@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>Popcode — Create Collection</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     <style>
@@ -50,6 +51,9 @@
       #result p { font-size: 13px; color: #666; margin-bottom: 12px; }
       #result-url { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 10px 14px; font-size: 13px; word-break: break-all; color: #333; margin-bottom: 12px; }
       #copy-btn { background: #7c3aed; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; cursor: pointer; font-weight: 600; }
+      #qr-container { margin-top: 16px; }
+      #qr-container p { margin-bottom: 8px; }
+      #qr-canvas { border-radius: 12px; }
     </style>
   </head>
   <body>
@@ -80,6 +84,10 @@
         <p>Share this link — anyone can scan any photo to watch its video.</p>
         <div id="result-url"></div>
         <button id="copy-btn">Copy Link</button>
+        <div id="qr-container">
+          <p>Scan to open on your phone — or print this QR code for your book:</p>
+          <canvas id="qr-canvas"></canvas>
+        </div>
       </div>
     </div>
 
@@ -238,6 +246,8 @@
           const viewUrl = `${location.origin}/view.html?id=${slug}`;
           document.getElementById('result-url').textContent = viewUrl;
           document.getElementById('result').style.display = 'block';
+
+          QRCode.toCanvas(document.getElementById('qr-canvas'), viewUrl, { width: 200, margin: 2 });
 
           document.getElementById('copy-btn').onclick = () => {
             navigator.clipboard.writeText(viewUrl);
