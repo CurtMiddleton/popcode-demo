@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Popcode Demo</title>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    <style>
+      body { margin: 0; overflow: hidden; background: black; }
+      a-scene { width: 100vw; height: 100vh; }
+      canvas { width: 100vw !important; height: 100vh !important; }
+
+      /* Scanning UI */
+      #scanner {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        pointer-events: none;
+      }
+      .corner {
+        position: absolute;
+        width: 36px;
+        height: 36px;
+        border-color: white;
+        border-style: solid;
+        transition: border-color 0.3s ease, top 0.5s ease, left 0.5s ease, right 0.5s ease, bottom 0.5s ease, width 0.5s ease, height 0.5s ease, filter 0.3s ease;
+      }
+      .corner.tl { top: 50%; left: 50%; margin-top: -24px; margin-left: -24px; border-width: 4px 0 0 4px; }
+      .corner.tr { top: 50%; right: 50%; margin-top: -24px; margin-right: -24px; border-width: 4px 4px 0 0; }
+      .corner.bl { bottom: 50%; left: 50%; margin-bottom: -24px; margin-left: -24px; border-width: 0 0 4px 4px; }
+      .corner.br { bottom: 50%; right: 50%; margin-bottom: -24px; margin-right: -24px; border-width: 0 4px 4px 0; }
+
+      .corner.expanded {
+        border-color: #a78bfa;
+        filter: drop-shadow(0 0 10px #a78bfa);
+        width: 50px;
+        height: 50px;
+      }
+      .corner.expanded.tl { border-width: 6px 0 0 6px; }
+      .corner.expanded.tr { border-width: 6px 6px 0 0; }
+      .corner.expanded.bl { border-width: 0 0 6px 6px; }
+      .corner.expanded.br { border-width: 0 6px 6px 0; }
+      .corner.expanded.tl { top: 24px;  left: 24px;  margin: 0; }
+      .corner.expanded.tr { top: 24px;  right: 24px; margin: 0; }
+      .corner.expanded.bl { bottom: 24px; left: 24px;  margin: 0; }
+      .corner.expanded.br { bottom: 24px; right: 24px; margin: 0; }
+
+
+      /* Fullscreen video */
+      #fullscreen-video {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9000;
+        background: black;
+      }
+      #fullscreen-video video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      #fade-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: black;
+        z-index: 9100;
+        opacity: 0;
+        transition: opacity 1s ease;
+        pointer-events: none;
+      }
+      #close-btn {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9001;
+        background: rgba(0,0,0,0.6);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 44px;
+        height: 44px;
+        font-size: 22px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="start-screen" style="position:fixed;inset:0;background:url('/assets/PopcodeHome.png') center/cover no-repeat;display:flex;align-items:flex-end;justify-content:center;padding-bottom:60px;z-index:9999;">
+      <button id="start-btn" style="padding:20px 40px;font-size:22px;border-radius:30px;border:none;background:white;color:#6b3fa0;font-family:sans-serif;font-weight:bold;">Tap to Start</button>
+    </div>
+
+    <div id="scanner">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+    </div>
+
+    <div id="fade-overlay"></div>
+    <div id="fullscreen-video">
+      <video id="fullvideo" src="/video/demo.mp4" playsinline webkit-playsinline></video>
+    </div>
+    <button id="close-btn">✕</button>
+
+    <a-scene
+      mindar-image="imageTargetSrc: /assets/targets.mind; autoStart: true;"
+      embedded
+      vr-mode-ui="enabled: false"
+      device-orientation-permission-ui="enabled: false">
+
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+      <a-entity mindar-image-target="targetIndex: 0"></a-entity>
+
+    </a-scene>
+
+    <script>
+      document.getElementById('start-btn').addEventListener('click', () => {
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('scanner').style.display = 'block';
+      });
+
+      const fullVid = document.getElementById('fullvideo');
+      const fullScreen = document.getElementById('fullscreen-video');
+      const closeBtn = document.getElementById('close-btn');
+      const scanner = document.getElementById('scanner');
+
+      document.querySelector('a-entity[mindar-image-target]').addEventListener('targetFound', () => {
+        // Turn purple and expand corners
+        document.querySelectorAll('.corner').forEach(c => c.classList.add('expanded'));
+        // After animation, show video
+        setTimeout(() => {
+          scanner.style.display = 'none';
+          fullScreen.style.display = 'block';
+          closeBtn.style.display = 'flex';
+          fullVid.play();
+        }, 900);
+      });
+
+      fullVid.addEventListener('ended', () => {
+        const fade = document.getElementById('fade-overlay');
+        fade.style.display = 'block';
+        setTimeout(() => fade.style.opacity = '1', 10);
+        setTimeout(() => {
+          fullScreen.style.display = 'none';
+          fullVid.currentTime = 0;
+          closeBtn.style.display = 'none';
+          document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+          document.getElementById('start-screen').style.display = 'flex';
+          fade.style.opacity = '0';
+          setTimeout(() => fade.style.display = 'none', 1000);
+        }, 1000);
+      });
+
+      closeBtn.addEventListener('click', () => {
+        fullVid.pause();
+        fullVid.currentTime = 0;
+        fullScreen.style.display = 'none';
+        closeBtn.style.display = 'none';
+        // Reset corners and show scanner again
+        document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+        scanner.style.display = 'block';
+      });
+    </script>
+  </body>
+</html>
