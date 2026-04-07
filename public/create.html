@@ -6,7 +6,7 @@
     <title>Popcode — Create</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
@@ -63,7 +63,8 @@
       #result p { font-size: 13px; opacity: 0.85; margin-bottom: 16px; }
       #result-url { background: white; border-radius: 10px; padding: 10px 14px; font-size: 12px; word-break: break-all; color: #333; margin-bottom: 12px; }
       #copy-btn { background: #3d2b8e; color: white; border: none; border-radius: 20px; padding: 10px 24px; font-size: 14px; cursor: pointer; font-weight: 600; margin-bottom: 20px; }
-      #qr-container canvas { border-radius: 12px; margin-top: 8px; }
+      #qr-canvas { border-radius: 12px; margin-top: 8px; }
+      #qr-canvas img { border-radius: 12px; }
     </style>
   </head>
   <body>
@@ -160,6 +161,10 @@
           alert('Add at least one page with both a photo and video.');
           return;
         }
+        if (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler) {
+          alert('MindAR compiler not loaded yet. Please wait a moment and try again.');
+          return;
+        }
 
         document.getElementById('create-btn').disabled = true;
         document.getElementById('progress').style.display = 'block';
@@ -226,7 +231,7 @@
           const viewUrl = `${location.origin}/view.html?id=${slug}`;
           document.getElementById('result-url').textContent = viewUrl;
           document.getElementById('result').style.display = 'block';
-          QRCode.toCanvas(document.getElementById('qr-canvas'), viewUrl, { width: 200, margin: 2 });
+          new QRCode(document.getElementById('qr-canvas'), { text: viewUrl, width: 200, height: 200 });
           document.getElementById('copy-btn').onclick = () => {
             navigator.clipboard.writeText(viewUrl);
             document.getElementById('copy-btn').textContent = 'Copied!';
