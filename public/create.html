@@ -4,6 +4,9 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>Popcode — Create</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
@@ -28,35 +31,18 @@
       .upload-row { display: flex; gap: 24px; justify-content: center; }
 
       .upload-btn {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 10px;
-        background: white;
-        border-radius: 50%;
-        width: 120px;
-        height: 120px;
-        justify-content: center;
-        cursor: pointer;
-        border: none;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-        transition: transform 0.15s;
-        position: relative;
-        overflow: hidden;
+        display: flex; flex-direction: column; align-items: center; gap: 10px;
+        background: white; border-radius: 50%; width: 120px; height: 120px;
+        justify-content: center; cursor: pointer; border: none;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.15); transition: transform 0.15s;
+        position: relative; overflow: hidden;
       }
       .upload-btn:active { transform: scale(0.95); }
-      .upload-btn input[type="file"] {
-        position: absolute;
-        inset: 0;
-        opacity: 0;
-        cursor: pointer;
-        width: 100%;
-        height: 100%;
-      }
-      .upload-btn img { width: 48px; height: 48px; }
+      .upload-btn input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+      .upload-btn img.icon { width: 48px; height: 48px; }
       .upload-btn .btn-label { font-size: 12px; color: #555; font-weight: 600; text-align: center; padding: 0 8px; }
       .upload-btn.selected { background: #f0f0ff; box-shadow: 0 0 0 3px #7c3aed; }
-      .upload-btn.selected img { display: none; }
+      .upload-btn.selected img.icon { display: none; }
       .upload-btn.selected .btn-label { color: #7c3aed; font-size: 11px; }
       .upload-btn .preview-img { display: none; width: 80px; height: 80px; object-fit: cover; border-radius: 50%; }
       .upload-btn.selected .preview-img { display: block; }
@@ -65,6 +51,19 @@
       .add-page-btn:hover { background: #4e38a8; }
       .create-btn { width: 100%; max-width: 360px; padding: 16px; border-radius: 30px; border: none; background: rgba(100, 220, 230, 0.5); color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
       .create-btn:hover { background: rgba(100, 220, 230, 0.7); }
+      .create-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+      #progress { display: none; width: 100%; max-width: 360px; margin-top: 24px; text-align: center; }
+      .progress-bar-wrap { background: rgba(255,255,255,0.3); border-radius: 99px; height: 8px; margin: 12px 0; overflow: hidden; }
+      .progress-bar { height: 100%; background: white; border-radius: 99px; transition: width 0.3s; width: 0%; }
+      #progress-label { font-size: 14px; opacity: 0.9; }
+
+      #result { display: none; width: 100%; max-width: 360px; margin-top: 24px; background: rgba(255,255,255,0.15); border-radius: 16px; padding: 24px; text-align: center; }
+      #result h3 { font-size: 18px; margin-bottom: 8px; }
+      #result p { font-size: 13px; opacity: 0.85; margin-bottom: 16px; }
+      #result-url { background: white; border-radius: 10px; padding: 10px 14px; font-size: 12px; word-break: break-all; color: #333; margin-bottom: 12px; }
+      #copy-btn { background: #3d2b8e; color: white; border: none; border-radius: 20px; padding: 10px 24px; font-size: 14px; cursor: pointer; font-weight: 600; margin-bottom: 20px; }
+      #qr-container canvas { border-radius: 12px; margin-top: 8px; }
     </style>
   </head>
   <body>
@@ -73,33 +72,55 @@
     <p class="subtitle">Add photo + video pairs. Anyone who scans a photo will see its matching video.</p>
 
     <div class="field-label">Collection Name (optional)</div>
-    <input type="text" placeholder="" />
+    <input type="text" id="name-input" placeholder="" />
 
     <div class="pages" id="pages"></div>
 
     <button class="add-page-btn" id="add-page-btn">+ Add Page</button>
-    <button class="create-btn">Create Collection</button>
+    <button class="create-btn" id="create-btn">Create Collection</button>
+
+    <div id="progress">
+      <div id="progress-label">Starting...</div>
+      <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar"></div></div>
+    </div>
+
+    <div id="result">
+      <h3>Your collection is live!</h3>
+      <p>Share this link — anyone can scan any photo to watch its video.</p>
+      <div id="result-url"></div>
+      <button id="copy-btn">Copy Link</button>
+      <div id="qr-container">
+        <p style="font-size:13px;opacity:0.85;">Scan to open on your phone:</p>
+        <canvas id="qr-canvas"></canvas>
+      </div>
+    </div>
 
     <script>
+      const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
+      const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
       let pageCount = 0;
+      const pairs = {};
 
       function addPage() {
         pageCount++;
         const n = pageCount;
+        pairs[n] = { photo: null, video: null };
         const page = document.createElement('div');
         page.className = 'page';
         page.innerHTML = `
           <div class="page-label">Page ${n}</div>
           <div class="upload-row">
             <label class="upload-btn" id="photo-btn-${n}">
-              <input type="file" accept="image/*" onchange="handleFile(this, 'photo', ${n})"/>
-              <img src="/assets/photo.png" alt="Photo"/>
+              <input type="file" accept="image/*" onchange="handleFile(this,'photo',${n})"/>
+              <img class="icon" src="/assets/photo.png" alt="Photo"/>
               <img class="preview-img" id="photo-preview-${n}"/>
               <span class="btn-label">Photo to scan</span>
             </label>
             <label class="upload-btn" id="video-btn-${n}">
-              <input type="file" accept="video/*" onchange="handleFile(this, 'video', ${n})"/>
-              <img src="/assets/video.png" alt="Video"/>
+              <input type="file" accept="video/*" onchange="handleFile(this,'video',${n})"/>
+              <img class="icon" src="/assets/video.png" alt="Video"/>
               <img class="preview-img" id="video-preview-${n}"/>
               <span class="btn-label">Plays on scan</span>
             </label>
@@ -111,9 +132,10 @@
       function handleFile(input, type, n) {
         const file = input.files[0];
         if (!file) return;
+        pairs[n][type] = file;
         const btn = document.getElementById(`${type}-btn-${n}`);
         btn.classList.add('selected');
-        btn.querySelector('.btn-label').textContent = file.name.length > 14 ? file.name.substring(0, 14) + '…' : file.name;
+        btn.querySelector('.btn-label').textContent = file.name.length > 14 ? file.name.substring(0,14)+'…' : file.name;
         if (type === 'photo') {
           const preview = document.getElementById(`photo-preview-${n}`);
           preview.src = URL.createObjectURL(file);
@@ -121,7 +143,100 @@
       }
 
       document.getElementById('add-page-btn').addEventListener('click', addPage);
-      addPage(); // start with page 1
+      addPage();
+
+      function setProgress(label, pct) {
+        document.getElementById('progress-label').textContent = label;
+        document.getElementById('progress-bar').style.width = pct + '%';
+      }
+
+      function randomSlug() {
+        return Math.random().toString(36).substring(2, 10);
+      }
+
+      document.getElementById('create-btn').addEventListener('click', async () => {
+        const readyPairs = Object.values(pairs).filter(p => p.photo && p.video);
+        if (readyPairs.length === 0) {
+          alert('Add at least one page with both a photo and video.');
+          return;
+        }
+
+        document.getElementById('create-btn').disabled = true;
+        document.getElementById('progress').style.display = 'block';
+        document.getElementById('result').style.display = 'none';
+
+        try {
+          const slug = randomSlug();
+
+          // Step 1: Compile image targets
+          setProgress('Compiling image targets...', 5);
+          const images = [];
+          for (const pair of readyPairs) {
+            const img = new Image();
+            img.src = URL.createObjectURL(pair.photo);
+            await new Promise(resolve => img.onload = resolve);
+            images.push(img);
+          }
+
+          const compiler = new MINDAR.IMAGE.Compiler();
+          await compiler.compileImageTargets(images, (progress) => {
+            setProgress(`Compiling image targets... ${Math.round(progress)}%`, 5 + progress * 0.45);
+          });
+          const mindBuffer = await compiler.exportData();
+          const mindBlob = new Blob([mindBuffer]);
+
+          // Step 2: Upload .mind file
+          setProgress('Uploading image targets...', 55);
+          const { error: mindError } = await db.storage
+            .from('experiences')
+            .upload(`${slug}/target.mind`, mindBlob, { contentType: 'application/octet-stream' });
+          if (mindError) throw mindError;
+          const mindUrl = db.storage.from('experiences').getPublicUrl(`${slug}/target.mind`).data.publicUrl;
+
+          // Step 3: Upload videos
+          const videoUrls = [];
+          for (let i = 0; i < readyPairs.length; i++) {
+            setProgress(`Uploading video ${i+1} of ${readyPairs.length}...`, 60 + (i / readyPairs.length) * 25);
+            const { error: videoError } = await db.storage
+              .from('experiences')
+              .upload(`${slug}/video_${i}.mp4`, readyPairs[i].video, { contentType: readyPairs[i].video.type });
+            if (videoError) throw videoError;
+            videoUrls.push(db.storage.from('experiences').getPublicUrl(`${slug}/video_${i}.mp4`).data.publicUrl);
+          }
+
+          // Step 4: Save to database
+          setProgress('Saving collection...', 90);
+          const name = document.getElementById('name-input').value || null;
+          const { data: collection, error: colError } = await db
+            .from('collections')
+            .insert({ slug, name, mind_file_url: mindUrl })
+            .select().single();
+          if (colError) throw colError;
+
+          const items = readyPairs.map((_, i) => ({
+            collection_id: collection.id,
+            target_index: i,
+            video_url: videoUrls[i]
+          }));
+          const { error: itemsError } = await db.from('collection_items').insert(items);
+          if (itemsError) throw itemsError;
+
+          // Done
+          setProgress('Done!', 100);
+          const viewUrl = `${location.origin}/view.html?id=${slug}`;
+          document.getElementById('result-url').textContent = viewUrl;
+          document.getElementById('result').style.display = 'block';
+          QRCode.toCanvas(document.getElementById('qr-canvas'), viewUrl, { width: 200, margin: 2 });
+          document.getElementById('copy-btn').onclick = () => {
+            navigator.clipboard.writeText(viewUrl);
+            document.getElementById('copy-btn').textContent = 'Copied!';
+          };
+
+        } catch (err) {
+          setProgress('Error: ' + err.message, 0);
+          document.getElementById('create-btn').disabled = false;
+        }
+      });
     </script>
   </body>
 </html>
