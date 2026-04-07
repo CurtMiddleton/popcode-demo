@@ -42,9 +42,11 @@
       .upload-btn .btn-label { font-size: 12px; color: #555; font-weight: 600; text-align: center; padding: 0 8px; }
       .upload-btn.selected { background: #f0f0ff; box-shadow: 0 0 0 3px #7c3aed; }
       .upload-btn.selected img.icon { display: none; }
-      .upload-btn.selected .btn-label { color: #7c3aed; font-size: 11px; }
-      .upload-btn .preview-img { display: none; width: 80px; height: 80px; object-fit: cover; border-radius: 50%; }
+      .upload-btn.selected .btn-label { display: none; }
+      .upload-btn .preview-img { display: none; width: 110px; height: 110px; object-fit: cover; border-radius: 50%; }
       .upload-btn.selected .preview-img { display: block; }
+      .file-name { font-size: 11px; color: white; font-weight: 600; text-align: center; margin-top: 8px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .upload-wrapper { display: flex; flex-direction: column; align-items: center; }
 
       .add-page-btn { width: 100%; max-width: 360px; padding: 16px; border-radius: 30px; border: none; background: #3d2b8e; color: white; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 16px; transition: background 0.2s; }
       .add-page-btn:hover { background: #4e38a8; }
@@ -112,18 +114,24 @@
         page.innerHTML = `
           <div class="page-label">Page ${n}</div>
           <div class="upload-row">
-            <label class="upload-btn" id="photo-btn-${n}">
-              <input type="file" accept="image/*" onchange="handleFile(this,'photo',${n})"/>
-              <img class="icon" src="/assets/photo.png" alt="Photo"/>
-              <img class="preview-img" id="photo-preview-${n}"/>
-              <span class="btn-label">Photo to scan</span>
-            </label>
-            <label class="upload-btn" id="video-btn-${n}">
-              <input type="file" accept="video/*" onchange="handleFile(this,'video',${n})"/>
-              <img class="icon" src="/assets/video.png" alt="Video"/>
-              <img class="preview-img" id="video-preview-${n}"/>
-              <span class="btn-label">Plays on scan</span>
-            </label>
+            <div class="upload-wrapper">
+              <label class="upload-btn" id="photo-btn-${n}">
+                <input type="file" accept="image/*" onchange="handleFile(this,'photo',${n})"/>
+                <img class="icon" src="/assets/photo.png" alt="Photo"/>
+                <img class="preview-img" id="photo-preview-${n}"/>
+                <span class="btn-label">Photo to scan</span>
+              </label>
+              <div class="file-name" id="photo-name-${n}"></div>
+            </div>
+            <div class="upload-wrapper">
+              <label class="upload-btn" id="video-btn-${n}">
+                <input type="file" accept="video/*" onchange="handleFile(this,'video',${n})"/>
+                <img class="icon" src="/assets/video.png" alt="Video"/>
+                <img class="preview-img" id="video-preview-${n}"/>
+                <span class="btn-label">Plays on scan</span>
+              </label>
+              <div class="file-name" id="video-name-${n}"></div>
+            </div>
           </div>
         `;
         document.getElementById('pages').appendChild(page);
@@ -135,10 +143,27 @@
         pairs[n][type] = file;
         const btn = document.getElementById(`${type}-btn-${n}`);
         btn.classList.add('selected');
-        btn.querySelector('.btn-label').textContent = file.name.length > 14 ? file.name.substring(0,14)+'…' : file.name;
+        const shortName = file.name.length > 18 ? file.name.substring(0,18)+'…' : file.name;
+        document.getElementById(`${type}-name-${n}`).textContent = shortName;
+
         if (type === 'photo') {
-          const preview = document.getElementById(`photo-preview-${n}`);
-          preview.src = URL.createObjectURL(file);
+          document.getElementById(`photo-preview-${n}`).src = URL.createObjectURL(file);
+        } else {
+          // Generate video thumbnail
+          const videoEl = document.createElement('video');
+          videoEl.src = URL.createObjectURL(file);
+          videoEl.muted = true;
+          videoEl.playsInline = true;
+          videoEl.currentTime = 0.5;
+          videoEl.addEventListener('seeked', () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 110;
+            canvas.height = 110;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(videoEl, 0, 0, 110, 110);
+            document.getElementById(`video-preview-${n}`).src = canvas.toDataURL('image/jpeg');
+          });
+          videoEl.load();
         }
       }
 
