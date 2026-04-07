@@ -46,6 +46,8 @@
       .upload-btn .preview-img { display: none; width: 110px; height: 110px; object-fit: cover; border-radius: 50%; }
       .upload-btn.selected .preview-img { display: block; }
       .file-name { font-size: 11px; color: white; font-weight: 600; text-align: center; margin-top: 8px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .file-size { font-size: 10px; color: rgba(255,255,255,0.7); font-weight: 500; text-align: center; max-width: 120px; }
+      .file-size.warn { color: #fbbf24; font-weight: 700; }
       .upload-wrapper { display: flex; flex-direction: column; align-items: center; }
 
       .add-page-btn { width: 100%; max-width: 360px; padding: 16px; border-radius: 30px; border: none; background: #3d2b8e; color: white; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 16px; transition: background 0.2s; }
@@ -58,6 +60,9 @@
       .progress-bar-wrap { background: rgba(255,255,255,0.3); border-radius: 99px; height: 8px; margin: 12px 0; overflow: hidden; }
       .progress-bar { height: 100%; background: white; border-radius: 99px; transition: width 0.3s; width: 0%; }
       #progress-label { font-size: 14px; opacity: 0.9; }
+      #progress-label.error { color: #fca5a5; opacity: 1; font-weight: 700; }
+      #try-again-btn { display: none; margin-top: 14px; background: rgba(255,255,255,0.2); color: white; border: 2px solid rgba(255,255,255,0.6); border-radius: 24px; padding: 10px 24px; font-size: 14px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+      #try-again-btn:hover { background: rgba(255,255,255,0.35); }
 
       #result { display: none; width: 100%; max-width: 360px; margin-top: 24px; background: rgba(255,255,255,0.15); border-radius: 16px; padding: 24px; text-align: center; }
       #result h3 { font-size: 18px; margin-bottom: 8px; }
@@ -84,6 +89,7 @@
     <div id="progress">
       <div id="progress-label">Starting...</div>
       <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar"></div></div>
+      <button id="try-again-btn">Try Again</button>
     </div>
 
     <div id="result">
@@ -102,8 +108,16 @@
       const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+      const MAX_VIDEO_MB = 50;
+      const MAX_PHOTO_MB = 10;
+
       let pageCount = 0;
       const pairs = {};
+
+      function formatFileSize(bytes) {
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      }
 
       function addPage() {
         pageCount++;
@@ -122,6 +136,7 @@
                 <span class="btn-label">Photo to scan</span>
               </label>
               <div class="file-name" id="photo-name-${n}"></div>
+              <div class="file-size" id="photo-size-${n}"></div>
             </div>
             <div class="upload-wrapper">
               <label class="upload-btn" id="video-btn-${n}">
@@ -131,6 +146,7 @@
                 <span class="btn-label">Plays on scan</span>
               </label>
               <div class="file-name" id="video-name-${n}"></div>
+              <div class="file-size" id="video-size-${n}"></div>
             </div>
           </div>
         `;
@@ -140,11 +156,28 @@
       function handleFile(input, type, n) {
         const file = input.files[0];
         if (!file) return;
+
+        // File size warnings
+        const sizeMB = file.size / (1024 * 1024);
+        const limitMB = type === 'video' ? MAX_VIDEO_MB : MAX_PHOTO_MB;
+        if (sizeMB > limitMB) {
+          alert(`This ${type} is ${sizeMB.toFixed(1)} MB, which exceeds the ${limitMB} MB limit. Please choose a smaller file.`);
+          input.value = '';
+          return;
+        }
+
         pairs[n][type] = file;
         const btn = document.getElementById(`${type}-btn-${n}`);
         btn.classList.add('selected');
+
         const shortName = file.name.length > 18 ? file.name.substring(0,18)+'…' : file.name;
         document.getElementById(`${type}-name-${n}`).textContent = shortName;
+
+        const sizeEl = document.getElementById(`${type}-size-${n}`);
+        const sizeStr = formatFileSize(file.size);
+        sizeEl.textContent = sizeStr;
+        // Warn visually if approaching limit (over 80%)
+        sizeEl.className = 'file-size' + (sizeMB > limitMB * 0.8 ? ' warn' : '');
 
         if (type === 'photo') {
           document.getElementById(`photo-preview-${n}`).src = URL.createObjectURL(file);
@@ -170,10 +203,29 @@
       document.getElementById('add-page-btn').addEventListener('click', addPage);
       addPage();
 
-      function setProgress(label, pct) {
-        document.getElementById('progress-label').textContent = label;
+      function setProgress(label, pct, isError) {
+        const labelEl = document.getElementById('progress-label');
+        labelEl.textContent = label;
+        labelEl.className = isError ? 'error' : '';
         document.getElementById('progress-bar').style.width = pct + '%';
       }
+
+      function showError(msg) {
+        setProgress(msg, 0, true);
+        document.getElementById('create-btn').disabled = false;
+        document.getElementById('try-again-btn').style.display = 'inline-block';
+      }
+
+      function resetProgress() {
+        setProgress('Starting...', 0, false);
+        document.getElementById('try-again-btn').style.display = 'none';
+        document.getElementById('progress').style.display = 'none';
+      }
+
+      document.getElementById('try-again-btn').addEventListener('click', () => {
+        resetProgress();
+        document.getElementById('create-btn').disabled = false;
+      });
 
       function randomSlug() {
         return Math.random().toString(36).substring(2, 10);
@@ -185,63 +237,115 @@
           alert('Add at least one page with both a photo and video.');
           return;
         }
+
+        // Pre-flight size check across all files
+        for (let i = 0; i < readyPairs.length; i++) {
+          const photoMB = readyPairs[i].photo.size / (1024 * 1024);
+          const videoMB = readyPairs[i].video.size / (1024 * 1024);
+          if (photoMB > MAX_PHOTO_MB) {
+            alert(`Page ${i+1}: Photo "${readyPairs[i].photo.name}" is ${photoMB.toFixed(1)} MB (limit: ${MAX_PHOTO_MB} MB). Please replace it with a smaller file.`);
+            return;
+          }
+          if (videoMB > MAX_VIDEO_MB) {
+            alert(`Page ${i+1}: Video "${readyPairs[i].video.name}" is ${videoMB.toFixed(1)} MB (limit: ${MAX_VIDEO_MB} MB). Please replace it with a smaller file.`);
+            return;
+          }
+        }
+
         if (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler) {
           alert('MindAR compiler not loaded yet. Please wait a moment and try again.');
           return;
         }
 
         document.getElementById('create-btn').disabled = true;
+        document.getElementById('try-again-btn').style.display = 'none';
         document.getElementById('progress').style.display = 'block';
         document.getElementById('result').style.display = 'none';
 
-        try {
-          const slug = randomSlug();
+        const slug = randomSlug();
 
-          // Step 1: Compile image targets
-          setProgress('Compiling image targets...', 5);
-          const images = [];
+        // Step 1: Load images for compilation
+        setProgress('Loading images...', 2);
+        let images;
+        try {
+          images = [];
           for (const pair of readyPairs) {
             const img = new Image();
             img.src = URL.createObjectURL(pair.photo);
-            await new Promise(resolve => img.onload = resolve);
+            await new Promise((resolve, reject) => {
+              img.onload = resolve;
+              img.onerror = () => reject(new Error(`Could not load photo "${pair.photo.name}". Make sure it is a valid image file.`));
+            });
             images.push(img);
           }
+        } catch (err) {
+          showError('Step 1 failed — ' + err.message);
+          return;
+        }
 
+        // Step 2: Compile image targets
+        let mindBlob;
+        try {
+          setProgress('Compiling image targets...', 5);
           const compiler = new MINDAR.IMAGE.Compiler();
           await compiler.compileImageTargets(images, (progress) => {
             setProgress(`Compiling image targets... ${Math.round(progress)}%`, 5 + progress * 0.45);
           });
           const mindBuffer = await compiler.exportData();
-          const mindBlob = new Blob([mindBuffer]);
+          mindBlob = new Blob([mindBuffer]);
+        } catch (err) {
+          showError('Step 2 failed (image target compilation) — ' + (err.message || 'Compilation error. Check that your photos are clear, flat images.'));
+          return;
+        }
 
-          // Step 2: Upload .mind file
+        // Step 3: Upload .mind file
+        let mindUrl;
+        try {
           setProgress('Uploading image targets...', 55);
           const { error: mindError } = await db.storage
             .from('experiences')
             .upload(`${slug}/target.mind`, mindBlob, { contentType: 'application/octet-stream' });
           if (mindError) throw mindError;
-          const mindUrl = db.storage.from('experiences').getPublicUrl(`${slug}/target.mind`).data.publicUrl;
+          mindUrl = db.storage.from('experiences').getPublicUrl(`${slug}/target.mind`).data.publicUrl;
+        } catch (err) {
+          showError('Step 3 failed (uploading image targets) — ' + (err.message || 'Upload error. Check your internet connection and try again.'));
+          return;
+        }
 
-          // Step 3: Upload videos
-          const videoUrls = [];
+        // Step 4: Upload videos
+        const videoUrls = [];
+        try {
           for (let i = 0; i < readyPairs.length; i++) {
             setProgress(`Uploading video ${i+1} of ${readyPairs.length}...`, 60 + (i / readyPairs.length) * 25);
             const { error: videoError } = await db.storage
               .from('experiences')
               .upload(`${slug}/video_${i}.mp4`, readyPairs[i].video, { contentType: readyPairs[i].video.type });
-            if (videoError) throw videoError;
+            if (videoError) throw new Error(`Video ${i+1} ("${readyPairs[i].video.name}"): ${videoError.message}`);
             videoUrls.push(db.storage.from('experiences').getPublicUrl(`${slug}/video_${i}.mp4`).data.publicUrl);
           }
+        } catch (err) {
+          showError('Step 4 failed (uploading video) — ' + (err.message || 'Upload error. Check your internet connection and try again.'));
+          return;
+        }
 
-          // Step 4: Save to database
+        // Step 5: Save to database
+        let collection;
+        try {
           setProgress('Saving collection...', 90);
-          const name = document.getElementById('name-input').value || null;
-          const { data: collection, error: colError } = await db
+          const name = document.getElementById('name-input').value.trim() || null;
+          const { data, error: colError } = await db
             .from('collections')
             .insert({ slug, name, mind_file_url: mindUrl })
             .select().single();
           if (colError) throw colError;
+          collection = data;
+        } catch (err) {
+          showError('Step 5 failed (saving collection) — ' + (err.message || 'Database error. Your files were uploaded but the collection record could not be saved.'));
+          return;
+        }
 
+        // Step 6: Save collection items
+        try {
           const items = readyPairs.map((_, i) => ({
             collection_id: collection.id,
             target_index: i,
@@ -249,26 +353,25 @@
           }));
           const { error: itemsError } = await db.from('collection_items').insert(items);
           if (itemsError) throw itemsError;
-
-          // Done
-          setProgress('Done!', 100);
-          const viewUrl = `${location.origin}/view.html?id=${slug}`;
-          document.getElementById('result-url').textContent = viewUrl;
-          document.getElementById('result').style.display = 'block';
-          const qrImg = document.createElement('img');
-          qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(viewUrl)}`;
-          qrImg.style.borderRadius = '12px';
-          qrImg.style.marginTop = '8px';
-          document.getElementById('qr-canvas').appendChild(qrImg);
-          document.getElementById('copy-btn').onclick = () => {
-            navigator.clipboard.writeText(viewUrl);
-            document.getElementById('copy-btn').textContent = 'Copied!';
-          };
-
         } catch (err) {
-          setProgress('Error: ' + err.message, 0);
-          document.getElementById('create-btn').disabled = false;
+          showError('Step 6 failed (saving page items) — ' + (err.message || 'Database error. The collection was created but page items could not be saved.'));
+          return;
         }
+
+        // Done
+        setProgress('Done!', 100);
+        const viewUrl = `${location.origin}/view.html?id=${slug}`;
+        document.getElementById('result-url').textContent = viewUrl;
+        document.getElementById('result').style.display = 'block';
+        const qrImg = document.createElement('img');
+        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(viewUrl)}`;
+        qrImg.style.borderRadius = '12px';
+        qrImg.style.marginTop = '8px';
+        document.getElementById('qr-canvas').appendChild(qrImg);
+        document.getElementById('copy-btn').onclick = () => {
+          navigator.clipboard.writeText(viewUrl);
+          document.getElementById('copy-btn').textContent = 'Copied!';
+        };
       });
     </script>
   </body>

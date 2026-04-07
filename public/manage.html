@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Popcode — My Collections</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        min-height: 100vh;
+        background: linear-gradient(160deg, #5bc8f5 0%, #7c3aed 100%);
+        font-family: sans-serif;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 48px 24px 80px;
+      }
+      .logo { margin-bottom: 24px; }
+      .logo img { height: 60px; }
+
+      .top-bar {
+        width: 100%;
+        max-width: 560px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 28px;
+      }
+      .top-bar h1 { font-size: 24px; font-weight: 800; }
+
+      .create-btn {
+        background: rgba(255,255,255,0.2);
+        color: white;
+        border: 2px solid rgba(255,255,255,0.6);
+        border-radius: 24px;
+        padding: 10px 20px;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        text-decoration: none;
+        transition: background 0.2s;
+        white-space: nowrap;
+      }
+      .create-btn:hover { background: rgba(255,255,255,0.35); }
+
+      .collections-list {
+        width: 100%;
+        max-width: 560px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .card {
+        background: rgba(255,255,255,0.15);
+        border-radius: 16px;
+        padding: 20px 20px 16px;
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255,255,255,0.25);
+      }
+      .card-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        gap: 12px;
+      }
+      .card-title {
+        font-size: 18px;
+        font-weight: 800;
+        flex: 1;
+        word-break: break-word;
+      }
+      .card-meta {
+        font-size: 12px;
+        opacity: 0.75;
+        margin-bottom: 16px;
+        line-height: 1.6;
+      }
+      .card-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .btn {
+        border: none;
+        border-radius: 20px;
+        padding: 8px 18px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: opacity 0.15s, transform 0.1s;
+        text-decoration: none;
+        display: inline-block;
+      }
+      .btn:active { transform: scale(0.96); }
+      .btn-view { background: rgba(255,255,255,0.9); color: #3d2b8e; }
+      .btn-view:hover { background: white; }
+      .btn-copy { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.5); }
+      .btn-copy:hover { background: rgba(255,255,255,0.35); }
+      .btn-delete { background: rgba(220,38,38,0.75); color: white; margin-left: auto; }
+      .btn-delete:hover { background: rgba(220,38,38,0.95); }
+      .btn-delete:disabled { opacity: 0.5; cursor: not-allowed; }
+
+      .empty-state {
+        width: 100%;
+        max-width: 560px;
+        text-align: center;
+        padding: 60px 24px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 20px;
+        border: 2px dashed rgba(255,255,255,0.4);
+      }
+      .empty-state p { font-size: 16px; opacity: 0.85; margin-bottom: 20px; line-height: 1.6; }
+      .empty-state a {
+        background: rgba(255,255,255,0.9);
+        color: #3d2b8e;
+        border-radius: 24px;
+        padding: 12px 28px;
+        font-size: 15px;
+        font-weight: 700;
+        text-decoration: none;
+        transition: background 0.2s;
+        display: inline-block;
+      }
+      .empty-state a:hover { background: white; }
+
+      .loading-msg {
+        font-size: 15px;
+        opacity: 0.8;
+        margin-top: 20px;
+      }
+
+      .error-banner {
+        width: 100%;
+        max-width: 560px;
+        background: rgba(220,38,38,0.25);
+        border: 1px solid rgba(220,38,38,0.5);
+        border-radius: 12px;
+        padding: 16px 20px;
+        font-size: 14px;
+        margin-bottom: 20px;
+        line-height: 1.5;
+      }
+
+      .toast {
+        position: fixed;
+        bottom: 32px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.75);
+        color: white;
+        padding: 10px 22px;
+        border-radius: 24px;
+        font-size: 14px;
+        font-weight: 600;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s;
+        z-index: 999;
+        white-space: nowrap;
+      }
+      .toast.show { opacity: 1; }
+    </style>
+  </head>
+  <body>
+    <div class="logo"><img src="/assets/Popcode_logo.rev.svg" alt="Popcode"/></div>
+
+    <div class="top-bar">
+      <h1>My Collections</h1>
+      <a class="create-btn" href="/create.html">+ Create New</a>
+    </div>
+
+    <div id="content" class="collections-list">
+      <div class="loading-msg">Loading collections...</div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+      const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
+      const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 2200);
+      }
+
+      function formatDate(iso) {
+        if (!iso) return 'Unknown date';
+        const d = new Date(iso);
+        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      }
+
+      async function loadCollections() {
+        const content = document.getElementById('content');
+        try {
+          const { data: collections, error } = await db
+            .from('collections')
+            .select('id, slug, name, created_at')
+            .order('created_at', { ascending: false });
+
+          if (error) throw error;
+
+          if (!collections || collections.length === 0) {
+            content.innerHTML = '';
+            content.appendChild(buildEmptyState());
+            return;
+          }
+
+          // Fetch item counts for all collections in one query
+          const ids = collections.map(c => c.id);
+          const { data: items, error: itemsError } = await db
+            .from('collection_items')
+            .select('collection_id')
+            .in('collection_id', ids);
+
+          if (itemsError) throw itemsError;
+
+          // Count items per collection
+          const countMap = {};
+          (items || []).forEach(item => {
+            countMap[item.collection_id] = (countMap[item.collection_id] || 0) + 1;
+          });
+
+          content.innerHTML = '';
+          collections.forEach(col => {
+            const pageCount = countMap[col.id] || 0;
+            content.appendChild(buildCard(col, pageCount));
+          });
+
+        } catch (err) {
+          content.innerHTML = '';
+          const banner = document.createElement('div');
+          banner.className = 'error-banner';
+          banner.textContent = 'Failed to load collections: ' + (err.message || 'Unknown error');
+          content.appendChild(banner);
+          const retryBtn = document.createElement('button');
+          retryBtn.className = 'btn btn-view';
+          retryBtn.textContent = 'Retry';
+          retryBtn.style.cssText = 'background:rgba(255,255,255,0.9);color:#3d2b8e;margin-top:4px;';
+          retryBtn.addEventListener('click', loadCollections);
+          content.appendChild(retryBtn);
+        }
+      }
+
+      function buildEmptyState() {
+        const div = document.createElement('div');
+        div.className = 'empty-state';
+        div.innerHTML = `
+          <p>No collections yet.<br>Create your first one.</p>
+          <a href="/create.html">+ Create Collection</a>
+        `;
+        return div;
+      }
+
+      function buildCard(col, pageCount) {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.dataset.id = col.id;
+
+        const title = col.name || 'Untitled';
+        const viewUrl = `${location.origin}/view.html?id=${col.slug}`;
+
+        card.innerHTML = `
+          <div class="card-header">
+            <div class="card-title">${escapeHtml(title)}</div>
+          </div>
+          <div class="card-meta">
+            Created ${formatDate(col.created_at)} &nbsp;&bull;&nbsp; ${pageCount} page${pageCount !== 1 ? 's' : ''}
+          </div>
+          <div class="card-actions">
+            <a class="btn btn-view" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener">View</a>
+            <button class="btn btn-copy" data-url="${escapeHtml(viewUrl)}">Copy Link</button>
+            <button class="btn btn-delete" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}">Delete</button>
+          </div>
+        `;
+
+        card.querySelector('.btn-copy').addEventListener('click', function() {
+          navigator.clipboard.writeText(this.dataset.url).then(() => {
+            showToast('Link copied!');
+          }).catch(() => {
+            // fallback
+            prompt('Copy this link:', this.dataset.url);
+          });
+        });
+
+        card.querySelector('.btn-delete').addEventListener('click', function() {
+          const slug = this.dataset.slug;
+          const name = this.dataset.title;
+          confirmDelete(card, col.id, slug, name, this);
+        });
+
+        return card;
+      }
+
+      async function confirmDelete(card, collectionId, slug, title, btn) {
+        const confirmed = window.confirm(`Delete "${title}"?\n\nThis will permanently remove the collection, all its items, and all uploaded files. This cannot be undone.`);
+        if (!confirmed) return;
+
+        btn.disabled = true;
+        btn.textContent = 'Deleting...';
+
+        try {
+          // Step 1: Get all storage paths to delete
+          const filesToDelete = [`${slug}/target.mind`];
+
+          // Fetch video paths from collection_items
+          const { data: items, error: fetchItemsError } = await db
+            .from('collection_items')
+            .select('target_index')
+            .eq('collection_id', collectionId);
+
+          if (fetchItemsError) throw new Error('Could not fetch collection items: ' + fetchItemsError.message);
+
+          (items || []).forEach(item => {
+            filesToDelete.push(`${slug}/video_${item.target_index}.mp4`);
+          });
+
+          // Also try to list storage folder to catch any extra files
+          const { data: storageFiles } = await db.storage
+            .from('experiences')
+            .list(slug);
+
+          if (storageFiles) {
+            storageFiles.forEach(f => {
+              const path = `${slug}/${f.name}`;
+              if (!filesToDelete.includes(path)) filesToDelete.push(path);
+            });
+          }
+
+          // Step 2: Delete from collection_items
+          const { error: deleteItemsError } = await db
+            .from('collection_items')
+            .delete()
+            .eq('collection_id', collectionId);
+          if (deleteItemsError) throw new Error('Could not delete collection items: ' + deleteItemsError.message);
+
+          // Step 3: Delete from collections
+          const { error: deleteColError } = await db
+            .from('collections')
+            .delete()
+            .eq('id', collectionId);
+          if (deleteColError) throw new Error('Could not delete collection record: ' + deleteColError.message);
+
+          // Step 4: Delete storage files
+          if (filesToDelete.length > 0) {
+            const { error: storageError } = await db.storage
+              .from('experiences')
+              .remove(filesToDelete);
+            // Storage errors are non-fatal — record might be orphaned but DB is clean
+            if (storageError) {
+              console.warn('Storage delete warning:', storageError.message);
+            }
+          }
+
+          // Remove card from DOM
+          card.style.transition = 'opacity 0.3s, transform 0.3s';
+          card.style.opacity = '0';
+          card.style.transform = 'scale(0.95)';
+          setTimeout(() => {
+            card.remove();
+            // If no more cards, show empty state
+            const remaining = document.querySelectorAll('.card');
+            if (remaining.length === 0) {
+              document.getElementById('content').appendChild(buildEmptyState());
+            }
+          }, 300);
+
+          showToast('Collection deleted.');
+
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = 'Delete';
+          alert('Delete failed: ' + err.message);
+        }
+      }
+
+      function escapeHtml(str) {
+        const d = document.createElement('div');
+        d.appendChild(document.createTextNode(str));
+        return d.innerHTML;
+      }
+
+      loadCollections();
+    </script>
+  </body>
+</html>
