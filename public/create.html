@@ -4,7 +4,7 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>Popcode — Create Experience</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@db/db-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image.prod.js"></script>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -199,9 +199,9 @@
     </div>
 
     <script>
-      const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
+      const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.db.co';
       const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
-      const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
       let photoFile = null;
       let videoFile = null;
@@ -270,26 +270,26 @@
 
           // Step 2: Upload .mind file
           setProgress('Uploading image target...', 55);
-          const { error: mindError } = await supabase.storage
+          const { error: mindError } = await db.storage
             .from('experiences')
             .upload(`${id}/target.mind`, mindBlob, { contentType: 'application/octet-stream' });
           if (mindError) throw mindError;
 
           // Step 3: Upload video
           setProgress('Uploading video...', 70);
-          const { error: videoError } = await supabase.storage
+          const { error: videoError } = await db.storage
             .from('experiences')
             .upload(`${id}/video.mp4`, videoFile, { contentType: videoFile.type });
           if (videoError) throw videoError;
 
           // Step 4: Get public URLs
           setProgress('Saving experience...', 90);
-          const mindUrl = supabase.storage.from('experiences').getPublicUrl(`${id}/target.mind`).data.publicUrl;
-          const videoUrl = supabase.storage.from('experiences').getPublicUrl(`${id}/video.mp4`).data.publicUrl;
+          const mindUrl = db.storage.from('experiences').getPublicUrl(`${id}/target.mind`).data.publicUrl;
+          const videoUrl = db.storage.from('experiences').getPublicUrl(`${id}/video.mp4`).data.publicUrl;
 
           // Step 5: Save to database
           const name = document.getElementById('name-input').value || null;
-          const { error: dbError } = await supabase.from('experiences').insert({ slug: id, name, mind_file_url: mindUrl, video_url: videoUrl });
+          const { error: dbError } = await db.from('experiences').insert({ slug: id, name, mind_file_url: mindUrl, video_url: videoUrl });
           if (dbError) throw dbError;
 
           // Done
