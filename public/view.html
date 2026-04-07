@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Popcode</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background: black; overflow: hidden; }
+      a-scene { width: 100vw; height: 100vh; }
+      canvas { width: 100vw !important; height: 100vh !important; }
+
+      #loading {
+        position: fixed;
+        inset: 0;
+        background: url('/assets/PopcodeHome.png') center/cover no-repeat;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+      }
+      #loading-text {
+        color: white;
+        font-family: sans-serif;
+        font-size: 16px;
+        margin-top: 20px;
+        opacity: 0.8;
+      }
+
+      #start-screen {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: url('/assets/PopcodeHome.png') center/cover no-repeat;
+        flex-direction: column;
+        align-items: flex-end;
+        justify-content: center;
+        padding-bottom: 60px;
+        z-index: 9999;
+        align-items: center;
+      }
+      #start-btn {
+        padding: 20px 40px;
+        font-size: 22px;
+        border-radius: 30px;
+        border: none;
+        background: white;
+        color: #6b3fa0;
+        font-family: sans-serif;
+        font-weight: bold;
+        cursor: pointer;
+        margin-top: auto;
+        margin-bottom: 60px;
+      }
+
+      #scanner {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        pointer-events: none;
+      }
+      .corner {
+        position: absolute;
+        width: 36px;
+        height: 36px;
+        border-color: white;
+        border-style: solid;
+        transition: border-color 0.3s ease, top 0.5s ease, left 0.5s ease,
+                    right 0.5s ease, bottom 0.5s ease, width 0.5s ease,
+                    height 0.5s ease, filter 0.3s ease;
+      }
+      .corner.tl { top: 50%; left: 50%; margin-top: -24px; margin-left: -24px; border-width: 4px 0 0 4px; }
+      .corner.tr { top: 50%; right: 50%; margin-top: -24px; margin-right: -24px; border-width: 4px 4px 0 0; }
+      .corner.bl { bottom: 50%; left: 50%; margin-bottom: -24px; margin-left: -24px; border-width: 0 0 4px 4px; }
+      .corner.br { bottom: 50%; right: 50%; margin-bottom: -24px; margin-right: -24px; border-width: 0 4px 4px 0; }
+      .corner.expanded { border-color: #a78bfa; filter: drop-shadow(0 0 10px #a78bfa); width: 50px; height: 50px; }
+      .corner.expanded.tl { top: 24px; left: 24px; margin: 0; border-width: 6px 0 0 6px; }
+      .corner.expanded.tr { top: 24px; right: 24px; margin: 0; border-width: 6px 6px 0 0; }
+      .corner.expanded.bl { bottom: 24px; left: 24px; margin: 0; border-width: 0 0 6px 6px; }
+      .corner.expanded.br { bottom: 24px; right: 24px; margin: 0; border-width: 0 6px 6px 0; }
+
+      #fullscreen-video {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9000;
+        background: black;
+      }
+      #fullscreen-video video { width: 100%; height: 100%; object-fit: cover; }
+
+      #fade-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: black;
+        z-index: 9100;
+        opacity: 0;
+        transition: opacity 1s ease;
+        pointer-events: none;
+      }
+      #close-btn {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9001;
+        background: rgba(0,0,0,0.6);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 44px;
+        height: 44px;
+        font-size: 22px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      #error-screen {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: black;
+        color: white;
+        font-family: sans-serif;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        text-align: center;
+        padding: 40px;
+        z-index: 99999;
+      }
+      #error-screen h2 { margin-bottom: 12px; }
+      #error-screen p { color: #999; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <div id="loading">
+      <div id="loading-text">Loading experience...</div>
+    </div>
+
+    <div id="start-screen">
+      <button id="start-btn">Tap to Start</button>
+    </div>
+
+    <div id="error-screen">
+      <h2>Experience not found</h2>
+      <p>This link may be invalid or expired.</p>
+    </div>
+
+    <div id="scanner">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+    </div>
+
+    <div id="fade-overlay"></div>
+    <div id="fullscreen-video">
+      <video id="fullvideo" playsinline webkit-playsinline></video>
+    </div>
+    <button id="close-btn">✕</button>
+
+    <script>
+      const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
+      const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
+      const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      const params = new URLSearchParams(location.search);
+      const id = params.get('id');
+
+      if (!id) {
+        showError();
+      } else {
+        loadExperience(id);
+      }
+
+      function showError() {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error-screen').style.display = 'flex';
+      }
+
+      async function loadExperience(id) {
+        const { data, error } = await supabase
+          .from('experiences')
+          .select('*')
+          .eq('slug', id)
+          .single();
+
+        if (error || !data) { showError(); return; }
+
+        // Build the a-scene dynamically
+        const scene = document.createElement('a-scene');
+        scene.setAttribute('mindar-image', `imageTargetSrc: ${data.mind_file_url}; autoStart: true;`);
+        scene.setAttribute('embedded', '');
+        scene.setAttribute('vr-mode-ui', 'enabled: false');
+        scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
+
+        const camera = document.createElement('a-camera');
+        camera.setAttribute('position', '0 0 0');
+        camera.setAttribute('look-controls', 'enabled: false');
+        scene.appendChild(camera);
+
+        const target = document.createElement('a-entity');
+        target.setAttribute('mindar-image-target', 'targetIndex: 0');
+        scene.appendChild(target);
+
+        document.body.appendChild(scene);
+
+        // Set video source
+        document.getElementById('fullvideo').src = data.video_url;
+
+        // Hide loading, show start screen
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('start-screen').style.display = 'flex';
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+          document.getElementById('start-screen').style.display = 'none';
+          document.getElementById('scanner').style.display = 'block';
+        });
+
+        const fullVid = document.getElementById('fullvideo');
+        const fullScreen = document.getElementById('fullscreen-video');
+        const closeBtn = document.getElementById('close-btn');
+        const scanner = document.getElementById('scanner');
+
+        target.addEventListener('targetFound', () => {
+          document.querySelectorAll('.corner').forEach(c => c.classList.add('expanded'));
+          setTimeout(() => {
+            scanner.style.display = 'none';
+            fullScreen.style.display = 'block';
+            closeBtn.style.display = 'flex';
+            fullVid.play();
+          }, 900);
+        });
+
+        fullVid.addEventListener('ended', () => {
+          const fade = document.getElementById('fade-overlay');
+          fade.style.display = 'block';
+          setTimeout(() => fade.style.opacity = '1', 10);
+          setTimeout(() => {
+            fullScreen.style.display = 'none';
+            fullVid.currentTime = 0;
+            closeBtn.style.display = 'none';
+            document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+            document.getElementById('start-screen').style.display = 'flex';
+            fade.style.opacity = '0';
+            setTimeout(() => fade.style.display = 'none', 1000);
+          }, 1000);
+        });
+
+        closeBtn.addEventListener('click', () => {
+          fullVid.pause();
+          fullVid.currentTime = 0;
+          fullScreen.style.display = 'none';
+          closeBtn.style.display = 'none';
+          document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+          scanner.style.display = 'block';
+        });
+      }
+    </script>
+  </body>
+</html>
