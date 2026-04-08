@@ -108,9 +108,22 @@
       .btn-view:hover { background: white; }
       .btn-copy { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.5); }
       .btn-copy:hover { background: rgba(255,255,255,0.35); }
+      .btn-rename { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.5); }
+      .btn-rename:hover { background: rgba(255,255,255,0.35); }
       .btn-delete { background: rgba(220,38,38,0.75); color: white; margin-left: auto; }
       .btn-delete:hover { background: rgba(220,38,38,0.95); }
       .btn-delete:disabled { opacity: 0.5; cursor: not-allowed; }
+      .rename-form { display: none; margin-bottom: 12px; gap: 8px; flex-wrap: wrap; }
+      .rename-form input {
+        flex: 1; min-width: 0; padding: 9px 14px; border-radius: 10px; border: none;
+        font-size: 15px; color: #333; outline: none;
+      }
+      .rename-form button {
+        padding: 9px 16px; border-radius: 10px; border: none;
+        font-size: 13px; font-weight: 700; cursor: pointer;
+      }
+      .rename-save { background: white; color: #3d2b8e; }
+      .rename-cancel { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4) !important; }
 
       .empty-state {
         width: 100%;
@@ -306,12 +319,18 @@
           <div class="card-header">
             <div class="card-title">${escapeHtml(title)}</div>
           </div>
+          <div class="rename-form" id="rename-form-${col.id}">
+            <input type="text" id="rename-input-${col.id}" value="${escapeHtml(title)}" maxlength="80" placeholder="Collection name"/>
+            <button class="rename-save" id="rename-save-${col.id}">Save</button>
+            <button class="rename-cancel" id="rename-cancel-${col.id}">Cancel</button>
+          </div>
           <div class="card-meta">
             Created ${formatDate(col.created_at)} &nbsp;&bull;&nbsp; ${pageCount} page${pageCount !== 1 ? 's' : ''}
           </div>
           <div class="card-actions">
             <a class="btn btn-view" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener">View</a>
             <button class="btn btn-copy" data-url="${escapeHtml(viewUrl)}">Copy Link</button>
+            <button class="btn btn-rename">Rename</button>
             <button class="btn btn-delete" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}">Delete</button>
           </div>
         `;
@@ -320,9 +339,36 @@
           navigator.clipboard.writeText(this.dataset.url).then(() => {
             showToast('Link copied!');
           }).catch(() => {
-            // fallback
             prompt('Copy this link:', this.dataset.url);
           });
+        });
+
+        card.querySelector('.btn-rename').addEventListener('click', function() {
+          const form = document.getElementById(`rename-form-${col.id}`);
+          form.style.display = form.style.display === 'flex' ? 'none' : 'flex';
+          if (form.style.display === 'flex') document.getElementById(`rename-input-${col.id}`).focus();
+        });
+
+        document.getElementById(`rename-cancel-${col.id}`).addEventListener('click', () => {
+          document.getElementById(`rename-form-${col.id}`).style.display = 'none';
+        });
+
+        document.getElementById(`rename-save-${col.id}`).addEventListener('click', async () => {
+          const newName = document.getElementById(`rename-input-${col.id}`).value.trim() || null;
+          const saveBtn = document.getElementById(`rename-save-${col.id}`);
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Saving...';
+          const { error } = await db.from('collections').update({ name: newName }).eq('id', col.id);
+          if (error) {
+            showToast('Rename failed: ' + error.message);
+          } else {
+            card.querySelector('.card-title').textContent = newName || 'Untitled';
+            card.querySelector('.btn-delete').dataset.title = newName || 'Untitled';
+            document.getElementById(`rename-form-${col.id}`).style.display = 'none';
+            showToast('Renamed!');
+          }
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save';
         });
 
         card.querySelector('.btn-delete').addEventListener('click', function() {
