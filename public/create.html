@@ -25,8 +25,11 @@
       .field-label { font-size: 15px; font-weight: 700; margin-bottom: 10px; width: 100%; max-width: 360px; text-align: center; }
       input[type="text"] { width: 100%; max-width: 360px; padding: 14px 16px; border-radius: 12px; border: none; font-size: 16px; color: #333; margin-bottom: 32px; outline: none; }
       .pages { width: 100%; max-width: 360px; }
-      .page { margin-bottom: 28px; }
-      .page-label { font-size: 16px; font-weight: 700; text-align: center; margin-bottom: 16px; }
+      .page { margin-bottom: 28px; position: relative; }
+      .page-header { display: flex; align-items: center; justify-content: center; position: relative; margin-bottom: 16px; }
+      .page-label { font-size: 16px; font-weight: 700; text-align: center; }
+      .remove-page-btn { position: absolute; right: 0; background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 50%; width: 28px; height: 28px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; }
+      .remove-page-btn:hover { background: rgba(220,38,38,0.6); }
       .upload-row { display: flex; gap: 24px; justify-content: center; }
 
       .upload-btn {
@@ -72,8 +75,6 @@
       #result p { font-size: 13px; opacity: 0.85; margin-bottom: 16px; }
       #result-url { background: white; border-radius: 10px; padding: 10px 14px; font-size: 12px; word-break: break-all; color: #333; margin-bottom: 12px; }
       #copy-btn { background: #3d2b8e; color: white; border: none; border-radius: 20px; padding: 10px 24px; font-size: 14px; cursor: pointer; font-weight: 600; margin-bottom: 20px; }
-      #qr-canvas { border-radius: 12px; margin-top: 8px; }
-      #qr-canvas img { border-radius: 12px; }
       #marker-result { display: none; margin-top: 20px; text-align: center; }
       #marker-result p { font-size: 13px; opacity: 0.85; margin-bottom: 10px; }
       #marker-preview { width: 160px; height: 160px; border-radius: 50%; box-shadow: 0 4px 20px rgba(0,0,0,0.4); margin-bottom: 12px; }
@@ -106,10 +107,6 @@
       <p>Share this link — anyone can scan any photo to watch its video.</p>
       <div id="result-url"></div>
       <button id="copy-btn">Copy Link</button>
-      <div id="qr-container">
-        <p style="font-size:13px;opacity:0.85;">Scan to open on your phone:</p>
-        <div id="qr-canvas"></div>
-      </div>
       <div id="marker-result">
         <p>Your collection marker — print this in your book cover to activate the experience:</p>
         <img id="marker-preview" alt="Collection marker"/>
@@ -150,8 +147,12 @@
         pairs[n] = { photo: null, video: null };
         const page = document.createElement('div');
         page.className = 'page';
+        page.id = `page-${n}`;
         page.innerHTML = `
-          <div class="page-label">Page ${n}</div>
+          <div class="page-header">
+            <div class="page-label">Page ${n}</div>
+            <button class="remove-page-btn" onclick="removePage(${n})" title="Remove page">&times;</button>
+          </div>
           <div class="upload-row">
             <div class="upload-wrapper">
               <label class="upload-btn" id="photo-btn-${n}">
@@ -182,7 +183,6 @@
         const file = input.files[0];
         if (!file) return;
 
-        // File size warnings
         const sizeMB = file.size / (1024 * 1024);
         const limitMB = type === 'video' ? MAX_VIDEO_MB : MAX_PHOTO_MB;
         if (sizeMB > limitMB) {
@@ -201,13 +201,11 @@
         const sizeEl = document.getElementById(`${type}-size-${n}`);
         const sizeStr = formatFileSize(file.size);
         sizeEl.textContent = sizeStr;
-        // Warn visually if approaching limit (over 80%)
         sizeEl.className = 'file-size' + (sizeMB > limitMB * 0.8 ? ' warn' : '');
 
         if (type === 'photo') {
           document.getElementById(`photo-preview-${n}`).src = URL.createObjectURL(file);
         } else {
-          // Generate video thumbnail
           const videoEl = document.createElement('video');
           videoEl.src = URL.createObjectURL(file);
           videoEl.muted = true;
@@ -223,6 +221,12 @@
           });
           videoEl.load();
         }
+      }
+
+      function removePage(n) {
+        const page = document.getElementById(`page-${n}`);
+        if (page) page.remove();
+        delete pairs[n];
       }
 
       document.getElementById('add-page-btn').addEventListener('click', addPage);
@@ -298,7 +302,6 @@
           return;
         }
 
-        // Pre-flight size check across all files
         for (let i = 0; i < readyPairs.length; i++) {
           const photoMB = readyPairs[i].photo.size / (1024 * 1024);
           const videoMB = readyPairs[i].video.size / (1024 * 1024);
@@ -324,11 +327,9 @@
 
         const slug = randomSlug();
 
-        // Step 1: Generate marker + load images for compilation
         setProgress('Generating collection marker...', 2);
         let images;
         try {
-          // Generate unique dot marker for this slug
           const markerCanvas = document.createElement('canvas');
           markerCanvas.width = 400; markerCanvas.height = 400;
           drawMarker(markerCanvas.getContext('2d'), 400, slug);
@@ -336,7 +337,7 @@
           markerImg.src = markerCanvas.toDataURL('image/png');
           await new Promise(resolve => markerImg.onload = resolve);
 
-          images = [markerImg]; // marker is always target index 0
+          images = [markerImg];
           for (const pair of readyPairs) {
             const img = new Image();
             img.src = URL.createObjectURL(pair.photo);
@@ -347,7 +348,6 @@
             images.push(img);
           }
 
-          // Save marker canvas for download after creation
           window._markerCanvas = markerCanvas;
           window._markerSlug = slug;
         } catch (err) {
@@ -355,7 +355,6 @@
           return;
         }
 
-        // Step 2: Compile image targets
         let mindBlob;
         try {
           setProgress('Compiling image targets...', 5);
@@ -370,7 +369,6 @@
           return;
         }
 
-        // Step 3: Upload .mind file
         let mindUrl;
         try {
           setProgress('Uploading image targets...', 55);
@@ -384,7 +382,6 @@
           return;
         }
 
-        // Step 4: Upload videos
         const videoUrls = [];
         try {
           for (let i = 0; i < readyPairs.length; i++) {
@@ -400,7 +397,6 @@
           return;
         }
 
-        // Step 5: Save to database
         let collection;
         try {
           setProgress('Saving collection...', 90);
@@ -416,11 +412,10 @@
           return;
         }
 
-        // Step 6: Save collection items
         try {
           const items = readyPairs.map((_, i) => ({
             collection_id: collection.id,
-            target_index: i + 1, // 0 is reserved for the marker
+            target_index: i + 1,
             video_url: videoUrls[i]
           }));
           const { error: itemsError } = await db.from('collection_items').insert(items);
@@ -430,22 +425,15 @@
           return;
         }
 
-        // Done
         setProgress('Done!', 100);
         const viewUrl = `https://popcode.app/${slug}`;
         document.getElementById('result-url').textContent = viewUrl;
         document.getElementById('result').style.display = 'block';
-        const qrImg = document.createElement('img');
-        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(viewUrl)}`;
-        qrImg.style.borderRadius = '12px';
-        qrImg.style.marginTop = '8px';
-        document.getElementById('qr-canvas').appendChild(qrImg);
         document.getElementById('copy-btn').onclick = () => {
           navigator.clipboard.writeText(viewUrl);
           document.getElementById('copy-btn').textContent = 'Copied!';
         };
 
-        // Show marker preview and download
         const markerContainer = document.getElementById('marker-result');
         markerContainer.style.display = 'block';
         const markerPreview = document.getElementById('marker-preview');
