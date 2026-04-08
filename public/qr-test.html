@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>Popcode Styled QR</title>
+    <title>Popcode QR Explorations</title>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -18,17 +18,19 @@
         padding: 40px 24px 60px;
         gap: 20px;
       }
-      .logo img { height: 80px; }
+      .logo img { height: 70px; }
       h1 { font-size: 20px; font-weight: 800; }
-      .subtitle { font-size: 13px; opacity: 0.8; text-align: center; max-width: 300px; line-height: 1.5; }
-      .controls { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 340px; }
-      .controls input { padding: 12px 16px; border-radius: 12px; border: none; font-size: 14px; color: #333; outline: none; }
+      .subtitle { font-size: 13px; opacity: 0.8; text-align: center; max-width: 320px; line-height: 1.5; }
+      .controls input {
+        padding: 12px 16px; border-radius: 12px; border: none;
+        font-size: 13px; color: #333; outline: none; width: 100%; max-width: 340px;
+      }
       .grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
         gap: 20px;
         width: 100%;
-        max-width: 500px;
+        max-width: 520px;
       }
       .card {
         background: rgba(255,255,255,0.1);
@@ -37,182 +39,239 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
       }
       .card h3 { font-size: 12px; font-weight: 700; text-align: center; opacity: 0.9; }
-      .card canvas { box-shadow: 0 4px 20px rgba(0,0,0,0.3); border-radius: 12px; }
+      .card canvas { box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
       .dl-btn { font-size: 12px; padding: 6px 14px; border-radius: 20px; border: none; background: rgba(255,255,255,0.2); color: white; cursor: pointer; font-weight: 600; }
-      .dl-btn:hover { background: rgba(255,255,255,0.35); }
       .note { font-size: 11px; opacity: 0.65; text-align: center; max-width: 300px; line-height: 1.5; }
     </style>
   </head>
   <body>
     <div class="logo"><img src="/assets/Popcode_logo.rev.svg" alt="popcode"/></div>
-    <h1>Styled QR Code</h1>
-    <p class="subtitle">Same data as a standard QR code — any phone camera can read it — but looks like Popcode.</p>
-
+    <h1>QR Explorations</h1>
+    <p class="subtitle">All scan with any phone camera. Finder patterns are always preserved.</p>
     <div class="controls">
-      <input type="text" id="url-input" placeholder="URL to encode" value="https://popcode-demo.vercel.app/view.html?id=abc123"/>
+      <input type="text" id="url-input" value="https://popcode-demo.vercel.app/view.html?id=abc123"/>
     </div>
-
     <div class="grid" id="grid"></div>
-    <p class="note">All variations scan with any phone camera. No app needed.</p>
+    <p class="note">Test each with your phone camera to confirm it scans.</p>
 
     <script>
-      function getQRMatrix(text) {
-        const qr = qrcode(0, 'M');
+      function getQRMatrix(text, ecl) {
+        const qr = qrcode(0, ecl || 'L');
         qr.addData(text);
         qr.make();
-        const size = qr.getModuleCount();
-        const matrix = [];
-        for (let r = 0; r < size; r++) {
-          matrix[r] = [];
-          for (let c = 0; c < size; c++) {
-            matrix[r][c] = qr.isDark(r, c);
-          }
-        }
-        return matrix;
+        const n = qr.getModuleCount();
+        const m = [];
+        for (let r = 0; r < n; r++) { m[r] = []; for (let c = 0; c < n; c++) m[r][c] = qr.isDark(r,c); }
+        return m;
       }
 
-      // Style 1: Rounded dots, black on white
-      function drawStyle1(canvas, matrix) {
-        const s = canvas.width;
-        const n = matrix.length;
-        const cell = s / (n + 4);
-        const offset = cell * 2;
+      function isFinderZone(r, c, n) {
+        return (r < 8 && c < 8) || (r < 8 && c >= n-8) || (r >= n-8 && c < 8);
+      }
+
+      // Draw a styled finder pattern (replaces the 3 corner squares)
+      function drawFinder(ctx, x, y, cellSize, style) {
+        const s = cellSize * 7;
+        if (style === 'circle') {
+          // Concentric circles
+          ctx.beginPath(); ctx.arc(x+s/2, y+s/2, s/2, 0, Math.PI*2);
+          ctx.fillStyle = '#111'; ctx.fill();
+          ctx.beginPath(); ctx.arc(x+s/2, y+s/2, s/2-cellSize, 0, Math.PI*2);
+          ctx.fillStyle = '#fff'; ctx.fill();
+          ctx.beginPath(); ctx.arc(x+s/2, y+s/2, s/2-cellSize*2, 0, Math.PI*2);
+          ctx.fillStyle = '#111'; ctx.fill();
+        } else if (style === 'roundsq') {
+          const r = cellSize * 0.8;
+          ctx.fillStyle = '#111'; ctx.beginPath(); ctx.roundRect(x, y, s, s, r); ctx.fill();
+          ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.roundRect(x+cellSize, y+cellSize, s-cellSize*2, s-cellSize*2, r*0.6); ctx.fill();
+          ctx.fillStyle = '#111'; ctx.beginPath(); ctx.roundRect(x+cellSize*2, y+cellSize*2, s-cellSize*4, s-cellSize*4, r*0.4); ctx.fill();
+        } else if (style === 'dot') {
+          ctx.beginPath(); ctx.arc(x+s/2, y+s/2, s/2, 0, Math.PI*2);
+          ctx.fillStyle = '#111'; ctx.fill();
+          ctx.beginPath(); ctx.arc(x+s/2, y+s/2, cellSize*1.5, 0, Math.PI*2);
+          ctx.fillStyle = '#fff'; ctx.fill();
+        } else if (style === 'diamond') {
+          ctx.save(); ctx.translate(x+s/2, y+s/2); ctx.rotate(Math.PI/4);
+          ctx.fillStyle = '#111'; ctx.fillRect(-s/2.2, -s/2.2, s/1.1, s/1.1);
+          ctx.fillStyle = '#fff'; ctx.fillRect(-s/3.5, -s/3.5, s/1.75, s/1.75);
+          ctx.fillStyle = '#111'; ctx.fillRect(-s/5.5, -s/5.5, s/2.75, s/2.75);
+          ctx.restore();
+        }
+      }
+
+      // STYLE 1: Constellation — dots on dark, circle finders
+      function drawConstellation(canvas, matrix) {
+        const s = canvas.width, n = matrix.length;
+        const cell = s / (n + 6), offset = cell * 3;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0,0,s,s);
+        drawFinder(ctx, offset, offset, cell, 'circle');
+        drawFinder(ctx, offset + (n-7)*cell, offset, cell, 'circle');
+        drawFinder(ctx, offset, offset + (n-7)*cell, cell, 'circle');
+        for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+          if (isFinderZone(r,c,n) || !matrix[r][c]) continue;
+          const x = offset + c*cell + cell/2, y = offset + r*cell + cell/2;
+          const size = cell * (0.3 + Math.random()*0.15);
+          ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI*2);
+          ctx.fillStyle = '#fff'; ctx.fill();
+        }
+      }
+
+      // STYLE 2: Soft Dots — white bg, round dots, round-square finders
+      function drawSoftDots(canvas, matrix) {
+        const s = canvas.width, n = matrix.length;
+        const cell = s / (n + 6), offset = cell * 3;
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = '#fff'; ctx.fillRect(0,0,s,s);
-        const r = cell * 0.45;
-        for (let row = 0; row < n; row++) {
-          for (let col = 0; col < n; col++) {
-            if (!matrix[row][col]) continue;
-            const x = offset + col * cell + cell/2;
-            const y = offset + row * cell + cell/2;
-            ctx.beginPath();
-            ctx.arc(x, y, r, 0, Math.PI*2);
-            ctx.fillStyle = '#111';
-            ctx.fill();
-          }
+        drawFinder(ctx, offset, offset, cell, 'roundsq');
+        drawFinder(ctx, offset + (n-7)*cell, offset, cell, 'roundsq');
+        drawFinder(ctx, offset, offset + (n-7)*cell, cell, 'roundsq');
+        for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+          if (isFinderZone(r,c,n) || !matrix[r][c]) continue;
+          const x = offset + c*cell + cell/2, y = offset + r*cell + cell/2;
+          ctx.beginPath(); ctx.arc(x, y, cell*0.38, 0, Math.PI*2);
+          ctx.fillStyle = '#111'; ctx.fill();
         }
       }
 
-      // Style 2: Rounded dots, white on black
-      function drawStyle2(canvas, matrix) {
-        const s = canvas.width;
-        const n = matrix.length;
-        const cell = s / (n + 4);
-        const offset = cell * 2;
+      // STYLE 3: Bold minimal — dark, large round dots, dot finders
+      function drawBoldMinimal(canvas, matrix) {
+        const s = canvas.width, n = matrix.length;
+        const cell = s / (n + 6), offset = cell * 3;
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = '#111'; ctx.fillRect(0,0,s,s);
-        const r = cell * 0.42;
-        for (let row = 0; row < n; row++) {
-          for (let col = 0; col < n; col++) {
-            if (!matrix[row][col]) continue;
-            const x = offset + col * cell + cell/2;
-            const y = offset + row * cell + cell/2;
-            ctx.beginPath();
-            ctx.arc(x, y, r, 0, Math.PI*2);
-            ctx.fillStyle = '#fff';
-            ctx.fill();
-          }
+        drawFinder(ctx, offset, offset, cell, 'dot');
+        drawFinder(ctx, offset + (n-7)*cell, offset, cell, 'dot');
+        drawFinder(ctx, offset, offset + (n-7)*cell, cell, 'dot');
+        for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+          if (isFinderZone(r,c,n) || !matrix[r][c]) continue;
+          const x = offset + c*cell + cell/2, y = offset + r*cell + cell/2;
+          ctx.beginPath(); ctx.arc(x, y, cell*0.42, 0, Math.PI*2);
+          ctx.fillStyle = '#fff'; ctx.fill();
         }
       }
 
-      // Style 3: Rounded squares, white on black
-      function drawStyle3(canvas, matrix) {
-        const s = canvas.width;
-        const n = matrix.length;
-        const cell = s / (n + 4);
-        const offset = cell * 2;
+      // STYLE 4: Diamond finders — dark, square dots, diamond finders
+      function drawDiamond(canvas, matrix) {
+        const s = canvas.width, n = matrix.length;
+        const cell = s / (n + 6), offset = cell * 3;
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = '#111'; ctx.fillRect(0,0,s,s);
-        const pad = cell * 0.12;
-        const radius = cell * 0.25;
-        for (let row = 0; row < n; row++) {
-          for (let col = 0; col < n; col++) {
-            if (!matrix[row][col]) continue;
-            const x = offset + col * cell + pad;
-            const y = offset + row * cell + pad;
-            const w = cell - pad*2;
-            ctx.beginPath();
-            ctx.roundRect(x, y, w, w, radius);
-            ctx.fillStyle = '#fff';
-            ctx.fill();
+        drawFinder(ctx, offset, offset, cell, 'diamond');
+        drawFinder(ctx, offset + (n-7)*cell, offset, cell, 'diamond');
+        drawFinder(ctx, offset, offset + (n-7)*cell, cell, 'diamond');
+        for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+          if (isFinderZone(r,c,n) || !matrix[r][c]) continue;
+          const x = offset + c*cell + cell/2, y = offset + r*cell + cell/2;
+          const d = cell*0.38;
+          ctx.save(); ctx.translate(x,y); ctx.rotate(Math.PI/4);
+          ctx.fillStyle = '#fff'; ctx.fillRect(-d,-d,d*2,d*2);
+          ctx.restore();
+        }
+      }
+
+      // STYLE 5: Mixed — dark, mix of dots and squares randomly
+      function drawMixed(canvas, matrix) {
+        const s = canvas.width, n = matrix.length;
+        const cell = s / (n + 6), offset = cell * 3;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#111'; ctx.fillRect(0,0,s,s);
+        drawFinder(ctx, offset, offset, cell, 'roundsq');
+        drawFinder(ctx, offset + (n-7)*cell, offset, cell, 'circle');
+        drawFinder(ctx, offset, offset + (n-7)*cell, cell, 'circle');
+        for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+          if (isFinderZone(r,c,n) || !matrix[r][c]) continue;
+          const x = offset + c*cell + cell/2, y = offset + r*cell + cell/2;
+          ctx.fillStyle = '#fff';
+          if ((r+c) % 3 === 0) {
+            const d = cell*0.32; ctx.fillRect(x-d, y-d, d*2, d*2);
+          } else {
+            ctx.beginPath(); ctx.arc(x, y, cell*0.38, 0, Math.PI*2); ctx.fill();
           }
         }
       }
 
-      // Style 4: Circle background, ALL dots preserved — no clipping
-      function drawStyle4(canvas, matrix) {
-        const s = canvas.width;
-        const n = matrix.length;
-        // Size the QR to fit inside a circle with a white quiet zone
-        const circleR = s * 0.46;
-        const qrSize = circleR * 1.72; // QR fits inside circle
-        const cell = qrSize / (n + 2);
-        const offset = (s - cell * n) / 2;
+      // STYLE 6: Halftone — dot sizes vary by position
+      function drawHalftone(canvas, matrix) {
+        const s = canvas.width, n = matrix.length;
+        const cell = s / (n + 6), offset = cell * 3;
         const ctx = canvas.getContext('2d');
-
-        // White background for quiet zone
         ctx.fillStyle = '#fff'; ctx.fillRect(0,0,s,s);
-
-        // Black circle
-        ctx.beginPath();
-        ctx.arc(s/2, s/2, circleR, 0, Math.PI*2);
-        ctx.fillStyle = '#111'; ctx.fill();
-
-        // Draw ALL dots — color flips based on inside/outside circle
-        const r = cell * 0.42;
-        for (let row = 0; row < n; row++) {
-          for (let col = 0; col < n; col++) {
-            if (!matrix[row][col]) continue;
-            const x = offset + col * cell + cell/2;
-            const y = offset + row * cell + cell/2;
-            const inside = Math.hypot(x - s/2, y - s/2) <= circleR;
-            ctx.beginPath();
-            ctx.arc(x, y, r, 0, Math.PI*2);
-            ctx.fillStyle = inside ? '#fff' : '#111';
-            ctx.fill();
-          }
+        drawFinder(ctx, offset, offset, cell, 'roundsq');
+        drawFinder(ctx, offset + (n-7)*cell, offset, cell, 'roundsq');
+        drawFinder(ctx, offset, offset + (n-7)*cell, cell, 'roundsq');
+        for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+          if (isFinderZone(r,c,n) || !matrix[r][c]) continue;
+          const x = offset + c*cell + cell/2, y = offset + r*cell + cell/2;
+          const distFromCenter = Math.hypot(x - s/2, y - s/2) / (s/2);
+          const size = cell * (0.48 - distFromCenter * 0.15);
+          ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI*2);
+          ctx.fillStyle = '#111'; ctx.fill();
         }
       }
 
       const styles = [
-        { fn: drawStyle1, label: 'Round Dots — Light' },
-        { fn: drawStyle2, label: 'Round Dots — Dark' },
-        { fn: drawStyle3, label: 'Rounded Squares — Dark' },
-        { fn: drawStyle4, label: 'Circle Shape — Dark' },
+        { fn: drawConstellation, label: 'Constellation' },
+        { fn: drawSoftDots,      label: 'Soft Dots' },
+        { fn: drawBoldMinimal,   label: 'Bold Minimal' },
+        { fn: drawDiamond,       label: 'Diamond' },
+        { fn: drawMixed,         label: 'Mixed Shapes' },
+        { fn: drawHalftone,      label: 'Halftone' },
       ];
 
       function renderAll() {
         const url = document.getElementById('url-input').value || 'https://popcode-demo.vercel.app';
-        let matrix;
-        try { matrix = getQRMatrix(url); } catch(e) { return; }
-
         const grid = document.getElementById('grid');
         grid.innerHTML = '';
+
+        // Show 3 URL length comparisons using Soft Dots style
+        const comparisons = [
+          { url: url, label: 'Current URL (' + url.length + ' chars)' },
+          { url: 'popcodeapp.com/' + (url.split('=')[1] || 'abc123'), label: 'Short domain (' + ('popcodeapp.com/abc123').length + ' chars)' },
+          { url: url.split('=')[1] || 'abc123', label: 'Slug only (' + ((url.split('=')[1] || 'abc123').length) + ' chars)' },
+        ];
+
+        comparisons.forEach(({ url: u, label }) => {
+          let matrix;
+          try { matrix = getQRMatrix(u); } catch(e) { return; }
+          const card = document.createElement('div');
+          card.className = 'card';
+          const canvas = document.createElement('canvas');
+          canvas.width = 300; canvas.height = 300;
+          canvas.style.width = '160px'; canvas.style.height = '160px';
+          drawSoftDots(canvas, matrix);
+          const lbl = document.createElement('h3');
+          lbl.textContent = label;
+          const btn = document.createElement('button');
+          btn.className = 'dl-btn';
+          btn.textContent = 'Download';
+          btn.onclick = () => { const a = document.createElement('a'); a.download = 'popcode-qr.png'; a.href = canvas.toDataURL(); a.click(); };
+          card.appendChild(canvas); card.appendChild(lbl); card.appendChild(btn);
+          grid.appendChild(card);
+        });
+
+        // Then show all styles using the short URL
+        const shortUrl = 'popcodeapp.com/' + (url.split('=')[1] || 'abc123');
+        let matrix;
+        try { matrix = getQRMatrix(shortUrl); } catch(e) { return; }
 
         styles.forEach((style, i) => {
           const card = document.createElement('div');
           card.className = 'card';
           const canvas = document.createElement('canvas');
-          canvas.width = 240; canvas.height = 240;
+          canvas.width = 300; canvas.height = 300;
           canvas.style.width = '160px'; canvas.style.height = '160px';
           style.fn(canvas, matrix);
           const label = document.createElement('h3');
-          label.textContent = style.label;
+          label.textContent = style.label + ' (short URL)';
           const btn = document.createElement('button');
           btn.className = 'dl-btn';
           btn.textContent = 'Download';
-          btn.onclick = () => {
-            const a = document.createElement('a');
-            a.download = `popcode-qr-style${i+1}.png`;
-            a.href = canvas.toDataURL();
-            a.click();
-          };
-          card.appendChild(canvas);
-          card.appendChild(label);
-          card.appendChild(btn);
+          btn.onclick = () => { const a = document.createElement('a'); a.download = `popcode-qr-${i}.png`; a.href = canvas.toDataURL(); a.click(); };
+          card.appendChild(canvas); card.appendChild(label); card.appendChild(btn);
           grid.appendChild(card);
         });
       }
