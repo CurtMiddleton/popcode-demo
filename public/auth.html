@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Popcode — Sign In</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        min-height: 100vh;
+        background: linear-gradient(160deg, #5bc8f5 0%, #7c3aed 100%);
+        font-family: sans-serif;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 24px;
+      }
+      .logo { margin-bottom: 32px; }
+      .logo img { height: 120px; }
+      .card {
+        width: 100%;
+        max-width: 360px;
+        background: rgba(255,255,255,0.15);
+        border-radius: 20px;
+        padding: 32px 28px;
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255,255,255,0.25);
+      }
+      h1 { font-size: 22px; font-weight: 800; margin-bottom: 24px; text-align: center; }
+      .field { margin-bottom: 16px; }
+      label { font-size: 13px; font-weight: 600; opacity: 0.85; display: block; margin-bottom: 6px; }
+      input[type="email"], input[type="password"] {
+        width: 100%; padding: 13px 16px; border-radius: 12px; border: none;
+        font-size: 15px; color: #333; outline: none;
+      }
+      .submit-btn {
+        width: 100%; padding: 15px; border-radius: 30px; border: none;
+        background: #3d2b8e; color: white; font-size: 16px; font-weight: 700;
+        cursor: pointer; margin-top: 8px; transition: background 0.2s;
+      }
+      .submit-btn:hover { background: #4e38a8; }
+      .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .toggle {
+        margin-top: 20px; text-align: center; font-size: 13px; opacity: 0.85;
+      }
+      .toggle a { color: white; font-weight: 700; cursor: pointer; text-decoration: underline; }
+      .error-msg {
+        display: none; background: rgba(220,38,38,0.3); border: 1px solid rgba(220,38,38,0.5);
+        border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="logo"><img src="/assets/Popcode_logo.rev.svg" alt="Popcode"/></div>
+    <div class="card">
+      <h1 id="form-title">Sign In</h1>
+      <div class="error-msg" id="error-msg"></div>
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" autocomplete="email" placeholder="you@example.com"/>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" autocomplete="current-password" placeholder="Password"/>
+      </div>
+      <button class="submit-btn" id="submit-btn">Sign In</button>
+      <div class="toggle">
+        <span id="toggle-text">Don't have an account?</span>
+        <a id="toggle-link">Create one</a>
+      </div>
+    </div>
+
+    <script>
+      const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
+      const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      // Redirect if already signed in
+      db.auth.getSession().then(({ data }) => {
+        if (data.session) window.location.href = '/manage.html';
+      });
+
+      let isSignUp = false;
+
+      document.getElementById('toggle-link').addEventListener('click', () => {
+        isSignUp = !isSignUp;
+        document.getElementById('form-title').textContent = isSignUp ? 'Create Account' : 'Sign In';
+        document.getElementById('submit-btn').textContent = isSignUp ? 'Create Account' : 'Sign In';
+        document.getElementById('toggle-text').textContent = isSignUp ? 'Already have an account?' : "Don't have an account?";
+        document.getElementById('toggle-link').textContent = isSignUp ? 'Sign in' : 'Create one';
+        document.getElementById('password').autocomplete = isSignUp ? 'new-password' : 'current-password';
+        hideError();
+      });
+
+      function showError(msg) {
+        const el = document.getElementById('error-msg');
+        el.textContent = msg;
+        el.style.display = 'block';
+      }
+      function hideError() {
+        document.getElementById('error-msg').style.display = 'none';
+      }
+
+      document.getElementById('submit-btn').addEventListener('click', async () => {
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        hideError();
+
+        if (!email || !password) {
+          showError('Please enter your email and password.');
+          return;
+        }
+
+        const btn = document.getElementById('submit-btn');
+        btn.disabled = true;
+        btn.textContent = isSignUp ? 'Creating account...' : 'Signing in...';
+
+        let error;
+        if (isSignUp) {
+          ({ error } = await db.auth.signUp({ email, password }));
+          if (!error) {
+            showError('Check your email for a confirmation link, then sign in.');
+            btn.disabled = false;
+            btn.textContent = 'Create Account';
+            return;
+          }
+        } else {
+          ({ error } = await db.auth.signInWithPassword({ email, password }));
+        }
+
+        if (error) {
+          showError(error.message);
+          btn.disabled = false;
+          btn.textContent = isSignUp ? 'Create Account' : 'Sign In';
+        } else {
+          window.location.href = '/manage.html';
+        }
+      });
+
+      // Allow Enter key to submit
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('submit-btn').click();
+      });
+    </script>
+  </body>
+</html>

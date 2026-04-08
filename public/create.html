@@ -123,6 +123,16 @@
       const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+      // Auth check
+      let currentUser = null;
+      db.auth.getSession().then(({ data }) => {
+        if (!data.session) {
+          window.location.href = '/auth.html';
+        } else {
+          currentUser = data.session.user;
+        }
+      });
+
       const MAX_VIDEO_MB = 50;
       const MAX_PHOTO_MB = 10;
 
@@ -397,7 +407,7 @@
           const name = document.getElementById('name-input').value.trim() || null;
           const { data, error: colError } = await db
             .from('collections')
-            .insert({ slug, name, mind_file_url: mindUrl })
+            .insert({ slug, name, mind_file_url: mindUrl, user_id: currentUser.id })
             .select().single();
           if (colError) throw colError;
           collection = data;

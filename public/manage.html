@@ -170,7 +170,10 @@
 
     <div class="top-bar">
       <h1>My Collections</h1>
-      <a class="create-btn" href="/create.html">+ Create New</a>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <a class="create-btn" href="/create.html">+ Create New</a>
+        <button id="logout-btn" class="create-btn" style="background:rgba(255,255,255,0.1);">Sign Out</button>
+      </div>
     </div>
 
     <div id="content" class="collections-list">
@@ -183,6 +186,22 @@
       const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
       const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      // Auth check
+      let currentUser = null;
+      db.auth.getSession().then(({ data }) => {
+        if (!data.session) {
+          window.location.href = '/auth.html';
+        } else {
+          currentUser = data.session.user;
+          loadCollections();
+        }
+      });
+
+      document.getElementById('logout-btn').addEventListener('click', async () => {
+        await db.auth.signOut();
+        window.location.href = '/auth.html';
+      });
 
       function showToast(msg) {
         const t = document.getElementById('toast');
@@ -203,6 +222,7 @@
           const { data: collections, error } = await db
             .from('collections')
             .select('id, slug, name, created_at')
+            .eq('user_id', currentUser.id)
             .order('created_at', { ascending: false });
 
           if (error) throw error;
@@ -265,7 +285,7 @@
         card.dataset.id = col.id;
 
         const title = col.name || 'Untitled';
-        const viewUrl = `${location.origin}/view.html?id=${col.slug}`;
+        const viewUrl = `https://popcode.app/${col.slug}`;
 
         card.innerHTML = `
           <div class="card-header">
@@ -387,7 +407,6 @@
         return d.innerHTML;
       }
 
-      loadCollections();
     </script>
   </body>
 </html>
