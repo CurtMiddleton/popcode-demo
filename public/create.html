@@ -25,8 +25,11 @@
       .field-label { font-size: 15px; font-weight: 700; margin-bottom: 10px; width: 100%; max-width: 360px; text-align: center; }
       input[type="text"] { width: 100%; max-width: 360px; padding: 14px 16px; border-radius: 12px; border: none; font-size: 16px; color: #333; margin-bottom: 32px; outline: none; }
       .pages { width: 100%; max-width: 360px; }
-      .page { margin-bottom: 28px; }
-      .page-label { font-size: 16px; font-weight: 700; text-align: center; margin-bottom: 16px; }
+      .page { margin-bottom: 28px; position: relative; }
+      .page-header { display: flex; align-items: center; justify-content: center; position: relative; margin-bottom: 16px; }
+      .page-label { font-size: 16px; font-weight: 700; text-align: center; }
+      .remove-page-btn { position: absolute; right: 0; background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 50%; width: 28px; height: 28px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; }
+      .remove-page-btn:hover { background: rgba(220,38,38,0.6); }
       .upload-row { display: flex; gap: 24px; justify-content: center; }
 
       .upload-btn {
@@ -144,8 +147,12 @@
         pairs[n] = { photo: null, video: null };
         const page = document.createElement('div');
         page.className = 'page';
+        page.id = `page-${n}`;
         page.innerHTML = `
-          <div class="page-label">Page ${n}</div>
+          <div class="page-header">
+            <div class="page-label">Page ${n}</div>
+            <button class="remove-page-btn" onclick="removePage(${n})" title="Remove page">&times;</button>
+          </div>
           <div class="upload-row">
             <div class="upload-wrapper">
               <label class="upload-btn" id="photo-btn-${n}">
@@ -217,6 +224,12 @@
           });
           videoEl.load();
         }
+      }
+
+      function removePage(n) {
+        const page = document.getElementById(`page-${n}`);
+        if (page) page.remove();
+        delete pairs[n];
       }
 
       document.getElementById('add-page-btn').addEventListener('click', addPage);
