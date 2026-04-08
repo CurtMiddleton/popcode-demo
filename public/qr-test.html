@@ -143,6 +143,7 @@
       }
 
       // Style 4: Dots in a circle, white on black
+      // Finder patterns (corners) are always preserved for scannability
       function drawStyle4(canvas, matrix) {
         const s = canvas.width;
         const n = matrix.length;
@@ -156,14 +157,22 @@
         ctx.arc(s/2, s/2, s/2 - 4, 0, Math.PI*2);
         ctx.fillStyle = '#111'; ctx.fill();
 
+        // Finder pattern zones: top-left, top-right, bottom-left (rows/cols 0-8)
+        function isFinderZone(row, col) {
+          return (row < 9 && col < 9) ||
+                 (row < 9 && col >= n - 8) ||
+                 (row >= n - 8 && col < 9);
+        }
+
         const r = cell * 0.42;
         for (let row = 0; row < n; row++) {
           for (let col = 0; col < n; col++) {
             if (!matrix[row][col]) continue;
             const x = offset + col * cell + cell/2;
             const y = offset + row * cell + cell/2;
-            // Skip dots outside circle
-            if (Math.hypot(x - s/2, y - s/2) > s/2 - cell) continue;
+            const outsideCircle = Math.hypot(x - s/2, y - s/2) > s/2 - cell*0.5;
+            // Always draw finder pattern cells; skip others outside circle
+            if (outsideCircle && !isFinderZone(row, col)) continue;
             ctx.beginPath();
             ctx.arc(x, y, r, 0, Math.PI*2);
             ctx.fillStyle = '#fff';
