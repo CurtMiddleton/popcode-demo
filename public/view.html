@@ -179,12 +179,25 @@
         const markerTarget = document.createElement('a-entity');
         markerTarget.setAttribute('mindar-image-target', 'targetIndex: 0');
         markerTarget.addEventListener('targetFound', triggerMarker);
+        markerTarget.addEventListener('targetLost', () => {
+          document.getElementById('welcome-overlay').style.display = 'none';
+        });
         scene.appendChild(markerTarget);
 
         Object.keys(videoMap).forEach(idx => {
           const target = document.createElement('a-entity');
           target.setAttribute('mindar-image-target', `targetIndex: ${idx}`);
-          target.addEventListener('targetFound', () => triggerVideo(videoMap[idx]));
+          target.addEventListener('targetFound', () => {
+            if (!videoActive) triggerVideo(videoMap[idx]);
+          });
+          target.addEventListener('targetLost', () => {
+            // Cancel pending trigger if camera moved away during the 900ms window
+            if (triggerTimer) {
+              clearTimeout(triggerTimer);
+              triggerTimer = null;
+              document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+            }
+          });
           scene.appendChild(target);
         });
 
@@ -203,18 +216,20 @@
       const fullScreen = document.getElementById('fullscreen-video');
       const closeBtn = document.getElementById('close-btn');
       const scanner = document.getElementById('scanner');
+      let videoActive = false;
+      let triggerTimer = null;
 
       function triggerMarker() {
         const overlay = document.getElementById('welcome-overlay');
         overlay.style.display = 'flex';
-        setTimeout(() => {
-          overlay.style.display = 'none';
-        }, 2200);
+        setTimeout(() => { overlay.style.display = 'none'; }, 2200);
       }
 
       function triggerVideo(url) {
+        videoActive = true;
         document.querySelectorAll('.corner').forEach(c => c.classList.add('expanded'));
-        setTimeout(() => {
+        triggerTimer = setTimeout(() => {
+          triggerTimer = null;
           fullVid.src = url;
           scanner.style.display = 'none';
           fullScreen.style.display = 'block';
@@ -223,11 +238,23 @@
         }, 900);
       }
 
+      function returnToScanner() {
+        videoActive = false;
+        if (triggerTimer) { clearTimeout(triggerTimer); triggerTimer = null; }
+        fullVid.pause();
+        fullVid.src = '';
+        fullScreen.style.display = 'none';
+        closeBtn.style.display = 'none';
+        document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+        scanner.style.display = 'block';
+      }
+
       fullVid.addEventListener('ended', () => {
         const fade = document.getElementById('fade-overlay');
         fade.style.display = 'block';
         setTimeout(() => fade.style.opacity = '1', 10);
         setTimeout(() => {
+          videoActive = false;
           fullScreen.style.display = 'none';
           fullVid.src = '';
           closeBtn.style.display = 'none';
@@ -238,14 +265,7 @@
         }, 1000);
       });
 
-      closeBtn.addEventListener('click', () => {
-        fullVid.pause();
-        fullVid.src = '';
-        fullScreen.style.display = 'none';
-        closeBtn.style.display = 'none';
-        document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
-        scanner.style.display = 'block';
-      });
+      closeBtn.addEventListener('click', returnToScanner);
     </script>
   </body>
 </html>
