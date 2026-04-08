@@ -47,8 +47,16 @@
         margin-top: 20px; text-align: center; font-size: 13px; opacity: 0.85;
       }
       .toggle a { color: white; font-weight: 700; cursor: pointer; text-decoration: underline; }
+      .forgot { text-align: right; margin-top: -8px; margin-bottom: 16px; }
+      .forgot a { font-size: 12px; color: white; opacity: 0.75; cursor: pointer; text-decoration: underline; }
+      .forgot a:hover { opacity: 1; }
       .error-msg {
         display: none; background: rgba(220,38,38,0.3); border: 1px solid rgba(220,38,38,0.5);
+        border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px;
+        line-height: 1.5;
+      }
+      .success-msg {
+        display: none; background: rgba(34,197,94,0.3); border: 1px solid rgba(34,197,94,0.5);
         border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px;
         line-height: 1.5;
       }
@@ -67,11 +75,15 @@
         <label for="password">Password</label>
         <input type="password" id="password" autocomplete="current-password" placeholder="Password"/>
       </div>
+      <div class="forgot" id="forgot-wrap">
+        <a id="forgot-link">Forgot password?</a>
+      </div>
       <button class="submit-btn" id="submit-btn">Sign In</button>
       <div class="toggle">
         <span id="toggle-text">Don't have an account?</span>
         <a id="toggle-link">Create one</a>
       </div>
+      <div class="success-msg" id="success-msg"></div>
     </div>
 
     <script>
@@ -93,7 +105,27 @@
         document.getElementById('toggle-text').textContent = isSignUp ? 'Already have an account?' : "Don't have an account?";
         document.getElementById('toggle-link').textContent = isSignUp ? 'Sign in' : 'Create one';
         document.getElementById('password').autocomplete = isSignUp ? 'new-password' : 'current-password';
+        document.getElementById('forgot-wrap').style.display = isSignUp ? 'none' : 'block';
         hideError();
+      });
+
+      document.getElementById('forgot-link').addEventListener('click', async () => {
+        const email = document.getElementById('email').value.trim();
+        if (!email) {
+          showError('Enter your email address above first.');
+          return;
+        }
+        const { error } = await db.auth.resetPasswordForEmail(email, {
+          redirectTo: 'https://popcode-demo.vercel.app/reset.html'
+        });
+        if (error) {
+          showError(error.message);
+        } else {
+          hideError();
+          const s = document.getElementById('success-msg');
+          s.textContent = 'Reset link sent — check your email.';
+          s.style.display = 'block';
+        }
       });
 
       function showError(msg) {
