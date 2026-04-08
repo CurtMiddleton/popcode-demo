@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Popcode Marker Variations</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        min-height: 100vh;
+        background: linear-gradient(160deg, #5bc8f5 0%, #7c3aed 100%);
+        font-family: sans-serif;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 40px 24px 60px;
+        gap: 20px;
+      }
+      .logo img { height: 80px; }
+      h1 { font-size: 20px; font-weight: 800; }
+      .subtitle { font-size: 13px; opacity: 0.8; text-align: center; max-width: 320px; line-height: 1.5; }
+
+      .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
+      .controls input { padding: 10px 14px; border-radius: 20px; border: none; font-size: 14px; color: #333; width: 180px; outline: none; }
+      .controls button { padding: 10px 20px; border-radius: 20px; border: none; background: #3d2b8e; color: white; font-size: 14px; font-weight: 700; cursor: pointer; }
+
+      .variations-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 24px;
+        width: 100%;
+        max-width: 500px;
+      }
+      .variation {
+        background: rgba(255,255,255,0.1);
+        border-radius: 16px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+      .variation h3 { font-size: 13px; font-weight: 700; text-align: center; }
+      .variation canvas { border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+      .dl-btn { font-size: 12px; padding: 6px 14px; border-radius: 20px; border: none; background: rgba(255,255,255,0.2); color: white; cursor: pointer; font-weight: 600; }
+      .dl-btn:hover { background: rgba(255,255,255,0.35); }
+
+      .size-section { width: 100%; max-width: 500px; }
+      .size-section h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; opacity: 0.9; }
+      .sizes { display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap; }
+      .size-item { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+      .size-item span { font-size: 11px; opacity: 0.8; }
+      .size-item canvas { box-shadow: 0 2px 10px rgba(0,0,0,0.3); border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <div class="logo"><img src="/assets/Popcode_logo.rev.svg" alt="popcode"/></div>
+    <h1>Marker Variations</h1>
+    <p class="subtitle">Black & white only. All patterns are unique per collection ID and deterministic.</p>
+
+    <div class="controls">
+      <input type="text" id="slug-input" placeholder="Collection ID" value="abc123"/>
+      <button onclick="renderAll()">Regenerate</button>
+    </div>
+
+    <div class="variations-grid" id="grid"></div>
+
+    <div class="size-section">
+      <h2>How small can it print?</h2>
+      <div class="sizes" id="sizes"></div>
+    </div>
+
+    <script>
+      function seededRandom(seed) {
+        let s = seed;
+        return function() {
+          s = (s * 1664525 + 1013904223) & 0xffffffff;
+          return (s >>> 0) / 0xffffffff;
+        };
+      }
+      function slugToSeed(slug) {
+        let hash = 0;
+        for (let i = 0; i < slug.length; i++) {
+          hash = ((hash << 5) - hash) + slug.charCodeAt(i);
+          hash |= 0;
+        }
+        return Math.abs(hash);
+      }
+
+      // VARIATION 1: Concentric rings, random gaps
+      function drawV1(ctx, size, slug) {
+        const rand = seededRandom(slugToSeed(slug + 'v1'));
+        const cx = size/2, cy = size/2;
+        ctx.fillStyle = '#000'; ctx.fillRect(0,0,size,size);
+        const rings = 6, dotR = size*0.028, inner = size*0.1, outer = size*0.44;
+        for (let ring = 0; ring < rings; ring++) {
+          const t = ring / (rings-1);
+          const r = inner + t * (outer - inner);
+          const dots = Math.max(8, Math.floor(2 * Math.PI * r / (dotR * 2.6)));
+          for (let d = 0; d < dots; d++) {
+            if (rand() < 0.2) continue;
+            const angle = (d / dots) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.arc(cx + r*Math.cos(angle), cy + r*Math.sin(angle), dotR, 0, Math.PI*2);
+            ctx.fillStyle = rand() < 0.5 ? '#fff' : '#888';
+            ctx.fill();
+          }
+        }
+      }
+
+      // VARIATION 2: Grid of dots clipped to circle
+      function drawV2(ctx, size, slug) {
+        const rand = seededRandom(slugToSeed(slug + 'v2'));
+        const cx = size/2, cy = size/2;
+        ctx.fillStyle = '#000'; ctx.fillRect(0,0,size,size);
+        const cols = 9, dotR = size*0.038, pad = size*0.08;
+        const step = (size - pad*2) / (cols - 1);
+        for (let row = 0; row < cols; row++) {
+          for (let col = 0; col < cols; col++) {
+            const x = pad + col * step;
+            const y = pad + row * step;
+            const dist = Math.hypot(x - cx, y - cy);
+            if (dist > size*0.42) continue;
+            if (rand() < 0.15) continue;
+            ctx.beginPath();
+            ctx.arc(x, y, dotR * (0.6 + rand()*0.8), 0, Math.PI*2);
+            ctx.fillStyle = rand() < 0.6 ? '#fff' : '#666';
+            ctx.fill();
+          }
+        }
+      }
+
+      // VARIATION 3: Radial spokes
+      function drawV3(ctx, size, slug) {
+        const rand = seededRandom(slugToSeed(slug + 'v3'));
+        const cx = size/2, cy = size/2;
+        ctx.fillStyle = '#000'; ctx.fillRect(0,0,size,size);
+        const spokes = 12, dotsPerSpoke = 5;
+        for (let s = 0; s < spokes; s++) {
+          const baseAngle = (s / spokes) * Math.PI * 2;
+          for (let d = 0; d < dotsPerSpoke; d++) {
+            const r = size*0.08 + (d / (dotsPerSpoke-1)) * size*0.36;
+            const wobble = (rand()-0.5) * 0.18;
+            const angle = baseAngle + wobble;
+            if (rand() < 0.2) continue;
+            const dotR = size * (0.025 + rand()*0.022);
+            ctx.beginPath();
+            ctx.arc(cx + r*Math.cos(angle), cy + r*Math.sin(angle), dotR, 0, Math.PI*2);
+            ctx.fillStyle = rand() < 0.55 ? '#fff' : '#777';
+            ctx.fill();
+          }
+        }
+        ctx.beginPath(); ctx.arc(cx, cy, size*0.47, 0, Math.PI*2);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = size*0.03; ctx.stroke();
+      }
+
+      // VARIATION 4: Dense scatter, varied sizes
+      function drawV4(ctx, size, slug) {
+        const rand = seededRandom(slugToSeed(slug + 'v4'));
+        const cx = size/2, cy = size/2;
+        ctx.fillStyle = '#000'; ctx.fillRect(0,0,size,size);
+        const count = 80;
+        for (let i = 0; i < count; i++) {
+          const angle = rand() * Math.PI * 2;
+          const r = rand() * size * 0.42;
+          const x = cx + r * Math.cos(angle);
+          const y = cy + r * Math.sin(angle);
+          const dotR = size * (0.018 + rand() * 0.035);
+          ctx.beginPath();
+          ctx.arc(x, y, dotR, 0, Math.PI*2);
+          ctx.fillStyle = rand() < 0.6 ? '#fff' : '#666';
+          ctx.fill();
+        }
+        ctx.beginPath(); ctx.arc(cx, cy, size*0.47, 0, Math.PI*2);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = size*0.03; ctx.stroke();
+      }
+
+      // VARIATION 5: Fibonacci spiral
+      function drawV5(ctx, size, slug) {
+        const rand = seededRandom(slugToSeed(slug + 'v5'));
+        const cx = size/2, cy = size/2;
+        ctx.fillStyle = '#000'; ctx.fillRect(0,0,size,size);
+        const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+        const count = 120;
+        for (let i = 0; i < count; i++) {
+          const r = Math.sqrt(i / count) * size * 0.44;
+          const angle = i * goldenAngle;
+          const x = cx + r * Math.cos(angle);
+          const y = cy + r * Math.sin(angle);
+          if (rand() < 0.15) continue;
+          const dotR = size * (0.018 + rand()*0.02);
+          ctx.beginPath();
+          ctx.arc(x, y, dotR, 0, Math.PI*2);
+          ctx.fillStyle = rand() < 0.55 ? '#fff' : '#777';
+          ctx.fill();
+        }
+        ctx.beginPath(); ctx.arc(cx, cy, size*0.47, 0, Math.PI*2);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = size*0.03; ctx.stroke();
+      }
+
+      // VARIATION 6: Concentric rings, square dots
+      function drawV6(ctx, size, slug) {
+        const rand = seededRandom(slugToSeed(slug + 'v6'));
+        const cx = size/2, cy = size/2;
+        ctx.fillStyle = '#000'; ctx.fillRect(0,0,size,size);
+        const rings = 6, dotSize = size*0.055, inner = size*0.1, outer = size*0.43;
+        for (let ring = 0; ring < rings; ring++) {
+          const t = ring / (rings-1);
+          const r = inner + t * (outer - inner);
+          const dots = Math.max(8, Math.floor(2 * Math.PI * r / (dotSize * 2.2)));
+          for (let d = 0; d < dots; d++) {
+            if (rand() < 0.2) continue;
+            const angle = (d / dots) * Math.PI * 2;
+            const x = cx + r*Math.cos(angle);
+            const y = cy + r*Math.sin(angle);
+            const s = dotSize * (0.5 + rand()*0.8);
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+            ctx.fillStyle = rand() < 0.55 ? '#fff' : '#777';
+            ctx.fillRect(-s/2, -s/2, s, s);
+            ctx.restore();
+          }
+        }
+        ctx.beginPath(); ctx.arc(cx, cy, size*0.47, 0, Math.PI*2);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = size*0.03; ctx.stroke();
+      }
+
+      const variations = [
+        { fn: drawV1, label: 'Concentric Rings' },
+        { fn: drawV2, label: 'Dot Grid' },
+        { fn: drawV3, label: 'Radial Spokes' },
+        { fn: drawV4, label: 'Dense Scatter' },
+        { fn: drawV5, label: 'Fibonacci Spiral' },
+        { fn: drawV6, label: 'Square Dots' },
+      ];
+
+      function renderAll() {
+        const slug = document.getElementById('slug-input').value || 'popcode';
+        const grid = document.getElementById('grid');
+        grid.innerHTML = '';
+
+        variations.forEach((v, i) => {
+          const div = document.createElement('div');
+          div.className = 'variation';
+          const canvas = document.createElement('canvas');
+          canvas.width = 200; canvas.height = 200;
+          canvas.style.width = '160px'; canvas.style.height = '160px';
+          const ctx = canvas.getContext('2d');
+          v.fn(ctx, 200, slug);
+          const label = document.createElement('h3');
+          label.textContent = v.label;
+          const btn = document.createElement('button');
+          btn.className = 'dl-btn';
+          btn.textContent = 'Download';
+          btn.onclick = () => {
+            const a = document.createElement('a');
+            a.download = `popcode-marker-v${i+1}-${slug}.png`;
+            a.href = canvas.toDataURL();
+            a.click();
+          };
+          div.appendChild(canvas);
+          div.appendChild(label);
+          div.appendChild(btn);
+          grid.appendChild(div);
+        });
+
+        // Size comparison using variation 1
+        const sizesEl = document.getElementById('sizes');
+        sizesEl.innerHTML = '';
+        const printSizes = [
+          { px: 180, label: '2 inch' },
+          { px: 120, label: '1.5 inch' },
+          { px: 80,  label: '1 inch' },
+          { px: 50,  label: '0.75 inch' },
+          { px: 35,  label: '0.5 inch' },
+        ];
+        printSizes.forEach(s => {
+          const item = document.createElement('div');
+          item.className = 'size-item';
+          const c = document.createElement('canvas');
+          c.width = s.px; c.height = s.px;
+          drawV1(c.getContext('2d'), s.px, slug);
+          const lbl = document.createElement('span');
+          lbl.textContent = s.label;
+          item.appendChild(c);
+          item.appendChild(lbl);
+          sizesEl.appendChild(item);
+        });
+      }
+
+      document.getElementById('slug-input').addEventListener('input', renderAll);
+      renderAll();
+    </script>
+  </body>
+</html>
