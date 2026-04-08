@@ -74,6 +74,10 @@
       #copy-btn { background: #3d2b8e; color: white; border: none; border-radius: 20px; padding: 10px 24px; font-size: 14px; cursor: pointer; font-weight: 600; margin-bottom: 20px; }
       #qr-canvas { border-radius: 12px; margin-top: 8px; }
       #qr-canvas img { border-radius: 12px; }
+      #marker-result { display: none; margin-top: 20px; text-align: center; }
+      #marker-result p { font-size: 13px; opacity: 0.85; margin-bottom: 10px; }
+      #marker-preview { width: 160px; height: 160px; border-radius: 50%; box-shadow: 0 4px 20px rgba(0,0,0,0.4); margin-bottom: 12px; }
+      #marker-dl-btn { background: #3d2b8e; color: white; border: none; border-radius: 20px; padding: 10px 24px; font-size: 14px; cursor: pointer; font-weight: 600; }
     </style>
   </head>
   <body>
@@ -105,6 +109,12 @@
       <div id="qr-container">
         <p style="font-size:13px;opacity:0.85;">Scan to open on your phone:</p>
         <div id="qr-canvas"></div>
+      </div>
+      <div id="marker-result">
+        <p>Your collection marker — print this in your book cover to activate the experience:</p>
+        <img id="marker-preview" alt="Collection marker"/>
+        <br/>
+        <button id="marker-dl-btn">Download Marker</button>
       </div>
     </div>
 
@@ -232,6 +242,41 @@
         document.getElementById('create-btn').disabled = false;
       });
 
+      function seededRandom(seed) {
+        let s = seed;
+        return function() {
+          s = (s * 1664525 + 1013904223) & 0xffffffff;
+          return (s >>> 0) / 0xffffffff;
+        };
+      }
+      function slugToSeed(slug) {
+        let hash = 0;
+        for (let i = 0; i < slug.length; i++) {
+          hash = ((hash << 5) - hash) + slug.charCodeAt(i);
+          hash |= 0;
+        }
+        return Math.abs(hash);
+      }
+      function drawMarker(ctx, size, slug) {
+        const rand = seededRandom(slugToSeed(slug));
+        const cx = size/2, cy = size/2;
+        ctx.fillStyle = '#000'; ctx.fillRect(0, 0, size, size);
+        const rings = 6, dotR = size*0.028, inner = size*0.1, outer = size*0.44;
+        for (let ring = 0; ring < rings; ring++) {
+          const t = ring / (rings - 1);
+          const r = inner + t * (outer - inner);
+          const dots = Math.max(8, Math.floor(2 * Math.PI * r / (dotR * 2.6)));
+          for (let d = 0; d < dots; d++) {
+            if (rand() < 0.2) continue;
+            const angle = (d / dots) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.arc(cx + r*Math.cos(angle), cy + r*Math.sin(angle), dotR, 0, Math.PI*2);
+            ctx.fillStyle = rand() < 0.5 ? '#fff' : '#888';
+            ctx.fill();
+          }
+        }
+      }
+
       function randomSlug() {
         return Math.random().toString(36).substring(2, 10);
       }
@@ -269,11 +314,19 @@
 
         const slug = randomSlug();
 
-        // Step 1: Load images for compilation
-        setProgress('Loading images...', 2);
+        // Step 1: Generate marker + load images for compilation
+        setProgress('Generating collection marker...', 2);
         let images;
         try {
-          images = [];
+          // Generate unique dot marker for this slug
+          const markerCanvas = document.createElement('canvas');
+          markerCanvas.width = 400; markerCanvas.height = 400;
+          drawMarker(markerCanvas.getContext('2d'), 400, slug);
+          const markerImg = new Image();
+          markerImg.src = markerCanvas.toDataURL('image/png');
+          await new Promise(resolve => markerImg.onload = resolve);
+
+          images = [markerImg]; // marker is always target index 0
           for (const pair of readyPairs) {
             const img = new Image();
             img.src = URL.createObjectURL(pair.photo);
@@ -283,6 +336,10 @@
             });
             images.push(img);
           }
+
+          // Save marker canvas for download after creation
+          window._markerCanvas = markerCanvas;
+          window._markerSlug = slug;
         } catch (err) {
           showError('Step 1 failed — ' + err.message);
           return;
@@ -353,7 +410,7 @@
         try {
           const items = readyPairs.map((_, i) => ({
             collection_id: collection.id,
-            target_index: i,
+            target_index: i + 1, // 0 is reserved for the marker
             video_url: videoUrls[i]
           }));
           const { error: itemsError } = await db.from('collection_items').insert(items);
@@ -376,6 +433,18 @@
         document.getElementById('copy-btn').onclick = () => {
           navigator.clipboard.writeText(viewUrl);
           document.getElementById('copy-btn').textContent = 'Copied!';
+        };
+
+        // Show marker preview and download
+        const markerContainer = document.getElementById('marker-result');
+        markerContainer.style.display = 'block';
+        const markerPreview = document.getElementById('marker-preview');
+        markerPreview.src = window._markerCanvas.toDataURL('image/png');
+        document.getElementById('marker-dl-btn').onclick = () => {
+          const a = document.createElement('a');
+          a.download = `popcode-marker-${window._markerSlug}.png`;
+          a.href = window._markerCanvas.toDataURL('image/png');
+          a.click();
         };
       });
     </script>
