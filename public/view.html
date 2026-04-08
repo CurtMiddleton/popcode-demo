@@ -78,6 +78,15 @@
         font-size: 22px; display: none;
         align-items: center; justify-content: center; cursor: pointer;
       }
+      #scan-hint {
+        display: none; position: fixed; bottom: 48px; left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.55); color: white;
+        font-family: sans-serif; font-size: 15px; font-weight: 600;
+        padding: 10px 22px; border-radius: 24px;
+        pointer-events: none; z-index: 1000;
+        white-space: nowrap;
+      }
       #welcome-overlay {
         display: none; position: fixed; inset: 0;
         background: rgba(0,0,0,0.85); z-index: 8000;
@@ -112,6 +121,7 @@
     </div>
     <div id="error-screen"><h2>Experience not found</h2><p>This link may be invalid or expired.</p></div>
 
+    <div id="scan-hint">Point your camera at one of the photos</div>
     <div id="scanner">
       <div class="corner tl"></div>
       <div class="corner tr"></div>
@@ -145,7 +155,6 @@
       }
 
       async function loadCollection(id) {
-        // Try collections first, fall back to legacy experiences
         let mindUrl, videoMap = {};
 
         const { data: col } = await db.from('collections').select('*').eq('slug', id).single();
@@ -156,14 +165,12 @@
             .select('*').eq('collection_id', col.id).order('target_index');
           items.forEach(item => { videoMap[item.target_index] = item.video_url; });
         } else {
-          // Legacy single experience
           const { data: exp } = await db.from('experiences').select('*').eq('slug', id).single();
           if (!exp) { showError(); return; }
           mindUrl = exp.mind_file_url;
           videoMap[0] = exp.video_url;
         }
 
-        // Build a-scene
         const scene = document.createElement('a-scene');
         scene.setAttribute('mindar-image', `imageTargetSrc: ${mindUrl}; autoStart: true;`);
         scene.setAttribute('embedded', '');
@@ -175,16 +182,27 @@
         camera.setAttribute('look-controls', 'enabled: false');
         scene.appendChild(camera);
 
-        // Target 0 is the marker — triggers welcome animation
         const markerTarget = document.createElement('a-entity');
         markerTarget.setAttribute('mindar-image-target', 'targetIndex: 0');
         markerTarget.addEventListener('targetFound', triggerMarker);
+        markerTarget.addEventListener('targetLost', () => {
+          document.getElementById('welcome-overlay').style.display = 'none';
+        });
         scene.appendChild(markerTarget);
 
         Object.keys(videoMap).forEach(idx => {
           const target = document.createElement('a-entity');
           target.setAttribute('mindar-image-target', `targetIndex: ${idx}`);
-          target.addEventListener('targetFound', () => triggerVideo(videoMap[idx]));
+          target.addEventListener('targetFound', () => {
+            if (!videoActive) triggerVideo(videoMap[idx]);
+          });
+          target.addEventListener('targetLost', () => {
+            if (triggerTimer) {
+              clearTimeout(triggerTimer);
+              triggerTimer = null;
+              document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+            }
+          });
           scene.appendChild(target);
         });
 
@@ -196,6 +214,7 @@
         document.getElementById('start-btn').addEventListener('click', () => {
           document.getElementById('start-screen').style.display = 'none';
           document.getElementById('scanner').style.display = 'block';
+          document.getElementById('scan-hint').style.display = 'block';
         });
       }
 
@@ -203,18 +222,21 @@
       const fullScreen = document.getElementById('fullscreen-video');
       const closeBtn = document.getElementById('close-btn');
       const scanner = document.getElementById('scanner');
+      let videoActive = false;
+      let triggerTimer = null;
 
       function triggerMarker() {
         const overlay = document.getElementById('welcome-overlay');
         overlay.style.display = 'flex';
-        setTimeout(() => {
-          overlay.style.display = 'none';
-        }, 2200);
+        setTimeout(() => { overlay.style.display = 'none'; }, 2200);
       }
 
       function triggerVideo(url) {
+        videoActive = true;
+        document.getElementById('scan-hint').style.display = 'none';
         document.querySelectorAll('.corner').forEach(c => c.classList.add('expanded'));
-        setTimeout(() => {
+        triggerTimer = setTimeout(() => {
+          triggerTimer = null;
           fullVid.src = url;
           scanner.style.display = 'none';
           fullScreen.style.display = 'block';
@@ -223,11 +245,24 @@
         }, 900);
       }
 
+      function returnToScanner() {
+        videoActive = false;
+        if (triggerTimer) { clearTimeout(triggerTimer); triggerTimer = null; }
+        fullVid.pause();
+        fullVid.src = '';
+        fullScreen.style.display = 'none';
+        closeBtn.style.display = 'none';
+        document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+        scanner.style.display = 'block';
+        document.getElementById('scan-hint').style.display = 'block';
+      }
+
       fullVid.addEventListener('ended', () => {
         const fade = document.getElementById('fade-overlay');
         fade.style.display = 'block';
         setTimeout(() => fade.style.opacity = '1', 10);
         setTimeout(() => {
+          videoActive = false;
           fullScreen.style.display = 'none';
           fullVid.src = '';
           closeBtn.style.display = 'none';
@@ -238,14 +273,7 @@
         }, 1000);
       });
 
-      closeBtn.addEventListener('click', () => {
-        fullVid.pause();
-        fullVid.src = '';
-        fullScreen.style.display = 'none';
-        closeBtn.style.display = 'none';
-        document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
-        scanner.style.display = 'block';
-      });
+      closeBtn.addEventListener('click', returnToScanner);
     </script>
   </body>
 </html>
