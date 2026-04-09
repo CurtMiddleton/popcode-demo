@@ -239,17 +239,21 @@
           vid.playsInline = true;
           vid.preload = 'metadata';
           vid.addEventListener('loadedmetadata', () => {
-            vid.currentTime = Math.min(0.5, vid.duration / 2);
+            vid.currentTime = Math.min(1.5, vid.duration * 0.15);
           });
           vid.addEventListener('seeked', () => {
-            try {
-              const c = document.createElement('canvas'); c.width = 110; c.height = 110;
-              c.getContext('2d').drawImage(vid, 0, 0, 110, 110);
-              const el = document.getElementById(`video-preview-${key}`);
-              if (el) el.src = c.toDataURL('image/jpeg');
-            } catch(e) {
-              // CORS prevented canvas capture — leave thumbnail blank
-            }
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                try {
+                  const c = document.createElement('canvas'); c.width = 110; c.height = 110;
+                  c.getContext('2d').drawImage(vid, 0, 0, 110, 110);
+                  const el = document.getElementById(`video-preview-${key}`);
+                  if (el) el.src = c.toDataURL('image/jpeg');
+                } catch(e) {
+                  // CORS prevented canvas capture — leave thumbnail blank
+                }
+              });
+            });
           });
           vid.src = videoThumb;
         }
