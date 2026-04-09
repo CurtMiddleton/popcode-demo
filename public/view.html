@@ -254,10 +254,13 @@
         document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
         scanner.style.display = 'block';
         document.getElementById('scan-hint').style.display = 'block';
-        // Force MindAR to re-detect — targetFound won't re-fire if camera stayed on target
-        const mindSys = document.querySelector('a-scene') &&
-          document.querySelector('a-scene').systems['mindar-image-system'];
-        if (mindSys) { mindSys.pause(); setTimeout(() => mindSys.play(), 300); }
+        // Restart MindAR tracking loop
+        const scene = document.querySelector('a-scene');
+        const mindSys = scene && scene.systems['mindar-image-system'];
+        if (mindSys) {
+          try { mindSys.pause(true); } catch(e) {} // keepVideo=true so camera stays live
+          setTimeout(() => { try { mindSys.unpause(); } catch(e) {} }, 300);
+        }
       }
 
       fullVid.addEventListener('ended', () => {
