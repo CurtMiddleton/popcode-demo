@@ -180,7 +180,15 @@
 
         const { data: items } = await db.from('collection_items')
           .select('*').eq('collection_id', col.id).order('target_index');
-        existingItems = items || [];
+
+        // Deduplicate by target_index (keep highest id) in case of DB duplicates
+        const byIndex = {};
+        (items || []).forEach(item => {
+          if (!byIndex[item.target_index] || item.id > byIndex[item.target_index].id) {
+            byIndex[item.target_index] = item;
+          }
+        });
+        existingItems = Object.values(byIndex).sort((a, b) => a.target_index - b.target_index);
 
         document.getElementById('loading-screen').style.display = 'none';
         const ui = document.getElementById('edit-ui');
@@ -729,8 +737,11 @@
         // ── Step 7: Replace all collection_items ──────────────────────────────
         try {
           setProgress('Saving pages...', 90);
-          const { error: delErr } = await db.from('collection_items').delete().eq('collection_id', collectionId);
-          if (delErr) throw delErr;
+          // Delete ALL items for this collection (including any DB duplicates)
+          const { error: delErr, count } = await db.from('collection_items')
+            .delete({ count: 'exact' })
+            .eq('collection_id', collectionId);
+          if (delErr) throw new Error('Could not clear existing pages: ' + delErr.message);
           const rows = finalItems.map(fi => ({
             collection_id: collectionId,
             target_index: fi.target_index,
