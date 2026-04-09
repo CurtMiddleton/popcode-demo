@@ -88,18 +88,6 @@
         pointer-events: none; z-index: 1000;
         white-space: nowrap;
       }
-      #welcome-overlay {
-        display: none; position: fixed; inset: 0;
-        background: rgba(0,0,0,0.85); z-index: 8000;
-        align-items: center; justify-content: center; flex-direction: column;
-        gap: 16px; pointer-events: none;
-      }
-      #welcome-overlay img { width: 120px; height: 120px; border-radius: 50%; animation: pulse 0.6s ease-in-out 3; }
-      #welcome-overlay p { color: white; font-family: sans-serif; font-size: 18px; font-weight: 700; }
-      @keyframes pulse {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.15); }
-      }
       #error-screen {
         display: none; position: fixed; inset: 0; background: black;
         color: white; font-family: sans-serif;
@@ -130,11 +118,7 @@
       <div class="corner br"></div>
     </div>
 
-    <div id="welcome-overlay">
-      <img id="welcome-marker" src="" alt=""/>
-      <p>Collection activated!</p>
-    </div>
-    <div id="fade-overlay"></div>
+<div id="fade-overlay"></div>
     <div id="fullscreen-video">
       <video id="fullvideo" playsinline webkit-playsinline></video>
     </div>
@@ -181,14 +165,6 @@
         camera.setAttribute('look-controls', 'enabled: false');
         scene.appendChild(camera);
 
-        const markerTarget = document.createElement('a-entity');
-        markerTarget.setAttribute('mindar-image-target', 'targetIndex: 0');
-        markerTarget.addEventListener('targetFound', triggerMarker);
-        markerTarget.addEventListener('targetLost', () => {
-          document.getElementById('welcome-overlay').style.display = 'none';
-        });
-        scene.appendChild(markerTarget);
-
         Object.keys(videoMap).forEach(idx => {
           const target = document.createElement('a-entity');
           target.setAttribute('mindar-image-target', `targetIndex: ${idx}`);
@@ -223,12 +199,6 @@
       const scanner = document.getElementById('scanner');
       let videoActive = false;
       let triggerTimer = null;
-
-      function triggerMarker() {
-        const overlay = document.getElementById('welcome-overlay');
-        overlay.style.display = 'flex';
-        setTimeout(() => { overlay.style.display = 'none'; }, 2200);
-      }
 
       function triggerVideo(url) {
         videoActive = true;
