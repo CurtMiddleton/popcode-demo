@@ -244,14 +244,13 @@
         }, 900);
       }
 
-      // ── Fullscreen helpers (hides browser chrome) ────────────────────────────
+      // ── Fullscreen helpers (hides browser chrome for landscape videos) ─────
       function tryGoFullscreen() {
         const el = fullScreen;
         try {
           if (el.requestFullscreen) el.requestFullscreen();
           else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-          // Note: intentionally NOT calling fullVid.webkitEnterFullscreen —
-          // that triggers native iOS player which hides our close button
+          else if (fullVid.webkitEnterFullscreen) fullVid.webkitEnterFullscreen();
         } catch(e) {}
       }
       function tryExitFullscreen() {
@@ -260,14 +259,20 @@
           else if (document.webkitExitFullscreen && document.webkitFullscreenElement) document.webkitExitFullscreen();
         } catch(e) {}
       }
+      // If user exits fullscreen via browser controls, return to scanner
       document.addEventListener('fullscreenchange', () => {
         if (!document.fullscreenElement && videoActive) returnToScanner();
       });
       document.addEventListener('webkitfullscreenchange', () => {
         if (!document.webkitFullscreenElement && videoActive) returnToScanner();
       });
+      // iOS native video fullscreen exit
+      fullVid.addEventListener('webkitendfullscreen', () => {
+        if (videoActive) returnToScanner();
+      });
+      // Request fullscreen when video is landscape
       fullVid.addEventListener('loadedmetadata', () => {
-        tryGoFullscreen();
+        if (fullVid.videoWidth > fullVid.videoHeight) tryGoFullscreen();
       });
 
       fullVid.addEventListener('error', () => {
