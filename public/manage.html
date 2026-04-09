@@ -165,6 +165,7 @@
           const { data: collections, error } = await db
             .from('collections')
             .select('id, slug, name, created_at')
+            .eq('user_id', currentUser.id)
             .order('created_at', { ascending: false });
 
           if (error) throw error;
@@ -327,9 +328,10 @@
             .from('collection_items').delete().eq('collection_id', collectionId);
           if (deleteItemsError) throw new Error('Could not delete collection items: ' + deleteItemsError.message);
 
-          const { error: deleteColError } = await db
-            .from('collections').delete().eq('id', collectionId);
+          const { error: deleteColError, count: deleteCount } = await db
+            .from('collections').delete({ count: 'exact' }).eq('id', collectionId).eq('user_id', currentUser.id);
           if (deleteColError) throw new Error('Could not delete collection record: ' + deleteColError.message);
+          if (deleteCount === 0) throw new Error('Delete was blocked — you may not own this collection.');
 
           if (filesToDelete.length > 0) {
             const { error: storageError } = await db.storage.from('experiences').remove(filesToDelete);
