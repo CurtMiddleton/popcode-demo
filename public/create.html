@@ -64,9 +64,15 @@
 
       .add-page-btn { width: 100%; max-width: 360px; padding: 16px; border-radius: 30px; border: none; background: #3d2b8e; color: white; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 16px; transition: background 0.2s; }
       .add-page-btn:hover { background: #4e38a8; }
-      .create-btn { width: 100%; max-width: 360px; padding: 16px; border-radius: 30px; border: none; background: rgba(100, 220, 230, 0.5); color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+      .create-btn { width: 100%; max-width: 360px; padding: 16px; border-radius: 30px; border: 2px solid transparent; background: rgba(100, 220, 230, 0.5); color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.3s, border-color 0.3s, box-shadow 0.3s; }
       .create-btn:hover { background: rgba(100, 220, 230, 0.7); }
       .create-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .create-btn.ready { background: rgba(100, 220, 230, 0.85); border-color: white; box-shadow: 0 0 0 0 rgba(255,255,255,0.7); animation: pulse-ring 1.8s ease-out infinite; }
+      @keyframes pulse-ring {
+        0%   { box-shadow: 0 0 0 0 rgba(255,255,255,0.7); }
+        70%  { box-shadow: 0 0 0 10px rgba(255,255,255,0); }
+        100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+      }
       .divider { width: 100%; max-width: 360px; border: none; border-top: 1px solid rgba(255,255,255,0.3); margin: 16px 0; }
       .manage-btn { width: 100%; max-width: 360px; padding: 16px; border-radius: 30px; border: none; background: #3d2b8e; color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.2s; text-decoration: none; display: block; text-align: center; }
       .manage-btn:hover { background: #4e38a8; }
@@ -331,12 +337,19 @@
           });
           videoEl.load();
         }
+        checkReady();
+      }
+
+      function checkReady() {
+        const hasComplete = Object.values(pairs).some(p => p.photo && p.video);
+        document.getElementById('create-btn').classList.toggle('ready', hasComplete);
       }
 
       function removePage(n) {
         const page = document.getElementById(`page-${n}`);
         if (page) page.remove();
         delete pairs[n];
+        checkReady();
       }
 
       document.getElementById('add-page-btn').addEventListener('click', addPage);
