@@ -470,6 +470,9 @@
         try {
           for (let i = 0; i < readyPairs.length; i++) {
             setProgress(`Uploading video ${i+1} of ${readyPairs.length}...`, 60 + (i / readyPairs.length) * 25);
+            if (readyPairs[i].video.size === 0) {
+              throw new Error(`Video ${i+1} ("${readyPairs[i].video.name}") is empty — it may have expired. Please remove and re-add it.`);
+            }
             const { error: videoError } = await db.storage
               .from('experiences')
               .upload(`${slug}/video_${i}.mp4`, readyPairs[i].video, { contentType: readyPairs[i].video.type });
