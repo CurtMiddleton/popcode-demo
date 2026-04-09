@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Popcode — Edit Collection</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        min-height: 100vh;
+        background: linear-gradient(160deg, #5bc8f5 0%, #7c3aed 100%);
+        font-family: sans-serif;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 48px 24px 60px;
+      }
+      .logo { margin-bottom: 24px; }
+      .logo img { height: 120px; }
+      h1 { font-size: 22px; font-weight: 800; margin-bottom: 8px; text-align: center; }
+      .subtitle { font-size: 14px; text-align: center; opacity: 0.85; margin-bottom: 28px; max-width: 280px; line-height: 1.5; }
+      .field-label { font-size: 15px; font-weight: 700; margin-bottom: 10px; width: 100%; max-width: 360px; text-align: center; }
+      input[type="text"] { width: 100%; max-width: 360px; padding: 14px 16px; border-radius: 12px; border: none; font-size: 16px; color: #333; margin-bottom: 32px; outline: none; }
+      .pages { width: 100%; max-width: 360px; }
+      .page { margin-bottom: 28px; position: relative; }
+      .page-header { display: flex; align-items: center; justify-content: center; position: relative; margin-bottom: 16px; }
+      .page-label { font-size: 16px; font-weight: 700; text-align: center; }
+      .remove-page-btn { position: absolute; right: 0; background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 50%; width: 28px; height: 28px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; }
+      .remove-page-btn:hover { background: rgba(220,38,38,0.6); }
+      .upload-row { display: flex; gap: 24px; justify-content: center; }
+
+      .upload-btn {
+        display: flex; flex-direction: column; align-items: center; gap: 10px;
+        background: white; border-radius: 50%; width: 120px; height: 120px;
+        justify-content: center; cursor: pointer; border: none;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.15); transition: transform 0.15s;
+        position: relative; overflow: hidden;
+      }
+      .upload-btn:active { transform: scale(0.95); }
+      .upload-btn input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+      .upload-btn img.icon { width: 48px; height: 48px; }
+      .upload-btn .btn-label { font-size: 12px; color: #555; font-weight: 600; text-align: center; padding: 0 8px; }
+      .upload-btn.selected { background: #f0f0ff; box-shadow: 0 0 0 3px #7c3aed; }
+      .upload-btn.selected img.icon { display: none; }
+      .upload-btn.selected .btn-label { display: none; }
+      .upload-btn .preview-img { display: none; width: 110px; height: 110px; object-fit: cover; border-radius: 50%; }
+      .upload-btn.selected .preview-img { display: block; }
+      /* Existing (locked) photo button — shows thumbnail, no re-upload */
+      .upload-btn.existing-photo { cursor: default; pointer-events: none; }
+      .file-name { font-size: 11px; color: white; font-weight: 600; text-align: center; margin-top: 8px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .file-size { font-size: 10px; color: rgba(255,255,255,0.7); font-weight: 500; text-align: center; max-width: 120px; }
+      .file-size.warn { color: #fbbf24; font-weight: 700; }
+      .upload-wrapper { display: flex; flex-direction: column; align-items: center; }
+      .video-msg { display: none; max-width: 120px; margin-top: 6px; text-align: center; }
+      .compress-status { font-size: 10px; color: rgba(255,255,255,0.9); font-weight: 600; line-height: 1.4; }
+      .compress-bar-wrap { background: rgba(255,255,255,0.25); border-radius: 99px; height: 4px; margin: 4px 0; }
+      .compress-bar { height: 100%; background: white; border-radius: 99px; transition: width 0.2s; width: 0%; }
+      .video-msg-banner { background: rgba(251,191,36,0.2); border: 1px solid rgba(251,191,36,0.6); border-radius: 10px; padding: 8px 10px; font-size: 10px; color: white; line-height: 1.5; }
+      .video-msg-banner a { color: #fde68a; font-weight: 700; text-decoration: underline; }
+      .compressed-badge { font-size: 10px; color: #86efac; font-weight: 700; }
+      .existing-badge { font-size: 10px; color: rgba(255,255,255,0.7); text-align: center; max-width: 120px; }
+
+      .add-page-btn { width: 100%; max-width: 360px; padding: 16px; border-radius: 30px; border: none; background: #3d2b8e; color: white; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 16px; transition: background 0.2s; }
+      .add-page-btn:hover { background: #4e38a8; }
+      .save-btn { width: 100%; max-width: 360px; padding: 16px; border-radius: 30px; border: 2px solid transparent; background: rgba(100, 220, 230, 0.5); color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.3s, border-color 0.3s, box-shadow 0.3s; }
+      .save-btn:hover { background: rgba(100, 220, 230, 0.7); }
+      .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .divider { width: 100%; max-width: 360px; border: none; border-top: 1px solid rgba(255,255,255,0.3); margin: 16px 0; }
+      .back-btn { width: 100%; max-width: 360px; padding: 16px; border-radius: 30px; border: none; background: #3d2b8e; color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.2s; text-decoration: none; display: block; text-align: center; }
+      .back-btn:hover { background: #4e38a8; }
+
+      #progress { display: none; width: 100%; max-width: 360px; margin-top: 24px; text-align: center; }
+      .progress-bar-wrap { background: rgba(255,255,255,0.3); border-radius: 99px; height: 14px; margin: 14px 0; overflow: hidden; }
+      .progress-bar { height: 100%; background: white; border-radius: 99px; transition: width 0.3s; width: 0%; }
+      #progress-label { font-size: 18px; font-weight: 700; opacity: 0.95; }
+      #progress-label.error { color: #fca5a5; opacity: 1; font-weight: 700; }
+      #try-again-btn { display: none; margin-top: 14px; background: rgba(255,255,255,0.2); color: white; border: 2px solid rgba(255,255,255,0.6); border-radius: 24px; padding: 10px 24px; font-size: 14px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+      #try-again-btn:hover { background: rgba(255,255,255,0.35); }
+
+      #result { display: none; width: 100%; max-width: 360px; margin-top: 24px; background: rgba(255,255,255,0.15); border-radius: 16px; padding: 24px; text-align: center; }
+      #result h3 { font-size: 18px; margin-bottom: 8px; }
+      #result p { font-size: 13px; opacity: 0.85; margin-bottom: 16px; }
+      #result-url { background: white; border-radius: 10px; padding: 10px 14px; font-size: 12px; word-break: break-all; color: #333; margin-bottom: 12px; }
+      #copy-btn { background: #3d2b8e; color: white; border: none; border-radius: 20px; padding: 10px 24px; font-size: 14px; cursor: pointer; font-weight: 600; margin-bottom: 20px; }
+
+      .loading-screen { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 40px 0; opacity: 0.85; }
+      .spinner { width: 36px; height: 36px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.3); border-top-color: white; animation: spin 0.8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <div class="logo"><img src="/assets/Popcode_logo.rev.svg" alt="popcode"/></div>
+    <h1>Edit Collection</h1>
+    <p class="subtitle">Add or remove photo + video pairs.</p>
+
+    <div id="loading-screen" class="loading-screen">
+      <div class="spinner"></div>
+      <span style="font-size:14px;">Loading collection...</span>
+    </div>
+
+    <div id="edit-ui" style="display:none; width:100%; max-width:360px; display:none; flex-direction:column; align-items:center;">
+      <div class="field-label">Collection Name (optional)</div>
+      <input type="text" id="name-input" placeholder=""/>
+
+      <div class="pages" id="pages"></div>
+
+      <button class="add-page-btn" id="add-page-btn">+ Add Page</button>
+      <button class="save-btn" id="save-btn">Save Changes</button>
+      <hr class="divider"/>
+      <a href="/manage.html" class="back-btn">← My Collections</a>
+    </div>
+
+    <div id="progress">
+      <div id="progress-label">Starting...</div>
+      <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar"></div></div>
+      <button id="try-again-btn">Try Again</button>
+    </div>
+
+    <div id="result">
+      <h3>Collection updated!</h3>
+      <p>Your collection is live with the new pages.</p>
+      <div id="result-url"></div>
+      <button id="copy-btn">Copy Link</button>
+      <br/>
+      <a href="/manage.html" class="back-btn" style="margin-top:12px;">← My Collections</a>
+    </div>
+
+    <script>
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      const MAX_VIDEO_MB = 200;
+      const MAX_PHOTO_MB = 10;
+
+      const params = new URLSearchParams(location.search);
+      const slug = params.get('id');
+
+      let currentUser = null;
+      let collectionId = null;
+      // existingItems: array of {id, target_index, video_url, photo_url} from DB
+      let existingItems = [];
+      // deletedExistingIds: set of item IDs the user removed
+      const deletedExistingIds = new Set();
+      // newPairs: keyed by page key, {photo: File, video: File}
+      let newPageKey = 0;
+      const newPairs = {};
+
+      // ── Auth ──────────────────────────────────────────────────────────────────
+      db.auth.getSession().then(({ data }) => {
+        if (!data.session) {
+          window.location.href = '/auth.html';
+        } else {
+          currentUser = data.session.user;
+          if (!slug) { alert('No collection specified.'); window.location.href = '/manage.html'; return; }
+          loadCollection();
+        }
+      });
+
+      // ── Load existing collection ──────────────────────────────────────────────
+      async function loadCollection() {
+        const { data: col } = await db.from('collections').select('*').eq('slug', slug).single();
+        if (!col) { alert('Collection not found.'); window.location.href = '/manage.html'; return; }
+        collectionId = col.id;
+        document.getElementById('name-input').value = col.name || '';
+
+        const { data: items } = await db.from('collection_items')
+          .select('*').eq('collection_id', col.id).order('target_index');
+        existingItems = items || [];
+
+        document.getElementById('loading-screen').style.display = 'none';
+        const ui = document.getElementById('edit-ui');
+        ui.style.display = 'flex';
+
+        existingItems.forEach(item => renderExistingPage(item));
+      }
+
+      // ── Render existing page (photo from URL, video locked) ───────────────────
+      function renderExistingPage(item) {
+        const key = `existing-${item.id}`;
+        const page = document.createElement('div');
+        page.className = 'page';
+        page.id = `page-${key}`;
+
+        const photoThumb = item.photo_url || '';
+        const videoThumb = item.video_url || '';
+
+        page.innerHTML = `
+          <div class="page-header">
+            <div class="page-label">Page</div>
+            <button class="remove-page-btn" title="Remove page">&times;</button>
+          </div>
+          <div class="upload-row">
+            <div class="upload-wrapper">
+              <div class="upload-btn selected existing-photo" id="photo-btn-${key}">
+                <img class="preview-img" id="photo-preview-${key}" src="${escapeHtml(photoThumb)}" style="display:block;"/>
+              </div>
+              <div class="existing-badge">Current photo</div>
+            </div>
+            <div class="upload-wrapper">
+              <div class="upload-btn selected" id="video-btn-${key}" style="cursor:default;pointer-events:none;">
+                <img class="preview-img" id="video-preview-${key}" style="display:block;"/>
+              </div>
+              <div class="existing-badge">Current video</div>
+            </div>
+          </div>
+        `;
+
+        // Generate video thumbnail from URL
+        if (videoThumb) {
+          const vid = document.createElement('video');
+          vid.crossOrigin = 'anonymous';
+          vid.src = videoThumb;
+          vid.muted = true;
+          vid.playsInline = true;
+          vid.currentTime = 0.5;
+          vid.addEventListener('seeked', () => {
+            const c = document.createElement('canvas'); c.width = 110; c.height = 110;
+            c.getContext('2d').drawImage(vid, 0, 0, 110, 110);
+            const el = document.getElementById(`video-preview-${key}`);
+            if (el) el.src = c.toDataURL('image/jpeg');
+          });
+          vid.load();
+        }
+
+        page.querySelector('.remove-page-btn').addEventListener('click', () => {
+          deletedExistingIds.add(item.id);
+          page.remove();
+        });
+
+        document.getElementById('pages').appendChild(page);
+      }
+
+      // ── Render new (file upload) page ─────────────────────────────────────────
+      function addNewPage() {
+        newPageKey++;
+        const n = newPageKey;
+        newPairs[n] = { photo: null, video: null };
+        const page = document.createElement('div');
+        page.className = 'page';
+        page.id = `page-new-${n}`;
+        page.innerHTML = `
+          <div class="page-header">
+            <div class="page-label">New Page</div>
+            <button class="remove-page-btn" title="Remove page">&times;</button>
+          </div>
+          <div class="upload-row">
+            <div class="upload-wrapper">
+              <label class="upload-btn" id="photo-btn-new-${n}">
+                <input type="file" accept="image/*" onchange="handleFile(this,'photo',${n}).catch(e=>console.error(e))"/>
+                <img class="icon" src="/assets/photo.png" alt="Photo"/>
+                <img class="preview-img" id="photo-preview-new-${n}"/>
+                <span class="btn-label">Photo to scan</span>
+              </label>
+              <div class="file-name" id="photo-name-new-${n}"></div>
+              <div class="file-size" id="photo-size-new-${n}"></div>
+            </div>
+            <div class="upload-wrapper">
+              <label class="upload-btn" id="video-btn-new-${n}">
+                <input type="file" accept="video/*" onchange="handleFile(this,'video',${n}).catch(e=>console.error(e))"/>
+                <img class="icon" src="/assets/video.png" alt="Video"/>
+                <img class="preview-img" id="video-preview-new-${n}"/>
+                <span class="btn-label">Plays on scan</span>
+              </label>
+              <div class="file-name" id="video-name-new-${n}"></div>
+              <div class="file-size" id="video-size-new-${n}"></div>
+              <div class="video-msg" id="video-msg-new-${n}"></div>
+            </div>
+          </div>
+        `;
+        page.querySelector('.remove-page-btn').addEventListener('click', () => {
+          delete newPairs[n];
+          page.remove();
+        });
+        document.getElementById('pages').appendChild(page);
+      }
+
+      document.getElementById('add-page-btn').addEventListener('click', addNewPage);
+
+      // ── File handling (mirrors create.html) ───────────────────────────────────
+      function formatFileSize(bytes) {
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      }
+
+      function canCompressVideo() {
+        try {
+          const canvas = document.createElement('canvas');
+          if (typeof canvas.captureStream !== 'function') return false;
+          if (typeof MediaRecorder === 'undefined') return false;
+          const types = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+          return types.some(t => MediaRecorder.isTypeSupported(t));
+        } catch (e) { return false; }
+      }
+
+      function compressVideo(file, onProgress) {
+        const types = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+        const mimeType = types.find(t => MediaRecorder.isTypeSupported(t));
+        return new Promise((resolve, reject) => {
+          const video = document.createElement('video');
+          const srcUrl = URL.createObjectURL(file);
+          video.src = srcUrl;
+          video.muted = true;
+          video.playsInline = true;
+          video.onloadedmetadata = () => {
+            const MAX_DIM = 1280;
+            const scale = Math.min(1, MAX_DIM / Math.max(video.videoWidth || 1, video.videoHeight || 1));
+            const w = Math.max(2, Math.round(video.videoWidth * scale / 2) * 2);
+            const h = Math.max(2, Math.round(video.videoHeight * scale / 2) * 2);
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            const stream = canvas.captureStream(30);
+            const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2_500_000 });
+            const chunks = [];
+            recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+            recorder.onstop = () => { URL.revokeObjectURL(srcUrl); resolve(new Blob(chunks, { type: mimeType.split(';')[0] })); };
+            recorder.onerror = e => { URL.revokeObjectURL(srcUrl); reject(e.error || new Error('Compression error')); };
+            let animId;
+            const draw = () => {
+              if (!video.ended && !video.paused) {
+                ctx.drawImage(video, 0, 0, w, h);
+                onProgress && onProgress(video.currentTime / (video.duration || 1));
+                animId = requestAnimationFrame(draw);
+              }
+            };
+            video.onended = () => { cancelAnimationFrame(animId); recorder.stop(); };
+            recorder.start(200);
+            video.play().then(draw).catch(reject);
+          };
+          video.onerror = () => reject(new Error('Could not load video for compression'));
+          video.load();
+        });
+      }
+
+      async function handleFile(input, type, n) {
+        const file = input.files[0];
+        if (!file) return;
+
+        const sizeMB = file.size / (1024 * 1024);
+        const limitMB = type === 'video' ? MAX_VIDEO_MB : MAX_PHOTO_MB;
+
+        if (sizeMB > limitMB) {
+          if (type === 'video') {
+            if (canCompressVideo()) {
+              const go = confirm(`This video is ${sizeMB.toFixed(1)} MB — over the ${limitMB} MB limit.\n\nWould you like to compress it? It may take a few minutes.\n\nTap OK to compress, or Cancel to choose a different video.`);
+              if (!go) { input.value = ''; return; }
+              const msgEl = document.getElementById(`video-msg-new-${n}`);
+              const btn = document.getElementById(`video-btn-new-${n}`);
+              msgEl.style.display = 'block';
+              msgEl.innerHTML = `<div class="compress-status">Compressing… 0%</div><div class="compress-bar-wrap"><div class="compress-bar" id="cbar-new-${n}"></div></div>`;
+              btn.style.pointerEvents = 'none';
+              let compressed;
+              try {
+                compressed = await compressVideo(file, p => {
+                  document.getElementById(`cbar-new-${n}`).style.width = Math.round(p * 100) + '%';
+                  msgEl.querySelector('.compress-status').textContent = `Compressing… ${Math.round(p * 100)}%`;
+                });
+              } catch (e) { compressed = null; }
+              btn.style.pointerEvents = '';
+              const compressedMB = compressed ? compressed.size / (1024 * 1024) : Infinity;
+              if (compressed && compressedMB <= limitMB) {
+                const compressedFile = new File([compressed], file.name.replace(/\.[^.]+$/, '.webm'), { type: compressed.type });
+                msgEl.innerHTML = `<div class="compressed-badge">✓ Compressed to ${compressedMB.toFixed(1)} MB</div>`;
+                input.value = '';
+                newPairs[n][type] = compressedFile;
+                btn.classList.add('selected');
+                document.getElementById(`video-name-new-${n}`).textContent = compressedFile.name.length > 18 ? compressedFile.name.substring(0,18)+'…' : compressedFile.name;
+                const sizeEl = document.getElementById(`video-size-new-${n}`);
+                sizeEl.textContent = formatFileSize(compressedFile.size);
+                sizeEl.className = 'file-size';
+                const videoEl = document.createElement('video');
+                videoEl.src = URL.createObjectURL(compressedFile);
+                videoEl.muted = true; videoEl.playsInline = true; videoEl.currentTime = 0.5;
+                videoEl.addEventListener('seeked', () => {
+                  const c = document.createElement('canvas'); c.width = 110; c.height = 110;
+                  c.getContext('2d').drawImage(videoEl, 0, 0, 110, 110);
+                  document.getElementById(`video-preview-new-${n}`).src = c.toDataURL('image/jpeg');
+                });
+                videoEl.load();
+                return;
+              } else {
+                msgEl.innerHTML = `<div class="video-msg-banner">Still too large. Try <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a> to compress further.</div>`;
+                input.value = ''; return;
+              }
+            } else {
+              const msgEl = document.getElementById(`video-msg-new-${n}`);
+              msgEl.style.display = 'block';
+              msgEl.innerHTML = `<div class="video-msg-banner">${sizeMB.toFixed(1)} MB — over limit. Compress free at <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a></div>`;
+              input.value = ''; return;
+            }
+          } else {
+            alert(`This photo is ${sizeMB.toFixed(1)} MB, which exceeds the ${MAX_PHOTO_MB} MB limit. Please choose a smaller photo.`);
+            input.value = ''; return;
+          }
+        }
+
+        const msgEl = document.getElementById(`video-msg-new-${n}`);
+        if (msgEl) { msgEl.style.display = 'none'; msgEl.innerHTML = ''; }
+
+        newPairs[n][type] = file;
+        const btn = document.getElementById(`${type}-btn-new-${n}`);
+        btn.classList.add('selected');
+        const shortName = file.name.length > 18 ? file.name.substring(0,18)+'…' : file.name;
+        document.getElementById(`${type}-name-new-${n}`).textContent = shortName;
+        const sizeEl = document.getElementById(`${type}-size-new-${n}`);
+        sizeEl.textContent = formatFileSize(file.size);
+        sizeEl.className = 'file-size' + (sizeMB > limitMB * 0.8 ? ' warn' : '');
+
+        if (type === 'photo') {
+          document.getElementById(`photo-preview-new-${n}`).src = URL.createObjectURL(file);
+        } else {
+          const videoEl = document.createElement('video');
+          videoEl.src = URL.createObjectURL(file);
+          videoEl.muted = true; videoEl.playsInline = true; videoEl.currentTime = 0.5;
+          videoEl.addEventListener('seeked', () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 110; canvas.height = 110;
+            canvas.getContext('2d').drawImage(videoEl, 0, 0, 110, 110);
+            document.getElementById(`video-preview-new-${n}`).src = canvas.toDataURL('image/jpeg');
+          });
+          videoEl.load();
+        }
+      }
+
+      // ── Progress helpers ──────────────────────────────────────────────────────
+      function setProgress(label, pct, isError) {
+        const labelEl = document.getElementById('progress-label');
+        labelEl.textContent = label;
+        labelEl.className = isError ? 'error' : '';
+        document.getElementById('progress-bar').style.width = pct + '%';
+      }
+
+      function showSaveError(msg) {
+        setProgress(msg, 0, true);
+        document.getElementById('save-btn').disabled = false;
+        document.getElementById('try-again-btn').style.display = 'inline-block';
+      }
+
+      document.getElementById('try-again-btn').addEventListener('click', () => {
+        setProgress('Starting...', 0, false);
+        document.getElementById('try-again-btn').style.display = 'none';
+        document.getElementById('progress').style.display = 'none';
+        document.getElementById('save-btn').disabled = false;
+      });
+
+      // ── Save ──────────────────────────────────────────────────────────────────
+      document.getElementById('save-btn').addEventListener('click', async () => {
+        // Collect kept existing items (not deleted)
+        const keptItems = existingItems.filter(item => !deletedExistingIds.has(item.id));
+        // Collect complete new pairs
+        const readyNew = Object.values(newPairs).filter(p => p.photo && p.video);
+
+        if (keptItems.length + readyNew.length === 0) {
+          alert('You need at least one page with both a photo and video.');
+          return;
+        }
+
+        // Validate new video sizes (stale file guard)
+        for (let i = 0; i < readyNew.length; i++) {
+          if (readyNew[i].video.size === 0) {
+            alert(`New page ${i+1}: video appears to be empty — it may have expired. Please remove and re-add it.`);
+            return;
+          }
+        }
+
+        if (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler) {
+          alert('MindAR compiler not loaded yet. Please wait a moment and try again.');
+          return;
+        }
+
+        document.getElementById('save-btn').disabled = true;
+        document.getElementById('progress').style.display = 'block';
+        document.getElementById('result').style.display = 'none';
+        document.getElementById('try-again-btn').style.display = 'none';
+
+        // ── Step 1: Load all photos as Image elements ─────────────────────────
+        let images = [];
+        // We need photos in final order: kept existing first, then new
+        // For existing items, load from photo_url (crossOrigin)
+        try {
+          setProgress('Loading photos...', 2);
+          for (const item of keptItems) {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.src = item.photo_url;
+            await new Promise((resolve, reject) => {
+              img.onload = resolve;
+              img.onerror = () => reject(new Error(`Could not load existing photo (target ${item.target_index}). Check your connection.`));
+            });
+            images.push(await resizeImage(img));
+          }
+          for (const pair of readyNew) {
+            const img = new Image();
+            img.src = URL.createObjectURL(pair.photo);
+            await new Promise((resolve, reject) => {
+              img.onload = resolve;
+              img.onerror = () => reject(new Error(`Could not load photo "${pair.photo.name}".`));
+            });
+            images.push(await resizeImage(img));
+          }
+        } catch (err) {
+          showSaveError('Step 1 failed — ' + err.message);
+          return;
+        }
+
+        // ── Step 2: Compile .mind ─────────────────────────────────────────────
+        let mindBlob;
+        try {
+          setProgress('Compiling image targets...', 5);
+          const compiler = new MINDAR.IMAGE.Compiler();
+          await compiler.compileImageTargets(images, (progress) => {
+            setProgress(`Compiling image targets... ${Math.round(progress)}%`, 5 + progress * 0.40);
+          });
+          const mindBuffer = await compiler.exportData();
+          mindBlob = new Blob([mindBuffer]);
+        } catch (err) {
+          showSaveError('Step 2 failed (compilation) — ' + (err.message || 'Compilation error.'));
+          return;
+        }
+
+        // ── Step 3: Upload new .mind (overwrite) ──────────────────────────────
+        let mindUrl;
+        try {
+          setProgress('Uploading image targets...', 50);
+          // Remove old first, then upload new
+          await db.storage.from('experiences').remove([`${slug}/target.mind`]);
+          const { error: mindError } = await db.storage
+            .from('experiences')
+            .upload(`${slug}/target.mind`, mindBlob, { contentType: 'application/octet-stream' });
+          if (mindError) throw mindError;
+          mindUrl = db.storage.from('experiences').getPublicUrl(`${slug}/target.mind`).data.publicUrl;
+        } catch (err) {
+          showSaveError('Step 3 failed (uploading targets) — ' + (err.message || 'Upload error.'));
+          return;
+        }
+
+        // ── Step 4: Upload new video/photo files ──────────────────────────────
+        // Final ordering: keptItems first (use their existing URLs), then readyNew
+        // We'll assign new target_index values 0..N-1
+        const finalItems = [];
+        let idx = 0;
+
+        // Kept existing items — reuse existing storage files (just update target_index in DB)
+        for (const item of keptItems) {
+          finalItems.push({
+            target_index: idx,
+            video_url: item.video_url,
+            photo_url: item.photo_url
+          });
+          idx++;
+        }
+
+        // New pairs — upload files
+        try {
+          for (let i = 0; i < readyNew.length; i++) {
+            setProgress(`Uploading new page ${i+1} of ${readyNew.length}...`, 55 + (i / readyNew.length) * 25);
+
+            // Find a unique slot name (avoid collisions with existing files)
+            const videoPath = `${slug}/video_${idx}.mp4`;
+            const photoExt = readyNew[i].photo.name.split('.').pop() || 'jpg';
+            const photoPath = `${slug}/photo_${idx}.${photoExt}`;
+
+            const { error: vErr } = await db.storage
+              .from('experiences')
+              .upload(videoPath, readyNew[i].video, { contentType: readyNew[i].video.type || 'video/mp4' });
+            if (vErr) throw new Error(`Video ${i+1}: ${vErr.message}`);
+
+            const { error: pErr } = await db.storage
+              .from('experiences')
+              .upload(photoPath, readyNew[i].photo, { contentType: readyNew[i].photo.type || 'image/jpeg' });
+            if (pErr) throw new Error(`Photo ${i+1}: ${pErr.message}`);
+
+            finalItems.push({
+              target_index: idx,
+              video_url: db.storage.from('experiences').getPublicUrl(videoPath).data.publicUrl,
+              photo_url: db.storage.from('experiences').getPublicUrl(photoPath).data.publicUrl
+            });
+            idx++;
+          }
+        } catch (err) {
+          showSaveError('Step 4 failed (uploading files) — ' + (err.message || 'Upload error.'));
+          return;
+        }
+
+        // ── Step 5: Delete storage files for removed items ────────────────────
+        try {
+          const removedItems = existingItems.filter(item => deletedExistingIds.has(item.id));
+          if (removedItems.length > 0) {
+            const paths = [];
+            for (const item of removedItems) {
+              // Extract path from public URL
+              const vPath = urlToStoragePath(item.video_url);
+              const pPath = urlToStoragePath(item.photo_url);
+              if (vPath) paths.push(vPath);
+              if (pPath) paths.push(pPath);
+            }
+            if (paths.length > 0) {
+              const { error } = await db.storage.from('experiences').remove(paths);
+              if (error) console.warn('Storage delete warning:', error.message);
+            }
+          }
+        } catch (err) {
+          console.warn('Could not delete old files:', err.message);
+          // Non-fatal — continue
+        }
+
+        // ── Step 6: Update collections.mind_file_url and name ─────────────────
+        try {
+          setProgress('Saving collection...', 85);
+          const name = document.getElementById('name-input').value.trim() || null;
+          const { error } = await db.from('collections')
+            .update({ mind_file_url: mindUrl, name })
+            .eq('id', collectionId);
+          if (error) throw error;
+        } catch (err) {
+          showSaveError('Step 5 failed (saving collection) — ' + (err.message || 'Database error.'));
+          return;
+        }
+
+        // ── Step 7: Replace all collection_items ──────────────────────────────
+        try {
+          setProgress('Saving pages...', 90);
+          const { error: delErr } = await db.from('collection_items').delete().eq('collection_id', collectionId);
+          if (delErr) throw delErr;
+          const rows = finalItems.map(fi => ({
+            collection_id: collectionId,
+            target_index: fi.target_index,
+            video_url: fi.video_url,
+            photo_url: fi.photo_url
+          }));
+          const { error: insErr } = await db.from('collection_items').insert(rows);
+          if (insErr) throw insErr;
+        } catch (err) {
+          showSaveError('Step 6 failed (saving pages) — ' + (err.message || 'Database error.'));
+          return;
+        }
+
+        // ── Done ──────────────────────────────────────────────────────────────
+        setProgress('Done!', 100);
+        const shortUrl = `popcode.app/${slug}`;
+        document.getElementById('result-url').textContent = shortUrl;
+        document.getElementById('result').style.display = 'block';
+        document.getElementById('copy-btn').onclick = () => {
+          navigator.clipboard.writeText(shortUrl);
+          document.getElementById('copy-btn').textContent = 'Copied!';
+        };
+      });
+
+      // ── Helpers ───────────────────────────────────────────────────────────────
+      async function resizeImage(img) {
+        const MAX_COMPILE_DIM = 640;
+        if (img.naturalWidth <= MAX_COMPILE_DIM && img.naturalHeight <= MAX_COMPILE_DIM) return img;
+        const scale = Math.min(MAX_COMPILE_DIM / img.naturalWidth, MAX_COMPILE_DIM / img.naturalHeight);
+        const rc = document.createElement('canvas');
+        rc.width = Math.round(img.naturalWidth * scale);
+        rc.height = Math.round(img.naturalHeight * scale);
+        rc.getContext('2d').drawImage(img, 0, 0, rc.width, rc.height);
+        const resized = new Image();
+        resized.src = rc.toDataURL('image/jpeg', 0.92);
+        await new Promise(r => resized.onload = r);
+        return resized;
+      }
+
+      function urlToStoragePath(url) {
+        if (!url) return null;
+        try {
+          const u = new URL(url);
+          // Supabase storage public URLs: /storage/v1/object/public/BUCKET/PATH
+          const match = u.pathname.match(/\/storage\/v1\/object\/public\/experiences\/(.+)/);
+          return match ? match[1] : null;
+        } catch (e) { return null; }
+      }
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        const d = document.createElement('div');
+        d.appendChild(document.createTextNode(str));
+        return d.innerHTML;
+      }
+    </script>
+  </body>
+</html>

@@ -466,21 +466,28 @@
           return;
         }
 
-        const videoUrls = [];
+        const videoUrls = [], photoUrls = [];
         try {
           for (let i = 0; i < readyPairs.length; i++) {
-            setProgress(`Uploading video ${i+1} of ${readyPairs.length}...`, 60 + (i / readyPairs.length) * 25);
+            setProgress(`Uploading page ${i+1} of ${readyPairs.length}...`, 60 + (i / readyPairs.length) * 25);
             if (readyPairs[i].video.size === 0) {
               throw new Error(`Video ${i+1} ("${readyPairs[i].video.name}") is empty — it may have expired. Please remove and re-add it.`);
             }
             const { error: videoError } = await db.storage
               .from('experiences')
-              .upload(`${slug}/video_${i}.mp4`, readyPairs[i].video, { contentType: readyPairs[i].video.type });
+              .upload(`${slug}/video_${i}.mp4`, readyPairs[i].video, { contentType: readyPairs[i].video.type || 'video/mp4' });
             if (videoError) throw new Error(`Video ${i+1} ("${readyPairs[i].video.name}"): ${videoError.message}`);
             videoUrls.push(db.storage.from('experiences').getPublicUrl(`${slug}/video_${i}.mp4`).data.publicUrl);
+
+            const photoExt = readyPairs[i].photo.name.split('.').pop() || 'jpg';
+            const { error: photoError } = await db.storage
+              .from('experiences')
+              .upload(`${slug}/photo_${i}.${photoExt}`, readyPairs[i].photo, { contentType: readyPairs[i].photo.type || 'image/jpeg' });
+            if (photoError) throw new Error(`Photo ${i+1}: ${photoError.message}`);
+            photoUrls.push(db.storage.from('experiences').getPublicUrl(`${slug}/photo_${i}.${photoExt}`).data.publicUrl);
           }
         } catch (err) {
-          showError('Step 4 failed (uploading video) — ' + (err.message || 'Upload error. Check your internet connection and try again.'));
+          showError('Step 4 failed (uploading files) — ' + (err.message || 'Upload error. Check your internet connection and try again.'));
           return;
         }
 
@@ -503,7 +510,8 @@
           const items = readyPairs.map((_, i) => ({
             collection_id: collection.id,
             target_index: i,
-            video_url: videoUrls[i]
+            video_url: videoUrls[i],
+            photo_url: photoUrls[i]
           }));
           const { error: itemsError } = await db.from('collection_items').insert(items);
           if (itemsError) throw itemsError;
