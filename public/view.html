@@ -244,7 +244,31 @@
         }, 900);
       }
 
-      // ── Fullscreen helpers (hides browser chrome for landscape videos) ─────
+      // ── Fullscreen helpers (hides browser chrome) ────────────────────────────
+      function tryGoFullscreen() {
+        const el = fullScreen;
+        try {
+          if (el.requestFullscreen) el.requestFullscreen();
+          else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+          // Note: intentionally NOT calling fullVid.webkitEnterFullscreen —
+          // that triggers native iOS player which hides our close button
+        } catch(e) {}
+      }
+      function tryExitFullscreen() {
+        try {
+          if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen();
+          else if (document.webkitExitFullscreen && document.webkitFullscreenElement) document.webkitExitFullscreen();
+        } catch(e) {}
+      }
+      document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement && videoActive) returnToScanner();
+      });
+      document.addEventListener('webkitfullscreenchange', () => {
+        if (!document.webkitFullscreenElement && videoActive) returnToScanner();
+      });
+      fullVid.addEventListener('loadedmetadata', () => {
+        tryGoFullscreen();
+      });
 
       fullVid.addEventListener('error', () => {
         const src = fullVid.src || '';
@@ -255,6 +279,7 @@
       function returnToScanner() {
         videoActive = false;
         if (triggerTimer) { clearTimeout(triggerTimer); triggerTimer = null; }
+        tryExitFullscreen();
         fullVid.pause();
         fullVid.src = '';
         fullScreen.style.display = 'none';
