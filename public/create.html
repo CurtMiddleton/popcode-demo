@@ -7,6 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
@@ -155,7 +156,7 @@
           <div class="upload-row">
             <div class="upload-wrapper">
               <label class="upload-btn" id="photo-btn-${n}">
-                <input type="file" accept="image/*" onchange="handleFile(this,'photo',${n})"/>
+                <input type="file" accept="image/*" onchange="handleFile(this,'photo',${n}).catch(e=>console.error(e))"/>
                 <img class="icon" src="/assets/photo.png" alt="Photo"/>
                 <img class="preview-img" id="photo-preview-${n}"/>
                 <span class="btn-label">Photo to scan</span>
@@ -165,7 +166,7 @@
             </div>
             <div class="upload-wrapper">
               <label class="upload-btn" id="video-btn-${n}">
-                <input type="file" accept="video/*" onchange="handleFile(this,'video',${n})"/>
+                <input type="file" accept="video/*" onchange="handleFile(this,'video',${n}).catch(e=>console.error(e))"/>
                 <img class="icon" src="/assets/video.png" alt="Video"/>
                 <img class="preview-img" id="video-preview-${n}"/>
                 <span class="btn-label">Plays on scan</span>
@@ -178,29 +179,71 @@
         document.getElementById('pages').appendChild(page);
       }
 
-      function handleFile(input, type, n) {
+      const COMPRESS_THRESHOLD_MB = 20;
+      let ffmpegInstance = null;
+
+      async function getFFmpeg() {
+        if (ffmpegInstance) return ffmpegInstance;
+        const { createFFmpeg } = FFmpeg;
+        ffmpegInstance = createFFmpeg({ log: false });
+        await ffmpegInstance.load();
+        return ffmpegInstance;
+      }
+
+      async function compressVideo(file, onProgress) {
+        const ff = await getFFmpeg();
+        const inputName = 'input' + file.name.replace(/[^a-z0-9.]/gi, '_');
+        const outputName = 'output.mp4';
+        ff.setProgress(({ ratio }) => onProgress(Math.round(ratio * 100)));
+        ff.FS('writeFile', inputName, await FFmpeg.fetchFile(file));
+        await ff.run('-i', inputName, '-vcodec', 'libx264', '-crf', '28', '-preset', 'fast', '-acodec', 'aac', '-b:a', '128k', outputName);
+        const data = ff.FS('readFile', outputName);
+        ff.FS('unlink', inputName);
+        ff.FS('unlink', outputName);
+        return new File([data.buffer], 'compressed.mp4', { type: 'video/mp4' });
+      }
+
+      async function handleFile(input, type, n) {
         const file = input.files[0];
         if (!file) return;
 
         const sizeMB = file.size / (1024 * 1024);
         const limitMB = type === 'video' ? MAX_VIDEO_MB : MAX_PHOTO_MB;
-        if (sizeMB > limitMB) {
-          alert(`This ${type} is ${sizeMB.toFixed(1)} MB, which exceeds the ${limitMB} MB limit. Please choose a smaller file.`);
-          input.value = '';
-          return;
-        }
 
-        pairs[n][type] = file;
         const btn = document.getElementById(`${type}-btn-${n}`);
         btn.classList.add('selected');
-
         const shortName = file.name.length > 18 ? file.name.substring(0,18)+'…' : file.name;
         document.getElementById(`${type}-name-${n}`).textContent = shortName;
-
         const sizeEl = document.getElementById(`${type}-size-${n}`);
-        const sizeStr = formatFileSize(file.size);
-        sizeEl.textContent = sizeStr;
-        sizeEl.className = 'file-size' + (sizeMB > limitMB * 0.8 ? ' warn' : '');
+
+        if (type === 'video' && sizeMB > COMPRESS_THRESHOLD_MB) {
+          sizeEl.textContent = `${sizeMB.toFixed(1)} MB — compressing...`;
+          sizeEl.className = 'file-size warn';
+          try {
+            const compressed = await compressVideo(file, (pct) => {
+              sizeEl.textContent = `Compressing... ${pct}%`;
+            });
+            const compressedMB = compressed.size / (1024 * 1024);
+            pairs[n][type] = compressed;
+            sizeEl.textContent = `${sizeMB.toFixed(1)} MB → ${compressedMB.toFixed(1)} MB ✓`;
+            sizeEl.className = 'file-size';
+          } catch (err) {
+            sizeEl.textContent = 'Compression failed — ' + err.message;
+            sizeEl.className = 'file-size warn';
+            input.value = '';
+            btn.classList.remove('selected');
+            return;
+          }
+        } else if (sizeMB > limitMB) {
+          alert(`This ${type} is ${sizeMB.toFixed(1)} MB, which exceeds the ${limitMB} MB limit.`);
+          input.value = '';
+          btn.classList.remove('selected');
+          return;
+        } else {
+          pairs[n][type] = file;
+          sizeEl.textContent = formatFileSize(file.size);
+          sizeEl.className = 'file-size' + (sizeMB > limitMB * 0.8 ? ' warn' : '');
+        }
 
         if (type === 'photo') {
           document.getElementById(`photo-preview-${n}`).src = URL.createObjectURL(file);
