@@ -95,6 +95,14 @@
         pointer-events: none; z-index: 1000;
         white-space: nowrap;
       }
+      #reload-hint {
+        display: none; position: fixed; bottom: 12px; left: 50%;
+        transform: translateX(-50%);
+        font-family: sans-serif; font-size: 13px; color: rgba(255,255,255,0.6);
+        z-index: 1000; white-space: nowrap; cursor: pointer;
+        background: none; border: none; padding: 8px 16px;
+        text-decoration: underline;
+      }
       #error-screen {
         display: none; position: fixed; inset: 0; background: black;
         color: white; font-family: sans-serif;
@@ -119,6 +127,7 @@
 
     <button id="home-btn">&#8592;</button>
     <div id="scan-hint">Point your camera at one of the photos</div>
+    <button id="reload-hint">Having trouble? Tap to reload</button>
     <div id="scanner">
       <div class="corner tl"></div>
       <div class="corner tr"></div>
@@ -205,6 +214,7 @@
           document.getElementById('scanner').style.display = 'block';
           document.getElementById('scan-hint').style.display = 'block';
           document.getElementById('home-btn').style.display = 'flex';
+          startReloadHintTimer();
         });
       }
 
@@ -214,6 +224,22 @@
       const scanner = document.getElementById('scanner');
       let videoActive = false;
       let triggerTimer = null;
+      let reloadHintTimer = null;
+
+      const reloadHintBtn = document.getElementById('reload-hint');
+      reloadHintBtn.addEventListener('click', () => location.reload());
+
+      function startReloadHintTimer() {
+        clearTimeout(reloadHintTimer);
+        reloadHintBtn.style.display = 'none';
+        reloadHintTimer = setTimeout(() => {
+          if (!videoActive) reloadHintBtn.style.display = 'block';
+        }, 20000);
+      }
+      function clearReloadHint() {
+        clearTimeout(reloadHintTimer);
+        reloadHintBtn.style.display = 'none';
+      }
 
       function showVideoError(msg) {
         videoActive = false;
@@ -230,6 +256,7 @@
       function triggerVideo(url) {
         if (!url) { showVideoError('No video found for this photo'); return; }
         videoActive = true;
+        clearReloadHint();
         document.getElementById('scan-hint').style.display = 'none';
         document.querySelectorAll('.corner').forEach(c => c.classList.add('expanded'));
         triggerTimer = setTimeout(() => {
@@ -293,6 +320,7 @@
         scanner.style.display = 'block';
         document.getElementById('scan-hint').style.display = 'block';
         document.getElementById('home-btn').style.display = 'flex';
+        startReloadHintTimer();
       }
 
       fullVid.addEventListener('ended', () => {
