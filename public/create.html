@@ -53,6 +53,13 @@
       .file-size { font-size: 10px; color: rgba(255,255,255,0.7); font-weight: 500; text-align: center; max-width: 120px; }
       .file-size.warn { color: #fbbf24; font-weight: 700; }
       .upload-wrapper { display: flex; flex-direction: column; align-items: center; }
+      .video-msg { display: none; max-width: 120px; margin-top: 6px; text-align: center; }
+      .compress-status { font-size: 10px; color: rgba(255,255,255,0.9); font-weight: 600; line-height: 1.4; }
+      .compress-bar-wrap { background: rgba(255,255,255,0.25); border-radius: 99px; height: 4px; margin: 4px 0; }
+      .compress-bar { height: 100%; background: white; border-radius: 99px; transition: width 0.2s; width: 0%; }
+      .video-msg-banner { background: rgba(251,191,36,0.2); border: 1px solid rgba(251,191,36,0.6); border-radius: 10px; padding: 8px 10px; font-size: 10px; color: white; line-height: 1.5; }
+      .video-msg-banner a { color: #fde68a; font-weight: 700; text-decoration: underline; }
+      .compressed-badge { font-size: 10px; color: #86efac; font-weight: 700; }
 
 
       .add-page-btn { width: 100%; max-width: 360px; padding: 16px; border-radius: 30px; border: none; background: #3d2b8e; color: white; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 16px; transition: background 0.2s; }
@@ -173,10 +180,61 @@
               </label>
               <div class="file-name" id="video-name-${n}"></div>
               <div class="file-size" id="video-size-${n}"></div>
+              <div class="video-msg" id="video-msg-${n}"></div>
             </div>
           </div>
         `;
         document.getElementById('pages').appendChild(page);
+      }
+
+      function canCompressVideo() {
+        try {
+          const canvas = document.createElement('canvas');
+          if (typeof canvas.captureStream !== 'function') return false;
+          if (typeof MediaRecorder === 'undefined') return false;
+          const types = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+          return types.some(t => MediaRecorder.isTypeSupported(t));
+        } catch (e) { return false; }
+      }
+
+      function compressVideo(file, onProgress) {
+        const types = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+        const mimeType = types.find(t => MediaRecorder.isTypeSupported(t));
+        return new Promise((resolve, reject) => {
+          const video = document.createElement('video');
+          const srcUrl = URL.createObjectURL(file);
+          video.src = srcUrl;
+          video.muted = true;
+          video.playsInline = true;
+          video.onloadedmetadata = () => {
+            const MAX_DIM = 1280;
+            const scale = Math.min(1, MAX_DIM / Math.max(video.videoWidth || 1, video.videoHeight || 1));
+            const w = Math.max(2, Math.round(video.videoWidth * scale / 2) * 2);
+            const h = Math.max(2, Math.round(video.videoHeight * scale / 2) * 2);
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            const stream = canvas.captureStream(30);
+            const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2_500_000 });
+            const chunks = [];
+            recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+            recorder.onstop = () => { URL.revokeObjectURL(srcUrl); resolve(new Blob(chunks, { type: mimeType.split(';')[0] })); };
+            recorder.onerror = e => { URL.revokeObjectURL(srcUrl); reject(e.error || new Error('Compression error')); };
+            let animId;
+            const draw = () => {
+              if (!video.ended && !video.paused) {
+                ctx.drawImage(video, 0, 0, w, h);
+                onProgress && onProgress(video.currentTime / (video.duration || 1));
+                animId = requestAnimationFrame(draw);
+              }
+            };
+            video.onended = () => { cancelAnimationFrame(animId); recorder.stop(); };
+            recorder.start(200);
+            video.play().then(draw).catch(reject);
+          };
+          video.onerror = () => reject(new Error('Could not load video for compression'));
+          video.load();
+        });
       }
 
       async function handleFile(input, type, n) {
@@ -187,10 +245,64 @@
         const limitMB = type === 'video' ? MAX_VIDEO_MB : MAX_PHOTO_MB;
 
         if (sizeMB > limitMB) {
-          alert(`This ${type} is ${sizeMB.toFixed(1)} MB, which exceeds the ${limitMB} MB limit. Please choose a smaller file.`);
-          input.value = '';
-          return;
+          if (type === 'video') {
+            if (canCompressVideo()) {
+              const go = confirm(`This video is ${sizeMB.toFixed(1)} MB — over the ${limitMB} MB limit.\n\nWould you like to compress it? It may take a few minutes.\n\nTap OK to compress, or Cancel to choose a different video.`);
+              if (!go) { input.value = ''; return; }
+              // Show compression progress
+              const msgEl = document.getElementById(`video-msg-${n}`);
+              const btn = document.getElementById(`video-btn-${n}`);
+              msgEl.style.display = 'block';
+              msgEl.innerHTML = `<div class="compress-status">Compressing… 0%</div><div class="compress-bar-wrap"><div class="compress-bar" id="cbar-${n}"></div></div>`;
+              btn.style.pointerEvents = 'none';
+              let compressed;
+              try {
+                compressed = await compressVideo(file, p => {
+                  document.getElementById(`cbar-${n}`).style.width = Math.round(p * 100) + '%';
+                  msgEl.querySelector('.compress-status').textContent = `Compressing… ${Math.round(p * 100)}%`;
+                });
+              } catch (e) { compressed = null; }
+              btn.style.pointerEvents = '';
+              const compressedMB = compressed ? compressed.size / (1024 * 1024) : Infinity;
+              if (compressed && compressedMB <= limitMB) {
+                const compressedFile = new File([compressed], file.name.replace(/\.[^.]+$/, '.webm'), { type: compressed.type });
+                msgEl.innerHTML = `<div class="compressed-badge">✓ Compressed to ${compressedMB.toFixed(1)} MB</div>`;
+                input.value = '';
+                pairs[n][type] = compressedFile;
+                btn.classList.add('selected');
+                document.getElementById(`video-name-${n}`).textContent = compressedFile.name.length > 18 ? compressedFile.name.substring(0,18)+'…' : compressedFile.name;
+                const sizeEl = document.getElementById(`video-size-${n}`);
+                sizeEl.textContent = formatFileSize(compressedFile.size);
+                sizeEl.className = 'file-size';
+                const videoEl = document.createElement('video');
+                videoEl.src = URL.createObjectURL(compressedFile);
+                videoEl.muted = true; videoEl.playsInline = true; videoEl.currentTime = 0.5;
+                videoEl.addEventListener('seeked', () => {
+                  const c = document.createElement('canvas'); c.width = 110; c.height = 110;
+                  c.getContext('2d').drawImage(videoEl, 0, 0, 110, 110);
+                  document.getElementById(`video-preview-${n}`).src = c.toDataURL('image/jpeg');
+                });
+                videoEl.load();
+                return;
+              } else {
+                msgEl.innerHTML = `<div class="video-msg-banner">Still too large (${compressedMB < Infinity ? compressedMB.toFixed(0) : sizeMB.toFixed(0)} MB). Try <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a> to compress further.</div>`;
+                input.value = ''; return;
+              }
+            } else {
+              // iOS Safari — no captureStream support
+              const msgEl = document.getElementById(`video-msg-${n}`);
+              msgEl.style.display = 'block';
+              msgEl.innerHTML = `<div class="video-msg-banner">${sizeMB.toFixed(1)} MB — over limit. Compress free at <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a></div>`;
+              input.value = ''; return;
+            }
+          } else {
+            alert(`This photo is ${sizeMB.toFixed(1)} MB, which exceeds the ${limitMB} MB limit. Please choose a smaller photo.`);
+            input.value = ''; return;
+          }
         }
+
+        const msgEl = document.getElementById(`video-msg-${n}`);
+        if (msgEl) { msgEl.style.display = 'none'; msgEl.innerHTML = ''; }
 
         pairs[n][type] = file;
         const btn = document.getElementById(`${type}-btn-${n}`);
