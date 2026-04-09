@@ -222,17 +222,23 @@
         if (videoThumb) {
           const vid = document.createElement('video');
           vid.crossOrigin = 'anonymous';
-          vid.src = videoThumb;
           vid.muted = true;
           vid.playsInline = true;
-          vid.currentTime = 0.5;
-          vid.addEventListener('seeked', () => {
-            const c = document.createElement('canvas'); c.width = 110; c.height = 110;
-            c.getContext('2d').drawImage(vid, 0, 0, 110, 110);
-            const el = document.getElementById(`video-preview-${key}`);
-            if (el) el.src = c.toDataURL('image/jpeg');
+          vid.preload = 'metadata';
+          vid.addEventListener('loadedmetadata', () => {
+            vid.currentTime = Math.min(0.5, vid.duration / 2);
           });
-          vid.load();
+          vid.addEventListener('seeked', () => {
+            try {
+              const c = document.createElement('canvas'); c.width = 110; c.height = 110;
+              c.getContext('2d').drawImage(vid, 0, 0, 110, 110);
+              const el = document.getElementById(`video-preview-${key}`);
+              if (el) el.src = c.toDataURL('image/jpeg');
+            } catch(e) {
+              // CORS prevented canvas capture — leave thumbnail blank
+            }
+          });
+          vid.src = videoThumb;
         }
 
         // Photo replacement
