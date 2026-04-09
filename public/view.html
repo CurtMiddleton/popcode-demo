@@ -201,6 +201,18 @@
       let videoActive = false;
       let triggerTimer = null;
 
+      function showVideoError(msg) {
+        videoActive = false;
+        fullScreen.style.display = 'none';
+        closeBtn.style.display = 'none';
+        scanner.style.display = 'block';
+        document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+        const hint = document.getElementById('scan-hint');
+        hint.textContent = msg;
+        hint.style.display = 'block';
+        setTimeout(() => { hint.textContent = 'Point your camera at one of the photos'; }, 4000);
+      }
+
       function triggerVideo(url) {
         videoActive = true;
         document.getElementById('scan-hint').style.display = 'none';
@@ -211,9 +223,13 @@
           scanner.style.display = 'none';
           fullScreen.style.display = 'block';
           closeBtn.style.display = 'flex';
-          fullVid.play();
+          fullVid.play().catch(err => showVideoError('Video failed to play — tap X and try again'));
         }, 900);
       }
+
+      fullVid.addEventListener('error', () => {
+        showVideoError('Video could not load — check your connection');
+      });
 
       function returnToScanner() {
         videoActive = false;
