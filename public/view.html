@@ -146,7 +146,8 @@
           mindUrl = col.mind_file_url;
           const { data: items } = await db.from('collection_items')
             .select('*').eq('collection_id', col.id).order('target_index');
-          items.forEach(item => { videoMap[item.target_index] = item.video_url; });
+          (items || []).forEach(item => { videoMap[item.target_index] = item.video_url; });
+          if (!mindUrl || Object.keys(videoMap).length === 0) { showError(); return; }
         } else {
           const { data: exp } = await db.from('experiences').select('*').eq('slug', id).single();
           if (!exp) { showError(); return; }
