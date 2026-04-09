@@ -343,7 +343,21 @@
               img.onload = resolve;
               img.onerror = () => reject(new Error(`Could not load photo "${pair.photo.name}". Make sure it is a valid image file.`));
             });
-            images.push(img);
+            // Resize to max 800px before compilation to prevent iOS memory crash
+            const MAX_COMPILE_DIM = 800;
+            if (img.naturalWidth > MAX_COMPILE_DIM || img.naturalHeight > MAX_COMPILE_DIM) {
+              const scale = Math.min(MAX_COMPILE_DIM / img.naturalWidth, MAX_COMPILE_DIM / img.naturalHeight);
+              const rc = document.createElement('canvas');
+              rc.width = Math.round(img.naturalWidth * scale);
+              rc.height = Math.round(img.naturalHeight * scale);
+              rc.getContext('2d').drawImage(img, 0, 0, rc.width, rc.height);
+              const resized = new Image();
+              resized.src = rc.toDataURL('image/jpeg', 0.92);
+              await new Promise(r => resized.onload = r);
+              images.push(resized);
+            } else {
+              images.push(img);
+            }
           }
 
           window._markerCanvas = markerCanvas;
