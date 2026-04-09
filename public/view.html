@@ -184,6 +184,15 @@
 
         document.body.appendChild(scene);
 
+        // Grab mindSys reference once scene is ready
+        scene.addEventListener('arReady', () => {
+          mindSys = scene.systems['mindar-image-system'] || null;
+        });
+        // Fallback: also try after a tick in case arReady already fired
+        setTimeout(() => {
+          if (!mindSys) mindSys = scene.systems['mindar-image-system'] || null;
+        }, 3000);
+
         document.getElementById('loading').style.display = 'none';
         document.getElementById('start-screen').style.display = 'flex';
 
@@ -200,6 +209,7 @@
       const scanner = document.getElementById('scanner');
       let videoActive = false;
       let triggerTimer = null;
+      let mindSys = null; // set after scene loads
 
       function showVideoError(msg) {
         videoActive = false;
@@ -220,6 +230,8 @@
         document.querySelectorAll('.corner').forEach(c => c.classList.add('expanded'));
         triggerTimer = setTimeout(() => {
           triggerTimer = null;
+          // Pause MindAR tracking now — clean state before unpause on close
+          if (mindSys) { try { mindSys.pause(true); } catch(e) {} }
           fullVid.src = url;
           fullVid.load();
           scanner.style.display = 'none';
@@ -245,11 +257,8 @@
         document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
         scanner.style.display = 'block';
         document.getElementById('scan-hint').style.display = 'block';
-        // Restart MindAR tracking loop
-        const scene = document.querySelector('a-scene');
-        const mindSys = scene && scene.systems['mindar-image-system'];
+        // Unpause MindAR — was paused cleanly when video started
         if (mindSys) {
-          try { mindSys.pause(true); } catch(e) {} // keepVideo=true so camera stays live
           setTimeout(() => { try { mindSys.unpause(); } catch(e) {} }, 300);
         }
       }
