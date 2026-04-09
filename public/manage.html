@@ -45,9 +45,10 @@
       .collections-list { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 16px; }
 
       .card {
-        background: rgba(255,255,255,0.15); border-radius: 16px; padding: 20px 20px 16px;
+        background: rgba(255,255,255,0.15); border-radius: 16px; padding: 0 0 16px;
         backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.25);
       }
+      .card-thumb { width: 100%; height: 110px; background-size: cover; background-position: center top; border-radius: 12px 12px 0 0; margin-bottom: 16px; background-color: rgba(255,255,255,0.1); }
       .card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; gap: 12px; }
       .card-title { font-size: 18px; font-weight: 800; flex: 1; word-break: break-word; }
       .card-meta { font-size: 12px; opacity: 0.75; margin-bottom: 16px; line-height: 1.6; }
@@ -181,20 +182,25 @@
           const ids = collections.map(c => c.id);
           const { data: items, error: itemsError } = await db
             .from('collection_items')
-            .select('collection_id')
-            .in('collection_id', ids);
+            .select('collection_id, photo_url, target_index')
+            .in('collection_id', ids)
+            .order('target_index');
 
           if (itemsError) throw itemsError;
 
           const countMap = {};
+          const photoMap = {};
           (items || []).forEach(item => {
             countMap[item.collection_id] = (countMap[item.collection_id] || 0) + 1;
+            if (!photoMap[item.collection_id] && item.photo_url) {
+              photoMap[item.collection_id] = item.photo_url;
+            }
           });
 
           content.innerHTML = '';
           collections.forEach(col => {
             const pageCount = countMap[col.id] || 0;
-            content.appendChild(buildCard(col, pageCount));
+            content.appendChild(buildCard(col, pageCount, photoMap[col.id] || null));
           });
 
         } catch (err) {
@@ -222,7 +228,7 @@
         return div;
       }
 
-      function buildCard(col, pageCount) {
+      function buildCard(col, pageCount, thumbUrl) {
         const card = document.createElement('div');
         card.className = 'card';
         card.dataset.id = col.id;
@@ -232,6 +238,8 @@
         const shortUrl = `popcode.app/${col.slug}`;
 
         card.innerHTML = `
+          ${thumbUrl ? `<div class="card-thumb" style="background-image:url('${escapeHtml(thumbUrl)}')"></div>` : '<div class="card-thumb"></div>'}
+          <div style="padding: 0 20px">
           <div class="card-header">
             <div class="card-title">${escapeHtml(title)}</div>
           </div>
@@ -249,6 +257,7 @@
             <a class="btn btn-rename" href="/edit.html?id=${escapeHtml(col.slug)}">Edit</a>
             <button class="btn btn-rename-open">Rename</button>
             <button class="btn btn-delete" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}">Delete</button>
+          </div>
           </div>
         `;
 
