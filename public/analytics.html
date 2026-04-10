@@ -197,11 +197,21 @@
 
         // ── Summary ───────────────────────────────────────────────────────────
         const opens     = evts.filter(e => e.event_type === 'scan_open').length;
-        const found     = evts.filter(e => e.event_type === 'target_found').length;
         const plays     = evts.filter(e => e.event_type === 'video_play').length;
         const completes = evts.filter(e => e.event_type === 'video_complete').length;
         const errors    = evts.filter(e => e.event_type === 'video_error').length;
         const uniqueIPs = new Set(evts.map(e => e.ip_address).filter(Boolean)).size;
+
+        // Detection rate = sessions with at least one target_found / total opens
+        // Group by IP+day to approximate sessions
+        const sessionsWithFound = new Set(
+          evts.filter(e => e.event_type === 'target_found')
+              .map(e => (e.ip_address || e.id) + '|' + (e.created_at || '').slice(0, 10))
+        ).size;
+        const sessionOpens = new Set(
+          evts.filter(e => e.event_type === 'scan_open')
+              .map(e => (e.ip_address || e.id) + '|' + (e.created_at || '').slice(0, 10))
+        ).size;
 
         // ── Breakdowns ────────────────────────────────────────────────────────
         const deviceCounts = {}, countryCounts = {}, colStats = {}, browserCounts = {};
@@ -232,7 +242,7 @@
           <!-- Summary cards -->
           <div class="cards">
             <div class="card"><div class="card-value">${opens}</div><div class="card-label">Total Opens</div></div>
-            <div class="card highlight"><div class="card-value">${pct(found,opens)}</div><div class="card-label">Detection Rate</div></div>
+            <div class="card highlight"><div class="card-value">${pct(sessionsWithFound,sessionOpens)}</div><div class="card-label">Detection Rate</div></div>
             <div class="card"><div class="card-value">${plays}</div><div class="card-label">Videos Played</div></div>
             <div class="card highlight"><div class="card-value">${pct(completes,plays)}</div><div class="card-label">Completion Rate</div></div>
             <div class="card"><div class="card-value">${uniqueIPs}</div><div class="card-label">Unique Visitors</div></div>
