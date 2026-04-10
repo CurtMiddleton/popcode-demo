@@ -171,8 +171,22 @@
       function countryFlag(code) {
         if (!code) return '';
         const flag = code.toUpperCase().replace(/./g, c => String.fromCodePoint(0x1F1E0 - 65 + c.charCodeAt(0)));
-        return `<span class="flag">${flag}</span>`;
+        return '<span class="flag">' + flag + '</span>';
       }
+      function renderRow(e, colNames) {
+        var loc = countryFlag(e.country) + (e.city ? e.city + ', ' : '') + (e.region ? e.region + ' ' : '') + (e.country || '—');
+        return '<tr>' +
+          '<td class="muted" style="white-space:nowrap">' + formatDate(e.created_at) + '</td>' +
+          '<td>' + eventBadge(e.event_type) + '</td>' +
+          '<td style="font-weight:600">' + (colNames[e.slug] || e.slug) + '</td>' +
+          '<td>' + devicePill(e.device_type) + '</td>' +
+          '<td class="muted">' + (e.browser || '—') + '</td>' +
+          '<td style="white-space:nowrap">' + loc + '</td>' +
+          '<td class="muted" style="font-size:11px">' + (e.ip_address || '—') + '</td>' +
+          '<td class="muted" style="font-size:11px">' + (e.user_name || e.user_email || '—') + '</td>' +
+          '</tr>';
+      }
+
       function barRows(obj, maxVal) {
         return Object.entries(obj).sort((a,b) => b[1]-a[1]).map(([label, n]) => `
           <div class="bar-row">
@@ -320,27 +334,7 @@
           <div class="section">
             <div class="section-title" style="margin-bottom:12px">Recent Activity <span style="font-size:12px;color:#aaa;font-weight:400">(last 100 events)</span></div>
             <div class="table-wrap">
-              ${recent.length === 0
-                ? '<p class="empty">No events yet.</p>'
-                : `<table>
-                    <thead><tr>
-                      <th>Time</th><th>Event</th><th>Collection</th>
-                      <th>Device</th><th>Browser</th><th>Location</th><th>IP</th><th>User</th>
-                    </tr></thead>
-                    <tbody>
-                      ${recent.map(e=>`
-                        <tr>
-                          <td class="muted" style="white-space:nowrap">${formatDate(e.created_at)}</td>
-                          <td>${eventBadge(e.event_type)}</td>
-                          <td style="font-weight:600">${colNames[e.slug]||e.slug}</td>
-                          <td>${devicePill(e.device_type)}</td>
-                          <td class="muted">${e.browser||'—'}</td>
-                          <td style="white-space:nowrap">${countryFlag(e.country)}${e.city ? e.city+', ' : ''}${e.region ? e.region+' ' : ''}${e.country||'—'}</td>
-                          <td class="muted" style="font-size:11px">${e.ip_address||'—'}</td>
-                          <td class="muted" style="font-size:11px">${e.user_name||e.user_email||'—'}</td>
-                        </tr>`).join('')}
-                    </tbody>
-                  </table>`}
+              ${recent.length === 0 ? '<p class="empty">No events yet.</p>' : '<table><thead><tr><th>Time</th><th>Event</th><th>Collection</th><th>Device</th><th>Browser</th><th>Location</th><th>IP</th><th>User</th></tr></thead><tbody>' + recent.map(function(e){ return renderRow(e, colNames); }).join('') + '</tbody></table>'}
             </div>
           </div>
         `;
