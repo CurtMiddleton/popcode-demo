@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Popcode — How It Works</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <style>
+      @font-face {
+        font-family: 'FilsonPro';
+        src: url('/assets/fonts/FilsonProMedium/font.woff2') format('woff2'),
+             url('/assets/fonts/FilsonProMedium/font.woff') format('woff');
+        font-weight: 400; font-style: normal;
+      }
+      @font-face {
+        font-family: 'FilsonPro';
+        src: url('/assets/fonts/FilsonProBold/font.woff2') format('woff2'),
+             url('/assets/fonts/FilsonProBold/font.woff') format('woff');
+        font-weight: 700; font-style: normal;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        min-height: 100vh; background: #f2f0eb;
+        font-family: 'FilsonPro', sans-serif; color: #1a1a1a;
+        display: flex; flex-direction: column; align-items: center;
+        padding: 0 0 80px; overflow-x: hidden;
+      }
+      .site-header {
+        width: 100vw; background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
+        padding: 24px 24px 40px; min-height: 200px;
+        display: flex; align-items: flex-end; justify-content: center;
+        position: relative; margin-bottom: 32px; align-self: stretch;
+      }
+      .top-bar {
+        width: 100%; max-width: 560px; padding: 0 24px;
+        margin-bottom: 28px;
+      }
+      .top-bar h1 { font-size: 26px; font-weight: 700; }
+      .content { width: 100%; max-width: 560px; padding: 0 24px; display: flex; flex-direction: column; gap: 20px; }
+
+      .section {
+        background: white; border-radius: 20px; padding: 28px 24px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      }
+      .section-title {
+        font-size: 20px; font-weight: 700; margin-bottom: 14px;
+        background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      .section p {
+        font-size: 15px; color: #444; line-height: 1.65; margin-bottom: 14px;
+      }
+      .section p:last-child { margin-bottom: 0; }
+
+      .steps { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
+      .step { display: flex; gap: 14px; align-items: flex-start; }
+      .step-num {
+        width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+        background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
+        color: white; font-size: 14px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .step-body { padding-top: 5px; }
+      .step-title { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+      .step-desc { font-size: 14px; color: #666; line-height: 1.5; }
+
+      .cta-btn {
+        display: inline-block; margin-top: 20px;
+        background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
+        color: white; border-radius: 24px; padding: 12px 28px;
+        font-size: 15px; font-weight: 700; text-decoration: none;
+      }
+
+      /* Nav overlay */
+      #nav-overlay { display:none; position:fixed; top:0; right:0; bottom:0; left:0; background:linear-gradient(160deg,#5bc8f5 0%,#7c3aed 100%); z-index:200; flex-direction:column; align-items:center; justify-content:center; }
+      #nav-drawer { display:flex; flex-direction:column; align-items:center; gap:4px; width:100%; padding:0 24px; }
+      .nav-link { display:block; padding:16px 24px; font-size:26px; font-weight:700; color:white; text-decoration:none; font-family:'FilsonPro',sans-serif; text-align:center; opacity:0.95; }
+      .nav-link:hover { opacity:1; }
+      .nav-link.external { opacity:0.7; font-size:18px; }
+      .nav-divider { height:1px; background:rgba(255,255,255,0.25); margin:12px 0; width:120px; }
+      .nav-close { position:absolute; top:24px; right:24px; background:none; border:none; color:white; cursor:pointer; padding:4px; }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <button id="nav-btn" style="position:absolute;left:20px;top:20px;background:none;border:none;cursor:pointer;padding:4px;" aria-label="Menu">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <img src="/assets/Popcode_logo.rev.svg" alt="Popcode" style="height:80px;"/>
+      <div style="position:absolute;right:20px;top:20px;display:flex;align-items:center;gap:10px;">
+        <span id="user-greeting" style="color:white;font-size:13px;font-weight:700;font-family:'FilsonPro',sans-serif;opacity:0.9;"></span>
+        <button id="logout-btn" style="background:#78A7FF;color:white;border:none;border-radius:20px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:'FilsonPro',sans-serif;">Sign Out</button>
+      </div>
+    </header>
+
+    <div id="nav-overlay">
+      <button class="nav-close" id="nav-close-btn" aria-label="Close menu">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <div id="nav-drawer">
+        <a class="nav-link" href="/create.html">Create a Popcode</a>
+        <a class="nav-link" href="/manage.html">My Collections</a>
+        <a class="nav-link" href="/views.html">Past Popcode Views</a>
+        <a class="nav-link" href="/account.html">Account</a>
+        <a class="nav-link" href="/howto.html">How It Works</a>
+        <div class="nav-divider"></div>
+        <a class="nav-link external" href="https://www.popcodeapp.com" target="_blank">popcodeapp.com <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-left:6px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+      </div>
+    </div>
+
+    <div class="top-bar">
+      <h1>How It Works</h1>
+    </div>
+
+    <div class="content">
+
+      <!-- What is Popcode -->
+      <div class="section">
+        <div class="section-title">What is Popcode?</div>
+        <p>Popcode brings printed photos to life. Using augmented reality, it lets you attach a video to any photo — so when someone points their phone camera at that photo, the video plays right on screen.</p>
+        <p>Think of it like a QR code, but instead of a boring link, the photo itself becomes the trigger. Wedding albums that play a highlight reel. Family photos that tell the story behind the moment. Art prints that come alive.</p>
+        <p>No app download required — it works right in the browser.</p>
+      </div>
+
+      <!-- How to create -->
+      <div class="section">
+        <div class="section-title">How do I create a Popcode?</div>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <div class="step-title">Sign up for an account</div>
+              <div class="step-desc">Create a free account at popcode.app using your email address.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <div class="step-title">Create a Collection</div>
+              <div class="step-desc">A collection is a set of photo + video pairs. Give it a name — for example, "Addie's First Year" or "Summer Trip 2025."</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <div class="step-title">Upload your photo + video pairs</div>
+              <div class="step-desc">For each page, upload the photo that will be scanned and the video that should play when someone scans it. You can add as many pairs as you like.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <div class="step-title">Share your link</div>
+              <div class="step-desc">Once your collection is ready, you'll get a short link like popcode.app/abc123. Share it with anyone you want to be able to view your Popcode.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-body">
+              <div class="step-title">Print your photos</div>
+              <div class="step-desc">Print the photos you uploaded and place them wherever you like — in a frame, an album, or on a card. Anyone with your link can scan them.</div>
+            </div>
+          </div>
+        </div>
+        <a href="/create.html" class="cta-btn">+ Create a Collection</a>
+      </div>
+
+      <!-- How to scan -->
+      <div class="section">
+        <div class="section-title">How do I scan a Popcoded image?</div>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <div class="step-title">Open the link</div>
+              <div class="step-desc">Open the Popcode link you were given — either by tapping it directly or by going to popcode.app and entering the code.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <div class="step-title">Tap "Tap to Scan"</div>
+              <div class="step-desc">Allow camera access when prompted, then tap the button to start scanning.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <div class="step-title">Point your camera at a photo</div>
+              <div class="step-desc">Hold your phone steady and point it at one of the Popcoded photos. Make sure the whole photo is visible in the frame.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <div class="step-title">Watch the video play</div>
+              <div class="step-desc">The video will start playing automatically. Tap the X to close it and scan another photo.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <script>
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      db.auth.getSession().then(function(res) {
+        if (!res.data.session) {
+          document.getElementById('logout-btn').style.display = 'none';
+        } else {
+          var uName = (res.data.session.user?.user_metadata?.full_name || '').split(' ')[0] || (res.data.session.user?.email || '').split('@')[0] || '';
+          if (uName) { var g = document.getElementById('user-greeting'); if (g) g.textContent = 'Hi, ' + uName + '!'; }
+        }
+      });
+
+      document.getElementById('logout-btn').addEventListener('click', async function() {
+        await db.auth.signOut(); window.location.href = '/auth.html';
+      });
+
+      // Nav overlay
+      document.getElementById('nav-btn').addEventListener('click', function() {
+        document.getElementById('nav-overlay').style.display = 'flex';
+      });
+      document.getElementById('nav-close-btn').addEventListener('click', function() {
+        document.getElementById('nav-overlay').style.display = 'none';
+      });
+      document.getElementById('nav-overlay').addEventListener('click', function(e) {
+        if (e.target === document.getElementById('nav-overlay')) {
+          document.getElementById('nav-overlay').style.display = 'none';
+        }
+      });
+    </script>
+  </body>
+</html>
