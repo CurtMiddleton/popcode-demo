@@ -93,6 +93,12 @@
       .empty { color: #aaa; font-size: 14px; text-align: center; padding: 32px; }
       .muted { color: #aaa; }
       .flag { font-size: 16px; margin-right: 4px; }
+      .session-row td { background: #fafaf8; }
+      .session-row:hover td { background: #f4f3f0; }
+      .child-row td { background: #f8f7ff; border-left: 3px solid #e0d8ff; }
+      .child-row:hover td { background: #f0eeff; }
+      .expand-btn { background: none; border: none; cursor: pointer; font-size: 12px; color: #7657FC; padding: 2px 6px; line-height: 1; }
+      .expand-btn:hover { color: #589AF9; }
 
       /* Nav overlay */
       #nav-overlay { display:none; position:fixed; top:0; right:0; bottom:0; left:0; background:linear-gradient(160deg,#5bc8f5 0%,#7c3aed 100%); z-index:200; flex-direction:column; align-items:center; justify-content:center; }
@@ -221,6 +227,36 @@
       function getUser(e) { return e.user_name || e.user_email || ''; }
       function getLocation(e) { return (e.city || '') + ' ' + (e.region || '') + ' ' + (e.country || ''); }
 
+      function buildSessions(events) {
+        // Sort ascending to group consecutive events
+        var sorted = events.slice().sort(function(a, b) { return a.created_at.localeCompare(b.created_at); });
+        var sessions = [];
+        var openMap = {}; // key -> session ref
+
+        sorted.forEach(function(e) {
+          var userKey = e.user_id || e.ip_address || 'anon';
+          var key = userKey + '|' + (e.slug || '');
+          var t = new Date(e.created_at).getTime();
+
+          if (openMap[key]) {
+            var sess = openMap[key];
+            var lastT = new Date(sess.events[sess.events.length - 1].created_at).getTime();
+            if (t - lastT <= 30 * 60 * 1000) {
+              sess.events.push(e);
+              return;
+            }
+            delete openMap[key];
+          }
+          var newSess = { id: sessions.length, events: [e] };
+          sessions.push(newSess);
+          openMap[key] = newSess;
+        });
+
+        // Sort sessions newest first
+        sessions.sort(function(a, b) { return b.events[0].created_at.localeCompare(a.events[0].created_at); });
+        return sessions;
+      }
+
       function renderActivityTable() {
         var wrap = document.getElementById('activity-wrap');
         if (!wrap) return;
@@ -245,14 +281,54 @@
           return 0;
         });
 
+        var sessions = buildSessions(rows);
+
         var thead = '<thead><tr>' + COLS.map(function(c) {
           var arrow = sortCol === c.key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
           return '<th style="cursor:pointer;user-select:none" data-col="' + c.key + '">' + c.label + '<span style="color:#7657FC">' + arrow + '</span></th>';
-        }).join('') + '</tr></thead>';
+        }).join('') + '<th style="width:32px"></th></tr></thead>';
 
-        var tbody = rows.length === 0
-          ? '<tr><td colspan="8" class="empty">No matching events.</td></tr>'
-          : rows.map(function(e) { return renderRow(e, cachedColNames); }).join('');
+        var tbody = '';
+        if (sessions.length === 0) {
+          tbody = '<tr><td colspan="9" class="empty">No matching events.</td></tr>';
+        } else {
+          sessions.forEach(function(sess) {
+            var first = sess.events[0];
+            var count = sess.events.length;
+            var hasMore = count > 1;
+            var sid = 'sess-' + sess.id;
+            var loc = countryFlag(first.country) + (first.city ? first.city + ', ' : '') + (first.region ? first.region + ' ' : '') + (first.country || '—');
+
+            tbody += '<tr class="session-row">';
+            tbody += '<td class="muted" style="white-space:nowrap">' + formatDate(first.created_at) + '</td>';
+            tbody += '<td>' + eventBadge(first.event_type) + (hasMore ? ' <span style="font-size:10px;color:#aaa;font-weight:700">+' + (count - 1) + '</span>' : '') + '</td>';
+            tbody += '<td style="font-weight:600">' + (cachedColNames[first.slug] || first.slug) + '</td>';
+            tbody += '<td>' + devicePill(first.device_type) + '</td>';
+            tbody += '<td class="muted">' + (first.browser || '—') + '</td>';
+            tbody += '<td style="white-space:nowrap">' + loc + '</td>';
+            tbody += '<td class="muted" style="font-size:11px">' + (first.ip_address || '—') + '</td>';
+            tbody += '<td class="muted" style="font-size:11px">' + (first.user_name || first.user_email || '—') + '</td>';
+            tbody += '<td>' + (hasMore ? '<button class="expand-btn" data-sid="' + sid + '">&#9658;</button>' : '') + '</td>';
+            tbody += '</tr>';
+
+            if (hasMore) {
+              sess.events.slice(1).forEach(function(e) {
+                var cloc = countryFlag(e.country) + (e.city ? e.city + ', ' : '') + (e.region ? e.region + ' ' : '') + (e.country || '—');
+                tbody += '<tr class="child-row" data-parent="' + sid + '" style="display:none">';
+                tbody += '<td class="muted" style="white-space:nowrap;padding-left:20px">' + formatDate(e.created_at) + '</td>';
+                tbody += '<td>' + eventBadge(e.event_type) + '</td>';
+                tbody += '<td style="font-weight:600">' + (cachedColNames[e.slug] || e.slug) + '</td>';
+                tbody += '<td>' + devicePill(e.device_type) + '</td>';
+                tbody += '<td class="muted">' + (e.browser || '—') + '</td>';
+                tbody += '<td style="white-space:nowrap">' + cloc + '</td>';
+                tbody += '<td class="muted" style="font-size:11px">' + (e.ip_address || '—') + '</td>';
+                tbody += '<td class="muted" style="font-size:11px">' + (e.user_name || e.user_email || '—') + '</td>';
+                tbody += '<td></td>';
+                tbody += '</tr>';
+              });
+            }
+          });
+        }
 
         wrap.innerHTML = '<table>' + thead + '<tbody>' + tbody + '</tbody></table>';
 
@@ -262,6 +338,16 @@
             if (sortCol === col) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
             else { sortCol = col; sortDir = 'asc'; }
             renderActivityTable();
+          });
+        });
+
+        wrap.querySelectorAll('.expand-btn').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var sid = btn.dataset.sid;
+            var children = wrap.querySelectorAll('[data-parent="' + sid + '"]');
+            var isOpen = btn.innerHTML === '&#9660;' || btn.textContent === '▼';
+            children.forEach(function(row) { row.style.display = isOpen ? 'none' : ''; });
+            btn.innerHTML = isOpen ? '&#9658;' : '&#9660;';
           });
         });
       }
