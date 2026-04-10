@@ -182,12 +182,24 @@
         const { data: allCols } = await db.from('collections').select('slug, name, user_id');
         const colNames = Object.fromEntries((allCols || []).map(c => [c.slug, c.name || c.slug]));
 
-        // Load events with user info via RPC
-        const { data: events } = await db.rpc('get_events_with_users', {
+        // Load events — try RPC first (includes user email), fall back to direct query
+        let evts = [];
+        const { data: rpcData, error: rpcError } = await db.rpc('get_events_with_users', {
           days_back: activeDays,
           max_rows: 5000
         });
-        const evts = events || [];
+        if (!rpcError && rpcData) {
+          evts = rpcData;
+        } else {
+          // RPC not set up yet — fall back to direct scan_events query
+          let q = db.from('scan_events').select('*').order('created_at', { ascending: false });
+          if (activeDays > 0) {
+            const since = new Date(Date.now() - activeDays * 86400000).toISOString();
+            q = q.gte('created_at', since);
+          }
+          const { data: fallback } = await q.limit(5000);
+          evts = fallback || [];
+        }
 
         if (evts.length === 0 && activeDays !== 0) {
           document.getElementById('main-content').innerHTML =
