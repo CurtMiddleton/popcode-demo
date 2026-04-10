@@ -406,7 +406,7 @@
         let evts = [];
         const { data: rpcData, error: rpcError } = await db.rpc('get_events_with_users', {
           days_back: activeDays,
-          max_rows: 5000
+          max_rows: 50000
         });
         if (!rpcError && rpcData) {
           evts = rpcData;
@@ -417,7 +417,7 @@
             const since = new Date(Date.now() - activeDays * 86400000).toISOString();
             q = q.gte('created_at', since);
           }
-          const { data: fallback } = await q.limit(5000);
+          const { data: fallback } = await q.limit(50000);
           evts = fallback || [];
         }
 
@@ -468,9 +468,8 @@
         const maxCountry = Math.max(...Object.values(countryCounts), 1);
         const maxBrowser = Math.max(...Object.values(browserCounts), 1);
 
-        cachedEvts = evts.slice(0, 500);
+        cachedEvts = evts;
         cachedColNames = colNames;
-        const recent = evts.slice(0, 100);
 
         document.getElementById('main-content').innerHTML = `
           <!-- Summary cards -->
@@ -532,7 +531,7 @@
           <!-- Recent activity -->
           <div class="section">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
-              <div class="section-title">Recent Activity <span style="font-size:12px;color:#aaa;font-weight:400">(last 500 events)</span></div>
+              <div class="section-title">Activity Log</div>
               <input id="activity-search" type="search" placeholder="Search user, collection, location…" style="padding:7px 14px;border-radius:20px;border:1px solid #e0ddd6;font-size:13px;font-family:inherit;outline:none;width:260px;"/>
             </div>
             <div class="table-wrap" id="activity-wrap"></div>
