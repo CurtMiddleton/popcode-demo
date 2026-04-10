@@ -192,6 +192,31 @@
       const params = new URLSearchParams(location.search);
       const id = params.get('id') || location.pathname.replace(/^\/|\/$/g, '');
 
+      // ── Analytics ────────────────────────────────────────────────────────────
+      function getDeviceInfo() {
+        const ua = navigator.userAgent;
+        const device = /iPad|iPhone|iPod/.test(ua) ? 'iOS' :
+                       /Android/.test(ua) ? 'Android' : 'Desktop';
+        const browser = /CriOS/.test(ua) ? 'Chrome iOS' :
+                        /FxiOS/.test(ua) ? 'Firefox iOS' :
+                        /EdgiOS/.test(ua) ? 'Edge iOS' :
+                        (/Safari/.test(ua) && /Apple/.test(navigator.vendor)) ? 'Safari' :
+                        /Chrome/.test(ua) ? 'Chrome' :
+                        /Firefox/.test(ua) ? 'Firefox' : 'Other';
+        return { device, browser };
+      }
+      async function logEvent(eventType, targetIndex = null) {
+        if (!id) return;
+        try {
+          const { device, browser } = getDeviceInfo();
+          await db.from('scan_events').insert({
+            slug: id, event_type: eventType,
+            target_index: targetIndex,
+            device_type: device, browser
+          });
+        } catch(e) {} // never let analytics break the app
+      }
+
       if (!id) { showError(); } else { loadCollection(id); }
 
       function showError() {
@@ -232,7 +257,10 @@
           const target = document.createElement('a-entity');
           target.setAttribute('mindar-image-target', `targetIndex: ${idx}`);
           target.addEventListener('targetFound', () => {
-            if (!videoActive) triggerVideo(videoMap[idx]);
+            if (!videoActive) {
+              logEvent('target_found', parseInt(idx));
+              triggerVideo(videoMap[idx]);
+            }
           });
           target.addEventListener('targetLost', () => {
             if (triggerTimer) {
@@ -253,6 +281,7 @@
 
         document.getElementById('loading').style.display = 'none';
         document.getElementById('start-screen').style.display = 'flex';
+        logEvent('scan_open');
 
         document.getElementById('start-btn').addEventListener('click', () => {
           document.getElementById('start-screen').style.display = 'none';
@@ -312,7 +341,9 @@
           document.getElementById('home-btn').style.display = 'none';
           fullScreen.style.display = 'block';
           closeBtn.style.display = 'flex';
-          fullVid.play().catch(err => showVideoError('Video failed to play — tap X and try again'));
+          fullVid.play()
+            .then(() => logEvent('video_play'))
+            .catch(err => { logEvent('video_error'); showVideoError('Video failed to play — tap X and try again'); });
         }, 900);
       }
 
@@ -369,6 +400,7 @@
       }
 
       fullVid.addEventListener('ended', () => {
+        logEvent('video_complete');
         const fade = document.getElementById('fade-overlay');
         fade.style.display = 'block';
         setTimeout(() => fade.style.opacity = '1', 10);
