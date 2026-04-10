@@ -110,7 +110,10 @@
         <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
       <img src="/assets/Popcode_logo.rev.svg" alt="Popcode" style="height:80px;"/>
-      <button id="logout-btn" style="position:absolute;right:20px;top:20px;background:#78A7FF;color:white;border:none;border-radius:20px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:'FilsonPro',sans-serif;">Sign Out</button>
+      <div style="position:absolute;right:20px;top:20px;display:flex;align-items:center;gap:10px;">
+        <span id="user-greeting" style="color:white;font-size:13px;font-weight:700;font-family:'FilsonPro',sans-serif;opacity:0.9;"></span>
+        <button id="logout-btn" style="background:#78A7FF;color:white;border:none;border-radius:20px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:'FilsonPro',sans-serif;">Sign Out</button>
+      </div>
     </header>
 
     <div id="nav-overlay">
@@ -161,6 +164,8 @@
         }
         if (!data.session) { window.location.href = '/auth.html'; return; }
         if (data.session.user.email !== ADMIN_EMAIL) { window.location.href = '/manage.html'; return; }
+        const uName = data.session.user?.user_metadata?.full_name?.split(' ')[0] || data.session.user?.email?.split('@')[0] || '';
+        if (uName) { const g = document.getElementById('user-greeting'); if (g) g.textContent = 'Hi, ' + uName + '!'; }
         document.getElementById('main-content').innerHTML = '<p class="empty">Session OK, loading data...</p>';
         loadAnalytics();
       }).catch(e => {
