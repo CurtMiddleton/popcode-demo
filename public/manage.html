@@ -172,6 +172,26 @@
       }
       .toast.show { opacity: 1; }
 
+      .confirm-overlay {
+        display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0;
+        background: rgba(0,0,0,0.5); z-index: 300;
+        align-items: center; justify-content: center; padding: 24px;
+      }
+      .confirm-overlay.visible { display: flex; }
+      .confirm-dialog {
+        background: white; border-radius: 20px; padding: 32px 28px;
+        max-width: 340px; width: 100%; box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+      }
+      .confirm-dialog h2 { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+      .confirm-dialog p { font-size: 14px; color: #666; line-height: 1.5; margin-bottom: 24px; }
+      .confirm-btns { display: flex; gap: 12px; }
+      .confirm-btns button {
+        flex: 1; padding: 13px; border-radius: 12px; font-size: 15px;
+        font-weight: 700; font-family: 'FilsonPro', sans-serif; cursor: pointer; border: none;
+      }
+      .btn-cancel { background: #f0eeea; color: #1a1a1a; }
+      .btn-delete { background: #c92a2a; color: white; }
+
       /* Nav overlay */
       #nav-overlay { display:none; position:fixed; top:0; right:0; bottom:0; left:0; background:linear-gradient(160deg,#5bc8f5 0%,#7c3aed 100%); z-index:200; flex-direction:column; align-items:center; justify-content:center; }
       #nav-drawer { display:flex; flex-direction:column; align-items:center; gap:4px; width:100%; padding:0 24px; }
@@ -201,6 +221,17 @@
         <a class="nav-link" href="/account.html">Account</a>
         <div class="nav-divider"></div>
         <a class="nav-link external" href="https://www.popcode.app" target="_blank">popcode.app ↗</a>
+      </div>
+    </div>
+
+    <div class="confirm-overlay" id="confirm-overlay">
+      <div class="confirm-dialog">
+        <h2>Delete collection?</h2>
+        <p id="confirm-msg">This will permanently remove the collection and all its videos. This cannot be undone.</p>
+        <div class="confirm-btns">
+          <button class="btn-cancel" id="confirm-cancel-btn">Cancel</button>
+          <button class="btn-delete" id="confirm-delete-btn">Delete</button>
+        </div>
       </div>
     </div>
 
@@ -393,9 +424,20 @@
         return card;
       }
 
-      async function confirmDelete(card, collectionId, slug, title, btn) {
-        const confirmed = window.confirm(`Delete "${title}"?\n\nThis will permanently remove the collection, all its items, and all uploaded files. This cannot be undone.`);
-        if (!confirmed) return;
+      function confirmDelete(card, collectionId, slug, title, btn) {
+        document.getElementById('confirm-msg').textContent = 'Delete "' + title + '"? This will permanently remove the collection and all its videos. This cannot be undone.';
+        const overlay = document.getElementById('confirm-overlay');
+        overlay.classList.add('visible');
+        document.getElementById('confirm-cancel-btn').onclick = function() {
+          overlay.classList.remove('visible');
+        };
+        document.getElementById('confirm-delete-btn').onclick = async function() {
+          overlay.classList.remove('visible');
+          await doDelete(card, collectionId, slug, title, btn);
+        };
+      }
+
+      async function doDelete(card, collectionId, slug, title, btn) {
 
         btn.disabled = true;
         btn.textContent = 'Deleting...';
