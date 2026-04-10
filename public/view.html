@@ -209,10 +209,16 @@
         if (!id) return;
         try {
           const { device, browser } = getDeviceInfo();
-          await db.from('scan_events').insert({
-            slug: id, event_type: eventType,
-            target_index: targetIndex,
-            device_type: device, browser
+          const session = (await db.auth.getSession()).data.session;
+          await fetch('/api/log-event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              slug: id, event_type: eventType,
+              target_index: targetIndex,
+              device_type: device, browser,
+              user_id: session?.user?.id ?? null
+            })
           });
         } catch(e) {} // never let analytics break the app
       }
