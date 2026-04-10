@@ -125,10 +125,16 @@
 
       const ADMIN_EMAIL = 'curtmid@gmail.com';
 
-      db.auth.getSession().then(({ data }) => {
+      db.auth.getSession().then(({ data, error }) => {
+        if (error) {
+          document.getElementById('main-content').innerHTML = '<p class="empty">Auth error: ' + error.message + '</p>';
+          return;
+        }
         if (!data.session) { window.location.href = '/auth.html'; return; }
         if (data.session.user.email !== ADMIN_EMAIL) { window.location.href = '/manage.html'; return; }
         loadAnalytics();
+      }).catch(e => {
+        document.getElementById('main-content').innerHTML = '<p class="empty">JS error: ' + e.message + '</p>';
       });
 
       document.getElementById('logout-btn').addEventListener('click', async () => {
@@ -177,6 +183,7 @@
       async function loadAnalytics() {
         document.getElementById('main-content').innerHTML =
           '<div class="loading-msg"><div class="spinner"></div>Loading...</div>';
+        try {
 
         // Load ALL collections (not just current user's)
         const { data: allCols } = await db.from('collections').select('slug, name, user_id');
@@ -335,6 +342,9 @@
             </div>
           </div>
         `;
+        } catch(e) {
+          document.getElementById('main-content').innerHTML = '<p class="empty">Error loading analytics: ' + e.message + '</p>';
+        }
       }
     </script>
   </body>
