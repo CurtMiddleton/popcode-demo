@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Popcode — Account Settings</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <style>
+      @font-face {
+        font-family: 'FilsonPro';
+        src: url('/assets/fonts/FilsonProMedium/font.woff2') format('woff2'),
+             url('/assets/fonts/FilsonProMedium/font.woff') format('woff');
+        font-weight: 400; font-style: normal;
+      }
+      @font-face {
+        font-family: 'FilsonPro';
+        src: url('/assets/fonts/FilsonProBold/font.woff2') format('woff2'),
+             url('/assets/fonts/FilsonProBold/font.woff') format('woff');
+        font-weight: 700; font-style: normal;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        min-height: 100vh; background: #f2f0eb;
+        font-family: 'FilsonPro', sans-serif; color: #1a1a1a;
+        display: flex; flex-direction: column; align-items: center;
+        padding: 0 0 80px; overflow-x: hidden;
+      }
+      .site-header {
+        width: 100vw; background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
+        padding: 24px 24px 40px; min-height: 200px;
+        display: flex; align-items: flex-end; justify-content: center;
+        position: relative; margin-bottom: 32px; align-self: stretch;
+      }
+      .top-bar {
+        width: 100%; max-width: 560px; padding: 0 24px;
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 28px; gap: 12px;
+      }
+      .top-bar h1 { font-size: 26px; font-weight: 700; }
+      .back-btn {
+        background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
+        color: white; border: none; border-radius: 24px;
+        padding: 10px 20px; font-size: 14px; font-weight: 700;
+        font-family: 'FilsonPro', sans-serif; cursor: pointer;
+        text-decoration: none; white-space: nowrap;
+      }
+      .content { width: 100%; max-width: 560px; padding: 0 24px; display: flex; flex-direction: column; gap: 20px; }
+      .card {
+        background: white; border-radius: 20px;
+        padding: 28px 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      }
+      .card-title { font-size: 16px; font-weight: 700; margin-bottom: 20px; }
+      .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+      .field label { font-size: 13px; font-weight: 700; color: #555; }
+      .field input {
+        padding: 12px 14px; border-radius: 12px; border: 1.5px solid #e0ddd6;
+        font-size: 15px; font-family: 'FilsonPro', sans-serif;
+        background: #fafaf8; color: #1a1a1a; outline: none;
+        transition: border-color 0.15s;
+      }
+      .field input:focus { border-color: #7657FC; background: white; }
+      .field input:disabled { color: #999; cursor: default; }
+      .save-btn {
+        width: 100%; padding: 14px; border-radius: 14px; border: none;
+        background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
+        color: white; font-size: 16px; font-weight: 700;
+        font-family: 'FilsonPro', sans-serif; cursor: pointer;
+        margin-top: 4px;
+      }
+      .save-btn:disabled { opacity: 0.5; cursor: default; }
+      .msg { font-size: 13px; margin-top: 10px; min-height: 18px; }
+      .msg.success { color: #2b8a3e; }
+      .msg.error { color: #c92a2a; }
+      .danger-zone { border: 1.5px solid #ffd0d0; }
+      .danger-zone .card-title { color: #c92a2a; }
+      .danger-desc { font-size: 14px; color: #888; margin-bottom: 20px; line-height: 1.5; }
+      .delete-btn {
+        width: 100%; padding: 14px; border-radius: 14px; border: 1.5px solid #c92a2a;
+        background: white; color: #c92a2a; font-size: 16px; font-weight: 700;
+        font-family: 'FilsonPro', sans-serif; cursor: pointer;
+      }
+      .delete-btn:hover { background: #fff5f5; }
+
+      /* Confirmation overlay */
+      .overlay {
+        display: none; position: fixed;
+        top: 0; right: 0; bottom: 0; left: 0;
+        background: rgba(0,0,0,0.5); z-index: 100;
+        align-items: center; justify-content: center; padding: 24px;
+      }
+      .overlay.visible { display: flex; }
+      .dialog {
+        background: white; border-radius: 20px; padding: 32px 28px;
+        max-width: 380px; width: 100%; box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+      }
+      .dialog h2 { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
+      .dialog p { font-size: 14px; color: #666; line-height: 1.5; margin-bottom: 20px; }
+      .dialog-btns { display: flex; gap: 12px; }
+      .dialog-btns button {
+        flex: 1; padding: 12px; border-radius: 12px; font-size: 15px;
+        font-weight: 700; font-family: 'FilsonPro', sans-serif; cursor: pointer; border: none;
+      }
+      .btn-cancel { background: #f0eeea; color: #1a1a1a; }
+      .btn-confirm { background: #c92a2a; color: white; }
+      .btn-confirm:disabled { opacity: 0.5; cursor: default; }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <img src="/assets/Popcode_logo.rev.svg" alt="Popcode" style="height:80px;"/>
+      <button id="logout-btn" style="position:absolute;right:20px;top:20px;background:#78A7FF;color:white;border:none;border-radius:20px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:'FilsonPro',sans-serif;">Sign Out</button>
+    </header>
+
+    <div class="top-bar">
+      <h1>Account</h1>
+      <a href="/manage.html" class="back-btn">My Collections</a>
+    </div>
+
+    <div class="content">
+      <!-- Profile -->
+      <div class="card">
+        <div class="card-title">Profile</div>
+        <div class="field">
+          <label>Name</label>
+          <input type="text" id="name-input" placeholder="Your name"/>
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="email-input" disabled/>
+        </div>
+        <button class="save-btn" id="save-profile-btn">Save Changes</button>
+        <div class="msg" id="profile-msg"></div>
+      </div>
+
+      <!-- Change Password -->
+      <div class="card">
+        <div class="card-title">Change Password</div>
+        <div class="field">
+          <label>New Password</label>
+          <input type="password" id="new-password" placeholder="At least 6 characters"/>
+        </div>
+        <div class="field">
+          <label>Confirm New Password</label>
+          <input type="password" id="confirm-password" placeholder="Repeat new password"/>
+        </div>
+        <button class="save-btn" id="save-password-btn">Update Password</button>
+        <div class="msg" id="password-msg"></div>
+      </div>
+
+      <!-- Danger Zone -->
+      <div class="card danger-zone">
+        <div class="card-title">Danger Zone</div>
+        <p class="danger-desc">Permanently delete your account and all your collections. This cannot be undone.</p>
+        <button class="delete-btn" id="delete-account-btn">Delete My Account</button>
+      </div>
+    </div>
+
+    <!-- Confirmation dialog -->
+    <div class="overlay" id="confirm-overlay">
+      <div class="dialog">
+        <h2>Delete account?</h2>
+        <p>This will permanently delete your account and all your Popcode collections. There is no going back.</p>
+        <div class="dialog-btns">
+          <button class="btn-cancel" id="cancel-delete-btn">Cancel</button>
+          <button class="btn-confirm" id="confirm-delete-btn">Yes, delete</button>
+        </div>
+        <div class="msg error" id="delete-msg" style="margin-top:12px;"></div>
+      </div>
+    </div>
+
+    <script>
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      db.auth.getSession().then(async ({ data }) => {
+        if (!data.session) { window.location.href = '/auth.html'; return; }
+        const user = data.session.user;
+        document.getElementById('email-input').value = user.email || '';
+        document.getElementById('name-input').value = user.user_metadata?.full_name || '';
+      });
+
+      document.getElementById('logout-btn').addEventListener('click', async () => {
+        await db.auth.signOut(); window.location.href = '/auth.html';
+      });
+
+      // Save profile
+      document.getElementById('save-profile-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('save-profile-btn');
+        const msg = document.getElementById('profile-msg');
+        const name = document.getElementById('name-input').value.trim();
+        btn.disabled = true;
+        msg.className = 'msg';
+        msg.textContent = 'Saving...';
+        const { error } = await db.auth.updateUser({ data: { full_name: name } });
+        btn.disabled = false;
+        if (error) {
+          msg.className = 'msg error'; msg.textContent = error.message;
+        } else {
+          msg.className = 'msg success'; msg.textContent = 'Saved!';
+          setTimeout(() => { msg.textContent = ''; }, 2000);
+        }
+      });
+
+      // Change password
+      document.getElementById('save-password-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('save-password-btn');
+        const msg = document.getElementById('password-msg');
+        const np = document.getElementById('new-password').value;
+        const cp = document.getElementById('confirm-password').value;
+        if (!np) { msg.className = 'msg error'; msg.textContent = 'Enter a new password.'; return; }
+        if (np !== cp) { msg.className = 'msg error'; msg.textContent = 'Passwords do not match.'; return; }
+        if (np.length < 6) { msg.className = 'msg error'; msg.textContent = 'Password must be at least 6 characters.'; return; }
+        btn.disabled = true;
+        msg.className = 'msg'; msg.textContent = 'Updating...';
+        const { error } = await db.auth.updateUser({ password: np });
+        btn.disabled = false;
+        if (error) {
+          msg.className = 'msg error'; msg.textContent = error.message;
+        } else {
+          msg.className = 'msg success'; msg.textContent = 'Password updated!';
+          document.getElementById('new-password').value = '';
+          document.getElementById('confirm-password').value = '';
+          setTimeout(() => { msg.textContent = ''; }, 2000);
+        }
+      });
+
+      // Delete account
+      document.getElementById('delete-account-btn').addEventListener('click', () => {
+        document.getElementById('confirm-overlay').classList.add('visible');
+      });
+      document.getElementById('cancel-delete-btn').addEventListener('click', () => {
+        document.getElementById('confirm-overlay').classList.remove('visible');
+        document.getElementById('delete-msg').textContent = '';
+      });
+      document.getElementById('confirm-delete-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('confirm-delete-btn');
+        const msg = document.getElementById('delete-msg');
+        btn.disabled = true;
+        btn.textContent = 'Deleting...';
+        msg.textContent = '';
+        try {
+          const { data } = await db.auth.getSession();
+          const token = data.session?.access_token;
+          const res = await fetch('/api/delete-account', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }
+          });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error || 'Failed to delete account');
+          await db.auth.signOut();
+          window.location.href = '/?deleted=1';
+        } catch(e) {
+          msg.textContent = e.message;
+          btn.disabled = false;
+          btn.textContent = 'Yes, delete';
+        }
+      });
+    </script>
+  </body>
+</html>
