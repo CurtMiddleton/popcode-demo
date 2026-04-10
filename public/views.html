@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Popcode — My Recent Views</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <style>
+      @font-face {
+        font-family: 'FilsonPro';
+        src: url('/assets/fonts/FilsonProMedium/font.woff2') format('woff2'),
+             url('/assets/fonts/FilsonProMedium/font.woff') format('woff');
+        font-weight: 400; font-style: normal;
+      }
+      @font-face {
+        font-family: 'FilsonPro';
+        src: url('/assets/fonts/FilsonProBold/font.woff2') format('woff2'),
+             url('/assets/fonts/FilsonProBold/font.woff') format('woff');
+        font-weight: 700; font-style: normal;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        min-height: 100vh; background: #f2f0eb;
+        font-family: 'FilsonPro', sans-serif; color: #1a1a1a;
+        display: flex; flex-direction: column; align-items: center;
+        padding: 0 0 80px; overflow-x: hidden;
+      }
+      .site-header {
+        width: 100vw; background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
+        padding: 24px 24px 40px; min-height: 200px;
+        display: flex; align-items: flex-end; justify-content: center;
+        position: relative; margin-bottom: 32px; align-self: stretch;
+      }
+      .top-bar {
+        width: 100%; max-width: 560px; padding: 0 24px;
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 28px;
+      }
+      .top-bar h1 { font-size: 26px; font-weight: 700; }
+      .content { width: 100%; max-width: 560px; padding: 0 24px; display: flex; flex-direction: column; gap: 14px; }
+
+      .view-card {
+        background: white; border-radius: 16px; padding: 18px 20px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      }
+      .view-info { flex: 1; min-width: 0; }
+      .view-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .view-date { font-size: 12px; color: #aaa; }
+      .view-btn {
+        background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
+        color: white; border: none; border-radius: 20px;
+        padding: 9px 18px; font-size: 13px; font-weight: 700;
+        font-family: 'FilsonPro', sans-serif; cursor: pointer;
+        text-decoration: none; white-space: nowrap; flex-shrink: 0;
+      }
+
+      .empty-state {
+        width: 100%; text-align: center; padding: 60px 24px;
+        background: white; border-radius: 20px; border: 2px dashed #e8e8e8;
+      }
+      .empty-state p { font-size: 16px; color: #888; line-height: 1.6; }
+
+      .spinner-wrap { display: flex; align-items: center; gap: 12px; color: #888; font-size: 14px; padding: 40px 24px; }
+      .spinner { width: 24px; height: 24px; border-radius: 50%; border: 3px solid #e8e8e8; border-top-color: #7657FC; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      /* Nav overlay */
+      #nav-overlay { display:none; position:fixed; top:0; right:0; bottom:0; left:0; background:linear-gradient(160deg,#5bc8f5 0%,#7c3aed 100%); z-index:200; flex-direction:column; align-items:center; justify-content:center; }
+      #nav-drawer { display:flex; flex-direction:column; align-items:center; gap:4px; width:100%; padding:0 24px; }
+      .nav-link { display:block; padding:16px 24px; font-size:26px; font-weight:700; color:white; text-decoration:none; font-family:'FilsonPro',sans-serif; text-align:center; opacity:0.95; }
+      .nav-link:hover { opacity:1; }
+      .nav-link.external { opacity:0.7; font-size:18px; }
+      .nav-divider { height:1px; background:rgba(255,255,255,0.25); margin:12px 0; width:120px; }
+      .nav-close { position:absolute; top:24px; right:24px; background:none; border:none; color:white; cursor:pointer; padding:4px; }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <button id="nav-btn" style="position:absolute;left:20px;top:20px;background:none;border:none;cursor:pointer;padding:4px;" aria-label="Menu">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <img src="/assets/Popcode_logo.rev.svg" alt="Popcode" style="height:80px;"/>
+      <button id="logout-btn" style="position:absolute;right:20px;top:20px;background:#78A7FF;color:white;border:none;border-radius:20px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:'FilsonPro',sans-serif;">Sign Out</button>
+    </header>
+
+    <div id="nav-overlay">
+      <button class="nav-close" id="nav-close-btn" aria-label="Close menu">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <div id="nav-drawer">
+        <a class="nav-link" href="/create.html">Create a Popcode</a>
+        <a class="nav-link" href="/manage.html">My Collections</a>
+        <a class="nav-link" href="/views.html">My Recent Views</a>
+        <a class="nav-link" href="/account.html">Account</a>
+        <div class="nav-divider"></div>
+        <a class="nav-link external" href="https://www.popcodeapp.com" target="_blank">popcodeapp.com ↗</a>
+      </div>
+    </div>
+
+    <div class="top-bar">
+      <h1>My Recent Views</h1>
+    </div>
+
+    <div class="content" id="content">
+      <div class="spinner-wrap"><div class="spinner"></div>Loading...</div>
+    </div>
+
+    <script>
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      function formatDate(iso) {
+        return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      }
+
+      function renderCards(views) {
+        const content = document.getElementById('content');
+        if (views.length === 0) {
+          content.innerHTML = '<div class="empty-state"><p>No recent views yet.<br>Scan a Popcode to get started.</p></div>';
+          return;
+        }
+        content.innerHTML = views.map(function(v) {
+          return '<div class="view-card">' +
+            '<div class="view-info">' +
+              '<div class="view-name">' + v.name + '</div>' +
+              '<div class="view-date">Last viewed ' + formatDate(v.last_viewed) + '</div>' +
+            '</div>' +
+            '<a class="view-btn" href="/' + v.slug + '">View Again</a>' +
+          '</div>';
+        }).join('');
+      }
+
+      async function loadViews() {
+        // Read localStorage
+        var local = {};
+        try { local = JSON.parse(localStorage.getItem('popcode_views') || '{}'); } catch(e) {}
+
+        var { data: session } = await db.auth.getSession();
+        var user = session?.session?.user;
+
+        if (user) {
+          // Logged-in: pull from scan_events, merge with localStorage
+          var { data: events } = await db
+            .from('scan_events')
+            .select('slug, created_at')
+            .eq('user_id', user.id)
+            .eq('event_type', 'scan_open')
+            .order('created_at', { ascending: false });
+
+          // Deduplicate by slug, keep most recent
+          var seen = {};
+          (events || []).forEach(function(e) {
+            if (!seen[e.slug]) seen[e.slug] = e.created_at;
+          });
+
+          // Merge with localStorage (localStorage wins if more recent)
+          Object.keys(local).forEach(function(slug) {
+            if (!seen[slug] || local[slug].last_viewed > seen[slug]) {
+              seen[slug] = local[slug].last_viewed;
+            }
+          });
+
+          if (Object.keys(seen).length === 0) { renderCards([]); return; }
+
+          // Fetch collection names
+          var slugs = Object.keys(seen);
+          var { data: cols } = await db.from('collections').select('slug, name').in('slug', slugs);
+          var nameMap = {};
+          (cols || []).forEach(function(c) { nameMap[c.slug] = c.name || c.slug; });
+
+          var views = slugs.map(function(slug) {
+            return { slug: slug, name: nameMap[slug] || local[slug]?.name || slug, last_viewed: seen[slug] };
+          }).sort(function(a, b) { return b.last_viewed.localeCompare(a.last_viewed); });
+
+          renderCards(views);
+        } else {
+          // Anonymous: localStorage only
+          var views = Object.keys(local).map(function(slug) {
+            return { slug: slug, name: local[slug].name || slug, last_viewed: local[slug].last_viewed };
+          }).sort(function(a, b) { return b.last_viewed.localeCompare(a.last_viewed); });
+          renderCards(views);
+        }
+      }
+
+      // Show/hide Sign Out based on session
+      db.auth.getSession().then(function(res) {
+        if (!res.data.session) {
+          document.getElementById('logout-btn').style.display = 'none';
+        }
+        loadViews();
+      });
+
+      document.getElementById('logout-btn').addEventListener('click', async function() {
+        await db.auth.signOut(); window.location.href = '/auth.html';
+      });
+
+      // Nav overlay
+      document.getElementById('nav-btn').addEventListener('click', function() {
+        document.getElementById('nav-overlay').style.display = 'flex';
+      });
+      document.getElementById('nav-close-btn').addEventListener('click', function() {
+        document.getElementById('nav-overlay').style.display = 'none';
+      });
+      document.getElementById('nav-overlay').addEventListener('click', function(e) {
+        if (e.target === document.getElementById('nav-overlay')) {
+          document.getElementById('nav-overlay').style.display = 'none';
+        }
+      });
+    </script>
+  </body>
+</html>

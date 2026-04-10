@@ -236,6 +236,12 @@
         const { data: col } = await db.from('collections').select('*').eq('slug', id).single();
 
         if (col) {
+          // Save to recent views localStorage
+          try {
+            const views = JSON.parse(localStorage.getItem('popcode_views') || '{}');
+            views[id] = { name: col.name || id, last_viewed: new Date().toISOString() };
+            localStorage.setItem('popcode_views', JSON.stringify(views));
+          } catch(e) {}
           mindUrl = col.mind_file_url;
           const { data: items } = await db.from('collection_items')
             .select('*').eq('collection_id', col.id).order('target_index');
