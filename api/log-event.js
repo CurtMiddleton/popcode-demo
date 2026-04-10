@@ -22,6 +22,7 @@ export default async function handler(req, res) {
 
     // Free geo headers Vercel injects automatically on all deployments
     const country = req.headers['x-vercel-ip-country'] || null;
+    const region  = req.headers['x-vercel-ip-country-region'] || null;
     const city    = decodeURIComponent(req.headers['x-vercel-ip-city'] || '') || null;
 
     const db = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -33,6 +34,7 @@ export default async function handler(req, res) {
       browser:      browser      ?? null,
       ip_address:   ip,
       country,
+      region,
       city,
       user_id:      user_id      ?? null,
     });
