@@ -63,7 +63,7 @@
       h1 { font-size: 22px; font-weight: 700; margin-bottom: 24px; text-align: center; color: #1a1a1a; }
       .field { margin-bottom: 16px; }
       label { font-size: 13px; font-weight: 700; color: #555; display: block; margin-bottom: 6px; }
-      input[type="email"], input[type="password"] {
+      input[type="text"], input[type="email"], input[type="password"] {
         width: 100%; padding: 13px 16px; border-radius: 12px;
         border: 1px solid #e8e8e8;
         font-size: 15px; color: #1a1a1a; outline: none;
@@ -105,6 +105,10 @@
     <div class="card">
       <h1 id="form-title">Sign In</h1>
       <div class="error-msg" id="error-msg"></div>
+      <div class="field" id="name-field" style="display:none;">
+        <label for="name">Your Name</label>
+        <input type="text" id="name" autocomplete="name" placeholder="First and last name"/>
+      </div>
       <div class="field">
         <label for="email">Email</label>
         <input type="email" id="email" autocomplete="email" placeholder="you@example.com"/>
@@ -142,6 +146,7 @@
         document.getElementById('toggle-link').textContent = isSignUp ? 'Sign in' : 'Create one';
         document.getElementById('password').autocomplete = isSignUp ? 'new-password' : 'current-password';
         document.getElementById('forgot-wrap').style.display = isSignUp ? 'none' : 'block';
+        document.getElementById('name-field').style.display = isSignUp ? 'block' : 'none';
         hideError();
       });
 
@@ -178,8 +183,14 @@
         const password = document.getElementById('password').value;
         hideError();
 
+        const name = document.getElementById('name').value.trim();
+
         if (!email || !password) {
           showError('Please enter your email and password.');
+          return;
+        }
+        if (isSignUp && !name) {
+          showError('Please enter your name.');
           return;
         }
 
@@ -189,7 +200,7 @@
 
         let error;
         if (isSignUp) {
-          ({ error } = await db.auth.signUp({ email, password }));
+          ({ error } = await db.auth.signUp({ email, password, options: { data: { full_name: name } } }));
           if (!error) {
             showError('Check your email for a confirmation link, then sign in.');
             btn.disabled = false;
