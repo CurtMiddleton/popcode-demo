@@ -182,13 +182,11 @@
         const { data: allCols } = await db.from('collections').select('slug, name, user_id');
         const colNames = Object.fromEntries((allCols || []).map(c => [c.slug, c.name || c.slug]));
 
-        // Load events — no slug filter, show everything
-        let query = db.from('scan_events').select('*').order('created_at', { ascending: false });
-        if (activeDays > 0) {
-          const since = new Date(Date.now() - activeDays * 86400000).toISOString();
-          query = query.gte('created_at', since);
-        }
-        const { data: events } = await query.limit(5000);
+        // Load events with user info via RPC
+        const { data: events } = await db.rpc('get_events_with_users', {
+          days_back: activeDays,
+          max_rows: 5000
+        });
         const evts = events || [];
 
         if (evts.length === 0 && activeDays !== 0) {
@@ -296,7 +294,7 @@
                 : `<table>
                     <thead><tr>
                       <th>Time</th><th>Event</th><th>Collection</th>
-                      <th>Device</th><th>Browser</th><th>Location</th><th>IP</th>
+                      <th>Device</th><th>Browser</th><th>Location</th><th>IP</th><th>User</th>
                     </tr></thead>
                     <tbody>
                       ${recent.map(e=>`
@@ -308,6 +306,7 @@
                           <td class="muted">${e.browser||'—'}</td>
                           <td style="white-space:nowrap">${countryFlag(e.country)}${e.city?e.city+', ':''} ${e.country||'—'}</td>
                           <td class="muted" style="font-size:11px">${e.ip_address||'—'}</td>
+                          <td class="muted" style="font-size:11px">${e.user_name||e.user_email||'—'}</td>
                         </tr>`).join('')}
                     </tbody>
                   </table>`}
