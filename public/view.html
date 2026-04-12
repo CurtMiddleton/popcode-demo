@@ -151,6 +151,11 @@
       }
       #error-screen h2 { margin-bottom: 12px; }
       #error-screen p { color: #999; font-size: 14px; }
+      #error-reload-btn {
+        margin-top: 24px; padding: 14px 36px; font-size: 16px;
+        border-radius: 999px; border: none; background: white; color: #6b3fa0;
+        font-family: 'FilsonPro', sans-serif; font-weight: bold; cursor: pointer;
+      }
     </style>
   </head>
   <body>
@@ -168,7 +173,11 @@
         <a id="signin-link" href="/manage.html">Already have an account? <span style="text-decoration:underline;">Sign in</span></a>
       </div>
     </div>
-    <div id="error-screen"><h2>Experience not found</h2><p>This link may be invalid or expired.</p></div>
+    <div id="error-screen">
+      <h2>Experience not found</h2>
+      <p>This link may be invalid or expired.</p>
+      <button id="error-reload-btn" onclick="location.reload()">Reload</button>
+    </div>
 
     <button id="home-btn">&#8592;</button>
     <div id="scan-hint">Point your camera at a Popcoded photo</div>
@@ -259,6 +268,7 @@
         scene.setAttribute('embedded', '');
         scene.setAttribute('vr-mode-ui', 'enabled: false');
         scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
+        scene.setAttribute('renderer', 'antialias: false; precision: mediump; powerPreference: low-power');
 
         const camera = document.createElement('a-camera');
         camera.setAttribute('position', '0 0 0');
@@ -286,13 +296,21 @@
 
         document.body.appendChild(scene);
 
-        scene.addEventListener('arError', () => {
+        const arReadyTimeout = setTimeout(() => {
+          showError();
+        }, 20000);
+
+        scene.addEventListener('arReady', () => {
+          clearTimeout(arReadyTimeout);
           document.getElementById('loading').style.display = 'none';
+          document.getElementById('start-screen').style.display = 'flex';
+        });
+
+        scene.addEventListener('arError', () => {
+          clearTimeout(arReadyTimeout);
           showError();
         });
 
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('start-screen').style.display = 'flex';
         logEvent('scan_open');
 
         document.getElementById('start-btn').addEventListener('click', () => {
