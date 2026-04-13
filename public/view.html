@@ -164,6 +164,7 @@
       <img class="splash-logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
       <div class="spinner"></div>
       <div id="loading-text">Loading experience...</div>
+      <div style="color:rgba(255,255,255,0.4);font-size:10px;margin-top:8px;">v3</div>
     </div>
     <div id="start-screen">
       <img class="splash-logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
@@ -234,9 +235,20 @@
         } catch(e) {} // never let analytics break the app
       }
 
+      // Nuclear-option safety net: unconditionally show error screen after 25s
+      // if nothing has navigated away from the loading spinner. Registered
+      // BEFORE any async work so it fires no matter where things hang.
+      let globalLoadTimeout = setTimeout(() => {
+        const loading = document.getElementById('loading');
+        if (loading && loading.style.display !== 'none') {
+          showError('Timed out loading experience (25s). This device may not support WebGL/AR, or the network is slow.');
+        }
+      }, 25000);
+
       if (!id) { showError(); } else { loadCollection(id); }
 
       function showError(message) {
+        clearTimeout(globalLoadTimeout);
         document.getElementById('loading').style.display = 'none';
         document.getElementById('error-screen').style.display = 'flex';
         if (message) {
@@ -306,6 +318,7 @@
 
         scene.addEventListener('arReady', () => {
           clearTimeout(arReadyTimeout);
+          clearTimeout(globalLoadTimeout);
           document.getElementById('loading').style.display = 'none';
           document.getElementById('start-screen').style.display = 'flex';
         });
