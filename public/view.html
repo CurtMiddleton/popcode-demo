@@ -313,19 +313,24 @@
         });
 
         let arReadyTimeout = setTimeout(() => {
-          showError('AR failed to initialize (timeout). Your device may not support WebGL.');
+          // Only show timeout error if we're still on the loading screen —
+          // avoids overwriting the start screen on the happy path.
+          if (document.getElementById('loading').style.display !== 'none') {
+            showError('AR failed to initialize (timeout). Your device may not support WebGL.');
+          }
         }, 20000);
 
         scene.addEventListener('arReady', () => {
           clearTimeout(arReadyTimeout);
           clearTimeout(globalLoadTimeout);
-          document.getElementById('loading').style.display = 'none';
-          document.getElementById('start-screen').style.display = 'flex';
         });
 
         scene.addEventListener('arError', (e) => {
           clearTimeout(arReadyTimeout);
-          showError('AR error: ' + (e?.detail?.message || 'unknown'));
+          // Only show error if we're still on the loading screen
+          if (document.getElementById('loading').style.display !== 'none') {
+            showError('AR error: ' + (e?.detail?.message || 'unknown'));
+          }
         });
 
         try {
@@ -335,6 +340,13 @@
           showError('Scene init failed: ' + (err?.message || err));
           return;
         }
+
+        // Unconditionally show start screen immediately after the scene is
+        // appended — this matches the original behavior that worked for
+        // modern iPhones. MindAR continues initializing in the background.
+        clearTimeout(globalLoadTimeout);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('start-screen').style.display = 'flex';
 
         logEvent('scan_open');
 
