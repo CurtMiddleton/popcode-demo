@@ -285,6 +285,7 @@
         });
 
         document.body.appendChild(scene);
+        arScene = scene;
 
         scene.addEventListener('arError', () => {
           document.getElementById('loading').style.display = 'none';
@@ -318,6 +319,7 @@
       let videoActive = false;
       let triggerTimer = null;
       let reloadHintTimer = null;
+      let arScene = null; // set inside loadCollection; used by triggerVideo/returnToScanner
 
       const reloadHintBtn = document.getElementById('reload-hint');
       reloadHintBtn.addEventListener('click', () => location.reload());
@@ -354,6 +356,14 @@
         document.querySelectorAll('.corner').forEach(c => c.classList.add('expanded'));
         triggerTimer = setTimeout(() => {
           triggerTimer = null;
+          // Stop MindAR's camera before playing the video. On iOS 16 Safari,
+          // getUserMedia and <video> playback can't share the media session,
+          // so the video freezes on the first frame unless the camera is
+          // released first. Re-started from returnToScanner() on close.
+          try {
+            const mindar = arScene && arScene.systems && arScene.systems['mindar-image-system'];
+            if (mindar && typeof mindar.stop === 'function') mindar.stop();
+          } catch(e) {}
           fullVid.src = url;
           fullVid.load();
           scanner.style.display = 'none';
@@ -419,6 +429,11 @@ fullVid.play()
         scanner.style.display = 'block';
         document.getElementById('scan-hint').style.display = 'block';
         document.getElementById('home-btn').style.display = 'flex';
+        // Restart MindAR's camera so the user can scan the next photo.
+        try {
+          const mindar = arScene && arScene.systems && arScene.systems['mindar-image-system'];
+          if (mindar && typeof mindar.start === 'function') mindar.start();
+        } catch(e) {}
         startReloadHintTimer();
       }
 
