@@ -3,12 +3,9 @@
   // and only in browser context
   if (typeof window === 'undefined') return;
 
-  const SUPABASE_URL = window.SUPABASE_URL || '';
-  const SUPABASE_KEY = window.SUPABASE_KEY || '';
-
-  // Wait for config to be available
+  // Wait for config.js globals to be available
   function init() {
-    if (!window.SUPABASE_URL) {
+    if (typeof SUPABASE_URL === 'undefined') {
       setTimeout(init, 100);
       return;
     }
@@ -234,11 +231,11 @@
       };
 
       try {
-        const res = await fetch(window.SUPABASE_URL + '/rest/v1/beta_feedback', {
+        const res = await fetch(SUPABASE_URL + '/rest/v1/beta_feedback', {
           method: 'POST',
           headers: {
-            'apikey': window.SUPABASE_KEY,
-            'Authorization': 'Bearer ' + window.SUPABASE_KEY,
+            'apikey': SUPABASE_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_KEY,
             'Content-Type': 'application/json',
             'Prefer': 'return=minimal'
           },
