@@ -204,6 +204,14 @@
       .download-btn:disabled { opacity:0.5; cursor:not-allowed; }
       .download-close { float:right; background:none; border:none; font-size:22px; cursor:pointer; color:#aaa; margin-top:-4px; }
 
+      /* Share popup */
+      .share-popup { display:none; position:absolute; background:white; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.18); padding:8px 0; min-width:220px; z-index:500; }
+      .share-popup.visible { display:block; }
+      .share-popup-title { font-size:11px; font-weight:700; color:#aaa; text-transform:uppercase; letter-spacing:0.06em; padding:8px 18px 6px; }
+      .share-option { display:flex; align-items:center; gap:12px; padding:11px 18px; cursor:pointer; font-size:15px; font-weight:700; color:#1a1a1a; font-family:'FilsonPro',sans-serif; border:none; background:none; width:100%; text-align:left; }
+      .share-option:hover { background:#f5f4f0; }
+      .share-option-icon { width:34px; height:34px; border-radius:50%; background:#f0eeea; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+
       /* Order Badges modal */
       #badges-modal { display:none; position:fixed; top:0; right:0; bottom:0; left:0; background:rgba(0,0,0,0.55); z-index:400; align-items:center; justify-content:center; padding:20px; }
       #badges-modal.visible { display:flex; }
@@ -446,7 +454,25 @@
               <div class="card-title">${escapeHtml(title)}</div>
               <button class="btn-rename-open" style="background:none;border:none;padding:0;font-size:11px;color:#aaa;cursor:pointer;font-family:'FilsonPro',sans-serif;font-weight:400;text-decoration:underline;display:block;margin-top:-5px;margin-bottom:4px;">rename</button>
               <div class="card-meta">Created ${formatDate(col.created_at)} &nbsp;•&nbsp; ${pageCount} image${pageCount !== 1 ? 's' : ''}</div>
-              <div class="card-id">ID: <strong>${escapeHtml(col.slug)}</strong> <button class="btn-share-id" data-url="${escapeHtml(viewUrl)}" title="Copy link" style="background:none;border:none;padding:0 0 0 6px;cursor:pointer;vertical-align:middle;line-height:1;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></button></div>
+              <div class="card-id" style="position:relative;">ID: <strong>${escapeHtml(col.slug)}</strong> <button class="btn-share-id" data-url="${escapeHtml(viewUrl)}" data-slug="${escapeHtml(col.slug)}" title="Share" style="background:none;border:none;padding:0 0 0 6px;cursor:pointer;vertical-align:middle;line-height:1;">
+                <img src="/assets/share.svg" width="15" height="15" style="vertical-align:middle;opacity:0.35;filter:grayscale(1);" alt="Share"/>
+              </button>
+              <div class="share-popup" id="share-popup-${escapeHtml(col.slug)}">
+                <div class="share-popup-title">Share options</div>
+                <button class="share-option share-opt-copy" data-url="${escapeHtml(viewUrl)}">
+                  <span class="share-option-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
+                  Copy link
+                </button>
+                <button class="share-option share-opt-email" data-url="${escapeHtml(viewUrl)}" data-title="${escapeHtml(title)}">
+                  <span class="share-option-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
+                  Email
+                </button>
+                <button class="share-option share-opt-message" data-url="${escapeHtml(viewUrl)}" data-title="${escapeHtml(title)}">
+                  <span class="share-option-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+                  Message
+                </button>
+              </div>
+              </div>
             </div>
           </div>
           <div class="rename-form" id="rename-form-${col.id}">
@@ -463,12 +489,38 @@
           </div>
         `;
 
-        card.querySelector('.btn-share-id').addEventListener('click', function() {
-          navigator.clipboard.writeText(this.dataset.url).then(() => {
-            showToast('Link copied!');
-          }).catch(() => {
-            prompt('Copy this link:', this.dataset.url);
+        card.querySelector('.btn-share-id').addEventListener('click', function(e) {
+          e.stopPropagation();
+          const slug = this.dataset.slug;
+          const popup = document.getElementById('share-popup-' + slug);
+          // Close all other popups
+          document.querySelectorAll('.share-popup.visible').forEach(function(p) {
+            if (p !== popup) p.classList.remove('visible');
           });
+          popup.classList.toggle('visible');
+        });
+
+        card.querySelector('.share-opt-copy').addEventListener('click', function(e) {
+          e.stopPropagation();
+          const url = this.dataset.url;
+          navigator.clipboard.writeText(url).then(() => { showToast('Link copied!'); }).catch(() => { prompt('Copy this link:', url); });
+          this.closest('.share-popup').classList.remove('visible');
+        });
+
+        card.querySelector('.share-opt-email').addEventListener('click', function(e) {
+          e.stopPropagation();
+          const url = this.dataset.url;
+          const title = this.dataset.title;
+          window.location.href = 'mailto:?subject=' + encodeURIComponent('Check out my Popcode: ' + title) + '&body=' + encodeURIComponent('View it here: ' + url);
+          this.closest('.share-popup').classList.remove('visible');
+        });
+
+        card.querySelector('.share-opt-message').addEventListener('click', function(e) {
+          e.stopPropagation();
+          const url = this.dataset.url;
+          const title = this.dataset.title;
+          window.location.href = 'sms:?&body=' + encodeURIComponent('Check out my Popcode "' + title + '": ' + url);
+          this.closest('.share-popup').classList.remove('visible');
         });
 
         card.querySelector('.btn-rename-open').addEventListener('click', function() {
@@ -736,6 +788,11 @@
       }
 
       // Nav overlay
+      // Close share popups when clicking outside
+      document.addEventListener('click', function() {
+        document.querySelectorAll('.share-popup.visible').forEach(function(p) { p.classList.remove('visible'); });
+      });
+
       document.getElementById('nav-btn').addEventListener('click', function() {
         document.getElementById('nav-overlay').style.display = 'flex';
       });
