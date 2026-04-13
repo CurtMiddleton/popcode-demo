@@ -202,6 +202,20 @@
       .download-btn { background:linear-gradient(135deg,#7657FC 0%,#589AF9 100%); color:white; border:none; border-radius:20px; padding:7px 16px; font-size:13px; font-weight:700; cursor:pointer; font-family:'FilsonPro',sans-serif; }
       .download-btn:disabled { opacity:0.5; cursor:not-allowed; }
       .download-close { float:right; background:none; border:none; font-size:22px; cursor:pointer; color:#aaa; margin-top:-4px; }
+
+      /* Order Badges modal */
+      #badges-modal { display:none; position:fixed; top:0; right:0; bottom:0; left:0; background:rgba(0,0,0,0.55); z-index:400; align-items:center; justify-content:center; padding:20px; }
+      #badges-modal.visible { display:flex; }
+      .badges-box { background:white; border-radius:24px; padding:28px 24px; max-width:400px; width:100%; box-shadow:0 12px 48px rgba(0,0,0,0.22); }
+      .badges-box h2 { font-size:20px; font-weight:700; margin-bottom:6px; }
+      .badges-box .badges-sub { font-size:13px; color:#888; margin-bottom:24px; line-height:1.5; }
+      .badge-option { display:flex; align-items:center; gap:16px; padding:16px; border:1px solid #e8e8e8; border-radius:16px; margin-bottom:12px; text-decoration:none; transition:border-color 0.15s, box-shadow 0.15s; }
+      .badge-option:hover { border-color:#7657FC; box-shadow:0 2px 12px rgba(118,87,252,0.12); }
+      .badge-preview { flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+      .badge-option-info { flex:1; }
+      .badge-option-title { font-size:15px; font-weight:700; color:#1a1a1a; }
+      .badge-option-desc { font-size:12px; color:#888; margin-top:2px; }
+      .badge-arrow { font-size:18px; color:#aaa; }
       .confirm-dialog {
         background: white; border-radius: 20px; padding: 32px 28px;
         max-width: 340px; width: 100%; box-shadow: 0 8px 40px rgba(0,0,0,0.2);
@@ -262,6 +276,30 @@
         <div class="download-grid" id="download-grid">
           <div style="color:#aaa;font-size:14px;text-align:center;padding:20px">Loading photos...</div>
         </div>
+      </div>
+    </div>
+
+    <div id="badges-modal">
+      <div class="badges-box">
+        <button class="download-close" id="badges-close-btn">&times;</button>
+        <h2>Order Popcode Badges</h2>
+        <p class="badges-sub">Stick a Popcode badge on any printed photo — anyone who scans it with your link will see the video. Printed and shipped by Sticker Mule.</p>
+        <a class="badge-option" href="https://www.stickermule.com/item/2421090c47beca439ebfef444379d6e1" target="_blank" rel="noopener">
+          <div class="badge-preview"><img src="/assets/popcode_icon.svg" style="width:36px;height:36px;"/></div>
+          <div class="badge-option-info">
+            <div class="badge-option-title">¾ inch round</div>
+            <div class="badge-option-desc">Subtle — great for small prints and wallet photos</div>
+          </div>
+          <div class="badge-arrow">›</div>
+        </a>
+        <a class="badge-option" href="https://www.stickermule.com/item/2421090c47beca439ebfef444379d7e1" target="_blank" rel="noopener">
+          <div class="badge-preview"><img src="/assets/popcode_icon.svg" style="width:56px;height:56px;"/></div>
+          <div class="badge-option-info">
+            <div class="badge-option-title">1½ inch round</div>
+            <div class="badge-option-desc">Bold — ideal for albums, frames, and larger prints</div>
+          </div>
+          <div class="badge-arrow">›</div>
+        </a>
       </div>
     </div>
 
@@ -416,6 +454,7 @@
             <button class="btn btn-copy" data-url="${escapeHtml(viewUrl)}">Copy Link</button>
             <a class="btn btn-rename" href="/edit.html?id=${escapeHtml(col.slug)}">Edit</a>
             <button class="btn btn-download" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}">Download ${pageCount === 1 ? 'Image' : 'Images'}</button>
+            <button class="btn btn-order-badges">Order Badges</button>
             <button class="btn btn-delete" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
           </div>
         `;
@@ -464,6 +503,10 @@
 
         card.querySelector('.btn-download').addEventListener('click', function() {
           openDownloadModal(this.dataset.slug, this.dataset.title);
+        });
+
+        card.querySelector('.btn-order-badges').addEventListener('click', function() {
+          document.getElementById('badges-modal').classList.add('visible');
         });
 
         return card;
@@ -598,6 +641,13 @@
         document.getElementById('download-modal').classList.remove('visible');
       });
       document.getElementById('download-modal').addEventListener('click', function(e) {
+        if (e.target === this) this.classList.remove('visible');
+      });
+
+      document.getElementById('badges-close-btn').addEventListener('click', function() {
+        document.getElementById('badges-modal').classList.remove('visible');
+      });
+      document.getElementById('badges-modal').addEventListener('click', function(e) {
         if (e.target === this) this.classList.remove('visible');
       });
 
