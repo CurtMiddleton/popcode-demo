@@ -151,6 +151,7 @@
       }
       #error-screen h2 { margin-bottom: 12px; }
       #error-screen p { color: #999; font-size: 14px; }
+      #error-detail { display: none; margin-top: 12px; font-family: monospace; font-size: 11px; color: #ff9; word-break: break-word; max-width: 90%; }
       #error-reload-btn {
         margin-top: 24px; padding: 14px 36px; font-size: 16px;
         border-radius: 999px; border: none; background: white; color: #6b3fa0;
@@ -176,6 +177,7 @@
     <div id="error-screen">
       <h2>Experience not found</h2>
       <p>This link may be invalid or expired.</p>
+      <p id="error-detail"></p>
       <button id="error-reload-btn" onclick="location.reload()">Reload</button>
     </div>
 
@@ -234,9 +236,13 @@
 
       if (!id) { showError(); } else { loadCollection(id); }
 
-      function showError() {
+      function showError(message) {
         document.getElementById('loading').style.display = 'none';
         document.getElementById('error-screen').style.display = 'flex';
+        if (message) {
+          const detail = document.getElementById('error-detail');
+          if (detail) { detail.textContent = message; detail.style.display = 'block'; }
+        }
       }
 
       async function loadCollection(id) {
@@ -294,10 +300,8 @@
           scene.appendChild(target);
         });
 
-        document.body.appendChild(scene);
-
-        const arReadyTimeout = setTimeout(() => {
-          showError();
+        let arReadyTimeout = setTimeout(() => {
+          showError('AR failed to initialize (timeout). Your device may not support WebGL.');
         }, 20000);
 
         scene.addEventListener('arReady', () => {
@@ -306,10 +310,18 @@
           document.getElementById('start-screen').style.display = 'flex';
         });
 
-        scene.addEventListener('arError', () => {
+        scene.addEventListener('arError', (e) => {
           clearTimeout(arReadyTimeout);
-          showError();
+          showError('AR error: ' + (e?.detail?.message || 'unknown'));
         });
+
+        try {
+          document.body.appendChild(scene);
+        } catch (err) {
+          clearTimeout(arReadyTimeout);
+          showError('Scene init failed: ' + (err?.message || err));
+          return;
+        }
 
         logEvent('scan_open');
 
