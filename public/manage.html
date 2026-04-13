@@ -250,7 +250,8 @@
       <div class="download-box">
         <button class="download-close" id="download-close-btn">&times;</button>
         <h2>Download Photos</h2>
-        <p>Each photo below has the Popcode badge added to the lower right corner. Download and print them — anyone who scans them with your link will see the video.</p>
+        <p>Each photo has the Popcode badge added to the lower right corner. Print them — anyone who scans with your link will see the video.</p>
+        <button class="download-btn" id="download-all-btn" style="width:100%;margin-bottom:20px;display:none;">Download All</button>
         <div class="download-grid" id="download-grid">
           <div style="color:#aaa;font-size:14px;text-align:center;padding:20px">Loading photos...</div>
         </div>
@@ -464,29 +465,41 @@
       async function openDownloadModal(slug, title) {
         const modal = document.getElementById('download-modal');
         const grid  = document.getElementById('download-grid');
+        const dlAll = document.getElementById('download-all-btn');
         modal.classList.add('visible');
+        dlAll.style.display = 'none';
         grid.innerHTML = '<div style="color:#aaa;font-size:14px;text-align:center;padding:20px">Loading photos...</div>';
 
-        const { data: items, error } = await db.from('collection_items')
+        const colRes = await db.from('collections').select('id').eq('slug', slug).single();
+        const { data: rawItems, error } = await db.from('collection_items')
           .select('target_index, photo_url')
-          .eq('collection_id',
-            (await db.from('collections').select('id').eq('slug', slug).single()).data.id
-          )
+          .eq('collection_id', colRes.data.id)
           .order('target_index');
 
-        if (error || !items || items.length === 0) {
+        if (error || !rawItems || rawItems.length === 0) {
           grid.innerHTML = '<div style="color:#aaa;font-size:14px;text-align:center;padding:20px">No photos found.</div>';
           return;
         }
 
+        // Deduplicate by target_index, keep first occurrence
+        var seen = {};
+        var items = rawItems.filter(function(item) {
+          if (!item.photo_url) return false;
+          if (seen[item.target_index]) return false;
+          seen[item.target_index] = true;
+          return true;
+        });
+
         grid.innerHTML = '';
+        var dataUrls = new Array(items.length);
+        var readyCount = 0;
+        var safeTitle = title.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+
         items.forEach(function(item, i) {
-          if (!item.photo_url) return;
           var row = document.createElement('div');
           row.className = 'download-item';
 
           var canvas = document.createElement('canvas');
-          canvas.width = 80; canvas.height = 80;
           canvas.style.cssText = 'width:80px;height:80px;border-radius:10px;flex-shrink:0;';
 
           var info = document.createElement('div');
@@ -504,14 +517,29 @@
           grid.appendChild(row);
 
           compositeImage(item.photo_url, canvas).then(function(dataUrl) {
+            dataUrls[i] = dataUrl;
             btn.textContent = 'Download';
             btn.disabled = false;
             btn.addEventListener('click', function() {
               var a = document.createElement('a');
-              a.download = title.replace(/[^a-z0-9]/gi, '-').toLowerCase() + '-photo-' + (i + 1) + '.png';
+              a.download = safeTitle + '-photo-' + (i + 1) + '.png';
               a.href = dataUrl;
               a.click();
             });
+            readyCount++;
+            if (readyCount === items.length) {
+              dlAll.style.display = 'block';
+              dlAll.onclick = function() {
+                dataUrls.forEach(function(url, idx) {
+                  setTimeout(function() {
+                    var a = document.createElement('a');
+                    a.download = safeTitle + '-photo-' + (idx + 1) + '.png';
+                    a.href = url;
+                    a.click();
+                  }, idx * 300);
+                });
+              };
+            }
           }).catch(function() {
             btn.textContent = 'Error';
           });
