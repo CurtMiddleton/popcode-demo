@@ -255,7 +255,7 @@
         }
 
         const scene = document.createElement('a-scene');
-        scene.setAttribute('mindar-image', `imageTargetSrc: ${mindUrl}; autoStart: true; warmupTolerance: 2; missTolerance: 10;`);
+        scene.setAttribute('mindar-image', `imageTargetSrc: ${mindUrl}; autoStart: false; warmupTolerance: 2; missTolerance: 10;`);
         scene.setAttribute('embedded', '');
         scene.setAttribute('vr-mode-ui', 'enabled: false');
         scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
@@ -296,6 +296,13 @@
         logEvent('scan_open');
 
         document.getElementById('start-btn').addEventListener('click', () => {
+          // Start MindAR from within the user-gesture click handler. iOS 18
+          // Safari requires a user gesture for camera access; autoStart:true
+          // triggered getUserMedia without a gesture and hung the main thread.
+          const mindar = scene.systems['mindar-image-system'];
+          if (mindar && typeof mindar.start === 'function') {
+            mindar.start();
+          }
           document.getElementById('start-screen').style.display = 'none';
           document.getElementById('scanner').style.display = 'block';
           document.getElementById('scan-hint').style.display = 'block';
