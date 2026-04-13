@@ -125,6 +125,85 @@
       // Row 7: user agent
       const rowUA = addRow('7. user agent');
       updateRow(rowUA, 'ok', navigator.userAgent);
+
+      // Row 8: fetch the actual .mind file for egrbne2j
+      const rowMind = addRow('8. fetch .mind file for egrbne2j');
+      supaScript.addEventListener('load', () => {
+        const db2 = window.supabase.createClient(
+          'https://mrwpkhsluzokytpvmwqk.supabase.co',
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI'
+        );
+        db2.from('collections').select('mind_file_url').eq('slug', 'egrbne2j').single()
+          .then(({ data, error }) => {
+            if (error || !data) {
+              updateRow(rowMind, 'err', 'no mind_file_url: ' + (error?.message || 'empty'));
+              return;
+            }
+            const mindUrl = data.mind_file_url;
+            const mindStart = performance.now();
+            fetch(mindUrl)
+              .then(r => {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.arrayBuffer();
+              })
+              .then(buf => {
+                const ms = Math.round(performance.now() - mindStart);
+                updateRow(rowMind, 'ok', 'downloaded ' + buf.byteLength + ' bytes in ' + ms + 'ms');
+              })
+              .catch(e => updateRow(rowMind, 'err', 'mind fetch failed: ' + e.message));
+          });
+      });
+
+      // Row 9: create a real <a-scene> with mindar-image and wait for arReady
+      const rowScene = addRow('9. create a-scene + mindar-image (10s timeout)');
+      Promise.all([
+        new Promise(res => aframeScript.addEventListener('load', res)),
+        new Promise(res => supaScript.addEventListener('load', res))
+      ]).then(() => {
+        // MindAR loads after A-Frame, wait for it too
+        const waitForMindar = () => {
+          if (window.AFRAME && window.AFRAME.components['mindar-image']) return Promise.resolve();
+          return new Promise(res => setTimeout(res, 100)).then(waitForMindar);
+        };
+        return waitForMindar();
+      }).then(() => {
+        const db3 = window.supabase.createClient(
+          'https://mrwpkhsluzokytpvmwqk.supabase.co',
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI'
+        );
+        return db3.from('collections').select('mind_file_url').eq('slug', 'egrbne2j').single();
+      }).then(({ data }) => {
+        const mindUrl = data.mind_file_url;
+        const sceneStart = performance.now();
+        const scene = document.createElement('a-scene');
+        scene.setAttribute('mindar-image', 'imageTargetSrc: ' + mindUrl + '; autoStart: false;');
+        scene.setAttribute('embedded', '');
+        scene.setAttribute('vr-mode-ui', 'enabled: false');
+        scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
+        scene.style.position = 'fixed'; scene.style.top = '-9999px'; scene.style.left = '-9999px';
+        scene.style.width = '1px'; scene.style.height = '1px';
+
+        const sceneTimeout = setTimeout(() => {
+          updateRow(rowScene, 'err', 'TIMEOUT: arReady did not fire in 10s');
+        }, 10000);
+
+        scene.addEventListener('arReady', () => {
+          clearTimeout(sceneTimeout);
+          const ms = Math.round(performance.now() - sceneStart);
+          updateRow(rowScene, 'ok', 'arReady fired in ' + ms + 'ms');
+        });
+        scene.addEventListener('arError', (e) => {
+          clearTimeout(sceneTimeout);
+          updateRow(rowScene, 'err', 'arError: ' + (e?.detail?.message || 'unknown'));
+        });
+
+        try {
+          document.body.appendChild(scene);
+        } catch (e) {
+          clearTimeout(sceneTimeout);
+          updateRow(rowScene, 'err', 'appendChild threw: ' + e.message);
+        }
+      }).catch(e => updateRow(rowScene, 'err', 'setup failed: ' + e.message));
     </script>
   </body>
 </html>
