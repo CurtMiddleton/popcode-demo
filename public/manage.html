@@ -180,6 +180,21 @@
         align-items: center; justify-content: center; padding: 24px;
       }
       .confirm-overlay.visible { display: flex; }
+
+      /* Download modal */
+      #download-modal { display:none; position:fixed; top:0; right:0; bottom:0; left:0; background:rgba(0,0,0,0.55); z-index:400; align-items:center; justify-content:center; padding:20px; }
+      #download-modal.visible { display:flex; }
+      .download-box { background:white; border-radius:24px; padding:28px 24px; max-width:480px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 12px 48px rgba(0,0,0,0.22); }
+      .download-box h2 { font-size:20px; font-weight:700; margin-bottom:6px; }
+      .download-box p { font-size:13px; color:#888; margin-bottom:20px; line-height:1.5; }
+      .download-grid { display:flex; flex-direction:column; gap:16px; }
+      .download-item { display:flex; align-items:center; gap:16px; }
+      .download-item canvas { width:80px; height:80px; object-fit:cover; border-radius:10px; flex-shrink:0; }
+      .download-item-info { flex:1; }
+      .download-item-label { font-size:13px; font-weight:700; color:#1a1a1a; margin-bottom:6px; }
+      .download-btn { background:linear-gradient(135deg,#7657FC 0%,#589AF9 100%); color:white; border:none; border-radius:20px; padding:7px 16px; font-size:13px; font-weight:700; cursor:pointer; font-family:'FilsonPro',sans-serif; }
+      .download-btn:disabled { opacity:0.5; cursor:not-allowed; }
+      .download-close { float:right; background:none; border:none; font-size:22px; cursor:pointer; color:#aaa; margin-top:-4px; }
       .confirm-dialog {
         background: white; border-radius: 20px; padding: 32px 28px;
         max-width: 340px; width: 100%; box-shadow: 0 8px 40px rgba(0,0,0,0.2);
@@ -228,6 +243,17 @@
         <a class="nav-link" href="/howto.html">How It Works</a>
         <div class="nav-divider"></div>
         <a class="nav-link external" href="https://www.popcodeapp.com" target="_blank">popcode.app ↗</a>
+      </div>
+    </div>
+
+    <div id="download-modal">
+      <div class="download-box">
+        <button class="download-close" id="download-close-btn">&times;</button>
+        <h2>Download Photos</h2>
+        <p>Each photo below has the Popcode badge added to the lower right corner. Download and print them — anyone who scans them with your link will see the video.</p>
+        <div class="download-grid" id="download-grid">
+          <div style="color:#aaa;font-size:14px;text-align:center;padding:20px">Loading photos...</div>
+        </div>
       </div>
     </div>
 
@@ -381,6 +407,7 @@
             <button class="btn btn-copy" data-url="${escapeHtml(viewUrl)}">Copy Link</button>
             <a class="btn btn-rename" href="/edit.html?id=${escapeHtml(col.slug)}">Edit</a>
             <button class="btn btn-rename-open">Rename</button>
+            <button class="btn btn-download" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}">Download Photos</button>
             <button class="btn btn-delete" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
           </div>
         `;
@@ -427,8 +454,117 @@
           confirmDelete(card, col.id, slug, name, this);
         });
 
+        card.querySelector('.btn-download').addEventListener('click', function() {
+          openDownloadModal(this.dataset.slug, this.dataset.title);
+        });
+
         return card;
       }
+
+      async function openDownloadModal(slug, title) {
+        const modal = document.getElementById('download-modal');
+        const grid  = document.getElementById('download-grid');
+        modal.classList.add('visible');
+        grid.innerHTML = '<div style="color:#aaa;font-size:14px;text-align:center;padding:20px">Loading photos...</div>';
+
+        const { data: items, error } = await db.from('collection_items')
+          .select('target_index, photo_url')
+          .eq('collection_id',
+            (await db.from('collections').select('id').eq('slug', slug).single()).data.id
+          )
+          .order('target_index');
+
+        if (error || !items || items.length === 0) {
+          grid.innerHTML = '<div style="color:#aaa;font-size:14px;text-align:center;padding:20px">No photos found.</div>';
+          return;
+        }
+
+        grid.innerHTML = '';
+        items.forEach(function(item, i) {
+          if (!item.photo_url) return;
+          var row = document.createElement('div');
+          row.className = 'download-item';
+
+          var canvas = document.createElement('canvas');
+          canvas.width = 80; canvas.height = 80;
+          canvas.style.cssText = 'width:80px;height:80px;border-radius:10px;flex-shrink:0;';
+
+          var info = document.createElement('div');
+          info.className = 'download-item-info';
+          info.innerHTML = '<div class="download-item-label">Photo ' + (i + 1) + '</div>';
+
+          var btn = document.createElement('button');
+          btn.className = 'download-btn';
+          btn.textContent = 'Preparing...';
+          btn.disabled = true;
+          info.appendChild(btn);
+
+          row.appendChild(canvas);
+          row.appendChild(info);
+          grid.appendChild(row);
+
+          compositeImage(item.photo_url, canvas).then(function(dataUrl) {
+            btn.textContent = 'Download';
+            btn.disabled = false;
+            btn.addEventListener('click', function() {
+              var a = document.createElement('a');
+              a.download = title.replace(/[^a-z0-9]/gi, '-').toLowerCase() + '-photo-' + (i + 1) + '.png';
+              a.href = dataUrl;
+              a.click();
+            });
+          }).catch(function() {
+            btn.textContent = 'Error';
+          });
+        });
+      }
+
+      async function compositeImage(photoUrl, previewCanvas) {
+        // Load photo
+        var img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise(function(resolve, reject) {
+          img.onload = resolve; img.onerror = reject;
+          img.src = photoUrl;
+        });
+
+        // Load Popcode icon SVG
+        var iconImg = new Image();
+        await new Promise(function(resolve, reject) {
+          iconImg.onload = resolve; iconImg.onerror = reject;
+          iconImg.src = '/assets/popcode_icon.svg';
+        });
+
+        // Full-res canvas
+        var c = document.createElement('canvas');
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        var ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+
+        // Badge = 12% of shorter side ≈ ½ inch at typical print DPI
+        var badgeSize = Math.round(Math.min(c.width, c.height) * 0.12);
+        var pad = Math.round(badgeSize * 0.2);
+        ctx.drawImage(iconImg, c.width - badgeSize - pad, c.height - badgeSize - pad, badgeSize, badgeSize);
+
+        // Draw scaled preview into the 80×80 canvas
+        if (previewCanvas) {
+          var pc = previewCanvas.getContext('2d');
+          var scale = Math.min(80 / c.width, 80 / c.height);
+          var pw = Math.round(c.width * scale);
+          var ph = Math.round(c.height * scale);
+          previewCanvas.width = pw; previewCanvas.height = ph;
+          pc.drawImage(c, 0, 0, pw, ph);
+        }
+
+        return c.toDataURL('image/png');
+      }
+
+      document.getElementById('download-close-btn').addEventListener('click', function() {
+        document.getElementById('download-modal').classList.remove('visible');
+      });
+      document.getElementById('download-modal').addEventListener('click', function(e) {
+        if (e.target === this) this.classList.remove('visible');
+      });
 
       function confirmDelete(card, collectionId, slug, title, btn) {
         document.getElementById('confirm-msg').textContent = 'Delete "' + title + '"? This will permanently remove the project and all its videos. This cannot be undone.';
