@@ -163,8 +163,8 @@
     <div id="loading">
       <img class="splash-logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
       <div class="spinner"></div>
-      <div id="loading-text">Loading experience...</div>
-      <div style="color:rgba(255,255,255,0.4);font-size:10px;margin-top:8px;">v3</div>
+      <div id="loading-text" style="max-width:90%;word-break:break-word;font-size:12px;">Loading experience...</div>
+      <div style="color:rgba(255,255,255,0.4);font-size:10px;margin-top:8px;">v4-diag</div>
     </div>
     <div id="start-screen">
       <img class="splash-logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
@@ -199,7 +199,24 @@
     </div>
 
     <script>
+      // ── Diagnostic: surface errors and execution steps on the loading screen
+      // so we can see on-device where things hang. Remove once XR is fixed.
+      function diagStep(msg) {
+        try {
+          const el = document.getElementById('loading-text');
+          if (el) el.textContent = msg;
+        } catch(e) {}
+      }
+      window.addEventListener('error', (e) => {
+        diagStep('JS ERROR: ' + (e?.message || e?.error || 'unknown'));
+      });
+      window.addEventListener('unhandledrejection', (e) => {
+        diagStep('PROMISE ERR: ' + (e?.reason?.message || e?.reason || 'unknown'));
+      });
+      diagStep('1: script start');
+
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      diagStep('2: supabase client');
 
       const params = new URLSearchParams(location.search);
       const id = params.get('id') || location.pathname.replace(/^\/|\/$/g, '');
@@ -245,6 +262,7 @@
         }
       }, 25000);
 
+      diagStep('3: calling loadCollection id=' + id);
       if (!id) { showError(); } else { loadCollection(id); }
 
       function showError(message) {
@@ -258,9 +276,12 @@
       }
 
       async function loadCollection(id) {
+        diagStep('4: loadCollection start');
         let mindUrl, videoMap = {};
 
+        diagStep('5: querying collections table');
         const { data: col } = await db.from('collections').select('*').eq('slug', id).single();
+        diagStep('6: collections query done, col=' + (col ? 'found' : 'null'));
 
         if (col) {
           // Save to recent views localStorage
@@ -333,6 +354,7 @@
           }
         });
 
+        diagStep('7: appending scene');
         try {
           document.body.appendChild(scene);
         } catch (err) {
@@ -340,6 +362,7 @@
           showError('Scene init failed: ' + (err?.message || err));
           return;
         }
+        diagStep('8: scene appended, showing start screen');
 
         // Unconditionally show start screen immediately after the scene is
         // appended — this matches the original behavior that worked for
