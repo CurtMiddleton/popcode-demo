@@ -4,10 +4,10 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>Popcode</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-    <script src="/config.js" defer></script>
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     <style>
       @font-face {
         font-family: 'FilsonPro';
@@ -151,20 +151,13 @@
       }
       #error-screen h2 { margin-bottom: 12px; }
       #error-screen p { color: #999; font-size: 14px; }
-      #error-detail { display: none; margin-top: 12px; font-family: monospace; font-size: 11px; color: #ff9; word-break: break-word; max-width: 90%; }
-      #error-reload-btn {
-        margin-top: 24px; padding: 14px 36px; font-size: 16px;
-        border-radius: 999px; border: none; background: white; color: #6b3fa0;
-        font-family: 'FilsonPro', sans-serif; font-weight: bold; cursor: pointer;
-      }
     </style>
   </head>
   <body>
     <div id="loading">
       <img class="splash-logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
       <div class="spinner"></div>
-      <div id="loading-text" style="max-width:90%;word-break:break-word;font-size:12px;">Loading experience...</div>
-      <div style="color:rgba(255,255,255,0.4);font-size:10px;margin-top:8px;">v5-defer</div>
+      <div id="loading-text">Loading experience...</div>
     </div>
     <div id="start-screen">
       <img class="splash-logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
@@ -175,12 +168,7 @@
         <a id="signin-link" href="/manage.html">Already have an account? <span style="text-decoration:underline;">Sign in</span></a>
       </div>
     </div>
-    <div id="error-screen">
-      <h2>Experience not found</h2>
-      <p>This link may be invalid or expired.</p>
-      <p id="error-detail"></p>
-      <button id="error-reload-btn" onclick="location.reload()">Reload</button>
-    </div>
+    <div id="error-screen"><h2>Experience not found</h2><p>This link may be invalid or expired.</p></div>
 
     <button id="home-btn">&#8592;</button>
     <div id="scan-hint">Point your camera at a Popcoded photo</div>
@@ -199,50 +187,7 @@
     </div>
 
     <script>
-      // ── Diagnostic: surface errors and execution steps on the loading screen
-      // so we can see on-device where things hang. Remove once XR is fixed.
-      function diagStep(msg) {
-        try {
-          const el = document.getElementById('loading-text');
-          if (el) el.textContent = msg;
-        } catch(e) {}
-      }
-      window.addEventListener('error', (e) => {
-        diagStep('JS ERROR: ' + (e?.message || e?.error || 'unknown'));
-      });
-      window.addEventListener('unhandledrejection', (e) => {
-        diagStep('PROMISE ERR: ' + (e?.reason?.message || e?.reason || 'unknown'));
-      });
-      diagStep('1: script start (waiting for DOM/scripts)');
-
-      // Watchdog: if DOMContentLoaded never fires within 15s, something is
-      // wrong with the deferred head scripts (aframe/mindar hung on CDN).
-      const domLoadWatchdog = setTimeout(() => {
-        diagStep('HUNG: DOMContentLoaded never fired (deferred script failed to load)');
-      }, 15000);
-
-      // Head scripts are deferred, so supabase/aframe/mindar aren't available
-      // until DOMContentLoaded. Wait for that before initializing.
-      document.addEventListener('DOMContentLoaded', () => {
-        clearTimeout(domLoadWatchdog);
-        diagStep('2: DOMContentLoaded fired');
-        try {
-          init();
-        } catch (err) {
-          diagStep('INIT ERR: ' + (err?.message || err));
-        }
-      });
-
-      let db;
-      function init() {
-        if (typeof window.supabase === 'undefined') {
-          diagStep('ERR: window.supabase missing (supabase CDN failed)');
-          return;
-        }
-        db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        diagStep('3: supabase client');
-        mainStart();
-      }
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
       const params = new URLSearchParams(location.search);
       const id = params.get('id') || location.pathname.replace(/^\/|\/$/g, '');
@@ -278,39 +223,17 @@
         } catch(e) {} // never let analytics break the app
       }
 
-      // Nuclear-option safety net. Assigned inside mainStart() after init.
-      let globalLoadTimeout;
+      if (!id) { showError(); } else { loadCollection(id); }
 
-      function mainStart() {
-        diagStep('4: mainStart, scheduling timeout');
-        globalLoadTimeout = setTimeout(() => {
-          const loading = document.getElementById('loading');
-          if (loading && loading.style.display !== 'none') {
-            showError('Timed out loading experience (25s). This device may not support WebGL/AR, or the network is slow.');
-          }
-        }, 25000);
-
-        diagStep('5: calling loadCollection id=' + id);
-        if (!id) { showError(); } else { loadCollection(id); }
-      }
-
-      function showError(message) {
-        clearTimeout(globalLoadTimeout);
+      function showError() {
         document.getElementById('loading').style.display = 'none';
         document.getElementById('error-screen').style.display = 'flex';
-        if (message) {
-          const detail = document.getElementById('error-detail');
-          if (detail) { detail.textContent = message; detail.style.display = 'block'; }
-        }
       }
 
       async function loadCollection(id) {
-        diagStep('6: loadCollection start');
         let mindUrl, videoMap = {};
 
-        diagStep('7: querying collections table');
         const { data: col } = await db.from('collections').select('*').eq('slug', id).single();
-        diagStep('8: collections query done, col=' + (col ? 'found' : 'null'));
 
         if (col) {
           // Save to recent views localStorage
@@ -336,7 +259,6 @@
         scene.setAttribute('embedded', '');
         scene.setAttribute('vr-mode-ui', 'enabled: false');
         scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
-        scene.setAttribute('renderer', 'antialias: false; precision: mediump; powerPreference: low-power');
 
         const camera = document.createElement('a-camera');
         camera.setAttribute('position', '0 0 0');
@@ -362,44 +284,15 @@
           scene.appendChild(target);
         });
 
-        let arReadyTimeout = setTimeout(() => {
-          // Only show timeout error if we're still on the loading screen —
-          // avoids overwriting the start screen on the happy path.
-          if (document.getElementById('loading').style.display !== 'none') {
-            showError('AR failed to initialize (timeout). Your device may not support WebGL.');
-          }
-        }, 20000);
+        document.body.appendChild(scene);
 
-        scene.addEventListener('arReady', () => {
-          clearTimeout(arReadyTimeout);
-          clearTimeout(globalLoadTimeout);
+        scene.addEventListener('arError', () => {
+          document.getElementById('loading').style.display = 'none';
+          showError();
         });
 
-        scene.addEventListener('arError', (e) => {
-          clearTimeout(arReadyTimeout);
-          // Only show error if we're still on the loading screen
-          if (document.getElementById('loading').style.display !== 'none') {
-            showError('AR error: ' + (e?.detail?.message || 'unknown'));
-          }
-        });
-
-        diagStep('9: appending scene');
-        try {
-          document.body.appendChild(scene);
-        } catch (err) {
-          clearTimeout(arReadyTimeout);
-          showError('Scene init failed: ' + (err?.message || err));
-          return;
-        }
-        diagStep('10: scene appended, showing start screen');
-
-        // Unconditionally show start screen immediately after the scene is
-        // appended — this matches the original behavior that worked for
-        // modern iPhones. MindAR continues initializing in the background.
-        clearTimeout(globalLoadTimeout);
         document.getElementById('loading').style.display = 'none';
         document.getElementById('start-screen').style.display = 'flex';
-
         logEvent('scan_open');
 
         document.getElementById('start-btn').addEventListener('click', () => {
