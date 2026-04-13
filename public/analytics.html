@@ -543,9 +543,16 @@
             </div>
             <div class="table-wrap" id="activity-wrap"></div>
           </div>
+
+          <!-- Beta Feedback -->
+          <div class="section">
+            <div class="section-title" style="margin-bottom:12px">Beta Feedback</div>
+            <div class="table-wrap" id="feedback-wrap"><div class="empty">Loading...</div></div>
+          </div>
         `;
 
         renderActivityTable();
+        loadFeedback();
 
         document.getElementById('activity-search').addEventListener('input', function() {
           searchQuery = this.value;
@@ -555,6 +562,45 @@
         } catch(e) {
           document.getElementById('main-content').innerHTML = '<p class="empty">Error loading analytics: ' + e.message + '</p>';
         }
+      }
+
+      async function loadFeedback() {
+        const wrap = document.getElementById('feedback-wrap');
+        if (!wrap) return;
+        try {
+          const { data, error } = await db
+            .from('beta_feedback')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (error) throw error;
+          if (!data || data.length === 0) {
+            wrap.innerHTML = '<div class="empty">No feedback submitted yet.</div>';
+            return;
+          }
+          var rows = data.map(function(f) {
+            var page = (f.page_url || '—').replace('https://popcode.app', '').replace('http://localhost:3000', '') || '/';
+            var device = f.user_agent ? (
+              /iPhone|iPad/.test(f.user_agent) ? 'iOS' :
+              /Android/.test(f.user_agent) ? 'Android' : 'Desktop'
+            ) : '—';
+            return '<tr>' +
+              '<td class="muted" style="white-space:nowrap">' + formatDate(f.created_at) + '</td>' +
+              '<td style="max-width:400px;white-space:pre-wrap;word-break:break-word">' + escapeHtml(f.description) + '</td>' +
+              '<td class="muted">' + escapeHtml(f.email || '—') + '</td>' +
+              '<td class="muted">' + escapeHtml(page) + '</td>' +
+              '<td>' + devicePill(device) + '</td>' +
+              '</tr>';
+          }).join('');
+          wrap.innerHTML = '<table>' +
+            '<thead><tr><th>Time</th><th>Report</th><th>Email</th><th>Page</th><th>Device</th></tr></thead>' +
+            '<tbody>' + rows + '</tbody></table>';
+        } catch(e) {
+          wrap.innerHTML = '<div class="empty">Could not load feedback: ' + e.message + '</div>';
+        }
+      }
+
+      function escapeHtml(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
       }
 
       // Nav overlay
