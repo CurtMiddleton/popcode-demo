@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>Popcode — Edit Collection</title>
+    <title>Popcode — Edit Project</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
@@ -181,7 +181,7 @@
       </button>
       <div id="nav-drawer">
         <a class="nav-link" href="/create.html">Create a Popcode</a>
-        <a class="nav-link" href="/manage.html">My Collections</a>
+        <a class="nav-link" href="/manage.html">My Projects</a>
         <a class="nav-link" href="/views.html">Past Popcode Views</a>
         <a class="nav-link" href="/account.html">Account</a>
         <a class="nav-link" href="/howto.html">How It Works</a>
@@ -191,18 +191,18 @@
     </div>
 
     <div class="page-top-bar">
-      <h1>Edit Collection</h1>
-      <a href="/manage.html" style="font-size:13px;font-weight:700;color:#7657FC;text-decoration:none;white-space:nowrap;">&#8249; My Collections</a>
+      <h1>Edit Project</h1>
+      <a href="/manage.html" style="font-size:13px;font-weight:700;color:#7657FC;text-decoration:none;white-space:nowrap;">&#8249; My Projects</a>
     </div>
     <p class="subtitle">Tap any photo or video to replace it. Add or remove pages.</p>
 
     <div id="loading-screen" class="loading-screen">
       <div class="spinner"></div>
-      <span style="font-size:14px;">Loading collection...</span>
+      <span style="font-size:14px;">Loading project...</span>
     </div>
 
     <div id="edit-ui" style="display:none; width:100%; max-width:360px; display:none; flex-direction:column; align-items:center;">
-      <div class="field-label">Collection Name</div>
+      <div class="field-label">Project Name</div>
       <input type="text" id="name-input" placeholder=""/>
 
       <div class="pages" id="pages"></div>
@@ -229,8 +229,8 @@
     </div>
 
     <div id="result">
-      <h3>Collection updated!</h3>
-      <p>Your collection is live with the new pages.</p>
+      <h3>Project updated!</h3>
+      <p>Your project is live with the new pages.</p>
       <div id="result-url"></div>
       <button id="copy-btn">Copy Link</button>
     </div>
@@ -269,7 +269,7 @@
           currentUser = data.session.user;
           const uName = data.session.user?.user_metadata?.full_name?.split(' ')[0] || data.session.user?.email?.split('@')[0] || '';
           if (uName) { const g = document.getElementById('user-greeting'); if (g) g.textContent = 'Hi, ' + uName + '!'; }
-          if (!slug) { alert('No collection specified.'); window.location.href = '/manage.html'; return; }
+          if (!slug) { alert('No project specified.'); window.location.href = '/manage.html'; return; }
           loadCollection();
         }
       });
@@ -281,7 +281,7 @@
         collectionLoaded = true;
 
         const { data: col } = await db.from('collections').select('*').eq('slug', slug).single();
-        if (!col) { alert('Collection not found.'); window.location.href = '/manage.html'; return; }
+        if (!col) { alert('Project not found.'); window.location.href = '/manage.html'; return; }
         collectionId = col.id;
         document.getElementById('name-input').value = col.name || '';
 
@@ -864,14 +864,14 @@
 
         // ── Step 6: Update collections.mind_file_url and name ─────────────────
         try {
-          setProgress('Saving collection...', 85);
+          setProgress('Saving project...', 85);
           const name = document.getElementById('name-input').value.trim() || null;
           const { error } = await db.from('collections')
             .update({ mind_file_url: mindUrl, name })
             .eq('id', collectionId);
           if (error) throw error;
         } catch (err) {
-          showSaveError('Step 5 failed (saving collection) — ' + (err.message || 'Database error.'));
+          showSaveError('Step 5 failed (saving project) — ' + (err.message || 'Database error.'));
           return;
         }
 

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>Popcode — My Collections</title>
+    <title>Popcode — My Projects</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <style>
@@ -222,7 +222,7 @@
       </button>
       <div id="nav-drawer">
         <a class="nav-link" href="/create.html">Create a Popcode</a>
-        <a class="nav-link" href="/manage.html">My Collections</a>
+        <a class="nav-link" href="/manage.html">My Projects</a>
         <a class="nav-link" href="/views.html">Past Popcode Views</a>
         <a class="nav-link" href="/account.html">Account</a>
         <a class="nav-link" href="/howto.html">How It Works</a>
@@ -233,8 +233,8 @@
 
     <div class="confirm-overlay" id="confirm-overlay">
       <div class="confirm-dialog">
-        <h2>Delete collection?</h2>
-        <p id="confirm-msg">This will permanently remove the collection and all its videos. This cannot be undone.</p>
+        <h2>Delete project?</h2>
+        <p id="confirm-msg">This will permanently remove the project and all its videos. This cannot be undone.</p>
         <div class="confirm-btns">
           <button class="btn-cancel" id="confirm-cancel-btn">Cancel</button>
           <button class="btn-delete" id="confirm-delete-btn">Delete</button>
@@ -243,11 +243,11 @@
     </div>
 
     <div class="top-bar">
-      <h1>My Collections</h1>
+      <h1>My Projects</h1>
     </div>
 
     <div id="content" class="collections-list">
-      <div class="loading-msg"><div class="spinner"></div><span>Loading collections...</span></div>
+      <div class="loading-msg"><div class="spinner"></div><span>Loading projects...</span></div>
     </div>
 
     <div class="toast" id="toast"></div>
@@ -332,7 +332,7 @@
           content.innerHTML = '';
           const banner = document.createElement('div');
           banner.className = 'error-banner';
-          banner.textContent = 'Failed to load collections: ' + (err.message || 'Unknown error');
+          banner.textContent = 'Failed to load projects: ' + (err.message || 'Unknown error');
           content.appendChild(banner);
           const retryBtn = document.createElement('button');
           retryBtn.className = 'btn btn-view';
@@ -347,8 +347,8 @@
         const div = document.createElement('div');
         div.className = 'empty-state';
         div.innerHTML = `
-          <p>You have no collections yet.</p>
-          <a href="/create.html">+ Create a Collection</a>
+          <p>You have no projects yet.</p>
+          <a href="/create.html">+ Create a Project</a>
         `;
         return div;
       }
@@ -372,7 +372,7 @@
             </div>
           </div>
           <div class="rename-form" id="rename-form-${col.id}">
-            <input type="text" id="rename-input-${col.id}" value="${escapeHtml(title)}" maxlength="80" placeholder="Collection name"/>
+            <input type="text" id="rename-input-${col.id}" value="${escapeHtml(title)}" maxlength="80" placeholder="Project name"/>
             <button class="rename-save" id="rename-save-${col.id}">Save</button>
             <button class="rename-cancel" id="rename-cancel-${col.id}">Cancel</button>
           </div>
@@ -431,7 +431,7 @@
       }
 
       function confirmDelete(card, collectionId, slug, title, btn) {
-        document.getElementById('confirm-msg').textContent = 'Delete "' + title + '"? This will permanently remove the collection and all its videos. This cannot be undone.';
+        document.getElementById('confirm-msg').textContent = 'Delete "' + title + '"? This will permanently remove the project and all its videos. This cannot be undone.';
         const overlay = document.getElementById('confirm-overlay');
         overlay.classList.add('visible');
         document.getElementById('confirm-cancel-btn').onclick = function() {
@@ -456,7 +456,7 @@
             .select('target_index')
             .eq('collection_id', collectionId);
 
-          if (fetchItemsError) throw new Error('Could not fetch collection items: ' + fetchItemsError.message);
+          if (fetchItemsError) throw new Error('Could not fetch project items: ' + fetchItemsError.message);
 
           (items || []).forEach(item => {
             filesToDelete.push(`${slug}/video_${item.target_index}.mp4`);
@@ -472,12 +472,12 @@
 
           const { error: deleteItemsError } = await db
             .from('collection_items').delete().eq('collection_id', collectionId);
-          if (deleteItemsError) throw new Error('Could not delete collection items: ' + deleteItemsError.message);
+          if (deleteItemsError) throw new Error('Could not delete project items: ' + deleteItemsError.message);
 
           const { error: deleteColError, count: deleteCount } = await db
             .from('collections').delete({ count: 'exact' }).eq('id', collectionId).eq('user_id', currentUser.id);
-          if (deleteColError) throw new Error('Could not delete collection record: ' + deleteColError.message);
-          if (deleteCount === 0) throw new Error('Delete was blocked — you may not own this collection.');
+          if (deleteColError) throw new Error('Could not delete project record: ' + deleteColError.message);
+          if (deleteCount === 0) throw new Error('Delete was blocked — you may not own this project.');
 
           if (filesToDelete.length > 0) {
             const { error: storageError } = await db.storage.from('experiences').remove(filesToDelete);
@@ -495,7 +495,7 @@
             }
           }, 300);
 
-          showToast('Collection deleted.');
+          showToast('Project deleted.');
 
         } catch (err) {
           btn.disabled = false;
