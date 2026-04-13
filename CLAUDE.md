@@ -64,7 +64,18 @@ When anything AR-, video-, or MindAR-related misbehaves on iPhone/iPad, **push t
 A common gotcha: the console will appear empty if the page hit a parse-time SyntaxError, because nothing ran. `typeof someKnownTopLevelFunction` returning `"undefined"` is a quick test for "the inline `<script>` failed to parse at all".
 
 ## Session workflow
-At the end of each session where code was changed, **append a brief entry to `## Session history` below** with: date, PRs opened/merged, what was fixed, and any surprises or lessons. Read `## Session history` at the start of each session for continuity — that's how context persists across sessions.
+**Trigger phrase: "save notes"** — when the user says this (or any close variant like "save session notes", "wrap the session", "save the notes"), treat it as an explicit instruction to append a new dated entry to `## Session history` below. Do not wait to be asked twice.
+
+The entry should include:
+- Date (use today's date from the environment info, not a guess)
+- PRs opened and their merge status
+- What was actually fixed / built / changed, at a level of detail useful to a fresh Claude session tomorrow
+- Any surprises, rabbit holes, or lessons worth warning future-Claude about
+- If helpful: file paths with line numbers in the `path:line` format
+
+After writing the entry, commit CLAUDE.md with a message like `Add session notes for YYYY-MM-DD` and push to the current branch. Do not open a PR just for session notes unless the user asks.
+
+**At the start of every session**, read `## Session history` (at least the most recent 2–3 entries) before doing anything else — that's how context persists across sessions in this repo.
 
 ## Session history
 
