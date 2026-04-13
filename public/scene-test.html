@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>MindAR scene test</title>
+    <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+      body { font-family: -apple-system, system-ui, sans-serif; background: #111; color: #eee; padding: 16px; margin: 0; font-size: 14px; }
+      h1 { font-size: 18px; margin: 0 0 12px; }
+      .row { padding: 10px 12px; margin-bottom: 8px; border-radius: 8px; background: #222; border-left: 4px solid #555; word-break: break-word; }
+      .row.ok { border-left-color: #4c4; }
+      .row.err { border-left-color: #f44; }
+      .row.pending { border-left-color: #fc4; }
+      .label { font-weight: bold; }
+      .detail { font-size: 11px; color: #aaa; margin-top: 4px; font-family: monospace; }
+    </style>
+  </head>
+  <body>
+    <h1>MindAR 1.2.5 + A-Frame 1.5.0 scene test</h1>
+    <div id="results"></div>
+
+    <script>
+      const results = document.getElementById('results');
+      function addRow(label) {
+        const row = document.createElement('div');
+        row.className = 'row pending';
+        row.innerHTML = '<div class="label">' + label + '</div><div class="detail">pending…</div>';
+        results.appendChild(row);
+        return row;
+      }
+      function updateRow(row, status, detail) {
+        row.className = 'row ' + status;
+        row.querySelector('.detail').textContent = detail;
+      }
+
+      // Row 1: confirm A-Frame + MindAR loaded
+      const rowLibs = addRow('1. A-Frame + MindAR loaded');
+      if (typeof AFRAME === 'undefined') {
+        updateRow(rowLibs, 'err', 'AFRAME missing');
+      } else if (!AFRAME.components['mindar-image']) {
+        updateRow(rowLibs, 'err', 'mindar-image component not registered');
+      } else {
+        updateRow(rowLibs, 'ok', 'AFRAME ' + AFRAME.version + ', mindar-image registered');
+      }
+
+      // Row 2: scene with CANONICAL card.mind example file
+      const rowCanon = addRow('2. scene with canonical card.mind (30s timeout)');
+      function testScene(row, mindUrl, label) {
+        return new Promise((resolve) => {
+          const start = performance.now();
+          const scene = document.createElement('a-scene');
+          scene.setAttribute('mindar-image', 'imageTargetSrc: ' + mindUrl + '; autoStart: false;');
+          scene.setAttribute('embedded', '');
+          scene.setAttribute('vr-mode-ui', 'enabled: false');
+          scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
+          scene.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;';
+
+          let done = false;
+          const finish = (status, msg) => {
+            if (done) return;
+            done = true;
+            clearTimeout(timeout);
+            try { scene.remove(); } catch(e) {}
+            updateRow(row, status, msg);
+            resolve();
+          };
+
+          const timeout = setTimeout(() => {
+            finish('err', 'TIMEOUT: arReady did not fire in 30s');
+          }, 30000);
+
+          scene.addEventListener('arReady', () => {
+            const ms = Math.round(performance.now() - start);
+            finish('ok', 'arReady fired in ' + ms + 'ms — ' + label);
+          });
+          scene.addEventListener('arError', (e) => {
+            finish('err', 'arError: ' + (e?.detail?.message || e?.detail || 'unknown'));
+          });
+
+          try {
+            document.body.appendChild(scene);
+            updateRow(row, 'pending', 'scene appended, waiting for arReady…');
+          } catch (e) {
+            finish('err', 'appendChild threw: ' + e.message);
+          }
+        });
+      }
+
+      // Test with canonical small .mind file first
+      const canonicalUrl = 'https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind';
+      testScene(rowCanon, canonicalUrl, 'canonical works').then(() => {
+        // Then test with the user's actual egrbne2j .mind file
+        const rowReal = addRow('3. scene with real egrbne2j .mind file');
+        const db = window.supabase.createClient(
+          'https://mrwpkhsluzokytpvmwqk.supabase.co',
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI'
+        );
+        db.from('collections').select('mind_file_url').eq('slug', 'egrbne2j').single().then(({ data, error }) => {
+          if (error || !data) {
+            updateRow(rowReal, 'err', 'query failed');
+            return;
+          }
+          testScene(rowReal, data.mind_file_url, 'real collection works');
+        });
+      });
+    </script>
+  </body>
+</html>
