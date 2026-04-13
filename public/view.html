@@ -4,10 +4,10 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>Popcode</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="/config.js"></script>
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <script src="/config.js" defer></script>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js" defer></script>
     <style>
       @font-face {
         font-family: 'FilsonPro';
@@ -164,7 +164,7 @@
       <img class="splash-logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
       <div class="spinner"></div>
       <div id="loading-text" style="max-width:90%;word-break:break-word;font-size:12px;">Loading experience...</div>
-      <div style="color:rgba(255,255,255,0.4);font-size:10px;margin-top:8px;">v4-diag</div>
+      <div style="color:rgba(255,255,255,0.4);font-size:10px;margin-top:8px;">v5-defer</div>
     </div>
     <div id="start-screen">
       <img class="splash-logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
@@ -213,10 +213,36 @@
       window.addEventListener('unhandledrejection', (e) => {
         diagStep('PROMISE ERR: ' + (e?.reason?.message || e?.reason || 'unknown'));
       });
-      diagStep('1: script start');
+      diagStep('1: script start (waiting for DOM/scripts)');
 
-      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-      diagStep('2: supabase client');
+      // Watchdog: if DOMContentLoaded never fires within 15s, something is
+      // wrong with the deferred head scripts (aframe/mindar hung on CDN).
+      const domLoadWatchdog = setTimeout(() => {
+        diagStep('HUNG: DOMContentLoaded never fired (deferred script failed to load)');
+      }, 15000);
+
+      // Head scripts are deferred, so supabase/aframe/mindar aren't available
+      // until DOMContentLoaded. Wait for that before initializing.
+      document.addEventListener('DOMContentLoaded', () => {
+        clearTimeout(domLoadWatchdog);
+        diagStep('2: DOMContentLoaded fired');
+        try {
+          init();
+        } catch (err) {
+          diagStep('INIT ERR: ' + (err?.message || err));
+        }
+      });
+
+      let db;
+      function init() {
+        if (typeof window.supabase === 'undefined') {
+          diagStep('ERR: window.supabase missing (supabase CDN failed)');
+          return;
+        }
+        db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        diagStep('3: supabase client');
+        mainStart();
+      }
 
       const params = new URLSearchParams(location.search);
       const id = params.get('id') || location.pathname.replace(/^\/|\/$/g, '');
@@ -252,18 +278,21 @@
         } catch(e) {} // never let analytics break the app
       }
 
-      // Nuclear-option safety net: unconditionally show error screen after 25s
-      // if nothing has navigated away from the loading spinner. Registered
-      // BEFORE any async work so it fires no matter where things hang.
-      let globalLoadTimeout = setTimeout(() => {
-        const loading = document.getElementById('loading');
-        if (loading && loading.style.display !== 'none') {
-          showError('Timed out loading experience (25s). This device may not support WebGL/AR, or the network is slow.');
-        }
-      }, 25000);
+      // Nuclear-option safety net. Assigned inside mainStart() after init.
+      let globalLoadTimeout;
 
-      diagStep('3: calling loadCollection id=' + id);
-      if (!id) { showError(); } else { loadCollection(id); }
+      function mainStart() {
+        diagStep('4: mainStart, scheduling timeout');
+        globalLoadTimeout = setTimeout(() => {
+          const loading = document.getElementById('loading');
+          if (loading && loading.style.display !== 'none') {
+            showError('Timed out loading experience (25s). This device may not support WebGL/AR, or the network is slow.');
+          }
+        }, 25000);
+
+        diagStep('5: calling loadCollection id=' + id);
+        if (!id) { showError(); } else { loadCollection(id); }
+      }
 
       function showError(message) {
         clearTimeout(globalLoadTimeout);
@@ -276,12 +305,12 @@
       }
 
       async function loadCollection(id) {
-        diagStep('4: loadCollection start');
+        diagStep('6: loadCollection start');
         let mindUrl, videoMap = {};
 
-        diagStep('5: querying collections table');
+        diagStep('7: querying collections table');
         const { data: col } = await db.from('collections').select('*').eq('slug', id).single();
-        diagStep('6: collections query done, col=' + (col ? 'found' : 'null'));
+        diagStep('8: collections query done, col=' + (col ? 'found' : 'null'));
 
         if (col) {
           // Save to recent views localStorage
@@ -354,7 +383,7 @@
           }
         });
 
-        diagStep('7: appending scene');
+        diagStep('9: appending scene');
         try {
           document.body.appendChild(scene);
         } catch (err) {
@@ -362,7 +391,7 @@
           showError('Scene init failed: ' + (err?.message || err));
           return;
         }
-        diagStep('8: scene appended, showing start screen');
+        diagStep('10: scene appended, showing start screen');
 
         // Unconditionally show start screen immediately after the scene is
         // appended — this matches the original behavior that worked for
