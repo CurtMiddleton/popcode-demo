@@ -380,15 +380,40 @@
         logEvent('scan_open');
 
         document.getElementById('start-btn').addEventListener('click', () => {
-          // Must be called inside a user-gesture handler — iOS Safari requires
-          // a gesture for the initial getUserMedia (camera access).
-          const mindar = arScene && arScene.systems['mindar-image-system'];
-          if (mindar && typeof mindar.start === 'function') mindar.start();
+          // Hide start screen immediately so it feels responsive
           document.getElementById('start-screen').style.display = 'none';
+          document.getElementById('start-btn').textContent = 'Tap to Scan';
+          document.getElementById('tagline').style.display = '';
+          document.getElementById('cta-group').style.display = '';
           document.getElementById('scanner').style.display = 'block';
-          document.getElementById('scan-hint').style.display = 'block';
           document.getElementById('home-btn').style.display = 'flex';
-          startReloadHintTimer();
+          const hint = document.getElementById('scan-hint');
+          hint.textContent = 'Point your camera at a Popcoded photo';
+          hint.style.display = 'block';
+
+          // If we're returning from a closed video, rebuild the scene fresh
+          // (MindAR stop/start is unreliable). Do it here inside the user gesture
+          // so getUserMedia has gesture context, then wait for loaded before start().
+          // On first tap savedMindUrl is set but arScene is fresh — no rebuild needed.
+          if (sceneWasStopped && savedMindUrl) {
+            sceneWasStopped = false;
+            hint.textContent = 'Restarting camera…';
+            const newScene = buildScene(savedMindUrl, savedVideoMap);
+            newScene.addEventListener('loaded', () => {
+              const mindar = arScene && arScene.systems['mindar-image-system'];
+              if (mindar && typeof mindar.start === 'function') {
+                mindar.start()
+                  .then(() => { hint.textContent = 'Point your camera at a Popcoded photo'; })
+                  .catch(() => { hint.textContent = 'Point your camera at a Popcoded photo'; });
+              }
+              startReloadHintTimer();
+            }, { once: true });
+          } else {
+            // First scan — scene is already built, just start it
+            const mindar = arScene && arScene.systems['mindar-image-system'];
+            if (mindar && typeof mindar.start === 'function') mindar.start();
+            startReloadHintTimer();
+          }
         });
       }
 
@@ -400,6 +425,7 @@
       let triggerTimer = null;
       let reloadHintTimer = null;
       let arScene = null; // set inside loadCollection; used by triggerVideo/returnToScanner
+      let sceneWasStopped = false; // true after mindar.stop(); tells start-btn to rebuild
 
       const reloadHintBtn = document.getElementById('reload-hint');
       reloadHintBtn.addEventListener('click', () => location.reload());
@@ -442,7 +468,7 @@
           // released first. Re-started from returnToScanner() on close.
           try {
             const mindar = arScene && arScene.systems && arScene.systems['mindar-image-system'];
-            if (mindar && typeof mindar.stop === 'function') mindar.stop();
+            if (mindar && typeof mindar.stop === 'function') { mindar.stop(); sceneWasStopped = true; }
           } catch(e) {}
           fullVid.src = url;
           fullVid.load();
@@ -506,34 +532,19 @@ fullVid.play()
         fullVid.src = '';
         fullScreen.style.display = 'none';
         closeBtn.style.display = 'none';
+        scanner.style.display = 'none';
+        document.getElementById('scan-hint').style.display = 'none';
+        document.getElementById('home-btn').style.display = 'none';
         document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
 
-        // Show scanner immediately with a "restarting" hint
-        scanner.style.display = 'block';
-        document.getElementById('home-btn').style.display = 'flex';
-        const hint = document.getElementById('scan-hint');
-        hint.textContent = 'Restarting camera…';
-        hint.style.display = 'block';
-
-        // Rebuild the scene after a short delay so iOS has time to fully
-        // release the video camera before we call getUserMedia again.
-        // Camera permission is already granted from the first scan, so
-        // mindar.start() from the loaded event callback works without a gesture.
-        setTimeout(() => {
-          if (!savedMindUrl) return;
-          const newScene = buildScene(savedMindUrl, savedVideoMap);
-          newScene.addEventListener('loaded', () => {
-            const mindar = arScene && arScene.systems['mindar-image-system'];
-            if (mindar && typeof mindar.start === 'function') {
-              mindar.start()
-                .then(() => { hint.textContent = 'Point your camera at a Popcoded photo'; })
-                .catch(() => { hint.textContent = 'Point your camera at a Popcoded photo'; });
-            } else {
-              hint.textContent = 'Point your camera at a Popcoded photo';
-            }
-            startReloadHintTimer();
-          }, { once: true });
-        }, 500);
+        // Return to start screen so the user can choose to scan again or stop.
+        // Scene is rebuilt inside the start-btn click (user gesture) and we wait
+        // for the loaded event before calling mindar.start(), which is the only
+        // reliable path after a stop/start cycle in MindAR 1.2.2.
+        document.getElementById('start-btn').textContent = 'Tap to Scan Again';
+        document.getElementById('tagline').style.display = 'none';
+        document.getElementById('cta-group').style.display = 'none';
+        document.getElementById('start-screen').style.display = 'flex';
       }
 
       fullVid.addEventListener('ended', () => {
