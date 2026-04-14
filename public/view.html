@@ -398,16 +398,20 @@
           if (sceneWasStopped && savedMindUrl) {
             sceneWasStopped = false;
             hint.textContent = 'Restarting camera…';
-            const newScene = buildScene(savedMindUrl, savedVideoMap);
-            newScene.addEventListener('loaded', () => {
-              const mindar = arScene && arScene.systems['mindar-image-system'];
-              if (mindar && typeof mindar.start === 'function') {
-                mindar.start()
-                  .then(() => { hint.textContent = 'Point your camera at a Popcoded photo'; })
-                  .catch(() => { hint.textContent = 'Point your camera at a Popcoded photo'; });
-              }
-              startReloadHintTimer();
-            }, { once: true });
+            // Delay so iOS fully releases the video camera before getUserMedia.
+            // Rebuild after the delay, then wait for loaded before start().
+            setTimeout(() => {
+              const newScene = buildScene(savedMindUrl, savedVideoMap);
+              newScene.addEventListener('loaded', () => {
+                const mindar = arScene && arScene.systems['mindar-image-system'];
+                if (mindar && typeof mindar.start === 'function') {
+                  mindar.start()
+                    .then(() => { hint.textContent = 'Point your camera at a Popcoded photo'; })
+                    .catch(() => { hint.textContent = 'Point your camera at a Popcoded photo'; });
+                }
+                startReloadHintTimer();
+              }, { once: true });
+            }, 500);
           } else {
             // First scan — scene is already built, just start it
             const mindar = arScene && arScene.systems['mindar-image-system'];
