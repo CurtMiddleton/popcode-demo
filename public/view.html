@@ -356,10 +356,16 @@
           // Start MindAR from within the user-gesture click handler. iOS 18
           // Safari requires a user gesture for camera access; autoStart:true
           // triggered getUserMedia without a gesture and hung the main thread.
+          // This handler is also used after manual close ("Tap to Scan Again"),
+          // which gives MindAR a fresh user-gesture-initiated camera start.
           const mindar = scene.systems['mindar-image-system'];
           if (mindar && typeof mindar.start === 'function') {
             mindar.start();
           }
+          // Reset start-screen copy in case we came back from a manual close
+          document.getElementById('start-btn').textContent = 'Tap to Scan';
+          document.getElementById('tagline').style.display = '';
+          document.getElementById('cta-group').style.display = '';
           document.getElementById('start-screen').style.display = 'none';
           document.getElementById('scanner').style.display = 'block';
           document.getElementById('scan-hint').style.display = 'block';
@@ -476,21 +482,22 @@ fullVid.play()
       function returnToScanner() {
         videoActive = false;
         if (triggerTimer) { clearTimeout(triggerTimer); triggerTimer = null; }
+        clearReloadHint();
         tryExitFullscreen();
         fullVid.pause();
         fullVid.src = '';
         fullScreen.style.display = 'none';
         closeBtn.style.display = 'none';
+        scanner.style.display = 'none';
+        document.getElementById('scan-hint').style.display = 'none';
+        document.getElementById('home-btn').style.display = 'none';
         document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
-        scanner.style.display = 'block';
-        document.getElementById('scan-hint').style.display = 'block';
-        document.getElementById('home-btn').style.display = 'flex';
-        // Restart MindAR's camera so the user can scan the next photo.
-        try {
-          const mindar = arScene && arScene.systems && arScene.systems['mindar-image-system'];
-          if (mindar && typeof mindar.start === 'function') mindar.start();
-        } catch(e) {}
-        startReloadHintTimer();
+        // Show start-screen with "Scan Again" copy so the user provides a fresh
+        // user gesture — this ensures MindAR gets a clean camera restart on iOS.
+        document.getElementById('start-btn').textContent = 'Tap to Scan Again';
+        document.getElementById('tagline').style.display = 'none';
+        document.getElementById('cta-group').style.display = 'none';
+        document.getElementById('start-screen').style.display = 'flex';
       }
 
       fullVid.addEventListener('ended', () => {
