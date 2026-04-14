@@ -382,8 +382,23 @@
         document.getElementById('start-btn').addEventListener('click', () => {
           // Must be called inside a user-gesture handler — iOS Safari requires
           // a gesture for getUserMedia (camera access).
-          const mindar = arScene && arScene.systems['mindar-image-system'];
-          if (mindar && typeof mindar.start === 'function') mindar.start();
+          // If returnToScanner() flagged a rebuild, do it now (inside the gesture)
+          // then wait for the scene's `loaded` event before calling start(),
+          // so A-Frame has time to register mindar-image-system.
+          if (needsRebuild && savedMindUrl) {
+            needsRebuild = false;
+            const newScene = buildScene(savedMindUrl, savedVideoMap);
+            newScene.addEventListener('loaded', () => {
+              const mindar = arScene && arScene.systems['mindar-image-system'];
+              if (mindar && typeof mindar.start === 'function') mindar.start();
+            }, { once: true });
+          } else {
+            const mindar = arScene && arScene.systems['mindar-image-system'];
+            if (mindar && typeof mindar.start === 'function') mindar.start();
+          }
+          document.getElementById('start-btn').textContent = 'Tap to Scan';
+          document.getElementById('tagline').style.display = '';
+          document.getElementById('cta-group').style.display = '';
           document.getElementById('start-screen').style.display = 'none';
           document.getElementById('scanner').style.display = 'block';
           document.getElementById('scan-hint').style.display = 'block';
@@ -400,6 +415,7 @@
       let triggerTimer = null;
       let reloadHintTimer = null;
       let arScene = null; // set inside loadCollection; used by triggerVideo/returnToScanner
+      let needsRebuild = false; // set by returnToScanner(); consumed by start-btn handler
 
       const reloadHintBtn = document.getElementById('reload-hint');
       reloadHintBtn.addEventListener('click', () => location.reload());
@@ -506,23 +522,20 @@ fullVid.play()
         fullVid.src = '';
         fullScreen.style.display = 'none';
         closeBtn.style.display = 'none';
+        scanner.style.display = 'none';
+        document.getElementById('scan-hint').style.display = 'none';
+        document.getElementById('home-btn').style.display = 'none';
         document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
 
-        // MindAR's stop()/start() cycle is unreliable — tracking often fails to
-        // resume. Rebuilding the a-scene from scratch is the only reliable fix.
-        // The .mind file is browser-cached so this is fast.
-        // We're inside the close-btn click handler (a user gesture), so
-        // getUserMedia can fire immediately without another tap.
-        if (savedMindUrl) {
-          buildScene(savedMindUrl, savedVideoMap);
-          const mindar = arScene && arScene.systems['mindar-image-system'];
-          if (mindar && typeof mindar.start === 'function') mindar.start();
-        }
-
-        scanner.style.display = 'block';
-        document.getElementById('scan-hint').style.display = 'block';
-        document.getElementById('home-btn').style.display = 'flex';
-        startReloadHintTimer();
+        // MindAR's stop()/start() cycle is unreliable after the first stop.
+        // Flag a rebuild so the start-btn handler can do it inside a fresh
+        // user-gesture click, then wait for the scene's `loaded` event before
+        // calling mindar.start() — that's when A-Frame registers its systems.
+        needsRebuild = true;
+        document.getElementById('start-btn').textContent = 'Tap to Scan Again';
+        document.getElementById('tagline').style.display = 'none';
+        document.getElementById('cta-group').style.display = 'none';
+        document.getElementById('start-screen').style.display = 'flex';
       }
 
       fullVid.addEventListener('ended', () => {
