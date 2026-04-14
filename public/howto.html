@@ -47,15 +47,35 @@
       .content { width: 100%; max-width: 560px; padding: 0 24px; display: flex; flex-direction: column; gap: 20px; }
 
       .section {
-        background: white; border-radius: 20px; padding: 28px 24px;
+        background: white; border-radius: 20px;
         box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        overflow: hidden;
       }
       .section-title {
-        font-size: 20px; font-weight: 700; margin-bottom: 14px;
+        font-size: 20px; font-weight: 700;
         background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         background-clip: text;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 24px 24px; margin: 0; cursor: pointer; user-select: none;
       }
+      .section-title .chevron {
+        flex-shrink: 0; width: 22px; height: 22px; margin-left: 12px;
+        transition: transform 0.25s ease;
+        background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") center/contain no-repeat;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") center/contain no-repeat;
+      }
+      .section.open .section-title .chevron { transform: rotate(180deg); }
+      .section-body {
+        display: grid; grid-template-rows: 0fr;
+        transition: grid-template-rows 0.28s ease;
+      }
+      .section.open .section-body { grid-template-rows: 1fr; }
+      .section-body-inner {
+        overflow: hidden; padding: 0 24px;
+      }
+      .section.open .section-body-inner { padding: 0 24px 24px; }
       .section p {
         font-size: 15px; color: #444; line-height: 1.65; margin-bottom: 14px;
       }
@@ -124,16 +144,19 @@
     <div class="content">
 
       <!-- What is Popcode -->
-      <div class="section">
-        <div class="section-title">What is Popcode?</div>
+      <div class="section open">
+        <div class="section-title">What is Popcode?<span class="chevron"></span></div>
+        <div class="section-body"><div class="section-body-inner">
         <p>Popcode brings printed photos to life. Using augmented reality, it lets you attach a video to any photo — so when someone points their phone camera at that photo, the video plays right on screen.</p>
         <p>Think of it like a QR code, but instead of a boring link, the photo itself becomes the trigger. Wedding albums that play a highlight reel. Family photos that tell the story behind the moment. Art prints that come alive.</p>
         <p>No app download required — it works right in the browser.</p>
+        </div></div>
       </div>
 
       <!-- How to create -->
       <div class="section">
-        <div class="section-title">How do I create a Popcode?</div>
+        <div class="section-title">How do I create a Popcode?<span class="chevron"></span></div>
+        <div class="section-body"><div class="section-body-inner">
         <div class="steps">
           <div class="step">
             <div class="step-num">1</div>
@@ -172,11 +195,13 @@
           </div>
         </div>
         <a href="/create.html" class="cta-btn">+ Create a Project</a>
+        </div></div>
       </div>
 
       <!-- How to scan -->
       <div class="section">
-        <div class="section-title">How do I scan a Popcoded image?</div>
+        <div class="section-title">How do I scan a Popcoded image?<span class="chevron"></span></div>
+        <div class="section-body"><div class="section-body-inner">
         <div class="steps">
           <div class="step">
             <div class="step-num">1</div>
@@ -207,11 +232,13 @@
             </div>
           </div>
         </div>
+        </div></div>
       </div>
 
       <!-- Troubleshooting -->
       <div class="section">
-        <div class="section-title">Having trouble scanning?</div>
+        <div class="section-title">Having trouble scanning?<span class="chevron"></span></div>
+        <div class="section-body"><div class="section-body-inner">
         <p>Here are a few tips if the video isn't triggering:</p>
         <div class="steps">
           <div class="step">
@@ -243,6 +270,7 @@
             </div>
           </div>
         </div>
+        </div></div>
       </div>
 
     </div>
@@ -261,6 +289,18 @@
 
       document.getElementById('logout-btn').addEventListener('click', async function() {
         await db.auth.signOut(); window.location.href = '/auth.html';
+      });
+
+      // Accordion
+      document.querySelectorAll('.section-title').forEach(function(title) {
+        title.addEventListener('click', function() {
+          var section = title.closest('.section');
+          var isOpen = section.classList.contains('open');
+          // Close all
+          document.querySelectorAll('.section').forEach(function(s) { s.classList.remove('open'); });
+          // Open clicked if it was closed
+          if (!isOpen) section.classList.add('open');
+        });
       });
 
       // Nav overlay
