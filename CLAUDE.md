@@ -45,8 +45,8 @@ User-facing copy calls them **"Projects"** (renamed from "Collections" on 2026-0
 
 ## Remaining improvements
 1. Centralize Supabase config — URL+key copy-pasted in every HTML file
-2. Photo thumbnails on Manage cards
-3. Re-scan fix after manual close on view.html
+2. ~~Photo thumbnails on Manage cards~~ ✅ done
+3. ~~Re-scan fix after manual close on view.html~~ ✅ done
 
 ## Development notes
 - Branch for new work: `claude/investigate-missing-work-1G11w` (tracks `main`)
@@ -99,3 +99,44 @@ After writing the entry, commit CLAUDE.md with a message like `Add session notes
 **Other work done in the same session**:
 - PR #15: deleted the 4 diagnostic pages (`diag.html`, `upgrade-test.html`, `version-probe.html`, `scene-test.html`) once the root cause was fixed
 - PR #16: renamed every user-facing "Collection" → "Project" across 11 HTML files (nav links, headings, buttons, labels, error messages, How It Works copy). DB tables + JS identifiers intentionally NOT renamed — see `## Terminology` above.
+
+### 2026-04-14 — Manage page polish + beta tooling + rescan fix
+
+**All changes committed directly to `main` (no PRs this session).**
+
+**manage.html — many small improvements:**
+- Image count was wrong (e.g. 35 instead of 22) — was counting all `collection_items` rows including duplicates. Fixed by deduplicating on `target_index` before counting (same fix already applied to download modal).
+- Replaced "Copy Link" button with a share icon (custom `share.svg` from Dropbox) next to the ID. Clicking opens a NYT-style popup with Copy Link / Email / Message options. Email uses `mailto:`, Message uses `sms:` with pre-filled body.
+- Download Image/Images button now matches the same gray style as View and Order Badges.
+- Order Badges modal descriptions updated: ¾" = "Great for small prints, cards and albums"; 1½" = "Great for large prints and posters".
+- Share icon size bumped 15→20px.
+- Nav "My Collections" → "My Projects" across all pages.
+- Nav external link corrected to `href="https://popcodeapp.com"` displaying `popcodeapp.com ↗` (was variously `www.popcodeapp.com` or `popcode.app`).
+
+**Beta feedback widget (`public/beta-feedback.js`):**
+- New shared JS file injected into all main pages (manage, create, edit, account, analytics, views, howto, index, auth, reset) — NOT view.html (viewers aren't testers).
+- Floating purple "Beta Feedback" pill in bottom-left corner.
+- Modal: description (required) + email (optional). Submits to Supabase `beta_feedback` table via REST API. Shows ✓ success state then auto-closes.
+- Requires this table in Supabase (SQL to create it was given to user and confirmed created):
+  ```sql
+  create table beta_feedback (id uuid primary key default gen_random_uuid(), created_at timestamptz default now(), page_url text, description text not null, email text, user_agent text, user_id uuid);
+  ```
+- Beta feedback reports appear in a new "Beta Feedback" section at the bottom of `analytics.html` (admin-only page), showing time / report / email / page / device.
+
+**OG image (`public/assets/og_image.png`):**
+- Regenerated as 600×300 (was 300×300 square). Wider aspect ratio gives a shorter, more compact iMessage/social preview card.
+
+**view.html — rescan after manual close (the big one):**
+- **Root cause**: MindAR 1.2.2's `stop()`/`start()` cycle is broken — after the first stop, `targetFound` events never fire again on restart. No amount of tuning fixes this.
+- **Fix**: Extracted scene creation into `buildScene(mindUrl, videoMap)` function. `savedMindUrl` / `savedVideoMap` stored at module scope after first DB fetch. `sceneWasStopped` flag set when `mindar.stop()` is called in `triggerVideo()`.
+- **Close flow**: `returnToScanner()` shows the **regular start screen** (unchanged — logo, tagline, "Tap to Scan", CTAs). No special "Tap to Scan Again" text.
+- **Rescan flow**: when user taps "Tap to Scan" and `sceneWasStopped` is true: 500ms timeout (lets iOS fully release the video camera), then `buildScene()` tears down old `a-scene` and creates a fresh one, waits for A-Frame's `loaded` event (when `mindar-image-system` is actually registered), then calls `mindar.start()`. Works for same image or any different image.
+- **Why 500ms**: if you rebuild immediately after `fullVid.src = ''`, iOS hasn't released the camera stream yet and `getUserMedia` fails.
+- **Why `loaded` event**: if you call `mindar.start()` synchronously right after `document.body.appendChild(scene)`, A-Frame systems aren't registered yet → `systems['mindar-image-system']` is null → camera never starts → black screen.
+- Key files: `public/view.html` — `buildScene()` ~line 290, `returnToScanner()` ~line 510, start-btn handler ~line 385.
+
+**Rabbit holes this session (avoid next time):**
+- Tried `mindar.stop()`/`start()` directly — broken in MindAR 1.2.2, don't bother.
+- Tried calling `buildScene()` inside `returnToScanner()` and immediately calling `start()` — black screen because A-Frame systems not yet registered.
+- Tried rebuilding inside close-btn click (user gesture) without delay — iOS camera not released fast enough.
+- The working solution requires ALL THREE: rebuild + 500ms delay + `loaded` event.
