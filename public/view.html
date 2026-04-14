@@ -286,28 +286,22 @@
         document.getElementById('error-screen').style.display = 'flex';
       }
 
-      async function loadCollection(id) {
-        let mindUrl, videoMap = {};
+      // Stored after first DB fetch so rebuildScene() can reuse without a DB call
+      let savedMindUrl = null;
+      let savedVideoMap = {};
 
-        const { data: col } = await db.from('collections').select('*').eq('slug', id).single();
-
-        if (col) {
-          // Save to recent views localStorage
+      // Builds (or rebuilds) the a-scene. Destroys previous scene if one exists.
+      // Must be called from within a user-gesture handler so MindAR can call
+      // getUserMedia immediately via mindar.start().
+      function buildScene(mindUrl, videoMap) {
+        // Tear down existing scene cleanly
+        if (arScene) {
           try {
-            const views = JSON.parse(localStorage.getItem('popcode_views') || '{}');
-            views[id] = { name: col.name || id, last_viewed: new Date().toISOString() };
-            localStorage.setItem('popcode_views', JSON.stringify(views));
+            const old = arScene.systems && arScene.systems['mindar-image-system'];
+            if (old && typeof old.stop === 'function') old.stop();
           } catch(e) {}
-          mindUrl = col.mind_file_url;
-          const { data: items } = await db.from('collection_items')
-            .select('*').eq('collection_id', col.id).order('target_index');
-          (items || []).forEach(item => { videoMap[item.target_index] = item.video_url; });
-          if (!mindUrl || Object.keys(videoMap).length === 0) { showError(); return; }
-        } else {
-          const { data: exp } = await db.from('experiences').select('*').eq('slug', id).single();
-          if (!exp) { showError(); return; }
-          mindUrl = exp.mind_file_url;
-          videoMap[0] = exp.video_url;
+          try { document.body.removeChild(arScene); } catch(e) {}
+          arScene = null;
         }
 
         const scene = document.createElement('a-scene');
@@ -348,24 +342,48 @@
           showError();
         });
 
+        return scene;
+      }
+
+      async function loadCollection(id) {
+        let mindUrl, videoMap = {};
+
+        const { data: col } = await db.from('collections').select('*').eq('slug', id).single();
+
+        if (col) {
+          // Save to recent views localStorage
+          try {
+            const views = JSON.parse(localStorage.getItem('popcode_views') || '{}');
+            views[id] = { name: col.name || id, last_viewed: new Date().toISOString() };
+            localStorage.setItem('popcode_views', JSON.stringify(views));
+          } catch(e) {}
+          mindUrl = col.mind_file_url;
+          const { data: items } = await db.from('collection_items')
+            .select('*').eq('collection_id', col.id).order('target_index');
+          (items || []).forEach(item => { videoMap[item.target_index] = item.video_url; });
+          if (!mindUrl || Object.keys(videoMap).length === 0) { showError(); return; }
+        } else {
+          const { data: exp } = await db.from('experiences').select('*').eq('slug', id).single();
+          if (!exp) { showError(); return; }
+          mindUrl = exp.mind_file_url;
+          videoMap[0] = exp.video_url;
+        }
+
+        // Save for scene rebuilds on rescan
+        savedMindUrl = mindUrl;
+        savedVideoMap = videoMap;
+
+        buildScene(mindUrl, videoMap);
+
         document.getElementById('loading').style.display = 'none';
         document.getElementById('start-screen').style.display = 'flex';
         logEvent('scan_open');
 
         document.getElementById('start-btn').addEventListener('click', () => {
-          // Start MindAR from within the user-gesture click handler. iOS 18
-          // Safari requires a user gesture for camera access; autoStart:true
-          // triggered getUserMedia without a gesture and hung the main thread.
-          // This handler is also used after manual close ("Tap to Scan Again"),
-          // which gives MindAR a fresh user-gesture-initiated camera start.
-          const mindar = scene.systems['mindar-image-system'];
-          if (mindar && typeof mindar.start === 'function') {
-            mindar.start();
-          }
-          // Reset start-screen copy in case we came back from a manual close
-          document.getElementById('start-btn').textContent = 'Tap to Scan';
-          document.getElementById('tagline').style.display = '';
-          document.getElementById('cta-group').style.display = '';
+          // Must be called inside a user-gesture handler — iOS Safari requires
+          // a gesture for getUserMedia (camera access).
+          const mindar = arScene && arScene.systems['mindar-image-system'];
+          if (mindar && typeof mindar.start === 'function') mindar.start();
           document.getElementById('start-screen').style.display = 'none';
           document.getElementById('scanner').style.display = 'block';
           document.getElementById('scan-hint').style.display = 'block';
@@ -488,16 +506,23 @@ fullVid.play()
         fullVid.src = '';
         fullScreen.style.display = 'none';
         closeBtn.style.display = 'none';
-        scanner.style.display = 'none';
-        document.getElementById('scan-hint').style.display = 'none';
-        document.getElementById('home-btn').style.display = 'none';
         document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
-        // Show start-screen with "Scan Again" copy so the user provides a fresh
-        // user gesture — this ensures MindAR gets a clean camera restart on iOS.
-        document.getElementById('start-btn').textContent = 'Tap to Scan Again';
-        document.getElementById('tagline').style.display = 'none';
-        document.getElementById('cta-group').style.display = 'none';
-        document.getElementById('start-screen').style.display = 'flex';
+
+        // MindAR's stop()/start() cycle is unreliable — tracking often fails to
+        // resume. Rebuilding the a-scene from scratch is the only reliable fix.
+        // The .mind file is browser-cached so this is fast.
+        // We're inside the close-btn click handler (a user gesture), so
+        // getUserMedia can fire immediately without another tap.
+        if (savedMindUrl) {
+          buildScene(savedMindUrl, savedVideoMap);
+          const mindar = arScene && arScene.systems['mindar-image-system'];
+          if (mindar && typeof mindar.start === 'function') mindar.start();
+        }
+
+        scanner.style.display = 'block';
+        document.getElementById('scan-hint').style.display = 'block';
+        document.getElementById('home-btn').style.display = 'flex';
+        startReloadHintTimer();
       }
 
       fullVid.addEventListener('ended', () => {
