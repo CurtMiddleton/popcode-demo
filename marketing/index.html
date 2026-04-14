@@ -238,36 +238,88 @@
       .uses-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 18px;
+        gap: 20px;
       }
       .use-card {
-        background: white;
-        padding: 32px 26px;
-        border-radius: 20px;
-        box-shadow: var(--shadow-sm);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        position: relative;
+        aspect-ratio: 3 / 4;
+        border-radius: 22px;
+        overflow: hidden;
+        cursor: pointer;
+        background-color: var(--card-bg, #7c3aed);
+        background-image: var(--card-bg-image, none);
+        background-size: cover;
+        background-position: center;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        transition: transform 0.5s cubic-bezier(0.2, 0.7, 0.3, 1), box-shadow 0.5s ease;
       }
-      .use-card:hover { transform: translateY(-6px); box-shadow: var(--shadow-lg); }
+      .use-card::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(0, 0, 0, 0.05) 0%, rgba(0, 0, 0, 0.55) 70%, rgba(0, 0, 0, 0.7) 100%);
+        pointer-events: none;
+      }
+      .use-card:hover { transform: translateY(-8px) scale(1.015); box-shadow: 0 28px 60px rgba(0, 0, 0, 0.22); }
+
+      /* Staggered: every other card pushed down for editorial rhythm.
+         Uses margin-top instead of translate so it doesn't fight the
+         transform-based .reveal animation. */
+      .use-card:nth-child(even) { margin-top: 56px; }
+
+      .use-card-content {
+        position: relative;
+        z-index: 1;
+        height: 100%;
+        padding: 26px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        color: white;
+      }
       .use-icon {
-        width: 52px;
-        height: 52px;
-        background: var(--gradient);
-        border-radius: 15px;
+        width: 46px;
+        height: 46px;
+        background: rgba(255, 255, 255, 0.18);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 13px;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: white;
-        margin-bottom: 18px;
-        box-shadow: 0 8px 20px rgba(124, 58, 237, 0.25);
+        align-self: flex-start;
       }
-      .use-icon svg { width: 26px; height: 26px; stroke: white; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+      .use-icon svg { width: 22px; height: 22px; stroke: white; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+      .use-text { display: flex; flex-direction: column; gap: 6px; }
       .use-name {
-        font-size: 18px;
-        font-weight: 700;
-        margin-bottom: 6px;
-        letter-spacing: -0.005em;
+        font-family: 'CooperBT', 'FilsonPro', serif;
+        font-size: 30px;
+        font-weight: 400;
+        line-height: 1.02;
+        letter-spacing: -0.01em;
+        text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
       }
-      .use-desc { font-size: 14px; color: var(--gray-500); line-height: 1.55; }
+      .use-desc {
+        font-size: 13px;
+        font-weight: 500;
+        opacity: 0.95;
+        line-height: 1.45;
+        text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+      }
+
+      /* Per-card placeholder backgrounds. Replace --card-bg-image with a
+         real photo URL (e.g. background-image: url('assets/images/wedding.jpg'))
+         when the imagery is ready. The gradient + colour gives a placeholder
+         that already feels on-brand. */
+      .use-weddings    { --card-bg: #d94d8a; --card-bg-image: linear-gradient(160deg, #ff7eb6 0%, #b13a78 100%); }
+      .use-family      { --card-bg: #e89568; --card-bg-image: linear-gradient(160deg, #ffc89e 0%, #d97442 100%); }
+      .use-birthdays   { --card-bg: #f5c145; --card-bg-image: linear-gradient(160deg, #ffd86b 0%, #e58320 100%); }
+      .use-travel      { --card-bg: #4ab8d8; --card-bg-image: linear-gradient(160deg, #6fd6f2 0%, #2b78a8 100%); }
+      .use-graduations { --card-bg: #5a4cd0; --card-bg-image: linear-gradient(160deg, #8a7af0 0%, #2e2078 100%); }
+      .use-gifts       { --card-bg: #d94c4c; --card-bg-image: linear-gradient(160deg, #ff8c8c 0%, #a82e2e 100%); }
+      .use-recipes     { --card-bg: #c2682c; --card-bg-image: linear-gradient(160deg, #f0a25a 0%, #7a3818 100%); }
+      .use-memoriam    { --card-bg: #8a86b8; --card-bg-image: linear-gradient(160deg, #b8b3e0 0%, #4f4d72 100%); }
 
       /* ── How it works ──────────────────────────────────────────────────── */
       .how-grid {
@@ -406,11 +458,13 @@
           grid-template-columns: repeat(2, 1fr);
           gap: 12px;
         }
-        .use-card { padding: 24px 18px; border-radius: 18px; }
-        .use-icon { width: 46px; height: 46px; border-radius: 13px; margin-bottom: 14px; }
-        .use-icon svg { width: 22px; height: 22px; }
-        .use-name { font-size: 16px; }
-        .use-desc { font-size: 13px; }
+        .use-card { aspect-ratio: 3 / 4; border-radius: 18px; }
+        .use-card:nth-child(even) { margin-top: 32px; }
+        .use-card-content { padding: 20px; }
+        .use-icon { width: 40px; height: 40px; border-radius: 11px; }
+        .use-icon svg { width: 20px; height: 20px; }
+        .use-name { font-size: 22px; }
+        .use-desc { font-size: 12px; }
 
         .how-grid {
           grid-template-columns: 1fr;
@@ -471,46 +525,81 @@
         <p class="section-eyebrow reveal">For every kind of memory</p>
         <h2 class="section-title reveal">Made for the moments<br />that matter most.</h2>
         <p class="section-sub reveal">A still photo can only say so much. Popcode lets you layer the full memory underneath.</p>
+        <!-- TIP: replace the gradient placeholders by setting a real photo
+             on each card, e.g. style="--card-bg-image: url('assets/images/wedding.jpg')"
+             on the .use-card div. Layout, overlay, icon, and text stay as-is. -->
         <div class="uses-grid">
-          <div class="use-card reveal">
-            <div class="use-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
-            <h3 class="use-name">Weddings</h3>
-            <p class="use-desc">First dances and forever moments.</p>
+          <div class="use-card use-weddings reveal">
+            <div class="use-card-content">
+              <div class="use-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+              <div class="use-text">
+                <h3 class="use-name">Weddings</h3>
+                <p class="use-desc">First dances and forever moments.</p>
+              </div>
+            </div>
           </div>
-          <div class="use-card reveal">
-            <div class="use-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
-            <h3 class="use-name">Family Albums</h3>
-            <p class="use-desc">Every page, every memory, alive.</p>
+          <div class="use-card use-family reveal">
+            <div class="use-card-content">
+              <div class="use-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+              <div class="use-text">
+                <h3 class="use-name">Family Albums</h3>
+                <p class="use-desc">Every page, every memory, alive.</p>
+              </div>
+            </div>
           </div>
-          <div class="use-card reveal">
-            <div class="use-icon"><svg viewBox="0 0 24 24"><path d="M20 21V10H4v11"/><path d="M2 10h20"/><path d="M12 10V6"/><path d="M9 6c0-1.5 1.5-3 3-3s3 1.5 3 3"/></svg></div>
-            <h3 class="use-name">Birthdays</h3>
-            <p class="use-desc">The wish, not just the cake.</p>
+          <div class="use-card use-birthdays reveal">
+            <div class="use-card-content">
+              <div class="use-icon"><svg viewBox="0 0 24 24"><path d="M20 21V10H4v11"/><path d="M2 10h20"/><path d="M12 10V6"/><path d="M9 6c0-1.5 1.5-3 3-3s3 1.5 3 3"/></svg></div>
+              <div class="use-text">
+                <h3 class="use-name">Birthdays</h3>
+                <p class="use-desc">The wish, not just the cake.</p>
+              </div>
+            </div>
           </div>
-          <div class="use-card reveal">
-            <div class="use-icon"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></div>
-            <h3 class="use-name">Travel</h3>
-            <p class="use-desc">Relive the trip back home.</p>
+          <div class="use-card use-travel reveal">
+            <div class="use-card-content">
+              <div class="use-icon"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></div>
+              <div class="use-text">
+                <h3 class="use-name">Travel</h3>
+                <p class="use-desc">Relive the trip back home.</p>
+              </div>
+            </div>
           </div>
-          <div class="use-card reveal">
-            <div class="use-icon"><svg viewBox="0 0 24 24"><path d="M22 10L12 4 2 10l10 6 10-6z"/><path d="M6 12v5c0 2 3 3 6 3s6-1 6-3v-5"/></svg></div>
-            <h3 class="use-name">Graduations</h3>
-            <p class="use-desc">Their walk, their pride, your tears.</p>
+          <div class="use-card use-graduations reveal">
+            <div class="use-card-content">
+              <div class="use-icon"><svg viewBox="0 0 24 24"><path d="M22 10L12 4 2 10l10 6 10-6z"/><path d="M6 12v5c0 2 3 3 6 3s6-1 6-3v-5"/></svg></div>
+              <div class="use-text">
+                <h3 class="use-name">Graduations</h3>
+                <p class="use-desc">Their walk, their pride, your tears.</p>
+              </div>
+            </div>
           </div>
-          <div class="use-card reveal">
-            <div class="use-icon"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div>
-            <h3 class="use-name">Gifts</h3>
-            <p class="use-desc">A note hidden inside a printed photo.</p>
+          <div class="use-card use-gifts reveal">
+            <div class="use-card-content">
+              <div class="use-icon"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div>
+              <div class="use-text">
+                <h3 class="use-name">Gifts</h3>
+                <p class="use-desc">A note hidden inside a printed photo.</p>
+              </div>
+            </div>
           </div>
-          <div class="use-card reveal">
-            <div class="use-icon"><svg viewBox="0 0 24 24"><path d="M3 11h18l-1 9H4l-1-9z"/><path d="M5 11V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/><path d="M9 5V3"/><path d="M12 5V3"/><path d="M15 5V3"/></svg></div>
-            <h3 class="use-name">Recipes</h3>
-            <p class="use-desc">Watch them show how it's done.</p>
+          <div class="use-card use-recipes reveal">
+            <div class="use-card-content">
+              <div class="use-icon"><svg viewBox="0 0 24 24"><path d="M3 11h18l-1 9H4l-1-9z"/><path d="M5 11V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/><path d="M9 5V3"/><path d="M12 5V3"/><path d="M15 5V3"/></svg></div>
+              <div class="use-text">
+                <h3 class="use-name">Recipes</h3>
+                <p class="use-desc">Watch them show how it's done.</p>
+              </div>
+            </div>
           </div>
-          <div class="use-card reveal">
-            <div class="use-icon"><svg viewBox="0 0 24 24"><path d="M12 2c1 3 3 5 3 8a3 3 0 0 1-6 0c0-3 2-5 3-8z"/><path d="M5 22h14"/><path d="M8 18h8"/></svg></div>
-            <h3 class="use-name">In Memoriam</h3>
-            <p class="use-desc">Their voice. Their smile. Forever near.</p>
+          <div class="use-card use-memoriam reveal">
+            <div class="use-card-content">
+              <div class="use-icon"><svg viewBox="0 0 24 24"><path d="M12 2c1 3 3 5 3 8a3 3 0 0 1-6 0c0-3 2-5 3-8z"/><path d="M5 22h14"/><path d="M8 18h8"/></svg></div>
+              <div class="use-text">
+                <h3 class="use-name">In Memoriam</h3>
+                <p class="use-desc">Their voice. Their smile. Forever near.</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
