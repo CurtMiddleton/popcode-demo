@@ -234,6 +234,34 @@
 
       function getUser(e) { return e.user_name || e.user_email || ''; }
       function getLocation(e) { return (e.city || '') + ' ' + (e.region || '') + ' ' + (e.country || ''); }
+      function parseModel(ua) {
+        if (!ua) return '—';
+        // iPhone model from user agent
+        var iphone = ua.match(/iPhone OS (\d+)_/);
+        if (iphone) {
+          // Map iOS version to approximate iPhone model
+          var ios = parseInt(iphone[1]);
+          if (ios >= 18) return 'iPhone 16+';
+          if (ios >= 17) return 'iPhone 15+';
+          if (ios >= 16) return 'iPhone 14+';
+          if (ios >= 15) return 'iPhone 13+';
+          if (ios >= 14) return 'iPhone 12+';
+          return 'iPhone (iOS ' + ios + ')';
+        }
+        // iPad
+        if (/iPad/.test(ua)) return 'iPad';
+        // Android device
+        var android = ua.match(/Android [^;]+; ([^)]+)\)/);
+        if (android) {
+          var model = android[1].trim();
+          // Shorten common brands
+          model = model.replace(/^Samsung /i, '').replace(/^SM-/i, 'Samsung ');
+          return model.length > 20 ? model.substring(0, 20) + '…' : model;
+        }
+        if (/Windows/.test(ua)) return 'Windows PC';
+        if (/Macintosh/.test(ua)) return 'Mac';
+        return '—';
+      }
 
       function buildSessions(events) {
         // Sort ascending to group consecutive events
@@ -295,8 +323,9 @@
           var arrow = sortCol === c.key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
           return '<th style="cursor:pointer;user-select:none" data-col="' + c.key + '">' + c.label + '<span style="color:#7657FC">' + arrow + '</span></th>';
         }).join('') +
-        '<th title="Photo detected / scans opened">Det. Rate</th>' +
-        '<th title="Video completed / video played">Comp. Rate</th>' +
+        '<th>Model</th>' +
+        '<th title="How often a photo was successfully detected after the scanner was opened. Low % may just mean the user opened the scanner without pointing it at a photo.">Scan Rate</th>' +
+        '<th title="How often a video played all the way through, out of videos that started.">Comp. Rate</th>' +
         '<th style="width:32px"></th></tr></thead>';
 
         var tbody = '';
@@ -333,6 +362,7 @@
             tbody += '<td style="white-space:nowrap">' + loc + '</td>';
             tbody += '<td class="muted" style="font-size:11px">' + (first.ip_address || '—') + '</td>';
             tbody += '<td class="muted" style="font-size:11px">' + (first.user_name || first.user_email || '—') + '</td>';
+            tbody += '<td class="muted" style="font-size:11px">' + parseModel(first.user_agent) + '</td>';
             tbody += foundTd + completedTd;
             tbody += '<td>' + (hasMore ? '<button class="expand-btn" data-sid="' + sid + '">&#9658;</button>' : '') + '</td>';
             tbody += '</tr>';
@@ -483,7 +513,7 @@
           <!-- Summary cards -->
           <div class="cards">
             <div class="card"><div class="card-value">${opens}</div><div class="card-label">Total Opens</div></div>
-            <div class="card highlight"><div class="card-value">${pct(sessionsWithFound,sessionOpens)}</div><div class="card-label">Detection Rate</div></div>
+            <div class="card highlight" title="How often a photo was successfully detected after the scanner was opened."><div class="card-value">${pct(sessionsWithFound,sessionOpens)}</div><div class="card-label">Scan Rate</div></div>
             <div class="card"><div class="card-value">${plays}</div><div class="card-label">Videos Played</div></div>
             <div class="card highlight"><div class="card-value">${pct(completes,plays)}</div><div class="card-label">Completion Rate</div></div>
             <div class="card"><div class="card-value">${uniqueIPs}</div><div class="card-label">Unique Visitors</div></div>
@@ -518,7 +548,7 @@
             <div class="table-wrap">
               <table>
                 <thead><tr>
-                  <th>Project</th><th>Opens</th><th>Detected</th><th>Det. Rate</th><th>Videos</th><th>Completed</th><th>Comp. Rate</th>
+                  <th>Project</th><th>Opens</th><th>Detected</th><th title="How often a photo was successfully detected after the scanner was opened.">Scan Rate</th><th>Videos</th><th>Completed</th><th>Comp. Rate</th>
                 </tr></thead>
                 <tbody>
                   ${Object.entries(colStats).sort((a,b)=>b[1].opens-a[1].opens).map(([slug,s])=>`
