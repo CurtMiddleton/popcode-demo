@@ -595,6 +595,19 @@
         }
       }
 
+      async function setFeedbackStatus(id, status) {
+        await db.from('beta_feedback').update({ status }).eq('id', id);
+        // Re-render row highlight
+        const row = document.querySelector('tr[data-feedback-id="' + id + '"]');
+        if (row) {
+          row.style.background = status === 'urgent' ? '#fff5f5' : status === 'not_urgent' ? '#fffbe6' : status === 'completed' ? '#f0fff4' : '';
+          row.querySelectorAll('.status-btn').forEach(function(btn) {
+            btn.style.opacity = btn.dataset.status === status ? '1' : '0.3';
+            btn.style.transform = btn.dataset.status === status ? 'scale(1.2)' : 'scale(1)';
+          });
+        }
+      }
+
       async function loadFeedback() {
         const wrap = document.getElementById('feedback-wrap');
         if (!wrap) return;
@@ -614,17 +627,35 @@
               /iPhone|iPad/.test(f.user_agent) ? 'iOS' :
               /Android/.test(f.user_agent) ? 'Android' : 'Desktop'
             ) : '—';
-            return '<tr>' +
+            var status = f.status || 'new';
+            var rowBg = status === 'urgent' ? '#fff5f5' : status === 'not_urgent' ? '#fffbe6' : status === 'completed' ? '#f0fff4' : '';
+            var btnStyle = function(s) {
+              var active = status === s;
+              return 'class="status-btn" data-status="' + s + '" data-id="' + f.id + '" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 3px;opacity:' + (active ? '1' : '0.25') + ';transform:' + (active ? 'scale(1.2)' : 'scale(1)') + ';transition:all 0.15s"';
+            };
+            return '<tr data-feedback-id="' + f.id + '" style="background:' + rowBg + '">' +
               '<td class="muted" style="white-space:nowrap">' + formatDate(f.created_at) + '</td>' +
-              '<td style="max-width:400px;white-space:pre-wrap;word-break:break-word">' + escapeHtml(f.description) + '</td>' +
+              '<td style="max-width:360px;white-space:pre-wrap;word-break:break-word">' + escapeHtml(f.description) + '</td>' +
               '<td class="muted">' + escapeHtml(f.email || '—') + '</td>' +
               '<td class="muted">' + escapeHtml(page) + '</td>' +
               '<td>' + devicePill(device) + '</td>' +
+              '<td style="white-space:nowrap">' +
+                '<button title="Urgent" ' + btnStyle('urgent') + '>🔴</button>' +
+                '<button title="Not urgent" ' + btnStyle('not_urgent') + '>🟡</button>' +
+                '<button title="Completed" ' + btnStyle('completed') + '>🟢</button>' +
+              '</td>' +
               '</tr>';
           }).join('');
           wrap.innerHTML = '<table>' +
-            '<thead><tr><th>Time</th><th>Report</th><th>Email</th><th>Page</th><th>Device</th></tr></thead>' +
+            '<thead><tr><th>Time</th><th>Report</th><th>Email</th><th>Page</th><th>Device</th><th>Status</th></tr></thead>' +
             '<tbody>' + rows + '</tbody></table>';
+
+          // Attach status button listeners
+          wrap.querySelectorAll('.status-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              setFeedbackStatus(this.dataset.id, this.dataset.status);
+            });
+          });
         } catch(e) {
           wrap.innerHTML = '<div class="empty">Could not load feedback: ' + e.message + '</div>';
         }
