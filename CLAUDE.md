@@ -223,3 +223,45 @@ Verify on github.com/CurtMiddleton/popcode-demo → click `CLAUDE.md` → scroll
 - Session storage is per-machine. If the user works on two laptops, each has its own `~/.claude/projects/`. CLAUDE.md in git is the only cross-machine memory.
 - The `save notes` trigger phrase is case-insensitive and forgiving of variants ("save session notes", "wrap the session", "save the notes"). Honor it the first time it's said — don't wait for a second request.
 - Two entries on the same day is fine; mark the second one with "(later)" or a descriptive suffix so they're distinguishable.
+
+### 2026-04-15 (cost planning) — Supabase video-storage cost model + AWS comparison (no code changes)
+
+**No code changed. No PRs. Branch: `claude/sync-cli-sessions-mbvBB`.** The user — who has been burned by surprise AWS bills in a past life — asked for a back-of-envelope cost forecast for Popcode video storage at scale. Capturing the analysis here so we don't have to re-derive it, and so the architectural escape hatches are documented.
+
+**Working assumptions used in the estimate (adjust when real data exists):**
+- Average video = 30 seconds, **~40 MB** (iPhone default 1080p @ ~10–12 Mbps). 4K iPhone recordings are ~170 MB for 30s — big variance risk. Compressed 720p @ 2.5 Mbps = ~10 MB (the target to push toward).
+- 2 projects per user, 10 videos per project → **~800 MB / user**.
+- ~50 scans per project per month (wild guess — real number lives in `scan_events`).
+
+**Supabase Pro pricing used (VERIFY at supabase.com/pricing before quoting — this is mid-2025 info):**
+- Base: **$25/mo**. Includes **100 GB storage** + **250 GB egress**.
+- Storage overage: **$0.021/GB/mo**.
+- Egress overage: **$0.09/GB** (same as S3 — Supabase is on AWS under the hood).
+
+**Back-of-envelope monthly totals (storage + egress combined):**
+| Users | Storage (GB) | Egress (GB) | ~Monthly bill |
+|---|---|---|---|
+| 100 | 80 | 250 | **~$25** (under included limits) |
+| 500 | 400 | 1,250 | **~$120** |
+| 1,000 | 800 | 2,500 | **~$240** |
+| 5,000 | 4,000 | 10,000 | **~$1,200** |
+
+**The egress line dominates everything past ~500 users.** Storage is cheap; bandwidth from video playback is the killer. Storage at 1,000 users is only ~$40; the other ~$200 is pure egress.
+
+**Why Supabase is meaningfully safer than AWS for this use case (important context — the user is gun-shy about cloud bills):**
+- **Supabase has a hard Spend Cap.** Dashboard → Organization → Billing → toggle Spend Cap ON. When enabled, Supabase stops serving requests past the included quotas rather than charging overages. Worst-case bill = exactly $25/mo. AWS has no equivalent — CloudWatch Billing Alerts only notify, they don't stop anything.
+- One bill, one product, no forgotten services in another region, no NAT Gateway data-transfer tax, no CloudWatch Logs ingestion fees, no Lambda invocation surprises. The things that typically wreck people on AWS don't exist in Popcode's architecture.
+- Per-GB rates are identical to S3 ($0.021 storage, $0.09 egress). No markup — you're getting AWS prices without the assembly-required billing complexity.
+
+**Concrete recommendations made to the user (none implemented yet — user said "save notes" before choosing a, b, or c):**
+- **(a) Add a cost dashboard panel to `analytics.html`.** Read current storage size + this month's scan count from Supabase, multiply by $0.021 and $0.09, display "on track for $X this month". Prevents bill surprises. ~30 min of work.
+- **(b) Enforce a video upload cap in `create.html`.** Max 50 MB per video, max 30 seconds, reject client-side before upload. Prevents one user from dumping 2 GB of 4K video. Simple File API check.
+- **(c) Both.**
+- **Also recommended but not offered as an immediate task:** turn on the Spend Cap in Supabase dashboard today (zero-code, user-side action), and eventually compress videos client-side on upload (ffmpeg.wasm or MediaRecorder re-encode to 720p @ 2.5 Mbps — would cut storage+bandwidth costs ~4×, dropping the 1,000-user estimate from ~$240 to ~$60).
+
+**Architectural escape hatch if/when bandwidth becomes the bottleneck:**
+- **Cloudflare R2** has **zero egress fees**. Storage is $0.015/GB/mo. For Popcode's workload (big videos, many plays) this fundamentally fixes the economics. Migration path: keep Postgres/auth/`.mind` files in Supabase, move **just the video files** to R2, change `collection_items.video_url` to point at R2 URLs. Straightforward, doesn't require rewriting anything else.
+- Also valid: **Bunny.net** (~$0.01–$0.02/GB egress, purpose-built for video CDN) or **Backblaze B2** ($0.01/GB egress via Cloudflare bandwidth alliance).
+- Don't migrate now — at hundreds of users, Supabase + Spend Cap is the right answer. Re-evaluate when egress regularly exceeds ~1 TB/month.
+
+**Open question for a future session:** does Supabase's Smart CDN actually cache video responses from the `experiences` storage bucket? If yes, repeat views from the same region are basically free and the egress estimates above are pessimistic. Worth checking in the dashboard before investing in any optimization work.
