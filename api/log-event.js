@@ -12,7 +12,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   try {
-    const { slug, event_type, target_index, device_type, browser, user_id } = req.body;
+    const { slug, event_type, target_index, device_type, browser, user_agent, user_id } = req.body;
     if (!slug || !event_type) return res.status(400).json({ error: 'Missing fields' });
 
     // IP address — use x-forwarded-for (Vercel sets this)
@@ -32,6 +32,7 @@ export default async function handler(req, res) {
       target_index: target_index ?? null,
       device_type:  device_type  ?? null,
       browser:      browser      ?? null,
+      user_agent:   user_agent   ?? null,
       ip_address:   ip,
       country,
       region,
