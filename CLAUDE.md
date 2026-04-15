@@ -187,3 +187,39 @@ After writing the entry, commit CLAUDE.md with a message like `Add session notes
 
 **Key lesson — RPC functions don't auto-update:**
 When a new column is added to a Supabase table, any RPC function that `select *`s or lists columns explicitly will NOT return the new column until the function is dropped and recreated with the new column in its `returns table(...)` definition. This is what caused "phone model not showing" even after adding the column and deploying code. Always check if data is coming through an RPC (look for `db.rpc(...)` in analytics.html ~line 445) and update the function definition when adding columns to `scan_events`.
+
+### 2026-04-15 (later) — Session persistence walkthrough (no code changes)
+
+**No code changed. No PRs. Branch: `claude/sync-cli-sessions-mbvBB`.** This session was entirely about helping the user understand how Claude Code sessions are stored and how project context persists across sessions — written down here so future-Claude (and future-user) don't have to re-derive it.
+
+**User's concern:** they thought their previous Popcode chats had been "lost" because the Claude Code desktop/web app showed 0 prior sessions for this repo.
+
+**What's actually going on:**
+- Claude Code CLI transcripts are stored **locally on the machine that ran them**, at `~/.claude/projects/<flattened-path>/*.jsonl`. Each `.jsonl` is one session; each line is a user/assistant turn or tool call.
+- The CLI and the desktop/web Claude Code app **do not share session storage.** So sessions run in Terminal on the Mac will never show up in the desktop app, and vice versa. Nothing was lost — the files are still on the user's Mac under `~/.claude/projects/` with a folder name like `-Users-<name>-…-popcode-demo/`.
+- To find/search them on the Mac:
+  ```bash
+  ls ~/.claude/projects/ | grep -i popcode
+  ls -lt ~/.claude/projects/*popcode*/
+  grep -l "spinner" ~/.claude/projects/*popcode*/*.jsonl
+  ```
+- Pretty-printing one is doable with `jq -r 'select(.type=="user" or .type=="assistant") | "\(.type): \(.message.content // .content)"' <file>.jsonl | less`.
+
+**The real persistence mechanism for this repo is `CLAUDE.md` itself, specifically the `## Session history` section.** Raw transcripts are noisy, machine-specific, and not version-controlled; CLAUDE.md is in git, pushed to GitHub, and auto-loaded by every new Claude Code session in this repo. That's why the 04-12 through 04-15 entries above have been the de-facto memory all along.
+
+**The `save notes` flow (documented in `## Session workflow` above) is the intended way to keep this working.** When the user says "save notes" (or a close variant), Claude appends a dated entry here, `git add CLAUDE.md && git commit -m "Add session notes for YYYY-MM-DD" && git push` to the current branch. This very entry is the proof-of-concept run the user asked for.
+
+**Manual fallback if the user edits CLAUDE.md directly on their Mac:**
+```bash
+cd ~/…/popcode-demo
+git add CLAUDE.md
+git commit -m "Update session notes"
+git push                                   # or `git push -u origin <branch>` on first push
+```
+Verify on github.com/CurtMiddleton/popcode-demo → click `CLAUDE.md` → scroll to bottom → check History.
+
+**Things worth remembering for next time:**
+- If a user says "my previous chats are gone," don't panic — check CLAUDE.md → `## Session history` first (it's probably all there in curated form), then point them at `~/.claude/projects/` on their Mac for the raw transcripts.
+- Session storage is per-machine. If the user works on two laptops, each has its own `~/.claude/projects/`. CLAUDE.md in git is the only cross-machine memory.
+- The `save notes` trigger phrase is case-insensitive and forgiving of variants ("save session notes", "wrap the session", "save the notes"). Honor it the first time it's said — don't wait for a second request.
+- Two entries on the same day is fine; mark the second one with "(later)" or a descriptive suffix so they're distinguishable.
