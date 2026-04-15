@@ -21,8 +21,8 @@
         bottom: 20px;
         left: 20px;
         z-index: 9000;
-        background: #7657FC;
-        color: white;
+        background: #eeeeee;
+        color: #333333;
         border: none;
         border-radius: 20px;
         padding: 7px 13px;
@@ -31,8 +31,8 @@
         letter-spacing: 0.04em;
         cursor: pointer;
         font-family: 'FilsonPro', sans-serif;
-        box-shadow: 0 2px 12px rgba(118,87,252,0.35);
-        opacity: 0.75;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+        opacity: 0.85;
         transition: opacity 0.15s;
         display: flex;
         align-items: center;
