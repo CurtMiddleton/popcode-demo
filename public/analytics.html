@@ -84,6 +84,15 @@
       .badge-video_complete{ background: #ede9fe; color: #7657FC; }
       .badge-video_error   { background: #ffe8e8; color: #c92a2a; }
 
+      /* Flat status dots for beta feedback */
+      .status-btn { background: none; border: none; cursor: pointer; padding: 3px 4px; display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+      .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; opacity: 0.22; transition: opacity 0.15s; }
+      .status-btn:hover .status-dot { opacity: 0.55; }
+      .status-btn.active .status-dot { opacity: 1; }
+      .status-dot-urgent     { background: #dc2626; }
+      .status-dot-not_urgent { background: #eab308; }
+      .status-dot-completed  { background: #16a34a; }
+
       .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
       .bar-label { font-size: 13px; width: 90px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .bar-track { flex: 1; background: #f0eeea; border-radius: 99px; height: 10px; overflow: hidden; }
@@ -786,14 +795,42 @@
       }
 
       async function setFeedbackStatus(id, status) {
-        await db.from('beta_feedback').update({ status }).eq('id', id);
-        // Re-render row highlight
+        // Chain .select() so the response includes the updated row(s).
+        // If RLS blocks the write, update() alone returns 204 with no error,
+        // which previously caused the UI to falsely show success on one
+        // machine while the DB still had the old value on every other
+        // machine. Checking data.length guards against that.
+        const { data, error } = await db
+          .from('beta_feedback')
+          .update({ status: status })
+          .eq('id', id)
+          .select();
+
+        if (error) {
+          console.error('setFeedbackStatus error:', error);
+          alert('Could not save status: ' + error.message);
+          return;
+        }
+        if (!data || data.length === 0) {
+          console.error('setFeedbackStatus: 0 rows updated for id=' + id +
+            ' — likely an RLS policy blocking UPDATE on beta_feedback, ' +
+            'or the `status` column does not exist on the table.');
+          alert('Status did not save (0 rows updated). This is usually an ' +
+            'RLS policy blocking writes to beta_feedback. See the browser ' +
+            'console for details.');
+          return;
+        }
+
+        // Update UI — toggle .active class on the three buttons in this row
         const row = document.querySelector('tr[data-feedback-id="' + id + '"]');
         if (row) {
-          row.style.background = status === 'urgent' ? '#fff5f5' : status === 'not_urgent' ? '#fffbe6' : status === 'completed' ? '#f0fff4' : '';
+          row.style.background = status === 'urgent' ? '#fff5f5'
+            : status === 'not_urgent' ? '#fffbe6'
+            : status === 'completed' ? '#f0fff4'
+            : '';
           row.querySelectorAll('.status-btn').forEach(function(btn) {
-            btn.style.opacity = btn.dataset.status === status ? '1' : '0.3';
-            btn.style.transform = btn.dataset.status === status ? 'scale(1.2)' : 'scale(1)';
+            if (btn.dataset.status === status) btn.classList.add('active');
+            else btn.classList.remove('active');
           });
         }
       }
@@ -819,9 +856,11 @@
             ) : '—';
             var status = f.status || 'new';
             var rowBg = status === 'urgent' ? '#fff5f5' : status === 'not_urgent' ? '#fffbe6' : status === 'completed' ? '#f0fff4' : '';
-            var btnStyle = function(s) {
+            var dotBtn = function(s, label) {
               var active = status === s;
-              return 'class="status-btn" data-status="' + s + '" data-id="' + f.id + '" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 3px;opacity:' + (active ? '1' : '0.25') + ';transform:' + (active ? 'scale(1.2)' : 'scale(1)') + ';transition:all 0.15s"';
+              return '<button class="status-btn' + (active ? ' active' : '') +
+                '" data-status="' + s + '" data-id="' + f.id + '" title="' + label + '">' +
+                '<span class="status-dot status-dot-' + s + '"></span></button>';
             };
             return '<tr data-feedback-id="' + f.id + '" style="background:' + rowBg + '">' +
               '<td class="muted" style="white-space:nowrap">' + formatDate(f.created_at) + '</td>' +
@@ -830,9 +869,9 @@
               '<td class="muted">' + escapeHtml(page) + '</td>' +
               '<td>' + devicePill(device) + '</td>' +
               '<td style="white-space:nowrap">' +
-                '<button title="Urgent" ' + btnStyle('urgent') + '>🔴</button>' +
-                '<button title="Not urgent" ' + btnStyle('not_urgent') + '>🟡</button>' +
-                '<button title="Completed" ' + btnStyle('completed') + '>🟢</button>' +
+                dotBtn('urgent', 'Urgent') +
+                dotBtn('not_urgent', 'Not urgent') +
+                dotBtn('completed', 'Completed') +
               '</td>' +
               '</tr>';
           }).join('');
