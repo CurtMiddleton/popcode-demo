@@ -140,3 +140,50 @@ After writing the entry, commit CLAUDE.md with a message like `Add session notes
 - Tried calling `buildScene()` inside `returnToScanner()` and immediately calling `start()` — black screen because A-Frame systems not yet registered.
 - Tried rebuilding inside close-btn click (user gesture) without delay — iOS camera not released fast enough.
 - The working solution requires ALL THREE: rebuild + 500ms delay + `loaded` event.
+
+### 2026-04-15 — Marketing site launch + analytics polish + beta prep
+
+**All changes committed directly to `main` (no PRs this session).**
+
+**Marketing site (`marketing/index.html`) — launched to popcodeapp.com:**
+- Hero text absolutely positioned, aligned with logo edge using `left: max(24px, calc((100vw - 1100px) / 2 + 24px))`. Tagline 56px CooperBT, "Brought to life." on one line.
+- Step icons replaced with big CooperBT gradient numbers (120px, `.step-icon { display:none }`).
+- Footer logo doubled to 60px height.
+- Email corrected: `hello@` → `info@popcodeapp.com`.
+- How It Works link fixed to `https://popcode.app/howto.html`.
+- Deployed as separate Vercel project (`popcode-marketing`). DNS via Squarespace: A record `216.198.79.1`, CNAME, TXT verification for popcodeapp.com → Vercel. Site live at popcodeapp.com.
+
+**howto.html — accordion + badge FAQ:**
+- All 5 sections (What is Popcode, How to Create, Badge FAQ, How to Scan, Troubleshooting) converted to CSS grid accordion. Click to expand/collapse, only one open at a time.
+- CSS: `grid-template-rows: 0fr → 1fr` transition, `.section.open` class toggle via JS.
+- Contact note added below accordion: "Still have questions? Email us at info@popcodeapp.com"
+
+**OG image (`public/assets/og_image.png`):**
+- Regenerated 1200×400, full gradient background (no white fade), white Popcode logo centered at 180px tall.
+- Generated via Python PIL — forced all logo pixels white by replacing via alpha channel (avoid `ImageOps.invert()` which corrupts gradient colors).
+- iMessage bottom bar color is sampled from the image by iOS — shows purple with this image. Gray bar requires a gray/white region at bottom of image; left as-is for now.
+
+**manage.html:**
+- Share message updated: `'Your Popcode project "X" is ready to scan!'` for both email and SMS.
+- "My Collections" → "My Projects" (h1 + title).
+
+**Nav drawer (all 7 app pages):**
+- Slide-in from left, 300px wide, gradient background, overlay behind.
+- Font sizes: links 20px bold, external URL 16px 0.7 opacity.
+- Labels: "Create a Project", "My Projects", "Past Views", "My Account", "How It Works", "popcodeapp.com ↗"
+- Close button inside `#nav-drawer`. JS uses `classList.add/remove('open')`, click-outside on `#nav-drawer-bg`.
+
+**analytics.html:**
+- "Detection Rate" → "Scan Rate" in 3 places with tooltip explaining low % = user opened scanner without pointing at photo.
+- Phone Model column added. `parseModel(ua)` maps iOS version → iPhone generation (iOS 18+ = iPhone 16+, etc.), Android device name, iPad, Windows PC, Mac.
+- Beta feedback 🔴🟡🟢 status buttons — urgent/not_urgent/completed. Row background colors: `#fff5f5` / `#fffbe6` / `#f0fff4`. Updates via `db.from('beta_feedback').update({ status }).eq('id', id)`.
+
+**beta-feedback.js:** pill color confirmed purple (`#7657FC`), opacity 0.75.
+
+**Supabase changes made this session (user confirmed all ran):**
+- `alter table scan_events add column if not exists user_agent text;`
+- `alter table beta_feedback add column if not exists status text default 'new';`
+- `drop function get_events_with_users(integer,integer)` + recreate with `user_agent` in return type and SELECT.
+
+**Key lesson — RPC functions don't auto-update:**
+When a new column is added to a Supabase table, any RPC function that `select *`s or lists columns explicitly will NOT return the new column until the function is dropped and recreated with the new column in its `returns table(...)` definition. This is what caused "phone model not showing" even after adding the column and deploying code. Always check if data is coming through an RPC (look for `db.rpc(...)` in analytics.html ~line 445) and update the function definition when adding columns to `scan_events`.
