@@ -103,6 +103,7 @@ export function Sidebar({ userEmail, userName, avatarUrl }: SidebarProps) {
             style={{
               writingMode: "vertical-rl",
               textOrientation: "mixed",
+              transform: "rotate(180deg)",
               letterSpacing: "0.08em",
             }}
           >
