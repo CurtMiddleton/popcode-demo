@@ -113,6 +113,12 @@
       .accounts-toggle { background: none; border: none; color: #7657FC; font-family: 'FilsonPro', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; padding: 4px 10px; }
       .accounts-toggle:hover { color: #589AF9; }
 
+      /* Activity log — Load more row */
+      .loadmore-row td { text-align: center; padding: 14px 10px; border-top: 1px solid #f0eeea; background: #fafaf8; }
+      .loadmore-row:hover td { background: #fafaf8; }
+      .loadmore-btn { background: none; border: none; color: #7657FC; font-family: 'FilsonPro', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; padding: 6px 14px; }
+      .loadmore-btn:hover { color: #589AF9; }
+
       /* Hosting cost panel */
       .cost-panel { background: white; border-radius: 16px; padding: 22px 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 28px; }
       .cost-panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; flex-wrap: wrap; gap: 8px; }
@@ -210,7 +216,8 @@
       let sortCol = 'created_at', sortDir = 'desc';
       let searchQuery = '';
       let cachedEvts = [], cachedColNames = {};
-      let activityLimit = 25;
+      let activityLimit = 25;   // chunk size: how many sessions each "show N" / "load more" click adds
+      let activityShown = 25;   // how many sessions are currently visible in the activity log
       let cachedAccounts = null;
       let accountsExpanded = false;
 
@@ -243,6 +250,7 @@
           document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
           activeDays = parseInt(btn.dataset.days);
+          activityShown = activityLimit; // reset pagination when time range changes
           loadAnalytics();
         });
       });
@@ -366,7 +374,7 @@
 
         var sessions = buildSessions(rows);
         var totalSessions = sessions.length;
-        if (activityLimit > 0) sessions = sessions.slice(0, activityLimit);
+        if (activityShown > 0) sessions = sessions.slice(0, activityShown);
 
         var thead = '<thead><tr>' + COLS.map(function(c) {
           var arrow = sortCol === c.key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
@@ -379,7 +387,7 @@
 
         var tbody = '';
         if (sessions.length === 0) {
-          tbody = '<tr><td colspan="11" class="empty">No matching events.</td></tr>';
+          tbody = '<tr><td colspan="12" class="empty">No matching events.</td></tr>';
         } else {
           sessions.forEach(function(sess) {
             var first = sess.events[0];
@@ -433,6 +441,27 @@
               });
             }
           });
+
+          // "Load more" row — only shown if there are more sessions behind activityShown
+          if (totalSessions > activityShown) {
+            var remaining = totalSessions - activityShown;
+            var increment = Math.min(activityLimit, remaining);
+            tbody +=
+              '<tr class="loadmore-row"><td colspan="12">' +
+                '<button class="loadmore-btn" id="loadmore-btn">' +
+                  'Load ' + increment + ' more ▼ ' +
+                  '<span style="color:#aaa;font-weight:500;font-size:11px">' +
+                    '(' + activityShown + ' of ' + totalSessions + ' shown)' +
+                  '</span>' +
+                '</button>' +
+              '</td></tr>';
+          } else if (totalSessions > activityLimit) {
+            // Everything is shown — give a quiet confirmation, no button
+            tbody +=
+              '<tr class="loadmore-row"><td colspan="12" style="color:#aaa;font-size:11px">' +
+                'All ' + totalSessions + ' sessions shown' +
+              '</td></tr>';
+          }
         }
 
         wrap.innerHTML = '<table>' + thead + '<tbody>' + tbody + '</tbody></table>';
@@ -455,6 +484,14 @@
             btn.innerHTML = isOpen ? '&#9658;' : '&#9660;';
           });
         });
+
+        var loadMoreBtn = document.getElementById('loadmore-btn');
+        if (loadMoreBtn) {
+          loadMoreBtn.addEventListener('click', function() {
+            activityShown += activityLimit;
+            renderActivityTable();
+          });
+        }
       }
 
       function renderRow(e, colNames) {
@@ -907,6 +944,7 @@
             document.querySelectorAll('.limit-btn').forEach(function(b) { b.classList.remove('active'); });
             btn.classList.add('active');
             activityLimit = parseInt(btn.dataset.limit, 10);
+            activityShown = activityLimit;
             renderActivityTable();
           });
         });
