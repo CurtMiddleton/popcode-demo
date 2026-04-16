@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  IoAirplaneOutline,
+  IoBriefcaseOutline,
   IoMailOutline,
   IoMapOutline,
   IoImagesOutline,
@@ -29,7 +29,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: "/trips", label: "Trips", icon: IoAirplaneOutline },
+  { href: "/trips", label: "Trips", icon: IoBriefcaseOutline },
   { href: "/inbox", label: "Inbox", icon: IoMailOutline },
   { href: "/map", label: "Map", icon: IoMapOutline },
   { href: "/photos", label: "Photos", icon: IoImagesOutline },

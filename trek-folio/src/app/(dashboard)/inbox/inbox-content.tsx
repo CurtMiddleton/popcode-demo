@@ -196,7 +196,7 @@ function AssignedRow({
         <p className="font-display-roman text-[16px] text-tf-ink truncate">
           {res.provider_name ?? RESERVATION_LABELS[res.type]}
         </p>
-        <p className="text-[10px] font-light text-tf-muted truncate mt-0.5">
+        <p className="text-[12px] font-light text-tf-muted truncate mt-0.5">
           {tripName && <>{tripName} · </>}
           {res.start_datetime
             ? format(parseISO(res.start_datetime), "MMM d, yyyy")
@@ -257,7 +257,7 @@ function UnassignedRow({
         <p className="font-display-roman text-[16px] text-tf-ink truncate">
           {res.provider_name ?? RESERVATION_LABELS[res.type]}
         </p>
-        <p className="text-[10px] font-light text-tf-muted truncate mt-0.5">
+        <p className="text-[12px] font-light text-tf-muted truncate mt-0.5">
           {res.start_datetime
             ? format(parseISO(res.start_datetime), "MMM d, yyyy · h:mm a")
             : "Unscheduled"}

@@ -122,7 +122,7 @@ function PlanTile({
       <p className="font-display-roman text-[15px] text-tf-ink leading-tight">
         {RESERVATION_LABELS[type]}
       </p>
-      <p className="text-[10px] font-light text-tf-muted mt-1 leading-tight">
+      <p className="text-[12px] font-light text-tf-muted mt-1 leading-tight">
         {RESERVATION_SUBTITLES[type]}
       </p>
     </button>

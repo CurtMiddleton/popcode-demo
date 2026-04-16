@@ -35,7 +35,7 @@ export function PageHeader({
           )}
           <h1
             className={cn(
-              "font-display text-[48px] leading-[0.95] text-tf-ink",
+              "font-display text-[42px] leading-[0.95] text-tf-ink",
               titleClassName
             )}
           >

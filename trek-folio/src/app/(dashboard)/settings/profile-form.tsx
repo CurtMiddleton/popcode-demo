@@ -117,7 +117,7 @@ export function ProfileForm({ profile, userEmail }: ProfileFormProps) {
               disabled
               className="bg-white/70 border-tf-cream-border"
             />
-            <p className="text-[10px] text-tf-muted font-light">
+            <p className="text-[12px] text-tf-muted font-light">
               Managed by your auth provider
             </p>
           </div>
