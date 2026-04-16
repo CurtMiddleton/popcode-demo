@@ -62,8 +62,7 @@ export async function uploadPhoto(
   supabase: SupabaseClient,
   file: File,
   trip: Trip,
-  userId: string,
-  _opts: UploadOptions = {}
+  userId: string
 ): Promise<Photo> {
   // Enforce per-trip cap.
   const { count } = await supabase
