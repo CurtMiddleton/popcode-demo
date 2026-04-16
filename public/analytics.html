@@ -103,6 +103,16 @@
       .range-btn { padding: 6px 14px; border-radius: 20px; border: 1px solid #e0ddd6; background: white; font-size: 13px; font-weight: 700; font-family: 'FilsonPro', sans-serif; cursor: pointer; color: #555; }
       .range-btn.active { background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%); color: white; border-color: transparent; }
 
+      /* Small pill buttons for the activity-log page-size toggle */
+      .limit-bar { display: inline-flex; gap: 6px; }
+      .limit-btn { padding: 4px 12px; border-radius: 16px; border: 1px solid #e0ddd6; background: white; font-size: 12px; font-weight: 700; font-family: 'FilsonPro', sans-serif; cursor: pointer; color: #555; }
+      .limit-btn.active { background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%); color: white; border-color: transparent; }
+
+      /* Accounts section — expand/collapse for rows 11+ */
+      .accounts-toggle-row td { text-align: center; padding: 12px 10px; border-top: 1px solid #f0eeea; background: #fafaf8; }
+      .accounts-toggle { background: none; border: none; color: #7657FC; font-family: 'FilsonPro', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; padding: 4px 10px; }
+      .accounts-toggle:hover { color: #589AF9; }
+
       /* Hosting cost panel */
       .cost-panel { background: white; border-radius: 16px; padding: 22px 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 28px; }
       .cost-panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; flex-wrap: wrap; gap: 8px; }
@@ -200,6 +210,9 @@
       let sortCol = 'created_at', sortDir = 'desc';
       let searchQuery = '';
       let cachedEvts = [], cachedColNames = {};
+      let activityLimit = 25;
+      let cachedAccounts = null;
+      let accountsExpanded = false;
 
       const ADMIN_EMAIL = 'curtmid@gmail.com';
 
@@ -216,6 +229,7 @@
         document.getElementById('main-content').innerHTML = '<p class="empty">Session OK, loading data...</p>';
         loadAnalytics();
         loadCostData();
+        loadAccounts();
       }).catch(e => {
         document.getElementById('main-content').innerHTML = '<p class="empty">JS error: ' + e.message + '</p>';
       });
@@ -351,6 +365,8 @@
         });
 
         var sessions = buildSessions(rows);
+        var totalSessions = sessions.length;
+        if (activityLimit > 0) sessions = sessions.slice(0, activityLimit);
 
         var thead = '<thead><tr>' + COLS.map(function(c) {
           var arrow = sortCol === c.key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
@@ -630,6 +646,87 @@
         }
       }
 
+      // ── Accounts section ─────────────────────────────────────────────────
+      // Fetched once on page load via the `get_all_users` RPC (admin-only,
+      // see session notes for SQL). Cached in memory so the main-content
+      // rebuild triggered by the range buttons doesn't re-query Supabase.
+      async function loadAccounts() {
+        const wrap = document.getElementById('accounts-wrap');
+        if (!wrap) return; // main-content may not be rendered yet; will retry
+
+        // If we already have them cached, just re-render from the cache
+        if (cachedAccounts !== null) {
+          renderAccounts();
+          return;
+        }
+
+        wrap.innerHTML = '<div class="loading-msg"><div class="spinner"></div>Loading accounts…</div>';
+        try {
+          const { data, error } = await db.rpc('get_all_users', { max_rows: 35 });
+          if (error) throw error;
+          cachedAccounts = data || [];
+          renderAccounts();
+        } catch (e) {
+          console.error('loadAccounts error:', e);
+          wrap.innerHTML =
+            '<div class="empty" style="padding:20px">Could not load accounts: ' + (e.message || e) +
+            '<br><span style="font-size:11px;color:#aaa">If this says the RPC does not exist, run the <code>get_all_users</code> SQL in your Supabase dashboard (see session notes).</span></div>';
+        }
+      }
+
+      function renderAccounts() {
+        const wrap = document.getElementById('accounts-wrap');
+        if (!wrap) return;
+        if (!cachedAccounts || cachedAccounts.length === 0) {
+          wrap.innerHTML = '<div class="empty">No accounts yet.</div>';
+          return;
+        }
+
+        const users = cachedAccounts;
+        const visibleCount = accountsExpanded ? users.length : Math.min(10, users.length);
+        const hiddenCount = users.length - visibleCount;
+
+        const rowHtml = function(u) {
+          const nameDisplay = u.full_name || '—';
+          return '<tr>' +
+            '<td class="muted" style="white-space:nowrap">' + formatDate(u.created_at) + '</td>' +
+            '<td style="font-weight:600">' + escapeHtml(nameDisplay) + '</td>' +
+            '<td class="muted">' + escapeHtml(u.email || '—') + '</td>' +
+            '<td class="muted" style="text-align:right">' + (u.project_count || 0) + '</td>' +
+            '</tr>';
+        };
+
+        var tbody = users.slice(0, visibleCount).map(rowHtml).join('');
+
+        if (users.length > 10) {
+          const label = accountsExpanded
+            ? 'Show fewer ▲'
+            : 'Show ' + (users.length - 10) + ' more ▼';
+          tbody += '<tr class="accounts-toggle-row"><td colspan="4">' +
+            '<button class="accounts-toggle" id="accounts-toggle-btn">' + label + '</button>' +
+            '</td></tr>';
+        }
+
+        wrap.innerHTML =
+          '<table>' +
+            '<thead><tr>' +
+              '<th>Created</th>' +
+              '<th>Name</th>' +
+              '<th>Email</th>' +
+              '<th style="text-align:right">Projects</th>' +
+            '</tr></thead>' +
+            '<tbody>' + tbody + '</tbody>' +
+          '</table>';
+
+        const btn = document.getElementById('accounts-toggle-btn');
+        if (btn) {
+          btn.addEventListener('click', function() {
+            accountsExpanded = !accountsExpanded;
+            renderAccounts();
+          });
+        }
+      }
+
       async function loadAnalytics() {
         document.getElementById('main-content').innerHTML =
           '<div class="loading-msg"><div class="spinner"></div>Loading...</div>';
@@ -741,6 +838,14 @@
             </div>
           </div>
 
+          <!-- Accounts -->
+          <div class="section">
+            <div class="section-title" style="margin-bottom:12px">Accounts</div>
+            <div class="table-wrap" id="accounts-wrap">
+              <div class="loading-msg" style="padding:24px"><div class="spinner"></div>Loading accounts…</div>
+            </div>
+          </div>
+
           <!-- By project -->
           <div class="section">
             <div class="section-title" style="margin-bottom:12px">By Project</div>
@@ -769,7 +874,14 @@
           <div class="section">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
               <div class="section-title">Activity Log</div>
-              <input id="activity-search" type="search" placeholder="Search user, project, location…" style="padding:7px 14px;border-radius:20px;border:1px solid #e0ddd6;font-size:13px;font-family:inherit;outline:none;width:260px;"/>
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                <div class="limit-bar">
+                  <button class="limit-btn${activityLimit===25?' active':''}" data-limit="25">Show 25</button>
+                  <button class="limit-btn${activityLimit===50?' active':''}" data-limit="50">Show 50</button>
+                  <button class="limit-btn${activityLimit===100?' active':''}" data-limit="100">Show 100</button>
+                </div>
+                <input id="activity-search" type="search" placeholder="Search user, project, location…" style="padding:7px 14px;border-radius:20px;border:1px solid #e0ddd6;font-size:13px;font-family:inherit;outline:none;width:260px;"/>
+              </div>
             </div>
             <div class="table-wrap" id="activity-wrap"></div>
           </div>
@@ -783,10 +895,20 @@
 
         renderActivityTable();
         loadFeedback();
+        loadAccounts();
 
         document.getElementById('activity-search').addEventListener('input', function() {
           searchQuery = this.value;
           renderActivityTable();
+        });
+
+        document.querySelectorAll('.limit-btn').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            document.querySelectorAll('.limit-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            activityLimit = parseInt(btn.dataset.limit, 10);
+            renderActivityTable();
+          });
         });
 
         } catch(e) {
