@@ -42,10 +42,18 @@ export default async function TripPage({ params }: TripPageProps) {
     .eq("trip_id", params.id)
     .order("start_datetime", { ascending: true });
 
+  // Fetch photos for this trip
+  const { data: photos } = await supabase
+    .from("photos")
+    .select("*")
+    .eq("trip_id", params.id)
+    .order("created_at", { ascending: true });
+
   return (
     <TripDetail
       trip={trip}
       reservations={reservations ?? []}
+      photos={photos ?? []}
       userId={user!.id}
     />
   );

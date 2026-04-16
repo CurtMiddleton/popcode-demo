@@ -1,10 +1,25 @@
 import { PageHeader } from "@/components/page-header";
+import { createClient } from "@/lib/supabase/server";
+import { GlobalPhotoGrid } from "@/components/global-photo-grid";
+import type { Photo, Trip } from "@/lib/types";
 
 export const metadata = {
   title: "Photos — Trek Folio",
 };
 
-export default function PhotosPage() {
+export default async function PhotosPage() {
+  const supabase = createClient();
+
+  const { data: trips } = await supabase
+    .from("trips")
+    .select("*")
+    .order("start_date", { ascending: false });
+
+  const { data: photos } = await supabase
+    .from("photos")
+    .select("*")
+    .order("created_at", { ascending: false });
+
   return (
     <div className="max-w-6xl mx-auto">
       <PageHeader
@@ -12,15 +27,10 @@ export default function PhotosPage() {
         title="Photos"
         description="All your trip photos in one place."
       />
-      <div className="tf-card-cream p-16 text-center">
-        <p className="micro-label mb-3">Coming in Phase 6</p>
-        <h2 className="font-display text-5xl text-tf-ink mb-3">
-          No photos yet
-        </h2>
-        <p className="text-sm text-tf-muted max-w-md mx-auto">
-          Upload photos to your trips and they&apos;ll appear here.
-        </p>
-      </div>
+      <GlobalPhotoGrid
+        trips={(trips ?? []) as Trip[]}
+        photos={(photos ?? []) as Photo[]}
+      />
     </div>
   );
 }

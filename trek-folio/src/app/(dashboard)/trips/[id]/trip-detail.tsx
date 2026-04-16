@@ -32,6 +32,7 @@ import { TypePill } from "@/components/type-pill";
 import { ReservationFormDialog } from "@/components/reservation-form-dialog";
 import { PlanPickerDialog } from "@/components/plan-picker-dialog";
 import { TripMap } from "@/components/trip-map";
+import { PhotoGallery } from "@/components/photo-gallery";
 import { deleteReservation } from "@/lib/reservations";
 import { cn } from "@/lib/utils";
 import {
@@ -39,15 +40,16 @@ import {
   RESERVATION_COLOR_KEY,
   type ReservationType,
 } from "@/lib/types";
-import type { Trip, Reservation } from "@/lib/types";
+import type { Trip, Reservation, Photo } from "@/lib/types";
 
 interface TripDetailProps {
   trip: Trip;
   reservations: Reservation[];
+  photos: Photo[];
   userId: string;
 }
 
-export function TripDetail({ trip, reservations, userId }: TripDetailProps) {
+export function TripDetail({ trip, reservations, photos, userId }: TripDetailProps) {
   const router = useRouter();
   const supabase = createClient();
   const [editOpen, setEditOpen] = useState(false);
@@ -333,7 +335,7 @@ export function TripDetail({ trip, reservations, userId }: TripDetailProps) {
         </TabsContent>
 
         <TabsContent value="photos" className="mt-8">
-          <Placeholder title="Photo gallery" subtitle="Coming in Phase 6" />
+          <PhotoGallery trip={trip} userId={userId} initialPhotos={photos} />
         </TabsContent>
 
         <TabsContent value="reservations" className="mt-8">
