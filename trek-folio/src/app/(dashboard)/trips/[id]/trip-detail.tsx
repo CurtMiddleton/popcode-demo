@@ -30,9 +30,14 @@ import {
 import { IconTile } from "@/components/icon-tile";
 import { TypePill } from "@/components/type-pill";
 import { ReservationFormDialog } from "@/components/reservation-form-dialog";
+import { PlanPickerDialog } from "@/components/plan-picker-dialog";
 import { deleteReservation } from "@/lib/reservations";
 import { cn } from "@/lib/utils";
-import { RESERVATION_LABELS } from "@/lib/types";
+import {
+  RESERVATION_LABELS,
+  RESERVATION_COLOR_KEY,
+  type ReservationType,
+} from "@/lib/types";
 import type { Trip, Reservation } from "@/lib/types";
 
 interface TripDetailProps {
@@ -46,7 +51,18 @@ export function TripDetail({ trip, reservations, userId }: TripDetailProps) {
   const supabase = createClient();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [resFormOpen, setResFormOpen] = useState(false);
+  const [pickedType, setPickedType] = useState<ReservationType | null>(null);
+
+  function openAddPlan() {
+    setPickerOpen(true);
+  }
+
+  function handleTypePicked(type: ReservationType) {
+    setPickedType(type);
+    setResFormOpen(true);
+  }
   const [name, setName] = useState(trip.name);
   const [destination, setDestination] = useState(trip.destination ?? "");
   const [startDate, setStartDate] = useState(trip.start_date ?? "");
@@ -235,7 +251,7 @@ export function TripDetail({ trip, reservations, userId }: TripDetailProps) {
           )}
           <span className="flex items-center gap-1.5">
             {reservations.length}{" "}
-            {reservations.length === 1 ? "reservation" : "reservations"}
+            {reservations.length === 1 ? "plan" : "plans"}
           </span>
         </div>
       </header>
@@ -265,7 +281,7 @@ export function TripDetail({ trip, reservations, userId }: TripDetailProps) {
             value="reservations"
             className="text-[11px] font-medium uppercase tracking-[0.12em] data-[state=active]:bg-white"
           >
-            Reservations
+            Plans
           </TabsTrigger>
           <TabsTrigger
             value="share"
@@ -277,17 +293,17 @@ export function TripDetail({ trip, reservations, userId }: TripDetailProps) {
 
         <TabsContent value="itinerary" className="mt-8">
           {reservations.length === 0 ? (
-            <EmptyItinerary onAdd={() => setResFormOpen(true)} />
+            <EmptyItinerary onAdd={openAddPlan} />
           ) : (
             <>
               <div className="flex justify-end mb-4">
                 <Button
                   size="sm"
-                  onClick={() => setResFormOpen(true)}
+                  onClick={openAddPlan}
                   className="bg-tf-ink hover:bg-tf-ink/90 text-white h-9 text-[11px] font-medium tracking-[0.12em] uppercase"
                 >
                   <IoAddOutline className="mr-1.5" style={{ fontSize: 14 }} />
-                  Add reservation
+                  Add a Plan
                 </Button>
               </div>
               <ItineraryDays
@@ -310,7 +326,7 @@ export function TripDetail({ trip, reservations, userId }: TripDetailProps) {
           <ReservationsList
             reservations={reservations}
             tripId={trip.id}
-            onAdd={() => setResFormOpen(true)}
+            onAdd={openAddPlan}
           />
         </TabsContent>
 
@@ -322,12 +338,23 @@ export function TripDetail({ trip, reservations, userId }: TripDetailProps) {
         </TabsContent>
       </Tabs>
 
-      {/* Reservation form dialog */}
+      {/* Plan picker — opens first when Add a Plan is clicked */}
+      <PlanPickerDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onPick={handleTypePicked}
+      />
+
+      {/* Reservation form dialog — opens with the picked type pre-selected */}
       <ReservationFormDialog
         open={resFormOpen}
-        onOpenChange={setResFormOpen}
+        onOpenChange={(o) => {
+          setResFormOpen(o);
+          if (!o) setPickedType(null);
+        }}
         tripId={trip.id}
         userId={userId}
+        initialType={pickedType ?? undefined}
       />
     </div>
   );
@@ -338,11 +365,11 @@ function EmptyItinerary({ onAdd }: { onAdd: () => void }) {
     <div className="tf-card-cream py-16 text-center">
       <p className="micro-label mb-3">Empty itinerary</p>
       <h3 className="font-display text-4xl text-tf-ink mb-3">
-        No reservations yet
+        No plans yet
       </h3>
       <p className="text-sm text-tf-muted mb-6 max-w-md mx-auto">
-        Forward confirmation emails to your Trek Folio address, or add
-        reservations by hand.
+        Forward confirmation emails to your Trek Folio address, or add a
+        plan by hand.
       </p>
       <Button
         size="sm"
@@ -350,7 +377,7 @@ function EmptyItinerary({ onAdd }: { onAdd: () => void }) {
         className="bg-tf-ink hover:bg-tf-ink/90 text-white h-9 text-[11px] font-medium tracking-[0.12em] uppercase"
       >
         <IoAddOutline className="mr-1.5" style={{ fontSize: 14 }} />
-        Add a reservation
+        Add a Plan
       </Button>
     </div>
   );
@@ -413,7 +440,7 @@ function ReservationRow({
   tripId: string;
   showBorder: boolean;
 }) {
-  const typeColorVar = `var(--tf-${res.type.replace("_", "-")})`;
+  const typeColorVar = `var(--tf-${RESERVATION_COLOR_KEY[res.type]})`;
   return (
     <Link
       href={`/trips/${tripId}/reservations/${res.id}`}
@@ -470,7 +497,7 @@ function ReservationsList({
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this reservation?")) return;
+    if (!confirm("Delete this plan?")) return;
     setDeletingId(id);
     try {
       await deleteReservation(supabase, id);
@@ -485,9 +512,9 @@ function ReservationsList({
   if (reservations.length === 0) {
     return (
       <div className="tf-card-cream py-16 text-center">
-        <p className="micro-label mb-3">No reservations</p>
+        <p className="micro-label mb-3">No plans</p>
         <h3 className="font-display text-4xl text-tf-ink mb-6">
-          Add your first reservation
+          Add your first plan
         </h3>
         <Button
           size="sm"
@@ -495,7 +522,7 @@ function ReservationsList({
           className="bg-tf-ink hover:bg-tf-ink/90 text-white h-9 text-[11px] font-medium tracking-[0.12em] uppercase"
         >
           <IoAddOutline className="mr-1.5" style={{ fontSize: 14 }} />
-          Add a reservation
+          Add a Plan
         </Button>
       </div>
     );
@@ -505,7 +532,7 @@ function ReservationsList({
     <>
       <div className="flex items-center justify-between mb-4">
         <span className="micro-label">
-          All reservations · {reservations.length}
+          All plans · {reservations.length}
         </span>
         <Button
           size="sm"
@@ -513,7 +540,7 @@ function ReservationsList({
           className="bg-tf-ink hover:bg-tf-ink/90 text-white h-9 text-[11px] font-medium tracking-[0.12em] uppercase"
         >
           <IoAddOutline className="mr-1.5" style={{ fontSize: 14 }} />
-          Add reservation
+          Add a Plan
         </Button>
       </div>
 

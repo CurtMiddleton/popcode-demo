@@ -37,11 +37,22 @@ import {
 
 const TYPES: ReservationType[] = [
   "flight",
+  "rail",
+  "cruise",
+  "ferry",
+  "transportation",
+  "car_rental",
+  "parking",
   "hotel",
   "restaurant",
   "bar",
   "activity",
-  "car_rental",
+  "tour",
+  "concert",
+  "theater",
+  "meeting",
+  "directions",
+  "note",
 ];
 
 interface ReservationFormDialogProps {
@@ -54,6 +65,11 @@ interface ReservationFormDialogProps {
     flight?: Flight | null;
     hotel?: Hotel | null;
   };
+  /**
+   * Pre-selected type when creating. Set by the plan picker. When provided,
+   * the type Select is hidden and the dialog title uses the type label.
+   */
+  initialType?: ReservationType;
 }
 
 // Convert ISO timestamp → value usable by <input type="datetime-local">
@@ -78,12 +94,22 @@ export function ReservationFormDialog({
   tripId,
   userId,
   existing,
+  initialType,
 }: ReservationFormDialogProps) {
   const router = useRouter();
   const supabase = createClient();
   const isEdit = !!existing;
 
-  const [type, setType] = useState<ReservationType>(existing?.type ?? "flight");
+  const [type, setType] = useState<ReservationType>(
+    existing?.type ?? initialType ?? "flight"
+  );
+
+  // Sync type when initialType changes (picker may pick different type each time)
+  useEffect(() => {
+    if (initialType && !existing) {
+      setType(initialType);
+    }
+  }, [initialType, existing]);
   const [providerName, setProviderName] = useState(
     existing?.provider_name ?? ""
   );
@@ -257,35 +283,39 @@ export function ReservationFormDialog({
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="font-display text-3xl font-normal tracking-tight">
-              {isEdit ? "Edit reservation" : "Add reservation"}
+              {isEdit
+                ? `Edit ${RESERVATION_LABELS[type]}`
+                : `Add ${RESERVATION_LABELS[type]}`}
             </DialogTitle>
             <DialogDescription>
               {isEdit
-                ? "Update this reservation's details."
-                : "Add a new reservation to your trip."}
+                ? "Update this plan's details."
+                : "Add a new plan to your trip."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5 py-6">
-            {/* Type */}
-            <div className="space-y-2">
-              <Label className="micro-label">Type</Label>
-              <Select
-                value={type}
-                onValueChange={(v) => setType(v as ReservationType)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TYPES.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {RESERVATION_LABELS[t]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Type — only shown in edit mode (picker chooses the type on create) */}
+            {isEdit && (
+              <div className="space-y-2">
+                <Label className="micro-label">Type</Label>
+                <Select
+                  value={type}
+                  onValueChange={(v) => setType(v as ReservationType)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {RESERVATION_LABELS[t]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Common: provider name */}
             <div className="space-y-2">

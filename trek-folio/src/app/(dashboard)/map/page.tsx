@@ -10,7 +10,7 @@ export default function MapPage() {
       <PageHeader
         eyebrow="Geographic View"
         title="Map"
-        description="See every reservation and saved place across all your trips."
+        description="See every plan and saved place across all your trips."
       />
       <div className="tf-card-cream h-[calc(100vh-20rem)] flex items-center justify-center">
         <div className="text-center">

@@ -4,7 +4,18 @@ export type ReservationType =
   | "restaurant"
   | "bar"
   | "activity"
-  | "car_rental";
+  | "car_rental"
+  | "concert"
+  | "parking"
+  | "cruise"
+  | "rail"
+  | "ferry"
+  | "theater"
+  | "tour"
+  | "meeting"
+  | "transportation"
+  | "note"
+  | "directions";
 
 export interface User {
   id: string;
@@ -126,21 +137,68 @@ export interface WishlistPlace {
   created_at: string;
 }
 
-// Color mapping for reservation types
-export const RESERVATION_COLORS: Record<ReservationType, string> = {
-  flight: "#3B82F6",     // blue
-  hotel: "#22C55E",      // green
-  restaurant: "#F97316", // orange
-  bar: "#A855F7",        // purple
-  activity: "#EAB308",   // yellow
-  car_rental: "#6B7280", // gray
-};
-
+// User-facing label for each plan type
 export const RESERVATION_LABELS: Record<ReservationType, string> = {
   flight: "Flight",
-  hotel: "Hotel",
+  hotel: "Lodging",
   restaurant: "Restaurant",
   bar: "Bar",
   activity: "Activity",
   car_rental: "Car Rental",
+  concert: "Concert",
+  parking: "Parking",
+  cruise: "Cruise",
+  rail: "Rail",
+  ferry: "Ferry",
+  theater: "Theater",
+  tour: "Tour",
+  meeting: "Meeting",
+  transportation: "Transportation",
+  note: "Note",
+  directions: "Directions",
+};
+
+// One-line subtitle shown in the plan picker tile under the label
+export const RESERVATION_SUBTITLES: Record<ReservationType, string> = {
+  flight: "Air travel with flight number",
+  hotel: "Hotel, B&B, Airbnb",
+  restaurant: "Dining reservation",
+  bar: "Bar, cocktail spot",
+  activity: "Tickets, excursions",
+  car_rental: "Car hire pickup & drop-off",
+  concert: "Live music, festival",
+  parking: "Garage, lot reservation",
+  cruise: "Multi-day boat trip",
+  rail: "Train, metro, Eurostar",
+  ferry: "Point-to-point ferry",
+  theater: "Show, play, opera",
+  tour: "Guided tour, walking tour",
+  meeting: "Business meeting, appointment",
+  transportation: "Bus, shuttle, transfer",
+  note: "Free-form note",
+  directions: "Route between two places",
+};
+
+// Map each plan type to one of the design-system color slots
+export const RESERVATION_COLOR_KEY: Record<
+  ReservationType,
+  "flight" | "hotel" | "restaurant" | "bar" | "activity" | "car" | "note"
+> = {
+  flight: "flight",
+  hotel: "hotel",
+  restaurant: "restaurant",
+  bar: "bar",
+  activity: "activity",
+  car_rental: "car",
+  concert: "bar",
+  parking: "car",
+  cruise: "hotel",
+  rail: "flight",
+  ferry: "hotel",
+  theater: "bar",
+  tour: "activity",
+  meeting: "car",
+  transportation: "flight",
+  note: "note",
+  directions: "note",
 };

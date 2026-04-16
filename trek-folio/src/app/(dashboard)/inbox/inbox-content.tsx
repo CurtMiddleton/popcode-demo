@@ -77,7 +77,7 @@ export function InboxContent({
         </div>
         <p className="text-[12px] text-tf-muted font-light mb-4 max-w-xl">
           Forward any booking confirmation email here and we&apos;ll parse it
-          with AI, then add the reservation to the matching trip automatically.
+          with AI, then add the plan to the matching trip automatically.
         </p>
         {forwardingEmail ? (
           <div className="flex items-center gap-2 max-w-md">
