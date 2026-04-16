@@ -1,23 +1,44 @@
-import { PageHeader } from "@/components/page-header";
+import { createClient } from "@/lib/supabase/server";
+import { InboxContent } from "./inbox-content";
+import type { Reservation, Trip } from "@/lib/types";
 
 export const metadata = {
   title: "Inbox — Trek Folio",
 };
 
-export default function InboxPage() {
+export default async function InboxPage() {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: profile } = await supabase
+    .from("users")
+    .select("forwarding_alias")
+    .eq("id", user!.id)
+    .single();
+
+  // All email-parsed reservations for this user, newest first
+  const { data: reservations } = await supabase
+    .from("reservations")
+    .select("*")
+    .eq("user_id", user!.id)
+    .not("raw_email_body", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  // Trips the user can assign orphan reservations to
+  const { data: trips } = await supabase
+    .from("trips")
+    .select("*")
+    .eq("user_id", user!.id)
+    .order("start_date", { ascending: false });
+
   return (
-    <div className="max-w-5xl mx-auto">
-      <PageHeader eyebrow="Reservations" title="Inbox" />
-      <div className="tf-card-cream p-16 text-center">
-        <p className="micro-label mb-3">Empty</p>
-        <h2 className="font-display text-5xl text-tf-ink mb-4">
-          No emails yet
-        </h2>
-        <p className="text-sm text-tf-muted max-w-md mx-auto">
-          Forward your booking confirmation emails to your Trek Folio
-          address. Check your Settings page for your forwarding email.
-        </p>
-      </div>
-    </div>
+    <InboxContent
+      reservations={(reservations ?? []) as Reservation[]}
+      trips={(trips ?? []) as Trip[]}
+      forwardingAlias={profile?.forwarding_alias ?? null}
+    />
   );
 }
