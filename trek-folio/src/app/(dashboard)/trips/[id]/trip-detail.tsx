@@ -11,6 +11,7 @@ import {
   IoLocationOutline,
   IoCalendarOutline,
   IoAddOutline,
+  IoChevronForwardOutline,
 } from "react-icons/io5";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -28,26 +29,31 @@ import {
 } from "@/components/ui/dialog";
 import { IconTile } from "@/components/icon-tile";
 import { TypePill } from "@/components/type-pill";
+import { ReservationFormDialog } from "@/components/reservation-form-dialog";
+import { deleteReservation } from "@/lib/reservations";
 import { cn } from "@/lib/utils";
+import { RESERVATION_LABELS } from "@/lib/types";
 import type { Trip, Reservation } from "@/lib/types";
 
 interface TripDetailProps {
   trip: Trip;
   reservations: Reservation[];
+  userId: string;
 }
 
-export function TripDetail({ trip, reservations }: TripDetailProps) {
+export function TripDetail({ trip, reservations, userId }: TripDetailProps) {
   const router = useRouter();
   const supabase = createClient();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [resFormOpen, setResFormOpen] = useState(false);
   const [name, setName] = useState(trip.name);
   const [destination, setDestination] = useState(trip.destination ?? "");
   const [startDate, setStartDate] = useState(trip.start_date ?? "");
   const [endDate, setEndDate] = useState(trip.end_date ?? "");
   const [saving, setSaving] = useState(false);
 
-  // Group reservations by day
+  // Group reservations by day (scheduled vs unscheduled)
   const reservationsByDay = useMemo(() => {
     const groups = new Map<string, Reservation[]>();
     for (const res of reservations) {
@@ -227,6 +233,10 @@ export function TripDetail({ trip, reservations }: TripDetailProps) {
                 ` — ${format(parseISO(trip.end_date), "MMM d, yyyy")}`}
             </span>
           )}
+          <span className="flex items-center gap-1.5">
+            {reservations.length}{" "}
+            {reservations.length === 1 ? "reservation" : "reservations"}
+          </span>
         </div>
       </header>
 
@@ -267,24 +277,43 @@ export function TripDetail({ trip, reservations }: TripDetailProps) {
 
         <TabsContent value="itinerary" className="mt-8">
           {reservations.length === 0 ? (
-            <EmptyItinerary />
+            <EmptyItinerary onAdd={() => setResFormOpen(true)} />
           ) : (
-            <ItineraryDays groups={reservationsByDay} />
+            <>
+              <div className="flex justify-end mb-4">
+                <Button
+                  size="sm"
+                  onClick={() => setResFormOpen(true)}
+                  className="bg-tf-ink hover:bg-tf-ink/90 text-white h-9 text-[11px] font-medium tracking-[0.12em] uppercase"
+                >
+                  <IoAddOutline className="mr-1.5" style={{ fontSize: 14 }} />
+                  Add reservation
+                </Button>
+              </div>
+              <ItineraryDays
+                groups={reservationsByDay}
+                tripId={trip.id}
+              />
+            </>
           )}
         </TabsContent>
 
         <TabsContent value="map" className="mt-8">
           <Placeholder title="Map view" subtitle="Coming in Phase 5" />
         </TabsContent>
+
         <TabsContent value="photos" className="mt-8">
           <Placeholder title="Photo gallery" subtitle="Coming in Phase 6" />
         </TabsContent>
+
         <TabsContent value="reservations" className="mt-8">
-          <Placeholder
-            title="Reservation management"
-            subtitle="Coming in Phase 3"
+          <ReservationsList
+            reservations={reservations}
+            tripId={trip.id}
+            onAdd={() => setResFormOpen(true)}
           />
         </TabsContent>
+
         <TabsContent value="share" className="mt-8">
           <Placeholder
             title="Sharing & collaboration"
@@ -292,11 +321,19 @@ export function TripDetail({ trip, reservations }: TripDetailProps) {
           />
         </TabsContent>
       </Tabs>
+
+      {/* Reservation form dialog */}
+      <ReservationFormDialog
+        open={resFormOpen}
+        onOpenChange={setResFormOpen}
+        tripId={trip.id}
+        userId={userId}
+      />
     </div>
   );
 }
 
-function EmptyItinerary() {
+function EmptyItinerary({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="tf-card-cream py-16 text-center">
       <p className="micro-label mb-3">Empty itinerary</p>
@@ -308,9 +345,9 @@ function EmptyItinerary() {
         reservations by hand.
       </p>
       <Button
-        variant="outline"
         size="sm"
-        className="h-9 border-tf-border-secondary text-tf-ink"
+        onClick={onAdd}
+        className="bg-tf-ink hover:bg-tf-ink/90 text-white h-9 text-[11px] font-medium tracking-[0.12em] uppercase"
       >
         <IoAddOutline className="mr-1.5" style={{ fontSize: 14 }} />
         Add a reservation
@@ -321,8 +358,10 @@ function EmptyItinerary() {
 
 function ItineraryDays({
   groups,
+  tripId,
 }: {
   groups: [string, Reservation[]][];
+  tripId: string;
 }) {
   return (
     <div className="tf-card overflow-hidden">
@@ -331,7 +370,7 @@ function ItineraryDays({
           key={dayKey}
           className={cn(idx > 0 && "border-t border-tf-border-tertiary")}
         >
-          {/* Day header */}
+          {/* Day header — THE one place italic serif appears */}
           <div className="flex items-baseline justify-between px-6 py-4 border-b border-tf-border-tertiary">
             <div className="flex items-baseline gap-3">
               <h3 className="font-display-italic text-[26px] text-tf-ink">
@@ -355,6 +394,7 @@ function ItineraryDays({
             <ReservationRow
               key={res.id}
               res={res}
+              tripId={tripId}
               showBorder={rowIdx < items.length - 1}
             />
           ))}
@@ -366,15 +406,19 @@ function ItineraryDays({
 
 function ReservationRow({
   res,
+  tripId,
   showBorder,
 }: {
   res: Reservation;
+  tripId: string;
   showBorder: boolean;
 }) {
+  const typeColorVar = `var(--tf-${res.type.replace("_", "-")})`;
   return (
-    <div
+    <Link
+      href={`/trips/${tripId}/reservations/${res.id}`}
       className={cn(
-        "flex items-center gap-4 px-6 py-4 bg-white hover:bg-tf-cream/50 transition-colors",
+        "flex items-center gap-4 px-6 py-4 bg-white hover:bg-tf-cream/50 transition-colors group",
         showBorder && "border-b border-tf-border-tertiary"
       )}
     >
@@ -383,15 +427,13 @@ function ReservationRow({
         {res.start_datetime && (
           <p
             className="micro-label mb-0.5"
-            style={{
-              color: `var(--tf-${res.type.replace("_", "-")})`,
-            }}
+            style={{ color: typeColorVar }}
           >
             {format(parseISO(res.start_datetime), "h:mm a")}
           </p>
         )}
         <p className="font-display-roman text-[16px] text-tf-ink truncate">
-          {res.provider_name ?? "Untitled"}
+          {res.provider_name ?? RESERVATION_LABELS[res.type]}
         </p>
         {(res.address || res.confirmation_number) && (
           <p className="text-[10px] font-light text-tf-muted truncate mt-0.5">
@@ -406,7 +448,120 @@ function ReservationRow({
         )}
       </div>
       <TypePill type={res.type} />
-    </div>
+      <IoChevronForwardOutline
+        className="text-tf-muted opacity-0 group-hover:opacity-100 transition-opacity"
+        style={{ fontSize: 14 }}
+      />
+    </Link>
+  );
+}
+
+function ReservationsList({
+  reservations,
+  tripId,
+  onAdd,
+}: {
+  reservations: Reservation[];
+  tripId: string;
+  onAdd: () => void;
+}) {
+  const router = useRouter();
+  const supabase = createClient();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this reservation?")) return;
+    setDeletingId(id);
+    try {
+      await deleteReservation(supabase, id);
+      router.refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  if (reservations.length === 0) {
+    return (
+      <div className="tf-card-cream py-16 text-center">
+        <p className="micro-label mb-3">No reservations</p>
+        <h3 className="font-display text-4xl text-tf-ink mb-6">
+          Add your first reservation
+        </h3>
+        <Button
+          size="sm"
+          onClick={onAdd}
+          className="bg-tf-ink hover:bg-tf-ink/90 text-white h-9 text-[11px] font-medium tracking-[0.12em] uppercase"
+        >
+          <IoAddOutline className="mr-1.5" style={{ fontSize: 14 }} />
+          Add a reservation
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-4">
+        <span className="micro-label">
+          All reservations · {reservations.length}
+        </span>
+        <Button
+          size="sm"
+          onClick={onAdd}
+          className="bg-tf-ink hover:bg-tf-ink/90 text-white h-9 text-[11px] font-medium tracking-[0.12em] uppercase"
+        >
+          <IoAddOutline className="mr-1.5" style={{ fontSize: 14 }} />
+          Add reservation
+        </Button>
+      </div>
+
+      <div className="tf-card overflow-hidden">
+        {reservations.map((res, idx) => (
+          <div
+            key={res.id}
+            className={cn(
+              "flex items-center gap-4 px-6 py-4 bg-white group",
+              idx < reservations.length - 1 &&
+                "border-b border-tf-border-tertiary"
+            )}
+          >
+            <IconTile type={res.type} size="sm" />
+            <Link
+              href={`/trips/${tripId}/reservations/${res.id}`}
+              className="flex-1 min-w-0 hover:opacity-70 transition-opacity"
+            >
+              <p className="font-display-roman text-[16px] text-tf-ink truncate">
+                {res.provider_name ?? RESERVATION_LABELS[res.type]}
+              </p>
+              <p className="text-[10px] font-light text-tf-muted truncate mt-0.5">
+                {res.start_datetime
+                  ? format(parseISO(res.start_datetime), "MMM d, yyyy · h:mm a")
+                  : "Unscheduled"}
+                {res.confirmation_number && (
+                  <>
+                    {" · "}
+                    <span className="font-mono">
+                      {res.confirmation_number}
+                    </span>
+                  </>
+                )}
+              </p>
+            </Link>
+            <TypePill type={res.type} />
+            <button
+              onClick={() => handleDelete(res.id)}
+              disabled={deletingId === res.id}
+              className="w-8 h-8 flex items-center justify-center rounded-md text-tf-muted hover:text-destructive hover:bg-destructive/5 transition-colors disabled:opacity-50"
+              aria-label="Delete reservation"
+            >
+              <IoTrashOutline style={{ fontSize: 14 }} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
