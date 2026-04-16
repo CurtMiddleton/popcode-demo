@@ -56,7 +56,18 @@ export function InboxContent({
 
   return (
     <div className="max-w-5xl mx-auto">
-      <PageHeader eyebrow="Reservations" title="Inbox" />
+      <PageHeader
+        eyebrow="Reservations"
+        title="Inbox"
+        action={
+          <Link
+            href="/inbox/dev"
+            className="text-[11px] font-medium uppercase tracking-[0.12em] text-tf-muted hover:text-tf-ink"
+          >
+            Test parser →
+          </Link>
+        }
+      />
 
       {/* Forwarding email banner */}
       <section className="tf-card-cream p-6 mb-8">
