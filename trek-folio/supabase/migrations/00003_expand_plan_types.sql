@@ -6,17 +6,17 @@
 -- transaction block. Run each statement separately if your migration
 -- runner wraps in transactions. In Supabase SQL Editor it works fine.
 
-alter type reservation_type add value if not exists 'concert';
-alter type reservation_type add value if not exists 'parking';
-alter type reservation_type add value if not exists 'cruise';
-alter type reservation_type add value if not exists 'rail';
-alter type reservation_type add value if not exists 'ferry';
-alter type reservation_type add value if not exists 'theater';
-alter type reservation_type add value if not exists 'tour';
-alter type reservation_type add value if not exists 'meeting';
-alter type reservation_type add value if not exists 'transportation';
-alter type reservation_type add value if not exists 'note';
-alter type reservation_type add value if not exists 'directions';
+alter type public.reservation_type add value if not exists 'concert';
+alter type public.reservation_type add value if not exists 'parking';
+alter type public.reservation_type add value if not exists 'cruise';
+alter type public.reservation_type add value if not exists 'rail';
+alter type public.reservation_type add value if not exists 'ferry';
+alter type public.reservation_type add value if not exists 'theater';
+alter type public.reservation_type add value if not exists 'tour';
+alter type public.reservation_type add value if not exists 'meeting';
+alter type public.reservation_type add value if not exists 'transportation';
+alter type public.reservation_type add value if not exists 'note';
+alter type public.reservation_type add value if not exists 'directions';
 
 -- Note: type-specific columns continue to live in the existing
 -- `flights` and `hotels` sub-tables. For the new types we use the
