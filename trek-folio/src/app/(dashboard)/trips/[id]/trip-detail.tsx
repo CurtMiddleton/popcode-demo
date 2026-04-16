@@ -120,7 +120,7 @@ export function TripDetail({ trip, reservations }: TripDetailProps) {
                 <DialogContent>
                   <form onSubmit={handleUpdate}>
                     <DialogHeader>
-                      <DialogTitle className="font-display text-3xl not-italic font-normal tracking-tight">
+                      <DialogTitle className="font-display text-3xl font-normal tracking-tight">
                         Edit trip
                       </DialogTitle>
                       <DialogDescription>
@@ -186,7 +186,7 @@ export function TripDetail({ trip, reservations }: TripDetailProps) {
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle className="font-display text-3xl not-italic font-normal tracking-tight">
+                    <DialogTitle className="font-display text-3xl font-normal tracking-tight">
                       Delete trip
                     </DialogTitle>
                     <DialogDescription>
@@ -334,7 +334,7 @@ function ItineraryDays({
           {/* Day header */}
           <div className="flex items-baseline justify-between px-6 py-4 border-b border-tf-border-tertiary">
             <div className="flex items-baseline gap-3">
-              <h3 className="font-display-roman text-[22px] text-tf-ink tracking-tight">
+              <h3 className="font-display-italic text-[26px] text-tf-ink">
                 {dayKey === "unscheduled"
                   ? "Unscheduled"
                   : format(parseISO(dayKey), "EEEE, MMMM d")}

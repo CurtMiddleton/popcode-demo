@@ -53,7 +53,7 @@ export default async function LandingPage() {
         <h1 className="font-display text-[72px] md:text-[120px] text-tf-ink leading-[0.92] tracking-[-0.03em] mb-8 max-w-4xl">
           Your entire trip,
           <br />
-          <span className="font-display-roman">one place.</span>
+          one place.
         </h1>
         <div className="pb-6 editorial-rule max-w-3xl">
           <p className="text-lg md:text-xl text-tf-muted font-light max-w-2xl leading-relaxed">

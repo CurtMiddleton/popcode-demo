@@ -92,7 +92,7 @@ export function TripsContent({ initialTrips, userId }: TripsContentProps) {
             <DialogContent>
               <form onSubmit={handleCreateTrip}>
                 <DialogHeader>
-                  <DialogTitle className="font-display text-3xl not-italic font-normal tracking-tight">
+                  <DialogTitle className="font-display text-3xl font-normal tracking-tight">
                     Create a new trip
                   </DialogTitle>
                   <DialogDescription>

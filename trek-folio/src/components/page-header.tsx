@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 interface PageHeaderProps {
   /** Micro label shown above the title (9px uppercase spaced) */
   eyebrow?: string;
-  /** Main page title — rendered in large italic serif */
+  /** Main page title — rendered in large Cormorant Garamond Light roman */
   title: string;
   /** Optional supporting text below the title */
   description?: string;
@@ -15,7 +15,7 @@ interface PageHeaderProps {
 }
 
 /**
- * Editorial page header: micro-label eyebrow → large italic serif title
+ * Editorial page header: micro-label eyebrow → large serif title (roman)
  * → 1.5px ink rule beneath. Optional right-aligned action.
  */
 export function PageHeader({
