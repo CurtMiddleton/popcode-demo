@@ -13,6 +13,9 @@ export interface ReservationInput {
   start_datetime?: string | null;
   end_datetime?: string | null;
   address?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  google_place_id?: string | null;
   price?: number | null;
   currency?: string | null;
   notes?: string | null;
@@ -74,6 +77,9 @@ export async function createReservation(
         start_datetime: common.start_datetime ?? null,
         end_datetime: common.end_datetime ?? null,
         address: common.address ?? null,
+        lat: common.lat ?? null,
+        lng: common.lng ?? null,
+        google_place_id: common.google_place_id ?? null,
         price: common.price ?? null,
         currency: common.currency ?? null,
         notes: common.notes ?? null,
@@ -141,6 +147,9 @@ export async function updateReservation(
         start_datetime: input.start_datetime ?? null,
         end_datetime: input.end_datetime ?? null,
         address: input.address ?? null,
+        lat: input.lat ?? null,
+        lng: input.lng ?? null,
+        google_place_id: input.google_place_id ?? null,
         price: input.price ?? null,
         currency: input.currency ?? null,
         notes: input.notes ?? null,

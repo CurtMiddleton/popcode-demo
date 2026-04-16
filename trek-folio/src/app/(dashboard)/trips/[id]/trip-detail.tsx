@@ -31,6 +31,7 @@ import { IconTile } from "@/components/icon-tile";
 import { TypePill } from "@/components/type-pill";
 import { ReservationFormDialog } from "@/components/reservation-form-dialog";
 import { PlanPickerDialog } from "@/components/plan-picker-dialog";
+import { TripMap } from "@/components/trip-map";
 import { deleteReservation } from "@/lib/reservations";
 import { cn } from "@/lib/utils";
 import {
@@ -54,6 +55,7 @@ export function TripDetail({ trip, reservations, userId }: TripDetailProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [resFormOpen, setResFormOpen] = useState(false);
   const [pickedType, setPickedType] = useState<ReservationType | null>(null);
+  const [tab, setTab] = useState("itinerary");
 
   function openAddPlan() {
     setPickerOpen(true);
@@ -257,7 +259,7 @@ export function TripDetail({ trip, reservations, userId }: TripDetailProps) {
       </header>
 
       {/* Tabs */}
-      <Tabs defaultValue="itinerary">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="bg-tf-cream border border-tf-cream-border h-10 rounded-[10px] p-1">
           <TabsTrigger
             value="itinerary"
@@ -315,7 +317,19 @@ export function TripDetail({ trip, reservations, userId }: TripDetailProps) {
         </TabsContent>
 
         <TabsContent value="map" className="mt-8">
-          <Placeholder title="Map view" subtitle="Coming in Phase 5" />
+          <TripMap
+            reservations={reservations}
+            onPinClick={(id) => {
+              setTab("itinerary");
+              // Give the itinerary tab content a tick to render before scrolling.
+              requestAnimationFrame(() => {
+                document.getElementById(`res-${id}`)?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "center",
+                });
+              });
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="photos" className="mt-8">
@@ -443,9 +457,10 @@ function ReservationRow({
   const typeColorVar = `var(--tf-${RESERVATION_COLOR_KEY[res.type]})`;
   return (
     <Link
+      id={`res-${res.id}`}
       href={`/trips/${tripId}/reservations/${res.id}`}
       className={cn(
-        "flex items-center gap-4 px-6 py-4 bg-white hover:bg-tf-cream/50 transition-colors group",
+        "flex items-center gap-4 px-6 py-4 bg-white hover:bg-tf-cream/50 transition-colors group scroll-mt-24",
         showBorder && "border-b border-tf-border-tertiary"
       )}
     >

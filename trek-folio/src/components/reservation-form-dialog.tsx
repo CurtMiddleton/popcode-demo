@@ -27,6 +27,7 @@ import {
   updateReservation,
   type ReservationInput,
 } from "@/lib/reservations";
+import { geocodeAddress } from "@/lib/google-maps";
 import {
   RESERVATION_LABELS,
   type ReservationType,
@@ -207,6 +208,27 @@ export function ReservationFormDialog({
     setError(null);
     setSaving(true);
 
+    // Geocode the address (hotel-specific field takes precedence over generic)
+    // so the plan can be pinned on the map. Fail silently — a missing pin is
+    // far better than a blocked save.
+    const addressToGeocode =
+      type === "hotel" ? hotelAddress || address : address;
+    let geo: { lat: number; lng: number; placeId: string | null } | null = null;
+    const prevGeoMatches =
+      isEdit &&
+      existing &&
+      existing.address === addressToGeocode &&
+      existing.lat != null &&
+      existing.lng != null;
+    if (addressToGeocode && !prevGeoMatches) {
+      try {
+        const result = await geocodeAddress(addressToGeocode);
+        if (result) geo = result;
+      } catch {
+        // Non-fatal — continue without coordinates.
+      }
+    }
+
     const input: ReservationInput = {
       trip_id: tripId,
       user_id: userId,
@@ -218,6 +240,10 @@ export function ReservationFormDialog({
       end_datetime:
         type === "flight" ? fromLocalInput(arrive) : fromLocalInput(endDt),
       address: address || null,
+      lat: geo?.lat ?? (prevGeoMatches ? existing!.lat : null),
+      lng: geo?.lng ?? (prevGeoMatches ? existing!.lng : null),
+      google_place_id:
+        geo?.placeId ?? (prevGeoMatches ? existing!.google_place_id : null),
       price: price ? parseFloat(price) : null,
       currency: currency || null,
       notes: notes || null,
