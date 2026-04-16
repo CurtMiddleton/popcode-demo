@@ -21,9 +21,6 @@ export async function generateMetadata({ params }: TripPageProps) {
 
 export default async function TripPage({ params }: TripPageProps) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const { data: trip } = await supabase
     .from("trips")
@@ -42,11 +39,5 @@ export default async function TripPage({ params }: TripPageProps) {
     .eq("trip_id", params.id)
     .order("start_datetime", { ascending: true });
 
-  return (
-    <TripDetail
-      trip={trip}
-      reservations={reservations ?? []}
-      userId={user!.id}
-    />
-  );
+  return <TripDetail trip={trip} reservations={reservations ?? []} />;
 }

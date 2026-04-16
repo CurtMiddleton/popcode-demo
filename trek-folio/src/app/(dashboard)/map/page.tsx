@@ -1,4 +1,4 @@
-import { Map } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 
 export const metadata = {
   title: "Map — Trek Folio",
@@ -7,15 +7,17 @@ export const metadata = {
 export default function MapPage() {
   return (
     <div className="max-w-6xl mx-auto">
-      <h1 className="text-3xl font-bold mb-2">Map</h1>
-      <p className="text-muted-foreground mb-8">
-        See all your reservations and saved places on a map
-      </p>
-      <div className="rounded-lg border bg-muted/50 h-[calc(100vh-16rem)] flex items-center justify-center">
-        <div className="text-center text-muted-foreground">
-          <Map className="h-16 w-16 mx-auto mb-3 opacity-30" />
-          <p className="font-medium text-lg">Interactive map</p>
-          <p className="text-sm">Coming in Phase 5</p>
+      <PageHeader
+        eyebrow="Geographic View"
+        title="Map"
+        description="See every reservation and saved place across all your trips."
+      />
+      <div className="tf-card-cream h-[calc(100vh-20rem)] flex items-center justify-center">
+        <div className="text-center">
+          <p className="micro-label mb-3">Coming in Phase 5</p>
+          <h3 className="font-display text-5xl text-tf-ink">
+            Interactive map
+          </h3>
         </div>
       </div>
     </div>

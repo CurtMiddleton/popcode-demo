@@ -17,11 +17,21 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
+  const { data: profile } = await supabase
+    .from("users")
+    .select("name, avatar_url")
+    .eq("id", user.id)
+    .single();
+
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:pl-0">
-        <div className="p-6 lg:p-8 pt-16 lg:pt-8">{children}</div>
+    <div className="min-h-screen bg-white">
+      <Sidebar
+        userEmail={user.email ?? ""}
+        userName={profile?.name ?? null}
+        avatarUrl={profile?.avatar_url ?? null}
+      />
+      <main className="md:pl-[52px]">
+        <div className="px-7 py-9 md:px-9 pt-20 md:pt-9">{children}</div>
       </main>
       <Toaster />
     </div>

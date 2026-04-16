@@ -2,27 +2,19 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { IoMailOutline, IoCopyOutline, IoCheckmarkOutline } from "react-icons/io5";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import {
   Avatar,
   AvatarFallback,
   AvatarImage,
 } from "@/components/ui/avatar";
+import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
 import type { User } from "@/lib/types";
-import { Mail, Copy, Check } from "lucide-react";
 
 interface ProfileFormProps {
   profile: User | null;
@@ -45,7 +37,6 @@ export function ProfileForm({ profile, userEmail }: ProfileFormProps) {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-
     const { error } = await supabase
       .from("users")
       .update({
@@ -53,7 +44,6 @@ export function ProfileForm({ profile, userEmail }: ProfileFormProps) {
         home_city: homeCity || null,
       })
       .eq("id", profile!.id);
-
     setSaving(false);
 
     if (error) {
@@ -64,7 +54,6 @@ export function ProfileForm({ profile, userEmail }: ProfileFormProps) {
       });
       return;
     }
-
     toast({ title: "Profile updated" });
     router.refresh();
   }
@@ -78,115 +67,128 @@ export function ProfileForm({ profile, userEmail }: ProfileFormProps) {
   }
 
   const initials = (name || userEmail || "U")
-    .split(" ")
+    .split(/[\s@]/)
+    .filter(Boolean)
     .map((n) => n[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
 
   return (
-    <div className="space-y-6">
-      {/* Profile card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Profile</CardTitle>
-          <CardDescription>
-            Your personal information and preferences
-          </CardDescription>
-        </CardHeader>
-        <form onSubmit={handleSave}>
-          <CardContent className="space-y-6">
-            {/* Avatar */}
-            <div className="flex items-center gap-4">
-              <Avatar className="h-16 w-16">
-                <AvatarImage src={profile?.avatar_url ?? undefined} />
-                <AvatarFallback className="text-lg">{initials}</AvatarFallback>
-              </Avatar>
-              <div>
-                <p className="font-medium">{name || "Your name"}</p>
-                <p className="text-sm text-muted-foreground">{userEmail}</p>
-              </div>
-            </div>
+    <div className="max-w-3xl mx-auto">
+      <PageHeader eyebrow="Account" title="Settings" />
 
-            <Separator />
+      {/* Profile card (cream) */}
+      <section className="tf-card-cream p-8 mb-6">
+        <p className="micro-label mb-5">Profile</p>
 
-            {/* Name */}
-            <div className="space-y-2">
-              <Label htmlFor="name">Full name</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Jane Doe"
-              />
-            </div>
-
-            {/* Email (read-only) */}
-            <div className="space-y-2">
-              <Label>Email</Label>
-              <Input value={userEmail} disabled />
-              <p className="text-xs text-muted-foreground">
-                Managed by your auth provider
-              </p>
-            </div>
-
-            {/* Home city */}
-            <div className="space-y-2">
-              <Label htmlFor="home-city">Home city</Label>
-              <Input
-                id="home-city"
-                value={homeCity}
-                onChange={(e) => setHomeCity(e.target.value)}
-                placeholder="San Francisco, CA"
-              />
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" disabled={saving}>
-              {saving ? "Saving..." : "Save changes"}
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
-
-      {/* Email forwarding card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Mail className="h-5 w-5" />
-            Reservation Email
-          </CardTitle>
-          <CardDescription>
-            Forward booking confirmations to this address to automatically add
-            them to your trips
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {forwardingEmail ? (
-            <div className="flex items-center gap-2">
-              <code className="flex-1 px-3 py-2 bg-muted rounded-md text-sm font-mono">
-                {forwardingEmail}
-              </code>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={copyForwardingEmail}
-              >
-                {copied ? (
-                  <Check className="h-4 w-4 text-green-500" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Your forwarding address will appear here once your profile is
-              created.
+        <div className="flex items-center gap-5 mb-8">
+          <Avatar className="w-16 h-16 border border-tf-border-secondary">
+            <AvatarImage src={profile?.avatar_url ?? undefined} />
+            <AvatarFallback className="text-base font-medium bg-white">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <p className="font-display-roman text-[22px] text-tf-ink">
+              {name || "Your name"}
             </p>
-          )}
-        </CardContent>
-      </Card>
+            <p className="text-[11px] text-tf-muted font-light">{userEmail}</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSave} className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="name" className="micro-label">
+              Full name
+            </Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Jane Doe"
+              className="bg-white border-tf-cream-border"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="micro-label">Email</Label>
+            <Input
+              value={userEmail}
+              disabled
+              className="bg-white/70 border-tf-cream-border"
+            />
+            <p className="text-[10px] text-tf-muted font-light">
+              Managed by your auth provider
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="home-city" className="micro-label">
+              Home city
+            </Label>
+            <Input
+              id="home-city"
+              value={homeCity}
+              onChange={(e) => setHomeCity(e.target.value)}
+              placeholder="San Francisco, CA"
+              className="bg-white border-tf-cream-border"
+            />
+          </div>
+          <div className="pt-2">
+            <Button
+              type="submit"
+              disabled={saving}
+              className="bg-tf-ink hover:bg-tf-ink/90 text-white h-9 px-5 text-xs font-medium tracking-wider uppercase"
+            >
+              {saving ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
+        </form>
+      </section>
+
+      {/* Forwarding email card (white) */}
+      <section className="tf-card p-8">
+        <div className="flex items-center gap-2 mb-3">
+          <IoMailOutline className="text-tf-ink" style={{ fontSize: 16 }} />
+          <p className="micro-label">Reservation Email</p>
+        </div>
+        <h3 className="font-display-roman text-[22px] text-tf-ink mb-2">
+          Forward bookings to this address
+        </h3>
+        <p className="text-[12px] text-tf-muted font-light mb-5 max-w-lg">
+          Any confirmation email you forward here will be parsed by AI and
+          automatically added to the matching trip.
+        </p>
+        {forwardingEmail ? (
+          <div className="flex items-center gap-2">
+            <code className="flex-1 px-4 py-3 bg-tf-cream rounded-[10px] text-[13px] font-mono border border-tf-cream-border">
+              {forwardingEmail}
+            </code>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={copyForwardingEmail}
+              className="h-11 w-11 border-tf-border-tertiary"
+            >
+              {copied ? (
+                <IoCheckmarkOutline
+                  className="text-tf-activity"
+                  style={{ fontSize: 18 }}
+                />
+              ) : (
+                <IoCopyOutline
+                  className="text-tf-ink"
+                  style={{ fontSize: 16 }}
+                />
+              )}
+            </Button>
+          </div>
+        ) : (
+          <p className="text-[12px] text-tf-muted">
+            Your forwarding address will appear here once your profile is
+            created.
+          </p>
+        )}
+      </section>
     </div>
   );
 }

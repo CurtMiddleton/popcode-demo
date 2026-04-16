@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import {
+  IoAirplaneOutline,
+  IoMapOutline,
+  IoImagesOutline,
+  IoMailOutline,
+} from "react-icons/io5";
+import type { IconType } from "react-icons";
+import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
-import { Button } from "@/components/ui/button";
-import { Plane, Map, Camera, Inbox } from "lucide-react";
 
 export default async function LandingPage() {
   const supabase = createClient();
@@ -17,83 +23,119 @@ export default async function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-white">
+      {/* Top nav */}
+      <nav className="max-w-6xl mx-auto px-6 md:px-9 py-6 flex items-center justify-between">
+        <Link
+          href="/"
+          className="font-display text-[18px] text-tf-ink tracking-[0.08em]"
+        >
+          TREK FOLIO
+        </Link>
+        <div className="flex items-center gap-4">
+          <Link
+            href="/login"
+            className="text-[11px] font-medium uppercase tracking-[0.12em] text-tf-muted hover:text-tf-ink"
+          >
+            Sign in
+          </Link>
+          <Link href="/signup">
+            <Button className="bg-tf-ink hover:bg-tf-ink/90 text-white h-9 px-5 text-[11px] font-medium tracking-[0.12em] uppercase">
+              Get started
+            </Button>
+          </Link>
+        </div>
+      </nav>
+
       {/* Hero */}
-      <div className="max-w-6xl mx-auto px-6 pt-20 pb-16">
-        <nav className="flex items-center justify-between mb-20">
-          <div className="flex items-center gap-2">
-            <Plane className="h-7 w-7 text-primary" />
-            <span className="text-xl font-bold">Trek Folio</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link href="/login">
-              <Button variant="ghost">Sign in</Button>
-            </Link>
-            <Link href="/signup">
-              <Button>Get started</Button>
-            </Link>
-          </div>
-        </nav>
-
-        <div className="text-center max-w-3xl mx-auto">
-          <h1 className="text-5xl sm:text-6xl font-bold tracking-tight mb-6">
-            Your entire trip,{" "}
-            <span className="text-primary">one place</span>
-          </h1>
-          <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
-            Itineraries, reservations, photos, and maps — everything you need
-            for every trip, organized beautifully.
+      <section className="max-w-6xl mx-auto px-6 md:px-9 pt-16 pb-20">
+        <p className="micro-label mb-6">A travel hub for the curious</p>
+        <h1 className="font-display text-[72px] md:text-[120px] text-tf-ink leading-[0.92] tracking-[-0.03em] mb-8 max-w-4xl">
+          Your entire trip,
+          <br />
+          <span className="font-display-roman">one place.</span>
+        </h1>
+        <div className="pb-6 editorial-rule max-w-3xl">
+          <p className="text-lg md:text-xl text-tf-muted font-light max-w-2xl leading-relaxed">
+            Itineraries, reservations, photos, and maps. Everything you need
+            for every trip, organized with the care of a travel magazine.
           </p>
-          <div className="flex items-center justify-center gap-4">
-            <Link href="/signup">
-              <Button size="lg" className="text-base px-8">
-                Start free
-              </Button>
-            </Link>
-          </div>
         </div>
+        <div className="flex items-center gap-4 mt-8">
+          <Link href="/signup">
+            <Button className="bg-tf-ink hover:bg-tf-ink/90 text-white h-11 px-8 text-[11px] font-medium tracking-[0.16em] uppercase">
+              Start free
+            </Button>
+          </Link>
+          <Link
+            href="/login"
+            className="text-[11px] font-medium uppercase tracking-[0.16em] text-tf-ink hover:opacity-60"
+          >
+            Sign in →
+          </Link>
+        </div>
+      </section>
 
-        {/* Features grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-24">
-          {[
-            {
-              icon: Plane,
-              title: "Reservations",
-              desc: "Forward confirmation emails — flights, hotels, restaurants parsed automatically.",
-            },
-            {
-              icon: Map,
-              title: "Interactive Maps",
-              desc: "See all your pins on a map, color-coded by type. Search and save places.",
-            },
-            {
-              icon: Camera,
-              title: "Photo Gallery",
-              desc: "Upload and tag photos to specific days or reservations. Share with anyone.",
-            },
-            {
-              icon: Inbox,
-              title: "Email Inbox",
-              desc: "Forward any booking confirmation and we'll parse it with AI instantly.",
-            },
-          ].map((feature) => (
-            <div
-              key={feature.title}
-              className="p-6 rounded-xl border bg-card hover:shadow-md transition-shadow"
-            >
-              <feature.icon className="h-10 w-10 text-primary mb-4" />
-              <h3 className="font-semibold mb-2">{feature.title}</h3>
-              <p className="text-sm text-muted-foreground">{feature.desc}</p>
-            </div>
-          ))}
+      {/* Features */}
+      <section className="max-w-6xl mx-auto px-6 md:px-9 pb-24">
+        <div className="flex items-center gap-3 mb-10">
+          <span className="micro-label">What you get</span>
+          <span className="flex-1 h-px bg-tf-border-tertiary" />
         </div>
-      </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {([
+            {
+              icon: IoMailOutline,
+              eyebrow: "Ingest",
+              title: "Reservations",
+              desc: "Forward confirmation emails. Flights, hotels, restaurants parse automatically with AI.",
+            },
+            {
+              icon: IoMapOutline,
+              eyebrow: "Navigate",
+              title: "Interactive maps",
+              desc: "Every pin color-coded by type. Search Google Places and save them to a trip.",
+            },
+            {
+              icon: IoImagesOutline,
+              eyebrow: "Remember",
+              title: "Photo gallery",
+              desc: "Upload and tag photos to specific days or reservations. Share a link with anyone.",
+            },
+            {
+              icon: IoAirplaneOutline,
+              eyebrow: "Plan",
+              title: "Day-by-day",
+              desc: "A clean timeline of every reservation across the trip. Print or export as PDF.",
+            },
+          ] as Array<{ icon: IconType; eyebrow: string; title: string; desc: string }>).map(
+            (feature) => {
+              const Icon = feature.icon;
+              return (
+                <div
+                  key={feature.title}
+                  className="tf-card-cream p-6 hover:shadow-sm transition-shadow"
+                >
+                  <Icon className="text-tf-ink mb-6" style={{ fontSize: 26 }} />
+                  <p className="micro-label mb-2">{feature.eyebrow}</p>
+                  <h3 className="font-display-roman text-[22px] text-tf-ink mb-2">
+                    {feature.title}
+                  </h3>
+                  <p className="text-[12px] font-light text-tf-muted leading-relaxed">
+                    {feature.desc}
+                  </p>
+                </div>
+              );
+            }
+          )}
+        </div>
+      </section>
 
       {/* Footer */}
-      <footer className="border-t mt-20">
-        <div className="max-w-6xl mx-auto px-6 py-8 flex items-center justify-between text-sm text-muted-foreground">
-          <span>Trek Folio</span>
-          <span>trekfol.io</span>
+      <footer className="border-t border-tf-border-tertiary">
+        <div className="max-w-6xl mx-auto px-6 md:px-9 py-8 flex items-center justify-between">
+          <span className="micro-label">Trek Folio · 2026</span>
+          <span className="micro-label">trekfol.io</span>
         </div>
       </footer>
     </div>
