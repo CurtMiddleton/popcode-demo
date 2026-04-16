@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader } from "@googlemaps/js-api-loader";
+import { setOptions, importLibrary } from "@googlemaps/js-api-loader";
 
 let loaderPromise: Promise<typeof google> | null = null;
 
@@ -14,12 +14,14 @@ export function loadGoogleMaps(): Promise<typeof google> {
         )
       );
     }
-    const loader = new Loader({
-      apiKey,
-      version: "weekly",
-      libraries: ["places", "marker"],
-    });
-    loaderPromise = loader.load();
+    setOptions({ key: apiKey, v: "weekly" });
+    // Load the libraries we need in parallel. importLibrary is idempotent.
+    loaderPromise = Promise.all([
+      importLibrary("maps"),
+      importLibrary("marker"),
+      importLibrary("places"),
+      importLibrary("geocoding"),
+    ]).then(() => google);
   }
   return loaderPromise;
 }
