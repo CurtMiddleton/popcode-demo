@@ -3,7 +3,11 @@ import { RESERVATION_LABELS, type ReservationType } from "./types";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const FROM = "Trek Folio <notifications@trekfol.io>";
+// Sender address. In dev (before trekfol.io is verified in Resend), use
+// onboarding@resend.dev — that only delivers to the email address that
+// owns the Resend account, which is fine for testing. Override with
+// RESEND_FROM when the domain is verified.
+const FROM = process.env.RESEND_FROM ?? "Trek Folio <onboarding@resend.dev>";
 
 interface AddedEmailOptions {
   to: string;

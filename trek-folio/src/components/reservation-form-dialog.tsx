@@ -225,13 +225,25 @@ export function ReservationFormDialog({
     };
 
     try {
+      let newId: string | null = null;
       if (isEdit && existing) {
         await updateReservation(supabase, existing.id, input);
       } else {
-        await createReservation(supabase, input);
+        newId = await createReservation(supabase, input);
       }
       onOpenChange(false);
       router.refresh();
+
+      // Fire-and-forget confirmation email on create only (not edit)
+      if (newId) {
+        fetch("/api/email/reservation-added", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reservation_id: newId }),
+        }).catch(() => {
+          // Non-fatal — don't block the user on email failure
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

@@ -54,6 +54,12 @@ export function DevParseTester() {
         setResult(json);
         if (save && json.reservation_id) {
           setSaved(true);
+          // Fire-and-forget confirmation email
+          fetch("/api/email/reservation-added", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reservation_id: json.reservation_id }),
+          }).catch(() => {});
         }
       }
     } catch (err) {
