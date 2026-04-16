@@ -27,9 +27,11 @@ export default async function MapPage() {
     .not("lat", "is", null)
     .not("lng", "is", null);
 
+  const today = new Date().toISOString().slice(0, 10);
   const pins = buildTripPins(
     trips ?? [],
-    (reservations ?? []) as ReservationCoord[]
+    (reservations ?? []) as ReservationCoord[],
+    today
   );
 
   return (
@@ -48,7 +50,8 @@ export default async function MapPage() {
 // Trips with no geocoded plans are skipped.
 function buildTripPins(
   trips: Trip[],
-  reservations: ReservationCoord[]
+  reservations: ReservationCoord[],
+  today: string
 ): TripPin[] {
   const coordsByTrip = new Map<string, { lat: number; lng: number }[]>();
   for (const r of reservations) {
@@ -73,7 +76,17 @@ function buildTripPins(
       lat,
       lng,
       planCount: coords.length,
+      isUpcoming: isTripUpcoming(trip, today),
     });
   }
   return pins;
+}
+
+// Upcoming = end_date is today or later. If no end_date, fall back to
+// start_date. Trips with no dates default to upcoming so new/draft trips
+// aren't visually demoted.
+function isTripUpcoming(trip: Trip, today: string): boolean {
+  const anchor = trip.end_date ?? trip.start_date;
+  if (!anchor) return true;
+  return anchor >= today;
 }

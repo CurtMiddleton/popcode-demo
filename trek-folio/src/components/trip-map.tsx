@@ -219,8 +219,8 @@ function pinIcon(hex: string): google.maps.Symbol {
     fillColor: hex,
     fillOpacity: 1,
     strokeColor: "#ffffff",
-    strokeWeight: 2,
-    scale: 1.2,
+    strokeWeight: 1.5,
+    scale: 0.6,
     anchor: new google.maps.Point(12, 32),
     labelOrigin: new google.maps.Point(12, 12),
   };

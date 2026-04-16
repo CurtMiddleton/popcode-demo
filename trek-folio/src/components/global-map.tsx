@@ -14,6 +14,7 @@ export interface TripPin {
   lat: number;
   lng: number;
   planCount: number;
+  isUpcoming: boolean;
 }
 
 interface GlobalMapProps {
@@ -70,7 +71,7 @@ export function GlobalMap({ pins }: GlobalMapProps) {
         map,
         position,
         title: buildTooltip(pin),
-        icon: tripPinIcon(),
+        icon: tripPinIcon(pin.isUpcoming ? "#1A1814" : "#B5AC97"),
       });
       marker.addListener("click", () => {
         router.push(`/trips/${pin.tripId}`);
@@ -142,14 +143,14 @@ function buildTooltip(pin: TripPin): string {
   }
 }
 
-function tripPinIcon(): google.maps.Symbol {
+function tripPinIcon(hex: string): google.maps.Symbol {
   return {
     path: "M12 0C5.37 0 0 5.37 0 12c0 9 12 20 12 20s12-11 12-20c0-6.63-5.37-12-12-12z",
-    fillColor: "#1A1814",
+    fillColor: hex,
     fillOpacity: 1,
     strokeColor: "#ffffff",
-    strokeWeight: 2,
-    scale: 1.4,
+    strokeWeight: 1.5,
+    scale: 0.7,
     anchor: new google.maps.Point(12, 32),
     labelOrigin: new google.maps.Point(12, 12),
   };

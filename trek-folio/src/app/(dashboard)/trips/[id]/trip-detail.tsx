@@ -236,7 +236,7 @@ export function TripDetail({ trip, reservations, userId }: TripDetailProps) {
           </div>
         </div>
         {/* Meta row below the rule */}
-        <div className="flex items-center gap-6 mt-5 text-[11px] font-light text-tf-muted">
+        <div className="flex items-center gap-6 mt-5 text-[13px] font-light text-tf-ink/70">
           {trip.destination && (
             <span className="flex items-center gap-1.5">
               <IoLocationOutline style={{ fontSize: 12 }} />
