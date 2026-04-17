@@ -352,3 +352,37 @@ Verify on github.com/CurtMiddleton/popcode-demo → click `CLAUDE.md` → scroll
 - **SVG dots-as-path parsing**: Adobe Illustrator exports circles as cubic-Bezier sub-paths inside one big `<path>`. Each sub-path has 4 segments (3 `c` + 1 `s`, or 4 `c`). The 4 Bezier endpoints are on the circle — average gives center, avg distance gives radius. Number regex needs to handle `.5` (no leading zero) and `-` as separator (no comma).
 - **Dense SVGs as icons**: popcode_icon.svg (252 circles) is unreadable below ~36px. For icon-scale usage, create a simplified line-art version (stroked circle + a few filled dots). The full SVG works fine for favicon (browsers smooth it) and composited-photo badges (large enough to resolve).
 - **Two-repo confusion**: if a user has multiple local copies of a repo, `git status` will report based on whichever folder they're `cd`ed into. Always confirm `pwd` and `git remote -v` before diagnosing "file not found" issues.
+
+### 2026-04-17 — Audio feature planning session
+
+**No code changes this session — planning only.**
+
+**Audio recording feature designed in detail.** The user wants creators to be able to record audio (not just upload video) for each page in a project. Use cases: grandma narrating a photo album, spoken grocery list on a fridge magnet. Plan also includes speech-to-text transcription so viewers see text alongside audio playback.
+
+**Implementation plan produced (3 phases):**
+
+1. **Phase 1 — Audio recording & upload (create.html + edit.html):**
+   - DB migration: add `media_type` (text, default 'video'), `audio_url` (text), `transcript` (text) columns to `collection_items`
+   - Per-page "Video | Audio" toggle in the create/edit UI
+   - In-browser audio recorder using `getUserMedia({ audio: true })` + `MediaRecorder`
+   - Audio stored at `{slug}/audio_{N}.webm` (Chrome) or `.mp4` (Safari)
+   - Codec detection pattern mirrors existing `compressVideo()` at create.html:297
+
+2. **Phase 2 — Audio playback (view.html):**
+   - Refactor `videoMap` → `mediaMap` carrying `{ type, videoUrl, audioUrl, transcript }` per target
+   - `targetFound` branches to `triggerAudio()` or `triggerVideo()` based on `media.type`
+   - Audio player UI: scanned photo displayed prominently + custom audio controls + transcript panel
+   - Same MindAR stop + 500ms delay + scene rebuild pattern for rescan
+   - If iOS `play()` rejects (gesture chain broken by setTimeout), show "Tap to Listen" fallback
+
+3. **Phase 3 — Transcription (Supabase Edge Function):**
+   - New Edge Function `transcribe-audio` calls OpenAI Whisper API (~$0.006/min)
+   - Fire-and-forget from create/edit after upload — transcript appears on next viewer load
+   - Stored directly on `collection_items.transcript` column
+
+**Key risks identified:**
+- MediaRecorder codec differences (WebM vs MP4) — mitigated by storing native format; `<audio>` plays both
+- iOS autoplay after setTimeout may break gesture chain — mitigated with "Tap to Listen" fallback
+- RPC functions will need drop/recreate if they select from `collection_items` (lesson from 2026-04-15)
+
+**Full plan saved at:** `.claude/plans/graceful-twirling-dream.md`
