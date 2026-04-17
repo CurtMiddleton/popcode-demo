@@ -265,3 +265,90 @@ Verify on github.com/CurtMiddleton/popcode-demo → click `CLAUDE.md` → scroll
 - Don't migrate now — at hundreds of users, Supabase + Spend Cap is the right answer. Re-evaluate when egress regularly exceeds ~1 TB/month.
 
 **Open question for a future session:** does Supabase's Smart CDN actually cache video responses from the `experiences` storage bucket? If yes, repeat views from the same region are basically free and the egress estimates above are pessimistic. Worth checking in the dashboard before investing in any optimization work.
+
+### 2026-04-17 — Analytics overhaul, badge redesign, manage icons, git auth fix
+
+**All changes committed directly to `main` via sandbox push. Branch: `claude/sync-cli-sessions-mbvBB`.**
+
+**analytics.html — hosting cost estimate panel (commit `748a690`):**
+- New "Hosting Cost Estimate" section at the top of the page, above the range buttons (calendar-month scoped, doesn't respond to the date-range selector).
+- Reads real storage size by walking the `experiences` bucket via `db.storage.from('experiences').list()` — lists slug folders in parallel, sums `metadata.size` across all files.
+- Estimates egress from `scan_events`: `(video_play count × avg video size) + (scan_open count × ~5 MB .mind file)`.
+- Three big numbers: Storage Used (GB / 100 included), Egress Est. (GB / 250 included), Projected Monthly Bill ($).
+- Color-coded bars: green < 70%, yellow 70–100%, red > 100% of included quota.
+- Footnote links to supabase.com/pricing and Spend Cap docs.
+- Pro-rates egress to end of month for the "on track for" projection.
+
+**analytics.html — beta feedback status persistence fix (commit `f9bc566`):**
+- **Root cause**: `setFeedbackStatus()` called `db.from('beta_feedback').update({status}).eq('id', id)` without chaining `.select()`. Supabase's default update returns 204 No Content with no error, so if an RLS policy silently blocked the write, the code had no idea — it updated the UI as if the write succeeded. On another machine, the DB still had the old value.
+- **Fix**: chained `.select()` and explicitly check both `error` and `data.length > 0`. If either check fails, shows a clear browser `alert()` + `console.error()` pointing at the most likely cause (RLS UPDATE policy missing on `beta_feedback`).
+- **RLS policy added by user**: `create policy "Admin can update beta_feedback" on beta_feedback for update to authenticated using ((auth.jwt() ->> 'email') = 'curtmid@gmail.com') with check (...)`. This is a server-side change living in Supabase, NOT in git — remember to re-apply if the DB is ever recreated.
+- Status indicators redesigned: emoji 🔴🟡🟢 replaced with flat 10px CSS circles (`.status-dot-urgent` red, `.status-dot-not_urgent` amber, `.status-dot-completed` green). Opacity toggle for active/inactive. Cleaner cross-platform rendering.
+
+**analytics.html — Accounts section (commit `59563db`):**
+- New section above "By Project" showing user accounts: Created, Name, Email, Projects (count).
+- Fetched via new RPC `get_all_users(max_rows)` — `security definer`, admin-gated by `auth.jwt() ->> 'email'`, reads from `auth.users` joined with `collections` count.
+- Cached client-side in `cachedAccounts` so the date-range rebuild doesn't re-query.
+- Shows most recent 10 by default. "Show N more ▼" accordion button expands to show all 35. Toggle collapses back.
+- **SQL the user ran in Supabase to create the RPC:**
+  ```sql
+  create or replace function get_all_users(max_rows integer default 100)
+  returns table (id uuid, email text, full_name text, created_at timestamptz, project_count integer)
+  language plpgsql security definer set search_path = public, auth
+  as $$ begin
+    if (auth.jwt() ->> 'email') <> 'curtmid@gmail.com' then raise exception 'Unauthorized'; end if;
+    return query select u.id, u.email::text,
+      coalesce(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name')::text,
+      u.created_at, (select count(*)::integer from collections c where c.user_id = u.id)
+    from auth.users u order by u.created_at desc limit max_rows;
+  end; $$;
+  grant execute on function get_all_users(integer) to authenticated;
+  ```
+
+**analytics.html — Activity log 25/50/100 toggle + Load more (commits `59563db`, `ebace31`):**
+- Pill buttons "Show 25 / 50 / 100" next to the search field. Default 25. Controls chunk size.
+- `activityLimit` = chunk size, `activityShown` = total currently visible. Slice is on sessions (not individual events).
+- "Load N more ▼ (X of Y shown)" row appears at bottom of activity table when more sessions exist. Clicking increments `activityShown += activityLimit` and re-renders.
+- "All N sessions shown" quiet confirmation when everything is visible.
+- `activityShown` resets when: chunk-size pill changes, date-range changes. Search does NOT reset (filters within the currently-shown window).
+- Fixed stale `colspan="11"` → `colspan="12"` on the empty-state row (table has 12 columns after the Model/Scan Rate/Comp. Rate additions).
+
+**Badge redesign — solid-dot conversion (commits `4018dd1`, `9f905ee`):**
+- User designed a new badge in Illustrator with fewer dots (252 vs old design's many hundreds). Exported as `popcode_badge.svg` (gradient version, single `<path>` with radial gradient fill).
+- I wrote `/tmp/convert_badge.py` which: parses each sub-path (split at `M` boundaries), extracts the 4 cubic Bezier endpoints per dot, computes center (average of endpoints) + radius (avg distance), samples the radial gradient at the center point, emits a `<circle>` with solid hex fill.
+- Gradient: radial at (399.8, 401.7) r=298.9, stops `#2dc0f7` (cyan, center) → `#5f8dfa` (blue, 60%) → `#8131fe` (purple, edge). 15 unique ring colors in the output, 18 dots per ring.
+- Converted output overwrites `public/assets/popcode_icon.svg` — used by: favicon (all 11 pages), Order Badges modal previews (manage.html), composited badge on downloaded photos (manage.html `compositeImage()`).
+- `popcode_badge.svg` kept in repo as the gradient design source-of-truth.
+
+**manage.html — icon circle buttons (commits `a4a2dc8`, `503c8bc`, `3b71d6e`):**
+- Card-actions row: text pill buttons replaced with 36px gray circle `.icon-btn` elements.
+- Icons (Feather-style inline SVGs): eye (View), pencil (Edit), upload-arrow (Share), download-arrow (Download), dots-in-circle (Order Badges), trash (Delete, kept as dark circle).
+- Share trigger button moved from the card-id area into card-actions. Share popup stays in card-id (positioned relative to slug area) — same mechanism, just different trigger location.
+- Order Badges icon evolved: first used `popcode_icon.svg` <img> (too dense at 18px, looked like a black blob) → then 6 dots in outer ring (looked like a cookie) → final: 6 outer dots + 3 inner dots (rotated 60°) + center dot = concentric rings pattern. Matches the other icons' line-art weight.
+- Each icon has `title` attribute for native hover tooltip.
+
+**manage.html — Order Badges modal fix (commit `a88c0ad`):**
+- Sticker Mule links were swapped: ¾" linked to the 1.5" product and vice versa. Fixed by swapping the href URLs.
+- Preview images switched from `popcode_icon.svg` (solid-dot, too dense at 36/56px) to `popcode_badge.svg` (gradient, renders smoothly at preview sizes).
+
+**Git auth fixed on user's Mac:**
+- GitHub had been rejecting pushes with "Invalid username or token. Password authentication is not supported."
+- Fix: generated a Personal Access Token (classic, `repo` scope) on github.com/settings/tokens/new, set `git config --global credential.helper osxkeychain`, and used the PAT as the password on next `git push`. Keychain now stores it permanently.
+- User's local `main` was diverged from `origin/main` (1 local commit `a9458cd "Fix video autoplay on iOS"` based on old parent `78add04`). Backed up to `backup-autoplay-fix` branch, then `git reset --hard origin/main`. The autoplay fix (adding `muted` to `<video>`) was already in origin/main from a prior session.
+
+**Two copies of popcode-demo discovered on user's Mac:**
+- `/Users/curtmiddleton/popcode-demo` — the real git repo, connected to github.com
+- `/Users/curtmiddleton/Dropbox/Popcode X/popcode-demo` — a second copy in Dropbox
+- User saved `popcode_badge.svg` to the Dropbox copy, which is why `git status` showed "clean" in the real repo. Copied the file over with `cp`. **This needs to be consolidated in a future session** — maintaining two copies is a recipe for confusion and lost work.
+
+**Supabase Spend Cap confirmed ON:**
+- User verified in dashboard: "Spend cap is enabled. You won't be charged any extra for usage."
+- Worst-case monthly bill is now hard-capped at the Pro base (~$25). Supabase will pause/degrade the project rather than charge overages.
+
+**Key lessons and gotchas from this session:**
+- **RLS silent failures**: Supabase's PostgREST returns 204 No Content for an update that matches 0 rows (RLS-filtered). Always chain `.select()` and check `data.length` when the write matters. This is how the beta-feedback persistence bug hid for days.
+- **Server-side state not in git**: the `beta_feedback` UPDATE policy and the `get_all_users` RPC are server-side SQL in Supabase. If the DB is ever recreated, these need to be re-applied. Consider adding a `supabase/migrations/` folder or a setup SQL file to the repo for documentation.
+- **Sandbox ↔ GitHub sync is real**: the Claude Code sandbox's localhost git mirror (`http://127.0.0.1:PORT/git/...`) DOES sync bidirectionally with real github.com. Pushes from the sandbox land on github.com and Vercel deploys them. User's `git fetch` confirmed receiving sandbox commits.
+- **SVG dots-as-path parsing**: Adobe Illustrator exports circles as cubic-Bezier sub-paths inside one big `<path>`. Each sub-path has 4 segments (3 `c` + 1 `s`, or 4 `c`). The 4 Bezier endpoints are on the circle — average gives center, avg distance gives radius. Number regex needs to handle `.5` (no leading zero) and `-` as separator (no comma).
+- **Dense SVGs as icons**: popcode_icon.svg (252 circles) is unreadable below ~36px. For icon-scale usage, create a simplified line-art version (stroked circle + a few filled dots). The full SVG works fine for favicon (browsers smooth it) and composited-photo badges (large enough to resolve).
+- **Two-repo confusion**: if a user has multiple local copies of a repo, `git status` will report based on whichever folder they're `cd`ed into. Always confirm `pwd` and `git remote -v` before diagnosing "file not found" issues.
