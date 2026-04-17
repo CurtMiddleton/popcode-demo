@@ -386,3 +386,44 @@ Verify on github.com/CurtMiddleton/popcode-demo → click `CLAUDE.md` → scroll
 - RPC functions will need drop/recreate if they select from `collection_items` (lesson from 2026-04-15)
 
 **Full plan saved at:** `.claude/plans/graceful-twirling-dream.md`
+
+### 2026-04-17 (evening) — SMS wording tweak + AWS cancellation pre-flight audit
+
+**Code changes:**
+- **SMS share text updated** on `manage.html`: `'Your Popcode project "X" is ready to scan!' → '"X" is ready to scan with Popcode!'` (commits `5ceee10` on main). User mentioned it felt more natural phrased as the project speaking rather than "Your Popcode project". Only affects the Message share option — Email subject/body unchanged.
+
+**Git gotcha — parallel pushes from two machines:**
+- While I was writing session notes and pushing from the sandbox, a different Claude Code session running on the user's **iMac** (`CURTs-iMac`, not the usual `CURTs-MBP`) also pushed to `main` at the same time with its own session notes (`37c26ca`, the audio feature planning entry above).
+- My push to main was rejected as non-fast-forward. Resolution: `git fetch origin main && git rebase origin/main` on the feature branch, then force-push the branch and fast-forward main. Clean because the two commits touched different sections of CLAUDE.md.
+- **Lesson:** the user has Claude Code on multiple machines (Mac + iMac). Parallel sessions can both push. Always `git fetch` before push when starting a new working session. Also: it's possible to have two separate "2026-04-17 session notes" commits in history — that's not a bug, it's two separate sessions on two machines the same day.
+
+**AWS cancellation conversation — user is planning to close their AWS account, wanted a pre-flight audit:**
+
+Context: user has been paying exorbitant AWS fees from prior unrelated work (not Popcode — Popcode is fully on Supabase + Vercel). Asked what could break before closing. After the conversation they wisely decided to **keep the account open another month** until they're certain nothing breaks. Key findings captured here so we don't have to re-derive them.
+
+**Five risk buckets to check before closing any AWS account:**
+
+1. **Domains registered in Route53** — THE critical one. If `popcode.app` or `popcodeapp.com` is registered through AWS Route53, closing the account kills the domain for 60–90 days. Must check `Route53 → Registered domains` in AWS Console and **transfer out** (to Squarespace, Namecheap, Cloudflare, etc.) BEFORE closing. Transfers take 5–7 days. Per CLAUDE.md the marketing site DNS is via Squarespace, so `popcodeapp.com` is probably there, but **verify** — I can't check this from the sandbox.
+2. **S3 URL references in codebase** — if any code or external link references `amazonaws.com` URLs, those break on closure AND the bucket namespace becomes publicly available, which means a malicious actor could claim the old bucket name and serve whatever they want at those URLs (known attack pattern: "S3 bucket takeover").
+3. **Local IAM credentials** — `~/.aws/credentials` on any machine using AWS SDK/CLI. Check on every Mac/iMac separately.
+4. **Active billing charges** — run `Billing → Cost Explorer → Group by Service` to see what's actually running. Common silent money-sinks: NAT Gateway ($32/mo baseline), unattached Elastic IPs ($3.60/mo each), stopped RDS instances (still charge for storage), forgotten Route53 hosted zones ($0.50/mo each), CloudWatch Logs accumulation, old EBS/RDS snapshots.
+5. **CloudFront distributions / SES / Lambda** — anything still serving or running counts. Check regions you don't usually look in.
+
+**Safety net:** AWS has a **90-day grace period** after account closure during which you can reactivate. Past 90 days, everything is permanently deleted.
+
+**Also recommended:** set a **Billing → Budgets** alert (e.g. $10/month email notification) as an early warning against any future surprise charges. AWS does NOT have a hard Spend Cap like Supabase — CloudWatch Billing Alerts only notify, they don't stop charges.
+
+**Results of the audit I could run from the sandbox:**
+
+- ✅ **Zero AWS URLs in the Popcode codebase.** Searched `public/`, `marketing/`, `CLAUDE.md`, `package.json` for `amazonaws.com`, `cloudfront.net`, `s3.*`, S3 URL patterns. No hits. The Popcode codebase has no AWS dependencies — only Supabase + Vercel.
+- ✅ **No AWS credential patterns in source.** Clean on `aws_access_key`, `AWS_SECRET`, `accessKeyId`, `secretAccessKey`, `AWS_REGION`. (Beware: `grep -iE 'AKIA[A-Z0-9]{16}'` will hit false positives in base64-encoded font data in `marketing/index.html`. Use specific variable-name patterns instead.)
+- ✅ **No `~/.aws/credentials` file on the user's MBP.** `ls ~/.aws/` returned "No such file or directory". No local AWS SDK/CLI is authenticated on this Mac.
+
+**Still to verify (user must log into AWS Console for these):**
+- Route53 domain check for `popcode.app` and `popcodeapp.com`
+- `~/.aws/credentials` check on the iMac (since the MBP is clean, but parallel work happens on the iMac too)
+- Cost Explorer audit to identify what's actually running
+
+**Lesson for future-Claude:** whenever a user mentions closing AWS (or any cloud account), the **Route53-hosted-domain risk is the one that can break production**. Everything else costs money or inconveniences you. The domain one silently breaks every user-facing short URL. Check it FIRST.
+
+**Also relevant: base64 grep false positives** — if you grep a repo for short uppercase-letter patterns like AWS access keys (`AKIA[A-Z0-9]{16}`) across all files, you'll hit base64-encoded assets (fonts, images) by sheer coincidence. Limit those greps to source-code file types (`.js`, `.py`, `.env*`, `.json`, `.yaml`) and exclude assets. Or verify hits visually aren't inside a `data:font/` URL.
