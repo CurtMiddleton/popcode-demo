@@ -57,7 +57,7 @@ Pretty templates still ship from Supabase's default shared SMTP by default, whic
    - Port: `465` (TLS) or `587` (STARTTLS)
    - Username: `resend`
    - Password: *(the API key from step 4)*
-   - Sender email: `hello@popcodeapp.com` (or whatever verified mailbox you want)
+   - Sender email: `info@popcodeapp.com`
    - Sender name: `Popcode`
 6. Click **Save**. Trigger a password reset to yourself to verify.
 
@@ -76,7 +76,7 @@ Sends automatically after a user submits the beta feedback widget with an email 
    ```bash
    supabase secrets set RESEND_API_KEY=re_your_key_here
    # Optional overrides (defaults shown):
-   # supabase secrets set FROM_EMAIL="Popcode <hello@popcodeapp.com>"
+   # supabase secrets set FROM_EMAIL="Popcode <info@popcodeapp.com>"
    # supabase secrets set REPLY_TO_EMAIL="info@popcodeapp.com"
    ```
 5. Deploy:

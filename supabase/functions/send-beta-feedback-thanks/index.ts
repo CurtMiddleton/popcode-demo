@@ -6,7 +6,7 @@
 //
 // Secrets (set with `supabase secrets set`):
 //   RESEND_API_KEY     required — re_xxx token from resend.com
-//   FROM_EMAIL         optional — defaults to "Popcode <hello@popcodeapp.com>"
+//   FROM_EMAIL         optional — defaults to "Popcode <info@popcodeapp.com>"
 //   REPLY_TO_EMAIL     optional — defaults to "info@popcodeapp.com"
 //
 // Deploy:
@@ -19,7 +19,7 @@
 
 import { THANKS_HTML } from "./template.ts";
 
-const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "Popcode <hello@popcodeapp.com>";
+const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "Popcode <info@popcodeapp.com>";
 const REPLY_TO_EMAIL = Deno.env.get("REPLY_TO_EMAIL") ?? "info@popcodeapp.com";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 
