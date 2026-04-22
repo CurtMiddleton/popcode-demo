@@ -143,37 +143,40 @@
         if (data.session) window.location.href = '/manage.html';
       });
 
-      let isSignUp = false;
+      let mode = 'signin'; // 'signin' | 'signup' | 'forgot'
+
+      function setMode(newMode) {
+        mode = newMode;
+        const isSignUp = mode === 'signup';
+        const isForgot = mode === 'forgot';
+        const titles = { signin: 'Sign In', signup: 'Create Account', forgot: 'Reset Password' };
+        const submitText = { signin: 'Sign In', signup: 'Create Account', forgot: 'Send Reset Link' };
+        document.getElementById('form-title').textContent = titles[mode];
+        document.getElementById('submit-btn').textContent = submitText[mode];
+        document.getElementById('name-field').style.display = isSignUp ? 'block' : 'none';
+        document.getElementById('password').closest('.field').style.display = isForgot ? 'none' : 'block';
+        document.getElementById('forgot-wrap').style.display = mode === 'signin' ? 'block' : 'none';
+        document.getElementById('password').autocomplete = isSignUp ? 'new-password' : 'current-password';
+        if (isForgot) {
+          document.getElementById('toggle-text').textContent = '';
+          document.getElementById('toggle-link').textContent = '← Back to sign in';
+        } else if (isSignUp) {
+          document.getElementById('toggle-text').textContent = 'Already have an account?';
+          document.getElementById('toggle-link').textContent = 'Sign in';
+        } else {
+          document.getElementById('toggle-text').textContent = "Don't have an account?";
+          document.getElementById('toggle-link').textContent = 'Create one';
+        }
+        hideError();
+        document.getElementById('success-msg').style.display = 'none';
+      }
 
       document.getElementById('toggle-link').addEventListener('click', () => {
-        isSignUp = !isSignUp;
-        document.getElementById('form-title').textContent = isSignUp ? 'Create Account' : 'Sign In';
-        document.getElementById('submit-btn').textContent = isSignUp ? 'Create Account' : 'Sign In';
-        document.getElementById('toggle-text').textContent = isSignUp ? 'Already have an account?' : "Don't have an account?";
-        document.getElementById('toggle-link').textContent = isSignUp ? 'Sign in' : 'Create one';
-        document.getElementById('password').autocomplete = isSignUp ? 'new-password' : 'current-password';
-        document.getElementById('forgot-wrap').style.display = isSignUp ? 'none' : 'block';
-        document.getElementById('name-field').style.display = isSignUp ? 'block' : 'none';
-        hideError();
+        setMode(mode === 'signin' ? 'signup' : 'signin');
       });
 
-      document.getElementById('forgot-link').addEventListener('click', async () => {
-        const email = document.getElementById('email').value.trim();
-        if (!email) {
-          showError('Enter your email address above first.');
-          return;
-        }
-        const { error } = await db.auth.resetPasswordForEmail(email, {
-          redirectTo: 'https://popcode-demo.vercel.app/reset.html'
-        });
-        if (error) {
-          showError(error.message);
-        } else {
-          hideError();
-          const s = document.getElementById('success-msg');
-          s.textContent = 'Reset link sent — check your email.';
-          s.style.display = 'block';
-        }
+      document.getElementById('forgot-link').addEventListener('click', () => {
+        setMode('forgot');
       });
 
       function showError(msg) {
@@ -188,25 +191,47 @@
       document.getElementById('submit-btn').addEventListener('click', async () => {
         const email = document.getElementById('email').value.trim();
         const password = document.getElementById('password').value;
+        const name = document.getElementById('name').value.trim();
         hideError();
 
-        const name = document.getElementById('name').value.trim();
+        if (mode === 'forgot') {
+          if (!email) {
+            showError('Please enter your email.');
+            return;
+          }
+          const btn = document.getElementById('submit-btn');
+          btn.disabled = true;
+          btn.textContent = 'Sending...';
+          const { error } = await db.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.origin + '/reset.html'
+          });
+          btn.disabled = false;
+          btn.textContent = 'Send Reset Link';
+          if (error) {
+            showError(error.message);
+          } else {
+            const s = document.getElementById('success-msg');
+            s.textContent = 'Reset link sent — check your email.';
+            s.style.display = 'block';
+          }
+          return;
+        }
 
         if (!email || !password) {
           showError('Please enter your email and password.');
           return;
         }
-        if (isSignUp && !name) {
+        if (mode === 'signup' && !name) {
           showError('Please enter your name.');
           return;
         }
 
         const btn = document.getElementById('submit-btn');
         btn.disabled = true;
-        btn.textContent = isSignUp ? 'Creating account...' : 'Signing in...';
+        btn.textContent = mode === 'signup' ? 'Creating account...' : 'Signing in...';
 
         let error;
-        if (isSignUp) {
+        if (mode === 'signup') {
           ({ error } = await db.auth.signUp({ email, password, options: { data: { full_name: name } } }));
           if (!error) {
             showError('Check your email for a confirmation link, then sign in.');
@@ -221,7 +246,7 @@
         if (error) {
           showError(error.message);
           btn.disabled = false;
-          btn.textContent = isSignUp ? 'Create Account' : 'Sign In';
+          btn.textContent = mode === 'signup' ? 'Create Account' : 'Sign In';
         } else {
           window.location.href = '/manage.html';
         }
