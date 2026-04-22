@@ -245,6 +245,24 @@
         document.getElementById('beta-form-body').style.display = 'none';
         document.getElementById('beta-success').style.display = 'block';
         setTimeout(closeModal, 2500);
+
+        // Fire-and-forget thank-you email. No-op if the edge function
+        // isn't deployed yet or the user didn't provide an email.
+        if (payload.email) {
+          fetch(SUPABASE_URL + '/functions/v1/send-beta-feedback-thanks', {
+            method: 'POST',
+            headers: {
+              'apikey': SUPABASE_KEY,
+              'Authorization': 'Bearer ' + SUPABASE_KEY,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              email: payload.email,
+              description: payload.description,
+              page_url: payload.page_url
+            })
+          }).catch(function() {});
+        }
       } catch (err) {
         btn.disabled = false;
         btn.textContent = 'Send Report';

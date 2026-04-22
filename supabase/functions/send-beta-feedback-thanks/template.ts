@@ -1,0 +1,79 @@
+// Thank-you email body. Sourced from supabase/email-templates/beta-feedback-thanks.html.
+// When the design source changes, copy the <html> verbatim into the template
+// literal below, preserving the {{DESCRIPTION}} and {{PAGE_URL}} placeholders.
+
+export const THANKS_HTML = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
+    <title>Thanks for the feedback</title>
+  </head>
+  <body style="margin:0; padding:0; background-color:#f2f0eb; font-family:'Helvetica Neue', Helvetica, Arial, sans-serif; color:#1a1a1a;">
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">We got your feedback. Here's what happens next.</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f2f0eb;">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; width:100%; background-color:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,0.06);">
+            <tr>
+              <td align="center" style="background-color:#7657FC; background-image:linear-gradient(135deg, #7657FC 0%, #589AF9 100%); padding:56px 32px;">
+                <div style="font-family:'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight:700; font-size:40px; color:#ffffff; letter-spacing:-0.02em; line-height:1;">Popcode</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:40px 40px 8px 40px;">
+                <h1 style="margin:0 0 16px 0; font-family:'Helvetica Neue', Helvetica, Arial, sans-serif; font-size:24px; font-weight:700; color:#1a1a1a; line-height:1.3;">Thanks for the feedback</h1>
+                <p style="margin:0 0 16px 0; font-size:16px; line-height:1.55; color:#333333;">
+                  We got your report and the team will take a look. Popcode is still in beta, so every note really does make the product better &mdash; thanks for taking the time.
+                </p>
+                <p style="margin:0 0 24px 0; font-size:16px; line-height:1.55; color:#333333;">
+                  If we need to follow up, we'll reply to this thread.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 40px 8px 40px;">
+                <div style="background-color:#f7f5f0; border-radius:12px; padding:16px 18px;">
+                  <div style="font-size:11px; font-weight:700; color:#888; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:8px;">Your report</div>
+                  <div style="font-size:14px; line-height:1.55; color:#333; white-space:pre-wrap;">{{DESCRIPTION}}</div>
+                  <div style="font-size:12px; color:#999; margin-top:10px;">Sent from {{PAGE_URL}}</div>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:28px 40px 8px 40px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td align="center" style="background-color:#7657FC; background-image:linear-gradient(135deg, #7657FC 0%, #589AF9 100%); border-radius:30px;">
+                      <a href="https://popcode.app" target="_blank" style="display:inline-block; padding:13px 32px; font-family:'Helvetica Neue', Helvetica, Arial, sans-serif; font-size:15px; font-weight:700; color:#ffffff; text-decoration:none; border-radius:30px;">
+                        Back to Popcode
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px 40px 40px 40px;">
+                <p style="margin:0; font-size:13px; line-height:1.55; color:#888888;">
+                  Questions? Just reply to this email &mdash; it reaches us directly at <a href="mailto:info@popcodeapp.com" style="color:#6b3fa0; text-decoration:underline;">info@popcodeapp.com</a>.
+                </p>
+              </td>
+            </tr>
+          </table>
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; width:100%;">
+            <tr>
+              <td align="center" style="padding:24px 16px;">
+                <p style="margin:0; font-size:12px; line-height:1.55; color:#999999;">
+                  Popcode &mdash; <a href="https://popcodeapp.com" style="color:#999999; text-decoration:underline;">popcodeapp.com</a>
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
