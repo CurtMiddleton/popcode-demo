@@ -19,7 +19,7 @@ export const THANKS_HTML = `<!DOCTYPE html>
           <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; width:100%; background-color:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,0.06);">
             <tr>
               <td align="center" style="background-color:#7657FC; background-image:linear-gradient(135deg, #7657FC 0%, #589AF9 100%); padding:56px 32px;">
-                <div style="font-family:'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight:700; font-size:40px; color:#ffffff; letter-spacing:-0.02em; line-height:1;">Popcode</div>
+                <img src="https://popcode.app/assets/Popcode_logo.rev.png" alt="Popcode" width="200" height="70" style="display:block; border:0; outline:none; color:#ffffff; font-family:'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight:700; font-size:40px; letter-spacing:-0.02em;">
               </td>
             </tr>
             <tr>
