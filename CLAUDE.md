@@ -427,3 +427,64 @@ Context: user has been paying exorbitant AWS fees from prior unrelated work (not
 **Lesson for future-Claude:** whenever a user mentions closing AWS (or any cloud account), the **Route53-hosted-domain risk is the one that can break production**. Everything else costs money or inconveniences you. The domain one silently breaks every user-facing short URL. Check it FIRST.
 
 **Also relevant: base64 grep false positives** — if you grep a repo for short uppercase-letter patterns like AWS access keys (`AKIA[A-Z0-9]{16}`) across all files, you'll hit base64-encoded assets (fonts, images) by sheer coincidence. Limit those greps to source-code file types (`.js`, `.py`, `.env*`, `.json`, `.yaml`) and exclude assets. Or verify hits visually aren't inside a `data:font/` URL.
+
+### 2026-04-22 — Branded transactional email end-to-end + auth UX fixes
+
+**PR #26 merged.** Branch: `claude/brand-email-communications-NbgMk`. All changes shipped to main.
+
+Kicked off when the user showed a screenshot of Supabase's default "Confirm your signup" email — bare, unbranded, ugly. Ended the session with the whole transactional-email surface branded, custom SMTP delivering via Resend, a buttoned-up forgot-password UX, and the canonical-domain ambiguity resolved.
+
+**What shipped (in git):**
+
+- **`supabase/email-templates/*.html`** — 5 branded HTML templates for Supabase Auth (confirm-signup, reset-password, magic-link, change-email, invite) + `beta-feedback-thanks.html` for the feedback-widget auto-reply + `reply-signature.html` for manual info@popcodeapp.com replies.
+- **`supabase/email-templates/README.md`** — comprehensive paste-into-dashboard instructions, Resend + custom SMTP setup, suggested subjects, template variables reference, cross-client test checklist.
+- **`supabase/functions/send-beta-feedback-thanks/`** — Deno Edge Function (index.ts + template.ts). Receives `{email, description, page_url}`, escapes HTML, substitutes placeholders, sends via Resend. Deploy with `--no-verify-jwt`. **NOT YET DEPLOYED** — user deferred this step; the CLI work can resume in a future session.
+- **`public/beta-feedback.js`** — wired to POST to the edge function fire-and-forget after a successful DB insert. Failure is silent so the widget UI is unaffected if the function isn't deployed.
+- **`public/assets/Popcode_logo.rev.png`** — 400px-wide white PNG, generated from `Popcode_logo.rev.svg` using `cairosvg` in Python. Email templates hotlink this at the absolute URL `https://popcode.app/assets/Popcode_logo.rev.png` and keep the old styled text wordmark as the `<img>` alt/fallback styling.
+- **`public/auth.html`** — Forgot Password is now a proper mode in a `mode` state machine (`signin` | `signup` | `forgot`). Switching to `forgot` hides the password field, swaps the button to "Send Reset Link", and replaces the toggle with "← Back to sign in". Also fixed `redirectTo` — was hardcoded to `https://popcode-demo.vercel.app/reset.html` (stale Vercel preview URL); now `window.location.origin + '/reset.html'`.
+
+**What shipped (in external services, not in git — record for next session):**
+
+- **Resend**: user already had an account from Tek Folio; `popcode.app` was already verified there, DNS records in place in Squarespace. A pre-existing "Supabase SMTP" API key (Full access, `re_be9sJ1xL…`) was already in use — didn't rotate it.
+- **Supabase → Authentication → SMTP Settings**: custom SMTP was already configured pointing at `smtp.resend.com:465`, sender `info@popcodeapp.com`, name `Popcode`. Nothing to change there.
+- **Supabase → Authentication → Email Templates**: user pasted all 5 templates into the tabs, then had to re-paste once after the logo `<img>` swap. Subjects set per the README's suggestion table.
+- **Supabase → Authentication → URL Configuration**: Site URL flipped from `http://localhost:3000` (Supabase default, untouched since project creation) to `https://popcode.app`. Redirect URLs now include `https://popcode.app/**` (the wildcard covers `/reset.html` and any future reset-flow paths).
+- **Vercel → Domains**: flipped the redirect direction. `popcode.app` now "Connect to an environment → Production" (serves directly), `www.popcode.app` now "Redirect to Another Domain → popcode.app" (307). Previously backwards — was redirecting the short URL to www.
+
+**The three surprises that ate most of the time:**
+
+1. **Vercel had the redirect backwards.** The Domains page showed `popcode.app → 307 → www.popcode.app`. User wanted the short URL canonical. Fix was to edit both domain entries and reverse the radio-button selection (Connect-to-environment vs Redirect-to-Another-Domain). Lesson: on the Domains list, the arrow direction tells you which is redirecting to which. Follow the arrow — if it points AWAY from your preferred canonical, you have it flipped.
+
+2. **Supabase Site URL was still `http://localhost:3000`.** This is Supabase's default when you create a new project for local dev. Nobody ever updated it when Popcode went to prod. Symptom: reset emails landed at `localhost:3000/#error=otp_expired&…` — Safari couldn't connect. When the Supabase `redirectTo` argument isn't in the Redirect URLs allow list, Supabase silently falls back to the Site URL. Lesson: for ANY bug of the form "my auth/reset email went to the wrong domain", check Supabase Dashboard → Authentication → URL Configuration BEFORE looking at client code.
+
+3. **`popcode.app` vs `www.popcode.app` are different origins to Supabase.** Even after setting Site URL correctly, the reset email landed at `www.popcode.app/#...` — because the user's browser was on www when they triggered the reset, so `window.location.origin` resolved to `https://www.popcode.app`, which wasn't in the allow list. Fixed by flipping Vercel's redirect direction (see #1) so there's only ever one canonical origin. Short-term workaround: add both `https://popcode.app/**` and `https://www.popcode.app/**` to the allow list.
+
+**Smaller but useful:**
+
+- **Forgot Password UX bug**: original auth.html kept the password field visible after clicking "Forgot password?", and the Sign In button's validator yelled "Please enter your email and password" when users tried to reset without a password. Refactored to a mode state machine — `setMode('forgot')` now hides password, changes the button, and swaps the toggle text. File: `public/auth.html` ~line 146 (state machine) and ~line 191 (submit handler branches on `mode`).
+- **SVG-to-PNG for email**: Gmail doesn't render SVG in email bodies, period. Had to generate a white PNG from the existing `.rev.svg`. Python one-liner with `cairosvg`: `cairosvg.svg2png(url='...svg', write_to='...png', output_width=400)`. White logo on transparent background works cleanly on the brand gradient.
+- **Alt-text styling trick**: putting `color:#ffffff; font-family:…; font-weight:700; font-size:40px; letter-spacing:-0.02em` as inline style on the `<img>` tag means when images are blocked (Gmail default on desktop, many corporate clients), the alt text renders with those styles as a best-effort fallback. Some clients honor it fully, some partially — good degradation either way.
+- **`re_pasting Supabase templates after HTML edits`** is a manual step that will trip us up every time the template design changes. No auto-sync. The README calls this out.
+- **Parallel-Macs problem recurred**: iMac's local `main` was stale after the user's MBP (and this session's sandbox) merged PR #26. `git push` rejected non-fast-forward. Fix: `cd ~/popcode-demo && git pull origin main && git push`. Same pattern as 2026-04-17.
+
+**User-side gotcha to remember**: the user's default terminal on iMac opens in `~`, not the project dir. When giving Bash commands, always start with `cd ~/popcode-demo` (or verify `pwd` first). Lost ~2 minutes when `git pull origin main` failed with "not a git repository" in a fresh tab.
+
+**Naming decisions worth keeping:**
+
+- Sender email: `info@popcodeapp.com` (both `from` and `reply-to`). Considered `hello@popcodeapp.com` but user didn't want to set up a second mailbox or alias. Since Resend sends on behalf of the whole domain (DKIM/SPF cover any address), any `from` address works without a real mailbox behind it. Info@ is the one address they already monitor.
+- Logo file: `public/assets/Popcode_logo.rev.png` — matches existing `.rev.svg` convention (`.rev` = reversed / white).
+
+**Remaining work deferred to future sessions:**
+
+- Deploy the `send-beta-feedback-thanks` Edge Function. Needs Supabase CLI on the iMac: `brew install supabase/tap/supabase`, `supabase login`, `supabase link --project-ref <ref>`, `supabase secrets set RESEND_API_KEY=re_…`, then `supabase functions deploy send-beta-feedback-thanks --no-verify-jwt`. The function is already written and committed; just needs deployment.
+- Install `reply-signature.html` as an email signature in Apple Mail or Gmail for info@popcodeapp.com. Instructions are at the top of that file.
+
+**Next session topic teed up by user:** design a beta-gating system — invite-only signup for ~10 close friends and family. User does NOT want random people creating accounts. Options worth considering:
+1. Email allow-list table + RLS policy that blocks signup unless email is on the list (cleanest, fully Supabase-native).
+2. Invite codes table — user must enter a code during signup. More clicks, less friendly.
+3. Pre-provisioned accounts — admin creates accounts and sends the password reset link. Simplest, no client-side changes, but every new invitee is manual work.
+4. Middleware in `auth.html` that validates email against a hard-coded (or DB-fetched) allow list before calling `signUp`. Easy to bypass via Supabase API directly — not secure, needs RLS backing anyway.
+5. Turn off signup at the Supabase level entirely and invite each person via the existing "Invite user" template + admin dashboard.
+
+Option 1 (RLS-enforced email allow-list) is probably the right answer — secure, scales, and the branded invite.html template is already in place to welcome them once they're added. Option 5 is the MVP if the user wants to move fast (no code at all, just invite 10 people from the dashboard). Leave the design decision to the next session.
+
