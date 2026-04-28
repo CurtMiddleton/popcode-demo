@@ -10,7 +10,7 @@
     <meta property="og:image" content="https://popcode.app/assets/og_image.png">
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
-    <title>Popcode — My Projects</title>
+    <title>Popcode — My Popcodes</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <style>
@@ -274,8 +274,8 @@
         <button class="nav-close" id="nav-close-btn" aria-label="Close menu">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
-        <a class="nav-link" href="/create.html">Create a Project</a>
-        <a class="nav-link" href="/manage.html">My Projects</a>
+        <a class="nav-link" href="/create.html">Create a Popcode</a>
+        <a class="nav-link" href="/manage.html">My Popcodes</a>
         <a class="nav-link" href="/views.html">Past Views</a>
         <a class="nav-link" href="/account.html">My Account</a>
         <a class="nav-link" href="/howto.html">How It Works</a>
@@ -322,8 +322,8 @@
 
     <div class="confirm-overlay" id="confirm-overlay">
       <div class="confirm-dialog">
-        <h2>Delete project?</h2>
-        <p id="confirm-msg">This will permanently remove the project and all its videos. This cannot be undone.</p>
+        <h2>Delete Popcode?</h2>
+        <p id="confirm-msg">This will permanently remove the Popcode and all its videos. This cannot be undone.</p>
         <div class="confirm-btns">
           <button class="btn-cancel" id="confirm-cancel-btn">Cancel</button>
           <button class="btn-delete" id="confirm-delete-btn">Delete</button>
@@ -332,11 +332,11 @@
     </div>
 
     <div class="top-bar">
-      <h1>My Projects</h1>
+      <h1>My Popcodes</h1>
     </div>
 
     <div id="content" class="collections-list">
-      <div class="loading-msg"><div class="spinner"></div><span>Loading projects...</span></div>
+      <div class="loading-msg"><div class="spinner"></div><span>Loading Popcodes...</span></div>
     </div>
 
     <div class="toast" id="toast"></div>
@@ -425,7 +425,7 @@
           content.innerHTML = '';
           const banner = document.createElement('div');
           banner.className = 'error-banner';
-          banner.textContent = 'Failed to load projects: ' + (err.message || 'Unknown error');
+          banner.textContent = 'Failed to load Popcodes: ' + (err.message || 'Unknown error');
           content.appendChild(banner);
           const retryBtn = document.createElement('button');
           retryBtn.className = 'btn btn-view';
@@ -440,8 +440,8 @@
         const div = document.createElement('div');
         div.className = 'empty-state';
         div.innerHTML = `
-          <p>You have no projects yet.</p>
-          <a href="/create.html">+ Create a Project</a>
+          <p>You have no Popcodes yet.</p>
+          <a href="/create.html">+ Create a Popcode</a>
         `;
         return div;
       }
@@ -482,7 +482,7 @@
             </div>
           </div>
           <div class="rename-form" id="rename-form-${col.id}">
-            <input type="text" id="rename-input-${col.id}" value="${escapeHtml(title)}" maxlength="80" placeholder="Project name"/>
+            <input type="text" id="rename-input-${col.id}" value="${escapeHtml(title)}" maxlength="80" placeholder="Popcode name"/>
             <button class="rename-save" id="rename-save-${col.id}">Save</button>
             <button class="rename-cancel" id="rename-cancel-${col.id}">Cancel</button>
           </div>
@@ -518,7 +518,7 @@
           e.stopPropagation();
           const url = this.dataset.url;
           const title = this.dataset.title;
-          window.location.href = 'mailto:?subject=' + encodeURIComponent('Your Popcode project "' + title + '" is ready to scan!') + '&body=' + encodeURIComponent('Your Popcode project "' + title + '" is ready to scan!\n\n' + url);
+          window.location.href = 'mailto:?subject=' + encodeURIComponent('"' + title + '" is ready to scan with Popcode!') + '&body=' + encodeURIComponent('"' + title + '" is ready to scan with Popcode!\n\n' + url);
           this.closest('.share-popup').classList.remove('visible');
         });
 
@@ -715,7 +715,7 @@
       });
 
       function confirmDelete(card, collectionId, slug, title, btn) {
-        document.getElementById('confirm-msg').textContent = 'Delete "' + title + '"? This will permanently remove the project and all its videos. This cannot be undone.';
+        document.getElementById('confirm-msg').textContent = 'Delete "' + title + '"? This will permanently remove the Popcode and all its videos. This cannot be undone.';
         const overlay = document.getElementById('confirm-overlay');
         overlay.classList.add('visible');
         document.getElementById('confirm-cancel-btn').onclick = function() {
@@ -740,7 +740,7 @@
             .select('target_index')
             .eq('collection_id', collectionId);
 
-          if (fetchItemsError) throw new Error('Could not fetch project items: ' + fetchItemsError.message);
+          if (fetchItemsError) throw new Error('Could not fetch Popcode items: ' + fetchItemsError.message);
 
           (items || []).forEach(item => {
             filesToDelete.push(`${slug}/video_${item.target_index}.mp4`);
@@ -756,12 +756,12 @@
 
           const { error: deleteItemsError } = await db
             .from('collection_items').delete().eq('collection_id', collectionId);
-          if (deleteItemsError) throw new Error('Could not delete project items: ' + deleteItemsError.message);
+          if (deleteItemsError) throw new Error('Could not delete Popcode items: ' + deleteItemsError.message);
 
           const { error: deleteColError, count: deleteCount } = await db
             .from('collections').delete({ count: 'exact' }).eq('id', collectionId).eq('user_id', currentUser.id);
-          if (deleteColError) throw new Error('Could not delete project record: ' + deleteColError.message);
-          if (deleteCount === 0) throw new Error('Delete was blocked — you may not own this project.');
+          if (deleteColError) throw new Error('Could not delete Popcode record: ' + deleteColError.message);
+          if (deleteCount === 0) throw new Error('Delete was blocked — you may not own this Popcode.');
 
           if (filesToDelete.length > 0) {
             const { error: storageError } = await db.storage.from('experiences').remove(filesToDelete);
@@ -779,7 +779,7 @@
             }
           }, 300);
 
-          showToast('Project deleted.');
+          showToast('Popcode deleted.');
 
         } catch (err) {
           btn.disabled = false;
