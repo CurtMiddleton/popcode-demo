@@ -488,3 +488,78 @@ Kicked off when the user showed a screenshot of Supabase's default "Confirm your
 
 Option 1 (RLS-enforced email allow-list) is probably the right answer — secure, scales, and the branded invite.html template is already in place to welcome them once they're added. Option 5 is the MVP if the user wants to move fast (no code at all, just invite 10 people from the dashboard). Leave the design decision to the next session.
 
+### 2026-04-29 — White-label custom cover (admin-only) — first version
+
+**Branch: `claude/white-label-customization-Rm3nU`. Not yet merged. No PR opened — user-facing build for review/QA first.**
+
+**Feature scope (v1, agreed with user):**
+- Admin-only (`curtmid@gmail.com`) per-project custom cover that replaces the default scan start screen on `view.html`.
+- Fields: cover image (uploaded), eyebrow (small caps line), title (big italic serif), subtitle/date.
+- The decorative top border (kente cloth in the Ghana mockup) is **baked into the uploaded image** — no separate asset, no preset library in v1.
+- "Tap to scan" is the only CTA mode for v1. The "Have a code? Enter it here." mockup variant is a follow-on for `index.html` (popcode.app root) and is NOT part of this feature.
+- Per-project only. Per-account / multi-project branding is deferred (user wants it later).
+
+**Fonts used:** Cormorant Garamond (serif italic, for the title) + DM Sans (sans, for eyebrow/subtitle/CTAs). Both loaded from Google Fonts CDN — no font upload UI, no Trek Folio repo access needed. Existing FilsonPro stays as the rest-of-app font.
+
+**Files changed:**
+- `public/view.html` — added `#wl-cover` markup + styles (full-bleed image, 4-stop top+bottom darkening gradient, eyebrow/title/subtitle text, `Tap to scan` white pill, outlined `Create your own Popcode`, `Sign in` link, Popcode logo at bottom). Refactored `start-screen` toggling into `showStartScreen()` / `hideStartScreen()` / `applyCoverConfig()` helpers and extracted the start-tap behavior into `handleStartTap()` so both the default and white-label scan buttons go through the same flow (including the post-close rebuild + 500ms delay + `loaded`-event dance from the 2026-04-14 fix). Cover only renders when `col.cover_config.enabled === true && image_url` is set; otherwise the existing gradient start screen still shows.
+- `public/edit.html` — added admin-only "White Label Cover" section (purple `Admin` pill, hidden unless `currentUser.email === curtmid@gmail.com`). Lets admin upload an image (8 MB cap), set the three text fields, toggle Enable, and save. Preview pane shows live overlay text on the chosen image at 9:19 aspect. Saves go to a separate "Save Cover" button that updates `collections.cover_config` only — does NOT touch the heavy compile-and-upload `Save Changes` flow. Image stored at `{slug}/cover.{ext}` in the existing `experiences` storage bucket. Save uses the post-2026-04-17 lesson — chains `.select()` after `update()` and treats `data.length === 0` as a likely RLS / trigger block.
+
+**Required Supabase changes (USER MUST RUN — not in git):**
+
+```sql
+-- 1. Add the column
+alter table collections add column if not exists cover_config jsonb;
+
+-- 2. Restrict cover_config writes to admin only.
+-- PostgreSQL has no column-level UPDATE policies via RLS, so use a trigger.
+create or replace function enforce_cover_config_admin()
+returns trigger language plpgsql as $$
+begin
+  if new.cover_config is distinct from old.cover_config then
+    if coalesce(auth.jwt() ->> 'email', '') <> 'curtmid@gmail.com' then
+      raise exception 'Only admin can modify cover_config';
+    end if;
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists trg_cover_config_admin on collections;
+create trigger trg_cover_config_admin
+  before update on collections
+  for each row execute function enforce_cover_config_admin();
+```
+
+Without the trigger the column still works but ANY signed-in user could set their own project's cover via the API (they can't see the editor UI but the anon key is public). Trigger is the belt-and-suspenders backstop. The editor's save handler already detects this case and surfaces a friendly error.
+
+**Cover_config jsonb shape:**
+```json
+{
+  "enabled": true,
+  "image_url": "https://<supabase>/.../experiences/{slug}/cover.jpg?v=<ts>",
+  "eyebrow": "MISSION TO",
+  "title": "Ghana",
+  "subtitle": "March 1 – 9, 2026"
+}
+```
+Cache-busting `?v=<timestamp>` is appended on save so a re-uploaded image immediately replaces the cached one in viewers' browsers.
+
+**Test plan:**
+1. Sign in as `curtmid@gmail.com`, open `edit.html?id={slug}`, the White Label Cover section should be visible.
+2. Upload an image (the Ghana mockup is a good test asset), fill eyebrow/title/subtitle, check Enable, click Save Cover.
+3. Open `popcode.app/{slug}` in a private window — should show the cover, not the default gradient start screen.
+4. Tap "Tap to scan" — should enter the AR scanner like normal. Close the video and tap again — should rescan (regression test for the 2026-04-14 work).
+5. Sign in as a non-admin account, confirm the section is hidden in `edit.html`.
+
+**Open follow-ups for future sessions:**
+- **Mockup 2 ("Have a code? Enter it here.")** — separate feature for `index.html` root. Add a small input + Go button that routes to `/{code}`. Doesn't render the project's cover (popcode.app root has no slug yet).
+- **Per-account branding** — when ready to support multiple white-label customers, introduce a `white_label_profiles` table keyed by user_id and let collections inherit from it. Per-project override stays for one-off campaigns.
+- **Font picker** — user mentioned eventually wanting "a handful of different fonts." Trivial to add a dropdown that maps to Google Fonts URL parameters once we know the curated list.
+- **Preview-on-the-real-device** button in the editor that opens `view.html?id={slug}` in a new tab so admin doesn't have to navigate manually.
+
+**Non-obvious decisions worth keeping:**
+- Image uploaded to `experiences/{slug}/cover.{ext}` rather than a separate bucket — reuses the existing storage RLS policies that already let creators write to their own slug folder. The trigger above is what actually gates the *publishing* (setting `cover_config`) to admin-only; the upload alone does nothing if the row isn't updated.
+- All admin gating is "UI hide + DB trigger." Email comparison is lower-cased on the client; the trigger uses `auth.jwt() ->> 'email'` directly. If a second admin is ever added, both the client constant `ADMIN_EMAIL` in edit.html and the trigger function need to change in lockstep — consider a dedicated `admins` table at that point.
+- All user-controlled cover text is rendered via `textContent` (never `innerHTML`) on both the editor preview and the public viewer, so there's no XSS surface even though admin-only writes mostly mitigate it anyway.
+- The cover does NOT replace `index.html` or `manage.html` — strictly per-project, applies only when someone hits `popcode.app/{slug}` for a project where `cover_config.enabled` is true.
+

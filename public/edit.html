@@ -11,6 +11,9 @@
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     <title>Popcode — Edit Project</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
@@ -168,6 +171,38 @@
       .nav-link.external { opacity:0.7; font-size:16px; }
       .nav-divider { height:1px; background:rgba(255,255,255,0.25); margin:12px 0; width:120px; }
       .nav-close { position:absolute; top:20px; right:16px; background:none; border:none; color:white; cursor:pointer; padding:4px; }
+
+      /* White-label cover admin section */
+      .wl-section { display: none; width: 100%; max-width: 360px; padding: 16px; background: #faf7ff; border: 1px solid #e0d6ff; border-radius: 14px; margin-bottom: 28px; }
+      .wl-section .wl-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+      .wl-section h3 { font-size: 15px; font-weight: 700; color: #1a1a1a; }
+      .wl-section .wl-admin-pill { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; background: #7657FC; color: white; padding: 3px 8px; border-radius: 999px; }
+      .wl-section .wl-help { font-size: 12px; color: #888; margin-bottom: 14px; line-height: 1.4; }
+      .wl-toggle-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 14px; font-weight: 600; }
+      .wl-toggle-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: #7657FC; cursor: pointer; }
+      .wl-section label { display: block; font-size: 13px; font-weight: 700; color: #1a1a1a; margin-bottom: 6px; }
+      .wl-section input[type="text"], .wl-section textarea {
+        width: 100%; padding: 10px 12px; border-radius: 10px;
+        border: 1px solid #e0d6ff; font-size: 14px; color: #1a1a1a;
+        background: white; font-family: 'FilsonPro', sans-serif; outline: none;
+        margin-bottom: 12px;
+      }
+      .wl-section input[type="text"]:focus, .wl-section textarea:focus { border-color: #7657FC; }
+      .wl-image-row { margin-bottom: 12px; }
+      .wl-image-preview { width: 100%; aspect-ratio: 9 / 19; max-height: 320px; background: #eee; border-radius: 10px; overflow: hidden; position: relative; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 12px; }
+      .wl-image-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .wl-image-preview .wl-overlay-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; color: white; text-shadow: 0 2px 8px rgba(0,0,0,0.4); pointer-events: none; }
+      .wl-image-preview .wl-overlay-text .pv-eyebrow { font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; margin-bottom: 4px; }
+      .wl-image-preview .wl-overlay-text .pv-title { font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 500; font-size: 38px; line-height: 1; margin-bottom: 6px; }
+      .wl-image-preview .wl-overlay-text .pv-sub { font-size: 11px; }
+      .wl-image-preview .wl-tint { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.10) 30%, rgba(0,0,0,0.10) 60%, rgba(0,0,0,0.55) 100%); pointer-events: none; }
+      .wl-pick-btn { display: inline-block; padding: 8px 14px; border-radius: 999px; background: #7657FC; color: white; font-size: 13px; font-weight: 600; cursor: pointer; border: none; }
+      .wl-clear-btn { display: inline-block; padding: 8px 12px; border-radius: 999px; background: white; color: #7657FC; border: 1px solid #7657FC; font-size: 13px; font-weight: 600; cursor: pointer; margin-left: 6px; }
+      .wl-save-btn { width: 100%; padding: 12px; border-radius: 999px; background: #1a1a1a; color: white; border: none; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 6px; font-family: 'FilsonPro', sans-serif; }
+      .wl-save-btn:disabled { opacity: 0.5; cursor: default; }
+      .wl-status { font-size: 12px; margin-top: 8px; min-height: 16px; }
+      .wl-status.ok { color: #16a34a; }
+      .wl-status.err { color: #dc2626; }
     </style>
   </head>
   <body>
@@ -212,6 +247,48 @@
     <div id="edit-ui" style="display:none; width:100%; max-width:360px; display:none; flex-direction:column; align-items:center;">
       <div class="field-label">Project Name</div>
       <input type="text" id="name-input" placeholder=""/>
+
+      <div class="wl-section" id="wl-section">
+        <div class="wl-head">
+          <h3>White Label Cover</h3>
+          <span class="wl-admin-pill">Admin</span>
+        </div>
+        <p class="wl-help">Replace the default scan screen for this project with a custom cover image and title.</p>
+
+        <div class="wl-toggle-row">
+          <input type="checkbox" id="wl-enabled"/>
+          <label for="wl-enabled" style="margin:0;">Enable cover</label>
+        </div>
+
+        <div class="wl-image-row">
+          <label>Cover image</label>
+          <div class="wl-image-preview" id="wl-preview">
+            <span id="wl-preview-empty">No image</span>
+            <img id="wl-preview-img" style="display:none;" alt=""/>
+            <div class="wl-tint" id="wl-tint" style="display:none;"></div>
+            <div class="wl-overlay-text" id="wl-overlay-text" style="display:none;">
+              <div class="pv-eyebrow" id="pv-eyebrow"></div>
+              <div class="pv-title" id="pv-title"></div>
+              <div class="pv-sub" id="pv-sub"></div>
+            </div>
+          </div>
+          <input type="file" id="wl-image-input" accept="image/*" style="display:none;"/>
+          <button type="button" class="wl-pick-btn" id="wl-pick-btn">Choose image</button>
+          <button type="button" class="wl-clear-btn" id="wl-clear-btn">Clear</button>
+        </div>
+
+        <label for="wl-eyebrow">Eyebrow (small caps)</label>
+        <input type="text" id="wl-eyebrow" maxlength="60" placeholder="MISSION TO"/>
+
+        <label for="wl-title">Title</label>
+        <input type="text" id="wl-title" maxlength="60" placeholder="Ghana"/>
+
+        <label for="wl-subtitle">Subtitle / date</label>
+        <input type="text" id="wl-subtitle" maxlength="80" placeholder="March 1 – 9, 2026"/>
+
+        <button type="button" class="wl-save-btn" id="wl-save-btn">Save Cover</button>
+        <div class="wl-status" id="wl-status"></div>
+      </div>
 
       <div class="pages" id="pages"></div>
 
@@ -282,6 +359,120 @@
         }
       });
 
+      // ── White Label Cover (admin only) ────────────────────────────────────────
+      const ADMIN_EMAIL = 'curtmid@gmail.com';
+      let wlPickedFile = null;     // newly chosen File, not yet uploaded
+      let wlExistingUrl = null;    // url already saved in DB
+
+      function isAdmin() {
+        return currentUser && (currentUser.email || '').toLowerCase() === ADMIN_EMAIL;
+      }
+
+      function initWhiteLabelSection(coverConfig) {
+        if (!isAdmin()) return;
+        document.getElementById('wl-section').style.display = 'block';
+
+        const cfg = coverConfig || {};
+        document.getElementById('wl-enabled').checked = !!cfg.enabled;
+        document.getElementById('wl-eyebrow').value = cfg.eyebrow || '';
+        document.getElementById('wl-title').value = cfg.title || '';
+        document.getElementById('wl-subtitle').value = cfg.subtitle || '';
+        wlExistingUrl = cfg.image_url || null;
+        if (wlExistingUrl) showPreviewImage(wlExistingUrl);
+        updatePreviewText();
+
+        document.getElementById('wl-pick-btn').addEventListener('click', () => {
+          document.getElementById('wl-image-input').click();
+        });
+        document.getElementById('wl-image-input').addEventListener('change', (e) => {
+          const f = e.target.files && e.target.files[0];
+          if (!f) return;
+          if (f.size > 8 * 1024 * 1024) {
+            setStatus('Image is over 8 MB — please pick a smaller one.', 'err');
+            return;
+          }
+          wlPickedFile = f;
+          showPreviewImage(URL.createObjectURL(f));
+          setStatus('');
+        });
+        document.getElementById('wl-clear-btn').addEventListener('click', () => {
+          wlPickedFile = null;
+          wlExistingUrl = null;
+          document.getElementById('wl-preview-img').src = '';
+          document.getElementById('wl-preview-img').style.display = 'none';
+          document.getElementById('wl-tint').style.display = 'none';
+          document.getElementById('wl-overlay-text').style.display = 'none';
+          document.getElementById('wl-preview-empty').style.display = 'block';
+          document.getElementById('wl-image-input').value = '';
+          setStatus('');
+        });
+        ['wl-eyebrow', 'wl-title', 'wl-subtitle'].forEach(id => {
+          document.getElementById(id).addEventListener('input', updatePreviewText);
+        });
+        document.getElementById('wl-save-btn').addEventListener('click', saveWhiteLabel);
+      }
+
+      function showPreviewImage(url) {
+        const img = document.getElementById('wl-preview-img');
+        img.src = url;
+        img.style.display = 'block';
+        document.getElementById('wl-tint').style.display = 'block';
+        document.getElementById('wl-overlay-text').style.display = 'flex';
+        document.getElementById('wl-preview-empty').style.display = 'none';
+      }
+      function updatePreviewText() {
+        document.getElementById('pv-eyebrow').textContent = document.getElementById('wl-eyebrow').value;
+        document.getElementById('pv-title').textContent = document.getElementById('wl-title').value;
+        document.getElementById('pv-sub').textContent = document.getElementById('wl-subtitle').value;
+      }
+      function setStatus(msg, kind) {
+        const el = document.getElementById('wl-status');
+        el.textContent = msg || '';
+        el.className = 'wl-status' + (kind ? ' ' + kind : '');
+      }
+
+      async function saveWhiteLabel() {
+        const btn = document.getElementById('wl-save-btn');
+        btn.disabled = true;
+        setStatus('Saving…');
+        try {
+          let imageUrl = wlExistingUrl;
+          if (wlPickedFile) {
+            const ext = (wlPickedFile.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+            const path = `${slug}/cover.${ext}`;
+            const { error: upErr } = await db.storage
+              .from('experiences')
+              .upload(path, wlPickedFile, { upsert: true, contentType: wlPickedFile.type || 'image/jpeg' });
+            if (upErr) throw upErr;
+            const { data: pub } = db.storage.from('experiences').getPublicUrl(path);
+            imageUrl = pub.publicUrl + '?v=' + Date.now();
+            wlPickedFile = null;
+            wlExistingUrl = imageUrl;
+          }
+          const cfg = {
+            enabled: document.getElementById('wl-enabled').checked,
+            image_url: imageUrl || null,
+            eyebrow: document.getElementById('wl-eyebrow').value.trim() || null,
+            title: document.getElementById('wl-title').value.trim() || null,
+            subtitle: document.getElementById('wl-subtitle').value.trim() || null
+          };
+          const { error: dbErr, data } = await db.from('collections')
+            .update({ cover_config: cfg })
+            .eq('id', collectionId)
+            .select();
+          if (dbErr) throw dbErr;
+          if (!data || data.length === 0) {
+            throw new Error('No row updated. The admin trigger may have blocked the write — check that you are signed in as ' + ADMIN_EMAIL + '.');
+          }
+          setStatus('Saved. Open the project URL to see it.', 'ok');
+        } catch (err) {
+          console.error(err);
+          setStatus('Save failed: ' + (err.message || 'unknown error'), 'err');
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
       // ── Load existing collection ──────────────────────────────────────────────
       let collectionLoaded = false;
       async function loadCollection() {
@@ -292,6 +483,7 @@
         if (!col) { alert('Project not found.'); window.location.href = '/manage.html'; return; }
         collectionId = col.id;
         document.getElementById('name-input').value = col.name || '';
+        initWhiteLabelSection(col.cover_config);
 
         const { data: items } = await db.from('collection_items')
           .select('*').eq('collection_id', col.id).order('target_index');

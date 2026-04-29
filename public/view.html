@@ -11,6 +11,9 @@
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     <title>Popcode</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
@@ -92,6 +95,87 @@
         font-family: 'FilsonPro', sans-serif; text-decoration: none;
       }
       #signin-link:hover { color: white; }
+
+      /* ── White-label cover ─────────────────────────────────────────────── */
+      #wl-cover {
+        display: none; position: fixed; inset: 0; z-index: 9999;
+        overflow: hidden; background: #000;
+      }
+      #wl-cover .wl-bg {
+        position: absolute; inset: 0; width: 100%; height: 100%;
+        object-fit: cover; object-position: center;
+      }
+      #wl-cover .wl-overlay {
+        position: absolute; inset: 0;
+        background:
+          linear-gradient(180deg,
+            rgba(0,0,0,0.35) 0%,
+            rgba(0,0,0,0.10) 28%,
+            rgba(0,0,0,0.10) 55%,
+            rgba(0,0,0,0.55) 100%);
+      }
+      #wl-cover .wl-content {
+        position: relative; z-index: 2;
+        height: 100%; display: flex; flex-direction: column;
+        align-items: center; padding: 0 24px;
+        color: white;
+      }
+      #wl-cover .wl-text {
+        margin-top: 22vh; text-align: center;
+        text-shadow: 0 2px 16px rgba(0,0,0,0.35);
+      }
+      #wl-cover .wl-eyebrow {
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 500; font-size: 16px;
+        letter-spacing: 0.22em; text-transform: uppercase;
+        margin-bottom: 4px; opacity: 0.95;
+      }
+      #wl-cover .wl-title {
+        font-family: 'Cormorant Garamond', serif;
+        font-weight: 500; font-style: italic;
+        font-size: 76px; line-height: 1; letter-spacing: -0.01em;
+        margin-bottom: 14px;
+      }
+      #wl-cover .wl-subtitle {
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 400; font-size: 18px;
+        letter-spacing: 0.04em; opacity: 0.95;
+      }
+      #wl-cover .wl-cta {
+        margin-top: auto; padding-bottom: 24px;
+        width: 100%; max-width: 360px;
+        display: flex; flex-direction: column; align-items: center; gap: 14px;
+      }
+      #wl-cover .wl-scan-btn {
+        width: 100%; padding: 18px 24px;
+        border: none; border-radius: 999px;
+        background: white; color: #1a1a1a;
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 700; font-size: 17px;
+        cursor: pointer;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+      }
+      #wl-cover .wl-create-btn {
+        width: 100%; padding: 16px 24px;
+        border: 1.5px solid rgba(255,255,255,0.85);
+        border-radius: 999px; background: transparent; color: white;
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 600; font-size: 16px;
+        text-align: center; text-decoration: none;
+      }
+      #wl-cover .wl-signin {
+        font-family: 'DM Sans', sans-serif;
+        font-size: 13px; color: rgba(255,255,255,0.85);
+        text-decoration: none;
+      }
+      #wl-cover .wl-signin u { text-decoration: underline; }
+      #wl-cover .wl-popcode-logo {
+        height: 26px; margin-top: 6px; opacity: 0.95;
+      }
+      @media (max-width: 360px) {
+        #wl-cover .wl-title { font-size: 64px; }
+        #wl-cover .wl-text { margin-top: 18vh; }
+      }
 
       #scanner { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 999; pointer-events: none; }
       .corner {
@@ -222,6 +306,24 @@
       <div id="cta-group">
         <a id="create-btn" href="/create.html">Create your own Popcode</a>
         <a id="signin-link" href="/manage.html">Already have an account? <span style="text-decoration:underline;">Sign in</span></a>
+      </div>
+    </div>
+
+    <div id="wl-cover">
+      <img class="wl-bg" alt=""/>
+      <div class="wl-overlay"></div>
+      <div class="wl-content">
+        <div class="wl-text">
+          <div class="wl-eyebrow"></div>
+          <div class="wl-title"></div>
+          <div class="wl-subtitle"></div>
+        </div>
+        <div class="wl-cta">
+          <button class="wl-scan-btn" id="wl-scan-btn">Tap to scan</button>
+          <a class="wl-create-btn" href="/create.html">Create your own Popcode</a>
+          <a class="wl-signin" href="/manage.html">Already have an account? <u>Sign in</u></a>
+          <img class="wl-popcode-logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
+        </div>
       </div>
     </div>
     <div id="error-screen"><h2>Experience not found</h2><p>This link may be invalid or expired.</p></div>
@@ -359,6 +461,7 @@
             localStorage.setItem('popcode_views', JSON.stringify(views));
           } catch(e) {}
           mindUrl = col.mind_file_url;
+          applyCoverConfig(col.cover_config);
           const { data: items } = await db.from('collection_items')
             .select('*').eq('collection_id', col.id).order('target_index');
           (items || []).forEach(item => { videoMap[item.target_index] = item.video_url; });
@@ -377,45 +480,74 @@
         buildScene(mindUrl, videoMap);
 
         document.getElementById('loading').style.display = 'none';
-        document.getElementById('start-screen').style.display = 'flex';
+        showStartScreen();
         logEvent('scan_open');
 
-        document.getElementById('start-btn').addEventListener('click', () => {
-          document.getElementById('start-screen').style.display = 'none';
-          document.getElementById('scanner').style.display = 'block';
-          document.getElementById('home-btn').style.display = 'flex';
-          const hint = document.getElementById('scan-hint');
-          hint.textContent = 'Point your camera at a Popcoded photo';
-          hint.style.display = 'block';
+        document.getElementById('start-btn').addEventListener('click', handleStartTap);
+        document.getElementById('wl-scan-btn').addEventListener('click', handleStartTap);
+      }
 
-          // If we're returning from a closed video, rebuild the scene fresh
-          // (MindAR stop/start is unreliable). Do it here inside the user gesture
-          // so getUserMedia has gesture context, then wait for loaded before start().
-          // On first tap savedMindUrl is set but arScene is fresh — no rebuild needed.
-          if (sceneWasStopped && savedMindUrl) {
-            sceneWasStopped = false;
-            hint.textContent = 'Restarting camera…';
-            // Delay so iOS fully releases the video camera before getUserMedia.
-            // Rebuild after the delay, then wait for loaded before start().
-            setTimeout(() => {
-              const newScene = buildScene(savedMindUrl, savedVideoMap);
-              newScene.addEventListener('loaded', () => {
-                const mindar = arScene && arScene.systems['mindar-image-system'];
-                if (mindar && typeof mindar.start === 'function') {
-                  mindar.start()
-                    .then(() => { hint.textContent = 'Point your camera at a Popcoded photo'; })
-                    .catch(() => { hint.textContent = 'Point your camera at a Popcoded photo'; });
-                }
-                startReloadHintTimer();
-              }, { once: true });
-            }, 500);
-          } else {
-            // First scan — scene is already built, just start it
-            const mindar = arScene && arScene.systems['mindar-image-system'];
-            if (mindar && typeof mindar.start === 'function') mindar.start();
-            startReloadHintTimer();
-          }
-        });
+      function handleStartTap() {
+        hideStartScreen();
+        document.getElementById('scanner').style.display = 'block';
+        document.getElementById('home-btn').style.display = 'flex';
+        const hint = document.getElementById('scan-hint');
+        hint.textContent = 'Point your camera at a Popcoded photo';
+        hint.style.display = 'block';
+
+        // If we're returning from a closed video, rebuild the scene fresh
+        // (MindAR stop/start is unreliable). Do it here inside the user gesture
+        // so getUserMedia has gesture context, then wait for loaded before start().
+        if (sceneWasStopped && savedMindUrl) {
+          sceneWasStopped = false;
+          hint.textContent = 'Restarting camera…';
+          setTimeout(() => {
+            const newScene = buildScene(savedMindUrl, savedVideoMap);
+            newScene.addEventListener('loaded', () => {
+              const mindar = arScene && arScene.systems['mindar-image-system'];
+              if (mindar && typeof mindar.start === 'function') {
+                mindar.start()
+                  .then(() => { hint.textContent = 'Point your camera at a Popcoded photo'; })
+                  .catch(() => { hint.textContent = 'Point your camera at a Popcoded photo'; });
+              }
+              startReloadHintTimer();
+            }, { once: true });
+          }, 500);
+        } else {
+          const mindar = arScene && arScene.systems['mindar-image-system'];
+          if (mindar && typeof mindar.start === 'function') mindar.start();
+          startReloadHintTimer();
+        }
+      }
+
+      let coverConfig = null;
+      function applyCoverConfig(cfg) {
+        if (!cfg || !cfg.enabled || !cfg.image_url) { coverConfig = null; return; }
+        coverConfig = cfg;
+        const wl = document.getElementById('wl-cover');
+        wl.querySelector('.wl-bg').src = cfg.image_url;
+        const eyebrow = wl.querySelector('.wl-eyebrow');
+        const title = wl.querySelector('.wl-title');
+        const subtitle = wl.querySelector('.wl-subtitle');
+        eyebrow.textContent = cfg.eyebrow || '';
+        title.textContent = cfg.title || '';
+        subtitle.textContent = cfg.subtitle || '';
+        eyebrow.style.display = cfg.eyebrow ? '' : 'none';
+        title.style.display = cfg.title ? '' : 'none';
+        subtitle.style.display = cfg.subtitle ? '' : 'none';
+      }
+      function showStartScreen() {
+        if (coverConfig) {
+          document.getElementById('start-screen').style.display = 'none';
+          document.getElementById('wl-cover').style.display = 'block';
+        } else {
+          document.getElementById('wl-cover').style.display = 'none';
+          document.getElementById('start-screen').style.display = 'flex';
+        }
+      }
+      function hideStartScreen() {
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('wl-cover').style.display = 'none';
       }
 
       const fullVid = document.getElementById('fullvideo');
@@ -540,7 +672,7 @@ fullVid.play()
 
         // Show the regular start screen — user can tap "Tap to Scan" to scan
         // the same image again or any new one.
-        document.getElementById('start-screen').style.display = 'flex';
+        showStartScreen();
       }
 
       fullVid.addEventListener('ended', () => {
@@ -554,7 +686,7 @@ fullVid.play()
           fullVid.src = '';
           closeBtn.style.display = 'none';
           document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
-          document.getElementById('start-screen').style.display = 'flex';
+          showStartScreen();
           fade.style.opacity = '0';
           setTimeout(() => fade.style.display = 'none', 1000);
         }, 1000);
@@ -567,7 +699,7 @@ fullVid.play()
         document.getElementById('scanner').style.display = 'none';
         document.getElementById('scan-hint').style.display = 'none';
         document.getElementById('home-btn').style.display = 'none';
-        document.getElementById('start-screen').style.display = 'flex';
+        showStartScreen();
       });
     </script>
   </body>
