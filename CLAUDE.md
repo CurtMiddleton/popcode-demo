@@ -563,3 +563,48 @@ Cache-busting `?v=<timestamp>` is appended on save so a re-uploaded image immedi
 - All user-controlled cover text is rendered via `textContent` (never `innerHTML`) on both the editor preview and the public viewer, so there's no XSS surface even though admin-only writes mostly mitigate it anyway.
 - The cover does NOT replace `index.html` or `manage.html` — strictly per-project, applies only when someone hits `popcode.app/{slug}` for a project where `cover_config.enabled` is true.
 
+### 2026-04-29 (later) — White-label cover, iterated and shipped to prod
+
+**Continuation of the earlier 2026-04-29 session notes. All commits on `main` (user said "push to prod and we can tweak" — no preview deploy, no PR).**
+
+**The feature is live in prod** as of `cee3015`. Mission to Ghana cover is enabled on at least two real projects (the original demo + slug `em6no1gm`). User confirmed it's working on iPhone.
+
+**Commit-by-commit (oldest → newest):**
+
+1. `beaf21e` — initial build (see earlier 2026-04-29 entry).
+2. `8fc89cf` — Title 76px italic → **122px regular** (small-screen breakpoint 64 → 104). User said italic was wrong and 122pt was the spec.
+3. `7215000` — Cover image `object-position: center` → **`top center`**. The kente-cloth pattern at the top of the uploaded image was getting cropped on tall phones because `object-fit: cover` distributes the crop top+bottom evenly. Anchoring to the top guarantees the kente always shows; bottom of the image gets cropped instead, but that's where the dark-bottom gradient + buttons sit so it's invisible. Same fix applied to the editor preview pane.
+4. `9cfaef3` — Share message in `manage.html` now uses **`col.cover_config.title`** when enabled, falling back to `col.name`. So Mission to Ghana now SMSes as `"Ghana" is ready to scan with Popcode!` instead of the project's internal name. One-line fix at `manage.html:454`.
+5. `e4b7332` — Title 122px → **112px** (small breakpoint 104 → 94). User wanted it dialed back 10pt.
+6. `749cc11` — **Save-guard**: `saveWhiteLabel()` now refuses to save if "Enable cover" is checked and no image is set, surfacing `"Pick a cover image before enabling the cover."` This was caught after the user toggled Enable on the demo project but the image picker didn't have a file selected — save succeeded silently with `image_url: null` and the cover never rendered (the viewer falls back to the default start screen when `image_url` is missing). Could've gone either way (loud client error vs. silent fail) but the user's first reaction was "looks broken" so the guard is the better default.
+7. `903a75e` — Popcode logo at the bottom of the cover doubled from **26px → 52px** tall.
+8. `51d487d` then `cee3015` — Iterated on the **Tap to scan button**: I first made it turquoise-bg + white-text + bigger (22px). User pushed back: "button should be white like before, the **text** should be turquoise, and make smaller." Final state: white background, **turquoise text `#2dc0c5`**, 18px font, 18×24 padding. Also dropped the CTA column `max-width` from 360 → **300px** so the buttons don't stretch edge-to-edge.
+
+**Brand turquoise**: settled on `#2dc0c5` for the text. This pairs with the existing Popcode brand cyan `#2dc0f7` (which is already used in the badge gradient and elsewhere) — `c5` is more green-leaning, closer to a kente turquoise. If we ever do a global "Popcode turquoise" color token, it should be one of these two; document which when it happens.
+
+**UX gotcha worth keeping (the silent-cover bug)**: the editor has TWO things that have to be set to render the cover — `enabled === true` AND a non-null `image_url`. If only Enable is checked, the save still goes through and the row gets `enabled: true, image_url: null`, which `applyCoverConfig()` in `view.html:524` treats as "no cover" and falls back to the default start screen. The `749cc11` guard prevents this on save, but if anyone ever queries the DB and sees `cover_config: { enabled: true, image_url: null }`, that's a left-over from before the guard.
+
+**SMS bounce mystery (not a Popcode bug)**: user reported getting "Undelivered Mail Returned to Sender" texts in Messages after using the Message share button. Source was Verizon's MMS-to-email gateway (`twbgohaavzwvmta-c-rh-cmta-01-mms-00.vtext.com`) trying to deliver to `curtmid@gmail.com` and being rejected by Gmail spam (550-5.7.1). Cause: the user (or iOS) picked the email address `curtmid@gmail.com` as the message recipient instead of a phone number, so Verizon converted the SMS to email-via-MMS-gateway, and Gmail blocked it. Nothing for us to fix — it's a recipient-routing thing in iOS Messages. Bounces should taper off in a day or two as Verizon's queue gives up.
+
+**iMessage link preview discrepancy (also not a bug)**: user noticed the Popcode logo card preview shows up on Mac Messages but is blank/gray on iPhone Messages for green (SMS) bubbles. Explanation: Mac Messages does its own URL fetch + OG-tag render via WebKit even for green bubbles, so it always unfurls. iPhone Messages does NOT auto-render link previews for SMS bubbles (only iMessage). This is iOS behavior, not a code issue — the OG tags in `view.html:8-12` are correct (since desktop unfurls them).
+
+**The follow-on the user explicitly tabled**: per-slug **dynamic OG image** so a Mission to Ghana iMessage preview shows the Ghana photo instead of the generic gradient Popcode logo. Implementation sketch when we pick this up:
+- Add a Vercel serverless function or rewrite that intercepts `popcode.app/{slug}` requests with the `User-Agent` of a link-preview crawler (Apple-Messages, facebookexternalhit, Twitterbot, Slackbot, etc.) OR for ALL `/{slug}` requests, server-render the HTML with `og:image` set to `cover_config.image_url` when present, falling back to `og_image.png` when not.
+- Cleanest: a thin Next-style edge function or `vercel.json` rewrite that fetches the cover_config from Supabase server-side and injects the right meta tag before sending the HTML. Static `view.html` can't do this because the meta tags are read from the initial HTML response — JS-injected `<meta>` tags don't get picked up by link-preview crawlers (they don't run JS).
+- Alternative without a function: pre-generate per-slug HTML files at build time. Won't work because slugs are user-created at runtime, not build time.
+- Same fix would also benefit Slack/Discord/iMessage/WhatsApp/Twitter/Facebook unfurling — currently all see the same generic Popcode card.
+
+**Other follow-ons still queued (from earlier 2026-04-29 entry):**
+- Mockup 2 ("Have a code? Enter it here.") on `index.html` root — small input + Go button that routes to `/{code}`. Still pending.
+- Per-account branding (a `white_label_profiles` table) when going beyond demo.
+- Font picker (curated Google Fonts dropdown).
+- "Preview on device" button in editor.
+
+**Lessons / things future-Claude should not relearn:**
+- **`object-fit: cover` + `object-position: center`** crops the top of the image. Anchor to `top center` for any layout where the top of the source image is meaningful (logos, decorative borders, faces near the top). The user immediately noticed when it was wrong.
+- **The "save succeeds, viewer falls back to default" failure mode** for jsonb config columns is sneakier than a hard error. Always guard at save time when there are AND-conditions on the render side.
+- **"X pt"** in this user's vocabulary = **`px`** in CSS. They said 122pt and 112pt; we set those literal numbers as `font-size: 122px` and it matched what they wanted. Don't try to convert pt→px (1.333× multiplier) when chatting with this user.
+- **Don't over-narrate iterative styling work** — quick edit, push, ask "look right?" and tweak. The user iterated 3× on the Tap to scan button (size, color, narrower) and the cycle was tight. Each round = one Edit + one push.
+- **iOS Messages link preview** is rendered by the displaying device, not the sending device. Mac Messages and iPhone Messages can show the same conversation completely differently. Not something to debug as a server-side issue.
+- **Push to prod was authorized** for this branch — "not able to preview, just push to prod and we can tweak." This was a one-shot authorization for the white-label feature. Going forward, do NOT take that as standing approval to skip preview/PR for other branches; ask each time.
+
