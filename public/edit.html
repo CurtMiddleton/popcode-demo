@@ -193,7 +193,7 @@
       .wl-image-preview img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
       .wl-image-preview .wl-overlay-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; color: white; text-shadow: 0 2px 8px rgba(0,0,0,0.4); pointer-events: none; }
       .wl-image-preview .wl-overlay-text .pv-eyebrow { font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; margin-bottom: 4px; }
-      .wl-image-preview .wl-overlay-text .pv-title { font-family: 'Cormorant Garamond', serif; font-style: normal; font-weight: 500; font-size: 60px; line-height: 1; margin-bottom: 6px; }
+      .wl-image-preview .wl-overlay-text .pv-title { font-family: 'Cormorant Garamond', serif; font-style: normal; font-weight: 500; font-size: 60px; line-height: 0.92; margin-bottom: 6px; }
       .wl-image-preview .wl-overlay-text .pv-sub { font-size: 11px; }
       .wl-image-preview .wl-tint { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.10) 30%, rgba(0,0,0,0.10) 60%, rgba(0,0,0,0.55) 100%); pointer-events: none; }
       .wl-pick-btn { display: inline-block; padding: 8px 14px; border-radius: 999px; background: #7657FC; color: white; font-size: 13px; font-weight: 600; cursor: pointer; border: none; }
@@ -282,6 +282,13 @@
 
         <label for="wl-title">Title</label>
         <input type="text" id="wl-title" maxlength="60" placeholder="Ghana"/>
+
+        <label for="wl-title-size">Title size</label>
+        <select id="wl-title-size" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid #e0d6ff; font-size:14px; color:#1a1a1a; background:white; font-family:'FilsonPro',sans-serif; outline:none; margin-bottom:12px;">
+          <option value="lg">Large (1 short word)</option>
+          <option value="md">Medium (2 words / longer)</option>
+          <option value="sm">Small (3+ words / wraps)</option>
+        </select>
 
         <label for="wl-subtitle">Subtitle / date</label>
         <input type="text" id="wl-subtitle" maxlength="80" placeholder="March 1 – 9, 2026"/>
@@ -376,6 +383,7 @@
         document.getElementById('wl-enabled').checked = !!cfg.enabled;
         document.getElementById('wl-eyebrow').value = cfg.eyebrow || '';
         document.getElementById('wl-title').value = cfg.title || '';
+        document.getElementById('wl-title-size').value = cfg.title_size === 'sm' || cfg.title_size === 'md' ? cfg.title_size : 'lg';
         document.getElementById('wl-subtitle').value = cfg.subtitle || '';
         wlExistingUrl = cfg.image_url || null;
         if (wlExistingUrl) showPreviewImage(wlExistingUrl);
@@ -409,6 +417,7 @@
         ['wl-eyebrow', 'wl-title', 'wl-subtitle'].forEach(id => {
           document.getElementById(id).addEventListener('input', updatePreviewText);
         });
+        document.getElementById('wl-title-size').addEventListener('change', updatePreviewText);
         document.getElementById('wl-save-btn').addEventListener('click', saveWhiteLabel);
       }
 
@@ -422,7 +431,11 @@
       }
       function updatePreviewText() {
         document.getElementById('pv-eyebrow').textContent = document.getElementById('wl-eyebrow').value;
-        document.getElementById('pv-title').textContent = document.getElementById('wl-title').value;
+        const titleEl = document.getElementById('pv-title');
+        titleEl.textContent = document.getElementById('wl-title').value;
+        const sizeMap = { sm: 32, md: 46, lg: 60 };
+        const size = document.getElementById('wl-title-size').value;
+        titleEl.style.fontSize = (sizeMap[size] || 60) + 'px';
         document.getElementById('pv-sub').textContent = document.getElementById('wl-subtitle').value;
       }
       function setStatus(msg, kind) {
@@ -460,6 +473,7 @@
             image_url: imageUrl || null,
             eyebrow: document.getElementById('wl-eyebrow').value.trim() || null,
             title: document.getElementById('wl-title').value.trim() || null,
+            title_size: document.getElementById('wl-title-size').value || 'lg',
             subtitle: document.getElementById('wl-subtitle').value.trim() || null
           };
           const { error: dbErr, data } = await db.from('collections')
