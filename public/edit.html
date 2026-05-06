@@ -128,6 +128,29 @@
       .compressed-badge { font-size: 10px; color: #16a34a; font-weight: 700; }
       .existing-badge { display: none; }
 
+      /* Media-type toggle (Video | Audio) */
+      .media-toggle { display: inline-flex; background: #ececec; border-radius: 999px; padding: 3px; margin-bottom: 14px; }
+      .media-toggle button { background: transparent; border: none; padding: 6px 14px; font-size: 12px; font-weight: 700; color: #666; border-radius: 999px; cursor: pointer; font-family: 'FilsonPro', sans-serif; }
+      .media-toggle button.active { background: white; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+      /* Audio recorder tile */
+      .audio-tile {
+        background: white; border-radius: 10px; width: 130px; height: 110px;
+        border: 1px solid #e8e8e8; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 6px; position: relative; overflow: hidden;
+      }
+      .audio-tile.recording { background: #fef2f2; border-color: #fca5a5; }
+      .audio-tile.has-audio { background: #f0ecf8; border-color: #d0c0e8; }
+      .audio-rec-btn { background: #1a1a1a; color: white; border: none; border-radius: 999px; padding: 7px 14px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: 'FilsonPro', sans-serif; }
+      .audio-rec-btn.stop { background: #dc2626; }
+      .audio-time { font-size: 11px; color: #555; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .audio-preview { width: 100%; padding: 0 8px; }
+      .audio-preview audio { width: 100%; height: 32px; }
+      .audio-rerecord { font-size: 10px; color: #6b3fa0; background: none; border: none; cursor: pointer; font-weight: 700; font-family: 'FilsonPro', sans-serif; text-decoration: underline; }
+      .rec-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #dc2626; margin-right: 5px; vertical-align: middle; animation: rec-pulse 1s infinite; }
+      @keyframes rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
       .add-page-btn { width: 100%; max-width: 360px; padding: 16px; border-radius: 30px; border: none; background: #eeeeee; color: #333333; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 16px; transition: background 0.2s; font-family: 'FilsonPro', sans-serif; }
       .add-page-btn:hover { background: #e0e0e0; }
       .save-btn { width: 100%; max-width: 360px; padding: 16px; border-radius: 30px; border: none; background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%); color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: opacity 0.2s; font-family: 'FilsonPro', sans-serif; }
@@ -338,13 +361,13 @@
 
       let currentUser = null;
       let collectionId = null;
-      // existingItems: array of {id, target_index, video_url, photo_url} from DB
+      // existingItems: array of {id, target_index, media_type, video_url, audio_url, transcript, photo_url} from DB
       let existingItems = [];
       // deletedExistingIds: set of item IDs the user removed
       const deletedExistingIds = new Set();
-      // replacements: {[itemId]: {photo?: File, video?: File}} — files chosen to replace existing
+      // replacements: {[itemId]: {photo?, video?, audio?, mediaType?}} — files / type changes for existing items
       const replacements = {};
-      // newPairs: keyed by page key, {photo: File, video: File}
+      // newPairs: keyed by page key, {photo, video, audio, mediaType}
       let newPageKey = 0;
       const newPairs = {};
 
@@ -527,6 +550,12 @@
       }
 
       // ── Render existing page (tap photo or video to replace) ─────────────────
+      function getExistingMediaType(item) {
+        const rep = replacements[item.id];
+        if (rep && rep.mediaType) return rep.mediaType;
+        return item.media_type === 'audio' ? 'audio' : 'video';
+      }
+
       function renderExistingPage(item) {
         const key = `existing-${item.id}`;
         const page = document.createElement('div');
@@ -535,11 +564,17 @@
 
         const photoThumb = item.photo_url || '';
         const videoThumb = item.video_url || '';
+        const audioUrl = item.audio_url || '';
+        const startMode = getExistingMediaType(item);
 
         page.innerHTML = `
           <div class="page-header">
             <div class="page-label">${item.target_index + 1}</div>
             <button class="remove-page-btn" title="Remove page"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+          </div>
+          <div class="media-toggle" data-key="${key}">
+            <button type="button" class="media-tab ${startMode === 'video' ? 'active' : ''}" data-mode="video">Video</button>
+            <button type="button" class="media-tab ${startMode === 'audio' ? 'active' : ''}" data-mode="audio">Audio</button>
           </div>
           <div class="upload-row">
             <div class="upload-wrapper">
@@ -549,18 +584,26 @@
               </label>
               <div class="existing-badge" id="photo-badge-${key}">Tap to replace</div>
             </div>
-            <div class="upload-wrapper">
-              <label class="upload-btn selected replaceable" id="video-btn-${key}" title="Tap to replace video">
-                <input type="file" accept="video/*" style="position:absolute;top:0;right:0;bottom:0;left:0;opacity:0;cursor:pointer;width:100%;height:100%;"/>
-                <img class="preview-img" id="video-preview-${key}" style="display:block;"/>
-                <span class="play-overlay" style="display:block;"></span>
-              </label>
-              <div class="existing-badge" id="video-badge-${key}">Tap to replace</div>
+            <div class="upload-wrapper" id="media-wrapper-${key}">
+              <div class="video-slot" id="video-slot-${key}" style="display:${startMode === 'video' ? '' : 'none'};">
+                <label class="upload-btn selected replaceable" id="video-btn-${key}" title="Tap to replace video">
+                  <input type="file" accept="video/*" style="position:absolute;top:0;right:0;bottom:0;left:0;opacity:0;cursor:pointer;width:100%;height:100%;"/>
+                  <img class="preview-img" id="video-preview-${key}" style="display:block;"/>
+                  <span class="play-overlay" style="display:block;"></span>
+                </label>
+                <div class="existing-badge" id="video-badge-${key}">Tap to replace</div>
+              </div>
+              <div class="audio-slot" id="audio-slot-${key}" style="display:${startMode === 'audio' ? '' : 'none'};">
+                <div class="audio-tile" id="audio-tile-${key}"></div>
+                <div class="file-size" id="audio-size-${key}" style="margin-top:6px;"></div>
+              </div>
             </div>
           </div>
         `;
 
-        // Generate video thumbnail from URL
+        document.getElementById('pages').appendChild(page);
+
+        // Generate video thumbnail from URL (only meaningful when item already has video)
         if (videoThumb) {
           const vid = document.createElement('video');
           vid.crossOrigin = 'anonymous';
@@ -586,6 +629,24 @@
           });
           vid.src = videoThumb;
         }
+
+        // Render the audio tile based on current state
+        renderExistingAudioTile(item, key, audioUrl);
+
+        // Media-type toggle (lets user switch this page from video → audio or vice versa)
+        page.querySelectorAll('.media-tab').forEach(tab => {
+          tab.addEventListener('click', () => {
+            const mode = tab.dataset.mode;
+            if (!replacements[item.id]) replacements[item.id] = {};
+            replacements[item.id].mediaType = mode;
+            page.querySelectorAll('.media-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
+            document.getElementById(`video-slot-${key}`).style.display = mode === 'video' ? '' : 'none';
+            document.getElementById(`audio-slot-${key}`).style.display = mode === 'audio' ? '' : 'none';
+            document.getElementById('unsaved-banner').style.display = 'block';
+            // If user just switched TO audio and item didn't have audio originally, show empty recorder
+            if (mode === 'audio') renderExistingAudioTile(item, key, item.audio_url || '');
+          });
+        });
 
         // Photo replacement
         page.querySelector('#photo-btn-' + key + ' input').addEventListener('change', function() {
@@ -646,8 +707,157 @@
             document.getElementById('unsaved-banner').style.display = 'block';
           });
         });
+      }
 
-        document.getElementById('pages').appendChild(page);
+      function renderExistingAudioTile(item, key, audioUrl) {
+        const tile = document.getElementById(`audio-tile-${key}`);
+        if (!tile) return;
+        const rep = replacements[item.id];
+        const newAudio = rep && rep.audio;
+        tile.classList.remove('recording', 'has-audio');
+
+        if (newAudio) {
+          tile.classList.add('has-audio');
+          const url = URL.createObjectURL(newAudio);
+          tile.innerHTML = `
+            <div class="audio-preview"><audio controls preload="metadata" src="${url}"></audio></div>
+            <button type="button" class="audio-rerecord">Re-record</button>
+          `;
+          tile.querySelector('.audio-rerecord').addEventListener('click', () => {
+            if (replacements[item.id]) delete replacements[item.id].audio;
+            renderExistingAudioTile(item, key, item.audio_url || '');
+          });
+          const sz = document.getElementById(`audio-size-${key}`);
+          if (sz) sz.textContent = formatFileSize(newAudio.size);
+          return;
+        }
+
+        if (audioUrl) {
+          tile.classList.add('has-audio');
+          tile.innerHTML = `
+            <div class="audio-preview"><audio controls preload="metadata" src="${escapeHtml(audioUrl)}"></audio></div>
+            <button type="button" class="audio-rerecord">Re-record</button>
+          `;
+          tile.querySelector('.audio-rerecord').addEventListener('click', () => startRecordingExisting(item, key));
+        } else {
+          tile.innerHTML = `<button type="button" class="audio-rec-btn">● Record</button>`;
+          tile.querySelector('.audio-rec-btn').addEventListener('click', () => startRecordingExisting(item, key));
+        }
+      }
+
+      // ── Audio recording (shared by existing-page tiles + new-page tiles) ─────
+      const recorders = {}; // { [token]: { mediaRecorder, chunks, mime, ext, stream, startTs, timerId } }
+
+      function pickAudioMime() {
+        const candidates = [
+          'audio/webm;codecs=opus',
+          'audio/webm',
+          'audio/mp4;codecs=mp4a.40.2',
+          'audio/mp4',
+          'audio/ogg;codecs=opus'
+        ];
+        if (typeof MediaRecorder === 'undefined') return null;
+        for (const c of candidates) {
+          if (MediaRecorder.isTypeSupported(c)) {
+            const ext = c.startsWith('audio/webm') ? 'webm'
+                      : c.startsWith('audio/mp4') ? 'm4a'
+                      : c.startsWith('audio/ogg') ? 'ogg'
+                      : 'webm';
+            return { mime: c, ext };
+          }
+        }
+        return { mime: '', ext: 'webm' };
+      }
+
+      async function startRecorder(token, tileEl, onDone) {
+        if (recorders[token]) return;
+        const pick = pickAudioMime();
+        if (!pick) { alert('Audio recording is not supported in this browser.'); return; }
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (e) {
+          alert('Microphone access was denied. Enable it in your browser settings and try again.');
+          return;
+        }
+        const opts = pick.mime ? { mimeType: pick.mime } : {};
+        const mr = new MediaRecorder(stream, opts);
+        const chunks = [];
+        mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+        mr.onstop = () => {
+          const blob = new Blob(chunks, { type: pick.mime || mr.mimeType || 'audio/webm' });
+          stream.getTracks().forEach(t => t.stop());
+          const file = new File([blob], `recording.${pick.ext}`, { type: blob.type });
+          if (recorders[token] && recorders[token].timerId) clearInterval(recorders[token].timerId);
+          delete recorders[token];
+          onDone(file);
+        };
+        mr.start();
+        const startTs = Date.now();
+        recorders[token] = { mediaRecorder: mr, chunks, mime: pick.mime, ext: pick.ext, stream, startTs, timerId: null };
+
+        tileEl.classList.add('recording');
+        tileEl.innerHTML = `
+          <div><span class="rec-dot"></span><span style="font-size:11px;color:#dc2626;font-weight:700;">Recording</span></div>
+          <div class="audio-time" id="audio-elapsed-${token}">0:00</div>
+          <button type="button" class="audio-rec-btn stop">Stop</button>
+        `;
+        tileEl.querySelector('.audio-rec-btn.stop').addEventListener('click', () => {
+          try { mr.stop(); } catch(e) {}
+        });
+        recorders[token].timerId = setInterval(() => {
+          const ms = Date.now() - startTs;
+          const s = Math.floor(ms / 1000);
+          const el = document.getElementById(`audio-elapsed-${token}`);
+          if (el) el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+        }, 250);
+      }
+
+      function startRecordingExisting(item, key) {
+        const tile = document.getElementById(`audio-tile-${key}`);
+        if (!tile) return;
+        startRecorder(`existing-${item.id}`, tile, (file) => {
+          if (!replacements[item.id]) replacements[item.id] = {};
+          replacements[item.id].audio = file;
+          replacements[item.id].mediaType = 'audio';
+          document.getElementById('unsaved-banner').style.display = 'block';
+          renderExistingAudioTile(item, key, item.audio_url || '');
+        });
+      }
+
+      function startRecordingNew(n) {
+        const tile = document.getElementById(`audio-tile-new-${n}`);
+        if (!tile) return;
+        startRecorder(`new-${n}`, tile, (file) => {
+          newPairs[n].audio = file;
+          renderNewAudioTile(n);
+        });
+      }
+
+      function renderNewAudioTile(n) {
+        const tile = document.getElementById(`audio-tile-new-${n}`);
+        if (!tile) return;
+        const audio = newPairs[n] && newPairs[n].audio;
+        tile.classList.remove('recording', 'has-audio');
+        if (audio) {
+          tile.classList.add('has-audio');
+          const url = URL.createObjectURL(audio);
+          tile.innerHTML = `
+            <div class="audio-preview"><audio controls preload="metadata" src="${url}"></audio></div>
+            <button type="button" class="audio-rerecord">Re-record</button>
+          `;
+          tile.querySelector('.audio-rerecord').addEventListener('click', () => {
+            newPairs[n].audio = null;
+            renderNewAudioTile(n);
+          });
+          const sz = document.getElementById(`audio-size-new-${n}`);
+          if (sz) sz.textContent = formatFileSize(audio.size);
+        } else {
+          tile.innerHTML = `<button type="button" class="audio-rec-btn">● Record</button>`;
+          tile.querySelector('.audio-rec-btn').addEventListener('click', () => startRecordingNew(n));
+          const sz = document.getElementById(`audio-size-new-${n}`);
+          if (sz) sz.textContent = '';
+        }
       }
 
       function setVideoPreview(previewId, file) {
@@ -667,7 +877,7 @@
       function addNewPage() {
         newPageKey++;
         const n = newPageKey;
-        newPairs[n] = { photo: null, video: null };
+        newPairs[n] = { photo: null, video: null, audio: null, mediaType: 'video' };
         const page = document.createElement('div');
         page.className = 'page';
         page.id = `page-new-${n}`;
@@ -675,6 +885,10 @@
           <div class="page-header">
             <div class="page-label">${n}</div>
             <button class="remove-page-btn" title="Remove page"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+          </div>
+          <div class="media-toggle">
+            <button type="button" class="media-tab active" data-mode="video">Video</button>
+            <button type="button" class="media-tab" data-mode="audio">Audio</button>
           </div>
           <div class="upload-row">
             <div class="upload-wrapper">
@@ -687,17 +901,23 @@
               <div class="file-name" id="photo-name-new-${n}"></div>
               <div class="file-size" id="photo-size-new-${n}"></div>
             </div>
-            <div class="upload-wrapper">
-              <label class="upload-btn" id="video-btn-new-${n}">
-                <input type="file" accept="video/*" onchange="handleFile(this,'video',${n}).catch(e=>console.error(e))"/>
-                <img class="icon" src="/assets/video.png" alt="Video"/>
-                <img class="preview-img" id="video-preview-new-${n}"/>
-                <span class="play-overlay"></span>
-                <span class="btn-label">Plays on scan</span>
-              </label>
-              <div class="file-name" id="video-name-new-${n}"></div>
-              <div class="file-size" id="video-size-new-${n}"></div>
-              <div class="video-msg" id="video-msg-new-${n}"></div>
+            <div class="upload-wrapper" id="media-wrapper-new-${n}">
+              <div class="video-slot" id="video-slot-new-${n}">
+                <label class="upload-btn" id="video-btn-new-${n}">
+                  <input type="file" accept="video/*" onchange="handleFile(this,'video',${n}).catch(e=>console.error(e))"/>
+                  <img class="icon" src="/assets/video.png" alt="Video"/>
+                  <img class="preview-img" id="video-preview-new-${n}"/>
+                  <span class="play-overlay"></span>
+                  <span class="btn-label">Plays on scan</span>
+                </label>
+                <div class="file-name" id="video-name-new-${n}"></div>
+                <div class="file-size" id="video-size-new-${n}"></div>
+                <div class="video-msg" id="video-msg-new-${n}"></div>
+              </div>
+              <div class="audio-slot" id="audio-slot-new-${n}" style="display:none;">
+                <div class="audio-tile" id="audio-tile-new-${n}"></div>
+                <div class="file-size" id="audio-size-new-${n}" style="margin-top:6px;"></div>
+              </div>
             </div>
           </div>
         `;
@@ -710,6 +930,16 @@
           });
         });
         document.getElementById('pages').appendChild(page);
+        page.querySelectorAll('.media-tab').forEach(tab => {
+          tab.addEventListener('click', () => {
+            const mode = tab.dataset.mode;
+            newPairs[n].mediaType = mode;
+            page.querySelectorAll('.media-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
+            document.getElementById(`video-slot-new-${n}`).style.display = mode === 'video' ? '' : 'none';
+            document.getElementById(`audio-slot-new-${n}`).style.display = mode === 'audio' ? '' : 'none';
+          });
+        });
+        renderNewAudioTile(n);
         renumberPages();
       }
 
@@ -902,21 +1132,41 @@
       });
 
       // ── Save ──────────────────────────────────────────────────────────────────
+      function newPairReady(p) {
+        return p && p.photo && (p.mediaType === 'audio' ? !!p.audio : !!p.video);
+      }
+
       document.getElementById('save-btn').addEventListener('click', async () => {
         // Collect kept existing items (not deleted)
         const keptItems = existingItems.filter(item => !deletedExistingIds.has(item.id));
         // Collect complete new pairs
-        const readyNew = Object.values(newPairs).filter(p => p.photo && p.video);
+        const readyNew = Object.values(newPairs).filter(newPairReady);
+
+        // Validate that any kept item that's been switched TO audio actually has audio
+        for (const item of keptItems) {
+          const finalType = getExistingMediaType(item);
+          const rep = replacements[item.id] || {};
+          const hasNewAudio = !!rep.audio;
+          const hasExistingAudio = !!item.audio_url;
+          if (finalType === 'audio' && !hasNewAudio && !hasExistingAudio) {
+            alert(`Page ${item.target_index + 1} is set to Audio but has no recording — record audio or switch back to Video before saving.`);
+            return;
+          }
+        }
 
         if (keptItems.length + readyNew.length === 0) {
-          alert('You need at least one page with both a photo and video.');
+          alert('You need at least one page with both a photo and either a video or an audio recording.');
           return;
         }
 
         // Validate new video sizes (stale file guard)
         for (let i = 0; i < readyNew.length; i++) {
-          if (readyNew[i].video.size === 0) {
+          if (readyNew[i].mediaType === 'video' && readyNew[i].video.size === 0) {
             alert(`New page ${i+1}: video appears to be empty — it may have expired. Please remove and re-add it.`);
+            return;
+          }
+          if (readyNew[i].mediaType === 'audio' && readyNew[i].audio.size === 0) {
+            alert(`New page ${i+1}: audio recording is empty — please re-record it.`);
             return;
           }
         }
@@ -1005,9 +1255,13 @@
         // Kept existing items — reuse existing URLs, or upload replacements if chosen
         for (const item of keptItems) {
           let video_url = item.video_url;
+          let audio_url = item.audio_url;
           let photo_url = item.photo_url;
-          const rep = replacements[item.id];
-          if (rep && rep.video) {
+          let transcript = item.transcript || null;
+          const rep = replacements[item.id] || {};
+          const finalType = getExistingMediaType(item);
+
+          if (rep.video) {
             const vPath = `${slug}/video_${idx}.mp4`;
             await db.storage.from('experiences').remove([urlToStoragePath(item.video_url)].filter(Boolean));
             const { error: vErr } = await db.storage.from('experiences')
@@ -1015,7 +1269,19 @@
             if (vErr) throw new Error(`Replacing video: ${vErr.message}`);
             video_url = db.storage.from('experiences').getPublicUrl(vPath).data.publicUrl;
           }
-          if (rep && rep.photo) {
+          if (rep.audio) {
+            const audioExt = (rep.audio.name && rep.audio.name.split('.').pop()) || 'webm';
+            const aPath = `${slug}/audio_${idx}.${audioExt}`;
+            if (item.audio_url) {
+              await db.storage.from('experiences').remove([urlToStoragePath(item.audio_url)].filter(Boolean));
+            }
+            const { error: aErr } = await db.storage.from('experiences')
+              .upload(aPath, rep.audio, { contentType: rep.audio.type || 'audio/webm', upsert: true });
+            if (aErr) throw new Error(`Replacing audio: ${aErr.message}`);
+            audio_url = db.storage.from('experiences').getPublicUrl(aPath).data.publicUrl;
+            transcript = null; // audio changed — old transcript is stale
+          }
+          if (rep.photo) {
             const photoExt = rep.photo.name.split('.').pop() || 'jpg';
             const pPath = `${slug}/photo_${idx}.${photoExt}`;
             await db.storage.from('experiences').remove([urlToStoragePath(item.photo_url)].filter(Boolean));
@@ -1024,7 +1290,17 @@
             if (pErr) throw new Error(`Replacing photo: ${pErr.message}`);
             photo_url = db.storage.from('experiences').getPublicUrl(pPath).data.publicUrl;
           }
-          finalItems.push({ target_index: idx, video_url, photo_url });
+
+          // If user switched type, null out the unused field so view.html doesn't accidentally load it
+          if (finalType === 'video') audio_url = audio_url; // keep for re-switch convenience
+          finalItems.push({
+            target_index: idx,
+            media_type: finalType,
+            video_url,
+            audio_url,
+            transcript,
+            photo_url
+          });
           idx++;
         }
 
@@ -1032,27 +1308,42 @@
         try {
           for (let i = 0; i < readyNew.length; i++) {
             setProgress(`Uploading new page ${i+1} of ${readyNew.length}...`, 55 + (i / readyNew.length) * 25);
+            const pair = readyNew[i];
 
-            // Find a unique slot name (avoid collisions with existing files)
-            const videoPath = `${slug}/video_${idx}.mp4`;
-            const photoExt = readyNew[i].photo.name.split('.').pop() || 'jpg';
+            const photoExt = pair.photo.name.split('.').pop() || 'jpg';
             const photoPath = `${slug}/photo_${idx}.${photoExt}`;
-
-            const { error: vErr } = await db.storage
-              .from('experiences')
-              .upload(videoPath, readyNew[i].video, { contentType: readyNew[i].video.type || 'video/mp4' });
-            if (vErr) throw new Error(`Video ${i+1}: ${vErr.message}`);
-
             const { error: pErr } = await db.storage
               .from('experiences')
-              .upload(photoPath, readyNew[i].photo, { contentType: readyNew[i].photo.type || 'image/jpeg' });
+              .upload(photoPath, pair.photo, { contentType: pair.photo.type || 'image/jpeg' });
             if (pErr) throw new Error(`Photo ${i+1}: ${pErr.message}`);
 
-            finalItems.push({
+            const item = {
               target_index: idx,
-              video_url: db.storage.from('experiences').getPublicUrl(videoPath).data.publicUrl,
+              media_type: pair.mediaType,
+              video_url: null,
+              audio_url: null,
+              transcript: null,
               photo_url: db.storage.from('experiences').getPublicUrl(photoPath).data.publicUrl
-            });
+            };
+
+            if (pair.mediaType === 'video') {
+              const videoPath = `${slug}/video_${idx}.mp4`;
+              const { error: vErr } = await db.storage
+                .from('experiences')
+                .upload(videoPath, pair.video, { contentType: pair.video.type || 'video/mp4' });
+              if (vErr) throw new Error(`Video ${i+1}: ${vErr.message}`);
+              item.video_url = db.storage.from('experiences').getPublicUrl(videoPath).data.publicUrl;
+            } else {
+              const audioExt = (pair.audio.name && pair.audio.name.split('.').pop()) || 'webm';
+              const audioPath = `${slug}/audio_${idx}.${audioExt}`;
+              const { error: aErr } = await db.storage
+                .from('experiences')
+                .upload(audioPath, pair.audio, { contentType: pair.audio.type || 'audio/webm' });
+              if (aErr) throw new Error(`Audio ${i+1}: ${aErr.message}`);
+              item.audio_url = db.storage.from('experiences').getPublicUrl(audioPath).data.publicUrl;
+            }
+
+            finalItems.push(item);
             idx++;
           }
         } catch (err) {
@@ -1068,8 +1359,10 @@
             for (const item of removedItems) {
               // Extract path from public URL
               const vPath = urlToStoragePath(item.video_url);
+              const aPath = urlToStoragePath(item.audio_url);
               const pPath = urlToStoragePath(item.photo_url);
               if (vPath) paths.push(vPath);
+              if (aPath) paths.push(aPath);
               if (pPath) paths.push(pPath);
             }
             if (paths.length > 0) {
@@ -1106,7 +1399,10 @@
           const rows = finalItems.map(fi => ({
             collection_id: collectionId,
             target_index: fi.target_index,
+            media_type: fi.media_type || 'video',
             video_url: fi.video_url,
+            audio_url: fi.audio_url,
+            transcript: fi.transcript,
             photo_url: fi.photo_url
           }));
           const { error: insErr } = await db.from('collection_items').insert(rows);
