@@ -202,6 +202,67 @@
       #fullscreen-video { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 9000; background: black; }
       #fullscreen-video video { width: 100%; height: 100%; object-fit: cover; }
 
+      /* Audio player overlay */
+      #audio-player {
+        display: none; position: fixed; inset: 0; z-index: 9000;
+        background: linear-gradient(180deg, #1a1428 0%, #2a1d4a 60%, #1a1428 100%);
+        flex-direction: column; align-items: center;
+        padding: 56px 24px 28px;
+        font-family: 'FilsonPro', sans-serif; color: white;
+      }
+      #audio-player.visible { display: flex; }
+      .ap-photo {
+        width: min(78vw, 360px); aspect-ratio: 1 / 1;
+        border-radius: 18px; overflow: hidden;
+        box-shadow: 0 18px 48px rgba(0,0,0,0.55);
+        background: #000;
+      }
+      .ap-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .ap-listen-overlay {
+        display: none; position: absolute; inset: 0;
+        align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.45);
+      }
+      .ap-listen-overlay.visible { display: flex; }
+      .ap-listen-overlay button {
+        background: white; color: #2dc0c5; border: none;
+        border-radius: 999px; padding: 14px 28px;
+        font-family: 'FilsonPro', sans-serif; font-weight: 700; font-size: 16px;
+        cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+      }
+      .ap-controls {
+        margin-top: 22px; width: 100%; max-width: 360px;
+        display: flex; flex-direction: column; align-items: center; gap: 12px;
+      }
+      .ap-play {
+        width: 64px; height: 64px; border-radius: 50%;
+        background: white; color: #2dc0c5; border: none;
+        font-size: 26px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      }
+      .ap-progress-row {
+        width: 100%; display: flex; align-items: center; gap: 10px;
+        font-size: 12px; font-variant-numeric: tabular-nums; color: rgba(255,255,255,0.85);
+      }
+      .ap-scrub { flex: 1; -webkit-appearance: none; appearance: none; height: 4px; background: rgba(255,255,255,0.25); border-radius: 999px; outline: none; }
+      .ap-scrub::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: white; cursor: pointer; }
+      .ap-scrub::-moz-range-thumb { width: 14px; height: 14px; border: none; border-radius: 50%; background: white; cursor: pointer; }
+      .ap-transcript {
+        margin-top: 18px; width: 100%; max-width: 360px; max-height: 28vh;
+        overflow-y: auto; padding: 14px 16px; border-radius: 14px;
+        background: rgba(255,255,255,0.08); font-size: 14px; line-height: 1.5;
+        color: rgba(255,255,255,0.92); text-align: left;
+      }
+      .ap-transcript:empty { display: none; }
+      #ap-close {
+        position: absolute; top: 20px; right: 20px;
+        background: rgba(255,255,255,0.18); color: white; border: none;
+        border-radius: 50%; width: 44px; height: 44px;
+        font-size: 22px; display: flex; align-items: center; justify-content: center;
+        cursor: pointer;
+      }
+
       #fade-overlay {
         display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0;
         background: black; z-index: 9100; opacity: 0;
@@ -348,6 +409,26 @@
       <button id="close-btn">✕</button>
     </div>
 
+    <div id="audio-player">
+      <button id="ap-close" aria-label="Close">✕</button>
+      <div class="ap-photo" style="position:relative;">
+        <img id="ap-photo-img" alt=""/>
+        <div class="ap-listen-overlay" id="ap-listen-overlay">
+          <button id="ap-listen-btn">▶ Tap to Listen</button>
+        </div>
+      </div>
+      <div class="ap-controls">
+        <button class="ap-play" id="ap-play" aria-label="Play/Pause">▶</button>
+        <div class="ap-progress-row">
+          <span id="ap-time">0:00</span>
+          <input class="ap-scrub" id="ap-scrub" type="range" min="0" max="100" value="0" step="0.1"/>
+          <span id="ap-duration">0:00</span>
+        </div>
+      </div>
+      <div class="ap-transcript" id="ap-transcript"></div>
+      <audio id="ap-audio" preload="metadata" playsinline webkit-playsinline></audio>
+    </div>
+
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -395,12 +476,12 @@
 
       // Stored after first DB fetch so rebuildScene() can reuse without a DB call
       let savedMindUrl = null;
-      let savedVideoMap = {};
+      let savedMediaMap = {}; // { [idx]: { type, videoUrl, audioUrl, transcript, photoUrl } }
 
       // Builds (or rebuilds) the a-scene. Destroys previous scene if one exists.
       // Must be called from within a user-gesture handler so MindAR can call
       // getUserMedia immediately via mindar.start().
-      function buildScene(mindUrl, videoMap) {
+      function buildScene(mindUrl, mediaMap) {
         // Tear down existing scene cleanly
         if (arScene) {
           try {
@@ -422,13 +503,13 @@
         camera.setAttribute('look-controls', 'enabled: false');
         scene.appendChild(camera);
 
-        Object.keys(videoMap).forEach(idx => {
+        Object.keys(mediaMap).forEach(idx => {
           const target = document.createElement('a-entity');
           target.setAttribute('mindar-image-target', `targetIndex: ${idx}`);
           target.addEventListener('targetFound', () => {
-            if (!videoActive) {
+            if (!mediaActive) {
               logEvent('target_found', parseInt(idx));
-              triggerVideo(videoMap[idx]);
+              triggerMedia(mediaMap[idx]);
             }
           });
           target.addEventListener('targetLost', () => {
@@ -453,7 +534,7 @@
       }
 
       async function loadCollection(id) {
-        let mindUrl, videoMap = {};
+        let mindUrl, mediaMap = {};
 
         const { data: col } = await db.from('collections').select('*').eq('slug', id).single();
 
@@ -468,20 +549,28 @@
           applyCoverConfig(col.cover_config);
           const { data: items } = await db.from('collection_items')
             .select('*').eq('collection_id', col.id).order('target_index');
-          (items || []).forEach(item => { videoMap[item.target_index] = item.video_url; });
-          if (!mindUrl || Object.keys(videoMap).length === 0) { showError(); return; }
+          (items || []).forEach(item => {
+            mediaMap[item.target_index] = {
+              type: item.media_type === 'audio' ? 'audio' : 'video',
+              videoUrl: item.video_url || null,
+              audioUrl: item.audio_url || null,
+              transcript: item.transcript || null,
+              photoUrl: item.photo_url || null
+            };
+          });
+          if (!mindUrl || Object.keys(mediaMap).length === 0) { showError(); return; }
         } else {
           const { data: exp } = await db.from('experiences').select('*').eq('slug', id).single();
           if (!exp) { showError(); return; }
           mindUrl = exp.mind_file_url;
-          videoMap[0] = exp.video_url;
+          mediaMap[0] = { type: 'video', videoUrl: exp.video_url, audioUrl: null, transcript: null, photoUrl: null };
         }
 
         // Save for scene rebuilds on rescan
         savedMindUrl = mindUrl;
-        savedVideoMap = videoMap;
+        savedMediaMap = mediaMap;
 
-        buildScene(mindUrl, videoMap);
+        buildScene(mindUrl, mediaMap);
 
         document.getElementById('loading').style.display = 'none';
         showStartScreen();
@@ -506,7 +595,7 @@
           sceneWasStopped = false;
           hint.textContent = 'Restarting camera…';
           setTimeout(() => {
-            const newScene = buildScene(savedMindUrl, savedVideoMap);
+            const newScene = buildScene(savedMindUrl, savedMediaMap);
             newScene.addEventListener('loaded', () => {
               const mindar = arScene && arScene.systems['mindar-image-system'];
               if (mindar && typeof mindar.start === 'function') {
@@ -561,10 +650,12 @@
       const fullScreen = document.getElementById('fullscreen-video');
       const closeBtn = document.getElementById('close-btn');
       const scanner = document.getElementById('scanner');
-      let videoActive = false;
+      const audioPlayer = document.getElementById('audio-player');
+      const apAudio = document.getElementById('ap-audio');
+      let mediaActive = false;
       let triggerTimer = null;
       let reloadHintTimer = null;
-      let arScene = null; // set inside loadCollection; used by triggerVideo/returnToScanner
+      let arScene = null; // set inside loadCollection; used by triggerMedia/returnToScanner
       let sceneWasStopped = false; // true after mindar.stop(); tells start-btn to rebuild
 
       const reloadHintBtn = document.getElementById('reload-hint');
@@ -574,7 +665,7 @@
         clearTimeout(reloadHintTimer);
         reloadHintBtn.style.display = 'none';
         reloadHintTimer = setTimeout(() => {
-          if (!videoActive) reloadHintBtn.style.display = 'block';
+          if (!mediaActive) reloadHintBtn.style.display = 'block';
         }, 10000);
       }
       function clearReloadHint() {
@@ -582,10 +673,11 @@
         reloadHintBtn.style.display = 'none';
       }
 
-      function showVideoError(msg) {
-        videoActive = false;
+      function showMediaError(msg) {
+        mediaActive = false;
         fullScreen.style.display = 'none';
         closeBtn.style.display = 'none';
+        audioPlayer.classList.remove('visible');
         scanner.style.display = 'block';
         document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
         const hint = document.getElementById('scan-hint');
@@ -593,10 +685,23 @@
         hint.style.display = 'block';
         setTimeout(() => { hint.textContent = 'Point your camera at a Popcoded photo'; }, 4000);
       }
+      // Backward-compat alias used by older code paths
+      const showVideoError = showMediaError;
+
+      function triggerMedia(media) {
+        if (!media) { showMediaError('No media found for this photo'); return; }
+        if (media.type === 'audio') {
+          if (!media.audioUrl) { showMediaError('No audio found for this photo'); return; }
+          triggerAudio(media);
+        } else {
+          if (!media.videoUrl) { showMediaError('No video found for this photo'); return; }
+          triggerVideo(media.videoUrl);
+        }
+      }
 
       function triggerVideo(url) {
-        if (!url) { showVideoError('No video found for this photo'); return; }
-        videoActive = true;
+        if (!url) { showMediaError('No video found for this photo'); return; }
+        mediaActive = true;
         clearReloadHint();
         document.getElementById('scan-hint').style.display = 'none';
         document.querySelectorAll('.corner').forEach(c => c.classList.add('expanded'));
@@ -622,9 +727,107 @@ fullVid.play()
     fullVid.muted = false;
     logEvent('video_play');
   })
-  .catch(err => { logEvent('video_error'); showVideoError('Video failed to play — tap X and try again'); });
+  .catch(err => { logEvent('video_error'); showMediaError('Video failed to play — tap X and try again'); });
         }, 900);
       }
+
+      // ── Audio player ────────────────────────────────────────────────────────
+      const apPhotoImg = document.getElementById('ap-photo-img');
+      const apPlay = document.getElementById('ap-play');
+      const apScrub = document.getElementById('ap-scrub');
+      const apTime = document.getElementById('ap-time');
+      const apDuration = document.getElementById('ap-duration');
+      const apTranscript = document.getElementById('ap-transcript');
+      const apListenOverlay = document.getElementById('ap-listen-overlay');
+      const apListenBtn = document.getElementById('ap-listen-btn');
+      const apClose = document.getElementById('ap-close');
+
+      function fmtTime(sec) {
+        if (!isFinite(sec) || sec < 0) sec = 0;
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return `${m}:${String(s).padStart(2, '0')}`;
+      }
+
+      function triggerAudio(media) {
+        mediaActive = true;
+        clearReloadHint();
+        document.getElementById('scan-hint').style.display = 'none';
+        document.querySelectorAll('.corner').forEach(c => c.classList.add('expanded'));
+        triggerTimer = setTimeout(() => {
+          triggerTimer = null;
+          // Same media-session conflict as video — release the camera first.
+          try {
+            const mindar = arScene && arScene.systems && arScene.systems['mindar-image-system'];
+            if (mindar && typeof mindar.stop === 'function') { mindar.stop(); sceneWasStopped = true; }
+          } catch(e) {}
+
+          apPhotoImg.src = media.photoUrl || '';
+          apTranscript.textContent = media.transcript || '';
+          apAudio.src = media.audioUrl;
+          apAudio.load();
+          apScrub.value = 0;
+          apTime.textContent = '0:00';
+          apDuration.textContent = '0:00';
+          apPlay.textContent = '▶';
+          apListenOverlay.classList.remove('visible');
+
+          scanner.style.display = 'none';
+          document.getElementById('home-btn').style.display = 'none';
+          audioPlayer.classList.add('visible');
+
+          apAudio.play()
+            .then(() => { logEvent('audio_play'); apPlay.textContent = '❚❚'; })
+            .catch(err => {
+              // iOS sometimes drops the gesture chain after setTimeout — show fallback.
+              logEvent('audio_play_blocked');
+              apListenOverlay.classList.add('visible');
+            });
+        }, 900);
+      }
+
+      apListenBtn.addEventListener('click', () => {
+        apListenOverlay.classList.remove('visible');
+        apAudio.play().then(() => { apPlay.textContent = '❚❚'; logEvent('audio_play'); })
+          .catch(() => showMediaError('Audio failed to play — tap X and try again'));
+      });
+
+      apPlay.addEventListener('click', () => {
+        if (apAudio.paused) {
+          apAudio.play().then(() => { apPlay.textContent = '❚❚'; })
+            .catch(() => apListenOverlay.classList.add('visible'));
+        } else {
+          apAudio.pause();
+          apPlay.textContent = '▶';
+        }
+      });
+
+      apAudio.addEventListener('loadedmetadata', () => {
+        apDuration.textContent = fmtTime(apAudio.duration);
+        apScrub.max = isFinite(apAudio.duration) ? apAudio.duration : 100;
+      });
+      apAudio.addEventListener('timeupdate', () => {
+        apTime.textContent = fmtTime(apAudio.currentTime);
+        if (isFinite(apAudio.duration) && apAudio.duration > 0) {
+          apScrub.value = apAudio.currentTime;
+        }
+      });
+      apAudio.addEventListener('ended', () => {
+        logEvent('audio_complete');
+        apPlay.textContent = '▶';
+        apScrub.value = 0;
+        apTime.textContent = '0:00';
+      });
+      apAudio.addEventListener('error', () => {
+        if (apAudio.src) showMediaError('Audio could not load — check your connection');
+      });
+      apScrub.addEventListener('input', () => {
+        if (isFinite(apAudio.duration)) {
+          apAudio.currentTime = parseFloat(apScrub.value) || 0;
+        }
+      });
+
+      apClose.addEventListener('click', returnToScanner);
 
       // ── Fullscreen helpers (hides browser chrome for landscape videos) ─────
       function tryGoFullscreen() {
@@ -643,14 +846,14 @@ fullVid.play()
       }
       // If user exits fullscreen via browser controls, return to scanner
       document.addEventListener('fullscreenchange', () => {
-        if (!document.fullscreenElement && videoActive) returnToScanner();
+        if (!document.fullscreenElement && mediaActive) returnToScanner();
       });
       document.addEventListener('webkitfullscreenchange', () => {
-        if (!document.webkitFullscreenElement && videoActive) returnToScanner();
+        if (!document.webkitFullscreenElement && mediaActive) returnToScanner();
       });
       // iOS native video fullscreen exit
       fullVid.addEventListener('webkitendfullscreen', () => {
-        if (videoActive) returnToScanner();
+        if (mediaActive) returnToScanner();
       });
       // Request fullscreen when video is landscape
       fullVid.addEventListener('loadedmetadata', () => {
@@ -664,12 +867,18 @@ fullVid.play()
       });
 
       function returnToScanner() {
-        videoActive = false;
+        mediaActive = false;
         if (triggerTimer) { clearTimeout(triggerTimer); triggerTimer = null; }
         clearReloadHint();
         tryExitFullscreen();
         fullVid.pause();
         fullVid.src = '';
+        try { apAudio.pause(); } catch(e) {}
+        apAudio.removeAttribute('src');
+        try { apAudio.load(); } catch(e) {}
+        audioPlayer.classList.remove('visible');
+        apListenOverlay.classList.remove('visible');
+        apPlay.textContent = '▶';
         fullScreen.style.display = 'none';
         closeBtn.style.display = 'none';
         scanner.style.display = 'none';
@@ -688,7 +897,7 @@ fullVid.play()
         fade.style.display = 'block';
         setTimeout(() => fade.style.opacity = '1', 10);
         setTimeout(() => {
-          videoActive = false;
+          mediaActive = false;
           fullScreen.style.display = 'none';
           fullVid.src = '';
           closeBtn.style.display = 'none';

@@ -116,6 +116,34 @@
       .video-msg-banner a { color: #6b3fa0; font-weight: 700; text-decoration: underline; }
       .compressed-badge { font-size: 10px; color: #16a34a; font-weight: 700; }
 
+      /* Media-type toggle (Video | Audio) */
+      .media-toggle { display: inline-flex; background: #ececec; border-radius: 999px; padding: 3px; margin-bottom: 14px; }
+      .media-toggle button { background: transparent; border: none; padding: 6px 14px; font-size: 12px; font-weight: 700; color: #666; border-radius: 999px; cursor: pointer; font-family: 'FilsonPro', sans-serif; }
+      .media-toggle button.active { background: white; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+      /* Audio recorder tile (replaces the video tile when Audio mode is selected) */
+      .audio-tile {
+        background: white; border-radius: 10px; width: 130px; height: 110px;
+        border: 1px solid #e8e8e8; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 6px; position: relative; overflow: hidden;
+      }
+      .audio-tile.recording { background: #fef2f2; border-color: #fca5a5; }
+      .audio-tile.has-audio { background: #f0ecf8; border-color: #d0c0e8; }
+      .audio-rec-btn {
+        background: #1a1a1a; color: white; border: none; border-radius: 999px;
+        padding: 7px 14px; font-size: 11px; font-weight: 700; cursor: pointer;
+        font-family: 'FilsonPro', sans-serif;
+      }
+      .audio-rec-btn.stop { background: #dc2626; }
+      .audio-rec-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .audio-time { font-size: 11px; color: #555; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .audio-preview { width: 100%; padding: 0 8px; }
+      .audio-preview audio { width: 100%; height: 32px; }
+      .audio-rerecord { font-size: 10px; color: #6b3fa0; background: none; border: none; cursor: pointer; font-weight: 700; font-family: 'FilsonPro', sans-serif; text-decoration: underline; }
+      .rec-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #dc2626; margin-right: 5px; vertical-align: middle; animation: rec-pulse 1s infinite; }
+      @keyframes rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
 
       .add-page-btn { width: 100%; max-width: 360px; padding: 16px; border-radius: 30px; border: none; background: #eeeeee; color: #333333; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 16px; transition: background 0.2s; font-family: 'FilsonPro', sans-serif; }
       .add-page-btn:hover { background: #e0e0e0; }
@@ -245,7 +273,7 @@
       function addPage() {
         pageCount++;
         const n = pageCount;
-        pairs[n] = { photo: null, video: null };
+        pairs[n] = { photo: null, video: null, audio: null, mediaType: 'video' };
         const page = document.createElement('div');
         page.className = 'page';
         page.id = `page-${n}`;
@@ -253,6 +281,10 @@
           <div class="page-header">
             <div class="page-label">${n}</div>
             <button class="remove-page-btn" onclick="removePage(${n})" title="Remove page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
+          </div>
+          <div class="media-toggle" data-page="${n}">
+            <button type="button" class="media-tab active" data-mode="video">Video</button>
+            <button type="button" class="media-tab" data-mode="audio">Audio</button>
           </div>
           <div class="upload-row">
             <div class="upload-wrapper">
@@ -265,22 +297,163 @@
               <div class="file-name" id="photo-name-${n}"></div>
               <div class="file-size" id="photo-size-${n}"></div>
             </div>
-            <div class="upload-wrapper">
-              <label class="upload-btn" id="video-btn-${n}">
-                <input type="file" accept="video/*" onchange="handleFile(this,'video',${n}).catch(e=>console.error(e))"/>
-                <img class="icon" src="/assets/video.png" alt="Video"/>
-                <img class="preview-img" id="video-preview-${n}"/>
-                <span class="play-overlay"></span>
-                <span class="btn-label">Plays on scan</span>
-              </label>
-              <div class="file-name" id="video-name-${n}"></div>
-              <div class="file-size" id="video-size-${n}"></div>
-              <div class="video-msg" id="video-msg-${n}"></div>
+            <div class="upload-wrapper" id="media-wrapper-${n}">
+              <div class="video-slot" id="video-slot-${n}">
+                <label class="upload-btn" id="video-btn-${n}">
+                  <input type="file" accept="video/*" onchange="handleFile(this,'video',${n}).catch(e=>console.error(e))"/>
+                  <img class="icon" src="/assets/video.png" alt="Video"/>
+                  <img class="preview-img" id="video-preview-${n}"/>
+                  <span class="play-overlay"></span>
+                  <span class="btn-label">Plays on scan</span>
+                </label>
+                <div class="file-name" id="video-name-${n}"></div>
+                <div class="file-size" id="video-size-${n}"></div>
+                <div class="video-msg" id="video-msg-${n}"></div>
+              </div>
+              <div class="audio-slot" id="audio-slot-${n}" style="display:none;">
+                <div class="audio-tile" id="audio-tile-${n}">
+                  <div class="audio-tile-empty">
+                    <button type="button" class="audio-rec-btn" data-page="${n}" data-action="start">● Record</button>
+                  </div>
+                </div>
+                <div class="file-size" id="audio-size-${n}" style="margin-top:6px;"></div>
+              </div>
             </div>
           </div>
         `;
         document.getElementById('pages').appendChild(page);
+
+        page.querySelectorAll('.media-tab').forEach(tab => {
+          tab.addEventListener('click', () => switchMediaType(n, tab.dataset.mode));
+        });
+        page.querySelector('.audio-rec-btn[data-action="start"]').addEventListener('click', () => startRecording(n));
+
         renumberPages();
+      }
+
+      function switchMediaType(n, mode) {
+        const pair = pairs[n];
+        if (!pair) return;
+        pair.mediaType = mode;
+        const page = document.getElementById(`page-${n}`);
+        page.querySelectorAll('.media-tab').forEach(tab => {
+          tab.classList.toggle('active', tab.dataset.mode === mode);
+        });
+        page.querySelector(`#video-slot-${n}`).style.display = mode === 'video' ? '' : 'none';
+        page.querySelector(`#audio-slot-${n}`).style.display = mode === 'audio' ? '' : 'none';
+        checkReady();
+      }
+
+      // ── Audio recorder ──────────────────────────────────────────────────────
+      const recorders = {}; // { [n]: { mediaRecorder, chunks, mime, ext, stream, startTs, timerId } }
+
+      function pickAudioMime() {
+        const candidates = [
+          'audio/webm;codecs=opus',
+          'audio/webm',
+          'audio/mp4;codecs=mp4a.40.2',
+          'audio/mp4',
+          'audio/ogg;codecs=opus'
+        ];
+        if (typeof MediaRecorder === 'undefined') return null;
+        for (const c of candidates) {
+          if (MediaRecorder.isTypeSupported(c)) {
+            const ext = c.startsWith('audio/webm') ? 'webm'
+                      : c.startsWith('audio/mp4') ? 'm4a'
+                      : c.startsWith('audio/ogg') ? 'ogg'
+                      : 'webm';
+            return { mime: c, ext };
+          }
+        }
+        return { mime: '', ext: 'webm' }; // let browser pick
+      }
+
+      async function startRecording(n) {
+        if (recorders[n]) return;
+        const tile = document.getElementById(`audio-tile-${n}`);
+        const pick = pickAudioMime();
+        if (!pick) {
+          alert('Audio recording is not supported in this browser. Try Chrome, Safari, or Firefox.');
+          return;
+        }
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (e) {
+          alert('Microphone access was denied. Enable it in your browser settings and try again.');
+          return;
+        }
+        const opts = pick.mime ? { mimeType: pick.mime } : {};
+        const mr = new MediaRecorder(stream, opts);
+        const chunks = [];
+        mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+        mr.onstop = () => {
+          const blob = new Blob(chunks, { type: pick.mime || mr.mimeType || 'audio/webm' });
+          stream.getTracks().forEach(t => t.stop());
+          finalizeRecording(n, blob, pick.ext);
+        };
+        mr.start();
+        const startTs = Date.now();
+        recorders[n] = { mediaRecorder: mr, chunks, mime: pick.mime, ext: pick.ext, stream, startTs, timerId: null };
+
+        tile.classList.add('recording');
+        tile.innerHTML = `
+          <div><span class="rec-dot"></span><span style="font-size:11px;color:#dc2626;font-weight:700;">Recording</span></div>
+          <div class="audio-time" id="audio-elapsed-${n}">0:00</div>
+          <button type="button" class="audio-rec-btn stop">Stop</button>
+        `;
+        tile.querySelector('.audio-rec-btn.stop').addEventListener('click', () => stopRecording(n));
+        const tick = () => {
+          const ms = Date.now() - startTs;
+          const s = Math.floor(ms / 1000);
+          const el = document.getElementById(`audio-elapsed-${n}`);
+          if (el) el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+        };
+        recorders[n].timerId = setInterval(tick, 250);
+      }
+
+      function stopRecording(n) {
+        const rec = recorders[n];
+        if (!rec) return;
+        if (rec.timerId) clearInterval(rec.timerId);
+        try { rec.mediaRecorder.stop(); } catch (e) {}
+      }
+
+      function finalizeRecording(n, blob, ext) {
+        delete recorders[n];
+        const file = new File([blob], `audio_${n}.${ext}`, { type: blob.type });
+        pairs[n].audio = file;
+        const tile = document.getElementById(`audio-tile-${n}`);
+        if (!tile) return;
+        tile.classList.remove('recording');
+        tile.classList.add('has-audio');
+        const url = URL.createObjectURL(file);
+        tile.innerHTML = `
+          <div class="audio-preview"><audio controls preload="metadata" src="${url}"></audio></div>
+          <button type="button" class="audio-rerecord" data-page="${n}">Re-record</button>
+        `;
+        tile.querySelector('.audio-rerecord').addEventListener('click', () => resetAudio(n));
+        const sizeEl = document.getElementById(`audio-size-${n}`);
+        if (sizeEl) {
+          sizeEl.textContent = formatFileSize(file.size);
+          sizeEl.className = 'file-size';
+        }
+        checkReady();
+      }
+
+      function resetAudio(n) {
+        pairs[n].audio = null;
+        const tile = document.getElementById(`audio-tile-${n}`);
+        tile.classList.remove('has-audio');
+        tile.innerHTML = `
+          <div class="audio-tile-empty">
+            <button type="button" class="audio-rec-btn" data-page="${n}" data-action="start">● Record</button>
+          </div>
+        `;
+        tile.querySelector('.audio-rec-btn').addEventListener('click', () => startRecording(n));
+        const sizeEl = document.getElementById(`audio-size-${n}`);
+        if (sizeEl) { sizeEl.textContent = ''; sizeEl.className = 'file-size'; }
+        checkReady();
       }
 
       function canCompressVideo() {
@@ -430,8 +603,11 @@
         checkReady();
       }
 
+      function pageHasMedia(p) {
+        return p && p.photo && (p.mediaType === 'audio' ? !!p.audio : !!p.video);
+      }
       function checkReady() {
-        const hasComplete = Object.values(pairs).some(p => p.photo && p.video);
+        const hasComplete = Object.values(pairs).some(pageHasMedia);
         document.getElementById('create-btn').classList.toggle('ready', hasComplete);
       }
 
@@ -481,22 +657,25 @@
       }
 
       document.getElementById('create-btn').addEventListener('click', async () => {
-        const readyPairs = Object.values(pairs).filter(p => p.photo && p.video);
+        const readyPairs = Object.values(pairs).filter(pageHasMedia);
         if (readyPairs.length === 0) {
-          alert('Add at least one page with both a photo and video.');
+          alert('Add at least one page with a photo and either a video or audio recording.');
           return;
         }
 
         for (let i = 0; i < readyPairs.length; i++) {
-          const photoMB = readyPairs[i].photo.size / (1024 * 1024);
-          const videoMB = readyPairs[i].video.size / (1024 * 1024);
+          const pair = readyPairs[i];
+          const photoMB = pair.photo.size / (1024 * 1024);
           if (photoMB > MAX_PHOTO_MB) {
-            alert(`Page ${i+1}: Photo "${readyPairs[i].photo.name}" is ${photoMB.toFixed(1)} MB (limit: ${MAX_PHOTO_MB} MB). Please replace it with a smaller file.`);
+            alert(`Page ${i+1}: Photo "${pair.photo.name}" is ${photoMB.toFixed(1)} MB (limit: ${MAX_PHOTO_MB} MB). Please replace it with a smaller file.`);
             return;
           }
-          if (videoMB > MAX_VIDEO_MB) {
-            alert(`Page ${i+1}: Video "${readyPairs[i].video.name}" is ${videoMB.toFixed(1)} MB (limit: ${MAX_VIDEO_MB} MB). Please replace it with a smaller file.`);
-            return;
+          if (pair.mediaType === 'video') {
+            const videoMB = pair.video.size / (1024 * 1024);
+            if (videoMB > MAX_VIDEO_MB) {
+              alert(`Page ${i+1}: Video "${pair.video.name}" is ${videoMB.toFixed(1)} MB (limit: ${MAX_VIDEO_MB} MB). Please replace it with a smaller file.`);
+              return;
+            }
           }
         }
 
@@ -573,25 +752,43 @@
           return;
         }
 
-        const videoUrls = [], photoUrls = [];
+        const mediaItems = []; // { type, video_url|null, audio_url|null, photo_url }
         try {
           for (let i = 0; i < readyPairs.length; i++) {
             setProgress(`Uploading page ${i+1} of ${readyPairs.length}...`, 60 + (i / readyPairs.length) * 25);
-            if (readyPairs[i].video.size === 0) {
-              throw new Error(`Video ${i+1} ("${readyPairs[i].video.name}") is empty — it may have expired. Please remove and re-add it.`);
-            }
-            const { error: videoError } = await db.storage
-              .from('experiences')
-              .upload(`${slug}/video_${i}.mp4`, readyPairs[i].video, { contentType: readyPairs[i].video.type || 'video/mp4' });
-            if (videoError) throw new Error(`Video ${i+1} ("${readyPairs[i].video.name}"): ${videoError.message}`);
-            videoUrls.push(db.storage.from('experiences').getPublicUrl(`${slug}/video_${i}.mp4`).data.publicUrl);
+            const pair = readyPairs[i];
+            const item = { type: pair.mediaType, video_url: null, audio_url: null, photo_url: null };
 
-            const photoExt = readyPairs[i].photo.name.split('.').pop() || 'jpg';
-            const { error: photoError } = await db.storage
+            if (pair.mediaType === 'video') {
+              if (pair.video.size === 0) {
+                throw new Error(`Video ${i+1} ("${pair.video.name}") is empty — it may have expired. Please remove and re-add it.`);
+              }
+              const { error: vErr } = await db.storage
+                .from('experiences')
+                .upload(`${slug}/video_${i}.mp4`, pair.video, { contentType: pair.video.type || 'video/mp4' });
+              if (vErr) throw new Error(`Video ${i+1} ("${pair.video.name}"): ${vErr.message}`);
+              item.video_url = db.storage.from('experiences').getPublicUrl(`${slug}/video_${i}.mp4`).data.publicUrl;
+            } else {
+              if (pair.audio.size === 0) {
+                throw new Error(`Audio ${i+1} is empty — please re-record it.`);
+              }
+              const audioExt = (pair.audio.name && pair.audio.name.split('.').pop()) || 'webm';
+              const audioPath = `${slug}/audio_${i}.${audioExt}`;
+              const { error: aErr } = await db.storage
+                .from('experiences')
+                .upload(audioPath, pair.audio, { contentType: pair.audio.type || 'audio/webm' });
+              if (aErr) throw new Error(`Audio ${i+1}: ${aErr.message}`);
+              item.audio_url = db.storage.from('experiences').getPublicUrl(audioPath).data.publicUrl;
+            }
+
+            const photoExt = pair.photo.name.split('.').pop() || 'jpg';
+            const { error: pErr } = await db.storage
               .from('experiences')
-              .upload(`${slug}/photo_${i}.${photoExt}`, readyPairs[i].photo, { contentType: readyPairs[i].photo.type || 'image/jpeg' });
-            if (photoError) throw new Error(`Photo ${i+1}: ${photoError.message}`);
-            photoUrls.push(db.storage.from('experiences').getPublicUrl(`${slug}/photo_${i}.${photoExt}`).data.publicUrl);
+              .upload(`${slug}/photo_${i}.${photoExt}`, pair.photo, { contentType: pair.photo.type || 'image/jpeg' });
+            if (pErr) throw new Error(`Photo ${i+1}: ${pErr.message}`);
+            item.photo_url = db.storage.from('experiences').getPublicUrl(`${slug}/photo_${i}.${photoExt}`).data.publicUrl;
+
+            mediaItems.push(item);
           }
         } catch (err) {
           showError('Step 4 failed (uploading files) — ' + (err.message || 'Upload error. Check your internet connection and try again.'));
@@ -614,11 +811,13 @@
         }
 
         try {
-          const items = readyPairs.map((_, i) => ({
+          const items = mediaItems.map((m, i) => ({
             collection_id: collection.id,
             target_index: i,
-            video_url: videoUrls[i],
-            photo_url: photoUrls[i]
+            media_type: m.type,
+            video_url: m.video_url,
+            audio_url: m.audio_url,
+            photo_url: m.photo_url
           }));
           const { error: itemsError } = await db.from('collection_items').insert(items);
           if (itemsError) throw itemsError;
