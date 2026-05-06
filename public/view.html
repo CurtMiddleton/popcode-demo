@@ -205,7 +205,7 @@
       /* Audio player overlay */
       #audio-player {
         display: none; position: fixed; inset: 0; z-index: 9000;
-        background: linear-gradient(180deg, #1a1428 0%, #2a1d4a 60%, #1a1428 100%);
+        background: #000;
         flex-direction: column; align-items: center;
         padding: 56px 24px 28px;
         font-family: 'FilsonPro', sans-serif; color: white;
@@ -218,25 +218,13 @@
         background: #000;
       }
       .ap-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-      .ap-listen-overlay {
-        display: none; position: absolute; inset: 0;
-        align-items: center; justify-content: center;
-        background: rgba(0,0,0,0.45);
-      }
-      .ap-listen-overlay.visible { display: flex; }
-      .ap-listen-overlay button {
-        background: white; color: #2dc0c5; border: none;
-        border-radius: 999px; padding: 14px 28px;
-        font-family: 'FilsonPro', sans-serif; font-weight: 700; font-size: 16px;
-        cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,0.35);
-      }
       .ap-controls {
         margin-top: 22px; width: 100%; max-width: 360px;
         display: flex; flex-direction: column; align-items: center; gap: 12px;
       }
       .ap-play {
         width: 64px; height: 64px; border-radius: 50%;
-        background: white; color: #2dc0c5; border: none;
+        background: white; color: #000; border: none;
         font-size: 26px; cursor: pointer;
         display: flex; align-items: center; justify-content: center;
         box-shadow: 0 8px 24px rgba(0,0,0,0.4);
@@ -411,11 +399,8 @@
 
     <div id="audio-player">
       <button id="ap-close" aria-label="Close">✕</button>
-      <div class="ap-photo" style="position:relative;">
+      <div class="ap-photo">
         <img id="ap-photo-img" alt=""/>
-        <div class="ap-listen-overlay" id="ap-listen-overlay">
-          <button id="ap-listen-btn">▶ Tap to Listen</button>
-        </div>
       </div>
       <div class="ap-controls">
         <button class="ap-play" id="ap-play" aria-label="Play/Pause">▶</button>
@@ -678,6 +663,7 @@
         fullScreen.style.display = 'none';
         closeBtn.style.display = 'none';
         audioPlayer.classList.remove('visible');
+        try { apAudio.pause(); apAudio.removeAttribute('src'); apAudio.load(); } catch(e) {}
         scanner.style.display = 'block';
         document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
         const hint = document.getElementById('scan-hint');
@@ -738,8 +724,6 @@ fullVid.play()
       const apTime = document.getElementById('ap-time');
       const apDuration = document.getElementById('ap-duration');
       const apTranscript = document.getElementById('ap-transcript');
-      const apListenOverlay = document.getElementById('ap-listen-overlay');
-      const apListenBtn = document.getElementById('ap-listen-btn');
       const apClose = document.getElementById('ap-close');
 
       function fmtTime(sec) {
@@ -770,7 +754,6 @@ fullVid.play()
           apTime.textContent = '0:00';
           apDuration.textContent = '0:00';
           apPlay.textContent = '▶';
-          apListenOverlay.classList.remove('visible');
 
           scanner.style.display = 'none';
           document.getElementById('home-btn').style.display = 'none';
@@ -779,23 +762,16 @@ fullVid.play()
           apAudio.play()
             .then(() => { logEvent('audio_play'); apPlay.textContent = '❚❚'; })
             .catch(err => {
-              // iOS sometimes drops the gesture chain after setTimeout — show fallback.
               logEvent('audio_play_blocked');
-              apListenOverlay.classList.add('visible');
+              showMediaError('Audio failed to play — tap X and try again');
             });
         }, 900);
       }
 
-      apListenBtn.addEventListener('click', () => {
-        apListenOverlay.classList.remove('visible');
-        apAudio.play().then(() => { apPlay.textContent = '❚❚'; logEvent('audio_play'); })
-          .catch(() => showMediaError('Audio failed to play — tap X and try again'));
-      });
-
       apPlay.addEventListener('click', () => {
         if (apAudio.paused) {
           apAudio.play().then(() => { apPlay.textContent = '❚❚'; })
-            .catch(() => apListenOverlay.classList.add('visible'));
+            .catch(() => showMediaError('Audio failed to play — tap X and try again'));
         } else {
           apAudio.pause();
           apPlay.textContent = '▶';
@@ -877,7 +853,6 @@ fullVid.play()
         apAudio.removeAttribute('src');
         try { apAudio.load(); } catch(e) {}
         audioPlayer.classList.remove('visible');
-        apListenOverlay.classList.remove('visible');
         apPlay.textContent = '▶';
         fullScreen.style.display = 'none';
         closeBtn.style.display = 'none';
