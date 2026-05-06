@@ -141,6 +141,9 @@
       .audio-preview { width: 100%; padding: 0 8px; }
       .audio-preview audio { width: 100%; height: 32px; }
       .audio-rerecord { font-size: 10px; color: #6b3fa0; background: none; border: none; cursor: pointer; font-weight: 700; font-family: 'FilsonPro', sans-serif; text-decoration: underline; }
+      .ap-mini-play { width: 40px; height: 40px; border-radius: 50%; background: white; color: #1a1a1a; border: 1px solid #d0c0e8; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+      .ap-mini-time { font-size: 11px; color: #555; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .ap-mini-audio { display: none; }
       .rec-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #dc2626; margin-right: 5px; vertical-align: middle; animation: rec-pulse 1s infinite; }
       @keyframes rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
@@ -172,7 +175,9 @@
       #result h3 { font-size: 18px; margin-bottom: 8px; color: #1a1a1a; }
       #result p { font-size: 13px; color: #888; margin-bottom: 16px; }
       #result-url { background: #f2f0eb; border-radius: 10px; padding: 10px 14px; font-size: 12px; word-break: break-all; color: #333; margin-bottom: 12px; }
-      #copy-btn { background: #6b3fa0; color: white; border: none; border-radius: 20px; padding: 10px 24px; font-size: 14px; cursor: pointer; font-weight: 600; margin-bottom: 20px; font-family: 'FilsonPro', sans-serif; }
+      .result-actions { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; }
+      #copy-btn, #share-btn { background: #1a1a1a; color: white; border: none; border-radius: 20px; padding: 10px 24px; font-size: 14px; cursor: pointer; font-weight: 600; font-family: 'FilsonPro', sans-serif; }
+      #copy-btn:hover, #share-btn:hover { background: #333; }
 
       /* Nav overlay */
       #nav-overlay { display:none; position:fixed; top:0; right:0; bottom:0; left:0; z-index:200; } #nav-overlay.open { display:block; } #nav-drawer-bg { position:absolute; inset:0; background:rgba(0,0,0,0.45); } #nav-drawer { position:absolute; top:0; left:0; bottom:0; width:300px; background:linear-gradient(160deg,#5bc8f5 0%,#7c3aed 100%); display:flex; flex-direction:column; align-items:flex-start; justify-content:center; padding:0 0 40px 0; transform:translateX(-100%); transition:transform 0.28s cubic-bezier(0.4,0,0.2,1); } #nav-overlay.open #nav-drawer { transform:translateX(0); }
@@ -236,7 +241,10 @@
       <h3>Your project is live!</h3>
       <p>Share this link — anyone can scan any photo to watch its video.</p>
       <div id="result-url"></div>
-      <button id="copy-btn">Copy Link</button>
+      <div class="result-actions">
+        <button id="copy-btn">Copy Link</button>
+        <button id="share-btn">Share</button>
+      </div>
     </div>
 
     <script>
@@ -419,6 +427,11 @@
         try { rec.mediaRecorder.stop(); } catch (e) {}
       }
 
+      function fmtSec(s) {
+        if (!isFinite(s) || s < 0) s = 0;
+        return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+      }
+
       function finalizeRecording(n, blob, ext) {
         delete recorders[n];
         const file = new File([blob], `audio_${n}.${ext}`, { type: blob.type });
@@ -429,9 +442,28 @@
         tile.classList.add('has-audio');
         const url = URL.createObjectURL(file);
         tile.innerHTML = `
-          <div class="audio-preview"><audio controls preload="metadata" src="${url}"></audio></div>
-          <button type="button" class="audio-rerecord" data-page="${n}">Re-record</button>
+          <button type="button" class="ap-mini-play" aria-label="Play preview">▶</button>
+          <div class="ap-mini-time">0:00</div>
+          <button type="button" class="audio-rerecord">Re-record</button>
+          <audio class="ap-mini-audio" preload="metadata" src="${url}"></audio>
         `;
+        const audioEl = tile.querySelector('.ap-mini-audio');
+        const playBtn = tile.querySelector('.ap-mini-play');
+        const timeEl = tile.querySelector('.ap-mini-time');
+        audioEl.addEventListener('loadedmetadata', () => {
+          timeEl.textContent = fmtSec(audioEl.duration);
+        });
+        audioEl.addEventListener('timeupdate', () => {
+          if (!audioEl.paused) timeEl.textContent = fmtSec(audioEl.currentTime);
+        });
+        audioEl.addEventListener('ended', () => {
+          playBtn.textContent = '▶';
+          timeEl.textContent = fmtSec(audioEl.duration);
+        });
+        playBtn.addEventListener('click', () => {
+          if (audioEl.paused) { audioEl.play(); playBtn.textContent = '❚❚'; }
+          else { audioEl.pause(); playBtn.textContent = '▶'; }
+        });
         tile.querySelector('.audio-rerecord').addEventListener('click', () => resetAudio(n));
         const sizeEl = document.getElementById(`audio-size-${n}`);
         if (sizeEl) {
@@ -829,12 +861,28 @@
         setProgress('Done!', 100);
         const viewUrl = `https://popcode.app/${slug}`;
         const shortUrl = `popcode.app/${slug}`;
-        document.getElementById('result-url').innerHTML = `<a href="${viewUrl}" target="_blank" rel="noopener" style="color:#6b3fa0;text-decoration:none;font-weight:600;">${shortUrl}</a>`;
+        const projectName = (document.getElementById('name-input').value.trim()) || 'My Popcode project';
+        document.getElementById('result-url').innerHTML = `<a href="${viewUrl}" target="_blank" rel="noopener" style="color:#1a1a1a;text-decoration:none;font-weight:600;">${shortUrl}</a>`;
         document.getElementById('result').style.display = 'block';
         document.getElementById('copy-btn').onclick = () => {
           navigator.clipboard.writeText(viewUrl);
           document.getElementById('copy-btn').textContent = 'Copied!';
         };
+        const shareBtn = document.getElementById('share-btn');
+        if (navigator.share) {
+          shareBtn.style.display = '';
+          shareBtn.onclick = async () => {
+            try {
+              await navigator.share({
+                title: 'Popcode',
+                text: `"${projectName}" is ready to scan with Popcode!`,
+                url: viewUrl
+              });
+            } catch (e) { /* user cancelled */ }
+          };
+        } else {
+          shareBtn.style.display = 'none';
+        }
 
       });
 
