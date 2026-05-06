@@ -10,5 +10,9 @@ alter table collection_items
   add column if not exists audio_url text,
   add column if not exists transcript text;
 
+-- Audio-only rows have no video_url, so the original NOT NULL constraint
+-- has to be relaxed.
+alter table collection_items alter column video_url drop not null;
+
 -- Backfill existing rows so the not-null-ish default is consistent.
 update collection_items set media_type = 'video' where media_type is null;
