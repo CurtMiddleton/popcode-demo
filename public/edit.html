@@ -75,6 +75,50 @@
         background: white; font-family: 'DM Sans', sans-serif;
       }
       .pages { width: 100%; max-width: 360px; }
+
+      .edit-container {
+        width: 100%;
+        flex-direction: column;
+        align-items: center;
+        box-sizing: border-box;
+      }
+      .edit-main { width: 100%; max-width: 360px; display: flex; flex-direction: column; align-items: center; }
+      .edit-side { width: 100%; max-width: 360px; display: flex; flex-direction: column; align-items: stretch; margin-top: 24px; }
+
+      @media (min-width: 960px) {
+        .edit-container {
+          flex-direction: row;
+          align-items: flex-start;
+          justify-content: center;
+          gap: 40px;
+          max-width: 1120px;
+          padding: 0 24px;
+        }
+        .edit-main { flex: 0 1 640px; max-width: 640px; }
+        .edit-side { flex: 0 0 360px; max-width: 360px; margin-top: 0; position: sticky; top: 24px; }
+
+        /* Wider, larger pair displays */
+        .edit-main .pages { max-width: 100%; }
+        .edit-main .page { margin-bottom: 48px; }
+        .edit-main .page-header { width: 430px; }
+        .edit-main .page-label { width: 36px; height: 36px; font-size: 15px; }
+        .edit-main .remove-page-btn { width: 40px; height: 40px; }
+        .edit-main .media-toggle button { padding: 8px 18px; font-size: 13px; }
+        .edit-main .upload-row { gap: 30px; }
+        .edit-main .upload-btn { width: 200px; height: 165px; }
+        .edit-main .upload-btn img.icon { width: 52px; height: 52px; }
+        .edit-main .upload-btn .btn-label { font-size: 13px; }
+
+        /* Main column form elements widen to match */
+        .edit-main input[type="text"] { max-width: 460px; }
+        .edit-main .field-label { max-width: 460px; }
+        .edit-main .add-page-btn,
+        .edit-main .save-btn,
+        .edit-main .unsaved-banner { max-width: 460px; }
+
+        /* Header bar and subtitle widen with main */
+        .page-top-bar, .subtitle { max-width: 1120px; padding: 0 24px; }
+      }
       .page { margin-bottom: 40px; position: relative; display: flex; flex-direction: column; align-items: center; }
       .page-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; width: 290px; }
       .page-label { background: #1a1a1a; color: white; border-radius: 50%; width: 28px; height: 28px; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -288,6 +332,10 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           How It Works
         </a>
+        <a class="nav-link nav-link-admin" href="/analytics.html" style="display:none;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="13" width="3" height="5"/><rect x="12" y="9" width="3" height="9"/><rect x="17" y="6" width="3" height="12"/></svg>
+          Analytics
+        </a>
         <div class="nav-divider"></div>
         <a class="nav-link external" href="https://popcodeapp.com" target="_blank">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
@@ -307,74 +355,78 @@
       <span style="font-size:14px;">Loading project...</span>
     </div>
 
-    <div id="edit-ui" style="display:none; width:100%; max-width:360px; display:none; flex-direction:column; align-items:center;">
-      <div class="field-label">Project Name</div>
-      <input type="text" id="name-input" placeholder=""/>
+    <div id="edit-ui" class="edit-container" style="display:none;">
+      <div class="edit-main">
+        <div class="field-label">Project Name</div>
+        <input type="text" id="name-input" placeholder=""/>
 
-      <div class="wl-section" id="wl-section">
-        <div class="wl-head">
-          <h3>White Label Cover</h3>
-          <span class="wl-admin-pill">Admin</span>
-        </div>
-        <p class="wl-help">Replace the default scan screen for this project with a custom cover image and title.</p>
+        <div class="pages" id="pages"></div>
 
-        <div class="wl-toggle-row">
-          <input type="checkbox" id="wl-enabled"/>
-          <label for="wl-enabled" style="margin:0;">Enable cover</label>
-        </div>
-
-        <div class="wl-image-row">
-          <label>Cover image</label>
-          <div class="wl-image-preview" id="wl-preview">
-            <span id="wl-preview-empty">No image</span>
-            <img id="wl-preview-img" style="display:none;" alt=""/>
-            <div class="wl-tint" id="wl-tint" style="display:none;"></div>
-            <div class="wl-overlay-text" id="wl-overlay-text" style="display:none;">
-              <div class="pv-eyebrow" id="pv-eyebrow"></div>
-              <div class="pv-title" id="pv-title"></div>
-              <div class="pv-sub" id="pv-sub"></div>
+        <div class="confirm-overlay" id="confirm-overlay">
+          <div class="confirm-box">
+            <p id="confirm-msg"></p>
+            <div class="confirm-actions">
+              <button class="confirm-cancel-btn" id="confirm-cancel-btn">Cancel</button>
+              <button class="confirm-delete-btn" id="confirm-delete-btn">Delete</button>
             </div>
           </div>
-          <input type="file" id="wl-image-input" accept="image/*" style="display:none;"/>
-          <button type="button" class="wl-pick-btn" id="wl-pick-btn">Choose image</button>
-          <button type="button" class="wl-clear-btn" id="wl-clear-btn">Clear</button>
         </div>
 
-        <label for="wl-eyebrow">Eyebrow (small caps)</label>
-        <input type="text" id="wl-eyebrow" maxlength="60" placeholder="MISSION TO"/>
-
-        <label for="wl-title">Title</label>
-        <input type="text" id="wl-title" maxlength="60" placeholder="Ghana"/>
-
-        <label for="wl-title-size">Title size</label>
-        <select id="wl-title-size" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid #e0d6ff; font-size:14px; color:#1a1a1a; background:white; font-family:'DM Sans',sans-serif; outline:none; margin-bottom:12px;">
-          <option value="lg">Large (1 short word)</option>
-          <option value="md">Medium (2 words / longer)</option>
-          <option value="sm">Small (3+ words / wraps)</option>
-        </select>
-
-        <label for="wl-subtitle">Subtitle / date</label>
-        <input type="text" id="wl-subtitle" maxlength="80" placeholder="March 1 – 9, 2026"/>
-
-        <button type="button" class="wl-save-btn" id="wl-save-btn">Save Cover</button>
-        <div class="wl-status" id="wl-status"></div>
+        <button class="add-page-btn" id="add-page-btn">+ Add Popcode</button>
+        <div class="unsaved-banner" id="unsaved-banner">Page removed &mdash; tap <strong>Save Changes</strong> to confirm.</div>
+        <button class="save-btn" id="save-btn">Save Changes</button>
       </div>
 
-      <div class="pages" id="pages"></div>
-
-      <div class="confirm-overlay" id="confirm-overlay">
-        <div class="confirm-box">
-          <p id="confirm-msg"></p>
-          <div class="confirm-actions">
-            <button class="confirm-cancel-btn" id="confirm-cancel-btn">Cancel</button>
-            <button class="confirm-delete-btn" id="confirm-delete-btn">Delete</button>
+      <aside class="edit-side" id="edit-side" style="display:none;">
+        <div class="wl-section" id="wl-section">
+          <div class="wl-head">
+            <h3>White Label Cover</h3>
+            <span class="wl-admin-pill">Admin</span>
           </div>
-        </div>
-      </div>
+          <p class="wl-help">Replace the default scan screen for this project with a custom cover image and title.</p>
 
-      <button class="add-page-btn" id="add-page-btn">+ Add Popcode</button>
-      <div class="unsaved-banner" id="unsaved-banner">Page removed — tap <strong>Save Changes</strong> to confirm.</div>
-      <button class="save-btn" id="save-btn">Save Changes</button>
+          <div class="wl-toggle-row">
+            <input type="checkbox" id="wl-enabled"/>
+            <label for="wl-enabled" style="margin:0;">Enable cover</label>
+          </div>
+
+          <div class="wl-image-row">
+            <label>Cover image</label>
+            <div class="wl-image-preview" id="wl-preview">
+              <span id="wl-preview-empty">No image</span>
+              <img id="wl-preview-img" style="display:none;" alt=""/>
+              <div class="wl-tint" id="wl-tint" style="display:none;"></div>
+              <div class="wl-overlay-text" id="wl-overlay-text" style="display:none;">
+                <div class="pv-eyebrow" id="pv-eyebrow"></div>
+                <div class="pv-title" id="pv-title"></div>
+                <div class="pv-sub" id="pv-sub"></div>
+              </div>
+            </div>
+            <input type="file" id="wl-image-input" accept="image/*" style="display:none;"/>
+            <button type="button" class="wl-pick-btn" id="wl-pick-btn">Choose image</button>
+            <button type="button" class="wl-clear-btn" id="wl-clear-btn">Clear</button>
+          </div>
+
+          <label for="wl-eyebrow">Eyebrow (small caps)</label>
+          <input type="text" id="wl-eyebrow" maxlength="60" placeholder="MISSION TO"/>
+
+          <label for="wl-title">Title</label>
+          <input type="text" id="wl-title" maxlength="60" placeholder="Ghana"/>
+
+          <label for="wl-title-size">Title size</label>
+          <select id="wl-title-size" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid #e0d6ff; font-size:14px; color:#1a1a1a; background:white; font-family:'DM Sans',sans-serif; outline:none; margin-bottom:12px;">
+            <option value="lg">Large (1 short word)</option>
+            <option value="md">Medium (2 words / longer)</option>
+            <option value="sm">Small (3+ words / wraps)</option>
+          </select>
+
+          <label for="wl-subtitle">Subtitle / date</label>
+          <input type="text" id="wl-subtitle" maxlength="80" placeholder="March 1 &ndash; 9, 2026"/>
+
+          <button type="button" class="wl-save-btn" id="wl-save-btn">Save Cover</button>
+          <div class="wl-status" id="wl-status"></div>
+        </div>
+      </aside>
     </div>
 
     <div id="save-modal" class="save-modal" role="dialog" aria-modal="true" aria-labelledby="progress-label">
@@ -463,6 +515,7 @@
 
       function initWhiteLabelSection(coverConfig) {
         if (!isAdmin()) return;
+        document.getElementById('edit-side').style.display = '';
         document.getElementById('wl-section').style.display = 'block';
 
         const cfg = coverConfig || {};
