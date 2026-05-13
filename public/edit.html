@@ -108,6 +108,11 @@
         .edit-main .upload-btn { width: 200px; height: 165px; }
         .edit-main .upload-btn img.icon { width: 52px; height: 52px; }
         .edit-main .upload-btn .btn-label { font-size: 13px; }
+        .edit-main .audio-tile { width: 200px; height: 165px; gap: 10px; }
+        .edit-main .audio-play-btn { width: 64px; height: 64px; }
+        .edit-main .audio-play-btn svg { width: 26px; height: 26px; }
+        .edit-main .audio-duration { font-size: 13px; }
+        .edit-main .audio-rerecord { font-size: 12px; padding: 5px 16px; }
 
         /* Main column form elements widen to match */
         .edit-main input[type="text"] { max-width: 460px; }
@@ -190,9 +195,29 @@
       .audio-rec-btn { background: #1a1a1a; color: white; border: none; border-radius: 999px; padding: 7px 14px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: 'DM Sans', sans-serif; }
       .audio-rec-btn.stop { background: #dc2626; }
       .audio-time { font-size: 11px; color: #555; font-weight: 600; font-variant-numeric: tabular-nums; }
-      .audio-preview { width: 100%; padding: 0 8px; }
-      .audio-preview audio { width: 100%; height: 32px; }
-      .audio-rerecord { font-size: 10px; color: #6b3fa0; background: none; border: none; cursor: pointer; font-weight: 700; font-family: 'DM Sans', sans-serif; text-decoration: underline; }
+      .audio-tile .audio-el { display: none; }
+      .audio-play-btn {
+        width: 52px; height: 52px; border-radius: 50%;
+        background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
+        border: none; cursor: pointer; color: white;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 3px 10px rgba(118,87,252,0.35);
+        transition: transform 0.15s;
+      }
+      .audio-play-btn:active { transform: scale(0.94); }
+      .audio-play-btn svg { margin-left: 2px; }
+      .audio-play-btn.playing svg { margin-left: 0; }
+      .audio-duration {
+        font-size: 11px; color: #6b3fa0; font-weight: 700;
+        font-variant-numeric: tabular-nums; font-family: 'DM Sans', sans-serif;
+      }
+      .audio-rerecord {
+        background: white; color: #6b3fa0; border: 1px solid #d0c0e8;
+        border-radius: 999px; padding: 4px 14px; font-size: 11px;
+        font-weight: 700; font-family: 'DM Sans', sans-serif;
+        cursor: pointer; transition: background 0.15s;
+      }
+      .audio-rerecord:hover { background: #faf7ff; }
       .rec-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #dc2626; margin-right: 5px; vertical-align: middle; animation: rec-pulse 1s infinite; }
       @keyframes rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
@@ -825,6 +850,26 @@
         });
       }
 
+      function wireAudioPlayer(tile) {
+        const audio = tile.querySelector('.audio-el');
+        const btn = tile.querySelector('.audio-play-btn');
+        const durEl = tile.querySelector('.audio-duration');
+        if (!audio || !btn) return;
+        const playIcon = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+        const pauseIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+        const fmt = s => (s && isFinite(s)) ? `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}` : '0:00';
+        const sync = () => {
+          if (audio.paused) { btn.innerHTML = playIcon; btn.classList.remove('playing'); btn.setAttribute('aria-label', 'Play'); }
+          else { btn.innerHTML = pauseIcon; btn.classList.add('playing'); btn.setAttribute('aria-label', 'Pause'); }
+        };
+        audio.addEventListener('loadedmetadata', () => { if (durEl) durEl.textContent = fmt(audio.duration); });
+        audio.addEventListener('play', sync);
+        audio.addEventListener('pause', sync);
+        audio.addEventListener('ended', () => { audio.currentTime = 0; if (durEl) durEl.textContent = fmt(audio.duration); sync(); });
+        audio.addEventListener('timeupdate', () => { if (durEl && !audio.paused) durEl.textContent = fmt(audio.currentTime); });
+        btn.addEventListener('click', () => { if (audio.paused) audio.play(); else audio.pause(); });
+      }
+
       function renderExistingAudioTile(item, key, audioUrl) {
         const tile = document.getElementById(`audio-tile-${key}`);
         if (!tile) return;
@@ -836,9 +881,12 @@
           tile.classList.add('has-audio');
           const url = URL.createObjectURL(newAudio);
           tile.innerHTML = `
-            <div class="audio-preview"><audio controls preload="metadata" src="${url}"></audio></div>
+            <audio class="audio-el" preload="metadata" src="${url}"></audio>
+            <button type="button" class="audio-play-btn" aria-label="Play"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+            <div class="audio-duration">0:00</div>
             <button type="button" class="audio-rerecord">Re-record</button>
           `;
+          wireAudioPlayer(tile);
           tile.querySelector('.audio-rerecord').addEventListener('click', () => {
             if (replacements[item.id]) delete replacements[item.id].audio;
             renderExistingAudioTile(item, key, item.audio_url || '');
@@ -851,9 +899,12 @@
         if (audioUrl) {
           tile.classList.add('has-audio');
           tile.innerHTML = `
-            <div class="audio-preview"><audio controls preload="metadata" src="${escapeHtml(audioUrl)}"></audio></div>
+            <audio class="audio-el" preload="metadata" src="${escapeHtml(audioUrl)}"></audio>
+            <button type="button" class="audio-play-btn" aria-label="Play"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+            <div class="audio-duration">0:00</div>
             <button type="button" class="audio-rerecord">Re-record</button>
           `;
+          wireAudioPlayer(tile);
           tile.querySelector('.audio-rerecord').addEventListener('click', () => startRecordingExisting(item, key));
         } else {
           tile.innerHTML = `<button type="button" class="audio-rec-btn">● Record</button>`;
@@ -959,9 +1010,12 @@
           tile.classList.add('has-audio');
           const url = URL.createObjectURL(audio);
           tile.innerHTML = `
-            <div class="audio-preview"><audio controls preload="metadata" src="${url}"></audio></div>
+            <audio class="audio-el" preload="metadata" src="${url}"></audio>
+            <button type="button" class="audio-play-btn" aria-label="Play"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+            <div class="audio-duration">0:00</div>
             <button type="button" class="audio-rerecord">Re-record</button>
           `;
+          wireAudioPlayer(tile);
           tile.querySelector('.audio-rerecord').addEventListener('click', () => {
             newPairs[n].audio = null;
             renderNewAudioTile(n);
