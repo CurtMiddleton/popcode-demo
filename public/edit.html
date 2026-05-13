@@ -478,6 +478,7 @@
       let collectionId = null;
       // existingItems: array of {id, target_index, media_type, video_url, audio_url, transcript, photo_url} from DB
       let existingItems = [];
+      let existingMindUrl = null;
       // deletedExistingIds: set of item IDs the user removed
       const deletedExistingIds = new Set();
       // replacements: {[itemId]: {photo?, video?, audio?, mediaType?}} — files / type changes for existing items
@@ -641,6 +642,7 @@
         const { data: col } = await db.from('collections').select('*').eq('slug', slug).single();
         if (!col) { alert('Project not found.'); window.location.href = '/manage.html'; return; }
         collectionId = col.id;
+        existingMindUrl = col.mind_file_url || null;
         document.getElementById('name-input').value = col.name || '';
         initWhiteLabelSection(col.cover_config);
 
@@ -1349,6 +1351,17 @@
         document.getElementById('unsaved-banner').style.display = 'none';
         openSaveModal();
 
+        // If no photos changed (no replacements, no deletions, no additions),
+        // we can skip the recompile entirely and reuse the existing .mind file.
+        const photosChanged = readyNew.length > 0
+          || deletedExistingIds.size > 0
+          || keptItems.some(item => replacements[item.id] && replacements[item.id].photo);
+        const skipRecompile = !photosChanged && existingMindUrl;
+
+        let mindUrl = existingMindUrl;
+
+        if (!skipRecompile) {
+
         // ── Step 1: Load all photos as Image elements ─────────────────────────
         let images = [];
         // We need photos in final order: kept existing first, then new
@@ -1406,7 +1419,6 @@
         }
 
         // ── Step 3: Upload new .mind (overwrite) ──────────────────────────────
-        let mindUrl;
         try {
           setProgress('Uploading image targets...', 50);
           const { error: mindError } = await db.storage
@@ -1418,6 +1430,8 @@
           showSaveError('Step 3 failed (uploading targets) — ' + (err.message || 'Upload error.'));
           return;
         }
+
+        } // end if (!skipRecompile)
 
         // ── Step 4: Upload new video/photo files ──────────────────────────────
         // Final ordering: keptItems first (use their existing URLs), then readyNew
