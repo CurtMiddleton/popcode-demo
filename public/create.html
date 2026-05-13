@@ -592,8 +592,12 @@
                 videoEl.src = URL.createObjectURL(compressedFile);
                 videoEl.muted = true; videoEl.playsInline = true; videoEl.currentTime = 0.5;
                 videoEl.addEventListener('seeked', () => {
-                  const c = document.createElement('canvas'); c.width = 130; c.height = 110;
-                  c.getContext('2d').drawImage(videoEl, 0, 0, 130, 110);
+                  const vw = videoEl.videoWidth || 130, vh = videoEl.videoHeight || 110;
+                  const scale = Math.min(1, 320 / Math.max(vw, vh));
+                  const c = document.createElement('canvas');
+                  c.width = Math.max(2, Math.round(vw * scale));
+                  c.height = Math.max(2, Math.round(vh * scale));
+                  c.getContext('2d').drawImage(videoEl, 0, 0, c.width, c.height);
                   document.getElementById(`video-preview-${n}`).src = c.toDataURL('image/jpeg');
                 });
                 videoEl.load();
@@ -636,11 +640,13 @@
           videoEl.playsInline = true;
           videoEl.currentTime = 0.5;
           videoEl.addEventListener('seeked', () => {
+            const vw = videoEl.videoWidth || 130, vh = videoEl.videoHeight || 110;
+            const scale = Math.min(1, 320 / Math.max(vw, vh));
             const canvas = document.createElement('canvas');
-            canvas.width = 130;
-            canvas.height = 110;
+            canvas.width = Math.max(2, Math.round(vw * scale));
+            canvas.height = Math.max(2, Math.round(vh * scale));
             const ctx = canvas.getContext('2d');
-            ctx.drawImage(videoEl, 0, 0, 130, 110);
+            ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
             document.getElementById(`video-preview-${n}`).src = canvas.toDataURL('image/jpeg');
           });
           videoEl.load();
