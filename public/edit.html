@@ -666,6 +666,38 @@
       }
 
       // ── Render existing page (tap photo or video to replace) ─────────────────
+      // Returns indices (0-based) of input photos that MindAR couldn't extract
+      // usable features from. These photos won't scan at runtime and would
+      // cause the .mind file to be out of sync with collection_items rows.
+      function findUncompilablePages(compiler, expectedCount) {
+        const data = (compiler && compiler.data) || [];
+        const bad = [];
+        for (let i = 0; i < expectedCount; i++) {
+          const entry = data[i];
+          if (!entry) { bad.push(i); continue; }
+          const matching = entry.matchingData || [];
+          const tracking = entry.trackingData || [];
+          const hasMatching = matching.some(k =>
+            (k && ((k.maximaPoints && k.maximaPoints.length) ||
+                   (k.minimaPoints && k.minimaPoints.length) ||
+                   (k.points && k.points.length))));
+          const hasTracking = tracking.some(t => t && t.points && t.points.length);
+          if (!hasMatching && !hasTracking) bad.push(i);
+        }
+        return bad;
+      }
+
+      // The compile order is [keptItems..., readyNew...]. Map a compile-time
+      // index back to a human-friendly page label so we can tell the user
+      // exactly which photo failed.
+      function describePageAtCompileIndex(idx, keptItems, readyNew) {
+        if (idx < keptItems.length) {
+          return `page ${keptItems[idx].target_index + 1}`;
+        }
+        const newIdx = idx - keptItems.length;
+        return `new page ${newIdx + 1}`;
+      }
+
       function getExistingMediaType(item) {
         const rep = replacements[item.id];
         if (rep && rep.mediaType) return rep.mediaType;
@@ -1360,6 +1392,12 @@
           await compiler.compileImageTargets(images, (progress) => {
             setProgress(`Compiling image targets... ${Math.round(progress)}%`, 5 + progress * 0.40);
           });
+          const badPages = findUncompilablePages(compiler, images.length);
+          if (badPages.length) {
+            const labels = badPages.map(i => describePageAtCompileIndex(i, keptItems, readyNew)).join(', ');
+            showSaveError(`MindAR couldn't extract enough trackable features from ${badPages.length === 1 ? 'this photo' : 'these photos'}: ${labels}. Replace ${badPages.length === 1 ? 'it' : 'them'} with a sharper / higher-contrast image before saving — otherwise ${badPages.length === 1 ? 'that page' : 'those pages'} won't scan and later pages will play the wrong video.`);
+            return;
+          }
           const mindBuffer = await compiler.exportData();
           mindBlob = new Blob([mindBuffer]);
         } catch (err) {

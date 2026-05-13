@@ -701,6 +701,27 @@
         return Math.random().toString(36).substring(2, 10);
       }
 
+      // Returns indices (0-based) of input photos that MindAR couldn't extract
+      // usable features from. These photos won't scan at runtime and would
+      // cause the .mind file to be out of sync with collection_items rows.
+      function findUncompilablePages(compiler, expectedCount) {
+        const data = (compiler && compiler.data) || [];
+        const bad = [];
+        for (let i = 0; i < expectedCount; i++) {
+          const entry = data[i];
+          if (!entry) { bad.push(i); continue; }
+          const matching = entry.matchingData || [];
+          const tracking = entry.trackingData || [];
+          const hasMatching = matching.some(k =>
+            (k && ((k.maximaPoints && k.maximaPoints.length) ||
+                   (k.minimaPoints && k.minimaPoints.length) ||
+                   (k.points && k.points.length))));
+          const hasTracking = tracking.some(t => t && t.points && t.points.length);
+          if (!hasMatching && !hasTracking) bad.push(i);
+        }
+        return bad;
+      }
+
       document.getElementById('create-btn').addEventListener('click', async () => {
         const readyPairs = Object.values(pairs).filter(pageHasMedia);
         if (readyPairs.length === 0) {
@@ -777,6 +798,11 @@
           await compiler.compileImageTargets(images, (progress) => {
             setProgress(`Compiling image targets... ${Math.round(progress)}%`, 5 + progress * 0.45);
           });
+          const badPages = findUncompilablePages(compiler, images.length);
+          if (badPages.length) {
+            showError(`Page ${badPages.map(n => n + 1).join(', ')} couldn't be compiled — MindAR couldn't find enough trackable features. Replace ${badPages.length === 1 ? 'that photo' : 'those photos'} with one that has more contrast/detail and try again.`);
+            return;
+          }
           const mindBuffer = await compiler.exportData();
           mindBlob = new Blob([mindBuffer]);
         } catch (err) {
