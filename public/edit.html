@@ -313,6 +313,17 @@
       .wl-image-preview .wl-overlay-text .pv-title { font-family: 'Cormorant Garamond', serif; font-style: normal; font-weight: 500; font-size: 60px; line-height: 0.92; margin-bottom: 6px; }
       .wl-image-preview .wl-overlay-text .pv-sub { font-size: 11px; }
       .wl-image-preview .wl-tint { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.10) 30%, rgba(0,0,0,0.10) 60%, rgba(0,0,0,0.55) 100%); pointer-events: none; }
+      .wl-image-preview .pv-org-logo { position: absolute; top: 22px; left: 0; right: 0; display: flex; justify-content: center; pointer-events: none; }
+      .wl-image-preview .pv-org-logo img { max-width: 90px; max-height: 44px; width: auto; height: auto; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35)); }
+      .wl-variant-row { display: flex; gap: 8px; margin-bottom: 14px; }
+      .wl-variant-row label { flex: 1; margin: 0; padding: 10px; border-radius: 10px; border: 1.5px solid #e0d6ff; background: white; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; }
+      .wl-variant-row input[type="radio"] { display: none; }
+      .wl-variant-row input[type="radio"]:checked + span { color: #7657FC; }
+      .wl-variant-row label:has(input:checked) { background: #f0eaff; border-color: #7657FC; }
+      .wl-org-logo-row { display: none; margin-bottom: 12px; }
+      .wl-org-logo-row.visible { display: block; }
+      .wl-org-logo-preview { width: 100%; aspect-ratio: 4 / 1; background: #eee; border-radius: 10px; overflow: hidden; position: relative; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 12px; }
+      .wl-org-logo-preview img { max-width: 70%; max-height: 70%; object-fit: contain; }
       .wl-pick-btn { display: inline-block; padding: 8px 14px; border-radius: 999px; background: #7657FC; color: white; font-size: 13px; font-weight: 600; cursor: pointer; border: none; }
       .wl-clear-btn { display: inline-block; padding: 8px 12px; border-radius: 999px; background: white; color: #7657FC; border: 1px solid #7657FC; font-size: 13px; font-weight: 600; cursor: pointer; margin-left: 6px; }
       .wl-save-btn { width: 100%; padding: 12px; border-radius: 999px; background: #1a1a1a; color: white; border: none; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 6px; font-family: 'DM Sans', sans-serif; }
@@ -415,12 +426,32 @@
             <label for="wl-enabled" style="margin:0;">Enable cover</label>
           </div>
 
+          <label style="margin-bottom:6px;">Template</label>
+          <div class="wl-variant-row">
+            <label><input type="radio" name="wl-variant" value="consumer" checked/><span>Consumer</span></label>
+            <label><input type="radio" name="wl-variant" value="org"/><span>Organization</span></label>
+          </div>
+
+          <div class="wl-org-logo-row" id="wl-org-logo-row">
+            <label>Organization logo</label>
+            <div class="wl-org-logo-preview" id="wl-org-logo-preview">
+              <span id="wl-org-logo-empty">No logo</span>
+              <img id="wl-org-logo-img" style="display:none;" alt=""/>
+            </div>
+            <input type="file" id="wl-org-logo-input" accept="image/*" style="display:none;"/>
+            <button type="button" class="wl-pick-btn" id="wl-org-logo-pick-btn">Choose logo</button>
+            <button type="button" class="wl-clear-btn" id="wl-org-logo-clear-btn">Clear</button>
+          </div>
+
           <div class="wl-image-row">
             <label>Cover image</label>
             <div class="wl-image-preview" id="wl-preview">
               <span id="wl-preview-empty">No image</span>
               <img id="wl-preview-img" style="display:none;" alt=""/>
               <div class="wl-tint" id="wl-tint" style="display:none;"></div>
+              <div class="pv-org-logo" id="pv-org-logo" style="display:none;">
+                <img id="pv-org-logo-img" alt=""/>
+              </div>
               <div class="wl-overlay-text" id="wl-overlay-text" style="display:none;">
                 <div class="pv-eyebrow" id="pv-eyebrow"></div>
                 <div class="pv-title" id="pv-title"></div>
@@ -533,9 +564,16 @@
       const ADMIN_EMAIL = 'curtmid@gmail.com';
       let wlPickedFile = null;     // newly chosen File, not yet uploaded
       let wlExistingUrl = null;    // url already saved in DB
+      let wlOrgLogoPickedFile = null;
+      let wlOrgLogoExistingUrl = null;
 
       function isAdmin() {
         return currentUser && (currentUser.email || '').toLowerCase() === ADMIN_EMAIL;
+      }
+
+      function getSelectedVariant() {
+        const checked = document.querySelector('input[name="wl-variant"]:checked');
+        return checked && checked.value === 'org' ? 'org' : 'consumer';
       }
 
       function initWhiteLabelSection(coverConfig) {
@@ -545,12 +583,17 @@
 
         const cfg = coverConfig || {};
         document.getElementById('wl-enabled').checked = !!cfg.enabled;
+        const variant = cfg.variant === 'org' ? 'org' : 'consumer';
+        document.querySelector(`input[name="wl-variant"][value="${variant}"]`).checked = true;
         document.getElementById('wl-eyebrow').value = cfg.eyebrow || '';
         document.getElementById('wl-title').value = cfg.title || '';
         document.getElementById('wl-title-size').value = cfg.title_size === 'sm' || cfg.title_size === 'md' ? cfg.title_size : 'lg';
         document.getElementById('wl-subtitle').value = cfg.subtitle || '';
         wlExistingUrl = cfg.image_url || null;
+        wlOrgLogoExistingUrl = cfg.org_logo_url || null;
         if (wlExistingUrl) showPreviewImage(wlExistingUrl);
+        if (wlOrgLogoExistingUrl) showOrgLogoPreview(wlOrgLogoExistingUrl);
+        updateVariantUI();
         updatePreviewText();
 
         document.getElementById('wl-pick-btn').addEventListener('click', () => {
@@ -578,11 +621,59 @@
           document.getElementById('wl-image-input').value = '';
           setStatus('');
         });
+        document.getElementById('wl-org-logo-pick-btn').addEventListener('click', () => {
+          document.getElementById('wl-org-logo-input').click();
+        });
+        document.getElementById('wl-org-logo-input').addEventListener('change', (e) => {
+          const f = e.target.files && e.target.files[0];
+          if (!f) return;
+          if (f.size > 2 * 1024 * 1024) {
+            setStatus('Logo is over 2 MB — please pick a smaller one.', 'err');
+            return;
+          }
+          wlOrgLogoPickedFile = f;
+          showOrgLogoPreview(URL.createObjectURL(f));
+          setStatus('');
+        });
+        document.getElementById('wl-org-logo-clear-btn').addEventListener('click', () => {
+          wlOrgLogoPickedFile = null;
+          wlOrgLogoExistingUrl = null;
+          document.getElementById('wl-org-logo-img').src = '';
+          document.getElementById('wl-org-logo-img').style.display = 'none';
+          document.getElementById('wl-org-logo-empty').style.display = 'block';
+          document.getElementById('pv-org-logo').style.display = 'none';
+          document.getElementById('pv-org-logo-img').src = '';
+          document.getElementById('wl-org-logo-input').value = '';
+          setStatus('');
+        });
+        document.querySelectorAll('input[name="wl-variant"]').forEach(r => {
+          r.addEventListener('change', updateVariantUI);
+        });
         ['wl-eyebrow', 'wl-title', 'wl-subtitle'].forEach(id => {
           document.getElementById(id).addEventListener('input', updatePreviewText);
         });
         document.getElementById('wl-title-size').addEventListener('change', updatePreviewText);
         document.getElementById('wl-save-btn').addEventListener('click', saveWhiteLabel);
+      }
+
+      function updateVariantUI() {
+        const v = getSelectedVariant();
+        document.getElementById('wl-org-logo-row').classList.toggle('visible', v === 'org');
+        const pvOrg = document.getElementById('pv-org-logo');
+        const hasLogo = !!(wlOrgLogoPickedFile || wlOrgLogoExistingUrl);
+        pvOrg.style.display = v === 'org' && hasLogo ? 'flex' : 'none';
+      }
+
+      function showOrgLogoPreview(url) {
+        const img = document.getElementById('wl-org-logo-img');
+        img.src = url;
+        img.style.display = 'block';
+        document.getElementById('wl-org-logo-empty').style.display = 'none';
+        const pvImg = document.getElementById('pv-org-logo-img');
+        pvImg.src = url;
+        if (getSelectedVariant() === 'org') {
+          document.getElementById('pv-org-logo').style.display = 'flex';
+        }
       }
 
       function showPreviewImage(url) {
@@ -611,9 +702,15 @@
       async function saveWhiteLabel() {
         const btn = document.getElementById('wl-save-btn');
         const enabled = document.getElementById('wl-enabled').checked;
+        const variant = getSelectedVariant();
         const hasImage = !!(wlPickedFile || wlExistingUrl);
+        const hasOrgLogo = !!(wlOrgLogoPickedFile || wlOrgLogoExistingUrl);
         if (enabled && !hasImage) {
           setStatus('Pick a cover image before enabling the cover.', 'err');
+          return;
+        }
+        if (enabled && variant === 'org' && !hasOrgLogo) {
+          setStatus('Pick an organization logo before saving an Organization cover.', 'err');
           return;
         }
         btn.disabled = true;
@@ -632,9 +729,24 @@
             wlPickedFile = null;
             wlExistingUrl = imageUrl;
           }
+          let orgLogoUrl = wlOrgLogoExistingUrl;
+          if (wlOrgLogoPickedFile) {
+            const ext = (wlOrgLogoPickedFile.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+            const path = `${slug}/org_logo.${ext}`;
+            const { error: upErr } = await db.storage
+              .from('experiences')
+              .upload(path, wlOrgLogoPickedFile, { upsert: true, contentType: wlOrgLogoPickedFile.type || 'image/png' });
+            if (upErr) throw upErr;
+            const { data: pub } = db.storage.from('experiences').getPublicUrl(path);
+            orgLogoUrl = pub.publicUrl + '?v=' + Date.now();
+            wlOrgLogoPickedFile = null;
+            wlOrgLogoExistingUrl = orgLogoUrl;
+          }
           const cfg = {
             enabled: document.getElementById('wl-enabled').checked,
+            variant: variant,
             image_url: imageUrl || null,
+            org_logo_url: orgLogoUrl || null,
             eyebrow: document.getElementById('wl-eyebrow').value.trim() || null,
             title: document.getElementById('wl-title').value.trim() || null,
             title_size: document.getElementById('wl-title-size').value || 'lg',
