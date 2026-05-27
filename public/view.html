@@ -121,6 +121,16 @@
         align-items: center; padding: 0 24px;
         color: white;
       }
+      #wl-cover .wl-org-logo {
+        display: none;
+        margin-top: 10vh; max-width: 180px; max-height: 96px;
+        width: auto; height: auto; object-fit: contain;
+        filter: drop-shadow(0 2px 12px rgba(0,0,0,0.35));
+      }
+      #wl-cover[data-variant="org"] .wl-org-logo[src] { display: block; }
+      #wl-cover[data-variant="org"] .wl-text { margin-top: 6vh; }
+      #wl-cover[data-variant="org"] .wl-create-btn,
+      #wl-cover[data-variant="org"] .wl-signin { display: none; }
       #wl-cover .wl-text {
         margin-top: 22vh; text-align: center;
         text-shadow: 0 2px 16px rgba(0,0,0,0.35);
@@ -372,10 +382,11 @@
       </div>
     </div>
 
-    <div id="wl-cover">
+    <div id="wl-cover" data-variant="consumer">
       <img class="wl-bg" alt=""/>
       <div class="wl-overlay"></div>
       <div class="wl-content">
+        <img class="wl-org-logo" alt=""/>
         <div class="wl-text">
           <div class="wl-eyebrow"></div>
           <div class="wl-title"></div>
@@ -615,7 +626,15 @@
         if (!cfg || !cfg.enabled || !cfg.image_url) { coverConfig = null; return; }
         coverConfig = cfg;
         const wl = document.getElementById('wl-cover');
+        const variant = cfg.variant === 'org' ? 'org' : 'consumer';
+        wl.setAttribute('data-variant', variant);
         wl.querySelector('.wl-bg').src = cfg.image_url;
+        const orgLogo = wl.querySelector('.wl-org-logo');
+        if (variant === 'org' && cfg.org_logo_url) {
+          orgLogo.src = cfg.org_logo_url;
+        } else {
+          orgLogo.removeAttribute('src');
+        }
         const eyebrow = wl.querySelector('.wl-eyebrow');
         const title = wl.querySelector('.wl-title');
         const subtitle = wl.querySelector('.wl-subtitle');
