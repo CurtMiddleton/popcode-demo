@@ -312,9 +312,10 @@
       .wl-image-preview .wl-overlay-text .pv-eyebrow { font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; margin-bottom: 4px; }
       .wl-image-preview .wl-overlay-text .pv-title { font-family: 'Cormorant Garamond', serif; font-style: normal; font-weight: 500; font-size: 60px; line-height: 0.92; margin-bottom: 6px; }
       .wl-image-preview .wl-overlay-text .pv-sub { font-size: 11px; }
-      .wl-image-preview .wl-tint { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.10) 30%, rgba(0,0,0,0.10) 60%, rgba(0,0,0,0.55) 100%); pointer-events: none; }
+      .wl-image-preview .wl-tint { --bg-d: 1; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,calc(0.35 * var(--bg-d))) 0%, rgba(0,0,0,calc(0.10 * var(--bg-d))) 30%, rgba(0,0,0,calc(0.10 * var(--bg-d))) 60%, rgba(0,0,0,calc(0.55 * var(--bg-d))) 100%); pointer-events: none; }
       .wl-image-preview .pv-org-logo { position: absolute; top: 22px; left: 0; right: 0; display: flex; justify-content: center; pointer-events: none; }
       .wl-image-preview .pv-org-logo img { max-width: 90px; max-height: 44px; width: auto; height: auto; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35)); }
+      .wl-image-preview .wl-overlay-text { transition: none; }
       .wl-variant-row { display: flex; gap: 8px; margin-bottom: 14px; }
       .wl-variant-row label { flex: 1; margin: 0; padding: 10px; border-radius: 10px; border: 1.5px solid #e0d6ff; background: white; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; }
       .wl-variant-row input[type="radio"] { display: none; }
@@ -324,6 +325,18 @@
       .wl-org-logo-row.visible { display: block; }
       .wl-org-logo-preview { width: 100%; aspect-ratio: 4 / 1; background: #eee; border-radius: 10px; overflow: hidden; position: relative; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 12px; }
       .wl-org-logo-preview img { max-width: 70%; max-height: 70%; object-fit: contain; }
+      .wl-layout-section { margin-top: 14px; padding-top: 14px; border-top: 1px solid #e0d6ff; }
+      .wl-layout-section h4 { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #7657FC; margin-bottom: 12px; }
+      .wl-slider-row { margin-bottom: 14px; }
+      .wl-slider-row .wl-slider-label { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #1a1a1a; }
+      .wl-slider-row .wl-slider-val { font-weight: 500; color: #7657FC; font-variant-numeric: tabular-nums; }
+      .wl-slider-row input[type="range"] { width: 100%; accent-color: #7657FC; cursor: pointer; }
+      .wl-align-row { display: flex; gap: 6px; margin-bottom: 14px; }
+      .wl-align-row label { flex: 1; margin: 0; padding: 8px; border-radius: 8px; border: 1.5px solid #e0d6ff; background: white; text-align: center; font-size: 12px; font-weight: 600; cursor: pointer; }
+      .wl-align-row input[type="radio"] { display: none; }
+      .wl-align-row label:has(input:checked) { background: #f0eaff; border-color: #7657FC; color: #7657FC; }
+      .wl-layout-org-only { display: none; }
+      .wl-section[data-variant="org"] .wl-layout-org-only { display: block; }
       .wl-pick-btn { display: inline-block; padding: 8px 14px; border-radius: 999px; background: #7657FC; color: white; font-size: 13px; font-weight: 600; cursor: pointer; border: none; }
       .wl-clear-btn { display: inline-block; padding: 8px 12px; border-radius: 999px; background: white; color: #7657FC; border: 1px solid #7657FC; font-size: 13px; font-weight: 600; cursor: pointer; margin-left: 6px; }
       .wl-save-btn { width: 100%; padding: 12px; border-radius: 999px; background: #1a1a1a; color: white; border: none; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 6px; font-family: 'DM Sans', sans-serif; }
@@ -432,6 +445,13 @@
             <label><input type="radio" name="wl-variant" value="org"/><span>Organization</span></label>
           </div>
 
+          <label for="wl-cta-mode">Call to action</label>
+          <select id="wl-cta-mode" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid #e0d6ff; font-size:14px; color:#1a1a1a; background:white; font-family:'DM Sans',sans-serif; outline:none; margin-bottom:14px;">
+            <option value="tap">Tap to scan</option>
+            <option value="code">Have a code? (code entry)</option>
+            <option value="both">Both</option>
+          </select>
+
           <div class="wl-org-logo-row" id="wl-org-logo-row">
             <label>Organization logo</label>
             <div class="wl-org-logo-preview" id="wl-org-logo-preview">
@@ -469,15 +489,50 @@
           <label for="wl-title">Title</label>
           <input type="text" id="wl-title" maxlength="60" placeholder="Ghana"/>
 
-          <label for="wl-title-size">Title size</label>
-          <select id="wl-title-size" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid #e0d6ff; font-size:14px; color:#1a1a1a; background:white; font-family:'DM Sans',sans-serif; outline:none; margin-bottom:12px;">
-            <option value="lg">Large (1 short word)</option>
-            <option value="md">Medium (2 words / longer)</option>
-            <option value="sm">Small (3+ words / wraps)</option>
-          </select>
-
           <label for="wl-subtitle">Subtitle / date</label>
           <input type="text" id="wl-subtitle" maxlength="80" placeholder="March 1 &ndash; 9, 2026"/>
+
+          <div class="wl-layout-section">
+            <h4>Layout</h4>
+
+            <div class="wl-slider-row">
+              <div class="wl-slider-label"><span>Background darkness</span><span class="wl-slider-val" id="wl-bg-darkness-val">100%</span></div>
+              <input type="range" id="wl-bg-darkness" min="0" max="200" step="5" value="100"/>
+            </div>
+
+            <div class="wl-slider-row">
+              <div class="wl-slider-label"><span>Title size</span><span class="wl-slider-val" id="wl-title-px-val">112 px</span></div>
+              <input type="range" id="wl-title-px" min="40" max="180" step="2" value="112"/>
+            </div>
+
+            <div class="wl-slider-row">
+              <div class="wl-slider-label"><span>Title vertical position</span><span class="wl-slider-val" id="wl-title-top-val">22%</span></div>
+              <input type="range" id="wl-title-top" min="0" max="70" step="1" value="22"/>
+            </div>
+
+            <div class="wl-slider-row">
+              <div class="wl-slider-label"><span>Subtitle size</span><span class="wl-slider-val" id="wl-subtitle-px-val">18 px</span></div>
+              <input type="range" id="wl-subtitle-px" min="10" max="32" step="1" value="18"/>
+            </div>
+
+            <label style="margin-bottom:6px;">Text alignment</label>
+            <div class="wl-align-row">
+              <label><input type="radio" name="wl-align" value="left"/><span>Left</span></label>
+              <label><input type="radio" name="wl-align" value="center" checked/><span>Center</span></label>
+              <label><input type="radio" name="wl-align" value="right"/><span>Right</span></label>
+            </div>
+
+            <div class="wl-layout-org-only">
+              <div class="wl-slider-row">
+                <div class="wl-slider-label"><span>Logo size</span><span class="wl-slider-val" id="wl-org-logo-size-val">180 px</span></div>
+                <input type="range" id="wl-org-logo-size" min="60" max="320" step="2" value="180"/>
+              </div>
+              <div class="wl-slider-row">
+                <div class="wl-slider-label"><span>Logo vertical position</span><span class="wl-slider-val" id="wl-org-logo-top-val">10%</span></div>
+                <input type="range" id="wl-org-logo-top" min="0" max="40" step="1" value="10"/>
+              </div>
+            </div>
+          </div>
 
           <button type="button" class="wl-save-btn" id="wl-save-btn">Save Cover</button>
           <div class="wl-status" id="wl-status"></div>
@@ -587,8 +642,21 @@
         document.querySelector(`input[name="wl-variant"][value="${variant}"]`).checked = true;
         document.getElementById('wl-eyebrow').value = cfg.eyebrow || '';
         document.getElementById('wl-title').value = cfg.title || '';
-        document.getElementById('wl-title-size').value = cfg.title_size === 'sm' || cfg.title_size === 'md' ? cfg.title_size : 'lg';
+        document.getElementById('wl-cta-mode').value = cfg.cta_mode === 'code' || cfg.cta_mode === 'both' ? cfg.cta_mode : 'tap';
         document.getElementById('wl-subtitle').value = cfg.subtitle || '';
+
+        // Back-compat: derive title_px from title_size when not explicitly set
+        const sizeToPx = { sm: 64, md: 88, lg: 112 };
+        const titlePxDefault = sizeToPx[cfg.title_size] || 112;
+        const titleTopDefault = variant === 'org' ? 6 : 22;
+        document.getElementById('wl-bg-darkness').value = cfg.bg_darkness !== undefined && cfg.bg_darkness !== null ? Math.round(Number(cfg.bg_darkness) * 100) : 100;
+        document.getElementById('wl-title-px').value = cfg.title_px || titlePxDefault;
+        document.getElementById('wl-title-top').value = cfg.title_top_pct !== undefined && cfg.title_top_pct !== null ? cfg.title_top_pct : titleTopDefault;
+        document.getElementById('wl-subtitle-px').value = cfg.subtitle_px || 18;
+        const align = cfg.text_align === 'left' || cfg.text_align === 'right' ? cfg.text_align : 'center';
+        document.querySelector(`input[name="wl-align"][value="${align}"]`).checked = true;
+        document.getElementById('wl-org-logo-size').value = cfg.org_logo_max_px || 180;
+        document.getElementById('wl-org-logo-top').value = cfg.org_logo_top_pct !== undefined && cfg.org_logo_top_pct !== null ? cfg.org_logo_top_pct : 10;
         wlExistingUrl = cfg.image_url || null;
         wlOrgLogoExistingUrl = cfg.org_logo_url || null;
         if (wlExistingUrl) showPreviewImage(wlExistingUrl);
@@ -652,16 +720,23 @@
         ['wl-eyebrow', 'wl-title', 'wl-subtitle'].forEach(id => {
           document.getElementById(id).addEventListener('input', updatePreviewText);
         });
-        document.getElementById('wl-title-size').addEventListener('change', updatePreviewText);
+        ['wl-bg-darkness', 'wl-title-px', 'wl-title-top', 'wl-subtitle-px', 'wl-org-logo-size', 'wl-org-logo-top'].forEach(id => {
+          document.getElementById(id).addEventListener('input', updatePreviewText);
+        });
+        document.querySelectorAll('input[name="wl-align"]').forEach(r => {
+          r.addEventListener('change', updatePreviewText);
+        });
         document.getElementById('wl-save-btn').addEventListener('click', saveWhiteLabel);
       }
 
       function updateVariantUI() {
         const v = getSelectedVariant();
+        document.getElementById('wl-section').setAttribute('data-variant', v);
         document.getElementById('wl-org-logo-row').classList.toggle('visible', v === 'org');
         const pvOrg = document.getElementById('pv-org-logo');
         const hasLogo = !!(wlOrgLogoPickedFile || wlOrgLogoExistingUrl);
         pvOrg.style.display = v === 'org' && hasLogo ? 'flex' : 'none';
+        updatePreviewText();
       }
 
       function showOrgLogoPreview(url) {
@@ -684,14 +759,47 @@
         document.getElementById('wl-overlay-text').style.display = 'flex';
         document.getElementById('wl-preview-empty').style.display = 'none';
       }
+      // Preview pane is roughly half the real cover width — scale font + logo sizes to match.
+      const PREVIEW_SCALE = 0.54;
+
       function updatePreviewText() {
         document.getElementById('pv-eyebrow').textContent = document.getElementById('wl-eyebrow').value;
         const titleEl = document.getElementById('pv-title');
+        const subEl = document.getElementById('pv-sub');
         titleEl.textContent = document.getElementById('wl-title').value;
-        const sizeMap = { sm: 32, md: 46, lg: 60 };
-        const size = document.getElementById('wl-title-size').value;
-        titleEl.style.fontSize = (sizeMap[size] || 60) + 'px';
-        document.getElementById('pv-sub').textContent = document.getElementById('wl-subtitle').value;
+        subEl.textContent = document.getElementById('wl-subtitle').value;
+
+        const titlePx = Number(document.getElementById('wl-title-px').value) || 112;
+        const titleTop = Number(document.getElementById('wl-title-top').value) || 0;
+        const subPx = Number(document.getElementById('wl-subtitle-px').value) || 18;
+        const darkness = (Number(document.getElementById('wl-bg-darkness').value) || 100) / 100;
+        const align = (document.querySelector('input[name="wl-align"]:checked') || {}).value || 'center';
+        const orgSize = Number(document.getElementById('wl-org-logo-size').value) || 180;
+        const orgTop = Number(document.getElementById('wl-org-logo-top').value) || 0;
+
+        titleEl.style.fontSize = Math.round(titlePx * PREVIEW_SCALE) + 'px';
+        subEl.style.fontSize = Math.max(8, Math.round(subPx * PREVIEW_SCALE)) + 'px';
+
+        const overlayText = document.getElementById('wl-overlay-text');
+        overlayText.style.justifyContent = 'flex-start';
+        overlayText.style.paddingTop = titleTop + '%';
+        overlayText.style.textAlign = align;
+        overlayText.style.alignItems = align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center';
+
+        document.getElementById('wl-tint').style.setProperty('--bg-d', darkness);
+
+        const pvOrgImg = document.getElementById('pv-org-logo-img');
+        pvOrgImg.style.maxWidth = Math.round(orgSize * PREVIEW_SCALE) + 'px';
+        const pvOrg = document.getElementById('pv-org-logo');
+        pvOrg.style.top = orgTop + '%';
+
+        // Update slider value readouts
+        document.getElementById('wl-bg-darkness-val').textContent = Math.round(darkness * 100) + '%';
+        document.getElementById('wl-title-px-val').textContent = titlePx + ' px';
+        document.getElementById('wl-title-top-val').textContent = titleTop + '%';
+        document.getElementById('wl-subtitle-px-val').textContent = subPx + ' px';
+        document.getElementById('wl-org-logo-size-val').textContent = orgSize + ' px';
+        document.getElementById('wl-org-logo-top-val').textContent = orgTop + '%';
       }
       function setStatus(msg, kind) {
         const el = document.getElementById('wl-status');
@@ -742,15 +850,25 @@
             wlOrgLogoPickedFile = null;
             wlOrgLogoExistingUrl = orgLogoUrl;
           }
+          const ctaSel = document.getElementById('wl-cta-mode').value;
+          const ctaMode = ctaSel === 'code' || ctaSel === 'both' ? ctaSel : 'tap';
+          const alignSel = (document.querySelector('input[name="wl-align"]:checked') || {}).value || 'center';
           const cfg = {
             enabled: document.getElementById('wl-enabled').checked,
             variant: variant,
+            cta_mode: ctaMode,
             image_url: imageUrl || null,
             org_logo_url: orgLogoUrl || null,
             eyebrow: document.getElementById('wl-eyebrow').value.trim() || null,
             title: document.getElementById('wl-title').value.trim() || null,
-            title_size: document.getElementById('wl-title-size').value || 'lg',
-            subtitle: document.getElementById('wl-subtitle').value.trim() || null
+            subtitle: document.getElementById('wl-subtitle').value.trim() || null,
+            bg_darkness: Number(document.getElementById('wl-bg-darkness').value) / 100,
+            title_px: Number(document.getElementById('wl-title-px').value),
+            title_top_pct: Number(document.getElementById('wl-title-top').value),
+            subtitle_px: Number(document.getElementById('wl-subtitle-px').value),
+            text_align: alignSel,
+            org_logo_max_px: Number(document.getElementById('wl-org-logo-size').value),
+            org_logo_top_pct: Number(document.getElementById('wl-org-logo-top').value)
           };
           const { error: dbErr, data } = await db.from('collections')
             .update({ cover_config: cfg })

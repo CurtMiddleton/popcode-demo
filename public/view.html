@@ -108,12 +108,13 @@
       }
       #wl-cover .wl-overlay {
         position: absolute; inset: 0;
+        --bg-d: 1;
         background:
           linear-gradient(180deg,
-            rgba(0,0,0,0.35) 0%,
-            rgba(0,0,0,0.10) 28%,
-            rgba(0,0,0,0.10) 55%,
-            rgba(0,0,0,0.55) 100%);
+            rgba(0,0,0,calc(0.35 * var(--bg-d))) 0%,
+            rgba(0,0,0,calc(0.10 * var(--bg-d))) 28%,
+            rgba(0,0,0,calc(0.10 * var(--bg-d))) 55%,
+            rgba(0,0,0,calc(0.55 * var(--bg-d))) 100%);
       }
       #wl-cover .wl-content {
         position: relative; z-index: 2;
@@ -168,6 +169,34 @@
         cursor: pointer;
         box-shadow: 0 8px 32px rgba(0,0,0,0.25);
       }
+      #wl-cover .wl-code-block { width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+      #wl-cover .wl-code-label {
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 600; font-size: 15px;
+        color: white; text-align: center;
+        text-shadow: 0 2px 12px rgba(0,0,0,0.45);
+      }
+      #wl-cover .wl-code-row { display: flex; align-items: stretch; gap: 8px; width: 100%; }
+      #wl-cover .wl-code-input {
+        flex: 1; min-width: 0; padding: 14px 16px;
+        border: none; border-radius: 10px;
+        background: white; color: #1a1a1a;
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 600; font-size: 16px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+        outline: none;
+      }
+      #wl-cover .wl-code-go {
+        padding: 0 22px;
+        border: none; border-radius: 10px;
+        background: #2dc0c5; color: white;
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 700; font-size: 16px;
+        cursor: pointer;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+      }
+      #wl-cover[data-cta-mode="tap"] .wl-code-block { display: none; }
+      #wl-cover[data-cta-mode="code"] .wl-scan-btn { display: none; }
       #wl-cover .wl-create-btn {
         width: 100%; padding: 16px 24px;
         border: 1.5px solid rgba(255,255,255,0.85);
@@ -382,7 +411,7 @@
       </div>
     </div>
 
-    <div id="wl-cover" data-variant="consumer">
+    <div id="wl-cover" data-variant="consumer" data-cta-mode="tap">
       <img class="wl-bg" alt=""/>
       <div class="wl-overlay"></div>
       <div class="wl-content">
@@ -394,6 +423,13 @@
         </div>
         <div class="wl-cta">
           <button class="wl-scan-btn" id="wl-scan-btn">Tap to scan</button>
+          <div class="wl-code-block">
+            <div class="wl-code-label">Have a code? Enter it here.</div>
+            <form class="wl-code-row" id="wl-code-form">
+              <input type="text" class="wl-code-input" id="wl-code-input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"/>
+              <button type="submit" class="wl-code-go">Go!</button>
+            </form>
+          </div>
           <a class="wl-create-btn" href="/create.html">Create your own Popcode</a>
           <a class="wl-signin" href="/manage.html">Already have an account? <u>Sign in</u></a>
           <img class="wl-popcode-logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
@@ -586,6 +622,13 @@
 
         document.getElementById('start-btn').addEventListener('click', handleStartTap);
         document.getElementById('wl-scan-btn').addEventListener('click', handleStartTap);
+        document.getElementById('wl-code-form').addEventListener('submit', (e) => {
+          e.preventDefault();
+          const raw = document.getElementById('wl-code-input').value || '';
+          const code = raw.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+          if (!code) return;
+          window.location.href = '/' + code;
+        });
       }
 
       function handleStartTap() {
@@ -628,6 +671,8 @@
         const wl = document.getElementById('wl-cover');
         const variant = cfg.variant === 'org' ? 'org' : 'consumer';
         wl.setAttribute('data-variant', variant);
+        const ctaMode = cfg.cta_mode === 'code' || cfg.cta_mode === 'both' ? cfg.cta_mode : 'tap';
+        wl.setAttribute('data-cta-mode', ctaMode);
         wl.querySelector('.wl-bg').src = cfg.image_url;
         const orgLogo = wl.querySelector('.wl-org-logo');
         if (variant === 'org' && cfg.org_logo_url) {
@@ -638,6 +683,7 @@
         const eyebrow = wl.querySelector('.wl-eyebrow');
         const title = wl.querySelector('.wl-title');
         const subtitle = wl.querySelector('.wl-subtitle');
+        const textEl = wl.querySelector('.wl-text');
         eyebrow.textContent = cfg.eyebrow || '';
         title.textContent = cfg.title || '';
         subtitle.textContent = cfg.subtitle || '';
@@ -645,8 +691,30 @@
         title.style.display = cfg.title ? '' : 'none';
         subtitle.style.display = cfg.subtitle ? '' : 'none';
         title.classList.remove('wl-size-sm', 'wl-size-md', 'wl-size-lg');
-        const size = cfg.title_size === 'sm' || cfg.title_size === 'md' ? cfg.title_size : 'lg';
-        title.classList.add('wl-size-' + size);
+        if (cfg.title_px) {
+          title.style.fontSize = cfg.title_px + 'px';
+        } else {
+          title.style.fontSize = '';
+          const size = cfg.title_size === 'sm' || cfg.title_size === 'md' ? cfg.title_size : 'lg';
+          title.classList.add('wl-size-' + size);
+        }
+        subtitle.style.fontSize = cfg.subtitle_px ? cfg.subtitle_px + 'px' : '';
+        if (cfg.title_top_pct !== undefined && cfg.title_top_pct !== null && cfg.title_top_pct !== '') {
+          textEl.style.marginTop = cfg.title_top_pct + 'vh';
+        } else {
+          textEl.style.marginTop = '';
+        }
+        const align = cfg.text_align === 'left' || cfg.text_align === 'right' ? cfg.text_align : 'center';
+        textEl.style.textAlign = align;
+        orgLogo.style.maxWidth = cfg.org_logo_max_px ? cfg.org_logo_max_px + 'px' : '';
+        if (cfg.org_logo_top_pct !== undefined && cfg.org_logo_top_pct !== null && cfg.org_logo_top_pct !== '') {
+          orgLogo.style.marginTop = cfg.org_logo_top_pct + 'vh';
+        } else {
+          orgLogo.style.marginTop = '';
+        }
+        const overlay = wl.querySelector('.wl-overlay');
+        const dark = cfg.bg_darkness !== undefined && cfg.bg_darkness !== null && cfg.bg_darkness !== '' ? Number(cfg.bg_darkness) : 1;
+        overlay.style.setProperty('--bg-d', isFinite(dark) ? dark : 1);
       }
       function showStartScreen() {
         if (coverConfig) {
