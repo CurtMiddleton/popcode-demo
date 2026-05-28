@@ -432,6 +432,13 @@
         <div class="field-label">Project Name</div>
         <input type="text" id="name-input" placeholder=""/>
 
+        <div class="field-label" style="display:flex;justify-content:space-between;align-items:baseline;">
+          <span>Project code <span style="font-weight:500;color:#888;">(popcode.app/&hellip;)</span></span>
+          <button type="button" id="rename-code-btn" style="background:#1a1a1a;color:white;border:none;border-radius:999px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:none;">Save code</button>
+        </div>
+        <input type="text" id="code-input" maxlength="10" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="text-transform:lowercase;letter-spacing:0.04em;font-variant-numeric:tabular-nums;"/>
+        <div class="field-hint" id="code-hint" style="font-size:12px;color:#888;margin:-28px 0 24px;width:100%;max-width:360px;padding:0 16px;text-align:left;min-height:16px;line-height:1.3;"></div>
+
         <div class="pages" id="pages"></div>
 
         <div class="confirm-overlay" id="confirm-overlay">
@@ -678,6 +685,131 @@
       function getSelectedVariant() {
         const checked = document.querySelector('input[name="wl-variant"]:checked');
         return checked && checked.value === 'org' ? 'org' : 'consumer';
+      }
+
+      // ── Project code rename ──────────────────────────────────────────────────
+      const RESERVED_SLUGS = new Set([
+        'index','create','manage','edit','view','views','auth','reset','account',
+        'howto','analytics','privacy','terms','marker-test','mockup-a','mockup-b','mockup-c','qr-test',
+        'admin','api','app','www','assets','static','public','login','signup','logout','help','support'
+      ]);
+
+      function normalizeCode(raw) { return (raw || '').trim().toLowerCase().replace(/[^a-z0-9]/g, ''); }
+
+      function validateCode(code) {
+        if (code.length < 6) return { ok: false, msg: `${code.length}/6 characters` };
+        if (code.length > 10) return { ok: false, msg: 'Max 10 characters' };
+        if (RESERVED_SLUGS.has(code)) return { ok: false, msg: `"${code}" is reserved` };
+        return { ok: true };
+      }
+
+      function initCodeRename() {
+        const input = document.getElementById('code-input');
+        const hint = document.getElementById('code-hint');
+        const btn = document.getElementById('rename-code-btn');
+        const setHint = (msg, kind) => { hint.textContent = msg || ''; hint.style.color = kind === 'err' ? '#dc2626' : kind === 'ok' ? '#16a34a' : '#888'; };
+
+        let token = 0;
+        let available = null;
+        let checkTimer = null;
+        const original = slug;
+
+        input.addEventListener('input', () => {
+          const raw = input.value;
+          const code = normalizeCode(raw);
+          if (raw !== code) input.value = code;
+          if (checkTimer) clearTimeout(checkTimer);
+          available = null;
+          if (code === original) {
+            setHint(`Current code: popcode.app/${original}`, '');
+            btn.style.display = 'none';
+            return;
+          }
+          const v = validateCode(code);
+          if (!v.ok) { setHint(v.msg, 'err'); btn.style.display = 'none'; return; }
+          setHint(`Checking "${code}"…`, '');
+          btn.style.display = 'none';
+          const myToken = ++token;
+          checkTimer = setTimeout(async () => {
+            try {
+              const { data } = await db.from('collections').select('slug').eq('slug', code).maybeSingle();
+              if (myToken !== token) return;
+              if (data) { available = false; setHint(`"${code}" is already taken`, 'err'); btn.style.display = 'none'; }
+              else { available = true; setHint(`"${code}" is available — click Save code to rename`, 'ok'); btn.style.display = ''; }
+            } catch (e) { if (myToken === token) setHint('Could not check availability', 'err'); }
+          }, 350);
+        });
+
+        btn.addEventListener('click', async () => {
+          const newSlug = normalizeCode(input.value);
+          if (newSlug === original || !validateCode(newSlug).ok || available !== true) return;
+          if (!confirm(`Rename to popcode.app/${newSlug}?\n\nThe old URL (popcode.app/${original}) will stop working.`)) return;
+          btn.disabled = true; btn.textContent = 'Renaming…';
+          try {
+            await renameProjectSlug(original, newSlug);
+            // Reload edit page at new slug
+            window.location.href = `/edit.html?id=${newSlug}`;
+          } catch (e) {
+            console.error(e);
+            alert('Rename failed: ' + (e.message || 'unknown error') + '\n\nThe project may be in a partial state — refresh and check.');
+            btn.disabled = false; btn.textContent = 'Save code';
+          }
+        });
+      }
+
+      // Copies all storage objects from {oldSlug}/ to {newSlug}/, rewrites every
+      // DB URL that points at the old folder, swaps collections.slug last, then
+      // deletes the old folder. Not atomic — if a step fails after copy + slug
+      // update, the project is functional under the new slug and the old files
+      // are orphaned (cleanable later).
+      async function renameProjectSlug(oldSlug, newSlug) {
+        // 1. List files in the old folder
+        const { data: files, error: listErr } = await db.storage.from('experiences').list(oldSlug, { limit: 1000 });
+        if (listErr) throw listErr;
+
+        // 2. Copy each file to the new prefix
+        for (const f of files || []) {
+          if (!f.name) continue;
+          const { error: copyErr } = await db.storage.from('experiences').copy(`${oldSlug}/${f.name}`, `${newSlug}/${f.name}`);
+          if (copyErr) throw new Error(`Copy ${f.name}: ${copyErr.message}`);
+        }
+
+        // 3. Helper to rewrite any URL whose path includes /{oldSlug}/ to use /{newSlug}/
+        const rewrite = (url) => typeof url === 'string' ? url.replace(`/${oldSlug}/`, `/${newSlug}/`) : url;
+
+        // 4. Update collection_items video/audio/photo URLs
+        const { data: items } = await db.from('collection_items').select('id, video_url, audio_url, photo_url').eq('collection_id', collectionId);
+        for (const it of items || []) {
+          const patch = {};
+          if (it.video_url) patch.video_url = rewrite(it.video_url);
+          if (it.audio_url) patch.audio_url = rewrite(it.audio_url);
+          if (it.photo_url) patch.photo_url = rewrite(it.photo_url);
+          if (Object.keys(patch).length) {
+            const { error } = await db.from('collection_items').update(patch).eq('id', it.id);
+            if (error) throw new Error(`Update item ${it.id}: ${error.message}`);
+          }
+        }
+
+        // 5. Update collections.mind_file_url, cover_config URLs, and slug
+        const { data: col } = await db.from('collections').select('mind_file_url, cover_config').eq('id', collectionId).single();
+        const colPatch = { slug: newSlug };
+        if (col && col.mind_file_url) colPatch.mind_file_url = rewrite(col.mind_file_url);
+        if (col && col.cover_config) {
+          const cc = { ...col.cover_config };
+          if (cc.image_url) cc.image_url = rewrite(cc.image_url);
+          if (cc.org_logo_url) cc.org_logo_url = rewrite(cc.org_logo_url);
+          colPatch.cover_config = cc;
+        }
+        const { error: colErr, data: updated } = await db.from('collections').update(colPatch).eq('id', collectionId).select();
+        if (colErr) throw colErr;
+        if (!updated || updated.length === 0) throw new Error('Rename blocked by RLS or trigger (cover_config admin trigger?).');
+
+        // 6. Best-effort delete of old files (project already works at new slug)
+        const oldPaths = (files || []).map(f => `${oldSlug}/${f.name}`);
+        if (oldPaths.length) {
+          const { error: delErr } = await db.storage.from('experiences').remove(oldPaths);
+          if (delErr) console.warn('Old files not deleted (orphaned):', delErr.message);
+        }
       }
 
       function initWhiteLabelSection(coverConfig) {
@@ -969,6 +1101,8 @@
         if (!col) { alert('Project not found.'); window.location.href = '/manage.html'; return; }
         collectionId = col.id;
         document.getElementById('name-input').value = col.name || '';
+        document.getElementById('code-input').value = slug;
+        initCodeRename();
         initWhiteLabelSection(col.cover_config);
 
         const { data: items } = await db.from('collection_items')
