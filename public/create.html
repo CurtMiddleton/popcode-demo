@@ -66,11 +66,15 @@
       .my-collections-btn:hover { opacity: 0.9; }
       .subtitle { font-size: 14px; text-align: left; color: #888; margin-bottom: 28px; max-width: 360px; line-height: 1.5; }
       .field-label { font-size: 15px; font-weight: 700; margin-bottom: 10px; width: 100%; max-width: 360px; text-align: center; color: #1a1a1a; }
+      .field-hint { font-size: 12px; color: #888; margin: -28px 0 24px; width: 100%; max-width: 360px; text-align: center; min-height: 16px; line-height: 1.3; }
+      .field-hint.ok { color: #16a34a; }
+      .field-hint.err { color: #dc2626; }
       input[type="text"] {
         width: 100%; max-width: 360px; padding: 14px 16px; border-radius: 12px;
         border: 1px solid #e8e8e8; font-size: 16px; color: #1a1a1a; margin-bottom: 32px; outline: none;
         background: white; font-family: 'DM Sans', sans-serif;
       }
+      #code-input { text-transform: lowercase; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
       .pages { width: 100%; max-width: 360px; }
 
       @media (min-width: 960px) {
@@ -289,6 +293,10 @@
 
     <div class="field-label">Project Name</div>
     <input type="text" id="name-input" placeholder="" />
+
+    <div class="field-label">Custom code <span style="font-weight:500;color:#888;">(optional)</span></div>
+    <input type="text" id="code-input" placeholder="e.g. ge2025 or leave blank" maxlength="10" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"/>
+    <div class="field-hint" id="code-hint">6&ndash;10 letters or numbers. Leave blank for an auto-generated code.</div>
 
     <div class="pages" id="pages"></div>
 
@@ -749,6 +757,72 @@
         return Math.random().toString(36).substring(2, 10);
       }
 
+      // Reserved slugs — must match every top-level path under /public.
+      const RESERVED_SLUGS = new Set([
+        'index','create','manage','edit','view','views','auth','reset','account',
+        'howto','analytics','privacy','terms','marker-test','mockup-a','mockup-b','mockup-c','qr-test',
+        'admin','api','app','www','assets','static','public','login','signup','logout','help','support'
+      ]);
+
+      function normalizeCode(raw) {
+        return (raw || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      }
+
+      function validateCode(code) {
+        if (!code) return { ok: false, msg: '' }; // blank = use random
+        if (code.length < 6) return { ok: false, err: true, msg: `${code.length}/6 characters` };
+        if (code.length > 10) return { ok: false, err: true, msg: 'Max 10 characters' };
+        if (RESERVED_SLUGS.has(code)) return { ok: false, err: true, msg: `"${code}" is reserved` };
+        return { ok: true };
+      }
+
+      // Debounced availability check
+      let codeCheckToken = 0;
+      const codeInput = document.getElementById('code-input');
+      const codeHint = document.getElementById('code-hint');
+      let codeAvailable = null; // null = not checked, true/false = result for the current input
+      let codeCheckTimer = null;
+
+      function setHint(text, kind) {
+        codeHint.textContent = text;
+        codeHint.className = 'field-hint' + (kind ? ' ' + kind : '');
+      }
+
+      async function checkCodeAvailable(code, token) {
+        try {
+          const { data } = await db.from('collections').select('slug').eq('slug', code).maybeSingle();
+          if (token !== codeCheckToken) return; // stale
+          if (data) {
+            codeAvailable = false;
+            setHint(`"${code}" is already taken — pick another`, 'err');
+          } else {
+            codeAvailable = true;
+            setHint(`"${code}" is available`, 'ok');
+          }
+        } catch (e) {
+          if (token !== codeCheckToken) return;
+          setHint('Could not check availability — try again', 'err');
+        }
+      }
+
+      codeInput.addEventListener('input', () => {
+        const raw = codeInput.value;
+        const code = normalizeCode(raw);
+        // Reflect normalization in the field so the user sees what they're about to register.
+        if (raw !== code) codeInput.value = code;
+        codeAvailable = null;
+        if (codeCheckTimer) clearTimeout(codeCheckTimer);
+        const v = validateCode(code);
+        if (!code) {
+          setHint('6–10 letters or numbers. Leave blank for an auto-generated code.', '');
+          return;
+        }
+        if (!v.ok) { setHint(v.msg, 'err'); return; }
+        setHint(`Checking "${code}"…`, '');
+        const token = ++codeCheckToken;
+        codeCheckTimer = setTimeout(() => checkCodeAvailable(code, token), 350);
+      });
+
       document.getElementById('create-btn').addEventListener('click', async () => {
         const readyPairs = Object.values(pairs).filter(pageHasMedia);
         if (readyPairs.length === 0) {
@@ -778,13 +852,23 @@
         }
 
         const createBtn = document.getElementById('create-btn');
+
+        // Pick the slug: custom code if provided + valid + available, else random.
+        const requestedCode = normalizeCode(document.getElementById('code-input').value);
+        if (requestedCode) {
+          const v = validateCode(requestedCode);
+          if (!v.ok) { setHint(v.msg, 'err'); codeInput.focus(); return; }
+          // Final availability re-check at submit time to close the race window.
+          const { data: clash } = await db.from('collections').select('slug').eq('slug', requestedCode).maybeSingle();
+          if (clash) { setHint(`"${requestedCode}" is already taken — pick another`, 'err'); codeInput.focus(); return; }
+        }
+        const slug = requestedCode || randomSlug();
+
         createBtn.disabled = true;
         createBtn.classList.remove('ready');
         document.getElementById('try-again-btn').style.display = 'none';
         document.getElementById('progress').style.display = 'block';
         document.getElementById('result').style.display = 'none';
-
-        const slug = randomSlug();
 
         let images;
         try {
