@@ -1061,7 +1061,7 @@
               requestAnimationFrame(() => {
                 try {
                   const c = document.createElement('canvas'); c.width = 130; c.height = 110;
-                  c.getContext('2d').drawImage(vid, 0, 0, 130, 110);
+                  drawVideoCover(c.getContext('2d'), vid, 130, 110);
                   const el = document.getElementById(`video-preview-${key}`);
                   if (el) el.src = c.toDataURL('image/jpeg');
                 } catch(e) {
@@ -1332,13 +1332,29 @@
         }
       }
 
+      // Center-crop a video frame onto a canvas to maintain aspect ratio (canvas equivalent of object-fit: cover).
+      function drawVideoCover(ctx, vid, dw, dh) {
+        const sw = vid.videoWidth, sh = vid.videoHeight;
+        if (!sw || !sh) { ctx.drawImage(vid, 0, 0, dw, dh); return; }
+        const srcAspect = sw / sh, dstAspect = dw / dh;
+        let cropW, cropH, cropX, cropY;
+        if (srcAspect > dstAspect) {
+          cropH = sh; cropW = sh * dstAspect;
+          cropX = (sw - cropW) / 2; cropY = 0;
+        } else {
+          cropW = sw; cropH = sw / dstAspect;
+          cropX = 0; cropY = (sh - cropH) / 2;
+        }
+        ctx.drawImage(vid, cropX, cropY, cropW, cropH, 0, 0, dw, dh);
+      }
+
       function setVideoPreview(previewId, file) {
         const videoEl = document.createElement('video');
         videoEl.src = URL.createObjectURL(file);
         videoEl.muted = true; videoEl.playsInline = true; videoEl.currentTime = 0.5;
         videoEl.addEventListener('seeked', () => {
           const c = document.createElement('canvas'); c.width = 130; c.height = 110;
-          c.getContext('2d').drawImage(videoEl, 0, 0, 130, 110);
+          drawVideoCover(c.getContext('2d'), videoEl, 130, 110);
           const el = document.getElementById(previewId);
           if (el) el.src = c.toDataURL('image/jpeg');
         });
@@ -1533,7 +1549,7 @@
                 videoEl.muted = true; videoEl.playsInline = true; videoEl.currentTime = 0.5;
                 videoEl.addEventListener('seeked', () => {
                   const c = document.createElement('canvas'); c.width = 130; c.height = 110;
-                  c.getContext('2d').drawImage(videoEl, 0, 0, 130, 110);
+                  drawVideoCover(c.getContext('2d'), videoEl, 130, 110);
                   document.getElementById(`video-preview-new-${n}`).src = c.toDataURL('image/jpeg');
                 });
                 videoEl.load();
@@ -1574,8 +1590,8 @@
           videoEl.muted = true; videoEl.playsInline = true; videoEl.currentTime = 0.5;
           videoEl.addEventListener('seeked', () => {
             const canvas = document.createElement('canvas');
-            canvas.width = 110; canvas.height = 110;
-            canvas.getContext('2d').drawImage(videoEl, 0, 0, 130, 110);
+            canvas.width = 130; canvas.height = 110;
+            drawVideoCover(canvas.getContext('2d'), videoEl, 130, 110);
             document.getElementById(`video-preview-new-${n}`).src = canvas.toDataURL('image/jpeg');
           });
           videoEl.load();
