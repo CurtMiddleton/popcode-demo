@@ -742,17 +742,20 @@
 
         btn.addEventListener('click', async () => {
           const newSlug = normalizeCode(input.value);
-          if (newSlug === original || !validateCode(newSlug).ok || available !== true) return;
-          if (!confirm(`Rename to popcode.app/${newSlug}?\n\nThe old URL (popcode.app/${original}) will stop working.`)) return;
+          if (newSlug === original) { setHint('Code unchanged.', 'err'); return; }
+          if (!validateCode(newSlug).ok) { setHint(validateCode(newSlug).msg, 'err'); return; }
+          if (available !== true) { setHint('Still checking availability — try again in a moment.', 'err'); return; }
           btn.disabled = true; btn.textContent = 'Renaming…';
+          input.disabled = true;
           try {
-            await renameProjectSlug(original, newSlug);
-            // Reload edit page at new slug
-            window.location.href = `/edit.html?id=${newSlug}`;
+            await renameProjectSlug(original, newSlug, (step) => setHint(step, ''));
+            setHint(`Renamed to popcode.app/${newSlug} — reloading…`, 'ok');
+            setTimeout(() => { window.location.href = `/edit.html?id=${newSlug}`; }, 600);
           } catch (e) {
-            console.error(e);
-            alert('Rename failed: ' + (e.message || 'unknown error') + '\n\nThe project may be in a partial state — refresh and check.');
+            console.error('Rename failed:', e);
+            setHint(`Rename failed: ${e.message || 'unknown error'}`, 'err');
             btn.disabled = false; btn.textContent = 'Save code';
+            input.disabled = false;
           }
         });
       }
@@ -762,14 +765,21 @@
       // deletes the old folder. Not atomic — if a step fails after copy + slug
       // update, the project is functional under the new slug and the old files
       // are orphaned (cleanable later).
-      async function renameProjectSlug(oldSlug, newSlug) {
+      async function renameProjectSlug(oldSlug, newSlug, onStep) {
+        const step = (m) => { if (onStep) onStep(m); };
+
         // 1. List files in the old folder
+        step('Listing files…');
         const { data: files, error: listErr } = await db.storage.from('experiences').list(oldSlug, { limit: 1000 });
         if (listErr) throw listErr;
 
         // 2. Copy each file to the new prefix
+        const total = (files || []).length;
+        let i = 0;
         for (const f of files || []) {
           if (!f.name) continue;
+          i++;
+          step(`Copying files (${i}/${total})…`);
           const { error: copyErr } = await db.storage.from('experiences').copy(`${oldSlug}/${f.name}`, `${newSlug}/${f.name}`);
           if (copyErr) throw new Error(`Copy ${f.name}: ${copyErr.message}`);
         }
@@ -778,6 +788,7 @@
         const rewrite = (url) => typeof url === 'string' ? url.replace(`/${oldSlug}/`, `/${newSlug}/`) : url;
 
         // 4. Update collection_items video/audio/photo URLs
+        step('Updating media URLs…');
         const { data: items } = await db.from('collection_items').select('id, video_url, audio_url, photo_url').eq('collection_id', collectionId);
         for (const it of items || []) {
           const patch = {};
@@ -791,6 +802,7 @@
         }
 
         // 5. Update collections.mind_file_url, cover_config URLs, and slug
+        step('Updating project record…');
         const { data: col } = await db.from('collections').select('mind_file_url, cover_config').eq('id', collectionId).single();
         const colPatch = { slug: newSlug };
         if (col && col.mind_file_url) colPatch.mind_file_url = rewrite(col.mind_file_url);
@@ -805,6 +817,7 @@
         if (!updated || updated.length === 0) throw new Error('Rename blocked by RLS or trigger (cover_config admin trigger?).');
 
         // 6. Best-effort delete of old files (project already works at new slug)
+        step('Cleaning up…');
         const oldPaths = (files || []).map(f => `${oldSlug}/${f.name}`);
         if (oldPaths.length) {
           const { error: delErr } = await db.storage.from('experiences').remove(oldPaths);
