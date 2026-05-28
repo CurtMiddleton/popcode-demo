@@ -522,6 +522,23 @@
 
       if (!id) { showError(); } else { loadCollection(id); }
 
+      // Code-entry form: wired up independently of loadCollection so it works
+      // even when the page hits an error path. Vercel rewrites /{slug} to
+      // view.html?id={slug} for slugs matching [a-z0-9]{6,10}.
+      const codeForm = document.getElementById('wl-code-form');
+      if (codeForm) {
+        codeForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const input = document.getElementById('wl-code-input');
+          const raw = (input && input.value) || '';
+          const code = raw.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (!code) return;
+          const currentSlug = location.pathname.replace(/^\//, '').toLowerCase();
+          if (code === currentSlug) { location.reload(); return; }
+          window.location.assign('/' + code);
+        });
+      }
+
       function showError() {
         document.getElementById('loading').style.display = 'none';
         document.getElementById('error-screen').style.display = 'flex';
@@ -631,13 +648,6 @@
 
         document.getElementById('start-btn').addEventListener('click', handleStartTap);
         document.getElementById('wl-scan-btn').addEventListener('click', handleStartTap);
-        document.getElementById('wl-code-form').addEventListener('submit', (e) => {
-          e.preventDefault();
-          const raw = document.getElementById('wl-code-input').value || '';
-          const code = raw.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
-          if (!code) return;
-          window.location.href = '/' + code;
-        });
       }
 
       function handleStartTap() {
