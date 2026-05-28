@@ -108,12 +108,13 @@
       }
       #wl-cover .wl-overlay {
         position: absolute; inset: 0;
+        --bg-d: 1;
         background:
           linear-gradient(180deg,
-            rgba(0,0,0,0.35) 0%,
-            rgba(0,0,0,0.10) 28%,
-            rgba(0,0,0,0.10) 55%,
-            rgba(0,0,0,0.55) 100%);
+            rgba(0,0,0,calc(0.35 * var(--bg-d))) 0%,
+            rgba(0,0,0,calc(0.10 * var(--bg-d))) 28%,
+            rgba(0,0,0,calc(0.10 * var(--bg-d))) 55%,
+            rgba(0,0,0,calc(0.55 * var(--bg-d))) 100%);
       }
       #wl-cover .wl-content {
         position: relative; z-index: 2;
@@ -682,6 +683,7 @@
         const eyebrow = wl.querySelector('.wl-eyebrow');
         const title = wl.querySelector('.wl-title');
         const subtitle = wl.querySelector('.wl-subtitle');
+        const textEl = wl.querySelector('.wl-text');
         eyebrow.textContent = cfg.eyebrow || '';
         title.textContent = cfg.title || '';
         subtitle.textContent = cfg.subtitle || '';
@@ -689,8 +691,30 @@
         title.style.display = cfg.title ? '' : 'none';
         subtitle.style.display = cfg.subtitle ? '' : 'none';
         title.classList.remove('wl-size-sm', 'wl-size-md', 'wl-size-lg');
-        const size = cfg.title_size === 'sm' || cfg.title_size === 'md' ? cfg.title_size : 'lg';
-        title.classList.add('wl-size-' + size);
+        if (cfg.title_px) {
+          title.style.fontSize = cfg.title_px + 'px';
+        } else {
+          title.style.fontSize = '';
+          const size = cfg.title_size === 'sm' || cfg.title_size === 'md' ? cfg.title_size : 'lg';
+          title.classList.add('wl-size-' + size);
+        }
+        subtitle.style.fontSize = cfg.subtitle_px ? cfg.subtitle_px + 'px' : '';
+        if (cfg.title_top_pct !== undefined && cfg.title_top_pct !== null && cfg.title_top_pct !== '') {
+          textEl.style.marginTop = cfg.title_top_pct + 'vh';
+        } else {
+          textEl.style.marginTop = '';
+        }
+        const align = cfg.text_align === 'left' || cfg.text_align === 'right' ? cfg.text_align : 'center';
+        textEl.style.textAlign = align;
+        orgLogo.style.maxWidth = cfg.org_logo_max_px ? cfg.org_logo_max_px + 'px' : '';
+        if (cfg.org_logo_top_pct !== undefined && cfg.org_logo_top_pct !== null && cfg.org_logo_top_pct !== '') {
+          orgLogo.style.marginTop = cfg.org_logo_top_pct + 'vh';
+        } else {
+          orgLogo.style.marginTop = '';
+        }
+        const overlay = wl.querySelector('.wl-overlay');
+        const dark = cfg.bg_darkness !== undefined && cfg.bg_darkness !== null && cfg.bg_darkness !== '' ? Number(cfg.bg_darkness) : 1;
+        overlay.style.setProperty('--bg-d', isFinite(dark) ? dark : 1);
       }
       function showStartScreen() {
         if (coverConfig) {
