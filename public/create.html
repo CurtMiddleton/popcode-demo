@@ -748,6 +748,16 @@
         document.getElementById('progress').style.display = 'none';
       }
 
+      // Let the browser repaint the progress label/bar before a CPU-heavy step.
+      // MindAR's compileImageTargets saturates the main thread, so without an
+      // explicit yield the "Compiling..." label never paints and the UI looks
+      // frozen on the previous "Loading photos..." message.
+      function yieldToPaint() {
+        return new Promise(resolve =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve))
+        );
+      }
+
       document.getElementById('try-again-btn').addEventListener('click', () => {
         resetProgress();
         document.getElementById('create-btn').disabled = false;
@@ -890,8 +900,11 @@
               rc.height = Math.round(img.naturalHeight * scale);
               rc.getContext('2d').drawImage(img, 0, 0, rc.width, rc.height);
               const resized = new Image();
-              resized.src = rc.toDataURL('image/jpeg', 0.92);
-              await new Promise(r => resized.onload = r);
+              await new Promise((resolve, reject) => {
+                resized.onload = resolve;
+                resized.onerror = () => reject(new Error(`Could not process photo "${pair.photo.name}". Try a different image.`));
+                resized.src = rc.toDataURL('image/jpeg', 0.92);
+              });
               images.push(resized);
             } else {
               images.push(img);
@@ -904,7 +917,8 @@
 
         let mindBlob;
         try {
-          setProgress('Compiling image targets...', 5);
+          setProgress('Compiling image targets... (this can take a minute)', 5);
+          await yieldToPaint();
           const compiler = new MINDAR.IMAGE.Compiler();
           await compiler.compileImageTargets(images, (progress) => {
             setProgress(`Compiling image targets... ${Math.round(progress)}%`, 5 + progress * 0.45);
