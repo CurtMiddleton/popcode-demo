@@ -16,12 +16,20 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
-    <!-- Compile-only page: use MindAR's standalone image build, which exposes
-         MINDAR.IMAGE.Compiler with no A-Frame dependency and no WebGL renderer.
-         The image-aframe build threw "Can't find variable: AFRAME" here, and
-         adding A-Frame to satisfy it booted a renderer ("WebGL: context lost").
-         This build avoids both. view.html still uses the aframe build to render. -->
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image.prod.js"></script>
+    <!-- edit.html only needs MINDAR.IMAGE.Compiler, not AR rendering. The
+         compiler ships in the image-aframe build, which exports MINDAR before
+         it registers its A-Frame components — so we stub AFRAME with no-op
+         register fns. This lets the build load cleanly without pulling in real
+         A-Frame (which booted a WebGL renderer -> "context lost") and without
+         the ESM-only standalone build (which threw "Unexpected token '{'").
+         Nothing renders here; view.html loads real A-Frame for the AR scene. -->
+    <script>
+      window.AFRAME = window.AFRAME || {
+        registerSystem(){}, registerComponent(){}, registerShader(){},
+        registerGeometry(){}, registerPrimitive(){}, registerElement(){}
+      };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
       @font-face {
