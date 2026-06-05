@@ -365,7 +365,7 @@
         <h2>Order Popcode Badges</h2>
         <p class="badges-sub">Stick a Popcode badge on any printed photo — anyone who scans it with your link will see the video. Printed and shipped by Sticker Mule.</p>
         <a class="badge-option" href="https://www.stickermule.com/item/2421090c47beca439ebfef444379d7e1" target="_blank" rel="noopener">
-          <div class="badge-preview"><img src="/assets/popcode_badge.svg" style="height:44px;width:auto;"/></div>
+          <div class="badge-preview"><img src="/assets/popcode_badge.svg" style="width:36px;height:36px;"/></div>
           <div class="badge-option-info">
             <div class="badge-option-title">¾ inch round</div>
             <div class="badge-option-desc">Great for small prints, cards and albums</div>
@@ -373,7 +373,7 @@
           <div class="badge-arrow">›</div>
         </a>
         <a class="badge-option" href="https://www.stickermule.com/item/2421090c47beca439ebfef444379d6e1" target="_blank" rel="noopener">
-          <div class="badge-preview"><img src="/assets/popcode_badge.svg" style="height:64px;width:auto;"/></div>
+          <div class="badge-preview"><img src="/assets/popcode_badge.svg" style="width:56px;height:56px;"/></div>
           <div class="badge-option-info">
             <div class="badge-option-title">1½ inch round</div>
             <div class="badge-option-desc">Great for large prints and posters</div>
@@ -723,26 +723,6 @@
         });
       }
 
-      // Average relative luminance (0–1) of a region of the canvas.
-      // Returns true when the area is light enough to want a black badge.
-      function cornerIsLight(ctx, x, y, w, h) {
-        x = Math.max(0, Math.round(x));
-        y = Math.max(0, Math.round(y));
-        try {
-          var data = ctx.getImageData(x, y, Math.round(w), Math.round(h)).data;
-          // Cap to ~2000 samples for speed on large photos.
-          var step = 4 * Math.max(1, Math.floor((data.length / 4) / 2000));
-          var sum = 0, count = 0;
-          for (var i = 0; i < data.length; i += step) {
-            sum += (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
-            count++;
-          }
-          return count ? (sum / count) > 0.5 : true;
-        } catch (e) {
-          return true; // default to black mark if sampling fails
-        }
-      }
-
       async function compositeImage(photoUrl, previewCanvas) {
         // Load photo
         var img = new Image();
@@ -752,6 +732,13 @@
           img.src = photoUrl;
         });
 
+        // Load Popcode badge (dotted gradient circle) for compositing onto photos
+        var iconImg = new Image();
+        await new Promise(function(resolve, reject) {
+          iconImg.onload = resolve; iconImg.onerror = reject;
+          iconImg.src = '/assets/popcode_badge.svg';
+        });
+
         // Full-res canvas
         var c = document.createElement('canvas');
         c.width = img.naturalWidth;
@@ -759,28 +746,10 @@
         var ctx = c.getContext('2d');
         ctx.drawImage(img, 0, 0);
 
-        // Badge geometry — the macron + ring mark is portrait (632 × 840).
-        // Width = 12% of shorter side ≈ ½ inch at typical print DPI; lower-right corner.
-        var MARK_ASPECT = 840 / 632;
-        var badgeW = Math.round(Math.min(c.width, c.height) * 0.12);
-        var badgeH = Math.round(badgeW * MARK_ASPECT);
-        var pad = Math.round(badgeW * 0.2);
-        var bx = c.width - badgeW - pad;
-        var by = c.height - badgeH - pad;
-
-        // Pick black or reversed (white) mark based on how light the corner is,
-        // so the badge stays legible on both light and dark photos.
-        var markSrc = cornerIsLight(ctx, bx, by, badgeW, badgeH)
-          ? '/assets/popcode_mark.svg'
-          : '/assets/popcode_mark.rev.svg';
-
-        var iconImg = new Image();
-        await new Promise(function(resolve, reject) {
-          iconImg.onload = resolve; iconImg.onerror = reject;
-          iconImg.src = markSrc;
-        });
-
-        ctx.drawImage(iconImg, bx, by, badgeW, badgeH);
+        // Badge = 12% of shorter side ≈ ½ inch at typical print DPI
+        var badgeSize = Math.round(Math.min(c.width, c.height) * 0.12);
+        var pad = Math.round(badgeSize * 0.2);
+        ctx.drawImage(iconImg, c.width - badgeSize - pad, c.height - badgeSize - pad, badgeSize, badgeSize);
 
         // Draw scaled preview into the 80×80 canvas
         if (previewCanvas) {
