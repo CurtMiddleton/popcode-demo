@@ -243,6 +243,11 @@
       .download-btn { background:linear-gradient(135deg,#7657FC 0%,#589AF9 100%); color:white; border:none; border-radius:20px; padding:7px 16px; font-size:13px; font-weight:700; cursor:pointer; font-family:'DM Sans',sans-serif; }
       .download-btn:disabled { opacity:0.5; cursor:not-allowed; }
       .download-close { float:right; background:none; border:none; font-size:22px; cursor:pointer; color:#aaa; margin-top:-4px; }
+      .badge-size-row { display:flex; align-items:center; gap:10px; margin-bottom:20px; flex-wrap:wrap; }
+      .badge-size-row .badge-size-label { font-size:13px; font-weight:700; color:#1a1a1a; }
+      .badge-size-toggle { display:inline-flex; background:#eeeeee; border-radius:20px; padding:3px; gap:2px; }
+      .badge-size-btn { border:none; background:none; border-radius:18px; padding:6px 14px; font-size:13px; font-weight:700; color:#666; cursor:pointer; font-family:'DM Sans',sans-serif; transition:background 0.15s, color 0.15s; }
+      .badge-size-btn.active { background:white; color:#1a1a1a; box-shadow:0 1px 4px rgba(0,0,0,0.12); }
 
       /* Share popup */
       .share-popup { display:none; position:absolute; background:white; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.18); padding:8px 0; min-width:220px; z-index:500; }
@@ -352,6 +357,14 @@
         <button class="download-close" id="download-close-btn">&times;</button>
         <h2>Download Photos</h2>
         <p>Each photo has the Popcode badge added to the lower right corner. Print them — anyone who scans with your link will see the video.</p>
+        <div class="badge-size-row">
+          <span class="badge-size-label">Badge size</span>
+          <div class="badge-size-toggle" id="badge-size-toggle">
+            <button class="badge-size-btn active" data-scale="0.06">Small</button>
+            <button class="badge-size-btn" data-scale="0.09">Medium</button>
+            <button class="badge-size-btn" data-scale="0.12">Large</button>
+          </div>
+        </div>
         <button class="download-btn" id="download-all-btn" style="width:100%;margin-bottom:20px;display:none;">Download All</button>
         <div class="download-grid" id="download-grid">
           <div style="color:#aaa;font-size:14px;text-align:center;padding:20px">Loading photos...</div>
@@ -639,6 +652,11 @@
         return card;
       }
 
+      // Download-modal state (shared so the badge-size toggle can re-render).
+      var dlItems = [];
+      var dlSafeTitle = '';
+      var badgeScale = 0.06; // Small by default; fraction of the photo's shorter side.
+
       async function openDownloadModal(slug, title) {
         const modal = document.getElementById('download-modal');
         const grid  = document.getElementById('download-grid');
@@ -667,10 +685,21 @@
           return true;
         });
 
+        dlItems = items;
+        dlSafeTitle = title.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+        renderDownloadGrid();
+      }
+
+      function renderDownloadGrid() {
+        var grid  = document.getElementById('download-grid');
+        var dlAll = document.getElementById('download-all-btn');
+        var items = dlItems;
+        var safeTitle = dlSafeTitle;
+
         grid.innerHTML = '';
+        dlAll.style.display = 'none';
         var dataUrls = new Array(items.length);
         var readyCount = 0;
-        var safeTitle = title.replace(/[^a-z0-9]/gi, '-').toLowerCase();
 
         items.forEach(function(item, i) {
           var row = document.createElement('div');
@@ -746,10 +775,10 @@
         var ctx = c.getContext('2d');
         ctx.drawImage(img, 0, 0);
 
-        // Badge = 6% of shorter side ≈ ¼ inch at typical print DPI.
-        // Padding is based on the shorter side (not the badge) so the small
-        // badge keeps a sensible margin and isn't jammed into the corner.
-        var badgeSize = Math.round(Math.min(c.width, c.height) * 0.06);
+        // Badge size = badgeScale (Small 6% ≈ ¼" / Medium 9% / Large 12% at
+        // typical print DPI) of the photo's shorter side. Padding is based on
+        // the shorter side so the badge keeps a sensible corner margin at any size.
+        var badgeSize = Math.round(Math.min(c.width, c.height) * badgeScale);
         var pad = Math.round(Math.min(c.width, c.height) * 0.025);
         ctx.drawImage(iconImg, c.width - badgeSize - pad, c.height - badgeSize - pad, badgeSize, badgeSize);
 
@@ -771,6 +800,19 @@
       });
       document.getElementById('download-modal').addEventListener('click', function(e) {
         if (e.target === this) this.classList.remove('visible');
+      });
+
+      // Badge-size toggle — re-composites the open photos at the chosen scale.
+      document.getElementById('badge-size-toggle').addEventListener('click', function(e) {
+        var btn = e.target.closest('.badge-size-btn');
+        if (!btn) return;
+        var scale = parseFloat(btn.dataset.scale);
+        if (scale === badgeScale) return;
+        badgeScale = scale;
+        this.querySelectorAll('.badge-size-btn').forEach(function(b) {
+          b.classList.toggle('active', b === btn);
+        });
+        if (dlItems.length) renderDownloadGrid();
       });
 
       document.getElementById('badges-close-btn').addEventListener('click', function() {
