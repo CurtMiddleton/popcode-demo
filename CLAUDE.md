@@ -18,7 +18,7 @@ User-facing copy calls them **"Projects"** (renamed from "Collections" on 2026-0
 - Frontend: Vanilla HTML/CSS/JS (no framework)
 - AR: MindAR (`mind-ar@1.2.2`) + A-Frame (`1.4.2`)
   - **MindAR is VENDORED** (self-hosted, not CDN) at `public/vendor/mindar/1.2.2/mindar-image-aframe.prod.js`. Loaded by `view.html`, `create.html`, `edit.html`. Pinned to upstream commit `1ad668d` (npm 1.2.2). Rebuild/upgrade/rollback steps + integrity hashes live in `public/vendor/mindar/1.2.2/PROVENANCE.md`. See 2026-06-06 session note.
-  - A-Frame is still loaded from CDN (`aframe.io/releases/1.4.2/aframe.min.js` in view.html) — vendoring it is a queued lower-priority follow-up.
+  - **A-Frame is also VENDORED** at `public/vendor/aframe/1.4.2/aframe.min.js` (loaded by view.html only). Pinned to upstream commit `8692d8a` (npm 1.4.2). Details + the caveat about its optional remote-loading features in `public/vendor/aframe/1.4.2/PROVENANCE.md`.
 - Backend/DB/Storage: Supabase (anon key, no auth currently)
 - Hosting: Vercel (static, `public/` folder)
 - Short URLs: popcode.app
@@ -637,8 +637,9 @@ Scope was deliberately the **high-priority, low-effort half** of the MindAR brie
 
 **Explicitly NOT done (and why):**
 - The `stop()`/`start()` source fix — de-prioritized by the brief; workaround works; needs real-iPhone iteration I can't do in a sandbox.
-- A-Frame vendoring — queued lower-priority follow-up.
 - Removing/simplifying the rescan workaround — depends on the source fix, which we didn't pursue. iOS-16 media-session handling left fully intact.
+
+**Follow-up done same session (A-Frame vendored too):** after the user approved it, also vendored A-Frame 1.4.2 the same way — `public/vendor/aframe/1.4.2/aframe.min.js`, pinned to commit `8692d8a`, integrity-verified from the npm tarball, view.html points at the local copy. PROVENANCE.md notes that A-Frame's min.js *does* reference a few remote URLs (VR cardboard DB, the inspector via unpkg, Draco glTF decoders, Google Fonts) — but all are optional features Popcode never triggers, so the scan flow makes no external A-Frame calls. view.html now loads **zero** AR libraries from a CDN. A PR was opened this session at the user's request.
 
 **Lesson for future-Claude:** when a CDN is 403 from the sandbox, don't assume the dep is unreachable — `registry.npmjs.org/<pkg>/-/<pkg>-<ver>.tgz` is usually allowed and is the canonical source (CDNs mirror it). Verify the tarball against npm's published `integrity` sha512 and you've got a provably-authentic copy without trusting any CDN.
 
