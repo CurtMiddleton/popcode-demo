@@ -99,6 +99,15 @@ Because each version lives in its own directory and old dirs are never deleted,
 rollback is just: point the three `<script>` tags back at the previous version
 path and redeploy. No re-fetch needed.
 
+## License
+
+MindAR is **MIT licensed** (Copyright (c) 2020 hiukim) — see `LICENSE` in this
+directory. MIT lets us use/modify/distribute/sell freely; the only obligation is
+to keep that notice bundled with the code (satisfied by the `LICENSE` file here).
+The grant is irrevocable for 1.2.2, so this version stays MIT permanently. The
+bundle also includes Apache-2.0 dependencies (TensorFlow.js et al.); their
+notices ship inside the prod build itself.
+
 ## Consumers (keep in sync when the path changes)
 
 - `public/view.html` — `<script src="/vendor/mindar/1.2.2/mindar-image-aframe.prod.js">`

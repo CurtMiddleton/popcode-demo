@@ -63,6 +63,13 @@ write a PROVENANCE.md, then update the `<script src>` in `view.html`. Roll back
 by pointing the tag at the previous version dir. **Test on real iOS hardware**
 before merging an A-Frame bump — it underpins the whole AR render path.
 
+## License
+
+A-Frame is **MIT licensed** (Copyright © A-Frame authors) — see `LICENSE` in
+this directory. Same terms as MindAR: free to use/modify/distribute/sell, just
+keep the notice bundled (satisfied by the `LICENSE` file here), and the grant is
+irrevocable for 1.4.2.
+
 ## Consumer
 
 - `public/view.html` — `<script src="/vendor/aframe/1.4.2/aframe.min.js">`
