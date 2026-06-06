@@ -17,6 +17,8 @@ User-facing copy calls them **"Projects"** (renamed from "Collections" on 2026-0
 ## Stack
 - Frontend: Vanilla HTML/CSS/JS (no framework)
 - AR: MindAR (`mind-ar@1.2.2`) + A-Frame (`1.4.2`)
+  - **MindAR is VENDORED** (self-hosted, not CDN) at `public/vendor/mindar/1.2.2/mindar-image-aframe.prod.js`. Loaded by `view.html`, `create.html`, `edit.html`. Pinned to upstream commit `1ad668d` (npm 1.2.2). Rebuild/upgrade/rollback steps + integrity hashes live in `public/vendor/mindar/1.2.2/PROVENANCE.md`. See 2026-06-06 session note.
+  - **A-Frame is also VENDORED** at `public/vendor/aframe/1.4.2/aframe.min.js` (loaded by view.html only). Pinned to upstream commit `8692d8a` (npm 1.4.2). Details + the caveat about its optional remote-loading features in `public/vendor/aframe/1.4.2/PROVENANCE.md`.
 - Backend/DB/Storage: Supabase (anon key, no auth currently)
 - Hosting: Vercel (static, `public/` folder)
 - Short URLs: popcode.app
@@ -607,4 +609,37 @@ Cache-busting `?v=<timestamp>` is appended on save so a re-uploaded image immedi
 - **Don't over-narrate iterative styling work** — quick edit, push, ask "look right?" and tweak. The user iterated 3× on the Tap to scan button (size, color, narrower) and the cycle was tight. Each round = one Edit + one push.
 - **iOS Messages link preview** is rendered by the displaying device, not the sending device. Mac Messages and iPhone Messages can show the same conversation completely differently. Not something to debug as a server-side issue.
 - **Push to prod was authorized** for this branch — "not able to preview, just push to prod and we can tweak." This was a one-shot authorization for the white-label feature. Going forward, do NOT take that as standing approval to skip preview/PR for other branches; ask each time.
+
+### 2026-06-06 — Vendored MindAR 1.2.2 (dependency ownership)
+
+**Branch: `claude/upbeat-mendel-YhE4V`. No PR opened (task didn't ask for one). Changes pushed to the branch.**
+
+Scope was deliberately the **high-priority, low-effort half** of the MindAR brief: *own the dependency* (vendor it locally so a CDN change or upstream/iOS/Chrome regression can't strand the scan flow). The brief explicitly de-prioritized the second half (patching the `stop()`/`start()` lifecycle bug at source) — it has a working prod workaround and patching someone else's CV library is open-ended. **Left the workaround untouched.**
+
+**Step 0 — state of the world before this session (verified against repo):**
+- MindAR was **NOT vendored** — all three consumers loaded it from `cdn.jsdelivr.net/npm/mind-ar@1.2.2/...`: `create.html:29`, `edit.html:32`, `view.html:20`.
+- The archival fork `curtmid/mind-ar-js` **does NOT exist** (GitHub returns 404). Still needs creating by the user — see "Fork still TODO" below.
+- A-Frame **still CDN** (`aframe.io/releases/1.4.2/aframe.min.js`, view.html:19). Lower-priority follow-up, not done.
+- Rescan workaround **still in place** in `view.html`: `buildScene()` ~line 554 + `handleStartTap()` ~line 653 (tear down a-scene, 500ms delay, wait for A-Frame `loaded` event, then `mindar.start()`). The `sceneWasStopped` flag is set by the iOS-16 media-session `mindar.stop()` calls at view.html:821 (video) and :875 (audio). All intact.
+
+**What shipped (in git):**
+- `public/vendor/mindar/1.2.2/mindar-image-aframe.prod.js` — the vendored build. **sha256 `db00b657…3032`**, 1,733,822 bytes.
+- `public/vendor/mindar/1.2.2/PROVENANCE.md` — full provenance + rebuild/upgrade/rollback runbook + integrity hashes + the fork-build procedure.
+- `create.html` / `edit.html` / `view.html` — `<script src>` swapped from the CDN URL to `/vendor/mindar/1.2.2/mindar-image-aframe.prod.js` (absolute path; Vercel serves `public/` as web root, so it maps to the vendored file — same convention as `/assets/…`, `/config.js`).
+
+**How the file was obtained / why it's trustworthy:**
+- The CDNs (jsdelivr, unpkg) **return 403 from this sandbox's egress** — but `registry.npmjs.org` is allowed, and it's the authoritative source the CDNs merely mirror. Pulled `mind-ar-1.2.2.tgz` from npm; its sha512 matched npm's published integrity (`sha512-bp3FOKpG…K7FA==`) exactly. Extracted `dist/mindar-image-aframe.prod.js` byte-for-byte.
+- Confirmed the bundle is **self-contained**: Web Workers are inlined as `data:application/javascript;base64` URIs, no runtime CDN/wasm/`importScripts` fetches. The only http(s) strings in it are license/docstring comments. So this one file fully replaces the CDN — nothing else to vendor for the runtime.
+- **Pinned upstream commit: `1ad668d0ba2c0cb9f57a208eede73ea43abf4972`** (npm `gitHead` for 1.2.2). Upstream is now at 1.2.5 — we are intentionally staying on 1.2.2.
+- Smoke-tested locally with `python3 -m http.server` over `public/`: `/vendor/mindar/1.2.2/mindar-image-aframe.prod.js` → 200, 1,733,822 bytes, `text/javascript`; view.html serves and its script tag points at the local path. **Not yet tested on real iOS hardware** — should be sanity-checked on an iPhone after deploy (the bytes are identical to the CDN's, so risk is low, but the scan flow's worst bugs are iOS-Safari-specific).
+
+**Fork still TODO (couldn't do from here):** the brief wants a patchable fork at `curtmid/mind-ar-js`. I can't create it from this sandbox — GitHub MCP scope is restricted to `curtmiddleton/popcode-demo`, and it's a different account anyway. The vendored file IS the shipping artifact and is the thing that actually protects prod; the fork only matters when we need to *patch* MindAR. PROVENANCE.md documents the full fork-and-build procedure for when the user creates it. **Action for user:** fork `hiukim/mind-ar-js` → `curtmid/mind-ar-js`, then `git checkout 1ad668d` to pin it to our exact source.
+
+**Explicitly NOT done (and why):**
+- The `stop()`/`start()` source fix — de-prioritized by the brief; workaround works; needs real-iPhone iteration I can't do in a sandbox.
+- Removing/simplifying the rescan workaround — depends on the source fix, which we didn't pursue. iOS-16 media-session handling left fully intact.
+
+**Follow-up done same session (A-Frame vendored too):** after the user approved it, also vendored A-Frame 1.4.2 the same way — `public/vendor/aframe/1.4.2/aframe.min.js`, pinned to commit `8692d8a`, integrity-verified from the npm tarball, view.html points at the local copy. PROVENANCE.md notes that A-Frame's min.js *does* reference a few remote URLs (VR cardboard DB, the inspector via unpkg, Draco glTF decoders, Google Fonts) — but all are optional features Popcode never triggers, so the scan flow makes no external A-Frame calls. view.html now loads **zero** AR libraries from a CDN. A PR was opened this session at the user's request.
+
+**Lesson for future-Claude:** when a CDN is 403 from the sandbox, don't assume the dep is unreachable — `registry.npmjs.org/<pkg>/-/<pkg>-<ver>.tgz` is usually allowed and is the canonical source (CDNs mirror it). Verify the tarball against npm's published `integrity` sha512 and you've got a provably-authentic copy without trusting any CDN.
 
