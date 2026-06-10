@@ -18,8 +18,12 @@
     <script src="/config.js"></script>
     <!-- Vendored A-Frame 1.4.2 — see public/vendor/aframe/1.4.2/PROVENANCE.md. Was a CDN URL. -->
     <script src="/vendor/aframe/1.4.2/aframe.min.js"></script>
-    <!-- Vendored MindAR 1.2.2 — see public/vendor/mindar/1.2.2/PROVENANCE.md. Was a CDN URL. -->
-    <script src="/vendor/mindar/1.2.2/mindar-image-aframe.prod.js"></script>
+    <!-- Vendored MindAR 1.2.2 — PATCHED build (stop()/start() lifecycle fix).
+         Identical to stock 1.2.2 except an anchor-visibility reset in start();
+         a no-op on first scan, so safe as the default. The clean-rescan path
+         that uses it is gated behind ?rescan=clean until iOS-verified.
+         See public/vendor/mindar/1.2.2-popcode.1/PROVENANCE.md. -->
+    <script src="/vendor/mindar/1.2.2-popcode.1/mindar-image-aframe.prod.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
       @font-face {
@@ -663,7 +667,20 @@
         // If we're returning from a closed video, rebuild the scene fresh
         // (MindAR stop/start is unreliable). Do it here inside the user gesture
         // so getUserMedia has gesture context, then wait for loaded before start().
-        if (sceneWasStopped && savedMindUrl) {
+        if (sceneWasStopped && savedMindUrl && CLEAN_RESCAN) {
+          // Patched-MindAR path: a clean stop()/start() now re-fires targetFound
+          // (the patch resets anchor visibility in start()), so no scene rebuild,
+          // no 500ms delay, no loaded-event wait. The camera was released back in
+          // triggerVideo/triggerAudio's mindar.stop(), and the user has since
+          // watched + closed the media, so getUserMedia is free to re-acquire.
+          sceneWasStopped = false;
+          const mindar = arScene && arScene.systems['mindar-image-system'];
+          if (mindar && typeof mindar.start === 'function') {
+            try { mindar.start(); } catch (e) {}
+          }
+          hint.textContent = 'Point your camera at a Popcoded photo';
+          startReloadHintTimer();
+        } else if (sceneWasStopped && savedMindUrl) {
           sceneWasStopped = false;
           hint.textContent = 'Restarting camera…';
           setTimeout(() => {
@@ -763,6 +780,11 @@
       let reloadHintTimer = null;
       let arScene = null; // set inside loadCollection; used by triggerMedia/returnToScanner
       let sceneWasStopped = false; // true after mindar.stop(); tells start-btn to rebuild
+      // Opt-in test flag for the patched-MindAR clean stop()/start() rescan path
+      // (vendor/mindar/1.2.2-popcode.1). Default OFF = proven scene-rebuild
+      // workaround. Enable per-session with ?rescan=clean while validating on
+      // real iOS hardware; flip the default + drop the workaround once confirmed.
+      const CLEAN_RESCAN = new URLSearchParams(location.search).get('rescan') === 'clean';
 
       const reloadHintBtn = document.getElementById('reload-hint');
       reloadHintBtn.addEventListener('click', () => location.reload());

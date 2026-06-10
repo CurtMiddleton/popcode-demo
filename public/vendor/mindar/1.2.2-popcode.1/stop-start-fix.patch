@@ -1,0 +1,27 @@
+--- orig/src/image-target/aframe.js	2023-06-04 07:13:22.000000000 +0000
++++ mindsrc/src/image-target/aframe.js	2026-06-10 10:35:19.711925557 +0000
+@@ -31,6 +31,24 @@
+   start: function() {
+     this.container = this.el.sceneEl.parentNode;
+ 
++    // Popcode patch (stop()/start() lifecycle fix): reset every anchor's
++    // visibility before (re)starting. 'targetFound' only fires on a
++    // not-visible -> visible transition (see updateWorldMatrix below). When
++    // stop() is called while a target is still visible (Popcode releases the
++    // camera the moment a photo is found, before playing its video), the
++    // anchor's object3D.visible stays true. Without this reset, a later
++    // start() re-detects the same photo but the (!visible && matrix) guard is
++    // false, so 'targetFound' never re-emits and the scan appears dead.
++    // Resetting here lets a clean stop()/start() restart recognition without
++    // rebuilding the whole A-Frame scene.
++    for (let i = 0; i < this.anchorEntities.length; i++) {
++      const anchor = this.anchorEntities[i].el;
++      if (anchor && anchor.el && anchor.el.object3D) {
++        anchor.el.object3D.visible = false;
++        if (anchor.invisibleMatrix) anchor.el.object3D.matrix = anchor.invisibleMatrix;
++      }
++    }
++
+     if (this.showStats) {
+       this.mainStats = new Stats();
+       this.mainStats.showPanel( 0 ); // 0: fps, 1: ms, 2: mb, 3+: custom

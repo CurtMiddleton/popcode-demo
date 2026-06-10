@@ -643,3 +643,31 @@ Scope was deliberately the **high-priority, low-effort half** of the MindAR brie
 
 **Lesson for future-Claude:** when a CDN is 403 from the sandbox, don't assume the dep is unreachable — `registry.npmjs.org/<pkg>/-/<pkg>-<ver>.tgz` is usually allowed and is the canonical source (CDNs mirror it). Verify the tarball against npm's published `integrity` sha512 and you've got a provably-authentic copy without trusting any CDN.
 
+
+### 2026-06-10 — Patched MindAR: the stop()/start() source fix (the second half of the brief)
+
+**Branch: `claude/upbeat-mendel-YhE4V` (same as the vendoring work, now PR #48). Not yet hardware-verified.**
+
+The brief de-prioritized the `stop()`/`start()` source fix — but the user then confirmed it's **visibly hurting them** ("create a new Popcode, sometimes have to restart the scanner and bounce to the home screen, works the second time"), which is exactly the trigger the brief named for pursuing it. So we did. It turned out to be a small, well-understood bug, **not** the open-ended CV rabbit hole that was feared.
+
+**Root cause (in `src/image-target/aframe.js`):** `mindar-image-target`'s `updateWorldMatrix` only emits `targetFound` on a *not-visible → visible* transition (`if (!object3D.visible && worldMatrix !== null) emit('targetFound')`). Popcode calls `mindar.stop()` the instant a photo is found (to release the camera before video playback — the iOS-16 media-session fix), so the anchor's `object3D.visible` is left `true`. The system's `stop()` tears down camera/video/controller but **never resets that flag**. On the next `start()`, the same photo is re-detected, `!visible` is now `false`, and `targetFound` is permanently suppressed — recognition silently "works" but the event Popcode listens on never fires. This is the whole reason the historical workaround had to rebuild the entire A-Frame scene (fresh entities start invisible) instead of a clean `stop()`/`start()`.
+
+**The fix:** ~4 lines at the top of `start()` that reset every anchor's `object3D.visible = false` (and matrix to `invisibleMatrix`) so the transition can re-fire. No computer-vision code touched. It's a no-op on first scan (anchors already invisible), so it can't regress the normal flow.
+
+**How it was built (reproducible — full runbook in the patched dir's PROVENANCE.md):**
+- GitHub IS reachable from the sandbox (`codeload.github.com` tarball at the pinned commit `1ad668d` worked; jsdelivr/unpkg are 403 but github/npm are fine).
+- `npm install` fails on the `canvas` native dep (needs Cairo, node-gyp errors) — but `canvas` is node-only (offline compiler), never in the browser bundle. **`npm install --ignore-scripts` then `npm run build`** (vite 4) produces `dist/mindar-image-aframe.prod.js` cleanly in ~9s.
+- Verified the patch landed in the minified bundle by property-name counts (`invisibleMatrix` 3→5, `anchorEntities` 8→10, `visible=!1` 1→2) and that `start()` now opens with the anchor-reset loop. Byte delta is exactly +191 vs stock; nothing else changed.
+
+**What shipped (in git, on the branch / PR #48):**
+- `public/vendor/mindar/1.2.2-popcode.1/` — patched build (**sha256 `2470e4fb…fea3`**, 1,734,013 bytes) + `PROVENANCE.md` + `stop-start-fix.patch` (the source diff) + `LICENSE`. The pristine `1.2.2/` dir is kept untouched as the audited baseline.
+- `public/view.html` — now loads the **patched** build (safe as default; the reset is a no-op until a stop/start happens). create.html / edit.html stay on pristine 1.2.2 (compiler only, patch irrelevant).
+- `public/view.html` — clean `stop()`/`start()` rescan path added in `handleStartTap`, **gated behind `?rescan=clean`** (`CLEAN_RESCAN` const). Default is still the proven scene-rebuild workaround. When the flag is on, rescan just calls `mindar.start()` — no scene teardown, no 500ms delay, no `loaded`-event wait.
+
+**Why flag-gated and not default:** I can't test on a real iPhone from the sandbox, and the scan flow's worst bugs are iOS-Safari-specific. The brief explicitly says keep the workaround as a fallback until the fix is confirmed on hardware. So this is opt-in for now.
+
+**HOW THE USER TESTS (next action):** open a scanned project on a real iPhone with `?rescan=clean` appended (e.g. `popcode.app/{slug}?rescan=clean`, or the PR-preview equivalent). Scan a photo → play & close its video → scan again. It should restart recognition **without** bouncing to the home screen or rebuilding the scene. Test on a modern iPhone and, if available, an iPhone XR / iOS 16. If solid, **flip the default** (drop the `CLEAN_RESCAN` gate and delete the rebuild branch in `handleStartTap`) — but do NOT touch the iOS-16 `mindar.stop()`-before-playback calls (separate, still-needed fix).
+
+**Caveat on the user's specific symptom:** their wording sounds like it might be *first-scan* flakiness on a freshly created project, which could be a different cause (a start()/A-Frame-system-registration race) than the stop/start bug this fixes. If the friction persists on the very first scan after this lands, get the exact repro steps and chase that separately.
+
+**Worth upstreaming:** the patch is generic (`hiukim/mind-ar-js`) once hardware-verified — fixes stop/start for everyone. First real use of the fork to *patch* rather than just mirror.
