@@ -602,6 +602,7 @@
         arScene = scene;
 
         scene.addEventListener('arError', () => {
+          if (cleanRescanActive) return; // a clean-rescan attempt will handle its own fallback
           document.getElementById('loading').style.display = 'none';
           showError();
         });
@@ -664,42 +665,64 @@
         hint.textContent = 'Point your camera at a Popcoded photo';
         hint.style.display = 'block';
 
-        // If we're returning from a closed video, rebuild the scene fresh
-        // (MindAR stop/start is unreliable). Do it here inside the user gesture
-        // so getUserMedia has gesture context, then wait for loaded before start().
-        if (sceneWasStopped && savedMindUrl && CLEAN_RESCAN) {
-          // Patched-MindAR path: a clean stop()/start() now re-fires targetFound
-          // (the patch resets anchor visibility in start()), so no scene rebuild,
-          // no 500ms delay, no loaded-event wait. The camera was released back in
-          // triggerVideo/triggerAudio's mindar.stop(), and the user has since
-          // watched + closed the media, so getUserMedia is free to re-acquire.
+        // Returning from a closed video/audio. Default path is a clean MindAR
+        // stop()/start() (the vendored 1.2.2-popcode.1 patch resets anchor
+        // visibility in start() so targetFound re-fires) — no scene rebuild, no
+        // 500ms delay, no loaded-event wait. If the camera fails to re-acquire
+        // (older iOS can be slow to release it -> arError), we automatically
+        // fall back to the proven scene-rebuild path. ?rescan=legacy forces the
+        // old path outright.
+        if (sceneWasStopped && savedMindUrl) {
           sceneWasStopped = false;
           const mindar = arScene && arScene.systems['mindar-image-system'];
-          if (mindar && typeof mindar.start === 'function') {
-            try { mindar.start(); } catch (e) {}
+          if (FORCE_LEGACY_RESCAN || !(mindar && typeof mindar.start === 'function')) {
+            rebuildRescan(hint);
+          } else {
+            cleanRescanActive = true; // suppresses buildScene's arError->showError while we may fall back
+            let fellBack = false;
+            const fallBack = () => {
+              if (fellBack) return;
+              fellBack = true;
+              cleanRescanActive = false;
+              arScene.removeEventListener('arReady', onReady);
+              rebuildRescan(hint);
+            };
+            const onReady = () => {
+              cleanRescanActive = false;
+              arScene.removeEventListener('arError', fallBack);
+              hint.textContent = 'Point your camera at a Popcoded photo';
+            };
+            arScene.addEventListener('arError', fallBack, { once: true });
+            arScene.addEventListener('arReady', onReady, { once: true });
+            // Safety net: never let the suppression guard stick if neither event fires.
+            setTimeout(() => { cleanRescanActive = false; }, 8000);
+            try { mindar.start(); } catch (e) { fallBack(); }
+            startReloadHintTimer();
           }
-          hint.textContent = 'Point your camera at a Popcoded photo';
-          startReloadHintTimer();
-        } else if (sceneWasStopped && savedMindUrl) {
-          sceneWasStopped = false;
-          hint.textContent = 'Restarting camera…';
-          setTimeout(() => {
-            const newScene = buildScene(savedMindUrl, savedMediaMap);
-            newScene.addEventListener('loaded', () => {
-              const mindar = arScene && arScene.systems['mindar-image-system'];
-              if (mindar && typeof mindar.start === 'function') {
-                mindar.start()
-                  .then(() => { hint.textContent = 'Point your camera at a Popcoded photo'; })
-                  .catch(() => { hint.textContent = 'Point your camera at a Popcoded photo'; });
-              }
-              startReloadHintTimer();
-            }, { once: true });
-          }, 500);
         } else {
           const mindar = arScene && arScene.systems['mindar-image-system'];
           if (mindar && typeof mindar.start === 'function') mindar.start();
           startReloadHintTimer();
         }
+      }
+
+      // The proven fallback: tear down + rebuild the A-Frame scene, wait for iOS
+      // to release the camera (500ms), then start once A-Frame's systems are
+      // registered (loaded event). Used when ?rescan=legacy is set or when a
+      // clean stop()/start() fails to re-acquire the camera.
+      function rebuildRescan(hint) {
+        hint.textContent = 'Restarting camera…';
+        setTimeout(() => {
+          const newScene = buildScene(savedMindUrl, savedMediaMap);
+          newScene.addEventListener('loaded', () => {
+            const mindar = arScene && arScene.systems['mindar-image-system'];
+            if (mindar && typeof mindar.start === 'function') {
+              try { mindar.start(); } catch (e) {}
+            }
+            hint.textContent = 'Point your camera at a Popcoded photo';
+            startReloadHintTimer();
+          }, { once: true });
+        }, 500);
       }
 
       let coverConfig = null;
@@ -779,12 +802,13 @@
       let triggerTimer = null;
       let reloadHintTimer = null;
       let arScene = null; // set inside loadCollection; used by triggerMedia/returnToScanner
-      let sceneWasStopped = false; // true after mindar.stop(); tells start-btn to rebuild
-      // Opt-in test flag for the patched-MindAR clean stop()/start() rescan path
-      // (vendor/mindar/1.2.2-popcode.1). Default OFF = proven scene-rebuild
-      // workaround. Enable per-session with ?rescan=clean while validating on
-      // real iOS hardware; flip the default + drop the workaround once confirmed.
-      const CLEAN_RESCAN = new URLSearchParams(location.search).get('rescan') === 'clean';
+      let sceneWasStopped = false; // true after mindar.stop(); tells start-btn how to restart
+      // Rescan strategy. Default is the patched-MindAR clean stop()/start()
+      // (vendor/mindar/1.2.2-popcode.1) with an automatic scene-rebuild fallback
+      // if the camera fails to re-acquire. ?rescan=legacy forces the old
+      // scene-rebuild path outright (debug/escape hatch).
+      const FORCE_LEGACY_RESCAN = new URLSearchParams(location.search).get('rescan') === 'legacy';
+      let cleanRescanActive = false; // true while a clean stop()/start() may still fall back
 
       const reloadHintBtn = document.getElementById('reload-hint');
       reloadHintBtn.addEventListener('click', () => location.reload());
