@@ -691,3 +691,10 @@ After PR #49 shipped the MindAR stop/start fix, hardware testing showed:
 2. **Alternative / complementary:** add a short settle delay between `mindar.stop()` and `fullVid.play()` in `triggerVideo` (mirror the 500ms rescan trick) to give the A12 time to release the media session before playback starts.
 
 Do NOT remove the existing iOS-16 `mindar.stop()`-before-playback calls while doing this — that's the load-bearing part of the current fix.
+
+**UPDATE 2026-06-10 (later) — fix implemented (Tap-to-play), pending hardware verification.** User hit the freeze on a real 9-page board book: the *first* scan triggered but froze on frame 1; reload fixed it and the other 8 were perfect. First scan = most important, so we built the queued fix in `view.html` (NOT yet merged — on branch `claude/upbeat-mendel-YhE4V` for device testing first):
+- `triggerVideo` now waits **250ms after `mindar.stop()`** before play (settle delay, lets iOS release the camera's media session), then calls new `startVideoPlayback()`.
+- **Frozen-frame watchdog** `armFrozenFrameWatch()`: 1200ms after play, if the element is `!paused && !ended && readyState>=2` but `currentTime` hasn't advanced, it's the media-session freeze → reveal a **`#tap-to-play`** overlay button. Tapping it plays in a user gesture (which reliably grabs the session) — one tap instead of a full page reload.
+- Conservative checks (readyState + not-advancing) mean working devices (iPhone 17) never see the button — verify this in testing (no false positives). Also wired `play().catch()` → showTapToPlay, and `hideTapToPlay()` on close/ended.
+- Audio path left unchanged (scope = video). iOS-16 `mindar.stop()`-before-playback calls untouched.
+- **TEST:** board book on iPhone XR (does the first-scan freeze now self-rescue / show Tap to play?) AND iPhone 17 (regression: video still autoplays, Tap-to-play never wrongly appears). If good, merge to prod. If the button shows on healthy playback, loosen the watchdog threshold.
