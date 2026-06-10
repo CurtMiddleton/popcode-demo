@@ -673,3 +673,21 @@ The brief de-prioritized the `stop()`/`start()` source fix — but the user then
 **Worth upstreaming:** the patch is generic (`hiukim/mind-ar-js`) once hardware-verified — fixes stop/start for everyone. First real use of the fork to *patch* rather than just mirror.
 
 **UPDATE (same day, after hardware confirmation):** User tested `?rescan=clean` on a real iPhone by creating a brand-new Popcode — worked beautifully, including the first-scan case they were worried about. So we **flipped the clean path to the default** and **merged PR #48 to prod**. Implementation now in `handleStartTap` (view.html): clean `mindar.start()` is the default, with an **automatic fallback** to the scene-rebuild path if the camera fails to re-acquire (listens for `arError`; `cleanRescanActive` guard stops `buildScene`'s arError handler from flashing the error screen during the attempt; 8s safety timeout clears the guard). `?rescan=legacy` forces the old rebuild path as a debug/escape hatch. The old workaround is therefore **kept as a live fallback, not deleted** — revisit deleting it only after it's run as default across real users and ideally an iPhone XR / iOS 16 check. iOS-16 `mindar.stop()`-before-playback calls still untouched. Next: test on an older device when one's available; consider upstreaming the patch to `hiukim/mind-ar-js`.
+
+### 2026-06-10 (known issue) — iPhone XR / A12: video freezes on frame 1 (first play), recovers on refresh
+
+**Status: KNOWN ISSUE, not blocking. Logged for a future polish pass. No code change yet.**
+
+After PR #49 shipped the MindAR stop/start fix, hardware testing showed:
+- **iPhone 17 (modern):** clean scanning + rescan, works great.
+- **iPhone XR (A12, ~2018):** the photo *scans* fine, but the linked video **freezes on the first frame** on first play. **Refreshing the page makes it work.** Intermittent.
+
+**This is NOT a regression from the rescan work** — the freeze is on the *first* video play, and `triggerVideo`'s stop-before-play code (view.html ~line 821) was untouched. It's the **same iOS-16 / A12 media-session conflict** documented in the 2026-04-12 notes (PR #14): on old Safari, `getUserMedia` (MindAR camera) and `<video>` playback can't share the media session, so the camera must be stopped before `fullVid.play()`. That fix is in place, but on a slow A12 the camera doesn't always release in time before `play()` fires → occasional frame-1 freeze, which a refresh clears once state settles.
+
+**Decision (with user):** don't invest now. iPhone XR is ~7–8 yrs old, share is small/shrinking, it's the worst-case device for this quirk, and the experience is *degraded, not broken* (scans fine, recovers on refresh). Popcode has zero paying customers; Liftworks is the revenue priority. **The trigger to actually fix this = an imminent demo on phones we don't control** (a frozen video is an ugly first impression for a "point and it plays" product).
+
+**Queued follow-up when it's worth it (time-boxed, ~30 min, needs a real XR to verify — none in sandbox):**
+1. **"Tap to play" graceful degradation (preferred).** Detect the frozen-frame case (video element reports `playing` but `currentTime` isn't advancing after N ms) and surface a **"Tap to play"** button instead of a dead frame. Turns "looks broken" into one tap, and helps *any* device that ever hits an autoplay/media-session hiccup — not just the XR.
+2. **Alternative / complementary:** add a short settle delay between `mindar.stop()` and `fullVid.play()` in `triggerVideo` (mirror the 500ms rescan trick) to give the A12 time to release the media session before playback starts.
+
+Do NOT remove the existing iOS-16 `mindar.stop()`-before-playback calls while doing this — that's the load-bearing part of the current fix.
