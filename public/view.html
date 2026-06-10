@@ -320,6 +320,20 @@
         background: black; z-index: 9100; opacity: 0;
         transition: opacity 1s ease; pointer-events: none;
       }
+      #tap-to-play {
+        display: none; position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%); z-index: 9002;
+        flex-direction: column; align-items: center; gap: 14px;
+        background: none; border: none; color: white; cursor: pointer;
+        font-family: 'DM Sans', sans-serif;
+      }
+      #tap-to-play .ttp-icon {
+        display: flex; align-items: center; justify-content: center;
+        width: 84px; height: 84px; border-radius: 50%;
+        background: rgba(0,0,0,0.55); border: 2px solid rgba(255,255,255,0.9);
+        font-size: 34px; padding-left: 6px;
+      }
+      #tap-to-play .ttp-label { font-size: 17px; font-weight: 600; }
       #close-btn {
         position: absolute; top: 20px; right: 20px; z-index: 9001;
         background: rgba(110,110,110,0.85); color: white; border: none;
@@ -466,6 +480,7 @@
 <div id="fade-overlay"></div>
     <div id="fullscreen-video">
 <video id="fullvideo" playsinline webkit-playsinline muted></video>
+      <button id="tap-to-play" type="button"><span class="ttp-icon">▶</span><span class="ttp-label">Tap to play</span></button>
       <button id="close-btn">✕</button>
     </div>
 
@@ -795,7 +810,9 @@
       const fullVid = document.getElementById('fullvideo');
       const fullScreen = document.getElementById('fullscreen-video');
       const closeBtn = document.getElementById('close-btn');
+      const tapToPlayBtn = document.getElementById('tap-to-play');
       const scanner = document.getElementById('scanner');
+      let frozenFrameTimer = null; // watches for the iOS media-session frame-1 freeze
       const audioPlayer = document.getElementById('audio-player');
       const apAudio = document.getElementById('ap-audio');
       let mediaActive = false;
@@ -874,15 +891,62 @@
           document.getElementById('home-btn').style.display = 'none';
           fullScreen.style.display = 'block';
           closeBtn.style.display = 'flex';
-          fullVid.muted = true;
-fullVid.play()
-  .then(() => {
-    fullVid.muted = false;
-    logEvent('video_play');
-  })
-  .catch(err => { logEvent('video_error'); showMediaError('Video failed to play — tap X and try again'); });
+          hideTapToPlay();
+          // Give iOS a beat to release the camera's media session before
+          // play() — on slower/older devices (A12 / iPhone XR) playing right
+          // after mindar.stop() freezes on frame 1. The settle delay reduces
+          // that; startVideoPlayback() then catches any remaining freeze and
+          // offers a one-tap rescue instead of a dead frame + page reload.
+          setTimeout(startVideoPlayback, 250);
         }, 900);
       }
+
+      // Start (or restart) playback of the already-loaded fullscreen video,
+      // then watch for the iOS media-session "frozen on frame 1" failure.
+      function startVideoPlayback() {
+        if (!mediaActive) return;
+        fullVid.muted = true;
+        const startT = fullVid.currentTime;
+        fullVid.play()
+          .then(() => { fullVid.muted = false; logEvent('video_play'); armFrozenFrameWatch(startT); })
+          .catch(() => { logEvent('video_error'); showTapToPlay(); });
+      }
+
+      // If the element claims to be playing and has data but currentTime never
+      // advances, it's the media-session freeze — surface "Tap to play". A tap
+      // is a user gesture, which reliably acquires the session. Conservative
+      // checks (readyState + not advancing) keep working devices from ever
+      // seeing it.
+      function armFrozenFrameWatch(startT) {
+        clearTimeout(frozenFrameTimer);
+        frozenFrameTimer = setTimeout(() => {
+          if (mediaActive && fullScreen.style.display !== 'none' &&
+              !fullVid.paused && !fullVid.ended &&
+              fullVid.readyState >= 2 && fullVid.currentTime <= startT + 0.05) {
+            showTapToPlay();
+          }
+        }, 1200);
+      }
+
+      function showTapToPlay() {
+        clearTimeout(frozenFrameTimer);
+        tapToPlayBtn.style.display = 'flex';
+      }
+      function hideTapToPlay() {
+        clearTimeout(frozenFrameTimer);
+        tapToPlayBtn.style.display = 'none';
+      }
+
+      // User-gesture rescue: a tap can start playback even when autoplay-after-
+      // camera couldn't grab the media session.
+      tapToPlayBtn.addEventListener('click', () => {
+        hideTapToPlay();
+        fullVid.muted = false;
+        const startT = fullVid.currentTime;
+        fullVid.play()
+          .then(() => { logEvent('video_play_tap'); armFrozenFrameWatch(startT); })
+          .catch(() => { showMediaError('Video failed to play — tap X and try again'); });
+      });
 
       // ── Audio player ────────────────────────────────────────────────────────
       const apPhotoImg = document.getElementById('ap-photo-img');
@@ -1047,6 +1111,7 @@ fullVid.play()
         mediaActive = false;
         if (triggerTimer) { clearTimeout(triggerTimer); triggerTimer = null; }
         clearReloadHint();
+        hideTapToPlay();
         tryExitFullscreen();
         fullVid.pause();
         fullVid.src = '';
@@ -1069,6 +1134,7 @@ fullVid.play()
 
       fullVid.addEventListener('ended', () => {
         logEvent('video_complete');
+        hideTapToPlay();
         const fade = document.getElementById('fade-overlay');
         fade.style.display = 'block';
         setTimeout(() => fade.style.opacity = '1', 10);
