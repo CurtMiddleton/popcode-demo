@@ -137,7 +137,7 @@ for (const item of items) {
     failed++;
     continue;
   }
-  const { error: insErr } = await target.from('pop_images').insert({
+  const { error: insErr } = await target.from('pop_images').upsert({
     collection_id: col.id,
     creator_id: creator.id,
     image_url: item.photo_url,
@@ -145,7 +145,7 @@ for (const item of items) {
     audio_first: true,
     embedding: toPgVector(vec),
     target_ref: ref,
-  });
+  }, { onConflict: 'collection_id,target_ref' });
   if (insErr) { console.warn(`skip (insert failed: ${insErr.message})`); failed++; continue; }
   done.add(ref);
   inserted++;
