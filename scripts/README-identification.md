@@ -103,6 +103,41 @@ images, confidence }` or `{ matched:false, reason }`. Point it at the branch by
 setting `IDENTIFY_SUPABASE_URL` / `IDENTIFY_SUPABASE_SERVICE_KEY` /
 `REPLICATE_API_TOKEN` in Vercel.
 
+## Phase 3 — scan frontend (`popcode.app/{handle}`)
+
+`public/scan.html` — the one-URL camera experience. Derived from `view.html`
+so all the iOS-hardened playback/rescan/tap-to-play machinery is reused
+verbatim; only the entry is new.
+
+Flow: start screen → tap → live camera preview (`getUserMedia`) → capture one
+640px frame → `POST /api/identify { handle, frame }` → on match, build the
+matched collection's MindAR scene (`.mind` from `pop-targets`) → **tap "bring it
+to life"** (second tap = iOS needs `getUserMedia` inside a gesture) → track +
+play. After a video closes, re-scanning the same book is local (no server call)
+— identification is a one-time bootstrap per book.
+
+### Testing (needs a deploy + a real phone)
+
+Unlike Phases 1–2, this can't be tested from a terminal — camera + HTTPS +
+mobile Safari. Use a Vercel **preview** deploy of this branch:
+
+1. In Vercel → Project → Settings → Environment Variables, add for **Preview**:
+   - `IDENTIFY_SUPABASE_URL` = the branch URL (`https://<branch-ref>.supabase.co`)
+   - `IDENTIFY_SUPABASE_SERVICE_KEY` = the branch service_role key
+   - `REPLICATE_API_TOKEN` = your token
+2. Push the branch (Vercel auto-builds a preview URL).
+3. On a phone, open `<preview-url>/scan.html?handle=Curt`, allow the camera,
+   point at a printed "Max - Chapter One" page.
+
+Routing: testing uses `?handle=Curt`. The pretty `/{handle}` rewrite (and the
+handle-vs-slug routing precedence) is deferred to cutover.
+
+### Known limits (v1)
+- **Video only.** `pop_images` stores `video_url` + `audio_first`, not audio/
+  transcript, so audio-first projects aren't played yet (Max is all video).
+- Analytics (`logEvent`) is a no-op on `scan.html` so a branch test never writes
+  to prod `scan_events`; Phase 4 logs to `identify_events` server-side instead.
+
 ## Notes / decisions
 
 - **Embeddings come from the photo URLs already stored on `collection_items`.**
