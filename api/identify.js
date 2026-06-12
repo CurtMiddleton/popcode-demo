@@ -15,7 +15,9 @@
 //   IDENTIFY_THRESHOLD             (optional; cosine-similarity cutoff)
 
 import { createClient } from '@supabase/supabase-js';
-import { identifyByHandle } from '../lib/identification/identify.mjs';
+// NOTE: this function is bundled as CommonJS by Vercel, so a *static* import of
+// our ESM `.mjs` lib becomes a require() of an ES module and fails
+// (ERR_REQUIRE_ESM). Load it via dynamic import() inside the handler instead.
 
 const SUPABASE_URL = process.env.IDENTIFY_SUPABASE_URL || process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.IDENTIFY_SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -38,6 +40,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing handle and frame/embedding' });
     }
 
+    const { identifyByHandle } = await import('../lib/identification/identify.mjs');
     const db = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
     const result = await identifyByHandle(
       db,
