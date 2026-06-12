@@ -560,7 +560,12 @@
       // server-side instead.
       async function logEvent() {}
 
-      if (!handle) { showError(); } else { bootstrap(handle); }
+      // Defer to DOMContentLoaded so the module-scope `let/const` declared
+      // below (e.g. coverConfig, read by showStartScreen) are initialized before
+      // bootstrap runs — a synchronous call here hits a temporal-dead-zone error.
+      window.addEventListener('DOMContentLoaded', () => {
+        if (!handle) { showError(); } else { bootstrap(handle); }
+      });
 
       // Code-entry form: wired up independently of loadCollection so it works
       // even when the page hits an error path. Vercel rewrites /{slug} to
