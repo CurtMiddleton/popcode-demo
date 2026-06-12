@@ -698,3 +698,59 @@ Do NOT remove the existing iOS-16 `mindar.stop()`-before-playback calls while do
 - Conservative checks (readyState + not-advancing) mean working devices (iPhone 17) never see the button — verify this in testing (no false positives). Also wired `play().catch()` → showTapToPlay, and `hideTapToPlay()` on close/ended.
 - Audio path left unchanged (scope = video). iOS-16 `mindar.stop()`-before-playback calls untouched.
 - **TEST:** board book on iPhone XR (does the first-scan freeze now self-rescue / show Tap to play?) AND iPhone 17 (regression: video still autoplays, Tap-to-play never wrongly appears). If good, merge to prod. If the button shows on healthy playback, loosen the watchdog threshold.
+
+### 2026-06-12 — Single-handle identification system: Phases 0–2 built, working, validated
+
+**Branch: `claude/lucid-archimedes-n1hymd`. No PR yet (staged feature work). All on the branch.** This is the start of the big "one handle per creator" rebuild from the build brief (`popcodeidentificationbuildbrief.md`): replace per-asset slugs with `popcode.app/{handle}`, split **identification** (server, whole library, scoped by creator) from **tracking** (on-device, one collection's `.mind`). Got Phases 0, 1, and 2 done and **validated end-to-end with real data + a real printed photo.** Phases 3–5 (scan frontend, shadow mode, cutover) still ahead.
+
+**Golden rule being followed:** everything additive + in an isolated Supabase **branch** called `identification`. Zero production tables touched. Prod Popcode keeps working untouched.
+
+#### The Supabase branch (important — it's a separate DB)
+- Branch name: **`identification`** (PREVIEW). Its own Postgres + Storage, created from prod schema. **Data is NOT copied** — branch starts schema-only (this bit us; see below).
+- Branch Project URL: **`https://uvnnhnbttfbycsgxfxzn.supabase.co`** (prod is `mrwpkhsluzokytpvmwqk` — totally different ref; don't mix them up).
+- Branch is **MICRO compute, costs extra**, and the org showed an "EXCEEDING USAGE LIMITS" pill (Spend Cap is ON, so it'll pause not charge). **Delete the branch when Phases 0–5 testing is done** to stop the cost.
+
+#### Phase 0 (done) — schema scaffold
+Migrations added to repo (operator runs them in the branch SQL editor; Claude never runs DB writes):
+- `supabase/migrations/2026-06-12-phase0-identification.sql` — `creators`, `pop_images`, `identify_events` + RLS (pop_images/identify_events are server-only, no anon policy). **`identify_events` is the brief's "scan_events" RENAMED** — prod already has a `scan_events` analytics table; reusing the name would collide.
+- `pop-targets` Storage bucket (separate from `experiences`) for the new per-collection `.mind` files.
+- Vercel env `USE_NEW_IDENTIFICATION=false` (kill switch, nothing reads it yet; set non-sensitive).
+- **Locked decisions:** new `creators` table (maps `user_id`→auth.users + unique `handle`); embedding model below; threshold below.
+
+#### Phase 1 (done) — creation/ingest pipeline
+- `lib/identification/embed.mjs` — CLIP embedding via **Replicate**. `embedImageFromUrl(url)`. Shared by seed + endpoint so index/query vectors match.
+- `lib/identification/provider.mjs` — `ReplicateClipProvider` implementing the brief's pluggable `IdentificationProvider` (embed + pgvector search). Default threshold **0.60**.
+- `scripts/seed-identification.mjs` — backfills ONE collection by slug. Reads source collection **read-only from prod** (anon), writes new-index rows to the **branch** (service role). Upserts `creators` + `collections` (FK target) + copies `.mind` to pop-targets + embeds each photo → `pop_images`. **Resumable** (skip target_refs already present; `--fresh` to wipe), skip-on-error, upsert on `(collection_id, target_ref)`.
+- `scripts/README-identification.md` — run instructions.
+- **Seeded project: slug `9xyx1ryb` = "Max - Chapter One", as creator `@Curt`.** 21 unique pages (the project has 78 `collection_items` rows but lots are DUPLICATE target_index — known prod data issue; deduped to 21). One page (`photo_15.jpeg`) is a broken/missing image in prod storage (Replicate 400) — skipped, not fatal.
+
+**Embedding model reality:** brief said CLIP ViT-B/32 (512-dim) but the chosen Replicate model **`krthr/clip-embeddings` returns 768-dim** (ViT-L/14-class, the brief's higher-accuracy option). So **`pop_images.embedding` is `vector(768)`**, EMBEDDING_DIM=768. Migration `2026-06-12-phase0b-embedding-768.sql` retypes the column; `2026-06-12-phase1-dedupe-pop-images.sql` dedupes + adds unique `(collection_id, target_ref)`.
+
+#### Phase 2 (done + VALIDATED) — `/api/identify`
+- `supabase/migrations/2026-06-12-phase2-identify-rpc.sql` — `identify_match(creator_id, embedding, limit)` RPC: scoped pgvector cosine search (`1 - (embedding <=> q)` = confidence), `where creator_id = $1` (the privacy wall, in SQL).
+- `lib/identification/identify.mjs` — `identifyByHandle()`: handle→creator→match→payload (`.mind` URL by convention `pop-targets/{slug}/target.mind` + images list).
+- `api/identify.js` — `POST /api/identify` Vercel function (thin wrapper). Reads `IDENTIFY_SUPABASE_URL`/`IDENTIFY_SUPABASE_SERVICE_KEY` (point at branch for testing, prod at cutover) + `REPLICATE_API_TOKEN` + optional `IDENTIFY_THRESHOLD`.
+- `scripts/test-identify.mjs` — **no-deploy CLI test** against the branch. Shows raw top-K candidate scores.
+
+**Validation results (real, on a real printed photo of Max page 0 — dad+baby on beach):**
+- **Exact seeded image → 100%** confidence, correct page. Pipeline works.
+- **Phone photo of the print** (bad sunset light, steep angle, shadow across it) → **correct page 0 at 69.3%**, clean 13-pt margin over the ~56% runner-up. CLIP global embeddings ARE good enough — no need to swap the matcher.
+- **Stranger photo (different project)** → best 49.6%, all clustered 42–50%, no margin → correctly **rejected**.
+- → **Threshold 0.60** sits cleanly between the ~50% noise floor and ~69% real matches. (Final value still gets tuned from Phase 4 shadow data.)
+
+#### Hard-won gotchas (don't relearn these)
+- **Supabase branch has schema but NOT data, and NOT auth.users rows.** FK from `creators`/`collections` → `auth.users(id)` fails for prod user ids that don't exist in the branch. Fix: seed with `user_id = null` (identity for identification is the handle/creator_id, not user_id). Set real user_id only at a prod cutover.
+- **Replicate `/v1/models/{owner}/{name}/predictions` is OFFICIAL-models only** — community models (krthr/...) 404 there. Must resolve `latest_version` via `GET /v1/models/{owner}/{name}` then `POST /v1/predictions` with the version id (cached). `Prefer: wait` avoids polling.
+- **Replicate throttles to ~6 req/min (burst 1) while account credit < $5.** Bought $10 → throttle lifts once it registers (can lag a few min via Cloudflare). Cost is pennies ($0.01 for ~15 embeds); the pain is the rate *limit*, not price. embed.mjs now backs off on 429. A real scan = ONE call, so throttle never affects the live product.
+- **pgvector via PostgREST:** pass the embedding as the text form `'[0.1,0.2,...]'` (see `toPgVector`), supabase-js sends it through and PG casts to vector.
+- **node_modules IS tracked in this repo** (odd, pre-existing, no .gitignore). `npm install @supabase/supabase-js` for the scripts adds untracked dirs + bumps package.json — the stop-hook flags untracked files. Keep install artifacts OUT of commits (revert package.json/lock, rm the new node_modules dirs) — the user `npm install`s locally to run scripts.
+- **Terminal quoting hell on the user's iMac (zsh):** multi-line backslash pastes and quoted values kept leaving `quote>`/`dquote>` continuation prompts. Fix that worked: `export VAR=value` one per line with **no quotes** (the URL/JWT/`r8_` token/photo-URL values have no shell-special chars), then run the `node ...` line with the image URL **unquoted**. Ctrl+C to escape a stuck `quote>`.
+- User runs everything on **`CURTs-iMac`** at `/Users/curtmiddleton/popcode-demo`. Had to `git fetch origin <branch> && git checkout <branch>` to get the new files (was on a different branch). Default terminal opens in `~`.
+
+#### What the user did (operator steps, all confirmed working)
+Created the branch; ran phase0 + phase0b + phase1-dedupe + phase2 SQL in the branch editor; created `pop-targets` bucket; added `USE_NEW_IDENTIFICATION=false` to Vercel; bought $10 Replicate credit (declined auto-reload, good for cost-control); seeded `9xyx1ryb` as `@Curt`; ran the identify tests.
+
+#### NEXT: Phase 3 — scan frontend (the big one, NOT started)
+Build `popcode.app/{handle}` camera screen as a **new `public/scan.html`** (keep prod `view.html` untouched). Flow: pre-framed permission → open plain getUserMedia → capture ONE low-res frame → `POST /api/identify {handle, frame}` → on match, **stop capture stream, 500ms release, build MindAR scene with the matched collection's `.mind`** (reuse view.html's `buildScene`/`triggerMedia`/rescan/tap-to-play machinery verbatim — those iOS media-session fixes are load-bearing) → track + play, audio-first → cache collection so same-book pages track locally with no further server calls → "Having trouble? Tap to play" fallback. Key insight: identify is a **one-time bootstrap** per book; once the collection's `.mind` is loaded, MindAR tracks all its pages on-device (the whole point of the split). Subsequent taps after a video close = view.html-style rescan (savedMindUrl already set, skip re-identify).
+**Phase 3 can't be tested from a terminal** — needs a Vercel **preview deploy** (with `/api/identify` env pointed at the branch + Replicate token) + a **real phone** (camera/HTTPS/mobile Safari). Routing: for testing use `scan.html?handle=Curt`; add the pretty `/{handle}` Vercel rewrite at cutover (mind handle-vs-slug routing collision).
+Then Phase 4 (shadow mode, log to `identify_events`, tune threshold from real scans) and Phase 5 (per-handle flip of `USE_NEW_IDENTIFICATION`).
