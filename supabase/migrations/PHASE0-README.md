@@ -16,7 +16,7 @@ time.
 
 | Decision | Choice |
 |---|---|
-| Embedding model | **CLIP ViT-B/32** → `vector(512)` |
+| Embedding model | **krthr/clip-embeddings** (CLIP ViT-L/14-class) → `vector(768)` |
 | Creator model | **New `creators` table** (`user_id → auth.users`, unique `handle`) |
 | Shadow log table | **`identify_events`** (renamed from the brief's `scan_events`, which already exists as the live analytics table) |
 | Embedding compute | **Hosted inference API** (Replicate / HF / Modal), called from `/api/identify` |

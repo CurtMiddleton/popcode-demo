@@ -10,7 +10,10 @@
 -- branch's SQL editor and reviews the result before any cutover.
 --
 -- Decisions locked 2026-06-12:
---   * Embedding model .... CLIP ViT-B/32  -> vector(512)
+--   * Embedding model .... krthr/clip-embeddings (CLIP ViT-L/14-class) -> vector(768)
+--                          (started at ViT-B/32 512-dim; the chosen Replicate
+--                          model emits 768-dim, the brief's higher-accuracy
+--                          option, so the column is 768.)
 --   * Creator model ...... new `creators` table mapping to auth.users + handle
 --   * Shadow log name .... `identify_events`  (the brief called this
 --                          "scan_events", but that name already belongs to the
@@ -58,7 +61,7 @@ create table if not exists pop_images (
   image_url     text,                       -- source / registration image
   video_url     text,
   audio_first   boolean default true,       -- fire audio immediately on play
-  embedding     vector(512),                -- CLIP ViT-B/32; revisit dim if model changes
+  embedding     vector(768),                -- krthr/clip-embeddings (768-dim); revisit dim if model changes
   target_ref    text,                       -- slot within the collection .mind (e.g. target_index)
   created_at    timestamptz default now()
 );

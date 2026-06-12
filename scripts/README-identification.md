@@ -9,7 +9,7 @@ rows + `.mind` copy to the Supabase **branch**. No production table is mutated.
 
 | File | Role |
 |---|---|
-| `lib/identification/embed.mjs` | CLIP embedding via Replicate (ViT-B/32 → 512 floats). Shared by this script and the Phase 2 endpoint. |
+| `lib/identification/embed.mjs` | CLIP embedding via Replicate (`krthr/clip-embeddings`, ViT-L/14-class → 768 floats). Shared by this script and the Phase 2 endpoint. |
 | `lib/identification/provider.mjs` | `IdentificationProvider` interface + `ReplicateClipProvider` (embedding done; pgvector search lands in Phase 2). |
 | `scripts/seed-identification.mjs` | The ingest script — backfills `creators` + `pop_images` and copies the `.mind` into `pop-targets`. |
 
@@ -47,7 +47,7 @@ Re-running is safe: the creator is upserted by handle and the collection's
 | Var | Default | Notes |
 |---|---|---|
 | `SOURCE_SUPABASE_URL` / `SOURCE_SUPABASE_ANON_KEY` | prod (from `public/config.js`) | Where to read the existing collection. Override if reading from the branch instead. |
-| `REPLICATE_CLIP_MODEL` | `krthr/clip-embeddings` | Must output a **512-dim** vector or the `vector(512)` column rejects it. |
+| `REPLICATE_CLIP_MODEL` | `krthr/clip-embeddings` | Must output a **768-dim** vector or the `vector(768)` column rejects it. |
 
 ## Verify
 
