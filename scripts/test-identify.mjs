@@ -47,7 +47,7 @@ if (!/^https?:|^data:/.test(image)) {
 
 const db = createClient(URL, KEY, { auth: { persistSession: false } });
 const topk = Number(arg('topk', '5'));
-const thr = threshold != null ? Number(threshold) : 0.75;
+const thr = threshold != null ? Number(threshold) : 0.60;
 
 // Resolve creator, embed once, then show the RAW top-K candidates with scores
 // (bypassing the threshold) so we can see exactly how the real photo ranks.
