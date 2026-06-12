@@ -64,6 +64,45 @@ select count(*) from pop_images;   -- == number of images you seeded
 
 And confirm the `.mind` landed at `pop-targets/<slug>/target.mind` in Storage.
 
+## Phase 2 — identification endpoint
+
+The "which photo is this?" search. Core logic is in
+`lib/identification/identify.mjs` (shared), exposed two ways:
+
+| File | Role |
+|---|---|
+| `lib/identification/provider.mjs` | `ReplicateClipProvider.identify()` — embed + scoped pgvector cosine search via the `identify_match` RPC. |
+| `lib/identification/identify.mjs` | `identifyByHandle()` — handle → creator → match → payload (`.mind` URL + images). |
+| `api/identify.js` | `POST /api/identify` HTTP wrapper (Vercel function). |
+| `scripts/test-identify.mjs` | CLI to test the match against the branch with no deploy. |
+
+### One-time setup
+
+Run the RPC migration in the **branch** SQL editor:
+`supabase/migrations/2026-06-12-phase2-identify-rpc.sql`.
+
+### Test it (no deploy needed)
+
+```bash
+TARGET_SUPABASE_URL="https://<branch-ref>.supabase.co" \
+TARGET_SUPABASE_SERVICE_KEY="<branch service_role key>" \
+REPLICATE_API_TOKEN="<token>" \
+node scripts/test-identify.mjs --handle Curt --image <url-or-local-path> [--threshold 0.6]
+```
+
+- **Sanity check:** pass a seeded photo URL (from `pop_images.image_url`) — it
+  should match its own page at ~100% confidence.
+- **Real test:** a phone photo of the printed page — lower confidence; that's
+  the number Phase 4 uses to set the production threshold.
+
+### Live endpoint (later)
+
+`POST /api/identify` `{ handle, frame }` (frame = image URL/data-URI) or
+`{ handle, embedding }`. Returns `{ matched, collectionId, mind_file_url,
+images, confidence }` or `{ matched:false, reason }`. Point it at the branch by
+setting `IDENTIFY_SUPABASE_URL` / `IDENTIFY_SUPABASE_SERVICE_KEY` /
+`REPLICATE_API_TOKEN` in Vercel.
+
 ## Notes / decisions
 
 - **Embeddings come from the photo URLs already stored on `collection_items`.**
