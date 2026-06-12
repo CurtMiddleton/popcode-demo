@@ -107,22 +107,35 @@ if (upErr) die(`Failed uploading .mind to ${TARGET_BUCKET}: ${upErr.message}`);
 const mindUrl = target.storage.from(TARGET_BUCKET).getPublicUrl(`${slug}/target.mind`).data.publicUrl;
 console.log(`  .mind → ${mindUrl}`);
 
-// 5. Clean re-seed: drop existing pop_images for this collection so the script
-//    is idempotent.
-const { error: delErr } = await target.from('pop_images').delete().eq('collection_id', col.id);
-if (delErr) die('Failed clearing existing pop_images: ' + delErr.message);
+// 5. Resume by default: skip targets already embedded (this also makes the run
+//    restart-safe on the throttled tier and naturally de-dupes repeated
+//    target_index rows). Pass --fresh to wipe this collection's rows and rebuild.
+const fresh = process.argv.includes('--fresh');
+if (fresh) {
+  const { error: delErr } = await target.from('pop_images').delete().eq('collection_id', col.id);
+  if (delErr) die('Failed clearing existing pop_images: ' + delErr.message);
+}
+const { data: existing } = await target.from('pop_images')
+  .select('target_ref').eq('collection_id', col.id);
+const done = new Set((existing || []).map(r => r.target_ref));
+if (done.size) console.log(`  resuming — ${done.size} target(s) already indexed`);
 
-// 6. Embed each photo and insert a pop_images row.
-let inserted = 0;
+// 6. Embed each photo and insert a pop_images row. A single bad/missing photo
+//    is skipped, not fatal.
+let inserted = 0, skipped = 0, failed = 0;
 for (const item of items) {
   const idx = item.target_index;
-  if (!item.photo_url) { console.warn(`  ! item ${idx} has no photo_url — skipping`); continue; }
+  const ref = String(idx);
+  if (done.has(ref)) { skipped++; continue; }
+  if (!item.photo_url) { console.warn(`  ! target ${idx}: no photo_url — skipping`); failed++; continue; }
   process.stdout.write(`  embedding target ${idx}… `);
   let vec;
   try {
     vec = await embedImageFromUrl(item.photo_url);
   } catch (e) {
-    die(`\n  embedding failed for target ${idx}: ${e.message}`);
+    console.warn(`skip (embed failed: ${e.message})`);
+    failed++;
+    continue;
   }
   const { error: insErr } = await target.from('pop_images').insert({
     collection_id: col.id,
@@ -131,12 +144,14 @@ for (const item of items) {
     video_url: item.video_url ?? null,
     audio_first: true,
     embedding: toPgVector(vec),
-    target_ref: String(idx),
+    target_ref: ref,
   });
-  if (insErr) die(`\n  insert failed for target ${idx}: ${insErr.message}`);
+  if (insErr) { console.warn(`skip (insert failed: ${insErr.message})`); failed++; continue; }
+  done.add(ref);
   inserted++;
   console.log(`ok (${vec.length}d)`);
 }
 
-console.log(`✓ Done. Indexed ${inserted}/${items.length} image(s) for @${handle} / "${slug}".`);
+console.log(`✓ Done. ${inserted} new, ${skipped} already present, ${failed} failed — ` +
+            `${done.size} unique target(s) for @${handle} / "${slug}".`);
 console.log(`  Verify: select count(*) from pop_images where creator_id = '${creator.id}';`);
