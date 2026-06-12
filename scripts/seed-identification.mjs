@@ -76,9 +76,13 @@ if (!items || items.length === 0) die('Collection has no items.');
 console.log(`  found ${items.length} item(s)`);
 
 // 2. Upsert the creator (by unique handle).
+//    user_id is left null: the branch carries prod's SCHEMA but not its
+//    auth.users rows, so FK-ing to the prod user id fails in the branch. The
+//    identification flow scopes by creator_id/handle, not user_id, so this is
+//    inert for testing. At a real prod cutover, set user_id to the auth user.
 const { data: creator, error: creatorErr } = await target
   .from('creators')
-  .upsert({ user_id: col.user_id ?? null, handle, display_name: displayName ?? col.name ?? handle },
+  .upsert({ user_id: null, handle, display_name: displayName ?? col.name ?? handle },
           { onConflict: 'handle' })
   .select().single();
 if (creatorErr) die('Failed upserting creator: ' + creatorErr.message);
@@ -86,9 +90,10 @@ console.log(`  creator ${creator.id}`);
 
 // 3. Ensure the collections row exists in TARGET (FK target for pop_images).
 //    Preserve id/slug; do NOT repoint mind_file_url (prod's column meaning).
+//    user_id null for the same branch/auth.users reason as the creator above.
 const { error: colUpsertErr } = await target
   .from('collections')
-  .upsert({ id: col.id, slug: col.slug, name: col.name, mind_file_url: col.mind_file_url, user_id: col.user_id },
+  .upsert({ id: col.id, slug: col.slug, name: col.name, mind_file_url: col.mind_file_url, user_id: null },
           { onConflict: 'id' });
 if (colUpsertErr) die('Failed upserting collection into target: ' + colUpsertErr.message);
 
