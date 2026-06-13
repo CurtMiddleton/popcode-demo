@@ -782,3 +782,44 @@ Continuation of the same-day identification work (branch `claude/lucid-archimede
 **v1 limitations / follow-ups:** video-only (pop_images has no audio/transcript columns yet); analytics no-op'd on scan.html (don't write to prod scan_events from a branch test); `?handle=` query param routing (pretty `/{handle}` deferred to cutover). Re-enable Vercel Deployment Protection; delete the Supabase branch when done iterating.
 
 **NEXT: Phase 4** — shadow mode: on real (legacy) scans, also run the new identify silently and log both + agreement to `identify_events`; collect a few hundred; tune the 0.60 threshold from real data. Then **Phase 5** — per-handle flip of `USE_NEW_IDENTIFICATION`, pretty `/{handle}` Vercel rewrite, audio support.
+
+### 2026-06-13 — Phase 4 (shadow logging + threshold tuning) done & validated; cross-book accuracy proven
+
+Branch `claude/lucid-archimedes-n1hymd` (same identification feature). Phase 4 built, deployed to the preview, and validated with ~17 real phone scans across TWO books. Threshold locked at **0.60**, now evidence-backed. Cross-book routing proven. Ready for Phase 5 (cutover) — which is the first phase that touches prod, so it needs deliberate decisions (see end).
+
+**What shipped (Phase 4):**
+- `supabase/migrations/2026-06-13-phase4-identify-events-cols.sql` — additive columns on `identify_events`: `handle`, `reason`, `matched_target_ref`, `tracked_target_ref`, `runner_up_confidence`, `threshold`. (Operator ran it in the branch.)
+- `lib/identification/provider.mjs` — added `search()` (raw top-K, no threshold); `identify()` now wraps it.
+- `lib/identification/identify.mjs` — logs every call to `identify_events` (top-1 + runner-up scores + threshold + chosen page), best-effort (never blocks identify), returns an `event_id`.
+- `api/identify-feedback.js` — NEW endpoint. scan.html reports which page MindAR actually locked (`tracked_target_ref`); sets `agreed` = did identify's page guess match what MindAR tracked. The real accuracy signal, no prod changes / no labeled data.
+- `public/scan.html` — stores `event_id` from identify, fires `/api/identify-feedback` on the first `targetFound` (fire-and-forget, keepalive).
+- README — threshold-tuning queries.
+
+**Why this instead of the brief's literal shadow-on-legacy:** legacy `view.html` runs on prod; the new index is branch-only with one project seeded; prod has ~no traffic; view.html is fragile. So we instrument the NEW path to measure itself as it's used. Same intent (tune threshold from real data), feasible now.
+
+**Second book seeded for cross-book test:** `egrbne2j` = "Addie Chapter One", 22 unique pages, under the SAME creator `@Curt` (creator_id `53ada50d-4aad-4eed-8aca-2eaf6b25817d`). Max = collection `a87f5275-fca1-4623-93e6-6ff96744e03d`; Addie = collection `7575d5c5-b278-4d5e-833c-38943c927b88`. `@Curt` library is now 43 pop_images rows across 2 collections. (Seeded from the **MBP** this time — had to `git fetch origin <branch> && git checkout <branch>` + `npm install` since that machine was on a different branch with no scripts/.)
+
+**Real-data threshold results (~17 scans):**
+- agreed=true (correct page, MindAR-confirmed): **0.665–0.723**
+- agreed=false (matched & loaded the RIGHT BOOK, but identify's page guess ≠ the page MindAR tracked): **0.620–0.629**
+- agreed=null (rejected, below 0.60 — these were UNRELATED/other-project images): **0.508–0.595**
+- → real pages **≥0.62**, noise **≤0.595**, **0.60 sits cleanly in the gap.** Placeholder validated.
+
+**Cross-book test result (the key one):** every Addie scan → Addie collection (7575d5c5); every Max scan → Max collection (a87f5275); zero wrong-book matches. With 2 books in one creator's library, identify routes each scan to the correct book. The privacy/accuracy premise holds at multi-book scale.
+
+**KEY INTERPRETATION (the confidence number is NOT an accuracy %):** it's **cosine similarity** between CLIP embeddings, read RELATIVELY. Scale for CLIP image↔image: ~1.0 = exact same digital file (our first test hit 1.00); **0.62–0.75 = same photo via a real print+camera capture (a STRONG match)**; ~0.45–0.55 = unrelated real images (the floor — never ~0). So 0.62 "looks low" only if you mistake it for a grade. The actual accuracy = "did the top match point to the right book, above threshold" = **100% across all tests**. What matters is the SEPARATION between match and noise bands, not the absolute value.
+
+**Honest caveat:** the gap is clean but NARROW (lowest match 0.620 vs highest noise 0.595 ≈ 0.025). Worked perfectly so far, but watch it as the library grows (more candidates can nudge the noise floor up). Levers if margin degrades: better capture UX (closer/steadier/fill-frame raises real-match scores) or swap in a stronger matcher (that's exactly why `IdentificationProvider` is pluggable).
+
+**Phase 4 cost note:** Replicate credit was registered by now → embeddings fast, no throttle.
+
+#### NEXT: Phase 5 — measured cutover (FIRST phase that touches prod; do deliberately)
+Still all on the branch; prod untouched until we merge to main. The cutover involves real decisions that were NOT yet made (flagged for the next working session):
+1. **Handle routing.** Today `vercel.json` rewrites `/:slug([a-z0-9]{6,10})` → view.html. Bare `popcode.app/{handle}` (e.g. `/Curt`) needs a scheme that won't collide with legacy slugs. Options: a resolver (look up handle vs slug, route accordingly), or a distinct prefix (`/u/{handle}` or `/@{handle}`), or keep `?handle=` for now. NOT decided.
+2. **Per-handle flag.** `USE_NEW_IDENTIFICATION` should be per-handle (e.g. a `new_identification_enabled` boolean on `creators`) so cutover is one creator at a time, legacy as fallback.
+3. **Prod data migration.** pop_images/creators + embeddings + pop-targets `.mind` currently exist ONLY in the branch. Going live means seeding the same into PROD Supabase and pointing `/api/identify` env at prod (service key), not the branch.
+4. **Audio support (still v1 gap).** pop_images has no audio_url/media_type/transcript, so audio-first projects don't play via the new path yet. Additive: extend pop_images + seed + identify response + scan.html playback. Max & Addie are video so it didn't block testing.
+
+Recommended Phase 5 sequencing: build routing + per-handle flag + audio on the BRANCH (testable on preview, prod untouched), then do the deliberate prod go-live (seed prod, point env at prod, merge the vercel.json rewrite, flip the flag for @Curt) as a final explicit step. Don't flip prod without explicit go-ahead — routing changes are outward-facing.
+
+**Housekeeping still pending:** re-enable Vercel Deployment Protection after testing (preview URLs public while off); delete the `identification` Supabase branch when done (MICRO compute cost).
