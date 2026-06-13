@@ -540,6 +540,13 @@
       const handle = (params.get('handle') || location.pathname.replace(/^\/|\/$/g, '')).trim();
       const id = handle; // analytics tag (logEvent is a no-op on this staged page)
 
+      // Pre-warm the identify model immediately on load so a Replicate cold start
+      // boots while the user grants the camera + aims — keeps the first (and
+      // single-image) scan fast instead of eating a 5–6s cold start.
+      if (handle) {
+        try { fetch('/api/identify-warm', { method: 'POST', keepalive: true }).catch(() => {}); } catch (e) {}
+      }
+
       // ── Analytics ────────────────────────────────────────────────────────────
       function getDeviceInfo() {
         const ua = navigator.userAgent;
