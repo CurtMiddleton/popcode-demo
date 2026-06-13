@@ -823,3 +823,47 @@ Still all on the branch; prod untouched until we merge to main. The cutover invo
 Recommended Phase 5 sequencing: build routing + per-handle flag + audio on the BRANCH (testable on preview, prod untouched), then do the deliberate prod go-live (seed prod, point env at prod, merge the vercel.json rewrite, flip the flag for @Curt) as a final explicit step. Don't flip prod without explicit go-ahead — routing changes are outward-facing.
 
 **Housekeeping still pending:** re-enable Vercel Deployment Protection after testing (preview URLs public while off); delete the `identification` Supabase branch when done (MICRO compute cost).
+
+### 2026-06-13 (later) — Phase 5 SHIPPED TO PROD: popcode.app/{handle} is live 🚀
+
+Continuation of the same-day identification work. Phase 5 built on the branch, then **merged to `main` and live in production**. `popcode.app/Curt` now works on a real phone (identifies Max & Addie, plays video), and legacy `popcode.app/{slug}` is verified untouched. The whole build brief (Phases 0–5) is done and in prod.
+
+**What shipped (branch work, all in `claude/lucid-archimedes-n1hymd`, then merged):**
+- `vercel.json` — added `{ "source": "/:handle([A-Za-z][A-Za-z0-9_-]{0,29})", "destination": "/scan.html" }` AFTER the existing slug rewrite. Disambiguation by pattern + order: lowercase 6–10 chars = slug → view.html; anything else (mixed case / short / long) = handle → scan.html. Collision caveat: an all-lowercase 6–10 handle would be caught by the slug rule (pick handles that aren't that shape; `Curt` is fine). Extensionless page paths (`/create`) would route to scan.html, but real links use `.html` so it's moot.
+- `creators.new_identification_enabled` (bool, default false) — per-handle cutover gate. `/api/identify` (in `identify.mjs`) returns `handle_not_enabled` unless true. Cutover one creator at a time; legacy is the untouched fallback.
+- Audio support plumbed through (pop_images `media_type`/`audio_url`/`transcript`; seed, identify payload, scan.html mediaMap) — but UNTESTED (Max & Addie are video; needs an audio project).
+- **Prod-safety fix in the seed (`0434fb6`):** when seeding prod (source==target), the script must NOT upsert the `collections` row (that would null the real owner's `user_id`). Now it inserts the FK row only if missing (branch case) and leaves existing rows (prod) untouched. CRITICAL — without this, prod collection ownership breaks.
+
+**Bare-URL routing decision:** chose bare `popcode.app/{handle}` (not `/u/` prefix). Implemented as a static rewrite to scan.html (which reads the handle from `location.pathname`) + server-side flag enforcement in `/api/identify` — no dedicated resolver function, legacy slugs keep their fast static route.
+
+**Prod go-live runbook (all done this session):**
+1. Ran migrations in PROD Supabase (production selected, ref `mrwpkhsluzokytpvmwqk`): phase0, phase1-dedupe, phase2, phase4, phase5 (skipped phase0b — phase0 already creates `embedding vector(768)`). Verified 3 tables.
+2. Created `pop-targets` bucket in prod (public).
+3. Vercel **Production**-scope env vars → prod: `IDENTIFY_SUPABASE_URL=https://mrwpkhsluzokytpvmwqk.supabase.co`, `IDENTIFY_SUPABASE_SERVICE_KEY` = **prod** service_role (Sensitive), `REPLICATE_API_TOKEN`. (Preview-scope ones still point at the branch.)
+4. Seeded both books into PROD (TARGET = prod URL + prod service key): `9xyx1ryb` (Max) + `egrbne2j` (Addie), `--handle Curt`. **Prod creator_id = `a995560f-d944-41f0-9f3b-5854ac169fb3`** (fresh row; different from the branch's `53ada50d…`). pop_images count in prod = **43**.
+5. `update creators set new_identification_enabled = true where handle = 'Curt';` in prod.
+6. Merged branch → `main` (`--no-ff`, merge commit `a653bf0`) and pushed. Clean merge — main had 2 unrelated commits touching only `public/create.html` (a parallel session's gutter fix); our branch is additive and doesn't touch create.html. No conflicts.
+7. Verified live: `popcode.app/Curt` works on phone; `popcode.app/9xyx1ryb` still loads the old viewer.
+
+**Go-live gotchas (don't relearn):**
+- **Vercel env-var scope mixups are the #1 hazard.** A var's value differs per environment (Preview→branch URL `uvnnhnbttfbycsgxfxzn`, Production→prod URL `mrwpkhsluzokytpvmwqk`). The user nearly saved the **branch** service key into the Production slot. **A Supabase key's project ref is embedded in the JWT** — decode the middle segment (`"ref":"…"`) to verify which project a `service_role`/`anon` key belongs to. To grab the prod key: Supabase dashboard → switch the top-left branch dropdown from `identification` back to **production/main** → Project Settings → **API Keys → Legacy anon, service_role** → `service_role` secret. The Project URL on that page (`mrwpkhsluzokytpvmwqk…`) confirms you're on prod.
+- **No manual redeploy needed before merge** — env var changes apply to the next build, and the merge-to-main IS that build.
+- **Vercel "Sensitive" is one-way** — once saved sensitive, the toggle is locked (can't un-sensitive). Fine for keys.
+- A separate pre-existing `SUPABASE_SERVICE_ROLE_KEY` (all envs, used by delete-account.js) shows "Needs Attention" because it's non-sensitive — pre-existing, not our concern; optionally mark Sensitive later, don't rotate mid-launch.
+
+**Reversibility (told the user):** it's additive — legacy untouched, only `@Curt` flag-enabled. Roll back by flipping the flag off (`new_identification_enabled=false`) or reverting the merge commit.
+
+**The UX question the user raised (next refinement, NOT done):** `/Curt` is currently a TWO-TAP flow (tap "Scan" → identify → tap "Tap to bring it to life" → track). User wants it to feel like the legacy scanner (one tap, point, play). Path to streamline ("Phase 6 / polish"):
+1. Drop the "Scan" button → auto-capture a frame after a brief aim/steady.
+2. Drop "Tap to bring it to life" → on modern iOS the 2nd camera open likely doesn't need a fresh gesture once permission's granted (gated for safety; test to confirm removable).
+3. Fully seamless = patch the vendored MindAR to reuse ONE camera stream (capture the identify frame from MindAR's own feed) — one camera open total, like legacy. We have the fork setup for this.
+**Unavoidable difference from legacy:** the FIRST photo always has a brief one-time "identifying…" server round-trip (a beat, not a tap) because `/Curt` doesn't know the book in advance; after that, all pages track instantly on-device like legacy.
+
+**Known issue still open:** intermittent iOS video freeze on first play — and it hit an **iPhone 17** (modern!) in the scan flow, not just old devices. Likely because the scan flow opens the camera twice (capture + MindAR), stressing the media session more than legacy. Tap-to-play watchdog fired (good) but the tap itself failed once, recovered on retry. Optional hardening: bump the post-stop settle delay in scan.html's triggerVideo (currently 250ms) and make the Tap-to-play handler self-heal (retry the camera-release) instead of dropping to the scanner.
+
+**HOUSEKEEPING NOW DUE (post-merge):**
+- **Re-enable Vercel Deployment Protection** on previews (was turned OFF for phone testing — preview URLs are public while off).
+- **Delete the `identification` Supabase branch** — it's merged/shipped; the branch keeps costing MICRO compute ("EXCEEDING USAGE LIMITS" pill). Prod now has all the tables/data, so the branch is no longer needed (keep it only if you want a staging env for the Phase 6 UX work).
+- **`USE_NEW_IDENTIFICATION` Vercel env var** (the original Phase 0 kill-switch, default false) is now effectively superseded by the per-handle `creators.new_identification_enabled` flag. Nothing reads `USE_NEW_IDENTIFICATION`; can be removed or left.
+
+**NEXT (optional, when wanted):** Phase 6 UX streamlining (above); audio-project support testing; the auto-re-identify-on-miss so switching books doesn't need a page reload (currently identify is a one-time bootstrap per page-load); per-account branding / more handles (flip `new_identification_enabled` per creator after seeding their books into prod).
