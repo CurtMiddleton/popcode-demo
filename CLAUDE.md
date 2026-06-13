@@ -698,3 +698,128 @@ Do NOT remove the existing iOS-16 `mindar.stop()`-before-playback calls while do
 - Conservative checks (readyState + not-advancing) mean working devices (iPhone 17) never see the button — verify this in testing (no false positives). Also wired `play().catch()` → showTapToPlay, and `hideTapToPlay()` on close/ended.
 - Audio path left unchanged (scope = video). iOS-16 `mindar.stop()`-before-playback calls untouched.
 - **TEST:** board book on iPhone XR (does the first-scan freeze now self-rescue / show Tap to play?) AND iPhone 17 (regression: video still autoplays, Tap-to-play never wrongly appears). If good, merge to prod. If the button shows on healthy playback, loosen the watchdog threshold.
+
+### 2026-06-12 — Single-handle identification system: Phases 0–2 built, working, validated
+
+**Branch: `claude/lucid-archimedes-n1hymd`. No PR yet (staged feature work). All on the branch.** This is the start of the big "one handle per creator" rebuild from the build brief (`popcodeidentificationbuildbrief.md`): replace per-asset slugs with `popcode.app/{handle}`, split **identification** (server, whole library, scoped by creator) from **tracking** (on-device, one collection's `.mind`). Got Phases 0, 1, and 2 done and **validated end-to-end with real data + a real printed photo.** Phases 3–5 (scan frontend, shadow mode, cutover) still ahead.
+
+**Golden rule being followed:** everything additive + in an isolated Supabase **branch** called `identification`. Zero production tables touched. Prod Popcode keeps working untouched.
+
+#### The Supabase branch (important — it's a separate DB)
+- Branch name: **`identification`** (PREVIEW). Its own Postgres + Storage, created from prod schema. **Data is NOT copied** — branch starts schema-only (this bit us; see below).
+- Branch Project URL: **`https://uvnnhnbttfbycsgxfxzn.supabase.co`** (prod is `mrwpkhsluzokytpvmwqk` — totally different ref; don't mix them up).
+- Branch is **MICRO compute, costs extra**, and the org showed an "EXCEEDING USAGE LIMITS" pill (Spend Cap is ON, so it'll pause not charge). **Delete the branch when Phases 0–5 testing is done** to stop the cost.
+
+#### Phase 0 (done) — schema scaffold
+Migrations added to repo (operator runs them in the branch SQL editor; Claude never runs DB writes):
+- `supabase/migrations/2026-06-12-phase0-identification.sql` — `creators`, `pop_images`, `identify_events` + RLS (pop_images/identify_events are server-only, no anon policy). **`identify_events` is the brief's "scan_events" RENAMED** — prod already has a `scan_events` analytics table; reusing the name would collide.
+- `pop-targets` Storage bucket (separate from `experiences`) for the new per-collection `.mind` files.
+- Vercel env `USE_NEW_IDENTIFICATION=false` (kill switch, nothing reads it yet; set non-sensitive).
+- **Locked decisions:** new `creators` table (maps `user_id`→auth.users + unique `handle`); embedding model below; threshold below.
+
+#### Phase 1 (done) — creation/ingest pipeline
+- `lib/identification/embed.mjs` — CLIP embedding via **Replicate**. `embedImageFromUrl(url)`. Shared by seed + endpoint so index/query vectors match.
+- `lib/identification/provider.mjs` — `ReplicateClipProvider` implementing the brief's pluggable `IdentificationProvider` (embed + pgvector search). Default threshold **0.60**.
+- `scripts/seed-identification.mjs` — backfills ONE collection by slug. Reads source collection **read-only from prod** (anon), writes new-index rows to the **branch** (service role). Upserts `creators` + `collections` (FK target) + copies `.mind` to pop-targets + embeds each photo → `pop_images`. **Resumable** (skip target_refs already present; `--fresh` to wipe), skip-on-error, upsert on `(collection_id, target_ref)`.
+- `scripts/README-identification.md` — run instructions.
+- **Seeded project: slug `9xyx1ryb` = "Max - Chapter One", as creator `@Curt`.** 21 unique pages (the project has 78 `collection_items` rows but lots are DUPLICATE target_index — known prod data issue; deduped to 21). One page (`photo_15.jpeg`) is a broken/missing image in prod storage (Replicate 400) — skipped, not fatal.
+
+**Embedding model reality:** brief said CLIP ViT-B/32 (512-dim) but the chosen Replicate model **`krthr/clip-embeddings` returns 768-dim** (ViT-L/14-class, the brief's higher-accuracy option). So **`pop_images.embedding` is `vector(768)`**, EMBEDDING_DIM=768. Migration `2026-06-12-phase0b-embedding-768.sql` retypes the column; `2026-06-12-phase1-dedupe-pop-images.sql` dedupes + adds unique `(collection_id, target_ref)`.
+
+#### Phase 2 (done + VALIDATED) — `/api/identify`
+- `supabase/migrations/2026-06-12-phase2-identify-rpc.sql` — `identify_match(creator_id, embedding, limit)` RPC: scoped pgvector cosine search (`1 - (embedding <=> q)` = confidence), `where creator_id = $1` (the privacy wall, in SQL).
+- `lib/identification/identify.mjs` — `identifyByHandle()`: handle→creator→match→payload (`.mind` URL by convention `pop-targets/{slug}/target.mind` + images list).
+- `api/identify.js` — `POST /api/identify` Vercel function (thin wrapper). Reads `IDENTIFY_SUPABASE_URL`/`IDENTIFY_SUPABASE_SERVICE_KEY` (point at branch for testing, prod at cutover) + `REPLICATE_API_TOKEN` + optional `IDENTIFY_THRESHOLD`.
+- `scripts/test-identify.mjs` — **no-deploy CLI test** against the branch. Shows raw top-K candidate scores.
+
+**Validation results (real, on a real printed photo of Max page 0 — dad+baby on beach):**
+- **Exact seeded image → 100%** confidence, correct page. Pipeline works.
+- **Phone photo of the print** (bad sunset light, steep angle, shadow across it) → **correct page 0 at 69.3%**, clean 13-pt margin over the ~56% runner-up. CLIP global embeddings ARE good enough — no need to swap the matcher.
+- **Stranger photo (different project)** → best 49.6%, all clustered 42–50%, no margin → correctly **rejected**.
+- → **Threshold 0.60** sits cleanly between the ~50% noise floor and ~69% real matches. (Final value still gets tuned from Phase 4 shadow data.)
+
+#### Hard-won gotchas (don't relearn these)
+- **Supabase branch has schema but NOT data, and NOT auth.users rows.** FK from `creators`/`collections` → `auth.users(id)` fails for prod user ids that don't exist in the branch. Fix: seed with `user_id = null` (identity for identification is the handle/creator_id, not user_id). Set real user_id only at a prod cutover.
+- **Replicate `/v1/models/{owner}/{name}/predictions` is OFFICIAL-models only** — community models (krthr/...) 404 there. Must resolve `latest_version` via `GET /v1/models/{owner}/{name}` then `POST /v1/predictions` with the version id (cached). `Prefer: wait` avoids polling.
+- **Replicate throttles to ~6 req/min (burst 1) while account credit < $5.** Bought $10 → throttle lifts once it registers (can lag a few min via Cloudflare). Cost is pennies ($0.01 for ~15 embeds); the pain is the rate *limit*, not price. embed.mjs now backs off on 429. A real scan = ONE call, so throttle never affects the live product.
+- **pgvector via PostgREST:** pass the embedding as the text form `'[0.1,0.2,...]'` (see `toPgVector`), supabase-js sends it through and PG casts to vector.
+- **node_modules IS tracked in this repo** (odd, pre-existing, no .gitignore). `npm install @supabase/supabase-js` for the scripts adds untracked dirs + bumps package.json — the stop-hook flags untracked files. Keep install artifacts OUT of commits (revert package.json/lock, rm the new node_modules dirs) — the user `npm install`s locally to run scripts.
+- **Terminal quoting hell on the user's iMac (zsh):** multi-line backslash pastes and quoted values kept leaving `quote>`/`dquote>` continuation prompts. Fix that worked: `export VAR=value` one per line with **no quotes** (the URL/JWT/`r8_` token/photo-URL values have no shell-special chars), then run the `node ...` line with the image URL **unquoted**. Ctrl+C to escape a stuck `quote>`.
+- User runs everything on **`CURTs-iMac`** at `/Users/curtmiddleton/popcode-demo`. Had to `git fetch origin <branch> && git checkout <branch>` to get the new files (was on a different branch). Default terminal opens in `~`.
+
+#### What the user did (operator steps, all confirmed working)
+Created the branch; ran phase0 + phase0b + phase1-dedupe + phase2 SQL in the branch editor; created `pop-targets` bucket; added `USE_NEW_IDENTIFICATION=false` to Vercel; bought $10 Replicate credit (declined auto-reload, good for cost-control); seeded `9xyx1ryb` as `@Curt`; ran the identify tests.
+
+#### NEXT: Phase 3 — scan frontend (the big one, NOT started)
+Build `popcode.app/{handle}` camera screen as a **new `public/scan.html`** (keep prod `view.html` untouched). Flow: pre-framed permission → open plain getUserMedia → capture ONE low-res frame → `POST /api/identify {handle, frame}` → on match, **stop capture stream, 500ms release, build MindAR scene with the matched collection's `.mind`** (reuse view.html's `buildScene`/`triggerMedia`/rescan/tap-to-play machinery verbatim — those iOS media-session fixes are load-bearing) → track + play, audio-first → cache collection so same-book pages track locally with no further server calls → "Having trouble? Tap to play" fallback. Key insight: identify is a **one-time bootstrap** per book; once the collection's `.mind` is loaded, MindAR tracks all its pages on-device (the whole point of the split). Subsequent taps after a video close = view.html-style rescan (savedMindUrl already set, skip re-identify).
+**Phase 3 can't be tested from a terminal** — needs a Vercel **preview deploy** (with `/api/identify` env pointed at the branch + Replicate token) + a **real phone** (camera/HTTPS/mobile Safari). Routing: for testing use `scan.html?handle=Curt`; add the pretty `/{handle}` Vercel rewrite at cutover (mind handle-vs-slug routing collision).
+Then Phase 4 (shadow mode, log to `identify_events`, tune threshold from real scans) and Phase 5 (per-handle flip of `USE_NEW_IDENTIFICATION`).
+
+### 2026-06-12 (later) — Phase 3 built + VALIDATED ON A REAL IPHONE 🎉
+
+Continuation of the same-day identification work (branch `claude/lucid-archimedes-n1hymd`). **Phase 3 is done and the whole system works end-to-end on a real phone:** point camera at a printed "Max - Chapter One" photo → `/api/identify` figures out which page/book → loads that book's `.mind` → video plays locked on the photo, and other pages of the book then track on-device with no further server call. The brief's core thesis (split server-identification from on-device-tracking, scoped per creator) is now demonstrated.
+
+**What shipped (on the branch):**
+- `public/scan.html` — the `popcode.app/{handle}` camera experience. **Derived from `view.html`** (via `cp` + surgical edits) so ALL the iOS-hardened playback/rescan/tap-to-play/audio machinery is byte-identical; only the entry is new. Flow: start screen → tap → plain `getUserMedia` preview with a frame reticle → tap "Scan" → grab one 640px JPEG frame → `POST /api/identify {handle, frame}` → on match, `buildScene(mind_file_url, mediaMap)` (autoStart:false) → **tap "Tap to bring it to life"** → `mindar.start()` → track + play. **Two taps on purpose:** iOS requires `getUserMedia` inside a user gesture, and we open the camera twice (capture frame, then MindAR), so the second open is gated behind a tap. Identify is a one-time bootstrap per book; later rescans (savedMindUrl set) reuse view.html's rescan path with no server call.
+- `api/identify.js` — `POST /api/identify` Vercel function. Reads `IDENTIFY_SUPABASE_URL` / `IDENTIFY_SUPABASE_SERVICE_KEY` (point at branch for testing) + `REPLICATE_API_TOKEN` + optional `IDENTIFY_THRESHOLD`.
+- `scripts/README-identification.md` — added Phase 3 + deploy/test section.
+
+**THREE bugs hit on the way (all fixed — don't relearn):**
+1. **`ERR_REQUIRE_ESM` on `/api/identify` (500).** Vercel bundles `api/*.js` as **CommonJS**, so a *static* `import` of our ESM `lib/identification/*.mjs` became a `require()` of an ES module → crash. Fix: load it via **dynamic `import()` inside the handler** (`const { identifyByHandle } = await import('../lib/identification/identify.mjs')`). The runtime error literally recommends this. (The npm `import { createClient }` static import is fine — only local `.mjs` imports break.) This is THE pattern for any future api function that needs the lib.
+2. **TDZ: "Cannot access uninitialized variable" → blank/black scan page.** My `bootstrap()` ran synchronously at parse time and called `showStartScreen()`, which reads `coverConfig` — a `let` declared *later* in the script. `view.html` dodged this because its loader was `async` and `await`ed a DB call first (letting the rest of the script finish). Fix: **defer the bootstrap dispatch to `DOMContentLoaded`**. Lesson: when porting from view.html, anything that runs synchronously at top level can hit TDZ on `let/const` declared further down.
+3. **Camera/identify returned "no match" for everything** — was actually masking bug #1 (my client shows the same nomatch screen on a fetch error as on a real low-confidence result). Once the 500 was fixed, real matches came through.
+
+**Vercel testing gotchas (for next time):**
+- **Preview deployments are private by default** (Vercel Authentication / Deployment Protection). The phone showed blank until the user turned it OFF (Settings → Deployment Protection). **Re-enable it after testing** — preview URLs are public while off. (Reminded the user.)
+- **Redeploy the BRANCH preview, not prod.** User accidentally redeployed `main`/Production first (harmless — prod has none of this branch's code). The branch's row in Deployments → Preview is the one.
+- Env vars added to **Preview** scope apply to the next branch build automatically (no manual redeploy needed if you push after adding them).
+- Every push = a new `…-<hash>-…vercel.app` URL. Use the **stable `popcode-demo-git-<branch>-…` alias** (in the deployment's Domains list) to stop chasing hashes.
+- Test URL during dev: `<preview>/scan.html?handle=Curt` (the pretty `/{handle}` rewrite is a Phase 5 thing).
+- "Turn phone upright to scan" overlay shows on the **Mac** because `#orientation-lock` triggers in landscape — not a bug; test on the phone in portrait.
+
+**Env vars set in Vercel (Preview scope):** `IDENTIFY_SUPABASE_URL` = branch URL, `IDENTIFY_SUPABASE_SERVICE_KEY` = branch service_role, `REPLICATE_API_TOKEN`. (Production scope deliberately NOT set — keeps the new endpoint off prod.)
+
+**v1 limitations / follow-ups:** video-only (pop_images has no audio/transcript columns yet); analytics no-op'd on scan.html (don't write to prod scan_events from a branch test); `?handle=` query param routing (pretty `/{handle}` deferred to cutover). Re-enable Vercel Deployment Protection; delete the Supabase branch when done iterating.
+
+**NEXT: Phase 4** — shadow mode: on real (legacy) scans, also run the new identify silently and log both + agreement to `identify_events`; collect a few hundred; tune the 0.60 threshold from real data. Then **Phase 5** — per-handle flip of `USE_NEW_IDENTIFICATION`, pretty `/{handle}` Vercel rewrite, audio support.
+
+### 2026-06-13 — Phase 4 (shadow logging + threshold tuning) done & validated; cross-book accuracy proven
+
+Branch `claude/lucid-archimedes-n1hymd` (same identification feature). Phase 4 built, deployed to the preview, and validated with ~17 real phone scans across TWO books. Threshold locked at **0.60**, now evidence-backed. Cross-book routing proven. Ready for Phase 5 (cutover) — which is the first phase that touches prod, so it needs deliberate decisions (see end).
+
+**What shipped (Phase 4):**
+- `supabase/migrations/2026-06-13-phase4-identify-events-cols.sql` — additive columns on `identify_events`: `handle`, `reason`, `matched_target_ref`, `tracked_target_ref`, `runner_up_confidence`, `threshold`. (Operator ran it in the branch.)
+- `lib/identification/provider.mjs` — added `search()` (raw top-K, no threshold); `identify()` now wraps it.
+- `lib/identification/identify.mjs` — logs every call to `identify_events` (top-1 + runner-up scores + threshold + chosen page), best-effort (never blocks identify), returns an `event_id`.
+- `api/identify-feedback.js` — NEW endpoint. scan.html reports which page MindAR actually locked (`tracked_target_ref`); sets `agreed` = did identify's page guess match what MindAR tracked. The real accuracy signal, no prod changes / no labeled data.
+- `public/scan.html` — stores `event_id` from identify, fires `/api/identify-feedback` on the first `targetFound` (fire-and-forget, keepalive).
+- README — threshold-tuning queries.
+
+**Why this instead of the brief's literal shadow-on-legacy:** legacy `view.html` runs on prod; the new index is branch-only with one project seeded; prod has ~no traffic; view.html is fragile. So we instrument the NEW path to measure itself as it's used. Same intent (tune threshold from real data), feasible now.
+
+**Second book seeded for cross-book test:** `egrbne2j` = "Addie Chapter One", 22 unique pages, under the SAME creator `@Curt` (creator_id `53ada50d-4aad-4eed-8aca-2eaf6b25817d`). Max = collection `a87f5275-fca1-4623-93e6-6ff96744e03d`; Addie = collection `7575d5c5-b278-4d5e-833c-38943c927b88`. `@Curt` library is now 43 pop_images rows across 2 collections. (Seeded from the **MBP** this time — had to `git fetch origin <branch> && git checkout <branch>` + `npm install` since that machine was on a different branch with no scripts/.)
+
+**Real-data threshold results (~17 scans):**
+- agreed=true (correct page, MindAR-confirmed): **0.665–0.723**
+- agreed=false (matched & loaded the RIGHT BOOK, but identify's page guess ≠ the page MindAR tracked): **0.620–0.629**
+- agreed=null (rejected, below 0.60 — these were UNRELATED/other-project images): **0.508–0.595**
+- → real pages **≥0.62**, noise **≤0.595**, **0.60 sits cleanly in the gap.** Placeholder validated.
+
+**Cross-book test result (the key one):** every Addie scan → Addie collection (7575d5c5); every Max scan → Max collection (a87f5275); zero wrong-book matches. With 2 books in one creator's library, identify routes each scan to the correct book. The privacy/accuracy premise holds at multi-book scale.
+
+**KEY INTERPRETATION (the confidence number is NOT an accuracy %):** it's **cosine similarity** between CLIP embeddings, read RELATIVELY. Scale for CLIP image↔image: ~1.0 = exact same digital file (our first test hit 1.00); **0.62–0.75 = same photo via a real print+camera capture (a STRONG match)**; ~0.45–0.55 = unrelated real images (the floor — never ~0). So 0.62 "looks low" only if you mistake it for a grade. The actual accuracy = "did the top match point to the right book, above threshold" = **100% across all tests**. What matters is the SEPARATION between match and noise bands, not the absolute value.
+
+**Honest caveat:** the gap is clean but NARROW (lowest match 0.620 vs highest noise 0.595 ≈ 0.025). Worked perfectly so far, but watch it as the library grows (more candidates can nudge the noise floor up). Levers if margin degrades: better capture UX (closer/steadier/fill-frame raises real-match scores) or swap in a stronger matcher (that's exactly why `IdentificationProvider` is pluggable).
+
+**Phase 4 cost note:** Replicate credit was registered by now → embeddings fast, no throttle.
+
+#### NEXT: Phase 5 — measured cutover (FIRST phase that touches prod; do deliberately)
+Still all on the branch; prod untouched until we merge to main. The cutover involves real decisions that were NOT yet made (flagged for the next working session):
+1. **Handle routing.** Today `vercel.json` rewrites `/:slug([a-z0-9]{6,10})` → view.html. Bare `popcode.app/{handle}` (e.g. `/Curt`) needs a scheme that won't collide with legacy slugs. Options: a resolver (look up handle vs slug, route accordingly), or a distinct prefix (`/u/{handle}` or `/@{handle}`), or keep `?handle=` for now. NOT decided.
+2. **Per-handle flag.** `USE_NEW_IDENTIFICATION` should be per-handle (e.g. a `new_identification_enabled` boolean on `creators`) so cutover is one creator at a time, legacy as fallback.
+3. **Prod data migration.** pop_images/creators + embeddings + pop-targets `.mind` currently exist ONLY in the branch. Going live means seeding the same into PROD Supabase and pointing `/api/identify` env at prod (service key), not the branch.
+4. **Audio support (still v1 gap).** pop_images has no audio_url/media_type/transcript, so audio-first projects don't play via the new path yet. Additive: extend pop_images + seed + identify response + scan.html playback. Max & Addie are video so it didn't block testing.
+
+Recommended Phase 5 sequencing: build routing + per-handle flag + audio on the BRANCH (testable on preview, prod untouched), then do the deliberate prod go-live (seed prod, point env at prod, merge the vercel.json rewrite, flip the flag for @Curt) as a final explicit step. Don't flip prod without explicit go-ahead — routing changes are outward-facing.
+
+**Housekeeping still pending:** re-enable Vercel Deployment Protection after testing (preview URLs public while off); delete the `identification` Supabase branch when done (MICRO compute cost).
