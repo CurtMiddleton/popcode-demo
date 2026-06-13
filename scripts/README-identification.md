@@ -138,6 +138,50 @@ handle-vs-slug routing precedence) is deferred to cutover.
 - Analytics (`logEvent`) is a no-op on `scan.html` so a branch test never writes
   to prod `scan_events`; Phase 4 logs to `identify_events` server-side instead.
 
+## Phase 4 — shadow logging + threshold tuning
+
+Every `/api/identify` call now logs one row to `identify_events` (scores +
+threshold + the page it chose). After tracking starts, `scan.html` reports which
+page MindAR actually locked via `POST /api/identify-feedback`, which sets
+`agreed` — a real accuracy signal with no prod changes and no labeled data.
+
+Adapted from the brief: instead of shadowing legacy `view.html` on prod (the new
+index lives in the branch, prod has ~no traffic, and `view.html` is fragile), we
+instrument the **new path** to measure itself as it's used.
+
+### One-time setup
+Run `supabase/migrations/2026-06-13-phase4-identify-events-cols.sql` in the
+branch SQL editor, then redeploy the preview (it picks up the existing env vars).
+
+### Tuning queries (branch SQL editor)
+
+```sql
+-- Overall score distribution + average margin over the runner-up.
+select reason, count(*),
+       round(avg(confidence)::numeric, 3)            as avg_conf,
+       round(min(confidence)::numeric, 3)            as min_conf,
+       round(max(confidence)::numeric, 3)            as max_conf,
+       round(avg(confidence - runner_up_confidence)::numeric, 3) as avg_margin
+from identify_events
+group by reason;
+
+-- The money query: confidence split by whether identify agreed with what
+-- MindAR actually tracked. Pick a threshold ABOVE the disagree band and BELOW
+-- the agree band.
+select agreed,
+       count(*),
+       round(min(confidence)::numeric, 3) as min_conf,
+       round(avg(confidence)::numeric, 3) as avg_conf,
+       round(max(confidence)::numeric, 3) as max_conf
+from identify_events
+where confidence is not null
+group by agreed;   -- agreed=true (real hits) vs false (misses) vs null (no track yet)
+```
+
+Collect a few dozen real scans, then set the production threshold (the
+`ReplicateClipProvider` default / `IDENTIFY_THRESHOLD`) from the gap between the
+agree and disagree confidence bands.
+
 ## Notes / decisions
 
 - **Embeddings come from the photo URLs already stored on `collection_items`.**

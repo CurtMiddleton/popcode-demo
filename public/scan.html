@@ -623,6 +623,7 @@
           target.setAttribute('mindar-image-target', `targetIndex: ${idx}`);
           target.addEventListener('targetFound', () => {
             if (!mediaActive) {
+              if (pendingEventId && !feedbackSent) { feedbackSent = true; sendIdentifyFeedback(idx); }
               logEvent('target_found', parseInt(idx));
               triggerMedia(mediaMap[idx]);
             }
@@ -653,6 +654,8 @@
       const capVideo = document.getElementById('cap-video');
       const capCanvas = document.getElementById('cap-canvas');
       let capStream = null;
+      let pendingEventId = null;   // identify_events row id for the current scan
+      let feedbackSent = false;    // ensure we report MindAR's tracked page only once
 
       function bootstrap() {
         document.getElementById('loading').style.display = 'none';
@@ -726,6 +729,20 @@
         return res.json();
       }
 
+      // Phase 4 agreement signal: tell the server which page MindAR actually
+      // locked, so it can compare against what identify guessed. Fire-and-forget.
+      function sendIdentifyFeedback(trackedRef) {
+        if (!pendingEventId) return;
+        try {
+          fetch('/api/identify-feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event_id: pendingEventId, tracked_target_ref: String(trackedRef) }),
+            keepalive: true,
+          }).catch(() => {});
+        } catch (e) {}
+      }
+
       async function doCaptureAndIdentify() {
         if (!capStream) { startCaptureFlow(); return; }
         const capBtn = document.getElementById('cap-btn');
@@ -750,6 +767,8 @@
             audioUrl: null, transcript: null, photoUrl: null,
           };
         });
+        pendingEventId = result.event_id || null;
+        feedbackSent = false;
         savedMindUrl = result.mind_file_url;
         savedMediaMap = mediaMap;
         // Build the scene now (autoStart:false) so A-Frame registers its systems
