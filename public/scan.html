@@ -996,6 +996,7 @@
       const tapToPlayBtn = document.getElementById('tap-to-play');
       const scanner = document.getElementById('scanner');
       let frozenFrameTimer = null; // watches for the iOS media-session frame-1 freeze
+      let recoverAttempts = 0;   // frozen-frame auto-recovery counter
       const audioPlayer = document.getElementById('audio-player');
       const apAudio = document.getElementById('ap-audio');
       let mediaActive = false;
@@ -1089,46 +1090,84 @@
       function startVideoPlayback() {
         if (!mediaActive) return;
         fullVid.muted = true;
-        const startT = fullVid.currentTime;
+        recoverAttempts = 0;
         fullVid.play()
-          .then(() => { fullVid.muted = false; logEvent('video_play'); armFrozenFrameWatch(startT); })
-          .catch(() => { logEvent('video_error'); showTapToPlay(); });
+          .then(() => { fullVid.muted = false; logEvent('video_play'); armFrozenFrameWatch(); })
+          .catch(() => { logEvent('video_error'); attemptRecover(); });
       }
 
-      // If the element claims to be playing and has data but currentTime never
-      // advances, it's the media-session freeze — surface "Tap to play". A tap
-      // is a user gesture, which reliably acquires the session. Conservative
-      // checks (readyState + not advancing) keep working devices from ever
-      // seeing it.
-      function armFrozenFrameWatch(startT) {
-        clearTimeout(frozenFrameTimer);
-        frozenFrameTimer = setTimeout(() => {
-          if (mediaActive && fullScreen.style.display !== 'none' &&
-              !fullVid.paused && !fullVid.ended &&
-              fullVid.readyState >= 2 && fullVid.currentTime <= startT + 0.05) {
-            showTapToPlay();
+      // Poll while "playing": if currentTime stops advancing despite the element
+      // not being paused/ended and having data, it's the iOS media-session
+      // freeze. (A single-shot check missed cases where the video advanced a
+      // hair before sticking.) On a stall we first try a silent reload+replay,
+      // then fall back to a reliable one-tap rescue.
+      function armFrozenFrameWatch() {
+        clearInterval(frozenFrameTimer);
+        let last = fullVid.currentTime;
+        let stalls = 0;
+        frozenFrameTimer = setInterval(() => {
+          if (!mediaActive || fullScreen.style.display === 'none' || fullVid.paused || fullVid.ended) {
+            clearInterval(frozenFrameTimer);
+            return;
           }
-        }, 1000);
+          if (fullVid.readyState >= 2 && Math.abs(fullVid.currentTime - last) < 0.02) {
+            stalls++;
+          } else {
+            stalls = 0;
+            last = fullVid.currentTime;
+            if (fullVid.currentTime > 0 && tapToPlayBtn.style.display !== 'none') {
+              tapToPlayBtn.style.display = 'none'; // recovered on its own
+            }
+          }
+          if (stalls >= 3) { // ~1s with no progress
+            clearInterval(frozenFrameTimer);
+            attemptRecover();
+          }
+        }, 350);
+      }
+
+      // Auto-recover a frozen frame once (reload + replay) before bothering the
+      // user — this usually clears the media-session stall the same way a page
+      // reload did. If it still freezes, surface the one-tap rescue.
+      function attemptRecover() {
+        if (!mediaActive) return;
+        if (recoverAttempts >= 1) { showTapToPlay(); return; }
+        recoverAttempts++;
+        logEvent('video_recover');
+        try {
+          fullVid.pause();
+          fullVid.load();
+          fullVid.muted = true;
+          setTimeout(() => {
+            if (!mediaActive) return;
+            fullVid.play()
+              .then(() => { fullVid.muted = false; armFrozenFrameWatch(); })
+              .catch(() => showTapToPlay());
+          }, 350);
+        } catch (e) { showTapToPlay(); }
       }
 
       function showTapToPlay() {
-        clearTimeout(frozenFrameTimer);
+        clearInterval(frozenFrameTimer);
         tapToPlayBtn.style.display = 'flex';
       }
       function hideTapToPlay() {
-        clearTimeout(frozenFrameTimer);
+        clearInterval(frozenFrameTimer);
         tapToPlayBtn.style.display = 'none';
       }
 
-      // User-gesture rescue: a tap can start playback even when autoplay-after-
-      // camera couldn't grab the media session.
+      // User-gesture rescue: a real tap reliably acquires the media session.
+      // Reload the element first so it replays cleanly from the start.
       tapToPlayBtn.addEventListener('click', () => {
         hideTapToPlay();
+        recoverAttempts = 0;
         fullVid.muted = false;
-        const startT = fullVid.currentTime;
-        fullVid.play()
-          .then(() => { logEvent('video_play_tap'); armFrozenFrameWatch(startT); })
-          .catch(() => { showMediaError('Video failed to play — tap X and try again'); });
+        try { fullVid.load(); } catch (e) {}
+        setTimeout(() => {
+          fullVid.play()
+            .then(() => { logEvent('video_play_tap'); armFrozenFrameWatch(); })
+            .catch(() => showMediaError('Video failed to play — tap X and try again'));
+        }, 100);
       });
 
       // ── Audio player ────────────────────────────────────────────────────────
