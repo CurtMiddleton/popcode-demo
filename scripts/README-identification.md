@@ -182,6 +182,46 @@ Collect a few dozen real scans, then set the production threshold (the
 `ReplicateClipProvider` default / `IDENTIFY_THRESHOLD`) from the gap between the
 agree and disagree confidence bands.
 
+## Phase 5 — cutover (bare /{handle}, per-handle flag, audio)
+
+Built on the branch; **prod is untouched until `main` is merged** (the deliberate
+go-live). Three pieces:
+
+1. **Bare `/{handle}` routing.** `vercel.json` rewrites `/{handle}` → `scan.html`
+   (which reads the handle from the path). Legacy slugs keep their existing
+   `/{slug}` → `view.html` rewrite (evaluated first). Disambiguation is by
+   pattern + order: a lowercase 6–10 char string is treated as a **slug**;
+   anything else (mixed case, short, long) is a **handle**. So an all-lowercase
+   6–10 char handle would collide with the slug space — pick handles that aren't
+   that shape (a capital or a natural name avoids it; `Curt` is fine). Extension-
+   less page paths like `/create` would also route to scan.html, but real links
+   use `.html`, so it's a non-issue (revisit with an exclude-list at go-live if needed).
+2. **Per-handle flag.** `creators.new_identification_enabled` (default false).
+   `/api/identify` returns `handle_not_enabled` unless it's true — so the new
+   experience goes live one creator at a time, legacy untouched as fallback.
+3. **Audio support.** `pop_images` gained `media_type` / `audio_url` /
+   `transcript`; the seed script, identify payload, and `scan.html` mediaMap now
+   carry them (scan.html reuses view.html's audio player). Untested end-to-end
+   (Max & Addie are video) — needs an audio project to verify.
+
+### Branch test (preview)
+1. Run `supabase/migrations/2026-06-13-phase5-flag-and-audio.sql` in the branch.
+2. Enable the creator: `update creators set new_identification_enabled = true where handle = 'Curt';`
+3. Redeploy the preview. Now `<preview>/Curt` (bare, no `?handle=`) loads scan.
+   (Set the flag false → `/Curt` still loads scan.html but identify returns
+   `handle_not_enabled` → "couldn't find it".)
+
+### Go-live (prod — deliberate, do last, with explicit OK)
+- Run all identification migrations (phase0 → phase5) in **prod** Supabase.
+- Seed prod: re-run the seed script with TARGET pointed at **prod** (its URL +
+  service key) for each book to go live; enable each creator's flag.
+- Create the `pop-targets` bucket in prod.
+- Point `/api/identify` + `/api/identify-feedback` env (`IDENTIFY_SUPABASE_URL` /
+  `IDENTIFY_SUPABASE_SERVICE_KEY`) at **prod**, in the **Production** scope.
+- Merge the branch to `main` (ships the `vercel.json` handle rewrite + scan.html).
+- Verify `popcode.app/{handle}` on a real device; legacy `popcode.app/{slug}`
+  must still work unchanged.
+
 ## Notes / decisions
 
 - **Embeddings come from the photo URLs already stored on `collection_items`.**
