@@ -416,11 +416,11 @@
           /* ── Single-handle scan flow screens ─────────────────────────────── */
       #capture-screen{position:fixed;inset:0;z-index:50;display:none;background:#000;}
       #cap-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
-      .cap-reticle{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);width:74vw;max-width:380px;height:44vh;max-height:380px;border:2px solid rgba(255,255,255,0.9);border-radius:18px;box-shadow:0 0 0 100vmax rgba(0,0,0,0.35);pointer-events:none;}
-      .cap-hint{position:absolute;left:0;right:0;top:7%;text-align:center;color:#fff;font-family:'DM Sans',sans-serif;font-size:18px;line-height:1.4;text-shadow:0 1px 6px rgba(0,0,0,0.7);padding:0 24px;}
-      #cap-status{position:absolute;left:0;right:0;bottom:128px;text-align:center;color:#fff;font-family:'DM Sans',sans-serif;font-size:16px;text-shadow:0 1px 6px rgba(0,0,0,0.7);padding:0 24px;}
-      #cap-btn{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);background:#fff;color:#2dc0c5;border:none;border-radius:999px;font-family:'DM Sans',sans-serif;font-weight:700;font-size:18px;padding:16px 52px;box-shadow:0 4px 16px rgba(0,0,0,0.3);}
-      #cap-btn:disabled{opacity:0.45;}
+      /* Capture phase matches the legacy scanner: fullscreen camera + a small
+         bottom hint pill. No framing box, no button. */
+      #cap-status{position:fixed;bottom:48px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.55);color:#fff;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;padding:10px 22px;border-radius:24px;white-space:nowrap;z-index:1000;pointer-events:none;}
+      #cap-status:empty{display:none;}
+      #cap-btn{display:none;}
       #ready-screen,#nomatch-screen{position:fixed;inset:0;z-index:50;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:linear-gradient(160deg,#7657FC,#2dc0f7);color:#fff;text-align:center;padding:0 32px;}
       #ready-screen .splash-logo,#nomatch-screen .splash-logo{height:46px;margin-bottom:8px;}
       .ready-msg{font-family:'Cormorant Garamond',serif;font-size:38px;font-weight:600;line-height:1.1;}
@@ -481,8 +481,6 @@
     <div id="capture-screen">
       <video id="cap-video" playsinline webkit-playsinline muted autoplay></video>
       <canvas id="cap-canvas" style="display:none"></canvas>
-      <div class="cap-reticle"></div>
-      <div class="cap-hint">Point your camera at the photo<br>to bring it to life</div>
       <div id="cap-status"></div>
       <button id="cap-btn" type="button">Scan now</button>
     </div>
@@ -703,7 +701,7 @@
         showScreen('capture-screen');
         const capBtn = document.getElementById('cap-btn');
         const status = document.getElementById('cap-status');
-        status.textContent = '';
+        status.textContent = 'Point your camera at the photo';
         capBtn.disabled = true;
         try {
           capStream = await navigator.mediaDevices.getUserMedia({
