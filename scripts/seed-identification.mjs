@@ -89,13 +89,21 @@ if (creatorErr) die('Failed upserting creator: ' + creatorErr.message);
 console.log(`  creator ${creator.id}`);
 
 // 3. Ensure the collections row exists in TARGET (FK target for pop_images).
-//    Preserve id/slug; do NOT repoint mind_file_url (prod's column meaning).
-//    user_id null for the same branch/auth.users reason as the creator above.
-const { error: colUpsertErr } = await target
-  .from('collections')
-  .upsert({ id: col.id, slug: col.slug, name: col.name, mind_file_url: col.mind_file_url, user_id: null },
-          { onConflict: 'id' });
-if (colUpsertErr) die('Failed upserting collection into target: ' + colUpsertErr.message);
+//    PROD-SAFETY: if the row already exists (target == prod, where the
+//    collection is real and owned), DO NOT touch it — overwriting user_id would
+//    break ownership in manage.html. Only insert when missing (the branch case,
+//    where collections data wasn't copied), with user_id null (the branch lacks
+//    the prod auth.users row to FK to).
+const { data: existingCol } = await target
+  .from('collections').select('id').eq('id', col.id).maybeSingle();
+if (!existingCol) {
+  const { error: colInsErr } = await target
+    .from('collections')
+    .insert({ id: col.id, slug: col.slug, name: col.name, mind_file_url: col.mind_file_url, user_id: null });
+  if (colInsErr) die('Failed inserting collection into target: ' + colInsErr.message);
+} else {
+  console.log('  collection row already present in target — leaving it untouched');
+}
 
 // 4. Copy the compiled .mind into the pop-targets bucket.
 const mindRes = await fetch(col.mind_file_url);
