@@ -900,3 +900,20 @@ The `IdentificationProvider` abstraction was built for exactly this. Options:
 - Re-enable Vercel Deployment Protection on previews (turned OFF for phone testing — preview URLs public while off).
 - Delete the `identification` Supabase branch (merged/shipped; costs MICRO compute). Prod has all tables/data.
 - Phase 6 (one-tap auto-scan + hardened recovery + restyle) is **on the branch, NOT merged** — merge only after the cold-start backend fix is verified on a phone.
+
+### 2026-06-14 — Phase 6 shipped to prod; next = embedding-backend swap (kill cold-start)
+
+Phase 6 (one-tap auto-scan + legacy-look capture screen + hardened freeze recovery) **merged to `main` and live in prod** (merge commit `f531de3`). `popcode.app/Curt` is now the streamlined flow: tap once → point → "Looking…" → recognizes and plays on its own; legacy `popcode.app/{slug}` verified untouched. Clean additive merge (main only had the unrelated create.html gutter fix; branch touched only scan.html + CLAUDE.md). The pre-warm add/revert netted out — no `api/identify-warm.js` in prod, no pre-warm call in scan.html.
+
+**The ONE remaining problem (next session's whole job): first-scan latency = Replicate cold-start (~5–6s, worst ~15s).** Warm scans are already fast. Credit is fine ($9.98) — it's purely cold-start. Worst for single-image experiences (a card/print is always a first scan).
+
+**Plan — swap the embedding backend to an always-warm one (no cold-start):**
+1. Recommended backend: **Cloudflare Workers AI CLIP** (`@cf/openai/clip-vit-base-patch32`) — serverless, no cold-start, edge-fast (~0.3–0.8s), ~free, no throttle. 512-dim (ViT-B/32). Alternative: on-device transformers.js (no network; ~40MB one-time download). DECISION not yet locked.
+2. Point `lib/identification/embed.mjs` at the new provider (add a Cloudflare account + API token as a Vercel env var if going Cloudflare).
+3. **One-time re-index** (critical): current `pop_images.embedding` vectors are krthr/clip-embeddings 768-dim and won't be comparable to a new model. Re-run `scripts/seed-identification.mjs` for both books (`9xyx1ryb`, `egrbne2j`) against BOTH the branch and prod, with the new model. If dim changes (768→512), flip the `vector(N)` column first (one-line migration, like phase0b).
+4. Test first-scan speed on a real COLD phone. Expected: first-scan total ~5–6s → **~2–3s**, and consistent (no cold penalty). The identify call itself drops from ~5s → sub-second.
+5. No big merge needed — mostly an env/provider switch + re-seed. Phase 6 UX is already in prod.
+
+**After the backend swap, OPTIONAL final polish:** the **single-camera-stream MindAR patch** (the "B" we shelved) becomes worth doing — it removes the 2nd camera open + handoff (~1–2s), getting the first scan to ~1.5–2s (near legacy-instant). Do it only after the backend swap, and only if the extra polish is wanted.
+
+**STILL-PENDING HOUSEKEEPING:** re-enable Vercel Deployment Protection on previews (off since phone testing — preview URLs public while off); delete the `identification` Supabase branch (everything's in prod now; it costs MICRO compute). The `USE_NEW_IDENTIFICATION` Phase 0 env var is superseded by the per-handle `creators.new_identification_enabled` flag — nothing reads it; remove or ignore.
