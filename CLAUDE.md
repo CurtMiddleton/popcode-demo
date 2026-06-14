@@ -867,3 +867,36 @@ Continuation of the same-day identification work. Phase 5 built on the branch, t
 - **`USE_NEW_IDENTIFICATION` Vercel env var** (the original Phase 0 kill-switch, default false) is now effectively superseded by the per-handle `creators.new_identification_enabled` flag. Nothing reads `USE_NEW_IDENTIFICATION`; can be removed or left.
 
 **NEXT (optional, when wanted):** Phase 6 UX streamlining (above); audio-project support testing; the auto-re-identify-on-miss so switching books doesn't need a page reload (currently identify is a one-time bootstrap per page-load); per-account branding / more handles (flip `new_identification_enabled` per creator after seeding their books into prod).
+
+### 2026-06-13 (later still) — Phase 6 UX streamlining (one-tap auto-scan) + cold-start diagnosis
+
+Branch `claude/lucid-archimedes-n1hymd` (NOT merged — Phase 6 lives on the branch; prod stays on the merged 2-tap version from earlier today). Goal: make `popcode.app/{handle}` feel like the legacy scanner (tap once, point, it plays) instead of the 3-tap "Tap to Scan → Scan → Tap to bring it to life." Got the UX much closer, then hit a wall on first-scan latency that needs an embedding-backend change next session.
+
+**What shipped on the branch (all in `public/scan.html` unless noted):**
+- **Continuous auto-scan** (commit `38045f8`): on the single "Tap to Scan", open the camera and loop capture+identify (up to 10 attempts, ~every 0.9–1.4s) until a match, then **auto-start MindAR** (no "Scan"/"bring it to life" taps). Modern iOS reuses the granted camera permission for the 2nd (MindAR) open — **confirmed: video auto-starts on its own on iPhone 17**. Manual "Tap to bring it to life" kept ONLY as a fallback if auto-start can't acquire the camera (older iOS). "Scan now" button kept as an optional immediate trigger; no-match after max attempts → retry screen.
+- **Capture screen restyled to match legacy** (`c39dc9a`): dropped the big framing box + "Scan now" prominence; now just fullscreen camera + a small bottom hint pill (same style as legacy `#scan-hint`). Feels continuous with the rest of the app.
+- **Hardened frozen-frame recovery — "Part A"** (`04c5d90`): replaced the single-shot freeze check with a **poll** (catches stalls even if the video advanced a hair first); on a stall, **auto-retry playback once** (pause+`load()`+replay — clears the media-session freeze the same way a page reload did) before showing the rescue; the "Tap to play" button now `load()`s the element so the tap reliably replays. Result: the intermittent first-frame freeze went from "needs page reload" to **self-healing / one-tap** — user couldn't reproduce a stuck freeze after this.
+- **Trimmed delays** (`20d80b3`): 900ms hold-to-confirm → 300ms in both video & audio paths (legacy uses the long hold to avoid firing on a glance; in the scan flow the user is already aiming, so it's pure lag). First-scan look delay 800→450ms, retries 1400→900ms, post-stop video settle 250→500ms (freeze mitigation).
+
+**THE WALL — first-scan latency is Replicate cold-start (diagnosed, not yet fixed):**
+- Symptom: ~5–6s from "Tap to Scan" to video on the **first** scan; **subsequent scans are fast (legacy-like)**. Classic cold-start signature.
+- **It is NOT the <$5 burst-1 throttle** — user has $9.98 credit, usage $0.02. Latency only.
+- Replicate spins the model down when idle and **cold-boots it (~5–15s) on the first call**. Inherent to its serverless model.
+- **Pre-warm attempt FAILED and made it WORSE (~15s)** — fired `/api/identify-warm` (a throwaway embed) on page load to boot the model during aim time. On a cold model, the real scan call arrived mid-boot and Replicate spun a **second** cold instance for the concurrent call → paid the boot twice. **Reverted** (`2059a38`, deleted `api/identify-warm.js`). Lesson: a separate warm-up call is the wrong mechanism for Replicate cold-start.
+- **B (single-stream MindAR patch) was investigated and SKIPPED**: the diagnosis showed the structural double-camera cost is only on the (already-fast) warm scans, so B wouldn't fix the first-scan complaint. Don't build it for speed; not worth the MindAR rebuild.
+
+**Why this matters most for SINGLE-IMAGE experiences:** a greeting card / single print is *always* a first scan, so it always eats the cold-start. Making the first scan fast is essential, not optional.
+
+#### NEXT SESSION: switch the embedding backend to kill cold-start (the real fix)
+The `IdentificationProvider` abstraction was built for exactly this. Options:
+- **Cloudflare Workers AI CLIP** (e.g. `@cf/openai/clip-vit-base-patch32`) — serverless, **no cold-start**, fast, ~free, no throttle. Best fit. 512-dim (ViT-B/32).
+- **On-device** (transformers.js CLIP) — no network/cold-start/per-call cost; ~one-time model download (~40MB quantized).
+- Either requires a **one-time re-index**: re-run `scripts/seed-identification.mjs` with the new model so `pop_images.embedding` is recomputed with the SAME model used at query time (current vectors are krthr/clip-embeddings 768-dim — a different model won't be comparable). Re-seed handles it; just point `lib/identification/embed.mjs` at the new provider, adjust `EMBEDDING_DIM`/`vector(N)` if the dim changes, and re-seed both books (prod + branch).
+- After the backend swap, re-test first-scan speed on a real (cold) phone; if fast, the one-tap auto-scan flow is ready to **merge Phase 6 to prod** (same additive merge as before; prod currently on the 2-tap version).
+
+**Other Phase 6 follow-ups noted:** the auto-scan loop fires multiple Replicate calls per scan (fine when warm/serverless-no-coldstart, but worth keeping call count low); occasional no-sound/freeze reports during the bad pre-warm run were likely calls queuing behind the cold boot — re-evaluate after the backend swap.
+
+**STILL-PENDING HOUSEKEEPING (unchanged from earlier today):**
+- Re-enable Vercel Deployment Protection on previews (turned OFF for phone testing — preview URLs public while off).
+- Delete the `identification` Supabase branch (merged/shipped; costs MICRO compute). Prod has all tables/data.
+- Phase 6 (one-tap auto-scan + hardened recovery + restyle) is **on the branch, NOT merged** — merge only after the cold-start backend fix is verified on a phone.

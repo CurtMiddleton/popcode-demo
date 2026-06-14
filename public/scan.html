@@ -416,11 +416,11 @@
           /* ── Single-handle scan flow screens ─────────────────────────────── */
       #capture-screen{position:fixed;inset:0;z-index:50;display:none;background:#000;}
       #cap-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
-      .cap-reticle{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);width:74vw;max-width:380px;height:44vh;max-height:380px;border:2px solid rgba(255,255,255,0.9);border-radius:18px;box-shadow:0 0 0 100vmax rgba(0,0,0,0.35);pointer-events:none;}
-      .cap-hint{position:absolute;left:0;right:0;top:7%;text-align:center;color:#fff;font-family:'DM Sans',sans-serif;font-size:18px;line-height:1.4;text-shadow:0 1px 6px rgba(0,0,0,0.7);padding:0 24px;}
-      #cap-status{position:absolute;left:0;right:0;bottom:128px;text-align:center;color:#fff;font-family:'DM Sans',sans-serif;font-size:16px;text-shadow:0 1px 6px rgba(0,0,0,0.7);padding:0 24px;}
-      #cap-btn{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);background:#fff;color:#2dc0c5;border:none;border-radius:999px;font-family:'DM Sans',sans-serif;font-weight:700;font-size:18px;padding:16px 52px;box-shadow:0 4px 16px rgba(0,0,0,0.3);}
-      #cap-btn:disabled{opacity:0.45;}
+      /* Capture phase matches the legacy scanner: fullscreen camera + a small
+         bottom hint pill. No framing box, no button. */
+      #cap-status{position:fixed;bottom:48px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.55);color:#fff;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;padding:10px 22px;border-radius:24px;white-space:nowrap;z-index:1000;pointer-events:none;}
+      #cap-status:empty{display:none;}
+      #cap-btn{display:none;}
       #ready-screen,#nomatch-screen{position:fixed;inset:0;z-index:50;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:linear-gradient(160deg,#7657FC,#2dc0f7);color:#fff;text-align:center;padding:0 32px;}
       #ready-screen .splash-logo,#nomatch-screen .splash-logo{height:46px;margin-bottom:8px;}
       .ready-msg{font-family:'Cormorant Garamond',serif;font-size:38px;font-weight:600;line-height:1.1;}
@@ -481,10 +481,8 @@
     <div id="capture-screen">
       <video id="cap-video" playsinline webkit-playsinline muted autoplay></video>
       <canvas id="cap-canvas" style="display:none"></canvas>
-      <div class="cap-reticle"></div>
-      <div class="cap-hint">Point your camera at the photo<br>to bring it to life</div>
       <div id="cap-status"></div>
-      <button id="cap-btn" type="button">Scan</button>
+      <button id="cap-btn" type="button">Scan now</button>
     </div>
     <div id="ready-screen">
       <img class="splash-logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
@@ -541,6 +539,7 @@
       const params = new URLSearchParams(location.search);
       const handle = (params.get('handle') || location.pathname.replace(/^\/|\/$/g, '')).trim();
       const id = handle; // analytics tag (logEvent is a no-op on this staged page)
+
 
       // ── Analytics ────────────────────────────────────────────────────────────
       function getDeviceInfo() {
@@ -657,17 +656,22 @@
       let pendingEventId = null;   // identify_events row id for the current scan
       let feedbackSent = false;    // ensure we report MindAR's tracked page only once
 
+      let scanning = false;      // continuous auto-scan loop active
+      let scanAttempts = 0;
+      let tickInFlight = false;  // prevent overlapping identify calls
+      const MAX_SCAN_ATTEMPTS = 10;
+
       function bootstrap() {
         document.getElementById('loading').style.display = 'none';
         showStartScreen();
         document.getElementById('start-btn').addEventListener('click', handleScanTap);
         document.getElementById('wl-scan-btn').addEventListener('click', handleScanTap);
-        document.getElementById('cap-btn').addEventListener('click', doCaptureAndIdentify);
+        document.getElementById('cap-btn').addEventListener('click', () => scanTick(true));
         document.getElementById('ready-btn').addEventListener('click', startTracking);
         document.getElementById('retry-btn').addEventListener('click', startCaptureFlow);
       }
 
-      // First tap figures out which book this is (one server call). Once a book
+      // First scan figures out which book this is (one server call). Once a book
       // is loaded, MindAR tracks all its pages on-device, so later taps (after a
       // video closes, savedMindUrl set) just rescan the same book — no server
       // call. This is the brief's "cache the loaded collection" behavior.
@@ -685,28 +689,35 @@
       }
 
       function stopCapStream() {
+        scanning = false;
         if (capStream) { try { capStream.getTracks().forEach(t => t.stop()); } catch(e){} capStream = null; }
         try { capVideo.srcObject = null; } catch(e){}
       }
 
+      // Open the camera and continuously capture+identify until a match — like
+      // the legacy scanner's "point and it recognizes," with a one-time server
+      // lookup. No "Scan"/"bring it to life" taps needed in the happy path; the
+      // "Scan now" button just forces an immediate attempt.
       async function startCaptureFlow() {
         showScreen('capture-screen');
         const capBtn = document.getElementById('cap-btn');
         const status = document.getElementById('cap-status');
-        status.textContent = '';
+        status.textContent = 'Point your camera at the photo';
         capBtn.disabled = true;
         try {
           capStream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: { ideal: 'environment' } }, audio: false,
           });
         } catch (e) {
-          status.textContent = 'Camera access is needed to scan. Enable it in Settings, then tap Scan.';
-          capBtn.disabled = false;
+          status.textContent = 'Camera access is needed to scan. Enable it in Settings, then reload.';
           return;
         }
         capVideo.srcObject = capStream;
         try { await capVideo.play(); } catch(e){}
         capBtn.disabled = false;
+        scanning = true;
+        scanAttempts = 0;
+        setTimeout(() => scanTick(false), 450); // brief aim delay before first look
       }
 
       function grabFrame() {
@@ -729,6 +740,31 @@
         return res.json();
       }
 
+      // One capture+identify attempt; loops itself until a match or MAX attempts.
+      // `manual` = the user tapped "Scan now".
+      async function scanTick(manual) {
+        if (!capStream || tickInFlight) return;
+        if (!scanning && !manual) return;
+        tickInFlight = true;
+        const status = document.getElementById('cap-status');
+        status.textContent = 'Looking…';
+        let result = null;
+        try { result = await identifyFrame(grabFrame()); } catch (e) { result = null; }
+        tickInFlight = false;
+        if (result && result.matched) { scanning = false; onMatch(result); return; }
+        scanAttempts++;
+        if (!scanning) { status.textContent = ''; return; }
+        if (scanAttempts >= MAX_SCAN_ATTEMPTS) {
+          stopCapStream();
+          showScreen('nomatch-screen');
+          return;
+        }
+        status.textContent = scanAttempts >= 3
+          ? 'Still looking — fill the frame with the photo, in good light.'
+          : 'Looking…';
+        setTimeout(() => scanTick(false), 900);
+      }
+
       // Phase 4 agreement signal: tell the server which page MindAR actually
       // locked, so it can compare against what identify guessed. Fire-and-forget.
       function sendIdentifyFeedback(trackedRef) {
@@ -743,23 +779,7 @@
         } catch (e) {}
       }
 
-      async function doCaptureAndIdentify() {
-        if (!capStream) { startCaptureFlow(); return; }
-        const capBtn = document.getElementById('cap-btn');
-        const status = document.getElementById('cap-status');
-        capBtn.disabled = true;
-        status.textContent = 'Identifying…';
-        const frame = grabFrame();
-        stopCapStream();
-        let result;
-        try {
-          result = await identifyFrame(frame);
-        } catch (e) {
-          showScreen('nomatch-screen');
-          return;
-        }
-        if (!result || !result.matched) { showScreen('nomatch-screen'); return; }
-
+      function onMatch(result) {
         const mediaMap = {};
         (result.images || []).forEach(im => {
           mediaMap[im.target_ref] = {
@@ -774,15 +794,53 @@
         feedbackSent = false;
         savedMindUrl = result.mind_file_url;
         savedMediaMap = mediaMap;
-        // Build the scene now (autoStart:false) so A-Frame registers its systems
-        // while the user reads the prompt; mindar.start() fires in the next tap
-        // (iOS requires getUserMedia inside a user gesture).
+        stopCapStream();
         buildScene(savedMindUrl, savedMediaMap);
-        showScreen('ready-screen');
+        autoStartTracking();
       }
 
-      // Gesture-gated MindAR start (opens the tracking camera).
+      // Auto-start MindAR after a match — no extra tap. Modern iOS lets the 2nd
+      // getUserMedia reuse the already-granted camera permission. If it can't
+      // acquire (older iOS may need a fresh gesture -> arError, or start throws),
+      // fall back to the manual "Tap to bring it to life" button (ready-screen).
+      function autoStartTracking() {
+        showScreen('');
+        document.getElementById('scanner').style.display = 'block';
+        document.getElementById('home-btn').style.display = 'flex';
+        const hint = document.getElementById('scan-hint');
+        hint.textContent = 'Point your camera at the photo';
+        hint.style.display = 'block';
+
+        cleanRescanActive = true; // suppress buildScene's arError->showError during auto-start
+        let fellBack = false;
+        const fallback = () => {
+          if (fellBack) return;
+          fellBack = true; cleanRescanActive = false;
+          document.getElementById('scanner').style.display = 'none';
+          document.getElementById('home-btn').style.display = 'none';
+          showScreen('ready-screen');
+        };
+        if (arScene) arScene.addEventListener('arError', fallback, { once: true });
+        setTimeout(() => { cleanRescanActive = false; }, 8000);
+
+        const tryStart = () => {
+          // 500ms lets iOS release the capture camera before MindAR opens it.
+          setTimeout(() => {
+            const mindar = arScene && arScene.systems['mindar-image-system'];
+            if (mindar && typeof mindar.start === 'function') {
+              try { mindar.start(); startReloadHintTimer(); } catch (e) { fallback(); }
+            } else { fallback(); }
+          }, 500);
+        };
+        if (arScene && arScene.systems && arScene.systems['mindar-image-system']) tryStart();
+        else if (arScene) arScene.addEventListener('loaded', tryStart, { once: true });
+        else fallback();
+      }
+
+      // Manual gesture fallback — the "Tap to bring it to life" button, used only
+      // if auto-start couldn't acquire the camera on its own.
       function startTracking() {
+        cleanRescanActive = false;
         showScreen('');
         document.getElementById('scanner').style.display = 'block';
         document.getElementById('home-btn').style.display = 'flex';
@@ -939,6 +997,7 @@
       const tapToPlayBtn = document.getElementById('tap-to-play');
       const scanner = document.getElementById('scanner');
       let frozenFrameTimer = null; // watches for the iOS media-session frame-1 freeze
+      let recoverAttempts = 0;   // frozen-frame auto-recovery counter
       const audioPlayer = document.getElementById('audio-player');
       const apAudio = document.getElementById('ap-audio');
       let mediaActive = false;
@@ -1023,8 +1082,8 @@
           // after mindar.stop() freezes on frame 1. The settle delay reduces
           // that; startVideoPlayback() then catches any remaining freeze and
           // offers a one-tap rescue instead of a dead frame + page reload.
-          setTimeout(startVideoPlayback, 250);
-        }, 900);
+          setTimeout(startVideoPlayback, 500);
+        }, 300);
       }
 
       // Start (or restart) playback of the already-loaded fullscreen video,
@@ -1032,46 +1091,84 @@
       function startVideoPlayback() {
         if (!mediaActive) return;
         fullVid.muted = true;
-        const startT = fullVid.currentTime;
+        recoverAttempts = 0;
         fullVid.play()
-          .then(() => { fullVid.muted = false; logEvent('video_play'); armFrozenFrameWatch(startT); })
-          .catch(() => { logEvent('video_error'); showTapToPlay(); });
+          .then(() => { fullVid.muted = false; logEvent('video_play'); armFrozenFrameWatch(); })
+          .catch(() => { logEvent('video_error'); attemptRecover(); });
       }
 
-      // If the element claims to be playing and has data but currentTime never
-      // advances, it's the media-session freeze — surface "Tap to play". A tap
-      // is a user gesture, which reliably acquires the session. Conservative
-      // checks (readyState + not advancing) keep working devices from ever
-      // seeing it.
-      function armFrozenFrameWatch(startT) {
-        clearTimeout(frozenFrameTimer);
-        frozenFrameTimer = setTimeout(() => {
-          if (mediaActive && fullScreen.style.display !== 'none' &&
-              !fullVid.paused && !fullVid.ended &&
-              fullVid.readyState >= 2 && fullVid.currentTime <= startT + 0.05) {
-            showTapToPlay();
+      // Poll while "playing": if currentTime stops advancing despite the element
+      // not being paused/ended and having data, it's the iOS media-session
+      // freeze. (A single-shot check missed cases where the video advanced a
+      // hair before sticking.) On a stall we first try a silent reload+replay,
+      // then fall back to a reliable one-tap rescue.
+      function armFrozenFrameWatch() {
+        clearInterval(frozenFrameTimer);
+        let last = fullVid.currentTime;
+        let stalls = 0;
+        frozenFrameTimer = setInterval(() => {
+          if (!mediaActive || fullScreen.style.display === 'none' || fullVid.paused || fullVid.ended) {
+            clearInterval(frozenFrameTimer);
+            return;
           }
-        }, 1200);
+          if (fullVid.readyState >= 2 && Math.abs(fullVid.currentTime - last) < 0.02) {
+            stalls++;
+          } else {
+            stalls = 0;
+            last = fullVid.currentTime;
+            if (fullVid.currentTime > 0 && tapToPlayBtn.style.display !== 'none') {
+              tapToPlayBtn.style.display = 'none'; // recovered on its own
+            }
+          }
+          if (stalls >= 3) { // ~1s with no progress
+            clearInterval(frozenFrameTimer);
+            attemptRecover();
+          }
+        }, 350);
+      }
+
+      // Auto-recover a frozen frame once (reload + replay) before bothering the
+      // user — this usually clears the media-session stall the same way a page
+      // reload did. If it still freezes, surface the one-tap rescue.
+      function attemptRecover() {
+        if (!mediaActive) return;
+        if (recoverAttempts >= 1) { showTapToPlay(); return; }
+        recoverAttempts++;
+        logEvent('video_recover');
+        try {
+          fullVid.pause();
+          fullVid.load();
+          fullVid.muted = true;
+          setTimeout(() => {
+            if (!mediaActive) return;
+            fullVid.play()
+              .then(() => { fullVid.muted = false; armFrozenFrameWatch(); })
+              .catch(() => showTapToPlay());
+          }, 350);
+        } catch (e) { showTapToPlay(); }
       }
 
       function showTapToPlay() {
-        clearTimeout(frozenFrameTimer);
+        clearInterval(frozenFrameTimer);
         tapToPlayBtn.style.display = 'flex';
       }
       function hideTapToPlay() {
-        clearTimeout(frozenFrameTimer);
+        clearInterval(frozenFrameTimer);
         tapToPlayBtn.style.display = 'none';
       }
 
-      // User-gesture rescue: a tap can start playback even when autoplay-after-
-      // camera couldn't grab the media session.
+      // User-gesture rescue: a real tap reliably acquires the media session.
+      // Reload the element first so it replays cleanly from the start.
       tapToPlayBtn.addEventListener('click', () => {
         hideTapToPlay();
+        recoverAttempts = 0;
         fullVid.muted = false;
-        const startT = fullVid.currentTime;
-        fullVid.play()
-          .then(() => { logEvent('video_play_tap'); armFrozenFrameWatch(startT); })
-          .catch(() => { showMediaError('Video failed to play — tap X and try again'); });
+        try { fullVid.load(); } catch (e) {}
+        setTimeout(() => {
+          fullVid.play()
+            .then(() => { logEvent('video_play_tap'); armFrozenFrameWatch(); })
+            .catch(() => showMediaError('Video failed to play — tap X and try again'));
+        }, 100);
       });
 
       // ── Audio player ────────────────────────────────────────────────────────
@@ -1130,7 +1227,7 @@
               logEvent('audio_play_blocked');
               showMediaError('Audio failed to play — tap X and try again');
             });
-        }, 900);
+        }, 300);
       }
 
       apPlay.addEventListener('click', () => {
