@@ -690,12 +690,10 @@
         document.getElementById('retry-btn').addEventListener('click', startCaptureFlow);
       }
 
-      // First scan figures out which book this is (one server call). Once a book
-      // is loaded, MindAR tracks all its pages on-device, so later taps (after a
-      // video closes, savedMindUrl set) just rescan the same book — no server
-      // call. This is the brief's "cache the loaded collection" behavior.
+      // Every tap re-runs identify (on-device embed + a fast scoped query), so a
+      // tap always opens the capture loop — same book or different, same page or
+      // another. No MindAR scene to cache/restart.
       function handleScanTap() {
-        if (savedMindUrl) { handleStartTap(); return; }
         startCaptureFlow();
       }
 
@@ -842,29 +840,26 @@
       }
 
       function onMatch(result) {
-        const mediaMap = {};
-        (result.images || []).forEach(im => {
-          mediaMap[im.target_ref] = {
-            type: im.media_type === 'audio' ? 'audio' : 'video',
-            videoUrl: im.video_url || null,
-            audioUrl: im.audio_url || null,
-            transcript: im.transcript || null,
-            photoUrl: im.image_url || null,
-          };
-        });
         pendingEventId = result.event_id || null;
         feedbackSent = false;
-        savedMindUrl = result.mind_file_url;
-        savedMediaMap = mediaMap;
-        showHoldFrame();          // cover the camera swap
-        stopCapStream();
-        buildScene(savedMindUrl, savedMediaMap);
-        // Reveal the live MindAR camera (drop the held frame) the moment its
-        // stream is ready; targetFound is a backup trigger.
-        if (arScene) {
-          arScene.addEventListener('arReady', hideHoldFrame, { once: true });
-        }
-        autoStartTracking();
+        savedMindUrl = result.mind_file_url; // retained for diagnostics; not used to track
+        // identify already told us EXACTLY which page this is (result.target_ref),
+        // so play it straight to fullscreen — no second camera, no MindAR re-detect.
+        const ref = String(result.target_ref);
+        const img = (result.images || []).find(i => String(i.target_ref) === ref) || {};
+        const media = {
+          type: img.media_type === 'audio' ? 'audio' : 'video',
+          videoUrl: img.video_url || null,
+          audioUrl: img.audio_url || null,
+          transcript: img.transcript || null,
+          photoUrl: img.image_url || null,
+        };
+        // Phase 4 log: we're playing identify's own pick, so report it as tracked.
+        if (pendingEventId && !feedbackSent) { feedbackSent = true; sendIdentifyFeedback(ref); }
+        const cs = document.getElementById('cap-status'); if (cs) cs.textContent = '';
+        showHoldFrame();   // hold the last camera frame through the brief handoff
+        stopCapStream();   // release the camera so the video can play (iOS media session)
+        triggerMedia(media);
       }
 
       // Auto-start MindAR after a match — no extra tap. Modern iOS lets the 2nd
@@ -1406,6 +1401,7 @@
         if (triggerTimer) { clearTimeout(triggerTimer); triggerTimer = null; }
         clearReloadHint();
         hideTapToPlay();
+        hideHoldFrame();
         tryExitFullscreen();
         fullVid.pause();
         fullVid.src = '';
