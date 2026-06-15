@@ -749,18 +749,19 @@
         return capCanvas.toDataURL('image/jpeg', 0.85);
       }
 
-      async function identifyFrame(frame) {
-        // Embed ON-DEVICE and send the 512-float vector — not the image — to the
-        // endpoint (no server cold-start). If the on-device model isn't ready
-        // (e.g. weights still downloading, or an unsupported browser), fall back
-        // to sending the frame for the server to embed.
-        let body;
+      // Embed the current frame on-device -> 512-float vector (or null if the
+      // model isn't ready yet).
+      async function embedFrame(frame) {
         try {
           const { embedDataUrl } = await getClipEmbed();
-          body = { handle, embedding: await embedDataUrl(frame) };
-        } catch (e) {
-          body = { handle, frame };
-        }
+          return await embedDataUrl(frame);
+        } catch (e) { return null; }
+      }
+
+      // Server identify from a precomputed embedding (falls back to sending the
+      // frame if we couldn't embed locally).
+      async function identifyByEmbedding(emb, frame) {
+        const body = emb ? { handle, embedding: emb } : { handle, frame };
         const res = await fetch('/api/identify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -770,15 +771,57 @@
         return res.json();
       }
 
-      // One capture+identify attempt; loops itself until a match or MAX attempts.
+      // ── Local (offline) matching ────────────────────────────────────────────
+      // After the first server identify we cache the matched book's page
+      // embeddings, so every later scan of that book is matched IN THE BROWSER —
+      // no network round-trip (the MindAR-instant feel, without MindAR). Vectors
+      // are L2-normalized at seed time and here, so cosine == dot product. This
+      // uses the exact same vectors/maths as the server, so page accuracy is
+      // identical; it just skips the network.
+      let cachedImages = []; // [{ ...meta, emb: Float32Array }]
+      const LOCAL_MATCH_THRESHOLD = 0.60;  // mirrors the server cutoff; tune from real use
+      const LOCAL_MATCH_MARGIN = 0.04;     // top must beat runner-up by this much (avoids wrong-book false hits)
+
+      function parseEmbedding(v) {
+        if (!v) return null;
+        try {
+          const arr = typeof v === 'string' ? JSON.parse(v) : v;
+          return Array.isArray(arr) ? Float32Array.from(arr) : null;
+        } catch (e) { return null; }
+      }
+      function cacheCollection(images) {
+        cachedImages = (images || [])
+          .map(im => ({ ...im, emb: parseEmbedding(im.embedding) }))
+          .filter(im => im.emb && im.emb.length);
+      }
+      function dot(a, b) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; }
+      function localMatch(emb) {
+        if (!emb || !cachedImages.length) return null;
+        let best = null, bestS = -2, secondS = -2;
+        for (const im of cachedImages) {
+          const s = dot(emb, im.emb);
+          if (s > bestS) { secondS = bestS; bestS = s; best = im; }
+          else if (s > secondS) { secondS = s; }
+        }
+        return (best && bestS >= LOCAL_MATCH_THRESHOLD && (bestS - secondS) >= LOCAL_MATCH_MARGIN) ? best : null;
+      }
+
+      // One capture attempt: embed once, try the cached book locally (instant,
+      // offline), otherwise ask the server. Loops until a match or MAX attempts.
       // `manual` = the user tapped "Scan now".
       async function scanTick(manual) {
         if (!capStream || tickInFlight) return;
         if (!scanning && !manual) return;
         tickInFlight = true;
         const status = document.getElementById('cap-status');
+        const frame = grabFrame();
+        const emb = await embedFrame(frame);
+        // 1) Local match against the already-loaded book — no network.
+        const local = localMatch(emb);
+        if (local) { tickInFlight = false; scanning = false; onLocalMatch(local); return; }
+        // 2) Server identify (first scan, or a different book).
         let result = null;
-        try { result = await identifyFrame(grabFrame()); } catch (e) { result = null; }
+        try { result = await identifyByEmbedding(emb, frame); } catch (e) { result = null; }
         tickInFlight = false;
         if (result && result.matched) { scanning = false; onMatch(result); return; }
         scanAttempts++;
@@ -839,27 +882,41 @@
         setTimeout(() => { hf.style.display = 'none'; hf.style.backgroundImage = ''; }, 450);
       }
 
-      function onMatch(result) {
-        pendingEventId = result.event_id || null;
-        feedbackSent = false;
-        savedMindUrl = result.mind_file_url; // retained for diagnostics; not used to track
-        // identify already told us EXACTLY which page this is (result.target_ref),
-        // so play it straight to fullscreen — no second camera, no MindAR re-detect.
-        const ref = String(result.target_ref);
-        const img = (result.images || []).find(i => String(i.target_ref) === ref) || {};
-        const media = {
+      function mediaFromImage(img) {
+        return {
           type: img.media_type === 'audio' ? 'audio' : 'video',
           videoUrl: img.video_url || null,
           audioUrl: img.audio_url || null,
           transcript: img.transcript || null,
           photoUrl: img.image_url || null,
         };
-        // Phase 4 log: we're playing identify's own pick, so report it as tracked.
-        if (pendingEventId && !feedbackSent) { feedbackSent = true; sendIdentifyFeedback(ref); }
+      }
+      function playMedia(media) {
         const cs = document.getElementById('cap-status'); if (cs) cs.textContent = '';
         showHoldFrame();   // hold the last camera frame through the brief handoff
         stopCapStream();   // release the camera so the video can play (iOS media session)
         triggerMedia(media);
+      }
+
+      function onMatch(result) {
+        pendingEventId = result.event_id || null;
+        feedbackSent = false;
+        savedMindUrl = result.mind_file_url; // retained for diagnostics; not used to track
+        // Cache this book so its other pages match locally next time (no server).
+        cacheCollection(result.images);
+        // identify already told us EXACTLY which page this is (result.target_ref),
+        // so play it straight to fullscreen — no second camera, no MindAR re-detect.
+        const ref = String(result.target_ref);
+        const img = (result.images || []).find(i => String(i.target_ref) === ref) || {};
+        // Phase 4 log: we're playing identify's own pick, so report it as tracked.
+        if (pendingEventId && !feedbackSent) { feedbackSent = true; sendIdentifyFeedback(ref); }
+        playMedia(mediaFromImage(img));
+      }
+
+      // A page matched locally from the cached book — instant, no server call.
+      function onLocalMatch(img) {
+        pendingEventId = null;
+        playMedia(mediaFromImage(img));
       }
 
       // Auto-start MindAR after a match — no extra tap. Modern iOS lets the 2nd
