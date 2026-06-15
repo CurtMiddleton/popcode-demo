@@ -254,7 +254,7 @@
       .corner.expanded.bl { bottom: 24px; left: 24px; margin: 0; border-width: 0 0 6px 6px; }
       .corner.expanded.br { bottom: 24px; right: 24px; margin: 0; border-width: 0 6px 6px 0; }
 
-      #fullscreen-video { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 9000; background: black; }
+      #fullscreen-video { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 9000; background:#000 center/cover no-repeat; }
       #fullscreen-video video { width: 100%; height: 100%; object-fit: cover; }
 
       /* Audio player overlay */
@@ -876,7 +876,7 @@
         document.getElementById('scanner').style.display = 'block';
         document.getElementById('home-btn').style.display = 'flex';
         const hint = document.getElementById('scan-hint');
-        hint.textContent = 'Point your camera at the photo';
+        hint.textContent = 'Bringing it to life…';
         hint.style.display = 'block';
 
         cleanRescanActive = true; // suppress buildScene's arError->showError during auto-start
@@ -913,7 +913,7 @@
         document.getElementById('scanner').style.display = 'block';
         document.getElementById('home-btn').style.display = 'flex';
         const hint = document.getElementById('scan-hint');
-        hint.textContent = 'Point your camera at the photo';
+        hint.textContent = 'Bringing it to life…';
         hint.style.display = 'block';
         const startNow = () => {
           const mindar = arScene && arScene.systems['mindar-image-system'];
@@ -1118,13 +1118,16 @@
           triggerAudio(media);
         } else {
           if (!media.videoUrl) { showMediaError('No video found for this photo'); return; }
-          triggerVideo(media.videoUrl);
+          triggerVideo(media.videoUrl, media.photoUrl);
         }
       }
 
-      function triggerVideo(url) {
+      function triggerVideo(url, photoUrl) {
         if (!url) { showMediaError('No video found for this photo'); return; }
         mediaActive = true;
+        // Show the scanned photo behind the player so the brief video-buffering
+        // gap reads as the photo "coming to life" rather than a black flash.
+        fullScreen.style.backgroundImage = photoUrl ? `url("${photoUrl}")` : '';
         clearReloadHint();
         document.getElementById('scan-hint').style.display = 'none';
         document.querySelectorAll('.corner').forEach(c => c.classList.add('expanded'));
