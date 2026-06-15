@@ -1,3 +1,16 @@
+# Single-Handle Identification — pipeline & runbook
+
+> **Embedding backend (Phase 6): on-device CLIP.** The query embedding is
+> computed in the browser with **transformers.js** (`Xenova/clip-vit-base-patch32`,
+> 8-bit, **512-dim**) and the vector — not the image — is POSTed to
+> `/api/identify`. This replaced the old Replicate (`krthr/clip-embeddings`,
+> 768-dim) backend, which serverless-**cold-started** ~5–15s on the first scan
+> after idling (fatal for single-image experiences, which are *always* a first
+> scan). On-device = no cold-start, no per-call cost, no rate limit, and the
+> photo never leaves the phone. The Node seed pipeline embeds with the **same
+> model** so index and query vectors are comparable. See
+> [Re-seeding for the on-device swap](#phase-6--on-device-embedding-swap-re-seed).
+
 # Phase 1 — Creation / Ingest Pipeline
 
 Seeds an existing collection into the new identification index so we have real
@@ -9,14 +22,19 @@ rows + `.mind` copy to the Supabase **branch**. No production table is mutated.
 
 | File | Role |
 |---|---|
-| `lib/identification/embed.mjs` | CLIP embedding via Replicate (`krthr/clip-embeddings`, ViT-L/14-class → 768 floats). Shared by this script and the Phase 2 endpoint. |
-| `lib/identification/provider.mjs` | `IdentificationProvider` interface + `ReplicateClipProvider` (embedding done; pgvector search lands in Phase 2). |
+| `lib/identification/embed.mjs` | On-device CLIP embedding via transformers.js (`Xenova/clip-vit-base-patch32`, q8 → **512 floats**), for the Node seed path. |
+| `public/lib/clip-embed.js` | The **browser** half of the same embedder — `scan.html` computes the query vector on the phone. Must stay identical to `embed.mjs` (same model/dtype). |
+| `lib/identification/provider.mjs` | `IdentificationProvider` interface + `ClipProvider` (embed + pgvector cosine search). |
 | `scripts/seed-identification.mjs` | The ingest script — backfills `creators` + `pop_images` and copies the `.mind` into `pop-targets`. |
 
 ## Prerequisites
 
-1. **Phase 0 done** in the branch (tables + `pop-targets` bucket exist).
-2. A **Replicate** account + API token: https://replicate.com/account/api-tokens
+1. **Phase 0 done** in the branch (tables + `pop-targets` bucket exist), plus the
+   Phase 6 migration `2026-06-15-phase6-clip-512-on-device.sql` so the column is
+   `vector(512)`.
+2. **`npm install`** (pulls the `@huggingface/transformers` dev dependency). The
+   first seed/test run downloads the CLIP weights (~tens of MB) once, then caches
+   them — no API token, no rate limit, no per-call cost.
 3. The **branch's** Supabase URL + **service_role** key:
    Supabase dashboard → select the `identification` branch → **Project Settings
    → API** → *Project URL* and *service_role* key.
@@ -31,7 +49,6 @@ From the repo root:
 ```bash
 TARGET_SUPABASE_URL="https://<branch-ref>.supabase.co" \
 TARGET_SUPABASE_SERVICE_KEY="<branch service_role key>" \
-REPLICATE_API_TOKEN="<your replicate token>" \
 node scripts/seed-identification.mjs --slug <existing-slug> --handle <handle> --display-name "Curt Middleton"
 ```
 
@@ -47,7 +64,11 @@ Re-running is safe: the creator is upserted by handle and the collection's
 | Var | Default | Notes |
 |---|---|---|
 | `SOURCE_SUPABASE_URL` / `SOURCE_SUPABASE_ANON_KEY` | prod (from `public/config.js`) | Where to read the existing collection. Override if reading from the branch instead. |
-| `REPLICATE_CLIP_MODEL` | `krthr/clip-embeddings` | Must output a **768-dim** vector or the `vector(768)` column rejects it. |
+
+> The embedding model is pinned in code (`CLIP_MODEL_ID` / `CLIP_DTYPE` in
+> `lib/identification/embed.mjs`). If you change it, change `public/lib/clip-embed.js`
+> to match, update the `vector(N)` dimension, and **re-seed** — index and query
+> vectors must come from the same model.
 
 ## Verify
 
@@ -71,7 +92,7 @@ The "which photo is this?" search. Core logic is in
 
 | File | Role |
 |---|---|
-| `lib/identification/provider.mjs` | `ReplicateClipProvider.identify()` — embed + scoped pgvector cosine search via the `identify_match` RPC. |
+| `lib/identification/provider.mjs` | `ClipProvider.identify()` — embed + scoped pgvector cosine search via the `identify_match` RPC. |
 | `lib/identification/identify.mjs` | `identifyByHandle()` — handle → creator → match → payload (`.mind` URL + images). |
 | `api/identify.js` | `POST /api/identify` HTTP wrapper (Vercel function). |
 | `scripts/test-identify.mjs` | CLI to test the match against the branch with no deploy. |
@@ -86,7 +107,6 @@ Run the RPC migration in the **branch** SQL editor:
 ```bash
 TARGET_SUPABASE_URL="https://<branch-ref>.supabase.co" \
 TARGET_SUPABASE_SERVICE_KEY="<branch service_role key>" \
-REPLICATE_API_TOKEN="<token>" \
 node scripts/test-identify.mjs --handle Curt --image <url-or-local-path> [--threshold 0.6]
 ```
 
@@ -97,11 +117,12 @@ node scripts/test-identify.mjs --handle Curt --image <url-or-local-path> [--thre
 
 ### Live endpoint (later)
 
-`POST /api/identify` `{ handle, frame }` (frame = image URL/data-URI) or
-`{ handle, embedding }`. Returns `{ matched, collectionId, mind_file_url,
-images, confidence }` or `{ matched:false, reason }`. Point it at the branch by
-setting `IDENTIFY_SUPABASE_URL` / `IDENTIFY_SUPABASE_SERVICE_KEY` /
-`REPLICATE_API_TOKEN` in Vercel.
+`POST /api/identify` `{ handle, embedding }` (the live path — `scan.html` embeds
+on-device and sends the 512-float vector) or `{ handle, frame }` (image
+URL/data-URI fallback). Returns `{ matched, collectionId, mind_file_url, images,
+confidence }` or `{ matched:false, reason }`. Point it at the branch by setting
+`IDENTIFY_SUPABASE_URL` / `IDENTIFY_SUPABASE_SERVICE_KEY` in Vercel — no Replicate
+token needed (the browser does the embedding).
 
 ## Phase 3 — scan frontend (`popcode.app/{handle}`)
 
@@ -110,11 +131,12 @@ so all the iOS-hardened playback/rescan/tap-to-play machinery is reused
 verbatim; only the entry is new.
 
 Flow: start screen → tap → live camera preview (`getUserMedia`) → capture one
-640px frame → `POST /api/identify { handle, frame }` → on match, build the
-matched collection's MindAR scene (`.mind` from `pop-targets`) → **tap "bring it
-to life"** (second tap = iOS needs `getUserMedia` inside a gesture) → track +
-play. After a video closes, re-scanning the same book is local (no server call)
-— identification is a one-time bootstrap per book.
+640px frame → **embed it on-device** (`public/lib/clip-embed.js`, warmed while
+the user aims) → `POST /api/identify { handle, embedding }` → on match, build the
+matched collection's MindAR scene (`.mind` from `pop-targets`) → track + play.
+After a video closes, re-scanning the same book is local (no server call) —
+identification is a one-time bootstrap per book. (If the on-device model isn't
+ready, it falls back to sending the frame for the server to embed.)
 
 ### Testing (needs a deploy + a real phone)
 
@@ -124,7 +146,7 @@ mobile Safari. Use a Vercel **preview** deploy of this branch:
 1. In Vercel → Project → Settings → Environment Variables, add for **Preview**:
    - `IDENTIFY_SUPABASE_URL` = the branch URL (`https://<branch-ref>.supabase.co`)
    - `IDENTIFY_SUPABASE_SERVICE_KEY` = the branch service_role key
-   - `REPLICATE_API_TOKEN` = your token
+   - (No `REPLICATE_API_TOKEN` — the browser embeds on-device now.)
 2. Push the branch (Vercel auto-builds a preview URL).
 3. On a phone, open `<preview-url>/scan.html?handle=Curt`, allow the camera,
    point at a printed "Max - Chapter One" page.
@@ -179,8 +201,11 @@ group by agreed;   -- agreed=true (real hits) vs false (misses) vs null (no trac
 ```
 
 Collect a few dozen real scans, then set the production threshold (the
-`ReplicateClipProvider` default / `IDENTIFY_THRESHOLD`) from the gap between the
-agree and disagree confidence bands.
+`ClipProvider` default / `IDENTIFY_THRESHOLD`) from the gap between the agree and
+disagree confidence bands. **Re-tune for the on-device model:** the 0.60 default
+was measured on the old Replicate 768-dim model; the ViT-B/32 q8 512-dim vectors
+have a different score distribution, so collect fresh `identify_events` after the
+swap before trusting any cutoff.
 
 ## Phase 5 — cutover (bare /{handle}, per-handle flag, audio)
 
@@ -222,11 +247,43 @@ go-live). Three pieces:
 - Verify `popcode.app/{handle}` on a real device; legacy `popcode.app/{slug}`
   must still work unchanged.
 
+## Phase 6 — on-device embedding swap (re-seed)
+
+The embedding model changed (Replicate 768-dim → on-device transformers.js CLIP
+512-dim), so the existing index is obsolete and must be rebuilt. The vectors are
+**derived data** — `pop_images` rows are regenerated by re-seeding — so this is a
+clean, additive swap.
+
+1. **Migrate the dimension.** Run
+   `supabase/migrations/2026-06-15-phase6-clip-512-on-device.sql` in the branch
+   (and in prod at cutover). It clears `pop_images`, retypes `embedding` to
+   `vector(512)`, rebuilds the index, and recreates the `identify_match` RPC.
+2. **`npm install`** to get `@huggingface/transformers`.
+3. **Re-seed every book** with the new model (no token now):
+   ```bash
+   TARGET_SUPABASE_URL="https://<ref>.supabase.co" \
+   TARGET_SUPABASE_SERVICE_KEY="<service_role>" \
+   node scripts/seed-identification.mjs --slug <slug> --handle Curt
+   ```
+   (For prod, point TARGET at prod's URL + service key — same as the Phase 5 go-live.)
+4. **Verify** with `scripts/test-identify.mjs` — a seeded photo URL should match
+   its own page at ~100%; a phone photo of the print should land well above the
+   noise floor. Drop a Vercel preview and re-tune the threshold from fresh
+   `identify_events` (the on-device model's scores differ from Replicate's).
+
+**Vercel:** remove the now-unused `REPLICATE_API_TOKEN` from the function's env
+once the swap is verified. `IDENTIFY_SUPABASE_URL` / `IDENTIFY_SUPABASE_SERVICE_KEY`
+stay.
+
+**Follow-up:** the browser loads transformers.js + weights from the jsDelivr / HF
+CDNs. Vendoring them into `public/vendor` (to match the AR libraries' self-hosted
+policy) is deferred — the weights are tens of MB, so it's a deliberate separate step.
+
 ## Notes / decisions
 
 - **Embeddings come from the photo URLs already stored on `collection_items`.**
-  Replicate fetches those public URLs server-side, so the branch doesn't need a
-  copy of the source images.
+  The Node seed reads those public URLs directly (transformers.js `RawImage.read`),
+  so the branch doesn't need a copy of the source images.
 - **The `.mind` is copied, not recompiled.** Every project already has a
   browser-compiled `.mind` (`create.html`); we just place it in the new bucket.
   The target order is preserved, so `target_ref` == the original `target_index`.
@@ -234,6 +291,7 @@ go-live). Three pieces:
   The new path resolves its `.mind` by convention at
   `pop-targets/<slug>/target.mind` (Phase 2 returns this URL), so prod's column
   meaning is untouched.
-- **Same embedding code on both sides.** Index-time (this script) and query-time
-  (Phase 2 `/api/identify`) both call `embedImageFromUrl`, so vectors are
-  comparable.
+- **Same model on both sides.** Index-time (the Node seed, `embed.mjs`) and
+  query-time (the browser, `public/lib/clip-embed.js`) use the same CLIP model +
+  q8 dtype + L2-normalized 512-dim `image_embeds`, so vectors are comparable.
+  Keep `CLIP_MODEL_ID` / `CLIP_DTYPE` in lockstep across both files.

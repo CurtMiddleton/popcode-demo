@@ -11,7 +11,8 @@
 //      the branch usually starts with empty data). mind_file_url is preserved,
 //      NOT repointed — the new path's .mind lives in the pop-targets bucket.
 //   4. Copies the compiled .mind into the pop-targets bucket as {slug}/target.mind.
-//   5. Embeds each photo via Replicate (CLIP ViT-B/32) and writes a pop_images row.
+//   5. Embeds each photo with on-device CLIP (transformers.js, ViT-B/32, 512-dim)
+//      — the SAME model the browser uses at scan time — and writes a pop_images row.
 //
 // SOURCE is read-only; ALL writes go to TARGET (the Supabase branch). No
 // production table is mutated.
@@ -19,12 +20,14 @@
 // Usage:
 //   TARGET_SUPABASE_URL=https://<branch-ref>.supabase.co \
 //   TARGET_SUPABASE_SERVICE_KEY=<branch service_role key> \
-//   REPLICATE_API_TOKEN=<token> \
 //   node scripts/seed-identification.mjs --slug <slug> --handle <handle> [--display-name "Name"]
+//
+// Requires `npm install` (the @huggingface/transformers dev dependency). The
+// first run downloads the CLIP weights (~tens of MB) once, then caches them —
+// no API token, no rate limit, no per-call cost.
 //
 // Optional env:
 //   SOURCE_SUPABASE_URL, SOURCE_SUPABASE_ANON_KEY  (default: prod, from public/config.js)
-//   REPLICATE_CLIP_MODEL                            (default: krthr/clip-embeddings)
 
 import { createClient } from '@supabase/supabase-js';
 import { embedImageFromUrl, toPgVector } from '../lib/identification/embed.mjs';
@@ -53,8 +56,6 @@ const TARGET_KEY = process.env.TARGET_SUPABASE_SERVICE_KEY;
 if (!TARGET_URL || !TARGET_KEY) {
   die('Set TARGET_SUPABASE_URL and TARGET_SUPABASE_SERVICE_KEY (the BRANCH project URL + its service_role key).');
 }
-if (!process.env.REPLICATE_API_TOKEN) die('Set REPLICATE_API_TOKEN.');
-
 const source = createClient(SOURCE_URL, SOURCE_KEY);
 const target = createClient(TARGET_URL, TARGET_KEY, { auth: { persistSession: false } });
 

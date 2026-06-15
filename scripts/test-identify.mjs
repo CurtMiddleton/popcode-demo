@@ -6,8 +6,10 @@
 // Usage:
 //   TARGET_SUPABASE_URL=https://<branch-ref>.supabase.co \
 //   TARGET_SUPABASE_SERVICE_KEY=<branch service_role key> \
-//   REPLICATE_API_TOKEN=<token> \
 //   node scripts/test-identify.mjs --handle Curt --image <url-or-path> [--threshold 0.6]
+//
+// Embeds with on-device CLIP (transformers.js) — no API token. Requires
+// `npm install`; the first run downloads the model weights once.
 //
 // Tips:
 //   * Easiest first test: pass one of the seeded photo URLs (from
@@ -33,9 +35,8 @@ if (!handle || !image) die('Required: --handle <handle> --image <url-or-local-pa
 const URL = process.env.TARGET_SUPABASE_URL || process.env.IDENTIFY_SUPABASE_URL;
 const KEY = process.env.TARGET_SUPABASE_SERVICE_KEY || process.env.IDENTIFY_SUPABASE_SERVICE_KEY;
 if (!URL || !KEY) die('Set TARGET_SUPABASE_URL and TARGET_SUPABASE_SERVICE_KEY (the branch).');
-if (!process.env.REPLICATE_API_TOKEN) die('Set REPLICATE_API_TOKEN.');
 
-// A local file is turned into a data-URI so Replicate can read it.
+// A local file is turned into a data-URI so transformers.js RawImage can read it.
 let imageUrl = image;
 if (!/^https?:|^data:/.test(image)) {
   const buf = await readFile(image).catch(() => die(`Cannot read file: ${image}`));

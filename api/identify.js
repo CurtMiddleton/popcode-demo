@@ -1,7 +1,9 @@
 // POST /api/identify  — "which photo is this?" (Phase 2)
 //
-// Body: { handle, frame }      frame = image URL or data-URI (server embeds it)
-//    or { handle, embedding }  embedding = precomputed 768-float vector
+// Body: { handle, embedding }  embedding = precomputed 512-float CLIP vector
+//                              (the live path — scan.html embeds ON-DEVICE)
+//    or { handle, frame }      frame = image URL/data-URI for the server to embed
+//                              (fallback only; needs the transformers.js dep)
 //
 // 200 { matched:true,  collectionId, mind_file_url, images:[...], confidence, target_ref }
 // 200 { matched:false, reason:'low_confidence' | 'unknown_handle' }
@@ -11,7 +13,6 @@
 // Env (point these at the branch while testing, prod at cutover):
 //   IDENTIFY_SUPABASE_URL          (falls back to SUPABASE_URL)
 //   IDENTIFY_SUPABASE_SERVICE_KEY  (falls back to SUPABASE_SERVICE_ROLE_KEY)
-//   REPLICATE_API_TOKEN
 //   IDENTIFY_THRESHOLD             (optional; cosine-similarity cutoff)
 
 import { createClient } from '@supabase/supabase-js';

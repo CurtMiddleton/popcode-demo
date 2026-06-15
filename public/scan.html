@@ -661,6 +661,16 @@
       let tickInFlight = false;  // prevent overlapping identify calls
       const MAX_SCAN_ATTEMPTS = 10;
 
+      // On-device CLIP embedding (transformers.js). Loaded lazily so the page
+      // itself stays light; warmed up when the camera opens so the first embed
+      // is instant. The query embedding is computed here on the phone, killing
+      // the old server-side (Replicate) cold-start.
+      let clipEmbedMod = null;
+      function getClipEmbed() {
+        if (!clipEmbedMod) clipEmbedMod = import('/lib/clip-embed.js');
+        return clipEmbedMod;
+      }
+
       function bootstrap() {
         document.getElementById('loading').style.display = 'none';
         showStartScreen();
@@ -714,6 +724,8 @@
         }
         capVideo.srcObject = capStream;
         try { await capVideo.play(); } catch(e){}
+        // Warm the CLIP model while the user aims so the first embed is instant.
+        getClipEmbed().then(m => m.warmupClip()).catch(() => {});
         capBtn.disabled = false;
         scanning = true;
         scanAttempts = 0;
@@ -731,10 +743,21 @@
       }
 
       async function identifyFrame(frame) {
+        // Embed ON-DEVICE and send the 512-float vector — not the image — to the
+        // endpoint (no server cold-start). If the on-device model isn't ready
+        // (e.g. weights still downloading, or an unsupported browser), fall back
+        // to sending the frame for the server to embed.
+        let body;
+        try {
+          const { embedDataUrl } = await getClipEmbed();
+          body = { handle, embedding: await embedDataUrl(frame) };
+        } catch (e) {
+          body = { handle, frame };
+        }
         const res = await fetch('/api/identify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ handle, frame }),
+          body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error('identify ' + res.status);
         return res.json();
