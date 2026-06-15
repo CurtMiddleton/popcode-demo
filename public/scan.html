@@ -414,7 +414,12 @@
         }
       }
           /* ── Single-handle scan flow screens ─────────────────────────────── */
-      #capture-screen{position:fixed;inset:0;z-index:50;display:none;background:#000;}
+      #capture-screen{position:fixed;inset:0;z-index:50;display:none;background:linear-gradient(160deg,#7657FC,#2dc0f7);}
+      /* Frozen last-camera frame shown over the black gap while the capture
+         stream is torn down and MindAR's camera spins up — keeps the view
+         visually continuous instead of flashing black. Sits above the scene
+         but below the reticle/hint/video. Removed on arReady (live camera). */
+      #hold-frame{position:fixed;inset:0;background-size:cover;background-position:center;background-color:#1a1140;z-index:500;display:none;opacity:1;transition:opacity .4s ease;pointer-events:none;}
       #cap-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
       /* Capture phase matches the legacy scanner: fullscreen camera + a small
          bottom hint pill. No framing box, no button. */
@@ -497,6 +502,7 @@
     </div>
     <div id="error-screen"><h2>Experience not found</h2><p>This link may be invalid or expired.</p></div>
 
+    <div id="hold-frame"></div>
     <button id="home-btn">&#8592;</button>
     <div id="scan-hint">Point your camera at a Popcoded photo</div>
     <button id="reload-hint">Having trouble? Tap to reload</button>
@@ -609,6 +615,9 @@
         const scene = document.createElement('a-scene');
         scene.setAttribute('mindar-image', `imageTargetSrc: ${mindUrl}; autoStart: false; warmupTolerance: 2; missTolerance: 10;`);
         scene.setAttribute('embedded', '');
+        // Suppress A-Frame's built-in loading spinner — we cover the gap with the
+        // held camera frame instead, so the user never sees a bare spinner.
+        scene.setAttribute('loading-screen', 'enabled: false');
         scene.setAttribute('vr-mode-ui', 'enabled: false');
         scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
 
@@ -770,21 +779,22 @@
         if (!scanning && !manual) return;
         tickInFlight = true;
         const status = document.getElementById('cap-status');
-        status.textContent = 'Looking…';
         let result = null;
         try { result = await identifyFrame(grabFrame()); } catch (e) { result = null; }
         tickInFlight = false;
         if (result && result.matched) { scanning = false; onMatch(result); return; }
         scanAttempts++;
-        if (!scanning) { status.textContent = ''; return; }
+        if (!scanning) return;
         if (scanAttempts >= MAX_SCAN_ATTEMPTS) {
           stopCapStream();
           showScreen('nomatch-screen');
           return;
         }
-        status.textContent = scanAttempts >= 3
-          ? 'Still looking — fill the frame with the photo, in good light.'
-          : 'Looking…';
+        // One calm, steady hint (set in startCaptureFlow) — no per-tick flicker.
+        // Only nudge once if it's taking a while.
+        if (scanAttempts === 5) {
+          status.textContent = 'Make sure the whole photo fills the frame, in good light.';
+        }
         setTimeout(() => scanTick(false), 900);
       }
 
@@ -802,6 +812,35 @@
         } catch (e) {}
       }
 
+      // Freeze the last camera frame into a full-screen overlay so the
+      // capture->MindAR camera swap looks continuous instead of flashing black.
+      function showHoldFrame() {
+        const hf = document.getElementById('hold-frame');
+        try {
+          const v = capVideo;
+          if (v && v.videoWidth) {
+            const c = document.createElement('canvas');
+            c.width = v.videoWidth; c.height = v.videoHeight;
+            c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+            hf.style.backgroundImage = `url(${c.toDataURL('image/jpeg', 0.8)})`;
+          }
+        } catch (e) {}
+        hf.style.transition = 'none';
+        hf.style.opacity = '1';
+        hf.style.display = 'block';
+        // safety: never let the held frame stick if arReady never fires.
+        clearTimeout(showHoldFrame._t);
+        showHoldFrame._t = setTimeout(hideHoldFrame, 6000);
+      }
+      function hideHoldFrame() {
+        const hf = document.getElementById('hold-frame');
+        if (hf.style.display === 'none') return;
+        clearTimeout(showHoldFrame._t);
+        hf.style.transition = 'opacity .4s ease';
+        hf.style.opacity = '0';
+        setTimeout(() => { hf.style.display = 'none'; hf.style.backgroundImage = ''; }, 450);
+      }
+
       function onMatch(result) {
         const mediaMap = {};
         (result.images || []).forEach(im => {
@@ -817,8 +856,14 @@
         feedbackSent = false;
         savedMindUrl = result.mind_file_url;
         savedMediaMap = mediaMap;
+        showHoldFrame();          // cover the camera swap
         stopCapStream();
         buildScene(savedMindUrl, savedMediaMap);
+        // Reveal the live MindAR camera (drop the held frame) the moment its
+        // stream is ready; targetFound is a backup trigger.
+        if (arScene) {
+          arScene.addEventListener('arReady', hideHoldFrame, { once: true });
+        }
         autoStartTracking();
       }
 
