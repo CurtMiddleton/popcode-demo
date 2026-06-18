@@ -124,3 +124,21 @@ Also note the **first-scan cold-start latency** (known open issue — Replicate 
 - Final decal artwork and print production.
 - World-map / country version (run the USA PoC first; same method).
 - Pretty `/{handle}` routing, per-account branding, audio-project polish — all deferred until the concept is proven.
+
+---
+
+## Findings — PARKED (2026-06-18), and why
+
+**Decision: shelved.** Not a failure of effort — we hit a real architectural boundary. Capturing it so a future session doesn't re-run the same exploration.
+
+**What we tried:** generated 5 procedural "state tiles" (AZ/GA/TX/CO/WY, committed at `public/assets/map-poc/`) and a 48-medallion contact sheet to gauge whether enough distinct, trackable targets could be made. They worked *technically* but looked **tacky** — and for wall art that someone chooses to hang in their home, "tacky" is fatal. Beauty is non-negotiable for this use case.
+
+**The fundamental tension (the real blocker):** feature-based AR (MindAR) recognizes **texture / feature density** — busy, high-contrast, detailed surfaces. Beautiful decorative maps are the *opposite by design*: flat color, negative space, clean lines, restraint. "Beautiful enough to hang" and "textured enough to track" pull in opposite directions on the same surface. Popcode's photo→video lane works *because* a photo is naturally feature-rich; a tasteful map is naturally feature-poor.
+
+**Distinctness was NOT the bottleneck.** Procedural generation makes effectively unlimited distinct targets (50 states, 179–195 countries — trivial to generate). The hard parts are (a) physical trackability of a *small region* even at wall scale — its share of the wall stays tiny regardless of mural size — and (b) margin-at-scale for CLIP identification (the 2-book data already showed only a ~0.025 gap between match and noise; 179 candidates in one library would tighten it further).
+
+**"Recognize borders" is a different engine.** MindAR tracks feature points, not shapes/outlines. Recognizing "this is the outline of Italy" is contour/shape classification, and *tracking* (locking media onto the region) is separate again. Not a setting to flip — a different CV bet.
+
+**The one revival path if we ever come back to it:** don't track the tiny region — **track the whole map as one target, compute its pose, and derive each region's location by geometry** (crosshair position + known full-map pose → which region). Lets the map stay minimal/beautiful because recognition rides on the *aggregate* composition (coastlines, labels, layout), not per-region texture. **Honest catch:** at wall scale the viewer is close to one corner, so only a fraction is in frame and full-image trackers struggle with partial views — would need tiling into a few large overlapping sub-targets (which softens but doesn't fully escape the texture requirement). Bigger build than off-the-shelf MindAR.
+
+**Bottom line:** maps want shape-based recognition + whole-surface tracking — a deliberate future bet, not a bolt-on to the current stack. Revisit only if/when that engine exists.

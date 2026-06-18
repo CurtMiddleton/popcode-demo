@@ -900,3 +900,26 @@ The `IdentificationProvider` abstraction was built for exactly this. Options:
 - Re-enable Vercel Deployment Protection on previews (turned OFF for phone testing — preview URLs public while off).
 - Delete the `identification` Supabase branch (merged/shipped; costs MICRO compute). Prod has all tables/data.
 - Phase 6 (one-tap auto-scan + hardened recovery + restyle) is **on the branch, NOT merged** — merge only after the cold-start backend fix is verified on a phone.
+
+### 2026-06-18 — Illustrated-map mural PoC: explored, then PARKED (texture-vs-beauty wall)
+
+**Branch: `claude/festive-edison-ltd09g`. No PR. Commits pushed (plan + tiles, then this note).** Exploratory product spike, ended with a deliberate "park it" decision. Worth a real entry because the *reason* it's parked is a fundamental boundary that'll recur for any "scan a region of a printed surface" idea.
+
+**The idea:** scan a region of a map mural (US states / world countries) → pop family-trip videos / factoids. Reuse the existing per-creator identification system (`popcode.app/{handle}`, Phases 0–6) to de-risk it before any decal art.
+
+**What I built (all cheap — never even seeded/ran the identify pipeline):**
+- `.claude/plans/illustrated-map-mural-poc.md` — the PoC plan (5 states incl. a deliberate CO↔WY "similar shape, different art" stress pair; seed under a `usamap` handle on the identification branch; `test-identify.mjs` for separation; preview + real phone for tracking). **Now has a "Findings — PARKED" section at the bottom — read that first if this ever comes back up.**
+- `public/assets/map-poc/{arizona,georgia,texas,colorado,wyoming}.png` + README — 5 procedural "state tiles" generated with PIL (`/tmp/gen_tiles.py`). Busy, distinct, feature-rich. Committed for URLs (servable at `popcode.app/assets/map-poc/<state>.png`). **Harmless but throwaway — fine to delete if pruning assets.**
+- A 48-medallion contact sheet (`/tmp/gen_medallions.py`, only sent to user, NOT committed) to show distinct uniform-size "badge" targets are trivial to mass-produce.
+
+**Why it's PARKED (the lesson):** the user's call, and the right one. Two findings:
+1. **Texture vs. beauty is a fundamental conflict, not an execution problem.** MindAR recognizes *texture / feature density* (busy, high-contrast surfaces). Beautiful decorative wall maps are the *opposite by design* (flat color, negative space, restraint). You can't have both on the same surface. Popcode's photo→video lane works precisely because photos are naturally feature-rich; a tasteful map is naturally feature-poor. The procedural tiles/medallions were trackable but **tacky**, and for home wall art "tacky" is fatal.
+2. **Small regions can't be fixed by a bigger wall.** A small state/country's *share* of the mural stays tiny no matter the mural size, so it never gets enough resolvable features in the camera frame. The "uniform-size badge on the map" reframe (decouple target from region shape; tiny states get a normal badge + leader line) solves the *size* problem and proves distinctness is a non-issue — but a tiny *beautiful* badge still lacks the high-frequency texture MindAR needs, so it doesn't escape finding #1.
+
+**"Recognize borders" (the user's phrasing) = a different engine.** MindAR tracks feature points, not shapes/outlines. Shape/contour classification (and pose-tracking to lock media on) is a separate CV bet, not a tunable setting.
+
+**The one revival path documented for later:** don't track the tiny region — **track the whole map as one target, get its pose, derive each region by geometry** (crosshair + known full-map pose → which region). Keeps the map beautiful (recognition rides on aggregate composition). Catch: at wall scale only a fraction is in frame → full-image trackers struggle with partial views → would need tiling into large overlapping sub-targets. Bigger build than off-the-shelf MindAR; revisit only if that engine gets built.
+
+**Distinctness scaling, for the record (since it came up):** generating 50–179+ visually distinct targets is trivial (procedural seeds). The genuine risks at that scale are CLIP *separation margin* (the 2-book data already had only ~0.025 between match and noise) and small-region *trackability* — measurable cheaply via a scaled (~40–50 target) `test-identify.mjs` run + a "screen for lookalike pairs" pass, if ever resumed.
+
+**Lesson for future-Claude:** for any "scan a printed surface" pitch, sanity-check the **texture-vs-aesthetics** tension up front. If the surface needs to be visually restrained/beautiful (decor, branding, fine art), feature-based AR is the wrong tool and no amount of art polish fixes it — that's an engine decision, not an art decision. Cheap spike, clear boundary found, parked cleanly.
