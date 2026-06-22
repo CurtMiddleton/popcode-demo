@@ -340,6 +340,10 @@
         font-size: 34px; padding-left: 6px;
       }
       #tap-to-play .ttp-label { font-size: 17px; font-weight: 600; }
+      #ap-tap-hint {
+        display: none; margin-top: 12px; text-align: center;
+        font-size: 15px; font-weight: 600; color: #fff; opacity: 0.92;
+      }
       #close-btn {
         position: absolute; top: 20px; right: 20px; z-index: 9001;
         background: rgba(110,110,110,0.85); color: white; border: none;
@@ -535,6 +539,7 @@
         </div>
         <button class="ap-play" id="ap-play" aria-label="Play/Pause">▶</button>
       </div>
+      <div id="ap-tap-hint">Tap &#9654; to play</div>
       <div class="ap-transcript" id="ap-transcript"></div>
       <audio id="ap-audio" preload="metadata" playsinline webkit-playsinline></audio>
     </div>
@@ -1194,7 +1199,42 @@
         apRemaining.textContent = '-0:00';
       }
       const apTranscript = document.getElementById('ap-transcript');
+      const apTapHint = document.getElementById('ap-tap-hint');
       const apClose = document.getElementById('ap-close');
+      let audioRecoverAttempts = 0; // audio autoplay-block recovery counter
+
+      // Audio analog of the video frozen-frame rescue: iOS rejects play() when the
+      // tap-gesture chain is broken (e.g. the 2nd photo after the camera reopened).
+      // Auto-retry once; if it still won't start, surface the existing ▶ button as
+      // a one-tap rescue rather than a dead "failed" error.
+      function attemptAudioRecover() {
+        if (!mediaActive) return;
+        if (audioRecoverAttempts >= 1) { showAudioTapHint(); return; }
+        audioRecoverAttempts++;
+        logEvent('audio_recover');
+        try {
+          apAudio.pause();
+          apAudio.load();
+          setTimeout(() => {
+            if (!mediaActive) return;
+            apAudio.play()
+              .then(() => { logEvent('audio_play'); apPlay.textContent = '❚❚'; hideAudioTapHint(); })
+              .catch(() => showAudioTapHint());
+          }, 350);
+        } catch (e) { showAudioTapHint(); }
+      }
+      function showAudioTapHint() {
+        logEvent('audio_play_blocked');
+        // Reported only after the auto-retry also failed, so it's signal not noise.
+        if (window.Sentry && typeof window.Sentry.captureMessage === 'function') {
+          window.Sentry.captureMessage('audio autoplay blocked after retry', 'warning');
+        }
+        apPlay.textContent = '▶';
+        apTapHint.style.display = 'block';
+      }
+      function hideAudioTapHint() {
+        apTapHint.style.display = 'none';
+      }
 
       function fmtTime(sec) {
         if (!isFinite(sec) || sec < 0) sec = 0;
@@ -1222,6 +1262,8 @@
           apAudio.load();
           apResetUi();
           apPlay.textContent = '▶';
+          audioRecoverAttempts = 0;
+          hideAudioTapHint();
 
           scanner.style.display = 'none';
           document.getElementById('home-btn').style.display = 'none';
@@ -1229,16 +1271,13 @@
 
           apAudio.play()
             .then(() => { logEvent('audio_play'); apPlay.textContent = '❚❚'; })
-            .catch(err => {
-              logEvent('audio_play_blocked');
-              showMediaError('Audio failed to play — tap X and try again');
-            });
+            .catch(() => attemptAudioRecover());
         }, 300);
       }
 
       apPlay.addEventListener('click', () => {
         if (apAudio.paused) {
-          apAudio.play().then(() => { apPlay.textContent = '❚❚'; })
+          apAudio.play().then(() => { apPlay.textContent = '❚❚'; hideAudioTapHint(); })
             .catch(() => showMediaError('Audio failed to play — tap X and try again'));
         } else {
           apAudio.pause();
