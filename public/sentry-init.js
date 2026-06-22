@@ -11,8 +11,8 @@
 (function () {
   if (typeof window === 'undefined' || !window.Sentry) return;
 
-  // Public DSN for the Popcode Inc. Sentry project.
-  var SENTRY_DSN = '__SENTRY_DSN__'; // TODO: replace with the real Popcode browser DSN
+  // Public DSN for the Popcode Inc. Sentry project (popcode-web).
+  var SENTRY_DSN = 'https://659c1936364177dec7333ebe579d19c4@o4511610871611392.ingest.us.sentry.io/4511610890485760';
 
   // No-op until a real DSN is filled in (placeholder still contains "__").
   if (!SENTRY_DSN || SENTRY_DSN.indexOf('__') !== -1) return;
