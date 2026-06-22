@@ -15,6 +15,7 @@
 //   IDENTIFY_THRESHOLD             (optional; cosine-similarity cutoff)
 
 import { createClient } from '@supabase/supabase-js';
+import { Sentry } from './_sentry.js';
 // NOTE: this function is bundled as CommonJS by Vercel, so a *static* import of
 // our ESM `.mjs` lib becomes a require() of an ES module and fails
 // (ERR_REQUIRE_ESM). Load it via dynamic import() inside the handler instead.
@@ -51,6 +52,8 @@ export default async function handler(req, res) {
     return res.status(200).json(result);
   } catch (e) {
     console.error('identify error:', e);
+    Sentry.captureException(e);
+    await Sentry.flush(2000);
     return res.status(500).json({ error: e.message });
   }
 }
