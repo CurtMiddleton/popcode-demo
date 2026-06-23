@@ -926,3 +926,22 @@ Task was "add Sentry like we just did for Bashō (a Next.js 14 app)." **Popcode 
 - An event ID return / `flushed:true` only proves the request LEFT the SDK — always confirm the issue actually appears in **Sentry → Issues** (and in the RIGHT project — check `dsnTarget.projectId`).
 
 **Follow-ups (optional):** resolve the 3 test issues in Sentry; consider targeted `captureException` in specific browser silent-catch blocks (currently relying on global handlers); add `sentry-cli` source-map upload for the bundled functions if traces are hard to read.
+
+### 2026-06-22 (later) — Audio autoplay-block recovery (first real Sentry-adjacent bug fix)
+
+**PR #52 merged to `main` (merge `30f48f47`). Branch: `claude/stoic-bardeen-d3bsud`. Verified working on a real iPhone ("works every time now").**
+
+First thing surfaced *after* shipping Sentry: user scanned two photos in "Moms wedding album" — first played audio, **second scanned ("Photo Found") but audio didn't play**. Asked whether this should show in Sentry. Answer was **no, as configured** — and that's the useful lesson:
+
+**Why Sentry didn't (and wouldn't) catch it:** the failure was a *handled* `apAudio.play()` promise rejection. The catch logged `audio_play_blocked` analytics + showed a dead "Audio failed to play — tap X and try again" error. Errors-only Sentry only sees **un**caught exceptions / **un**handled rejections (browser global handlers) + the explicit `captureException` calls in the 4 `api/` functions. A swallowed `.catch()` is invisible to it by design. Root cause = the **iOS media-session/autoplay conflict** (same family as the video frozen-frame freeze): by the 2nd photo, MindAR reopening the camera + the `setTimeout` break the tap-gesture chain, so iOS rejects `play()`.
+
+**The fix (mirrors the video frozen-frame rescue), in BOTH `scan.html` and `view.html`:**
+- `attemptAudioRecover()` — auto-retries playback once (`pause` → `load()` → replay after 350ms). On a slow device the camera/media-session isn't released in time for the first `play()`; the retry usually clears it. **On real-iPhone test the auto-retry alone fixed it every time** (user never had to use the manual fallback).
+- If the retry also fails, the existing **`#ap-play` ▶ button becomes a one-tap rescue** with a new `#ap-tap-hint` ("Tap ▶ to play") shown — a real user gesture reliably acquires the media session — instead of an error screen. (Reused the existing play button rather than adding a fullscreen overlay like video's `#tap-to-play`; fits the audio-player UI.)
+- State resets per scan: `audioRecoverAttempts = 0` + `hideAudioTapHint()` at the top of `triggerAudio`'s setTimeout body. `apPlay` click handler now `hideAudioTapHint()`s on success.
+
+**Sentry signal (signal, not noise):** `window.Sentry?.captureMessage('audio autoplay blocked after retry', 'warning')` fires **only inside `showAudioTapHint()`** — i.e. *after* the auto-retry already failed. Routine self-healing iOS blocks never reach it. `warning` level (not `error`) so it's distinguishable from hard exceptions. Still logs `audio_play_blocked` analytics (now means "blocked even after retry") + a new `audio_recover` event when the retry kicks in.
+
+**Files/anchors:** `scan.html` `triggerAudio` ~line 1255, recovery fns ~1204–1236, `#ap-tap-hint` markup ~542 + CSS ~343. `view.html` same structure, recovery fns ~979–1013, `triggerAudio` ~1032. The two files' audio paths are near-identical; only the camera-release settle delay differs (scan **300ms** / view **900ms**) — left as-is. Video path was already hardened (`attemptRecover`/`showTapToPlay`/`armFrozenFrameWatch`); only audio was missing the rescue.
+
+**Lessons:** (1) errors-only Sentry will MISS handled/swallowed `.catch()` failures — if you want a known-but-degraded path visible, add an explicit `captureMessage`/`captureException`, ideally gated so expected cases don't spam Issues. (2) iOS media-session timing fixes genuinely need a real device to confirm — the 350ms retry was a guess that happened to work first try, but don't assume; hardware-verify. (3) `window.Sentry?.` guard everywhere on the browser side — the SDK loads from CDN and could be blocked.
