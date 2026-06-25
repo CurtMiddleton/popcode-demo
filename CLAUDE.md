@@ -926,3 +926,30 @@ Task was "add Sentry like we just did for Bashō (a Next.js 14 app)." **Popcode 
 - An event ID return / `flushed:true` only proves the request LEFT the SDK — always confirm the issue actually appears in **Sentry → Issues** (and in the RIGHT project — check `dsnTarget.projectId`).
 
 **Follow-ups (optional):** resolve the 3 test issues in Sentry; consider targeted `captureException` in specific browser silent-catch blocks (currently relying on global handlers); add `sentry-cli` source-map upload for the bundled functions if traces are hard to read.
+
+### 2026-06-25 — AWS cancellation pre-flight: re-audited post-identification, FULLY CLEARED
+
+**No code changes (CLAUDE.md session note only). Branch: `claude/nifty-ptolemy-7j2uzi`.** The user is finally closing the old AWS account and wanted dependency-certainty given how much new infra landed since the last audit (2026-04-17 evening). Re-ran the whole audit against the *current* architecture — clean across the board. **Verdict: safe to close the AWS account; nothing in the new Popcode (or its domains) depends on it.**
+
+**What was re-checked this time (the 2026-04-17 audit predates ALL the identification + Sentry work, so it had to be redone):**
+- **Codebase grep — zero AWS.** No `amazonaws.com` / `cloudfront.net` / S3 URLs / `route53` / `aws_access` / `AWS_SECRET` / `accessKeyId` / `AWS_REGION` anywhere in code. The only hits are inside CLAUDE.md itself (documenting the prior audit).
+- **Every external endpoint the new code actually calls, and who bills it** (none = the user's AWS account):
+  - Supabase `mrwpkhsluzokytpvmwqk.supabase.co` (DB/storage/auth) — billed by Supabase.
+  - Replicate `api.replicate.com` (CLIP embeddings, `lib/identification/embed.mjs:13`) — billed by Replicate.
+  - Sentry `…ingest.us.sentry.io` (`public/sentry-init.js`, project `popcode-web`) — billed by Sentry.
+  - Vercel (hosting; `vercel.json` `framework:null`, static `public/` + `api/` functions) — billed by Vercel.
+  - `package.json` deps are only `@sentry/node`, `@supabase/supabase-js`, `express` — **no `aws-sdk`**.
+  - Key subtlety told to user: Supabase/Vercel/Replicate/Sentry *run on* AWS under the hood, but that's *their* AWS accounts on *their* invoices — closing the user's personal account has zero effect.
+- **Route53 — the production-breaking risk — CONFIRMED CLEAR by the user in the AWS console:**
+  - **Registered domains: "No domains to display."** Neither `popcode.app` nor `popcodeapp.com` is registered through AWS. (Domains are at Squarespace, matching all prior notes.)
+  - **Hosted zones: "There are no hosted zones created for this account."**
+  - So AWS has *zero* involvement in Popcode DNS/domains — closing the account can't break short URLs. This was the one item from the 2026-04-17 audit that was still unverified; it is now verified.
+  - Aside: the AWS account is *named* "popcodeapp.com (account 938904815040)" in the console, but that's just a label — no actual domain is registered in it.
+
+**Still nominally open but NOT blockers:**
+- `~/.aws/credentials` on the **iMac** — never checked (MBP was clean in 2026-04-17). Pure tidiness: `ls -la ~/.aws/`; if keys exist, `rm -rf ~/.aws` (they die on account closure anyway). Doesn't affect production.
+- Old S3 video data: per the grep no live short URL references S3, so nothing live needs it — but grab any old data worth keeping before closing.
+
+**How-to-cancel given to the user (close the whole account):** root-user login required (not IAM) → top-right account name → **Account** → scroll to **Close Account** at the bottom → tick the acknowledgements → **Close Account**. Recommended pre-flight: glance at **Billing → Cost Explorer → Group by Service** first to see what's actually running (this account historically carried *non-Popcode* charges from prior unrelated work — make sure nothing in there is still wanted). **90-day grace period** after closure allows reactivation if something surfaces.
+
+**Lesson reaffirmed:** when a user closes a cloud account, the Route53 *registered-domain* check is THE one that can silently break prod — check it first, in the console, don't infer from `whois`. Everything else is money/tidiness. This time it was clean, so the close is low-risk.
