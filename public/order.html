@@ -13,7 +13,6 @@
     <title>Popcode — Order Prints</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
-    <script src="/composite.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -170,6 +169,38 @@
       };
       const TYPE_LABELS = { print: 'Prints', tile: 'Photo Tiles' };
 
+      // Badge compositor (inlined so the page never depends on a separate file load).
+      async function compositeBadgedImage(photoUrl, opts) {
+        opts = opts || {};
+        var scale = typeof opts.scale === 'number' ? opts.scale : 0.06;
+        var previewCanvas = opts.previewCanvas || null;
+        var img = new Image(); img.crossOrigin = 'anonymous';
+        await new Promise(function (res, rej) { img.onload = res; img.onerror = rej; img.src = photoUrl; });
+        var iconImg = new Image();
+        await new Promise(function (res, rej) { iconImg.onload = res; iconImg.onerror = rej; iconImg.src = '/assets/popcode_icon.svg'; });
+        var c = document.createElement('canvas');
+        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        var ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
+        var badgeSize = Math.round(Math.min(c.width, c.height) * scale);
+        var pad = Math.round(Math.min(c.width, c.height) * 0.025);
+        ctx.drawImage(iconImg, c.width - badgeSize - pad, c.height - badgeSize - pad, badgeSize, badgeSize);
+        if (previewCanvas) {
+          var pc = previewCanvas.getContext('2d');
+          var s = Math.min(previewCanvas.width / c.width, previewCanvas.height / c.height);
+          var pw = Math.round(c.width * s), ph = Math.round(c.height * s);
+          pc.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+          pc.drawImage(c, (previewCanvas.width - pw) / 2, (previewCanvas.height - ph) / 2, pw, ph);
+        }
+        return c.toDataURL('image/png');
+      }
+      function dataUrlToBlob(dataUrl) {
+        var parts = dataUrl.split(',');
+        var mime = (parts[0].match(/:(.*?);/) || [null, 'image/png'])[1];
+        var bin = atob(parts[1]), len = bin.length, arr = new Uint8Array(len);
+        for (var i = 0; i < len; i++) arr[i] = bin.charCodeAt(i);
+        return new Blob([arr], { type: mime });
+      }
+
       let currentUser = null;
       let collection = null;       // { id, slug, name }
       let photos = [];             // deduped [{ target_index, photo_url }]
@@ -256,7 +287,7 @@
           cell.onclick = () => { state.selectedIndex = p.target_index; renderPhotos(); };
           grid.appendChild(cell);
           // Draw the badged preview (best-effort; ignore CORS/load failures).
-          window.compositeBadgedImage(p.photo_url, { scale: state.scale, previewCanvas: cv }).catch(() => {});
+          compositeBadgedImage(p.photo_url, { scale: state.scale, previewCanvas: cv }).catch(() => {});
         });
       }
 
@@ -338,8 +369,8 @@
         payBtn.disabled = true; payBtn.textContent = 'Preparing…';
         try {
           // 1. Composite badge onto the photo and upload it (public) so Prodigi can fetch it.
-          const dataUrl = await window.compositeBadgedImage(photo.photo_url, { scale: state.scale });
-          const blob = window.dataUrlToBlob(dataUrl);
+          const dataUrl = await compositeBadgedImage(photo.photo_url, { scale: state.scale });
+          const blob = dataUrlToBlob(dataUrl);
           const scalePct = Math.round(state.scale * 100);
           const path = collection.id + '/' + state.selectedIndex + '-badge' + scalePct + '.png';
           const up = await db.storage.from('print-assets').upload(path, blob, { contentType: 'image/png', upsert: true });
