@@ -35,7 +35,7 @@ export default async function handler(req, res) {
     const variant = findVariant(productType, variantId);
     if (!variant) return res.status(400).json({ error: 'Unknown product' });
 
-    const items = buildProdigiItems({ variant, copies, assetUrls: [] });
+    const items = buildProdigiItems({ variant, copies, forQuote: true });
     const quote = await prodigiQuote({ shippingMethod, destinationCountryCode, items });
     const summed = sumQuoteMinor(quote);
     if (!summed) return res.status(502).json({ error: 'Could not price this product/destination' });

@@ -84,7 +84,7 @@ export default async function handler(req, res) {
     if (collection.user_id !== user.id) return res.status(403).json({ error: 'Not your project' });
 
     // 4. Authoritative re-quote (never trust the client's displayed price).
-    const items = buildProdigiItems({ variant, copies, assetUrls });
+    const items = buildProdigiItems({ variant, copies, forQuote: true });
     const quote = await prodigiQuote({
       shippingMethod,
       destinationCountryCode: recipient.address.countryCode,
