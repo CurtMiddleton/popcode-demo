@@ -158,29 +158,47 @@
       // Mirror of lib/print/catalog.mjs (client copy for rendering the picker).
       const PRODUCTS = {
         print: [
-          { id: 'fap-10x10', label: 'Fine Art Print 10×10"' },
-          { id: 'fap-16x24', label: 'Fine Art Print 16×24"' },
+          { id: 'fap-10x10', label: 'Fine Art Print 10×10"', aspect: 1 },
+          { id: 'fap-16x24', label: 'Fine Art Print 16×24"', aspect: 16 / 24 },
         ],
         tile: [
-          { id: 'tile-5x7',  label: 'Framed Photo Tile 5×7"' },
-          { id: 'tile-8x8',  label: 'Framed Photo Tile 8×8"' },
-          { id: 'tile-8x10', label: 'Framed Photo Tile 8×10"' },
+          { id: 'tile-5x7',  label: 'Framed Photo Tile 5×7"',  aspect: 5 / 7 },
+          { id: 'tile-8x8',  label: 'Framed Photo Tile 8×8"',  aspect: 1 },
+          { id: 'tile-8x10', label: 'Framed Photo Tile 8×10"', aspect: 8 / 10 },
         ],
       };
       const TYPE_LABELS = { print: 'Prints', tile: 'Photo Tiles' };
+      // Aspect ratio (width/height) of the currently selected product, used to
+      // pre-crop the photo so the badge lands in the corner of the actual print.
+      function currentAspect() {
+        var list = PRODUCTS[state.productType] || [];
+        var v = list.find(function (x) { return x.id === state.variantId; });
+        return v ? v.aspect : null;
+      }
 
       // Badge compositor (inlined so the page never depends on a separate file load).
       async function compositeBadgedImage(photoUrl, opts) {
         opts = opts || {};
         var scale = typeof opts.scale === 'number' ? opts.scale : 0.06;
+        var aspect = (typeof opts.aspect === 'number' && opts.aspect > 0) ? opts.aspect : null; // target width/height
         var previewCanvas = opts.previewCanvas || null;
         var img = new Image(); img.crossOrigin = 'anonymous';
         await new Promise(function (res, rej) { img.onload = res; img.onerror = rej; img.src = photoUrl; });
         var iconImg = new Image();
         await new Promise(function (res, rej) { iconImg.onload = res; iconImg.onerror = rej; iconImg.src = '/assets/popcode_icon.svg'; });
+        // Center-crop the source to the product's aspect ratio so the badge sits in
+        // the corner of what actually prints (Prodigi won't crop further). With no
+        // aspect, keep the full photo.
+        var sw = img.naturalWidth, sh = img.naturalHeight;
+        var cropW = sw, cropH = sh, sx = 0, sy = 0;
+        if (aspect) {
+          if (sw / sh > aspect) { cropH = sh; cropW = Math.round(sh * aspect); sx = Math.round((sw - cropW) / 2); }
+          else { cropW = sw; cropH = Math.round(sw / aspect); sy = Math.round((sh - cropH) / 2); }
+        }
         var c = document.createElement('canvas');
-        c.width = img.naturalWidth; c.height = img.naturalHeight;
-        var ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
+        c.width = cropW; c.height = cropH;
+        var ctx = c.getContext('2d');
+        ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
         var badgeSize = Math.round(Math.min(c.width, c.height) * scale);
         var pad = Math.round(Math.min(c.width, c.height) * 0.025);
         ctx.drawImage(iconImg, c.width - badgeSize - pad, c.height - badgeSize - pad, badgeSize, badgeSize);
@@ -257,7 +275,7 @@
           b.onclick = () => {
             state.productType = type;
             state.variantId = PRODUCTS[type][0].id;
-            renderTypeToggle(); renderVariants(); requestQuote();
+            renderTypeToggle(); renderVariants(); renderPhotos(); requestQuote();
           };
           el.appendChild(b);
         });
@@ -287,12 +305,12 @@
           cell.onclick = () => { state.selectedIndex = p.target_index; renderPhotos(); };
           grid.appendChild(cell);
           // Draw the badged preview (best-effort; ignore CORS/load failures).
-          compositeBadgedImage(p.photo_url, { scale: state.scale, previewCanvas: cv }).catch(() => {});
+          compositeBadgedImage(p.photo_url, { scale: state.scale, aspect: currentAspect(), previewCanvas: cv }).catch(() => {});
         });
       }
 
       // --- events ---
-      document.getElementById('variant').addEventListener('change', e => { state.variantId = e.target.value; requestQuote(); });
+      document.getElementById('variant').addEventListener('change', e => { state.variantId = e.target.value; renderPhotos(); requestQuote(); });
       document.getElementById('copies').addEventListener('input', requestQuoteDebounced);
       document.getElementById('country').addEventListener('change', requestQuote);
       document.getElementById('shipping').addEventListener('change', requestQuote);
@@ -369,7 +387,7 @@
         payBtn.disabled = true; payBtn.textContent = 'Preparing…';
         try {
           // 1. Composite badge onto the photo and upload it (public) so Prodigi can fetch it.
-          const dataUrl = await compositeBadgedImage(photo.photo_url, { scale: state.scale });
+          const dataUrl = await compositeBadgedImage(photo.photo_url, { scale: state.scale, aspect: currentAspect() });
           const blob = dataUrlToBlob(dataUrl);
           const scalePct = Math.round(state.scale * 100);
           // Upload into the existing public `experiences` bucket, under the project's
