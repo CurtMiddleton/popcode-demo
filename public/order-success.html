@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <script
+      src="https://browser.sentry-cdn.com/10.59.0/bundle.min.js"
+      integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
+      crossorigin="anonymous"></script>
+    <script src="/sentry-init.js"></script>
+    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <title>Popcode — Order Placed</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <style>
+      * { box-sizing:border-box; margin:0; padding:0; }
+      body { min-height:100vh; background:#f2f0eb; font-family:'Inter',sans-serif; color:#1a1a1a; display:flex; align-items:center; justify-content:center; padding:24px; }
+      .box { background:#fff; border-radius:24px; padding:36px 30px; max-width:460px; width:100%; text-align:center; box-shadow:0 8px 32px rgba(0,0,0,0.10); }
+      .check { width:64px; height:64px; border-radius:50%; background:linear-gradient(135deg,#7657FC 0%,#589AF9 100%); display:flex; align-items:center; justify-content:center; margin:0 auto 18px; }
+      h1 { font-size:24px; margin-bottom:8px; }
+      p { color:#555; font-size:15px; line-height:1.5; margin-bottom:8px; }
+      .status { display:inline-block; margin-top:10px; padding:6px 14px; border-radius:20px; font-size:13px; font-weight:700; background:#eef; color:#445; }
+      .btn { display:inline-block; margin-top:22px; padding:13px 26px; border-radius:16px; font-size:15px; font-weight:800; color:#fff; text-decoration:none; background:linear-gradient(135deg,#7657FC 0%,#589AF9 100%); }
+      .muted { color:#999; font-size:13px; margin-top:14px; }
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <div class="check">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <h1>Thanks — payment received!</h1>
+      <p>Your print order is on its way to production. We'll email you when it ships.</p>
+      <div class="status" id="status">Finalizing…</div>
+      <div>
+        <a class="btn" href="/manage.html">Back to My Projects</a>
+      </div>
+      <div class="muted" id="ref"></div>
+    </div>
+
+    <script>
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      const sessionId = new URLSearchParams(location.search).get('session_id');
+
+      const LABELS = {
+        pending: 'Finalizing payment…',
+        paid: 'Payment confirmed — submitting to print',
+        submitted: 'Submitted to print 🎉',
+        in_production: 'In production',
+        shipped: 'Shipped',
+        complete: 'Complete',
+        prodigi_failed: 'Payment received — we hit a snag submitting to print; our team is on it.',
+        payment_failed: 'Payment did not complete.',
+      };
+
+      async function poll(attempt) {
+        if (!sessionId) { document.getElementById('status').textContent = 'Order placed'; return; }
+        const { data } = await db.from('print_orders')
+          .select('status, prodigi_order_id').eq('stripe_session_id', sessionId).maybeSingle();
+        if (data) {
+          document.getElementById('status').textContent = LABELS[data.status] || data.status;
+          if (data.prodigi_order_id) document.getElementById('ref').textContent = 'Order ref: ' + data.prodigi_order_id;
+          // Keep polling briefly until the webhook advances past pending/paid.
+          if ((data.status === 'pending' || data.status === 'paid') && attempt < 6) {
+            return setTimeout(() => poll(attempt + 1), 2500);
+          }
+          return;
+        }
+        if (attempt < 6) setTimeout(() => poll(attempt + 1), 2500);
+        else document.getElementById('status').textContent = 'Order placed';
+      }
+
+      db.auth.getSession().then(({ data }) => {
+        if (!data.session) { document.getElementById('status').textContent = 'Order placed'; return; }
+        poll(0);
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <!-- Sentry error monitoring (errors-only; init in /sentry-init.js) -->
+    <script
+      src="https://browser.sentry-cdn.com/10.59.0/bundle.min.js"
+      integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
+      crossorigin="anonymous"></script>
+    <script src="/sentry-init.js"></script>
+    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <title>Popcode — Order Prints</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <script src="/composite.js"></script>
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { min-height:100vh; background:#f2f0eb; font-family:'Inter',sans-serif; color:#1a1a1a; }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 28px 20px 80px; }
+      a.back { display:inline-block; color:#7657FC; text-decoration:none; font-weight:700; font-size:14px; margin-bottom:14px; }
+      h1 { font-size: 26px; margin-bottom: 4px; }
+      .sub { color:#666; font-size:14px; margin-bottom:22px; }
+      .card { background:#fff; border-radius:20px; padding:22px; margin-bottom:18px; box-shadow:0 2px 10px rgba(0,0,0,0.05); }
+      .card h2 { font-size:16px; margin-bottom:14px; }
+      label { display:block; font-size:13px; font-weight:700; margin:12px 0 5px; color:#333; }
+      select, input { width:100%; padding:11px 12px; border:1.5px solid #e3e1db; border-radius:12px; font-size:15px; font-family:'Inter',sans-serif; background:#fff; }
+      select:focus, input:focus { outline:none; border-color:#7657FC; }
+      .row { display:flex; gap:12px; flex-wrap:wrap; }
+      .row > div { flex:1; min-width:140px; }
+      .type-toggle { display:inline-flex; background:#eee; border-radius:16px; padding:3px; gap:2px; margin-bottom:4px; }
+      .type-btn { border:none; background:none; border-radius:14px; padding:8px 18px; font-size:14px; font-weight:700; color:#666; cursor:pointer; font-family:'Inter',sans-serif; }
+      .type-btn.active { background:#fff; color:#1a1a1a; box-shadow:0 1px 4px rgba(0,0,0,0.12); }
+      .photo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:10px; margin-top:6px; }
+      .photo-cell { position:relative; border:3px solid transparent; border-radius:12px; overflow:hidden; cursor:pointer; aspect-ratio:1; background:#f0eeea; }
+      .photo-cell.selected { border-color:#7657FC; }
+      .photo-cell canvas { width:100%; height:100%; object-fit:cover; display:block; }
+      .badge-size-toggle { display:inline-flex; background:#eee; border-radius:16px; padding:3px; gap:2px; }
+      .badge-size-btn { border:none; background:none; border-radius:14px; padding:6px 13px; font-size:13px; font-weight:700; color:#666; cursor:pointer; font-family:'Inter',sans-serif; }
+      .badge-size-btn.active { background:#fff; color:#1a1a1a; box-shadow:0 1px 4px rgba(0,0,0,0.12); }
+      .price-row { display:flex; justify-content:space-between; align-items:baseline; margin-top:6px; }
+      .price { font-size:30px; font-weight:800; }
+      .price-note { color:#888; font-size:12px; }
+      .pay-btn { width:100%; margin-top:18px; padding:15px; border:none; border-radius:16px; font-size:16px; font-weight:800; color:#fff; font-family:'Inter',sans-serif; cursor:pointer; background:linear-gradient(135deg,#7657FC 0%,#589AF9 100%); }
+      .pay-btn:disabled { opacity:0.5; cursor:not-allowed; }
+      .banner { border-radius:14px; padding:12px 16px; font-size:14px; margin-bottom:18px; }
+      .banner.cancel { background:#fff5f5; border:1px solid #ffd4d4; color:#a33; }
+      .banner.error { background:#fff5f5; border:1px solid #ffd4d4; color:#a33; }
+      .muted { color:#999; font-size:13px; }
+      .loading { text-align:center; color:#888; padding:40px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <a class="back" href="/manage.html">&larr; My Projects</a>
+      <h1>Order Prints</h1>
+      <div class="sub" id="project-name">Loading project…</div>
+
+      <div id="cancel-banner" class="banner cancel" style="display:none;">Checkout cancelled — your order wasn't placed. Adjust anything and try again.</div>
+      <div id="error-banner" class="banner error" style="display:none;"></div>
+
+      <div id="main" style="display:none;">
+        <div class="card">
+          <h2>Product</h2>
+          <div class="type-toggle" id="type-toggle"></div>
+          <label for="variant">Size</label>
+          <select id="variant"></select>
+        </div>
+
+        <div class="card">
+          <h2>Photo</h2>
+          <p class="muted">Pick the photo to print. The Popcode badge is added automatically so the print stays scannable.</p>
+          <div style="margin:14px 0 6px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span style="font-size:13px;font-weight:700;">Badge size</span>
+            <div class="badge-size-toggle" id="badge-size-toggle">
+              <button type="button" class="badge-size-btn active" data-scale="0.06">Small</button>
+              <button type="button" class="badge-size-btn" data-scale="0.09">Medium</button>
+              <button type="button" class="badge-size-btn" data-scale="0.12">Large</button>
+            </div>
+          </div>
+          <div class="photo-grid" id="photo-grid"></div>
+        </div>
+
+        <div class="card">
+          <h2>Quantity &amp; shipping</h2>
+          <div class="row">
+            <div>
+              <label for="copies">Copies</label>
+              <input id="copies" type="number" min="1" value="1"/>
+            </div>
+            <div>
+              <label for="country">Ship to (country)</label>
+              <select id="country">
+                <option value="US">United States</option>
+                <option value="CA">Canada</option>
+                <option value="GB">United Kingdom</option>
+                <option value="AU">Australia</option>
+                <option value="DE">Germany</option>
+                <option value="FR">France</option>
+                <option value="IE">Ireland</option>
+                <option value="NZ">New Zealand</option>
+              </select>
+            </div>
+            <div>
+              <label for="shipping">Shipping</label>
+              <select id="shipping">
+                <option value="Budget">Budget</option>
+                <option value="Standard" selected>Standard</option>
+                <option value="Express">Express</option>
+              </select>
+            </div>
+          </div>
+          <label for="r-name">Recipient name</label>
+          <input id="r-name" type="text" autocomplete="name"/>
+          <label for="r-email">Email</label>
+          <input id="r-email" type="email" autocomplete="email"/>
+          <label for="r-line1">Address line 1</label>
+          <input id="r-line1" type="text" autocomplete="address-line1"/>
+          <label for="r-line2">Address line 2 (optional)</label>
+          <input id="r-line2" type="text" autocomplete="address-line2"/>
+          <div class="row">
+            <div>
+              <label for="r-city">City</label>
+              <input id="r-city" type="text" autocomplete="address-level2"/>
+            </div>
+            <div>
+              <label for="r-state">State / county</label>
+              <input id="r-state" type="text" autocomplete="address-level1"/>
+            </div>
+            <div>
+              <label for="r-postal">Postal / ZIP</label>
+              <input id="r-postal" type="text" autocomplete="postal-code"/>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="price-row">
+            <div>
+              <div class="muted">Total</div>
+              <div class="price" id="price">—</div>
+            </div>
+            <div class="price-note" id="price-note">Pick a product to see pricing</div>
+          </div>
+          <button class="pay-btn" id="pay-btn" disabled>Pay with card</button>
+        </div>
+      </div>
+
+      <div id="loading" class="loading"><div>Loading…</div></div>
+    </div>
+
+    <script>
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      const qs = new URLSearchParams(location.search);
+      const slug = qs.get('id');
+      if (qs.get('cancelled')) document.getElementById('cancel-banner').style.display = 'block';
+
+      // Mirror of lib/print/catalog.mjs (client copy for rendering the picker).
+      const PRODUCTS = {
+        print: [
+          { id: 'fap-8x10',  label: 'Photo Print 8×10"' },
+          { id: 'fap-11x14', label: 'Photo Print 11×14"' },
+          { id: 'fap-16x24', label: 'Fine Art Print 16×24"' },
+        ],
+        tile: [
+          { id: 'tile-5x7',  label: 'Framed Photo Tile 5×7"' },
+          { id: 'tile-8x8',  label: 'Framed Photo Tile 8×8"' },
+          { id: 'tile-8x10', label: 'Framed Photo Tile 8×10"' },
+        ],
+      };
+      const TYPE_LABELS = { print: 'Prints', tile: 'Photo Tiles' };
+
+      let currentUser = null;
+      let collection = null;       // { id, slug, name }
+      let photos = [];             // deduped [{ target_index, photo_url }]
+      let state = { productType: 'print', variantId: 'fap-8x10', scale: 0.06, selectedIndex: null };
+
+      db.auth.getSession().then(async ({ data }) => {
+        if (!data.session) { window.location.href = '/auth.html'; return; }
+        currentUser = data.session.user;
+        await loadProject();
+      });
+
+      async function loadProject() {
+        try {
+          const { data: col, error } = await db
+            .from('collections').select('id, slug, name, user_id').eq('slug', slug).single();
+          if (error || !col) throw new Error('Project not found');
+          if (col.user_id && col.user_id !== currentUser.id) throw new Error('This is not your project');
+          collection = col;
+          document.getElementById('project-name').textContent = col.name || col.slug;
+
+          const { data: items } = await db
+            .from('collection_items').select('target_index, photo_url')
+            .eq('collection_id', col.id).order('target_index');
+          // Dedupe by target_index, keep first non-null photo_url (projects have dupes).
+          const seen = new Set();
+          photos = (items || []).filter(it => {
+            if (it.target_index == null || !it.photo_url) return false;
+            if (seen.has(it.target_index)) return false;
+            seen.add(it.target_index); return true;
+          });
+          if (!photos.length) throw new Error('This project has no printable photos yet');
+          state.selectedIndex = photos[0].target_index;
+
+          renderTypeToggle();
+          renderVariants();
+          renderPhotos();
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('main').style.display = 'block';
+          requestQuote();
+        } catch (e) {
+          document.getElementById('loading').style.display = 'none';
+          showError(e.message);
+        }
+      }
+
+      function renderTypeToggle() {
+        const el = document.getElementById('type-toggle');
+        el.innerHTML = '';
+        Object.keys(PRODUCTS).forEach(type => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'type-btn' + (type === state.productType ? ' active' : '');
+          b.textContent = TYPE_LABELS[type];
+          b.onclick = () => {
+            state.productType = type;
+            state.variantId = PRODUCTS[type][0].id;
+            renderTypeToggle(); renderVariants(); requestQuote();
+          };
+          el.appendChild(b);
+        });
+      }
+
+      function renderVariants() {
+        const sel = document.getElementById('variant');
+        sel.innerHTML = '';
+        PRODUCTS[state.productType].forEach(v => {
+          const o = document.createElement('option');
+          o.value = v.id; o.textContent = v.label;
+          if (v.id === state.variantId) o.selected = true;
+          sel.appendChild(o);
+        });
+      }
+
+      function renderPhotos() {
+        const grid = document.getElementById('photo-grid');
+        grid.innerHTML = '';
+        photos.forEach(p => {
+          const cell = document.createElement('div');
+          cell.className = 'photo-cell' + (p.target_index === state.selectedIndex ? ' selected' : '');
+          cell.dataset.index = p.target_index;
+          const cv = document.createElement('canvas');
+          cv.width = 200; cv.height = 200;
+          cell.appendChild(cv);
+          cell.onclick = () => { state.selectedIndex = p.target_index; renderPhotos(); };
+          grid.appendChild(cell);
+          // Draw the badged preview (best-effort; ignore CORS/load failures).
+          window.compositeBadgedImage(p.photo_url, { scale: state.scale, previewCanvas: cv }).catch(() => {});
+        });
+      }
+
+      // --- events ---
+      document.getElementById('variant').addEventListener('change', e => { state.variantId = e.target.value; requestQuote(); });
+      document.getElementById('copies').addEventListener('input', requestQuoteDebounced);
+      document.getElementById('country').addEventListener('change', requestQuote);
+      document.getElementById('shipping').addEventListener('change', requestQuote);
+      document.getElementById('badge-size-toggle').addEventListener('click', e => {
+        const btn = e.target.closest('.badge-size-btn'); if (!btn) return;
+        state.scale = parseFloat(btn.dataset.scale);
+        document.querySelectorAll('.badge-size-btn').forEach(b => b.classList.toggle('active', b === btn));
+        renderPhotos();
+      });
+      document.getElementById('pay-btn').addEventListener('click', pay);
+
+      let quoteTimer = null;
+      function requestQuoteDebounced() { clearTimeout(quoteTimer); quoteTimer = setTimeout(requestQuote, 400); }
+
+      let lastQuote = null;
+      async function requestQuote() {
+        const priceEl = document.getElementById('price');
+        const noteEl = document.getElementById('price-note');
+        const payBtn = document.getElementById('pay-btn');
+        priceEl.textContent = '…'; noteEl.textContent = 'Getting price…'; payBtn.disabled = true; lastQuote = null;
+        try {
+          const body = {
+            productType: state.productType,
+            variantId: state.variantId,
+            copies: Math.max(1, parseInt(document.getElementById('copies').value, 10) || 1),
+            destinationCountryCode: document.getElementById('country').value,
+            shippingMethod: document.getElementById('shipping').value,
+          };
+          const resp = await fetch('/api/prodigi-quote', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+          });
+          const data = await resp.json();
+          if (!resp.ok) throw new Error(data.error || 'Could not price this');
+          lastQuote = data;
+          priceEl.textContent = formatMoney(data.total_minor, data.currency);
+          noteEl.textContent = 'Incl. product, shipping & handling';
+          payBtn.disabled = false;
+        } catch (e) {
+          priceEl.textContent = '—'; noteEl.textContent = e.message; payBtn.disabled = true;
+        }
+      }
+
+      function formatMoney(minor, currency) {
+        try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD' }).format(minor / 100); }
+        catch (_) { return (currency || 'USD') + ' ' + (minor / 100).toFixed(2); }
+      }
+
+      function recipientFromForm() {
+        return {
+          name: document.getElementById('r-name').value.trim(),
+          email: document.getElementById('r-email').value.trim(),
+          address: {
+            line1: document.getElementById('r-line1').value.trim(),
+            line2: document.getElementById('r-line2').value.trim(),
+            townOrCity: document.getElementById('r-city').value.trim(),
+            stateOrCounty: document.getElementById('r-state').value.trim(),
+            postalOrZipCode: document.getElementById('r-postal').value.trim(),
+            countryCode: document.getElementById('country').value,
+          },
+        };
+      }
+
+      async function pay() {
+        clearError();
+        const recipient = recipientFromForm();
+        if (!recipient.name || !recipient.email || !recipient.address.line1 ||
+            !recipient.address.townOrCity || !recipient.address.postalOrZipCode) {
+          showError('Please fill in name, email, address, city and postal code.'); return;
+        }
+        const photo = photos.find(p => p.target_index === state.selectedIndex);
+        if (!photo) { showError('Pick a photo to print.'); return; }
+
+        const payBtn = document.getElementById('pay-btn');
+        payBtn.disabled = true; payBtn.textContent = 'Preparing…';
+        try {
+          // 1. Composite badge onto the photo and upload it (public) so Prodigi can fetch it.
+          const dataUrl = await window.compositeBadgedImage(photo.photo_url, { scale: state.scale });
+          const blob = window.dataUrlToBlob(dataUrl);
+          const scalePct = Math.round(state.scale * 100);
+          const path = collection.id + '/' + state.selectedIndex + '-badge' + scalePct + '.png';
+          const up = await db.storage.from('print-assets').upload(path, blob, { contentType: 'image/png', upsert: true });
+          if (up.error) throw new Error('Could not prepare the print image: ' + up.error.message);
+          const publicUrl = db.storage.from('print-assets').getPublicUrl(path).data.publicUrl;
+
+          // 2. Create the checkout session server-side (it re-quotes + validates).
+          const { data: sess } = await db.auth.getSession();
+          const token = sess?.session?.access_token;
+          const resp = await fetch('/api/create-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({
+              collectionId: collection.id,
+              productType: state.productType,
+              variantId: state.variantId,
+              copies: Math.max(1, parseInt(document.getElementById('copies').value, 10) || 1),
+              shippingMethod: document.getElementById('shipping').value,
+              recipient,
+              assetUrls: [{ target_index: state.selectedIndex, print_area: 'default', url: publicUrl }],
+            }),
+          });
+          const data = await resp.json();
+          if (!resp.ok || !data.url) throw new Error(data.error || 'Could not start checkout');
+          window.location = data.url;
+        } catch (e) {
+          showError(e.message);
+          payBtn.disabled = false; payBtn.textContent = 'Pay with card';
+        }
+      }
+
+      function showError(msg) {
+        const b = document.getElementById('error-banner');
+        b.textContent = msg; b.style.display = 'block';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      function clearError() { document.getElementById('error-banner').style.display = 'none'; }
+    </script>
+  </body>
+</html>
