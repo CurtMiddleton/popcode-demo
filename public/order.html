@@ -372,10 +372,13 @@
           const dataUrl = await compositeBadgedImage(photo.photo_url, { scale: state.scale });
           const blob = dataUrlToBlob(dataUrl);
           const scalePct = Math.round(state.scale * 100);
-          const path = collection.id + '/' + state.selectedIndex + '-badge' + scalePct + '.png';
-          const up = await db.storage.from('print-assets').upload(path, blob, { contentType: 'image/png', upsert: true });
+          // Upload into the existing public `experiences` bucket, under the project's
+          // own slug folder — reuses the upload policy that already lets the owner
+          // write {slug}/photo_N, so no separate print-assets bucket/policy is needed.
+          const path = collection.slug + '/print-' + state.selectedIndex + '-badge' + scalePct + '.png';
+          const up = await db.storage.from('experiences').upload(path, blob, { contentType: 'image/png', upsert: true });
           if (up.error) throw new Error('Could not prepare the print image: ' + up.error.message);
-          const publicUrl = db.storage.from('print-assets').getPublicUrl(path).data.publicUrl;
+          const publicUrl = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
 
           // 2. Create the checkout session server-side (it re-quotes + validates).
           const { data: sess } = await db.auth.getSession();

@@ -30,7 +30,9 @@ const PRODIGI_BASE_URL = (process.env.PRODIGI_BASE_URL || 'https://api.sandbox.p
 const PRODIGI_API_KEY = (process.env.PRODIGI_API_KEY || '').trim();
 const MARKUP = Number(process.env.PRINT_MARKUP_MULTIPLIER || 1.4);
 
-const PUBLIC_ASSET_PREFIX = `${SUPABASE_URL}/storage/v1/object/public/print-assets/`;
+// Composited print images are uploaded to the existing public `experiences`
+// bucket (reuses its owner-write policy). Only accept asset URLs under it.
+const PUBLIC_ASSET_PREFIX = `${SUPABASE_URL}/storage/v1/object/public/experiences/`;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
