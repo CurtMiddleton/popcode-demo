@@ -971,13 +971,16 @@ Task was "add Sentry like we just did for Bashō (a Next.js 14 app)." **Popcode 
 - Money in integer minor units; `priceFromQuote` rounds once.
 - **Proof of print:** the composited asset is a public URL on the row (`asset_urls` / `prodigi_response.wouldSend...assets[].url`) — open it to see the badge baked in. Prodigi's true rendered proof (with the product crop applied) only exists for a REAL order.
 
-**KNOWN ISSUE / decision needed — square-print crop:** order sends `sizing: fillPrintArea`. A square product (10×10) crops a 4:3 photo on the sides, and the badge sits in the bottom-right corner → it can get **clipped** on square sizes. Aspect-matched products (8×10 print/tile) are safe. Options for later: switch square sizes to `fitPrintArea` (white borders, no crop), give the badge more margin, or only offer aspect-matched sizes.
+**~~KNOWN ISSUE — square-print crop~~ → FIXED (commit `6285e48`):** previously the badge was composited onto the full photo and Prodigi cropped to the product shape via `fillPrintArea`, clipping the corner badge on square sizes. Now `order.html`'s compositor **center-crops each photo to the selected product's aspect ratio FIRST, then places the badge in the corner of that crop** — so the badge is always correctly positioned in what actually prints, and the matching-aspect asset isn't cropped further by Prodigi. Each catalog variant carries an `aspect` (w/h): prints 10×10=1, 16×24=2/3; tiles 5×7, 8×8=1, 8×10. Previews re-render on size/type change. Verified: a 10×10 dry-run asset came out a clean square with the badge safely in the corner. Trade-off: center-crop trims the sides of a landscape photo forced into a tall/square product (unavoidable when reshaping); a future "drag to reposition the crop" UI could let creators choose what's kept.
+
+**Adding more products/sizes:** trivial — edit `PRODUCTS` in `lib/print/catalog.mjs` AND the client mirror in `order.html` (keep ids + `aspect` in sync). But **verify each new SKU against `GET /v4.0/products/{sku}` before adding** (guessed SKUs return SkuNotFound). Recommendation: don't expand the catalog until ONE real (non-dry-run) order has confirmed the live path works — no point stacking unverified SKUs on an unproven flow.
 
 **TO GO FULLY LIVE (not done; deliberate steps):**
 1. Get a working **Prodigi sandbox** key (or accept live orders) so real submits are free during testing.
 2. Remove/disable **`PRODIGI_DRY_RUN`** to place real Prodigi orders.
 3. Add all env vars to **Production** scope (incl. `PRODIGI_DRY_RUN=true` first if you want prod dry-run), merge PR #53 to `main`.
 4. Switch Stripe to **live** keys + a live webhook for real payments; tune markup.
-5. Decide the square-crop handling above.
+5. ~~Decide the square-crop handling~~ — DONE (aspect-crop fix above).
+6. Recommended sequencing: real test order first → then expand the product catalog → then full public launch.
 
 **Housekeeping done/queued this session:** user deleting the leftover **`identification` Supabase branch** (merged to prod in June, safe to delete — it was driving the "EXCEEDING USAGE LIMITS" MICRO-compute pill). **Re-enable Vercel Deployment Protection** on previews if it was turned off for testing (it had to be off so Stripe/phone could reach the preview). The `print-assets` bucket + its policies in the migration are now unused (we upload to `experiences`) — harmless, can drop later.
