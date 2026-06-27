@@ -26,8 +26,8 @@ const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const PRODIGI_BASE_URL = process.env.PRODIGI_BASE_URL || 'https://api.sandbox.prodigi.com';
-const PRODIGI_API_KEY = process.env.PRODIGI_API_KEY;
+const PRODIGI_BASE_URL = (process.env.PRODIGI_BASE_URL || 'https://api.sandbox.prodigi.com').trim().replace(/\/+$/, '');
+const PRODIGI_API_KEY = (process.env.PRODIGI_API_KEY || '').trim();
 const MARKUP = Number(process.env.PRINT_MARKUP_MULTIPLIER || 1.4);
 
 const PUBLIC_ASSET_PREFIX = `${SUPABASE_URL}/storage/v1/object/public/print-assets/`;

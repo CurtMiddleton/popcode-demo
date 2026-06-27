@@ -23,8 +23,8 @@ const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-const PRODIGI_BASE_URL = process.env.PRODIGI_BASE_URL || 'https://api.sandbox.prodigi.com';
-const PRODIGI_API_KEY = process.env.PRODIGI_API_KEY;
+const PRODIGI_BASE_URL = (process.env.PRODIGI_BASE_URL || 'https://api.sandbox.prodigi.com').trim().replace(/\/+$/, '');
+const PRODIGI_API_KEY = (process.env.PRODIGI_API_KEY || '').trim();
 
 // Terminal/in-flight statuses we must not re-submit on a webhook retry.
 const ALREADY_HANDLED = new Set(['submitted', 'in_production', 'shipped', 'complete', 'prodigi_failed']);

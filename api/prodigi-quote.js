@@ -12,8 +12,8 @@
 
 import { Sentry } from './_sentry.js';
 
-const PRODIGI_BASE_URL = process.env.PRODIGI_BASE_URL || 'https://api.sandbox.prodigi.com';
-const PRODIGI_API_KEY = process.env.PRODIGI_API_KEY;
+const PRODIGI_BASE_URL = (process.env.PRODIGI_BASE_URL || 'https://api.sandbox.prodigi.com').trim().replace(/\/+$/, '');
+const PRODIGI_API_KEY = (process.env.PRODIGI_API_KEY || '').trim();
 const MARKUP = Number(process.env.PRINT_MARKUP_MULTIPLIER || 1.4);
 
 export default async function handler(req, res) {
