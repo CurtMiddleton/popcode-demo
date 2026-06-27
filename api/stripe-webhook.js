@@ -87,7 +87,7 @@ export default async function handler(req, res) {
 
     // Submit to Prodigi. merchantReference = our order id makes a manual retry
     // idempotent on Prodigi's side too.
-    const { buildProdigiItems } = await import('../lib/print/catalog.mjs');
+    const { buildProdigiItems, cleanRecipient } = await import('../lib/print/catalog.mjs');
     const variant = {
       sku: order.sku,
       sizing: order.sizing || 'fillPrintArea',
@@ -98,7 +98,7 @@ export default async function handler(req, res) {
     const orderBody = {
       merchantReference: order.id,
       shippingMethod: order.shipping_method || 'Standard',
-      recipient: order.recipient,
+      recipient: cleanRecipient(order.recipient),
       items,
     };
 

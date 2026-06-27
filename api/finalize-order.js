@@ -72,13 +72,13 @@ export default async function handler(req, res) {
       .update({ status: 'paid', total_charged_minor: session.amount_total, updated_at: new Date().toISOString() })
       .eq('id', order.id);
 
-    const { buildProdigiItems } = await import('../lib/print/catalog.mjs');
+    const { buildProdigiItems, cleanRecipient } = await import('../lib/print/catalog.mjs');
     const variant = { sku: order.sku, sizing: order.sizing || 'fillPrintArea', attributes: order.attributes || {}, printArea: 'default' };
     const items = buildProdigiItems({ variant, copies: order.copies, assetUrls: order.asset_urls || [] });
     const orderBody = {
       merchantReference: order.id,
       shippingMethod: order.shipping_method || 'Standard',
-      recipient: order.recipient,
+      recipient: cleanRecipient(order.recipient),
       items,
     };
 
