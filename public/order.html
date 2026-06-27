@@ -10,15 +10,15 @@
       crossorigin="anonymous"></script>
     <script src="/sentry-init.js"></script>
     <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
-    <title>Popcode — Order Prints</title>
+    <title>Popcode — Shop</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { min-height:100vh; background:#f2f0eb; font-family:'Inter',sans-serif; color:#1a1a1a; }
-      .wrap { max-width: 720px; margin: 0 auto; padding: 28px 20px 80px; }
-      a.back { display:inline-block; color:#7657FC; text-decoration:none; font-weight:700; font-size:14px; margin-bottom:14px; }
+      body { min-height:100vh; background:#ffffff; font-family:'Inter',sans-serif; color:#1a1a1a; }
+      .wrap { max-width: 860px; margin: 0 auto; padding: 28px 20px 90px; }
+      a.back, .linkback { display:inline-flex; align-items:center; gap:6px; color:#7657FC; background:none; border:none; text-decoration:none; font-weight:700; font-size:14px; margin-bottom:14px; cursor:pointer; font-family:'Inter',sans-serif; }
       h1 { font-size: 26px; margin-bottom: 4px; }
       .sub { color:#666; font-size:14px; margin-bottom:22px; }
       .card { background:#fff; border-radius:20px; padding:22px; margin-bottom:18px; box-shadow:0 2px 10px rgba(0,0,0,0.05); }
@@ -28,9 +28,56 @@
       select:focus, input:focus { outline:none; border-color:#7657FC; }
       .row { display:flex; gap:12px; flex-wrap:wrap; }
       .row > div { flex:1; min-width:140px; }
-      .type-toggle { display:inline-flex; background:#eee; border-radius:16px; padding:3px; gap:2px; margin-bottom:4px; }
-      .type-btn { border:none; background:none; border-radius:14px; padding:8px 18px; font-size:14px; font-weight:700; color:#666; cursor:pointer; font-family:'Inter',sans-serif; }
-      .type-btn.active { background:#fff; color:#1a1a1a; box-shadow:0 1px 4px rgba(0,0,0,0.12); }
+      .muted { color:#999; font-size:13px; }
+      .loading { text-align:center; color:#888; padding:40px; }
+      .banner { border-radius:14px; padding:12px 16px; font-size:14px; margin-bottom:18px; }
+      .banner.cancel, .banner.error { background:#fff5f5; border:1px solid #ffd4d4; color:#a33; }
+
+      /* Step 1 — category grid */
+      .cat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:18px; }
+      @media (max-width:600px){ .cat-grid { grid-template-columns:1fr; } }
+      .cat-card { background:#fff; border-radius:20px; padding:16px; box-shadow:0 2px 10px rgba(0,0,0,0.05); cursor:pointer; border:2px solid transparent; transition:transform .12s, box-shadow .15s, border-color .15s; text-align:left; }
+      .cat-card:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.10); border-color:#e3dffb; }
+      .cat-thumb { width:100%; height:200px; border-radius:12px; background:#f3f1ec; display:flex; align-items:center; justify-content:center; overflow:hidden; margin-bottom:14px; }
+      .cat-thumb canvas { max-width:88%; max-height:88%; }
+      .cat-thumb.frame-framed canvas { border:9px solid #1a1a1a; background:#fff; padding:7px; box-shadow:0 3px 10px rgba(0,0,0,0.22); }
+      .cat-thumb.frame-tile canvas { border:5px solid #fff; box-shadow:0 3px 10px rgba(0,0,0,0.20); }
+      .cat-thumb.frame-canvas canvas { box-shadow:6px 6px 0 #d9d4ca, 0 3px 10px rgba(0,0,0,0.18); }
+      .cat-thumb.frame-print canvas { box-shadow:0 3px 10px rgba(0,0,0,0.16); }
+      .cat-name { font-size:18px; font-weight:800; }
+      .cat-desc { color:#777; font-size:13px; margin:3px 0 8px; line-height:1.4; }
+      .cat-from { font-size:14px; font-weight:700; color:#7657FC; }
+
+      /* Step 2 — product detail */
+      .detail { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+      @media (max-width:680px){ .detail { grid-template-columns:1fr; } }
+      .detail-preview { background:#fff; border-radius:20px; padding:24px; box-shadow:0 2px 10px rgba(0,0,0,0.05); display:flex; align-items:center; justify-content:center; min-height:320px; }
+      .detail-preview canvas { max-width:100%; max-height:380px; }
+      .detail-preview.frame-framed canvas { border:14px solid #1a1a1a; background:#fff; padding:12px; box-shadow:0 6px 18px rgba(0,0,0,0.25); }
+      .detail-preview.frame-tile canvas { border:8px solid #fff; box-shadow:0 6px 18px rgba(0,0,0,0.22); }
+      .detail-preview.frame-canvas canvas { box-shadow:10px 10px 0 #d9d4ca, 0 6px 18px rgba(0,0,0,0.18); }
+      .detail-preview.frame-print canvas { box-shadow:0 6px 18px rgba(0,0,0,0.16); }
+      .detail-info h2 { font-size:22px; margin-bottom:4px; }
+      .detail-info .tagline { color:#777; font-size:14px; margin-bottom:16px; }
+      .size-chips { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 4px; }
+      .size-chip { border:1.5px solid #e3e1db; background:#fff; border-radius:12px; padding:9px 14px; font-size:14px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; color:#333; }
+      .size-chip.active { border-color:#7657FC; background:#f3f0ff; color:#7657FC; }
+      .orient-row { margin-top:14px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+      .toggle { display:inline-flex; background:#eee; border-radius:16px; padding:3px; gap:2px; }
+      .toggle button { border:none; background:none; border-radius:14px; padding:7px 15px; font-size:13px; font-weight:700; color:#666; cursor:pointer; font-family:'Inter',sans-serif; }
+      .toggle button.active { background:#fff; color:#1a1a1a; box-shadow:0 1px 4px rgba(0,0,0,0.12); }
+      .detail-price { font-size:30px; font-weight:800; margin:18px 0 2px; }
+      .detail-price-note { color:#888; font-size:12px; margin-bottom:16px; }
+      .specs { border-top:1px solid #eee; padding-top:14px; margin-top:6px; }
+      .specs li { list-style:none; color:#555; font-size:13px; padding:3px 0; display:flex; gap:8px; }
+      .specs li::before { content:'•'; color:#7657FC; }
+      .primary-btn { width:100%; margin-top:18px; padding:15px; border:none; border-radius:16px; font-size:16px; font-weight:800; color:#fff; font-family:'Inter',sans-serif; cursor:pointer; background:linear-gradient(135deg,#7657FC 0%,#589AF9 100%); }
+      .primary-btn:disabled { opacity:.5; cursor:not-allowed; }
+
+      /* Step 3 — create / checkout */
+      .summary-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+      .summary-bar .s-title { font-size:16px; font-weight:800; }
+      .summary-bar .s-sub { color:#777; font-size:13px; }
       .photo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:10px; margin-top:6px; }
       .photo-cell { position:relative; border:3px solid transparent; border-radius:12px; overflow:hidden; cursor:pointer; aspect-ratio:1; background:#f0eeea; }
       .photo-cell.selected { border-color:#7657FC; }
@@ -41,42 +88,63 @@
       .price-row { display:flex; justify-content:space-between; align-items:baseline; margin-top:6px; }
       .price { font-size:30px; font-weight:800; }
       .price-note { color:#888; font-size:12px; }
-      .pay-btn { width:100%; margin-top:18px; padding:15px; border:none; border-radius:16px; font-size:16px; font-weight:800; color:#fff; font-family:'Inter',sans-serif; cursor:pointer; background:linear-gradient(135deg,#7657FC 0%,#589AF9 100%); }
-      .pay-btn:disabled { opacity:0.5; cursor:not-allowed; }
-      .banner { border-radius:14px; padding:12px 16px; font-size:14px; margin-bottom:18px; }
-      .banner.cancel { background:#fff5f5; border:1px solid #ffd4d4; color:#a33; }
-      .banner.error { background:#fff5f5; border:1px solid #ffd4d4; color:#a33; }
-      .muted { color:#999; font-size:13px; }
-      .loading { text-align:center; color:#888; padding:40px; }
     </style>
   </head>
   <body>
     <div class="wrap">
       <a class="back" href="/manage.html">&larr; My Projects</a>
-      <h1>Order Prints</h1>
+      <h1>Shop</h1>
       <div class="sub" id="project-name">Loading project…</div>
 
       <div id="cancel-banner" class="banner cancel" style="display:none;">Checkout cancelled — your order wasn't placed. Adjust anything and try again.</div>
       <div id="error-banner" class="banner error" style="display:none;"></div>
 
-      <div id="main" style="display:none;">
-        <div class="card">
-          <h2>Product</h2>
-          <div class="type-toggle" id="type-toggle"></div>
-          <label for="variant">Size</label>
-          <select id="variant"></select>
-          <div id="orientation-row" style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <span style="font-size:13px;font-weight:700;">Orientation</span>
-            <div class="type-toggle" id="orientation-toggle">
-              <button type="button" class="type-btn active" data-orientation="portrait">Portrait</button>
-              <button type="button" class="type-btn" data-orientation="landscape">Landscape</button>
+      <!-- Step 1: choose a product category -->
+      <div id="step-category" style="display:none;">
+        <div class="cat-grid" id="cat-grid"></div>
+      </div>
+
+      <!-- Step 2: product detail -->
+      <div id="step-detail" style="display:none;">
+        <button class="linkback" id="to-category">&larr; All products</button>
+        <div class="detail">
+          <div class="detail-preview" id="detail-preview"><canvas id="detail-canvas" width="400" height="400"></canvas></div>
+          <div class="detail-info">
+            <h2 id="detail-name">Product</h2>
+            <div class="tagline" id="detail-tagline"></div>
+            <label>Size</label>
+            <div class="size-chips" id="size-chips"></div>
+            <div class="orient-row" id="orient-row">
+              <span style="font-size:13px;font-weight:700;">Orientation</span>
+              <div class="toggle" id="orientation-toggle">
+                <button type="button" class="active" data-orientation="portrait">Portrait</button>
+                <button type="button" data-orientation="landscape">Landscape</button>
+              </div>
             </div>
+            <div class="detail-price" id="detail-price">From —</div>
+            <div class="detail-price-note" id="detail-price-note">per print, incl. shipping &amp; handling</div>
+            <ul class="specs" id="detail-specs"></ul>
+            <button class="primary-btn" id="create-btn">Create</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: choose photo + checkout -->
+      <div id="step-create" style="display:none;">
+        <button class="linkback" id="to-detail">&larr; Back to product</button>
+        <div class="card">
+          <div class="summary-bar">
+            <div>
+              <div class="s-title" id="summary-title">—</div>
+              <div class="s-sub" id="summary-sub"></div>
+            </div>
+            <button class="linkback" id="change-product" style="margin:0;">Change</button>
           </div>
         </div>
 
         <div class="card">
-          <h2>Photo</h2>
-          <p class="muted">Pick the photo to print. We add a badge to indicate that the photo can be scanned by the Popcode app.</p>
+          <h2>Choose your photo</h2>
+          <p class="muted">We add a badge to indicate that the photo can be scanned by the Popcode app.</p>
           <div style="margin:14px 0 6px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
             <span style="font-size:13px;font-weight:700;">Badge size</span>
             <div class="badge-size-toggle" id="badge-size-toggle">
@@ -126,30 +194,18 @@
           <label for="r-line2">Address line 2 (optional)</label>
           <input id="r-line2" type="text" autocomplete="address-line2"/>
           <div class="row">
-            <div>
-              <label for="r-city">City</label>
-              <input id="r-city" type="text" autocomplete="address-level2"/>
-            </div>
-            <div>
-              <label for="r-state">State / county</label>
-              <input id="r-state" type="text" autocomplete="address-level1"/>
-            </div>
-            <div>
-              <label for="r-postal">Postal / ZIP</label>
-              <input id="r-postal" type="text" autocomplete="postal-code"/>
-            </div>
+            <div><label for="r-city">City</label><input id="r-city" type="text" autocomplete="address-level2"/></div>
+            <div><label for="r-state">State / county</label><input id="r-state" type="text" autocomplete="address-level1"/></div>
+            <div><label for="r-postal">Postal / ZIP</label><input id="r-postal" type="text" autocomplete="postal-code"/></div>
           </div>
         </div>
 
         <div class="card">
           <div class="price-row">
-            <div>
-              <div class="muted">Total</div>
-              <div class="price" id="price">—</div>
-            </div>
-            <div class="price-note" id="price-note">Pick a product to see pricing</div>
+            <div><div class="muted">Total</div><div class="price" id="price">—</div></div>
+            <div class="price-note" id="price-note">Getting price…</div>
           </div>
-          <button class="pay-btn" id="pay-btn" disabled>Pay with card</button>
+          <button class="primary-btn" id="pay-btn" disabled>Pay with card</button>
         </div>
       </div>
 
@@ -162,70 +218,66 @@
       const slug = qs.get('id');
       if (qs.get('cancelled')) document.getElementById('cancel-banner').style.display = 'block';
 
-      // Mirror of lib/print/catalog.mjs (client copy for rendering the picker).
+      // Client mirror of lib/print/catalog.mjs (ids/sizes/aspect must stay in sync).
       const PRODUCTS = {
         print: [
-          { id: 'fap-8x10',  label: 'Fine Art Print 8×10"',  aspect: 8 / 10 },
-          { id: 'fap-10x10', label: 'Fine Art Print 10×10"', aspect: 1 },
-          { id: 'fap-11x14', label: 'Fine Art Print 11×14"', aspect: 11 / 14 },
-          { id: 'fap-12x16', label: 'Fine Art Print 12×16"', aspect: 12 / 16 },
-          { id: 'fap-16x24', label: 'Fine Art Print 16×24"', aspect: 16 / 24 },
-          { id: 'fap-20x28', label: 'Fine Art Print 20×28"', aspect: 20 / 28 },
-          { id: 'fap-24x36', label: 'Fine Art Print 24×36"', aspect: 24 / 36 },
+          { id: 'fap-8x10',  size: '8×10"',  aspect: 8 / 10 },
+          { id: 'fap-10x10', size: '10×10"', aspect: 1 },
+          { id: 'fap-11x14', size: '11×14"', aspect: 11 / 14 },
+          { id: 'fap-12x16', size: '12×16"', aspect: 12 / 16 },
+          { id: 'fap-16x24', size: '16×24"', aspect: 16 / 24 },
+          { id: 'fap-20x28', size: '20×28"', aspect: 20 / 28 },
+          { id: 'fap-24x36', size: '24×36"', aspect: 24 / 36 },
         ],
         tile: [
-          { id: 'tile-5x7',  label: 'Framed Photo Tile 5×7"',  aspect: 5 / 7 },
-          { id: 'tile-8x8',  label: 'Framed Photo Tile 8×8"',  aspect: 1 },
-          { id: 'tile-8x10', label: 'Framed Photo Tile 8×10"', aspect: 8 / 10 },
+          { id: 'tile-5x7',  size: '5×7"',  aspect: 5 / 7 },
+          { id: 'tile-8x8',  size: '8×8"',  aspect: 1 },
+          { id: 'tile-8x10', size: '8×10"', aspect: 8 / 10 },
         ],
         canvas: [
-          { id: 'can-10x10', label: 'Canvas 10×10"', aspect: 1 },
-          { id: 'can-12x16', label: 'Canvas 12×16"', aspect: 12 / 16 },
-          { id: 'can-16x20', label: 'Canvas 16×20"', aspect: 16 / 20 },
-          { id: 'can-16x24', label: 'Canvas 16×24"', aspect: 16 / 24 },
+          { id: 'can-10x10', size: '10×10"', aspect: 1 },
+          { id: 'can-12x16', size: '12×16"', aspect: 12 / 16 },
+          { id: 'can-16x20', size: '16×20"', aspect: 16 / 20 },
+          { id: 'can-16x24', size: '16×24"', aspect: 16 / 24 },
         ],
         framed: [
-          { id: 'cfp-8x10',  label: 'Framed Print 8×10" (Black)',  aspect: 8 / 10 },
-          { id: 'cfp-11x14', label: 'Framed Print 11×14" (Black)', aspect: 11 / 14 },
-          { id: 'cfp-12x16', label: 'Framed Print 12×16" (Black)', aspect: 12 / 16 },
-          { id: 'cfp-16x24', label: 'Framed Print 16×24" (Black)', aspect: 16 / 24 },
+          { id: 'cfp-8x10',  size: '8×10"',  aspect: 8 / 10 },
+          { id: 'cfp-11x14', size: '11×14"', aspect: 11 / 14 },
+          { id: 'cfp-12x16', size: '12×16"', aspect: 12 / 16 },
+          { id: 'cfp-16x24', size: '16×24"', aspect: 16 / 24 },
         ],
       };
-      const TYPE_LABELS = { print: 'Prints', tile: 'Photo Tiles', canvas: 'Canvas', framed: 'Framed' };
-      // Base aspect (width/height) of the selected product, in its catalog
-      // (portrait) form. Square = 1.
-      function baseAspect() {
-        var list = PRODUCTS[state.productType] || [];
-        var v = list.find(function (x) { return x.id === state.variantId; });
-        return v ? v.aspect : null;
-      }
-      // Effective crop aspect, accounting for the orientation toggle. Prodigi
-      // auto-orients the print to the artwork's aspect (same SKU), so landscape
-      // just inverts the crop ratio. Square sizes ignore orientation.
+      const CATEGORIES = ['print', 'tile', 'canvas', 'framed'];
+      const CATEGORY_META = {
+        print:  { name: 'Prints',        tagline: 'Classic fine-art prints',  desc: 'Museum-quality enhanced matte giclée prints — perfect for any photo.', specs: ['Enhanced matte art paper, 200gsm', 'Giclée print', 'Ships worldwide'] },
+        tile:   { name: 'Photo Tiles',   tagline: 'Framed photo tiles',       desc: 'Ready-to-hang framed tiles — great on their own or in a cluster.',     specs: ['Framed photo tile', 'Ready to hang', 'Ships worldwide'] },
+        canvas: { name: 'Canvas',        tagline: 'Stretched canvas',         desc: 'Gallery-style stretched canvas with mirror-wrapped edges.',           specs: ['Stretched canvas', 'Mirror-wrapped edges', 'Ships worldwide'] },
+        framed: { name: 'Framed Prints', tagline: 'Classic framed prints',    desc: 'Fine-art print in a classic black frame behind perspex glaze.',       specs: ['Fine-art paper + perspex glaze', 'Black classic frame', 'Ships worldwide'] },
+      };
+
+      let currentUser = null;
+      let collection = null;
+      let photos = [];
+      let state = { step: 'category', productType: null, variantId: null, orientation: 'portrait', scale: 0.06, selectedIndex: null };
+
+      function variantOf(type, id) { return (PRODUCTS[type] || []).find(v => v.id === id) || null; }
+      function baseAspect() { const v = variantOf(state.productType, state.variantId); return v ? v.aspect : null; }
       function currentAspect() {
-        var a = baseAspect();
+        const a = baseAspect();
         if (a && a !== 1 && state.orientation === 'landscape') return 1 / a;
         return a;
       }
-      // Hide the orientation toggle for square products (it does nothing there).
-      function updateOrientationVisibility() {
-        var a = baseAspect();
-        document.getElementById('orientation-row').style.display = (a && a !== 1) ? 'flex' : 'none';
-      }
 
-      // Badge compositor (inlined so the page never depends on a separate file load).
+      // ---- badge compositor (inlined; never depends on a separate file) ----
       async function compositeBadgedImage(photoUrl, opts) {
         opts = opts || {};
         var scale = typeof opts.scale === 'number' ? opts.scale : 0.06;
-        var aspect = (typeof opts.aspect === 'number' && opts.aspect > 0) ? opts.aspect : null; // target width/height
+        var aspect = (typeof opts.aspect === 'number' && opts.aspect > 0) ? opts.aspect : null;
         var previewCanvas = opts.previewCanvas || null;
         var img = new Image(); img.crossOrigin = 'anonymous';
         await new Promise(function (res, rej) { img.onload = res; img.onerror = rej; img.src = photoUrl; });
         var iconImg = new Image();
         await new Promise(function (res, rej) { iconImg.onload = res; iconImg.onerror = rej; iconImg.src = '/assets/popcode_icon.svg'; });
-        // Center-crop the source to the product's aspect ratio so the badge sits in
-        // the corner of what actually prints (Prodigi won't crop further). With no
-        // aspect, keep the full photo.
         var sw = img.naturalWidth, sh = img.naturalHeight;
         var cropW = sw, cropH = sh, sx = 0, sy = 0;
         if (aspect) {
@@ -240,11 +292,15 @@
         var pad = Math.round(Math.min(c.width, c.height) * 0.025);
         ctx.drawImage(iconImg, c.width - badgeSize - pad, c.height - badgeSize - pad, badgeSize, badgeSize);
         if (previewCanvas) {
+          // Intrinsic size matches the crop aspect (so CSS max-width/height or
+          // object-fit render correctly) but capped so previews stay lightweight.
+          var maxDim = 600;
+          var s = Math.min(1, maxDim / Math.max(cropW, cropH));
+          var pw = Math.max(1, Math.round(cropW * s)), ph = Math.max(1, Math.round(cropH * s));
+          previewCanvas.width = pw; previewCanvas.height = ph;
           var pc = previewCanvas.getContext('2d');
-          var s = Math.min(previewCanvas.width / c.width, previewCanvas.height / c.height);
-          var pw = Math.round(c.width * s), ph = Math.round(c.height * s);
-          pc.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-          pc.drawImage(c, (previewCanvas.width - pw) / 2, (previewCanvas.height - ph) / 2, pw, ph);
+          pc.clearRect(0, 0, pw, ph);
+          pc.drawImage(c, 0, 0, pw, ph);
         }
         return c.toDataURL('image/png');
       }
@@ -256,11 +312,28 @@
         return new Blob([arr], { type: mime });
       }
 
-      let currentUser = null;
-      let collection = null;       // { id, slug, name }
-      let photos = [];             // deduped [{ target_index, photo_url }]
-      let state = { productType: 'print', variantId: 'fap-10x10', orientation: 'portrait', scale: 0.06, selectedIndex: null };
+      // ---- quoting ----
+      async function quoteFor(productType, variantId, opts) {
+        opts = opts || {};
+        const resp = await fetch('/api/prodigi-quote', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productType, variantId,
+            copies: opts.copies || 1,
+            destinationCountryCode: opts.country || 'US',
+            shippingMethod: opts.shipping || 'Standard',
+          }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Could not price this');
+        return data;
+      }
+      function formatMoney(minor, currency) {
+        try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD' }).format(minor / 100); }
+        catch (_) { return (currency || 'USD') + ' ' + (minor / 100).toFixed(2); }
+      }
 
+      // ---- boot ----
       db.auth.getSession().then(async ({ data }) => {
         if (!data.session) { window.location.href = '/auth.html'; return; }
         currentUser = data.session.user;
@@ -279,7 +352,6 @@
           const { data: items } = await db
             .from('collection_items').select('target_index, photo_url')
             .eq('collection_id', col.id).order('target_index');
-          // Dedupe by target_index, keep first non-null photo_url (projects have dupes).
           const seen = new Set();
           photos = (items || []).filter(it => {
             if (it.target_index == null || !it.photo_url) return false;
@@ -289,46 +361,116 @@
           if (!photos.length) throw new Error('This project has no printable photos yet');
           state.selectedIndex = photos[0].target_index;
 
-          renderTypeToggle();
-          renderVariants();
-          updateOrientationVisibility();
-          renderPhotos();
           document.getElementById('loading').style.display = 'none';
-          document.getElementById('main').style.display = 'block';
-          requestQuote();
+          renderCategories();
+          showStep('category');
         } catch (e) {
           document.getElementById('loading').style.display = 'none';
           showError(e.message);
         }
       }
 
-      function renderTypeToggle() {
-        const el = document.getElementById('type-toggle');
-        el.innerHTML = '';
-        Object.keys(PRODUCTS).forEach(type => {
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.className = 'type-btn' + (type === state.productType ? ' active' : '');
-          b.textContent = TYPE_LABELS[type];
-          b.onclick = () => {
-            state.productType = type;
-            state.variantId = PRODUCTS[type][0].id;
-            renderTypeToggle(); renderVariants(); updateOrientationVisibility(); renderPhotos(); requestQuote();
-          };
-          el.appendChild(b);
+      function showStep(step) {
+        state.step = step;
+        document.getElementById('step-category').style.display = step === 'category' ? 'block' : 'none';
+        document.getElementById('step-detail').style.display   = step === 'detail'   ? 'block' : 'none';
+        document.getElementById('step-create').style.display   = step === 'create'   ? 'block' : 'none';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      // ---- Step 1: categories ----
+      function renderCategories() {
+        const grid = document.getElementById('cat-grid');
+        grid.innerHTML = '';
+        const firstPhoto = photos[0].photo_url;
+        CATEGORIES.forEach(type => {
+          const meta = CATEGORY_META[type];
+          const first = PRODUCTS[type][0];
+          const card = document.createElement('div');
+          card.className = 'cat-card';
+          card.innerHTML =
+            '<div class="cat-thumb frame-' + type + '"><canvas></canvas></div>' +
+            '<div class="cat-name">' + meta.name + '</div>' +
+            '<div class="cat-desc">' + meta.desc + '</div>' +
+            '<div class="cat-from" data-from>Pricing…</div>';
+          card.onclick = () => openCategory(type);
+          grid.appendChild(card);
+          compositeBadgedImage(firstPhoto, { scale: 0.06, aspect: first.aspect, previewCanvas: card.querySelector('canvas') }).catch(() => {});
+          quoteFor(type, first.id).then(d => {
+            const el = card.querySelector('[data-from]');
+            if (el) el.textContent = 'From ' + formatMoney(d.total_minor, d.currency);
+          }).catch(() => { const el = card.querySelector('[data-from]'); if (el) el.textContent = ''; });
         });
       }
 
-      function renderVariants() {
-        const sel = document.getElementById('variant');
-        sel.innerHTML = '';
+      // ---- Step 2: product detail ----
+      function openCategory(type) {
+        state.productType = type;
+        state.variantId = PRODUCTS[type][0].id;
+        state.orientation = 'portrait';
+        const meta = CATEGORY_META[type];
+        document.getElementById('detail-name').textContent = meta.name;
+        document.getElementById('detail-tagline').textContent = meta.tagline;
+        document.getElementById('detail-specs').innerHTML = meta.specs.map(s => '<li>' + s + '</li>').join('');
+        document.getElementById('detail-preview').className = 'detail-preview frame-' + type;
+        // reset orientation toggle UI
+        document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b.dataset.orientation === 'portrait'));
+        renderSizeChips();
+        updateOrientationVisibility();
+        renderDetailPreview();
+        refreshDetailPrice();
+        showStep('detail');
+      }
+      function renderSizeChips() {
+        const wrap = document.getElementById('size-chips');
+        wrap.innerHTML = '';
         PRODUCTS[state.productType].forEach(v => {
-          const o = document.createElement('option');
-          o.value = v.id; o.textContent = v.label;
-          if (v.id === state.variantId) o.selected = true;
-          sel.appendChild(o);
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'size-chip' + (v.id === state.variantId ? ' active' : '');
+          b.textContent = v.size;
+          b.onclick = () => {
+            state.variantId = v.id;
+            renderSizeChips(); updateOrientationVisibility(); renderDetailPreview(); refreshDetailPrice();
+          };
+          wrap.appendChild(b);
         });
       }
+      function updateOrientationVisibility() {
+        const a = baseAspect();
+        document.getElementById('orient-row').style.display = (a && a !== 1) ? 'flex' : 'none';
+      }
+      function renderDetailPreview() {
+        compositeBadgedImage(photos[0].photo_url, { scale: 0.06, aspect: currentAspect(), previewCanvas: document.getElementById('detail-canvas') }).catch(() => {});
+      }
+      async function refreshDetailPrice() {
+        const el = document.getElementById('detail-price');
+        el.textContent = 'From …';
+        try {
+          const d = await quoteFor(state.productType, state.variantId);
+          el.textContent = 'From ' + formatMoney(d.total_minor, d.currency);
+        } catch (e) { el.textContent = '—'; }
+      }
+      document.getElementById('orientation-toggle').addEventListener('click', e => {
+        const btn = e.target.closest('button'); if (!btn) return;
+        state.orientation = btn.dataset.orientation;
+        document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b === btn));
+        renderDetailPreview();
+      });
+      document.getElementById('to-category').addEventListener('click', () => showStep('category'));
+      document.getElementById('create-btn').addEventListener('click', goCreate);
+
+      // ---- Step 3: create / checkout ----
+      function goCreate() {
+        const v = variantOf(state.productType, state.variantId);
+        document.getElementById('summary-title').textContent = CATEGORY_META[state.productType].name + ' · ' + v.size;
+        document.getElementById('summary-sub').textContent = (baseAspect() !== 1 ? (state.orientation === 'landscape' ? 'Landscape' : 'Portrait') : 'Square');
+        renderPhotos();
+        showStep('create');
+        requestQuote();
+      }
+      document.getElementById('to-detail').addEventListener('click', () => showStep('detail'));
+      document.getElementById('change-product').addEventListener('click', () => showStep('detail'));
 
       function renderPhotos() {
         const grid = document.getElementById('photo-grid');
@@ -336,70 +478,43 @@
         photos.forEach(p => {
           const cell = document.createElement('div');
           cell.className = 'photo-cell' + (p.target_index === state.selectedIndex ? ' selected' : '');
-          cell.dataset.index = p.target_index;
-          const cv = document.createElement('canvas');
-          cv.width = 200; cv.height = 200;
+          const cv = document.createElement('canvas'); cv.width = 200; cv.height = 200;
           cell.appendChild(cv);
           cell.onclick = () => { state.selectedIndex = p.target_index; renderPhotos(); };
           grid.appendChild(cell);
-          // Draw the badged preview (best-effort; ignore CORS/load failures).
-          compositeBadgedImage(p.photo_url, { scale: state.scale, aspect: currentAspect(), previewCanvas: cv }).catch(() => {});
+          // square thumbnail for the grid (cover), badge baked at chosen scale
+          compositeBadgedImage(p.photo_url, { scale: state.scale, aspect: 1, previewCanvas: cv }).catch(() => {});
         });
       }
 
-      // --- events ---
-      document.getElementById('variant').addEventListener('change', e => { state.variantId = e.target.value; updateOrientationVisibility(); renderPhotos(); requestQuote(); });
-      document.getElementById('orientation-toggle').addEventListener('click', e => {
-        const btn = e.target.closest('.type-btn'); if (!btn) return;
-        state.orientation = btn.dataset.orientation;
-        document.querySelectorAll('#orientation-toggle .type-btn').forEach(b => b.classList.toggle('active', b === btn));
-        renderPhotos();
-      });
-      document.getElementById('copies').addEventListener('input', requestQuoteDebounced);
-      document.getElementById('country').addEventListener('change', requestQuote);
-      document.getElementById('shipping').addEventListener('change', requestQuote);
       document.getElementById('badge-size-toggle').addEventListener('click', e => {
         const btn = e.target.closest('.badge-size-btn'); if (!btn) return;
         state.scale = parseFloat(btn.dataset.scale);
         document.querySelectorAll('.badge-size-btn').forEach(b => b.classList.toggle('active', b === btn));
         renderPhotos();
       });
+      document.getElementById('copies').addEventListener('input', requestQuoteDebounced);
+      document.getElementById('country').addEventListener('change', requestQuote);
+      document.getElementById('shipping').addEventListener('change', requestQuote);
       document.getElementById('pay-btn').addEventListener('click', pay);
 
       let quoteTimer = null;
       function requestQuoteDebounced() { clearTimeout(quoteTimer); quoteTimer = setTimeout(requestQuote, 400); }
-
-      let lastQuote = null;
       async function requestQuote() {
         const priceEl = document.getElementById('price');
         const noteEl = document.getElementById('price-note');
         const payBtn = document.getElementById('pay-btn');
-        priceEl.textContent = '…'; noteEl.textContent = 'Getting price…'; payBtn.disabled = true; lastQuote = null;
+        priceEl.textContent = '…'; noteEl.textContent = 'Getting price…'; payBtn.disabled = true;
         try {
-          const body = {
-            productType: state.productType,
-            variantId: state.variantId,
+          const d = await quoteFor(state.productType, state.variantId, {
             copies: Math.max(1, parseInt(document.getElementById('copies').value, 10) || 1),
-            destinationCountryCode: document.getElementById('country').value,
-            shippingMethod: document.getElementById('shipping').value,
-          };
-          const resp = await fetch('/api/prodigi-quote', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+            country: document.getElementById('country').value,
+            shipping: document.getElementById('shipping').value,
           });
-          const data = await resp.json();
-          if (!resp.ok) throw new Error(data.error || 'Could not price this');
-          lastQuote = data;
-          priceEl.textContent = formatMoney(data.total_minor, data.currency);
+          priceEl.textContent = formatMoney(d.total_minor, d.currency);
           noteEl.textContent = 'Incl. product, shipping & handling';
           payBtn.disabled = false;
-        } catch (e) {
-          priceEl.textContent = '—'; noteEl.textContent = e.message; payBtn.disabled = true;
-        }
-      }
-
-      function formatMoney(minor, currency) {
-        try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD' }).format(minor / 100); }
-        catch (_) { return (currency || 'USD') + ' ' + (minor / 100).toFixed(2); }
+        } catch (e) { priceEl.textContent = '—'; noteEl.textContent = e.message; payBtn.disabled = true; }
       }
 
       function recipientFromForm() {
@@ -430,19 +545,14 @@
         const payBtn = document.getElementById('pay-btn');
         payBtn.disabled = true; payBtn.textContent = 'Preparing…';
         try {
-          // 1. Composite badge onto the photo and upload it (public) so Prodigi can fetch it.
           const dataUrl = await compositeBadgedImage(photo.photo_url, { scale: state.scale, aspect: currentAspect() });
           const blob = dataUrlToBlob(dataUrl);
           const scalePct = Math.round(state.scale * 100);
-          // Upload into the existing public `experiences` bucket, under the project's
-          // own slug folder — reuses the upload policy that already lets the owner
-          // write {slug}/photo_N, so no separate print-assets bucket/policy is needed.
           const path = collection.slug + '/print-' + state.selectedIndex + '-' + state.orientation + '-badge' + scalePct + '.png';
           const up = await db.storage.from('experiences').upload(path, blob, { contentType: 'image/png', upsert: true });
           if (up.error) throw new Error('Could not prepare the print image: ' + up.error.message);
           const publicUrl = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
 
-          // 2. Create the checkout session server-side (it re-quotes + validates).
           const { data: sess } = await db.auth.getSession();
           const token = sess?.session?.access_token;
           const resp = await fetch('/api/create-checkout', {
