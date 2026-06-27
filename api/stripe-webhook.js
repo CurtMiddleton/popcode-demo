@@ -25,6 +25,7 @@ const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 const PRODIGI_BASE_URL = (process.env.PRODIGI_BASE_URL || 'https://api.sandbox.prodigi.com').trim().replace(/\/+$/, '');
 const PRODIGI_API_KEY = (process.env.PRODIGI_API_KEY || '').trim();
+const PRODIGI_DRY_RUN = (process.env.PRODIGI_DRY_RUN || '').trim().toLowerCase() === 'true';
 
 // Terminal/in-flight statuses we must not re-submit on a webhook retry.
 const ALREADY_HANDLED = new Set(['submitted', 'in_production', 'shipped', 'complete', 'prodigi_failed']);
@@ -100,6 +101,20 @@ export default async function handler(req, res) {
       recipient: order.recipient,
       items,
     };
+
+    // Dry-run: prove the Stripe -> webhook -> "would submit" chain without placing
+    // a real (live) Prodigi order. Records the exact body that would have been sent.
+    if (PRODIGI_DRY_RUN) {
+      await admin.from('print_orders')
+        .update({
+          status: 'submitted',
+          prodigi_order_id: `DRYRUN-${order.id}`,
+          prodigi_response: { dryRun: true, wouldSend: orderBody },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', order.id);
+      return res.status(200).json({ received: true, dryRun: true });
+    }
 
     let prodigiResp, prodigiData;
     try {
