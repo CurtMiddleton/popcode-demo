@@ -57,3 +57,18 @@ drop policy if exists "read own print_orders" on print_orders;
 create policy "read own print_orders" on print_orders
   for select to authenticated
   using (auth.uid() = user_id);
+
+-- Storage: allow signed-in users to upload/overwrite the badge-composited print
+-- images into the (public) print-assets bucket. Public bucket = public READ; the
+-- upload still needs these INSERT/UPDATE policies. Create the `print-assets`
+-- bucket (Public) in the dashboard before running these.
+drop policy if exists "print-assets insert" on storage.objects;
+create policy "print-assets insert"
+  on storage.objects for insert to authenticated
+  with check (bucket_id = 'print-assets');
+
+drop policy if exists "print-assets update" on storage.objects;
+create policy "print-assets update"
+  on storage.objects for update to authenticated
+  using (bucket_id = 'print-assets')
+  with check (bucket_id = 'print-assets');

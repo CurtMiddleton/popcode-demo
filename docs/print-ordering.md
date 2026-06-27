@@ -42,6 +42,12 @@ New bucket → Public). Composited print images are uploaded here so Prodigi can
 them by URL. The checkout endpoint only accepts asset URLs under this bucket's public
 prefix.
 
+A public bucket is publicly *readable*, but uploads still need INSERT/UPDATE RLS
+policies on `storage.objects`. Those are included in
+`supabase/migrations/2026-06-27-print-orders.sql` (`print-assets insert` / `update`)
+— create the bucket first, then run the migration, or you'll hit
+"new row violates row-level security policy" on the Pay step.
+
 ### 4. Stripe
 - Create a Stripe account; start in **test mode**.
 - Add a webhook endpoint → `https://<your-deploy>/api/stripe-webhook`, event
