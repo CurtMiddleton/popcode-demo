@@ -65,11 +65,18 @@
           <div class="type-toggle" id="type-toggle"></div>
           <label for="variant">Size</label>
           <select id="variant"></select>
+          <div id="orientation-row" style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span style="font-size:13px;font-weight:700;">Orientation</span>
+            <div class="type-toggle" id="orientation-toggle">
+              <button type="button" class="type-btn active" data-orientation="portrait">Portrait</button>
+              <button type="button" class="type-btn" data-orientation="landscape">Landscape</button>
+            </div>
+          </div>
         </div>
 
         <div class="card">
           <h2>Photo</h2>
-          <p class="muted">Pick the photo to print. The Popcode badge is added automatically so the print stays scannable.</p>
+          <p class="muted">Pick the photo to print. We add the small Popcode badge as a mark that it's a Popcoded photo — scanning works off the photo itself, so pointing a camera at the print plays the video.</p>
           <div style="margin:14px 0 6px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
             <span style="font-size:13px;font-weight:700;">Badge size</span>
             <div class="badge-size-toggle" id="badge-size-toggle">
@@ -173,12 +180,25 @@
         ],
       };
       const TYPE_LABELS = { print: 'Prints', tile: 'Photo Tiles' };
-      // Aspect ratio (width/height) of the currently selected product, used to
-      // pre-crop the photo so the badge lands in the corner of the actual print.
-      function currentAspect() {
+      // Base aspect (width/height) of the selected product, in its catalog
+      // (portrait) form. Square = 1.
+      function baseAspect() {
         var list = PRODUCTS[state.productType] || [];
         var v = list.find(function (x) { return x.id === state.variantId; });
         return v ? v.aspect : null;
+      }
+      // Effective crop aspect, accounting for the orientation toggle. Prodigi
+      // auto-orients the print to the artwork's aspect (same SKU), so landscape
+      // just inverts the crop ratio. Square sizes ignore orientation.
+      function currentAspect() {
+        var a = baseAspect();
+        if (a && a !== 1 && state.orientation === 'landscape') return 1 / a;
+        return a;
+      }
+      // Hide the orientation toggle for square products (it does nothing there).
+      function updateOrientationVisibility() {
+        var a = baseAspect();
+        document.getElementById('orientation-row').style.display = (a && a !== 1) ? 'flex' : 'none';
       }
 
       // Badge compositor (inlined so the page never depends on a separate file load).
@@ -227,7 +247,7 @@
       let currentUser = null;
       let collection = null;       // { id, slug, name }
       let photos = [];             // deduped [{ target_index, photo_url }]
-      let state = { productType: 'print', variantId: 'fap-10x10', scale: 0.06, selectedIndex: null };
+      let state = { productType: 'print', variantId: 'fap-10x10', orientation: 'portrait', scale: 0.06, selectedIndex: null };
 
       db.auth.getSession().then(async ({ data }) => {
         if (!data.session) { window.location.href = '/auth.html'; return; }
@@ -259,6 +279,7 @@
 
           renderTypeToggle();
           renderVariants();
+          updateOrientationVisibility();
           renderPhotos();
           document.getElementById('loading').style.display = 'none';
           document.getElementById('main').style.display = 'block';
@@ -280,7 +301,7 @@
           b.onclick = () => {
             state.productType = type;
             state.variantId = PRODUCTS[type][0].id;
-            renderTypeToggle(); renderVariants(); renderPhotos(); requestQuote();
+            renderTypeToggle(); renderVariants(); updateOrientationVisibility(); renderPhotos(); requestQuote();
           };
           el.appendChild(b);
         });
@@ -315,7 +336,13 @@
       }
 
       // --- events ---
-      document.getElementById('variant').addEventListener('change', e => { state.variantId = e.target.value; renderPhotos(); requestQuote(); });
+      document.getElementById('variant').addEventListener('change', e => { state.variantId = e.target.value; updateOrientationVisibility(); renderPhotos(); requestQuote(); });
+      document.getElementById('orientation-toggle').addEventListener('click', e => {
+        const btn = e.target.closest('.type-btn'); if (!btn) return;
+        state.orientation = btn.dataset.orientation;
+        document.querySelectorAll('#orientation-toggle .type-btn').forEach(b => b.classList.toggle('active', b === btn));
+        renderPhotos();
+      });
       document.getElementById('copies').addEventListener('input', requestQuoteDebounced);
       document.getElementById('country').addEventListener('change', requestQuote);
       document.getElementById('shipping').addEventListener('change', requestQuote);
@@ -398,7 +425,7 @@
           // Upload into the existing public `experiences` bucket, under the project's
           // own slug folder — reuses the upload policy that already lets the owner
           // write {slug}/photo_N, so no separate print-assets bucket/policy is needed.
-          const path = collection.slug + '/print-' + state.selectedIndex + '-badge' + scalePct + '.png';
+          const path = collection.slug + '/print-' + state.selectedIndex + '-' + state.orientation + '-badge' + scalePct + '.png';
           const up = await db.storage.from('experiences').upload(path, blob, { contentType: 'image/png', upsert: true });
           if (up.error) throw new Error('Could not prepare the print image: ' + up.error.message);
           const publicUrl = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
