@@ -314,31 +314,38 @@
         await new Promise(function (res, rej) { img.onload = res; img.onerror = rej; img.src = photoUrl; });
         var iconImg = new Image();
         await new Promise(function (res, rej) { iconImg.onload = res; iconImg.onerror = rej; iconImg.src = '/assets/popcode_icon.svg'; });
+        var returnDataUrl = opts.returnDataUrl !== false; // previews pass false
         var sw = img.naturalWidth, sh = img.naturalHeight;
         var cropW = sw, cropH = sh, sx = 0, sy = 0;
         if (aspect) {
           if (sw / sh > aspect) { cropH = sh; cropW = Math.round(sh * aspect); sx = Math.round((sw - cropW) / 2); }
           else { cropW = sw; cropH = Math.round(sw / aspect); sy = Math.round((sh - cropH) / 2); }
         }
-        var c = document.createElement('canvas');
-        c.width = cropW; c.height = cropH;
-        var ctx = c.getContext('2d');
-        ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
-        var badgeSize = Math.round(Math.min(c.width, c.height) * scale);
-        var pad = Math.round(Math.min(c.width, c.height) * 0.025);
-        ctx.drawImage(iconImg, c.width - badgeSize - pad, c.height - badgeSize - pad, badgeSize, badgeSize);
+        // Fast preview path: draw the crop straight into a small canvas (no full-res
+        // intermediate, no toDataURL) so the grid/detail stay snappy.
         if (previewCanvas) {
-          // Intrinsic size matches the crop aspect (so CSS max-width/height or
-          // object-fit render correctly) but capped so previews stay lightweight.
-          var maxDim = 600;
+          var maxDim = 500;
           var s = Math.min(1, maxDim / Math.max(cropW, cropH));
           var pw = Math.max(1, Math.round(cropW * s)), ph = Math.max(1, Math.round(cropH * s));
           previewCanvas.width = pw; previewCanvas.height = ph;
           var pc = previewCanvas.getContext('2d');
           pc.clearRect(0, 0, pw, ph);
-          pc.drawImage(c, 0, 0, pw, ph);
+          pc.drawImage(img, sx, sy, cropW, cropH, 0, 0, pw, ph);
+          var pbS = Math.round(Math.min(pw, ph) * scale), pbp = Math.round(Math.min(pw, ph) * 0.025);
+          pc.drawImage(iconImg, pw - pbS - pbp, ph - pbS - pbp, pbS, pbS);
+          if (!returnDataUrl) return null;
         }
-        return c.toDataURL('image/png');
+        // Full-res output (the actual print asset). JPEG keeps the file small so
+        // compositing + upload at checkout is fast (no transparency needed once
+        // the badge is flattened onto the photo).
+        var c = document.createElement('canvas');
+        c.width = cropW; c.height = cropH;
+        var ctx = c.getContext('2d');
+        ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+        var badgeSize = Math.round(Math.min(cropW, cropH) * scale);
+        var pad = Math.round(Math.min(cropW, cropH) * 0.025);
+        ctx.drawImage(iconImg, cropW - badgeSize - pad, cropH - badgeSize - pad, badgeSize, badgeSize);
+        return c.toDataURL('image/jpeg', 0.92);
       }
       function dataUrlToBlob(dataUrl) {
         var parts = dataUrl.split(',');
@@ -439,7 +446,7 @@
             '<div class="cat-from">See more details and pricing &rarr;</div>';
           card.onclick = () => openCategory(type);
           grid.appendChild(card);
-          compositeBadgedImage(firstPhoto, { scale: 0.06, aspect: first.aspect, previewCanvas: card.querySelector('canvas') }).catch(() => {});
+          compositeBadgedImage(firstPhoto, { scale: 0.06, aspect: first.aspect, previewCanvas: card.querySelector('canvas'), returnDataUrl: false }).catch(() => {});
         });
       }
 
@@ -481,7 +488,7 @@
         document.getElementById('orient-row').style.display = (a && a !== 1) ? 'flex' : 'none';
       }
       function renderDetailPreview() {
-        compositeBadgedImage(photos[0].photo_url, { scale: 0.06, aspect: currentAspect(), previewCanvas: document.getElementById('detail-canvas') }).catch(() => {});
+        compositeBadgedImage(photos[0].photo_url, { scale: 0.06, aspect: currentAspect(), previewCanvas: document.getElementById('detail-canvas'), returnDataUrl: false }).catch(() => {});
       }
       async function refreshDetailPrice() {
         const el = document.getElementById('detail-price');
@@ -525,7 +532,7 @@
           cell.onclick = () => { state.selectedIndex = p.target_index; renderPhotos(); };
           grid.appendChild(cell);
           // square thumbnail for the grid (cover), badge baked at chosen scale
-          compositeBadgedImage(p.photo_url, { scale: state.scale, aspect: 1, previewCanvas: cv }).catch(() => {});
+          compositeBadgedImage(p.photo_url, { scale: state.scale, aspect: 1, previewCanvas: cv, returnDataUrl: false }).catch(() => {});
         });
       }
 
@@ -590,8 +597,8 @@
           const dataUrl = await compositeBadgedImage(photo.photo_url, { scale: state.scale, aspect: currentAspect() });
           const blob = dataUrlToBlob(dataUrl);
           const scalePct = Math.round(state.scale * 100);
-          const path = collection.slug + '/print-' + state.selectedIndex + '-' + state.orientation + '-badge' + scalePct + '.png';
-          const up = await db.storage.from('experiences').upload(path, blob, { contentType: 'image/png', upsert: true });
+          const path = collection.slug + '/print-' + state.selectedIndex + '-' + state.orientation + '-badge' + scalePct + '.jpg';
+          const up = await db.storage.from('experiences').upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
           if (up.error) throw new Error('Could not prepare the print image: ' + up.error.message);
           const publicUrl = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
 
