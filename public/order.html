@@ -291,6 +291,18 @@
         framed: { name: 'Framed Prints', tagline: 'Classic framed prints',    desc: 'Fine-art print in a classic black frame behind perspex glaze.',       specs: ['Fine-art paper + perspex glaze', 'Black classic frame', 'Ships worldwide'] },
       };
 
+      // Photorealistic mockups (Route B): a face-on product photo + the rectangle
+      // (in template-image pixels) where the artwork sits. When a product has an
+      // entry here, the detail preview composites the badged photo INTO that real
+      // product shot; otherwise it falls back to the framed-canvas CSS preview.
+      // Add per product as templates land in /assets/mockups/.
+      const MOCKUPS = {
+        // canvas: { template: '/assets/mockups/canvas.jpg', rect: { x: 0, y: 0, w: 0, h: 0 } },
+        // framed: { template: '/assets/mockups/framed.jpg', rect: { x: 0, y: 0, w: 0, h: 0 } },
+        // tile:   { template: '/assets/mockups/tile.jpg',   rect: { x: 0, y: 0, w: 0, h: 0 } },
+        // print:  { template: '/assets/mockups/print.jpg',  rect: { x: 0, y: 0, w: 0, h: 0 } },
+      };
+
       let currentUser = null;
       let collection = null;
       let photos = [];
@@ -347,6 +359,28 @@
         ctx.drawImage(iconImg, cropW - badgeSize - pad, cropH - badgeSize - pad, badgeSize, badgeSize);
         return c.toDataURL('image/jpeg', 0.92);
       }
+      // Composite the badged photo into a real product mockup's art rectangle.
+      async function renderProductMockup(targetCanvas, photoUrl, opts) {
+        const mk = opts.mockup;
+        const artUrl = await compositeBadgedImage(photoUrl, { scale: opts.scale, aspect: opts.aspect });
+        const art = new Image(); await new Promise((res, rej) => { art.onload = res; art.onerror = rej; art.src = artUrl; });
+        const tpl = new Image(); tpl.crossOrigin = 'anonymous';
+        await new Promise((res, rej) => { tpl.onload = res; tpl.onerror = rej; tpl.src = mk.template; });
+        const maxDim = 900;
+        const s = Math.min(1, maxDim / Math.max(tpl.naturalWidth, tpl.naturalHeight));
+        const tw = Math.round(tpl.naturalWidth * s), th = Math.round(tpl.naturalHeight * s);
+        targetCanvas.width = tw; targetCanvas.height = th;
+        const ctx = targetCanvas.getContext('2d');
+        ctx.drawImage(tpl, 0, 0, tw, th);
+        const r = { x: mk.rect.x * s, y: mk.rect.y * s, w: mk.rect.w * s, h: mk.rect.h * s };
+        // cover-fit the art into the rect, clipped to it
+        const ar = art.naturalWidth / art.naturalHeight, rr = r.w / r.h;
+        let dw, dh; if (ar > rr) { dh = r.h; dw = r.h * ar; } else { dw = r.w; dh = r.w / ar; }
+        const dx = r.x + (r.w - dw) / 2, dy = r.y + (r.h - dh) / 2;
+        ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+        ctx.drawImage(art, dx, dy, dw, dh); ctx.restore();
+      }
+
       function dataUrlToBlob(dataUrl) {
         var parts = dataUrl.split(',');
         var mime = (parts[0].match(/:(.*?);/) || [null, 'image/png'])[1];
@@ -459,7 +493,9 @@
         document.getElementById('detail-name').textContent = meta.name;
         document.getElementById('detail-tagline').textContent = meta.tagline;
         document.getElementById('detail-specs').innerHTML = meta.specs.map(s => '<li>' + s + '</li>').join('');
-        document.getElementById('detail-preview').className = 'detail-preview frame-' + type;
+        // A real mockup provides its own framing/scene, so drop the CSS frame.
+        const hasMockup = !!(MOCKUPS[type] && MOCKUPS[type].template);
+        document.getElementById('detail-preview').className = 'detail-preview' + (hasMockup ? '' : ' frame-' + type);
         // reset orientation toggle UI
         document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b.dataset.orientation === 'portrait'));
         renderSizeChips();
@@ -488,7 +524,12 @@
         document.getElementById('orient-row').style.display = (a && a !== 1) ? 'flex' : 'none';
       }
       function renderDetailPreview() {
-        compositeBadgedImage(photos[0].photo_url, { scale: 0.06, aspect: currentAspect(), previewCanvas: document.getElementById('detail-canvas'), returnDataUrl: false }).catch(() => {});
+        const cv = document.getElementById('detail-canvas');
+        const mk = MOCKUPS[state.productType];
+        const fallback = () => compositeBadgedImage(photos[0].photo_url, { scale: 0.06, aspect: currentAspect(), previewCanvas: cv, returnDataUrl: false }).catch(() => {});
+        if (mk && mk.template) {
+          renderProductMockup(cv, photos[0].photo_url, { scale: 0.06, aspect: currentAspect(), mockup: mk }).catch(fallback);
+        } else { fallback(); }
       }
       async function refreshDetailPrice() {
         const el = document.getElementById('detail-price');
