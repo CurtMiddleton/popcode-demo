@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <script
+      src="https://browser.sentry-cdn.com/10.59.0/bundle.min.js"
+      integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
+      crossorigin="anonymous"></script>
+    <script src="/sentry-init.js"></script>
+    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <title>Popcode — Order Placed</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <style>
+      * { box-sizing:border-box; margin:0; padding:0; }
+      body { min-height:100vh; background:#f2f0eb; font-family:'Inter',sans-serif; color:#1a1a1a; display:flex; align-items:center; justify-content:center; padding:24px; }
+      .box { background:#fff; border-radius:24px; padding:36px 30px; max-width:460px; width:100%; text-align:center; box-shadow:0 8px 32px rgba(0,0,0,0.10); }
+      .check { width:64px; height:64px; border-radius:50%; background:linear-gradient(135deg,#7657FC 0%,#589AF9 100%); display:flex; align-items:center; justify-content:center; margin:0 auto 18px; }
+      h1 { font-size:24px; margin-bottom:8px; }
+      p { color:#555; font-size:15px; line-height:1.5; margin-bottom:8px; }
+      .status { display:inline-block; margin-top:10px; padding:6px 14px; border-radius:20px; font-size:13px; font-weight:700; background:#eef; color:#445; }
+      .btn { display:inline-block; margin-top:22px; padding:13px 26px; border-radius:16px; font-size:15px; font-weight:800; color:#fff; text-decoration:none; background:linear-gradient(135deg,#7657FC 0%,#589AF9 100%); }
+      .muted { color:#999; font-size:13px; margin-top:14px; }
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <div class="check">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <h1>Thanks — payment received!</h1>
+      <p>Your print order is on its way to production. We'll email you when it ships.</p>
+      <div class="status" id="status">Finalizing…</div>
+      <div>
+        <a class="btn" href="/manage.html">Back to My Projects</a>
+      </div>
+      <div class="muted" id="ref"></div>
+    </div>
+
+    <script>
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      const sessionId = new URLSearchParams(location.search).get('session_id');
+
+      const LABELS = {
+        pending: 'Finalizing payment…',
+        paid: 'Payment confirmed — submitting to print',
+        submitted: 'Submitted to print 🎉',
+        in_production: 'In production',
+        shipped: 'Shipped',
+        complete: 'Complete',
+        prodigi_failed: 'Payment received — we hit a snag submitting to print; our team is on it.',
+        payment_failed: 'Payment did not complete.',
+      };
+
+      function showStatus(status, prodigiOrderId) {
+        document.getElementById('status').textContent = LABELS[status] || status || 'Order placed';
+        if (prodigiOrderId) document.getElementById('ref').textContent = 'Order ref: ' + prodigiOrderId;
+      }
+
+      // Drive finalization from the success page (independent of the webhook).
+      async function finalize(token) {
+        const resp = await fetch('/api/finalize-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ sessionId }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Finalize failed');
+        return data;
+      }
+
+      db.auth.getSession().then(async ({ data }) => {
+        if (!sessionId) { showStatus('submitted'); return; }
+        const token = data.session?.access_token;
+        if (!token) { showStatus('submitted'); return; }
+        try {
+          const result = await finalize(token);
+          showStatus(result.status, result.prodigi_order_id);
+        } catch (e) {
+          // Fall back to reading the row (the webhook may finalize it instead).
+          const { data: row } = await db.from('print_orders')
+            .select('status, prodigi_order_id').eq('stripe_session_id', sessionId).maybeSingle();
+          if (row) showStatus(row.status, row.prodigi_order_id);
+          else showStatus('submitted');
+        }
+      });
+    </script>
+  </body>
+</html>

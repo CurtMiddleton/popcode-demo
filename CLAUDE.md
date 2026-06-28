@@ -926,3 +926,72 @@ Task was "add Sentry like we just did for Bashō (a Next.js 14 app)." **Popcode 
 - An event ID return / `flushed:true` only proves the request LEFT the SDK — always confirm the issue actually appears in **Sentry → Issues** (and in the RIGHT project — check `dsnTarget.projectId`).
 
 **Follow-ups (optional):** resolve the 3 test issues in Sentry; consider targeted `captureException` in specific browser silent-catch blocks (currently relying on global handlers); add `sentry-cli` source-map upload for the bundled functions if traces are hard to read.
+
+### 2026-06-27 — Prodigi print ordering + Stripe checkout (built, tested end-to-end in dry-run; NOT merged)
+
+**Branch `claude/kind-babbage-mpmxr8`, PR #53 (open, NOT merged to main).** Built a full print-on-demand ordering flow: a creator opens a project, picks a product + size + photo, enters a shipping address, sees a live price, pays via Stripe, and the order is submitted to Prodigi with the Popcode scan badge baked into the photo. **Validated end-to-end on the Vercel preview** (Stripe test mode + Prodigi DRY-RUN) — got all the way to "Submitted to print" with a real composited print asset.
+
+**Product decisions (from user):** Stripe Checkout + configurable markup (`PRINT_MARKUP_MULTIPLIER`, default 1.4 = 40% over Prodigi cost incl. shipping); v1 = single-image products only (flat prints + photo tiles); books/calendars deferred (schema/catalog designed to extend without migration); badge baked into every photo so prints stay scannable.
+
+**Files (all on the branch):**
+- `lib/print/catalog.mjs` — server-authoritative SKU catalog + `findVariant` + `buildProdigiItems` (has a `forQuote` flag — see SKU gotchas) + `priceFromQuote`/`sumQuoteMinor`. Client never trusted for SKU/price.
+- `api/prodigi-quote.js` — live price for the UI (display only).
+- `api/create-checkout.js` — authed (Bearer, like delete-account.js); validates owner + SKU + asset URL prefix; **re-quotes Prodigi server-side** (client price is advisory); inserts `print_orders` row; opens Stripe Checkout Session; returns `{url}`.
+- `api/stripe-webhook.js` — raw-body (`export const config = { api:{ bodyParser:false } }`) signature verify; idempotent; submits to Prodigi on `checkout.session.completed`. **Honors `PRODIGI_DRY_RUN`.** Kept as a BACKUP (see below).
+- `api/finalize-order.js` — **the thing that actually finalizes in practice.** Called by the success page directly (Stripe's fulfill-on-redirect-AND-webhook pattern). Verifies the session is paid via Stripe, then submits to Prodigi (or dry-run) and advances status. Idempotent, shares the guard with the webhook. Added because webhook delivery was too fragile to configure (URL/secret/sandbox/deployment-protection) — this removed that whole dependency.
+- `public/order.html` — order UI. **Compositor is INLINED** (don't reintroduce a dependency on `/composite.js` — it 404'd/cached-flaked and broke the page; inlining fixed it). Dedupes `collection_items` by target_index. Uploads to the **`experiences`** bucket (see RLS gotcha), not a new bucket.
+- `public/order-success.html` — calls `/api/finalize-order` then shows status.
+- `public/composite.js` — shared compositor (created but order.html no longer uses it; harmless).
+- `supabase/migrations/2026-06-27-print-orders.sql` — `print_orders` table + RLS (owner-read, server-only writes) + storage INSERT/UPDATE policies.
+- `manage.html` — "Order prints" shopping-bag icon on each card → `/order.html?id={slug}`.
+- `docs/print-ordering.md` — setup + env + test plan. `package.json` — added `stripe`.
+
+**Env vars (Vercel, Preview scope) set during testing:** `PRODIGI_API_KEY` (user's LIVE Prodigi key), `PRODIGI_BASE_URL=https://api.prodigi.com` (LIVE — sandbox login never worked, see below), `PRINT_MARKUP_MULTIPLIER=1.4`, `STRIPE_SECRET_KEY=sk_test_…`, `STRIPE_WEBHOOK_SECRET=whsec_…`, `PRODIGI_DRY_RUN=true`, plus the pre-existing `SUPABASE_SERVICE_ROLE_KEY`. **`PRODIGI_DRY_RUN=true` is the safety that prevents real Prodigi orders while pointed at the LIVE endpoint — do NOT remove it until intentionally going live.**
+
+**Current state:** works end-to-end on the preview in dry-run. A 10×10 fine-art print quoted **$34.79** (Prodigi ~$24.85 × 1.4). The composited print asset (Max beach photo + badge bottom-right) is real and viewable. `print_orders` has the submitted row (`prodigi_order_id = DRYRUN-…`, `prodigi_response.wouldSend` = exact Prodigi payload). No real Prodigi order placed (dry-run). Migrations were run on PROD Supabase (`mrwpkhsluzokytpvmwqk`).
+
+**The debugging saga — every blocker we hit, in order (so future-Claude doesn't relive it):**
+1. **"Prodigi not configured"** = env var missing/not redeployed. Vercel env changes need a redeploy.
+2. **Wrong value in `PRODIGI_API_KEY`** — user pasted a Stripe `sk_live_…` key into it, and later pasted the **base URL** into the key slot. Key prefixes `sk_test_`/`sk_live_` are STRIPE; Prodigi keys are NOT `sk_`. The long secret goes in `PRODIGI_API_KEY`; the `https://…` goes in `PRODIGI_BASE_URL`.
+3. **401 NotAuthenticated** = key rejected. Prodigi **sandbox and live use different keys**; a key only works against its matching `PRODIGI_BASE_URL`. Added `.trim()` to the key/base-URL reads (stray newline in pasted env vars breaks the X-API-Key header). Sandbox dashboard is `sandbox-beta-dashboard.pwinty.com` (NOT sandbox-dashboard.prodigi.com) — **user could never log into sandbox**, so we used the LIVE endpoint + key + dry-run instead.
+4. **400 ModelBindingFailed (items[0].sizing UnknownField)** — Prodigi's **quote** item schema rejects `sizing`. Added `forQuote` to `buildProdigiItems`: quotes send only sku/copies/attributes(+printArea asset); orders add sizing + asset URLs.
+5. **400 SkuNotFound** — placeholder SKUs were fake. Real verified SKUs: prints `GLOBAL-FAP-10x10`, `GLOBAL-FAP-16x24`; framed photo tiles `PHOTIL-FRA-0507`, `PHOTIL-FRA-0808`, `PHOTIL-FRA-0810`. (More FAP sizes exist but verify each via `GET /v4.0/products/{sku}` before adding.)
+6. **400 MissingRequiredAssets** — quote items still need `assets:[{printArea:'default'}]` (printArea only, no URL, no sizing).
+7. **Identical traceParent on a repeat error** = a STALE/cached page, not a new failure. Hard-refresh (Cmd+Shift+R); confirm you're on the newest preview build, not a redeploy of an older commit.
+8. **"new row violates row-level security policy"** on upload — the new `print-assets` bucket had no INSERT policy. **Fix that actually worked: upload to the existing `experiences` bucket** under `{slug}/print-…png` (reuses the owner-write policy create.html already relies on). `create-checkout` asset-URL prefix check points at the `experiences` public prefix accordingly.
+9. **`window.compositeBadgedImage is not a function`** — `/composite.js` failed to load. Fix: inlined the compositor into order.html.
+10. **"Checkout backend not configured"** = `STRIPE_SECRET_KEY` (or service key) missing from the deployment.
+11. **Stuck on "Finalizing payment…"** = the webhook never advanced the row (delivery never reached the function — no `checkout.session.completed` showed in Stripe's events for the right sandbox/endpoint). **Fix: `/api/finalize-order` driven by the success page** made it work without the webhook.
+
+**Lessons worth keeping:**
+- **Vercel env vars apply to the NEXT build only.** Every value change needs a redeploy; test on the newest preview at the top of Deployments, never a redeploy of an older commit. Stable preview alias was `popcode-demo-git-claude-kind-bab-a691b9-curtmiddletons-projects.vercel.app` (Vercel truncated the long branch name + hash — don't construct preview URLs by hand).
+- **Don't trust webhooks as the only fulfillment path** — finalize on the success redirect too (idempotent), webhook as backup. Saved the integration.
+- **Reuse the proven `experiences` bucket** for any new authenticated client upload rather than fighting a new bucket's storage RLS.
+- **Verify Prodigi SKUs against the catalogue** (`GET /v4.0/products/{sku}`) — never guess. Quote vs order item schemas differ (quote rejects `sizing`, needs printArea-only assets).
+- Money in integer minor units; `priceFromQuote` rounds once.
+- **Proof of print:** the composited asset is a public URL on the row (`asset_urls` / `prodigi_response.wouldSend...assets[].url`) — open it to see the badge baked in. Prodigi's true rendered proof (with the product crop applied) only exists for a REAL order.
+
+**~~KNOWN ISSUE — square-print crop~~ → FIXED (commit `6285e48`):** previously the badge was composited onto the full photo and Prodigi cropped to the product shape via `fillPrintArea`, clipping the corner badge on square sizes. Now `order.html`'s compositor **center-crops each photo to the selected product's aspect ratio FIRST, then places the badge in the corner of that crop** — so the badge is always correctly positioned in what actually prints, and the matching-aspect asset isn't cropped further by Prodigi. Each catalog variant carries an `aspect` (w/h): prints 10×10=1, 16×24=2/3; tiles 5×7, 8×8=1, 8×10. Previews re-render on size/type change. Verified: a 10×10 dry-run asset came out a clean square with the badge safely in the corner. Trade-off: center-crop trims the sides of a landscape photo forced into a tall/square product (unavoidable when reshaping); a future "drag to reposition the crop" UI could let creators choose what's kept.
+
+**Adding more products/sizes:** trivial — edit `PRODUCTS` in `lib/print/catalog.mjs` AND the client mirror in `order.html` (keep ids + `aspect` in sync). But **verify each new SKU against `GET /v4.0/products/{sku}` before adding** (guessed SKUs return SkuNotFound). Recommendation: don't expand the catalog until ONE real (non-dry-run) order has confirmed the live path works — no point stacking unverified SKUs on an unproven flow.
+
+**TO GO FULLY LIVE (not done; deliberate steps):**
+1. Get a working **Prodigi sandbox** key (or accept live orders) so real submits are free during testing.
+2. Remove/disable **`PRODIGI_DRY_RUN`** to place real Prodigi orders.
+3. Add all env vars to **Production** scope (incl. `PRODIGI_DRY_RUN=true` first if you want prod dry-run), merge PR #53 to `main`.
+4. Switch Stripe to **live** keys + a live webhook for real payments; tune markup.
+5. ~~Decide the square-crop handling~~ — DONE (aspect-crop fix above).
+6. Recommended sequencing: real test order first → then expand the product catalog → then full public launch.
+
+**Housekeeping done/queued this session:** user deleting the leftover **`identification` Supabase branch** (merged to prod in June, safe to delete — it was driving the "EXCEEDING USAGE LIMITS" MICRO-compute pill). **Re-enable Vercel Deployment Protection** on previews if it was turned off for testing (it had to be off so Stripe/phone could reach the preview). The `print-assets` bucket + its policies in the migration are now unused (we upload to `experiences`) — harmless, can drop later.
+
+**UPDATE — FIRST REAL SANDBOX ORDER SUCCEEDED (Prodigi #1161509):** got the integration fully working against the Prodigi **sandbox** (real order, free, nothing prints). Sequence of what it took:
+- **Prodigi sandbox needs its OWN key** — the live key returns 401 against `api.sandbox.prodigi.com`. Got the sandbox key from **`sandbox-beta-dashboard.pwinty.com`** (signed in there; sandbox key is prefixed **`test_`**, shown under "API authentication → X-API-Key"). The live dashboard only shows the one live key.
+- Switched Preview env to sandbox: `PRODIGI_API_KEY=test_…`, `PRODIGI_BASE_URL=https://api.sandbox.prodigi.com`, **`PRODIGI_DRY_RUN=false`** (safe on sandbox — orders process but never print). **All print/Stripe vars kept Preview-only** so Production (no print code yet) stays clean until deliberate go-live.
+- **Last bug: Prodigi ORDER endpoint rejects an empty `line2`** (`ValidationFailed` / `MustNotBeEmptyOrWhitespace`). Added `cleanRecipient()` in `lib/print/catalog.mjs` (trims + DROPS empty/whitespace address fields), applied in both `finalize-order.js` and `stripe-webhook.js` before building the order body. (Quote didn't care; order does.)
+- Result: order **#1161509** in the sandbox dashboard, **In production**, via API, SKU `GLOBAL-FAP-10x10`, **Order reference = our `print_orders.id`** (the `merchantReference`). Proof image shows "Image pending" for a minute while Prodigi fetches the asset URL, then renders the badged square-cropped proof. **Note: finalize-order's idempotency treats `prodigi_failed` as terminal — a failed order won't auto-retry; place a NEW order after a fix.**
+- **Path is now proven end-to-end.** Cleared to (a) add more single-image products/sizes (verify each SKU first) and (b) go live (production-scoped env with live key/URL + live Stripe + merge PR #53).
+
+**Catalog expansion (done this session):** prints went 2 → 7 GLOBAL-FAP sizes (8x10, 10x10, 11x14, 12x16, 16x24, 20x28, 24x36); 11x14/12x16/16x24/20x28/24x36 verified on Prodigi's Enhanced Matte Art page, 10x10/16x24 already proven, 8x10 added to spot-check. Each variant carries its `aspect` for the crop+badge. Tiles unchanged (PHOTIL-FRA 5x7/8x8/8x10). To add more: edit `PRODUCTS` in `lib/print/catalog.mjs` + the client mirror in `order.html` (keep id/aspect in sync), verify each SKU (selecting a size auto-quotes; SkuNotFound surfaces instantly).
+
+**ROADMAP — product-first ("commerce-first") ordering funnel (user idea, 2026-06-27):** today's flow is creation-first (build Popcode project → Manage → "Order prints"). User wants a buyer-led funnel: **pick product (e.g. framed print) → choose photo → link a video → create the Popcode behind the scenes → pay.** Better sales funnel (product intent leads). Good news: it REUSES existing building blocks — `create.html`'s compile/upload `.mind`, and `order.html`'s badge-composite + quote + Stripe checkout + `finalize-order`. The new work is mainly: (1) a **combined guided wizard** UI (product→photo→video→auto-create→pay); (2) **auth/guest handling** — a commerce-first buyer may not have an account, but a project currently requires a logged-in user (RLS), so either sign-up inline or guest checkout that provisions a lightweight account (the biggest design question); (3) the Popcode must still be really created (collection + collection_item + `.mind`) so the printed photo stays scannable via view/scan. **Additive — doesn't replace the current flow. Bigger UX project; do it AFTER the current single-image ordering ships, don't block go-live on it.**

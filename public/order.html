@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <!-- Sentry error monitoring (errors-only; init in /sentry-init.js) -->
+    <script
+      src="https://browser.sentry-cdn.com/10.59.0/bundle.min.js"
+      integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
+      crossorigin="anonymous"></script>
+    <script src="/sentry-init.js"></script>
+    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <title>Popcode — Shop</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { min-height:100vh; background:#ffffff; font-family:'Inter',sans-serif; color:#1a1a1a; display:flex; flex-direction:column; align-items:center; }
+      /* App banner (mirrors manage.html) */
+      .site-header { width:100vw; background:linear-gradient(135deg,#7657FC 0%,#589AF9 100%); padding:24px 24px 40px; min-height:200px; display:flex; align-items:flex-end; justify-content:center; position:relative; margin-bottom:8px; align-self:stretch; }
+      #nav-overlay { display:none; position:fixed; inset:0; z-index:200; }
+      #nav-overlay.open { display:block; }
+      #nav-drawer-bg { position:absolute; inset:0; background:rgba(0,0,0,0.18); }
+      #nav-drawer { position:absolute; top:14px; left:14px; width:264px; background:#fff; border-radius:18px; box-shadow:0 12px 48px rgba(0,0,0,0.18); padding:8px 0; opacity:0; transform:translateY(-8px) scale(0.97); transform-origin:top left; transition:opacity .18s ease, transform .18s ease; }
+      #nav-overlay.open #nav-drawer { opacity:1; transform:translateY(0) scale(1); }
+      .nav-link { display:flex; align-items:center; gap:14px; padding:11px 20px; font-size:15px; font-weight:500; color:#1a1a1a; text-decoration:none; font-family:'Inter',sans-serif; }
+      .nav-link:hover { background:#f5f4f0; }
+      .nav-link svg { flex-shrink:0; color:#555; }
+      .nav-link.external { color:#666; font-size:14px; }
+      .nav-divider { height:1px; background:#ececec; margin:8px 0; }
+      .wrap { width:100%; max-width: 1040px; margin: 0 auto; padding: 22px 28px 140px; }
+      a.back, .linkback { display:inline-flex; align-items:center; gap:6px; color:#7657FC; background:none; border:none; text-decoration:none; font-weight:600; font-size:14px; margin-bottom:22px; cursor:pointer; font-family:'Inter',sans-serif; }
+      h1 { font-family:'CooperBT', Georgia, serif; font-size: 54px; font-weight:400; margin-bottom: 10px; letter-spacing:-0.01em; }
+      .sub { color:#666; font-size:16px; margin-bottom:48px; }
+      .card { background:#fff; border-radius:22px; padding:30px; margin-bottom:26px; box-shadow:0 2px 12px rgba(0,0,0,0.05); }
+      .card h2 { font-size:17px; font-weight:600; margin-bottom:20px; }
+      label { display:block; font-size:13px; font-weight:500; margin:18px 0 8px; color:#333; }
+      select, input { width:100%; padding:11px 12px; border:1.5px solid #e3e1db; border-radius:12px; font-size:15px; font-family:'Inter',sans-serif; background:#fff; }
+      select:focus, input:focus { outline:none; border-color:#7657FC; }
+      .row { display:flex; gap:12px; flex-wrap:wrap; }
+      .row > div { flex:1; min-width:140px; }
+      .muted { color:#999; font-size:13px; }
+      .loading { text-align:center; color:#888; padding:40px; }
+      .banner { border-radius:14px; padding:12px 16px; font-size:14px; margin-bottom:18px; }
+      .banner.cancel, .banner.error { background:#fff5f5; border:1px solid #ffd4d4; color:#a33; }
+
+      /* Step 1 — category grid (big Popsa-style tiles) */
+      .cat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:44px; margin-top:8px; }
+      @media (max-width:680px){ .cat-grid { grid-template-columns:1fr; gap:32px; } }
+      .cat-card { background:#fff; border-radius:24px; padding:30px; box-shadow:0 2px 14px rgba(0,0,0,0.06); cursor:pointer; border:1px solid #eee; transition:transform .12s, box-shadow .15s, border-color .15s; text-align:left; }
+      .cat-card:hover { transform:translateY(-3px); box-shadow:0 12px 32px rgba(0,0,0,0.12); border-color:#e3dffb; }
+      .cat-thumb { width:100%; height:400px; border-radius:16px; background:#fafafa; display:flex; align-items:center; justify-content:center; overflow:hidden; margin-bottom:28px; }
+      .cat-thumb canvas { max-width:74%; max-height:80%; }
+      .cat-thumb.mockup canvas { max-width:98%; max-height:98%; }
+      .cat-thumb.frame-framed canvas { border:14px solid #1a1a1a; background:#fff; padding:10px; box-shadow:0 5px 16px rgba(0,0,0,0.22); }
+      .cat-thumb.frame-tile canvas { border:7px solid #fff; box-shadow:0 5px 16px rgba(0,0,0,0.20); }
+      .cat-thumb.frame-canvas canvas { box-shadow:9px 9px 0 #d9d4ca, 0 5px 16px rgba(0,0,0,0.18); }
+      .cat-thumb.frame-print canvas { box-shadow:0 5px 16px rgba(0,0,0,0.16); }
+      .cat-name { font-family:'CooperBT', Georgia, serif; font-size:31px; font-weight:400; letter-spacing:-0.01em; }
+      .cat-desc { color:#777; font-size:15px; margin:10px 0 22px; line-height:1.55; }
+      .cat-from { font-size:16px; font-weight:600; color:#1a1a1a; }
+
+      /* Step 2 — product detail */
+      .detail { display:grid; grid-template-columns:1fr 1fr; gap:48px; margin-top:8px; }
+      @media (max-width:680px){ .detail { grid-template-columns:1fr; gap:32px; } }
+      .detail-preview { background:#fff; border-radius:22px; padding:36px; box-shadow:0 2px 12px rgba(0,0,0,0.05); display:flex; align-items:center; justify-content:center; min-height:380px; }
+      .detail-preview canvas { max-width:100%; max-height:400px; }
+      .detail-preview.frame-framed canvas { border:14px solid #1a1a1a; background:#fff; padding:12px; box-shadow:0 6px 18px rgba(0,0,0,0.25); }
+      .detail-preview.frame-tile canvas { border:8px solid #fff; box-shadow:0 6px 18px rgba(0,0,0,0.22); }
+      .detail-preview.frame-canvas canvas { box-shadow:10px 10px 0 #d9d4ca, 0 6px 18px rgba(0,0,0,0.18); }
+      .detail-preview.frame-print canvas { box-shadow:0 6px 18px rgba(0,0,0,0.16); }
+      .detail-info h2 { font-family:'CooperBT', Georgia, serif; font-size:36px; font-weight:400; letter-spacing:-0.01em; margin-bottom:6px; }
+      .detail-info .tagline { color:#777; font-size:15px; margin-bottom:28px; }
+      .size-chips { display:flex; flex-wrap:wrap; gap:10px; margin:10px 0 6px; }
+      .size-chip { border:1.5px solid #e3e1db; background:#fff; border-radius:14px; padding:11px 18px; font-size:14px; font-weight:500; cursor:pointer; font-family:'Inter',sans-serif; color:#333; }
+      .size-chip.active { border-color:#7657FC; background:#f3f0ff; color:#7657FC; font-weight:600; }
+      .orient-row { margin-top:24px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+      .toggle { display:inline-flex; background:#eee; border-radius:16px; padding:3px; gap:2px; }
+      .toggle button { border:none; background:none; border-radius:14px; padding:8px 16px; font-size:13px; font-weight:500; color:#666; cursor:pointer; font-family:'Inter',sans-serif; }
+      .toggle button.active { background:#fff; color:#1a1a1a; box-shadow:0 1px 4px rgba(0,0,0,0.12); font-weight:600; }
+      .detail-price { font-size:20px; font-weight:600; margin:30px 0 4px; }
+      .detail-price-note { color:#888; font-size:12px; margin-bottom:24px; }
+      .specs { border-top:1px solid #eee; padding-top:22px; margin-top:10px; }
+      .specs li { list-style:none; color:#555; font-size:14px; padding:6px 0; display:flex; gap:10px; }
+      .specs li::before { content:'•'; color:#7657FC; }
+      .primary-btn { width:100%; margin-top:30px; padding:17px; border:none; border-radius:16px; font-size:16px; font-weight:600; color:#fff; font-family:'Inter',sans-serif; cursor:pointer; background:linear-gradient(135deg,#7657FC 0%,#589AF9 100%); }
+      .primary-btn:disabled { opacity:.5; cursor:not-allowed; }
+
+      /* Step 3 — create / checkout */
+      .summary-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+      .summary-bar .s-title { font-size:17px; font-weight:600; }
+      .summary-bar .s-sub { color:#777; font-size:13px; margin-top:2px; }
+      .photo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:14px; margin-top:12px; }
+      .photo-cell { position:relative; border:3px solid transparent; border-radius:12px; overflow:hidden; cursor:pointer; aspect-ratio:1; background:#f0eeea; }
+      .photo-cell.selected { border-color:#7657FC; }
+      .photo-cell canvas { width:100%; height:100%; object-fit:cover; display:block; }
+      .badge-size-toggle { display:inline-flex; background:#eee; border-radius:16px; padding:3px; gap:2px; }
+      .badge-size-btn { border:none; background:none; border-radius:14px; padding:7px 14px; font-size:13px; font-weight:500; color:#666; cursor:pointer; font-family:'Inter',sans-serif; }
+      .badge-size-btn.active { background:#fff; color:#1a1a1a; box-shadow:0 1px 4px rgba(0,0,0,0.12); font-weight:600; }
+      .price-row { display:flex; justify-content:space-between; align-items:baseline; margin-top:12px; }
+      .price { font-size:32px; font-weight:600; }
+      .price-note { color:#888; font-size:12px; }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <button id="nav-btn" style="position:absolute;left:20px;top:20px;background:none;border:none;cursor:pointer;padding:4px;" aria-label="Menu">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <a href="/manage.html"><img src="/assets/Popcode_logo.rev.svg" alt="Popcode" style="height:80px;"/></a>
+      <div style="position:absolute;right:20px;top:20px;display:flex;align-items:center;gap:10px;">
+        <span id="user-greeting" style="color:white;font-size:13px;font-weight:500;font-family:'Inter',sans-serif;opacity:0.9;"></span>
+        <button id="logout-btn" style="background:#78A7FF;color:white;border:none;border-radius:20px;padding:7px 16px;font-size:13px;font-weight:500;cursor:pointer;font-family:'Inter',sans-serif;">Sign Out</button>
+      </div>
+    </header>
+
+    <div id="nav-overlay">
+      <div id="nav-drawer-bg"></div>
+      <div id="nav-drawer">
+        <a class="nav-link" href="/manage.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>My Projects</a>
+        <a class="nav-link" href="/create.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>New Project</a>
+        <a class="nav-link" href="/views.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Past Views</a>
+        <a class="nav-link" href="/account.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>My Account</a>
+        <a class="nav-link" href="/howto.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>How It Works</a>
+        <div class="nav-divider"></div>
+        <a class="nav-link external" href="https://popcodeapp.com" target="_blank"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>popcodeapp.com</a>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <a class="back" href="/manage.html">&larr; My Projects</a>
+      <h1>Shop Products</h1>
+      <div class="sub" id="project-name">Loading project…</div>
+
+      <div id="cancel-banner" class="banner cancel" style="display:none;">Checkout cancelled — your order wasn't placed. Adjust anything and try again.</div>
+      <div id="error-banner" class="banner error" style="display:none;"></div>
+
+      <!-- Step 1: choose a product category -->
+      <div id="step-category" style="display:none;">
+        <div class="cat-grid" id="cat-grid"></div>
+      </div>
+
+      <!-- Step 2: product detail -->
+      <div id="step-detail" style="display:none;">
+        <button class="linkback" id="to-category">&larr; All products</button>
+        <div class="detail">
+          <div class="detail-preview" id="detail-preview"><canvas id="detail-canvas" width="400" height="400"></canvas></div>
+          <div class="detail-info">
+            <h2 id="detail-name">Product</h2>
+            <div class="tagline" id="detail-tagline"></div>
+            <label>Size</label>
+            <div class="size-chips" id="size-chips"></div>
+            <div class="orient-row" id="orient-row">
+              <span style="font-size:13px;font-weight:700;">Orientation</span>
+              <div class="toggle" id="orientation-toggle">
+                <button type="button" class="active" data-orientation="portrait">Portrait</button>
+                <button type="button" data-orientation="landscape">Landscape</button>
+              </div>
+            </div>
+            <div class="detail-price" id="detail-price">From —</div>
+            <div class="detail-price-note" id="detail-price-note">per print, incl. shipping &amp; handling</div>
+            <ul class="specs" id="detail-specs"></ul>
+            <button class="primary-btn" id="create-btn">Create</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: choose photo + checkout -->
+      <div id="step-create" style="display:none;">
+        <button class="linkback" id="to-detail">&larr; Back to product</button>
+        <div class="card">
+          <div class="summary-bar">
+            <div>
+              <div class="s-title" id="summary-title">—</div>
+              <div class="s-sub" id="summary-sub"></div>
+            </div>
+            <button class="linkback" id="change-product" style="margin:0;">Change</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Choose your photo</h2>
+          <p class="muted">We add a badge to indicate that the photo can be scanned by the Popcode app.</p>
+          <div style="margin:14px 0 6px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span style="font-size:13px;font-weight:700;">Badge size</span>
+            <div class="badge-size-toggle" id="badge-size-toggle">
+              <button type="button" class="badge-size-btn active" data-scale="0.06">Small</button>
+              <button type="button" class="badge-size-btn" data-scale="0.09">Medium</button>
+              <button type="button" class="badge-size-btn" data-scale="0.12">Large</button>
+            </div>
+          </div>
+          <div class="photo-grid" id="photo-grid"></div>
+        </div>
+
+        <div class="card">
+          <h2>Quantity &amp; shipping</h2>
+          <div class="row">
+            <div>
+              <label for="copies">Copies</label>
+              <input id="copies" type="number" min="1" value="1"/>
+            </div>
+            <div>
+              <label for="country">Ship to (country)</label>
+              <select id="country">
+                <option value="US">United States</option>
+                <option value="CA">Canada</option>
+                <option value="GB">United Kingdom</option>
+                <option value="AU">Australia</option>
+                <option value="DE">Germany</option>
+                <option value="FR">France</option>
+                <option value="IE">Ireland</option>
+                <option value="NZ">New Zealand</option>
+              </select>
+            </div>
+            <div>
+              <label for="shipping">Shipping</label>
+              <select id="shipping">
+                <option value="Budget">Budget</option>
+                <option value="Standard" selected>Standard</option>
+                <option value="Express">Express</option>
+              </select>
+            </div>
+          </div>
+          <label for="r-name">Recipient name</label>
+          <input id="r-name" type="text" autocomplete="name"/>
+          <label for="r-email">Email</label>
+          <input id="r-email" type="email" autocomplete="email"/>
+          <label for="r-line1">Address line 1</label>
+          <input id="r-line1" type="text" autocomplete="address-line1"/>
+          <label for="r-line2">Address line 2 (optional)</label>
+          <input id="r-line2" type="text" autocomplete="address-line2"/>
+          <div class="row">
+            <div><label for="r-city">City</label><input id="r-city" type="text" autocomplete="address-level2"/></div>
+            <div><label for="r-state">State / county</label><input id="r-state" type="text" autocomplete="address-level1"/></div>
+            <div><label for="r-postal">Postal / ZIP</label><input id="r-postal" type="text" autocomplete="postal-code"/></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="price-row">
+            <div><div class="muted">Total</div><div class="price" id="price">—</div></div>
+            <div class="price-note" id="price-note">Getting price…</div>
+          </div>
+          <button class="primary-btn" id="pay-btn" disabled>Pay with card</button>
+        </div>
+      </div>
+
+      <div id="loading" class="loading"><div>Loading…</div></div>
+    </div>
+
+    <script>
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      const qs = new URLSearchParams(location.search);
+      const slug = qs.get('id');
+      if (qs.get('cancelled')) document.getElementById('cancel-banner').style.display = 'block';
+
+      // Client mirror of lib/print/catalog.mjs (ids/sizes/aspect must stay in sync).
+      const PRODUCTS = {
+        print: [
+          { id: 'fap-8x10',  size: '8×10"',  aspect: 8 / 10 },
+          { id: 'fap-10x10', size: '10×10"', aspect: 1 },
+          { id: 'fap-11x14', size: '11×14"', aspect: 11 / 14 },
+          { id: 'fap-12x16', size: '12×16"', aspect: 12 / 16 },
+          { id: 'fap-16x24', size: '16×24"', aspect: 16 / 24 },
+          { id: 'fap-20x28', size: '20×28"', aspect: 20 / 28 },
+          { id: 'fap-24x36', size: '24×36"', aspect: 24 / 36 },
+        ],
+        tile: [
+          { id: 'tile-5x7',  size: '5×7"',  aspect: 5 / 7 },
+          { id: 'tile-8x8',  size: '8×8"',  aspect: 1 },
+          { id: 'tile-8x10', size: '8×10"', aspect: 8 / 10 },
+        ],
+        canvas: [
+          { id: 'can-10x10', size: '10×10"', aspect: 1 },
+          { id: 'can-12x16', size: '12×16"', aspect: 12 / 16 },
+          { id: 'can-16x20', size: '16×20"', aspect: 16 / 20 },
+          { id: 'can-16x24', size: '16×24"', aspect: 16 / 24 },
+        ],
+        framed: [
+          { id: 'cfp-8x10',  size: '8×10"',  aspect: 8 / 10 },
+          { id: 'cfp-11x14', size: '11×14"', aspect: 11 / 14 },
+          { id: 'cfp-12x16', size: '12×16"', aspect: 12 / 16 },
+          { id: 'cfp-16x24', size: '16×24"', aspect: 16 / 24 },
+        ],
+      };
+      const CATEGORIES = ['print', 'tile', 'canvas', 'framed'];
+      const CATEGORY_META = {
+        print:  { name: 'Prints',        tagline: 'Classic fine-art prints',  desc: 'Museum-quality enhanced matte giclée prints — perfect for any photo.', specs: ['Enhanced matte art paper, 200gsm', 'Giclée print', 'Ships worldwide'] },
+        tile:   { name: 'Photo Tiles',   tagline: 'Framed photo tiles',       desc: 'Ready-to-hang framed tiles — great on their own or in a cluster.',     specs: ['Framed photo tile', 'Ready to hang', 'Ships worldwide'] },
+        canvas: { name: 'Canvas',        tagline: 'Stretched canvas',         desc: 'Gallery-style stretched canvas with mirror-wrapped edges.',           specs: ['Stretched canvas', 'Mirror-wrapped edges', 'Ships worldwide'] },
+        framed: { name: 'Framed Prints', tagline: 'Classic framed prints',    desc: 'Fine-art print in a classic black frame behind perspex glaze.',       specs: ['Fine-art paper + perspex glaze', 'Black classic frame', 'Ships worldwide'] },
+      };
+
+      // Photorealistic mockups (Route B): a face-on product photo + the rectangle
+      // (in template-image pixels) where the artwork sits. When a product has an
+      // entry here, the detail preview composites the badged photo INTO that real
+      // product shot; otherwise it falls back to the framed-canvas CSS preview.
+      // Add per product as templates land in /assets/mockups/.
+      // rect = art opening as FRACTIONS of the template (resolution-independent).
+      const MOCKUPS = {
+        canvas: { template: '/assets/mockups/canvas.jpg', rect: { x: 0.192,  y: 0.113, w: 0.660, h: 0.823 } },
+        framed: { template: '/assets/mockups/framed.jpg', rect: { x: 0.208,  y: 0.111, w: 0.582, h: 0.778 } },
+        tile:   { template: '/assets/mockups/tile.jpg',   rect: { x: 0.280,  y: 0.206, w: 0.427, h: 0.598 } },
+        // A borderless print has no frame/depth of its own, and the template's wall
+        // is near-white, so it washes out on the white storefront card. `shadow`
+        // makes renderProductMockup cast a real drop shadow so it reads as a
+        // physical print lifted off the wall.
+        print:  { template: '/assets/mockups/print.jpg',  rect: { x: 0.190,  y: 0.113, w: 0.626, h: 0.782 }, shadow: true },
+      };
+
+      let currentUser = null;
+      let collection = null;
+      let photos = [];
+      let state = { step: 'category', productType: null, variantId: null, orientation: 'portrait', scale: 0.06, selectedIndex: null };
+
+      function variantOf(type, id) { return (PRODUCTS[type] || []).find(v => v.id === id) || null; }
+      function baseAspect() { const v = variantOf(state.productType, state.variantId); return v ? v.aspect : null; }
+      function currentAspect() {
+        const a = baseAspect();
+        if (a && a !== 1 && state.orientation === 'landscape') return 1 / a;
+        return a;
+      }
+
+      // ---- badge compositor (inlined; never depends on a separate file) ----
+      async function compositeBadgedImage(photoUrl, opts) {
+        opts = opts || {};
+        var scale = typeof opts.scale === 'number' ? opts.scale : 0.06;
+        var aspect = (typeof opts.aspect === 'number' && opts.aspect > 0) ? opts.aspect : null;
+        var previewCanvas = opts.previewCanvas || null;
+        var img = new Image(); img.crossOrigin = 'anonymous';
+        await new Promise(function (res, rej) { img.onload = res; img.onerror = rej; img.src = photoUrl; });
+        var iconImg = new Image();
+        await new Promise(function (res, rej) { iconImg.onload = res; iconImg.onerror = rej; iconImg.src = '/assets/popcode_icon.svg'; });
+        var returnDataUrl = opts.returnDataUrl !== false; // previews pass false
+        var sw = img.naturalWidth, sh = img.naturalHeight;
+        var cropW = sw, cropH = sh, sx = 0, sy = 0;
+        if (aspect) {
+          if (sw / sh > aspect) { cropH = sh; cropW = Math.round(sh * aspect); sx = Math.round((sw - cropW) / 2); }
+          else { cropW = sw; cropH = Math.round(sw / aspect); sy = Math.round((sh - cropH) / 2); }
+        }
+        // Fast preview path: draw the crop straight into a small canvas (no full-res
+        // intermediate, no toDataURL) so the grid/detail stay snappy.
+        if (previewCanvas) {
+          var maxDim = 500;
+          var s = Math.min(1, maxDim / Math.max(cropW, cropH));
+          var pw = Math.max(1, Math.round(cropW * s)), ph = Math.max(1, Math.round(cropH * s));
+          previewCanvas.width = pw; previewCanvas.height = ph;
+          var pc = previewCanvas.getContext('2d');
+          pc.clearRect(0, 0, pw, ph);
+          pc.drawImage(img, sx, sy, cropW, cropH, 0, 0, pw, ph);
+          var pbS = Math.round(Math.min(pw, ph) * scale), pbp = Math.round(Math.min(pw, ph) * 0.025);
+          pc.drawImage(iconImg, pw - pbS - pbp, ph - pbS - pbp, pbS, pbS);
+          if (!returnDataUrl) return null;
+        }
+        // Full-res output (the actual print asset). JPEG keeps the file small so
+        // compositing + upload at checkout is fast (no transparency needed once
+        // the badge is flattened onto the photo).
+        var c = document.createElement('canvas');
+        c.width = cropW; c.height = cropH;
+        var ctx = c.getContext('2d');
+        ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+        var badgeSize = Math.round(Math.min(cropW, cropH) * scale);
+        var pad = Math.round(Math.min(cropW, cropH) * 0.025);
+        ctx.drawImage(iconImg, cropW - badgeSize - pad, cropH - badgeSize - pad, badgeSize, badgeSize);
+        return c.toDataURL('image/jpeg', 0.92);
+      }
+      // Composite the badged photo into a real product mockup's art rectangle.
+      async function renderProductMockup(targetCanvas, photoUrl, opts) {
+        const mk = opts.mockup;
+        const tpl = new Image(); tpl.crossOrigin = 'anonymous';
+        await new Promise((res, rej) => { tpl.onload = res; tpl.onerror = rej; tpl.src = mk.template; });
+        const maxDim = 900;
+        const s = Math.min(1, maxDim / Math.max(tpl.naturalWidth, tpl.naturalHeight));
+        const tw = Math.round(tpl.naturalWidth * s), th = Math.round(tpl.naturalHeight * s);
+        let r = { x: mk.rect.x * tw, y: mk.rect.y * th, w: mk.rect.w * tw, h: mk.rect.h * th };
+        // Landscape orientation: rotate the (portrait) template 90° so the frame
+        // itself reads landscape, then place an upright landscape-cropped photo in
+        // the rotated opening. (A portrait 8×10 frame turned 90° IS a 10×8.)
+        const landscape = !!(opts.aspect && opts.aspect > 1);
+        const ctx = targetCanvas.getContext('2d');
+        if (landscape) {
+          targetCanvas.width = th; targetCanvas.height = tw;
+          ctx.save(); ctx.translate(th, 0); ctx.rotate(Math.PI / 2); ctx.drawImage(tpl, 0, 0, tw, th); ctx.restore();
+          r = { x: th - r.y - r.h, y: r.x, w: r.h, h: r.w };
+        } else {
+          targetCanvas.width = tw; targetCanvas.height = th;
+          ctx.drawImage(tpl, 0, 0, tw, th);
+        }
+        // Crop the badged art to the OPENING's exact aspect so the badge always
+        // lands in the corner of what's shown (no cover-crop clipping it off).
+        const artUrl = await compositeBadgedImage(photoUrl, { scale: opts.scale, aspect: r.w / r.h });
+        const art = new Image(); await new Promise((res, rej) => { art.onload = res; art.onerror = rej; art.src = artUrl; });
+        // Reinforce a cast shadow for borderless prints so they read as a physical
+        // object lifted off the wall (the template's baked shadow washes out on a
+        // white page). Paint a shadowed white rect under the art, then draw the art
+        // on top so only the soft halo around the print edges shows.
+        if (mk.shadow) {
+          ctx.save();
+          ctx.shadowColor = 'rgba(0,0,0,0.30)';
+          ctx.shadowBlur = Math.round(tw * 0.022);
+          ctx.shadowOffsetX = Math.round(tw * 0.012);
+          ctx.shadowOffsetY = Math.round(th * 0.016);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(r.x, r.y, r.w, r.h);
+          ctx.restore();
+        }
+        ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+        ctx.drawImage(art, r.x, r.y, r.w, r.h); ctx.restore();
+      }
+
+      function dataUrlToBlob(dataUrl) {
+        var parts = dataUrl.split(',');
+        var mime = (parts[0].match(/:(.*?);/) || [null, 'image/png'])[1];
+        var bin = atob(parts[1]), len = bin.length, arr = new Uint8Array(len);
+        for (var i = 0; i < len; i++) arr[i] = bin.charCodeAt(i);
+        return new Blob([arr], { type: mime });
+      }
+
+      // ---- quoting ----
+      async function quoteFor(productType, variantId, opts) {
+        opts = opts || {};
+        const resp = await fetch('/api/prodigi-quote', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productType, variantId,
+            copies: opts.copies || 1,
+            destinationCountryCode: opts.country || 'US',
+            shippingMethod: opts.shipping || 'Standard',
+          }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Could not price this');
+        return data;
+      }
+      function formatMoney(minor, currency) {
+        try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD' }).format(minor / 100); }
+        catch (_) { return (currency || 'USD') + ' ' + (minor / 100).toFixed(2); }
+      }
+
+      // ---- boot ----
+      db.auth.getSession().then(async ({ data }) => {
+        if (!data.session) { window.location.href = '/auth.html'; return; }
+        currentUser = data.session.user;
+        const uName = currentUser?.user_metadata?.full_name?.split(' ')[0] || currentUser?.email?.split('@')[0] || '';
+        if (uName) document.getElementById('user-greeting').textContent = 'Hi, ' + uName + '!';
+        await loadProject();
+      });
+
+      document.getElementById('logout-btn').addEventListener('click', async () => { await db.auth.signOut(); window.location.href = '/auth.html'; });
+      document.getElementById('nav-btn').addEventListener('click', () => document.getElementById('nav-overlay').classList.add('open'));
+      document.getElementById('nav-overlay').addEventListener('click', (e) => { if (e.target === document.getElementById('nav-drawer-bg')) document.getElementById('nav-overlay').classList.remove('open'); });
+
+      async function loadProject() {
+        try {
+          const { data: col, error } = await db
+            .from('collections').select('id, slug, name, user_id').eq('slug', slug).single();
+          if (error || !col) throw new Error('Project not found');
+          if (col.user_id && col.user_id !== currentUser.id) throw new Error('This is not your project');
+          collection = col;
+          const pn = document.getElementById('project-name');
+          pn.textContent = 'For ';
+          const st = document.createElement('strong'); st.textContent = col.name || col.slug; pn.appendChild(st);
+
+          const { data: items } = await db
+            .from('collection_items').select('target_index, photo_url')
+            .eq('collection_id', col.id).order('target_index');
+          const seen = new Set();
+          photos = (items || []).filter(it => {
+            if (it.target_index == null || !it.photo_url) return false;
+            if (seen.has(it.target_index)) return false;
+            seen.add(it.target_index); return true;
+          });
+          if (!photos.length) throw new Error('This project has no printable photos yet');
+          state.selectedIndex = photos[0].target_index;
+
+          document.getElementById('loading').style.display = 'none';
+          renderCategories();
+          showStep('category');
+        } catch (e) {
+          document.getElementById('loading').style.display = 'none';
+          showError(e.message);
+        }
+      }
+
+      function showStep(step) {
+        state.step = step;
+        document.getElementById('step-category').style.display = step === 'category' ? 'block' : 'none';
+        document.getElementById('step-detail').style.display   = step === 'detail'   ? 'block' : 'none';
+        document.getElementById('step-create').style.display   = step === 'create'   ? 'block' : 'none';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      // ---- Step 1: categories ----
+      function renderCategories() {
+        const grid = document.getElementById('cat-grid');
+        grid.innerHTML = '';
+        const firstPhoto = photos[0].photo_url;
+        CATEGORIES.forEach(type => {
+          const meta = CATEGORY_META[type];
+          const first = PRODUCTS[type][0];
+          const mk = MOCKUPS[type];
+          const hasMockup = !!(mk && mk.template);
+          const card = document.createElement('div');
+          card.className = 'cat-card';
+          // A real product mockup carries its own framing/depth/shadow, so don't
+          // also apply the CSS frame (its hard offset shadow looked like a bug).
+          card.innerHTML =
+            '<div class="cat-thumb' + (hasMockup ? ' mockup' : ' frame-' + type) + '"><canvas></canvas></div>' +
+            '<div class="cat-name">' + meta.name + '</div>' +
+            '<div class="cat-desc">' + meta.desc + '</div>' +
+            '<div class="cat-from">See more details and pricing &rarr;</div>';
+          card.onclick = () => openCategory(type);
+          grid.appendChild(card);
+          const cv = card.querySelector('canvas');
+          const fallback = () => compositeBadgedImage(firstPhoto, { scale: 0.06, aspect: first.aspect, previewCanvas: cv, returnDataUrl: false }).catch(() => {});
+          if (hasMockup) {
+            renderProductMockup(cv, firstPhoto, { scale: 0.06, aspect: first.aspect, mockup: mk }).catch(fallback);
+          } else { fallback(); }
+        });
+      }
+
+      // ---- Step 2: product detail ----
+      function openCategory(type) {
+        state.productType = type;
+        state.variantId = PRODUCTS[type][0].id;
+        state.orientation = 'portrait';
+        const meta = CATEGORY_META[type];
+        document.getElementById('detail-name').textContent = meta.name;
+        document.getElementById('detail-tagline').textContent = meta.tagline;
+        document.getElementById('detail-specs').innerHTML = meta.specs.map(s => '<li>' + s + '</li>').join('');
+        // A real mockup provides its own framing/scene, so drop the CSS frame.
+        const hasMockup = !!(MOCKUPS[type] && MOCKUPS[type].template);
+        document.getElementById('detail-preview').className = 'detail-preview' + (hasMockup ? '' : ' frame-' + type);
+        // reset orientation toggle UI
+        document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b.dataset.orientation === 'portrait'));
+        renderSizeChips();
+        updateOrientationVisibility();
+        renderDetailPreview();
+        refreshDetailPrice();
+        showStep('detail');
+      }
+      function renderSizeChips() {
+        const wrap = document.getElementById('size-chips');
+        wrap.innerHTML = '';
+        PRODUCTS[state.productType].forEach(v => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'size-chip' + (v.id === state.variantId ? ' active' : '');
+          b.textContent = v.size;
+          b.onclick = () => {
+            state.variantId = v.id;
+            renderSizeChips(); updateOrientationVisibility(); renderDetailPreview(); refreshDetailPrice();
+          };
+          wrap.appendChild(b);
+        });
+      }
+      function updateOrientationVisibility() {
+        const a = baseAspect();
+        document.getElementById('orient-row').style.display = (a && a !== 1) ? 'flex' : 'none';
+      }
+      function renderDetailPreview() {
+        const cv = document.getElementById('detail-canvas');
+        const mk = MOCKUPS[state.productType];
+        const fallback = () => compositeBadgedImage(photos[0].photo_url, { scale: 0.06, aspect: currentAspect(), previewCanvas: cv, returnDataUrl: false }).catch(() => {});
+        if (mk && mk.template) {
+          renderProductMockup(cv, photos[0].photo_url, { scale: 0.06, aspect: currentAspect(), mockup: mk }).catch(fallback);
+        } else { fallback(); }
+      }
+      async function refreshDetailPrice() {
+        const el = document.getElementById('detail-price');
+        const note = document.getElementById('detail-price-note');
+        el.textContent = 'From …'; note.textContent = 'per print, incl. shipping & handling';
+        try {
+          const d = await quoteFor(state.productType, state.variantId);
+          el.textContent = 'From ' + formatMoney(d.total_minor, d.currency);
+          note.textContent = 'per print, incl. shipping & handling';
+        } catch (e) { el.textContent = '—'; note.textContent = 'Pricing unavailable: ' + e.message; }
+      }
+      document.getElementById('orientation-toggle').addEventListener('click', e => {
+        const btn = e.target.closest('button'); if (!btn) return;
+        state.orientation = btn.dataset.orientation;
+        document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b === btn));
+        renderDetailPreview();
+      });
+      document.getElementById('to-category').addEventListener('click', () => showStep('category'));
+      document.getElementById('create-btn').addEventListener('click', goCreate);
+
+      // ---- Step 3: create / checkout ----
+      function goCreate() {
+        const v = variantOf(state.productType, state.variantId);
+        document.getElementById('summary-title').textContent = CATEGORY_META[state.productType].name + ' · ' + v.size;
+        document.getElementById('summary-sub').textContent = (baseAspect() !== 1 ? (state.orientation === 'landscape' ? 'Landscape' : 'Portrait') : 'Square');
+        renderPhotos();
+        showStep('create');
+        requestQuote();
+      }
+      document.getElementById('to-detail').addEventListener('click', () => showStep('detail'));
+      document.getElementById('change-product').addEventListener('click', () => showStep('detail'));
+
+      function renderPhotos() {
+        const grid = document.getElementById('photo-grid');
+        grid.innerHTML = '';
+        photos.forEach(p => {
+          const cell = document.createElement('div');
+          cell.className = 'photo-cell' + (p.target_index === state.selectedIndex ? ' selected' : '');
+          const cv = document.createElement('canvas'); cv.width = 200; cv.height = 200;
+          cell.appendChild(cv);
+          cell.onclick = () => { state.selectedIndex = p.target_index; renderPhotos(); };
+          grid.appendChild(cell);
+          // square thumbnail for the grid (cover), badge baked at chosen scale
+          compositeBadgedImage(p.photo_url, { scale: state.scale, aspect: 1, previewCanvas: cv, returnDataUrl: false }).catch(() => {});
+        });
+      }
+
+      document.getElementById('badge-size-toggle').addEventListener('click', e => {
+        const btn = e.target.closest('.badge-size-btn'); if (!btn) return;
+        state.scale = parseFloat(btn.dataset.scale);
+        document.querySelectorAll('.badge-size-btn').forEach(b => b.classList.toggle('active', b === btn));
+        renderPhotos();
+      });
+      document.getElementById('copies').addEventListener('input', requestQuoteDebounced);
+      document.getElementById('country').addEventListener('change', requestQuote);
+      document.getElementById('shipping').addEventListener('change', requestQuote);
+      document.getElementById('pay-btn').addEventListener('click', pay);
+
+      let quoteTimer = null;
+      function requestQuoteDebounced() { clearTimeout(quoteTimer); quoteTimer = setTimeout(requestQuote, 400); }
+      async function requestQuote() {
+        const priceEl = document.getElementById('price');
+        const noteEl = document.getElementById('price-note');
+        const payBtn = document.getElementById('pay-btn');
+        priceEl.textContent = '…'; noteEl.textContent = 'Getting price…'; payBtn.disabled = true;
+        try {
+          const d = await quoteFor(state.productType, state.variantId, {
+            copies: Math.max(1, parseInt(document.getElementById('copies').value, 10) || 1),
+            country: document.getElementById('country').value,
+            shipping: document.getElementById('shipping').value,
+          });
+          priceEl.textContent = formatMoney(d.total_minor, d.currency);
+          noteEl.textContent = 'Incl. product, shipping & handling';
+          payBtn.disabled = false;
+        } catch (e) { priceEl.textContent = '—'; noteEl.textContent = e.message; payBtn.disabled = true; }
+      }
+
+      function recipientFromForm() {
+        return {
+          name: document.getElementById('r-name').value.trim(),
+          email: document.getElementById('r-email').value.trim(),
+          address: {
+            line1: document.getElementById('r-line1').value.trim(),
+            line2: document.getElementById('r-line2').value.trim(),
+            townOrCity: document.getElementById('r-city').value.trim(),
+            stateOrCounty: document.getElementById('r-state').value.trim(),
+            postalOrZipCode: document.getElementById('r-postal').value.trim(),
+            countryCode: document.getElementById('country').value,
+          },
+        };
+      }
+
+      async function pay() {
+        clearError();
+        const recipient = recipientFromForm();
+        if (!recipient.name || !recipient.email || !recipient.address.line1 ||
+            !recipient.address.townOrCity || !recipient.address.postalOrZipCode) {
+          showError('Please fill in name, email, address, city and postal code.'); return;
+        }
+        const photo = photos.find(p => p.target_index === state.selectedIndex);
+        if (!photo) { showError('Pick a photo to print.'); return; }
+
+        const payBtn = document.getElementById('pay-btn');
+        payBtn.disabled = true; payBtn.textContent = 'Preparing…';
+        try {
+          const dataUrl = await compositeBadgedImage(photo.photo_url, { scale: state.scale, aspect: currentAspect() });
+          const blob = dataUrlToBlob(dataUrl);
+          const scalePct = Math.round(state.scale * 100);
+          const path = collection.slug + '/print-' + state.selectedIndex + '-' + state.orientation + '-badge' + scalePct + '.jpg';
+          const up = await db.storage.from('experiences').upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
+          if (up.error) throw new Error('Could not prepare the print image: ' + up.error.message);
+          const publicUrl = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+
+          const { data: sess } = await db.auth.getSession();
+          const token = sess?.session?.access_token;
+          const resp = await fetch('/api/create-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({
+              collectionId: collection.id,
+              productType: state.productType,
+              variantId: state.variantId,
+              copies: Math.max(1, parseInt(document.getElementById('copies').value, 10) || 1),
+              shippingMethod: document.getElementById('shipping').value,
+              recipient,
+              assetUrls: [{ target_index: state.selectedIndex, print_area: 'default', url: publicUrl }],
+            }),
+          });
+          const data = await resp.json();
+          if (!resp.ok || !data.url) throw new Error(data.error || 'Could not start checkout');
+          window.location = data.url;
+        } catch (e) {
+          showError(e.message);
+          payBtn.disabled = false; payBtn.textContent = 'Pay with card';
+        }
+      }
+
+      function showError(msg) {
+        const b = document.getElementById('error-banner');
+        b.textContent = msg; b.style.display = 'block';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      function clearError() { document.getElementById('error-banner').style.display = 'none'; }
+    </script>
+  </body>
+</html>
