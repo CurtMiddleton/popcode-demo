@@ -80,10 +80,21 @@ export default async function handler(req, res) {
       return res.status(200).json({ received: true, note: 'not paid' });
     }
 
-    // Mark paid + reconcile the charged amount against Stripe.
-    await admin.from('print_orders')
-      .update({ status: 'paid', total_charged_minor: session.amount_total, updated_at: new Date().toISOString() })
-      .eq('id', order.id);
+    // Atomically claim this order for submission. This route and the success-page
+    // /api/finalize-order can fire at the same time and both clear the idempotency
+    // check above before either writes prodigi_order_id — without a claim that
+    // races into TWO Prodigi orders (double print + double charge;
+    // merchantReference is NOT a Prodigi-side uniqueness guarantee). Only the
+    // caller that flips pending/paid -> submitting proceeds.
+    const { data: claimed } = await admin.from('print_orders')
+      .update({ status: 'submitting', total_charged_minor: session.amount_total, updated_at: new Date().toISOString() })
+      .eq('id', order.id)
+      .is('prodigi_order_id', null)
+      .in('status', ['pending', 'paid'])
+      .select();
+    if (!claimed || claimed.length === 0) {
+      return res.status(200).json({ received: true, idempotent: true });
+    }
 
     // Submit to Prodigi. merchantReference = our order id makes a manual retry
     // idempotent on Prodigi's side too.
