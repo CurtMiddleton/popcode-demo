@@ -373,14 +373,24 @@
         const maxDim = 900;
         const s = Math.min(1, maxDim / Math.max(tpl.naturalWidth, tpl.naturalHeight));
         const tw = Math.round(tpl.naturalWidth * s), th = Math.round(tpl.naturalHeight * s);
-        const r = { x: mk.rect.x * tw, y: mk.rect.y * th, w: mk.rect.w * tw, h: mk.rect.h * th };
+        let r = { x: mk.rect.x * tw, y: mk.rect.y * th, w: mk.rect.w * tw, h: mk.rect.h * th };
+        // Landscape orientation: rotate the (portrait) template 90° so the frame
+        // itself reads landscape, then place an upright landscape-cropped photo in
+        // the rotated opening. (A portrait 8×10 frame turned 90° IS a 10×8.)
+        const landscape = !!(opts.aspect && opts.aspect > 1);
+        const ctx = targetCanvas.getContext('2d');
+        if (landscape) {
+          targetCanvas.width = th; targetCanvas.height = tw;
+          ctx.save(); ctx.translate(th, 0); ctx.rotate(Math.PI / 2); ctx.drawImage(tpl, 0, 0, tw, th); ctx.restore();
+          r = { x: th - r.y - r.h, y: r.x, w: r.h, h: r.w };
+        } else {
+          targetCanvas.width = tw; targetCanvas.height = th;
+          ctx.drawImage(tpl, 0, 0, tw, th);
+        }
         // Crop the badged art to the OPENING's exact aspect so the badge always
         // lands in the corner of what's shown (no cover-crop clipping it off).
         const artUrl = await compositeBadgedImage(photoUrl, { scale: opts.scale, aspect: r.w / r.h });
         const art = new Image(); await new Promise((res, rej) => { art.onload = res; art.onerror = rej; art.src = artUrl; });
-        targetCanvas.width = tw; targetCanvas.height = th;
-        const ctx = targetCanvas.getContext('2d');
-        ctx.drawImage(tpl, 0, 0, tw, th);
         // Reinforce a cast shadow for borderless prints so they read as a physical
         // object lifted off the wall (the template's baked shadow washes out on a
         // white page). Paint a shadowed white rect under the art, then draw the art
