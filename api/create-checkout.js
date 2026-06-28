@@ -138,7 +138,7 @@ export default async function handler(req, res) {
           unit_amount: totalMinor,
           product_data: {
             name: `${variant.label} — ${collection.name || 'Popcode print'}`,
-            description: `Qty ${copiesInt} · ships to ${recipient.address.countryCode}`,
+            description: `Quantity: ${copiesInt}`,
           },
         },
       }],
