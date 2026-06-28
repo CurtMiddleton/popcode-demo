@@ -363,23 +363,21 @@
       // Composite the badged photo into a real product mockup's art rectangle.
       async function renderProductMockup(targetCanvas, photoUrl, opts) {
         const mk = opts.mockup;
-        const artUrl = await compositeBadgedImage(photoUrl, { scale: opts.scale, aspect: opts.aspect });
-        const art = new Image(); await new Promise((res, rej) => { art.onload = res; art.onerror = rej; art.src = artUrl; });
         const tpl = new Image(); tpl.crossOrigin = 'anonymous';
         await new Promise((res, rej) => { tpl.onload = res; tpl.onerror = rej; tpl.src = mk.template; });
         const maxDim = 900;
         const s = Math.min(1, maxDim / Math.max(tpl.naturalWidth, tpl.naturalHeight));
         const tw = Math.round(tpl.naturalWidth * s), th = Math.round(tpl.naturalHeight * s);
+        const r = { x: mk.rect.x * tw, y: mk.rect.y * th, w: mk.rect.w * tw, h: mk.rect.h * th };
+        // Crop the badged art to the OPENING's exact aspect so the badge always
+        // lands in the corner of what's shown (no cover-crop clipping it off).
+        const artUrl = await compositeBadgedImage(photoUrl, { scale: opts.scale, aspect: r.w / r.h });
+        const art = new Image(); await new Promise((res, rej) => { art.onload = res; art.onerror = rej; art.src = artUrl; });
         targetCanvas.width = tw; targetCanvas.height = th;
         const ctx = targetCanvas.getContext('2d');
         ctx.drawImage(tpl, 0, 0, tw, th);
-        const r = { x: mk.rect.x * tw, y: mk.rect.y * th, w: mk.rect.w * tw, h: mk.rect.h * th };
-        // cover-fit the art into the rect, clipped to it
-        const ar = art.naturalWidth / art.naturalHeight, rr = r.w / r.h;
-        let dw, dh; if (ar > rr) { dh = r.h; dw = r.h * ar; } else { dw = r.w; dh = r.w / ar; }
-        const dx = r.x + (r.w - dw) / 2, dy = r.y + (r.h - dh) / 2;
         ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
-        ctx.drawImage(art, dx, dy, dw, dh); ctx.restore();
+        ctx.drawImage(art, r.x, r.y, r.w, r.h); ctx.restore();
       }
 
       function dataUrlToBlob(dataUrl) {
