@@ -434,8 +434,10 @@
         return data;
       }
       function formatMoney(minor, currency) {
-        try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD' }).format(minor / 100); }
-        catch (_) { return (currency || 'USD') + ' ' + (minor / 100).toFixed(2); }
+        // Prices are rounded to whole dollars server-side, so drop the .00.
+        var whole = minor % 100 === 0;
+        try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD', minimumFractionDigits: whole ? 0 : 2 }).format(minor / 100); }
+        catch (_) { return (currency || 'USD') + ' ' + (minor / 100).toFixed(whole ? 0 : 2); }
       }
 
       // ---- boot ----
