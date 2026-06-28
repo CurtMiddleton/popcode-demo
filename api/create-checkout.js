@@ -87,12 +87,14 @@ export default async function handler(req, res) {
 
     // 4. Authoritative re-quote (never trust the client's displayed price).
     const items = buildProdigiItems({ variant, copies, forQuote: true });
-    const quote = await prodigiQuote({
-      shippingMethod,
-      destinationCountryCode: recipient.address.countryCode,
-      items,
-    });
-    const summed = sumQuoteMinor(quote);
+    // Retry transient empty quotes so a Prodigi blip can't fail a paid checkout.
+    let summed = null;
+    for (let attempt = 0; attempt < 3 && !summed; attempt++) {
+      try {
+        const quote = await prodigiQuote({ shippingMethod, destinationCountryCode: recipient.address.countryCode, items });
+        summed = sumQuoteMinor(quote);
+      } catch (err) { if (attempt === 2) throw err; }
+    }
     if (!summed) return res.status(502).json({ error: 'Could not price this order' });
     const totalMinor = priceFromQuote(summed.totalMinor, MARKUP);
 

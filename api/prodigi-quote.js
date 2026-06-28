@@ -36,8 +36,15 @@ export default async function handler(req, res) {
     if (!variant) return res.status(400).json({ error: 'Unknown product' });
 
     const items = buildProdigiItems({ variant, copies, forQuote: true });
-    const quote = await prodigiQuote({ shippingMethod, destinationCountryCode, items });
-    const summed = sumQuoteMinor(quote);
+    // Retry a couple of times — Prodigi sandbox occasionally returns an empty
+    // quote transiently; a customer shouldn't see a price fail over a blip.
+    let summed = null;
+    for (let attempt = 0; attempt < 3 && !summed; attempt++) {
+      try {
+        const quote = await prodigiQuote({ shippingMethod, destinationCountryCode, items });
+        summed = sumQuoteMinor(quote);
+      } catch (err) { if (attempt === 2) throw err; }
+    }
     if (!summed) return res.status(502).json({ error: 'Could not price this product/destination' });
 
     const total_minor = priceFromQuote(summed.totalMinor, MARKUP);
