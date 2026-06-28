@@ -301,7 +301,11 @@
         canvas: { template: '/assets/mockups/canvas.jpg', rect: { x: 0.192,  y: 0.113, w: 0.660, h: 0.823 } },
         framed: { template: '/assets/mockups/framed.jpg', rect: { x: 0.208,  y: 0.112, w: 0.582, h: 0.744 } },
         tile:   { template: '/assets/mockups/tile.jpg',   rect: { x: 0.280,  y: 0.206, w: 0.427, h: 0.598 } },
-        print:  { template: '/assets/mockups/print.jpg',  rect: { x: 0.190,  y: 0.113, w: 0.626, h: 0.782 } },
+        // A borderless print has no frame/depth of its own, and the template's wall
+        // is near-white, so it washes out on the white storefront card. `shadow`
+        // makes renderProductMockup cast a real drop shadow so it reads as a
+        // physical print lifted off the wall.
+        print:  { template: '/assets/mockups/print.jpg',  rect: { x: 0.190,  y: 0.113, w: 0.626, h: 0.782 }, shadow: true },
       };
 
       let currentUser = null;
@@ -376,6 +380,20 @@
         targetCanvas.width = tw; targetCanvas.height = th;
         const ctx = targetCanvas.getContext('2d');
         ctx.drawImage(tpl, 0, 0, tw, th);
+        // Reinforce a cast shadow for borderless prints so they read as a physical
+        // object lifted off the wall (the template's baked shadow washes out on a
+        // white page). Paint a shadowed white rect under the art, then draw the art
+        // on top so only the soft halo around the print edges shows.
+        if (mk.shadow) {
+          ctx.save();
+          ctx.shadowColor = 'rgba(0,0,0,0.30)';
+          ctx.shadowBlur = Math.round(tw * 0.022);
+          ctx.shadowOffsetX = Math.round(tw * 0.012);
+          ctx.shadowOffsetY = Math.round(th * 0.016);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(r.x, r.y, r.w, r.h);
+          ctx.restore();
+        }
         ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
         ctx.drawImage(art, r.x, r.y, r.w, r.h); ctx.restore();
       }
