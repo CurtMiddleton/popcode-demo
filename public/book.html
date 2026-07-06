@@ -178,6 +178,47 @@
       }
       .slot-tag img { width: 10px; height: 10px; }
 
+      /* ── Front cover ─────────────────────────────────────────── */
+      /* container-type: inline-size lets the cover text scale with the page width
+         via cqw, WITHOUT containing the block axis (so aspect-ratio + inset:0 fill
+         still work — `size` would collapse the height). */
+      .page-canvas.cover { background: #ffffff; container-type: inline-size; }
+      .cv { position: absolute; inset: 0; overflow: hidden; }
+      .cv-photo { background-size: cover; background-position: center; background-color: #e4e1d9; }
+      .cv-photo-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: #8a8578; font-size: 3.4cqw; font-weight: 600; padding: 6%; }
+      .cv-fill { position: absolute; inset: 0; }
+      .cv-top { position: absolute; top: 0; left: 0; right: 0; height: 66%; }
+      .cv-lower { position: absolute; left: 9%; right: 9%; bottom: 9%; height: 58%; border-radius: 2px; }
+      .cv-half { position: absolute; top: 0; bottom: 0; left: 0; width: 52%; }
+      .cv-titlebar { position: absolute; left: 0; right: 0; bottom: 0; height: 34%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5%; padding: 0 7%; text-align: center; }
+      .cv-frame { position: absolute; top: 10%; left: 10%; right: 10%; bottom: 30%; background: #fff; padding: 2.4%; box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+      .cv-frame .cv-photo { width: 100%; height: 100%; }
+      .cv-scrim { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0) 48%); }
+      .cv-text { position: absolute; z-index: 2; display: flex; flex-direction: column; gap: 1.2%; }
+      .cv-bl { left: 7%; right: 7%; bottom: 7%; align-items: flex-start; text-align: left; }
+      .cv-center { left: 7%; right: 7%; bottom: 6%; align-items: center; text-align: center; }
+      .cv-mid { inset: 0; align-items: center; justify-content: center; text-align: center; padding: 0 9%; }
+      .cv-tl { top: 8%; left: 8%; right: 8%; align-items: flex-start; text-align: left; }
+      .cv-right { top: 0; bottom: 0; right: 0; width: 48%; justify-content: center; align-items: flex-start; text-align: left; padding: 0 6%; }
+      .cv-title { font-family: 'CooperBT', serif; font-weight: 400; font-size: 8.5cqw; line-height: 1.02; letter-spacing: 0; }
+      .cv-sub { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 3.4cqw; line-height: 1.2; opacity: 0.9; }
+      .cv-title.cv-ph { opacity: 0.4; }
+      .cv-ontxt-light, .cv-ontxt-light .cv-title, .cv-ontxt-light .cv-sub { color: #ffffff; }
+      .cv-ontxt-dark, .cv-ontxt-dark .cv-title, .cv-ontxt-dark .cv-sub { color: #1a1a1a; }
+
+      /* Cover editor sheet */
+      .cover-preview { position: relative; width: 100%; aspect-ratio: 117 / 83; border-radius: 8px; overflow: hidden; container-type: inline-size; box-shadow: 0 2px 14px rgba(0,0,0,0.14); margin-bottom: 16px; background: #fff; }
+      .cvtpl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+      .cvtpl { cursor: pointer; }
+      .cvtpl-mini { position: relative; width: 100%; aspect-ratio: 117 / 83; container-type: inline-size; border-radius: 6px; overflow: hidden; border: 2px solid #eceae4; }
+      .cvtpl.active .cvtpl-mini { border-color: #7657FC; }
+      .cvtpl-name { font-size: 11px; font-weight: 700; text-align: center; color: #666; margin-top: 5px; }
+      .cv-swatch-row { display: flex; gap: 10px; flex-wrap: wrap; }
+      .cv-swatch { width: 34px; height: 34px; border-radius: 50%; border: 2px solid #e4e2dc; cursor: pointer; padding: 0; }
+      .cv-swatch.active { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #7657FC; }
+      .cover-photo-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .cover-photo-prev { width: 64px; height: 46px; border-radius: 8px; background-size: cover; background-position: center; flex: 0 0 auto; }
+
       .add-page-btn {
         width: 100%; padding: 15px; border-radius: 14px; border: 1.5px dashed #cfcabd; background: transparent;
         color: #6a6455; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 18px;
@@ -450,6 +491,14 @@
             slots: (pg.slots || []).map(s => (s && s.photo_url) ? getPhotoId(s.photo_url) : null),
           }));
 
+          // Restore the front-cover config.
+          const c = col.book_layout.cover;
+          if (c) cover = {
+            template: COVER_TEMPLATES.some(t => t.key === c.template) ? c.template : 'overlay',
+            title: c.title || '', subtitle: c.subtitle || '', color: c.color || '#2dc0c5',
+            photo: c.photo_url ? { file: null, url: c.photo_url, existingUrl: c.photo_url } : null,
+          };
+
           document.getElementById('title-input').value = col.name || '';
           document.querySelector('h1').textContent = 'Edit Book';
           document.getElementById('create-btn').textContent = 'Save Changes';
@@ -527,9 +576,27 @@
       }
 
       const blankPage = () => ({ id: uid('pg'), layout: 'blank', slots: [] });
-      // Book label for a page at global index i: first left page is the blank
-      // inside-cover; content starts at "Page 1" on the first right page.
-      const pageLabel = (i) => (i === 0 ? 'Blank Page' : 'Page ' + i);
+      // Book label for a page at global index i: the first page (index 0) is the
+      // Front Cover; content starts at "Page 1" on the first right page.
+      const pageLabel = (i) => (i === 0 ? 'Front Cover' : 'Page ' + i);
+
+      // Cover templates (Popsa-style). Each renders the cover title/subtitle +
+      // optional cover photo differently. `needsColor` shows the colour swatches.
+      const COVER_TEMPLATES = [
+        { key: 'overlay',  name: 'Photo',   needsColor: false },
+        { key: 'band',     name: 'Band',    needsColor: true },
+        { key: 'framed',   name: 'Framed',  needsColor: true },
+        { key: 'titletop', name: 'Title top', needsColor: true },
+        { key: 'split',    name: 'Split',   needsColor: true },
+        { key: 'color',    name: 'Color',   needsColor: true },
+      ];
+      const COVER_COLORS = ['#2dc0c5', '#7657FC', '#589AF9', '#1a1a1a', '#f2efe9', '#c96a3f'];
+      // White text on dark colours, dark text on light — quick luminance check.
+      function isLightColor(hex) {
+        const h = (hex || '').replace('#', ''); if (h.length < 6) return false;
+        const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 165;
+      }
 
       // ── State ───────────────────────────────────────────────────
       // photos: id -> { id, file, url, popcode|null }
@@ -537,6 +604,8 @@
       // pages: [ { id, layout, slots:[photoId|null,...] } ]
       const photos = new Map();
       let pages = [];
+      // Front-cover config. photo: { file, url, existingUrl } | null.
+      let cover = { template: 'overlay', title: '', subtitle: '', color: '#2dc0c5', photo: null };
       let selectedTrayId = null;     // photo selected in tray, waiting to place
       let swapSource = null;         // {pageId, slotIdx} first tap of a swap
       let justDragged = false;       // suppresses the click that trails a photo drag
@@ -745,24 +814,28 @@
       // SVGs for the per-page tools.
       const IC_LAYOUT ='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>';
       const IC_MORE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>';
+      const IC_EDIT = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
 
       // Build one page (half of a spread): a header (label + Popsa controls) above
       // the landscape canvas with its slots. `globalIndex` sets the page label;
       // `side` mirrors the header; the first page (index 0) is the blank cover.
       function buildPageHalf(pg, globalIndex, side, isSingle) {
-        const isBlank = pg.layout === 'blank';
+        const isCover = globalIndex === 0;      // the first page is the front cover
+        const isBlank = pg.layout === 'blank' && !isCover;
         const half = document.createElement('div');
         half.className = 'page-half' + (isSingle ? ' single' : '');
 
-        // Header row above the page (not overlaid): label + controls (layout, more).
-        // Mirrored — icons on the outer edge, label toward the gutter. The blank
-        // inside-cover shows just its label.
+        // Header row above the page (not overlaid): label + controls. Mirrored —
+        // icons on the outer edge, label toward the gutter. The cover gets an Edit
+        // button; a plain blank page shows just its label.
         const head = document.createElement('div');
         head.className = 'page-half-head';
         const label = `<span class="page-label-text">${escapeHtml(pageLabel(globalIndex))}</span>`;
-        const controls = isBlank ? '' : `
+        const controls = isCover
+          ? `<button class="page-tool tool-cover" title="Edit cover">${IC_EDIT}</button>`
+          : (isBlank ? '' : `
           <button class="page-tool tool-layout" title="Change layout">${IC_LAYOUT}</button>
-          <button class="page-tool tool-more" title="More">${IC_MORE}</button>`;
+          <button class="page-tool tool-more" title="More">${IC_MORE}</button>`);
         head.innerHTML = side === 'right'
           ? `<div class="ph-spacer"></div>${label}${controls}`
           : `${controls}${label}<div class="ph-spacer"></div>`;
@@ -770,14 +843,136 @@
         if (layoutBtn) layoutBtn.addEventListener('click', () => openLayoutSheet(pg));
         const moreBtn = head.querySelector('.tool-more');
         if (moreBtn) moreBtn.addEventListener('click', () => openPageMenu(pg));
+        const coverBtn = head.querySelector('.tool-cover');
+        if (coverBtn) coverBtn.addEventListener('click', openCoverEditor);
 
         const canvas = document.createElement('div');
-        canvas.className = 'page-canvas' + (isBlank ? ' blank' : '');
-        if (!isBlank) canvas.appendChild(buildPageGrid(pg));
+        canvas.className = 'page-canvas' + (isCover ? ' cover' : (isBlank ? ' blank' : ''));
+        if (isCover) { canvas.appendChild(buildCoverCanvas()); canvas.addEventListener('click', openCoverEditor); }
+        else if (!isBlank) canvas.appendChild(buildPageGrid(pg));
 
         half.appendChild(head);
         half.appendChild(canvas);
         return half;
+      }
+
+      // Render the front cover from `cover` state per its template.
+      function buildCoverCanvas() {
+        const wrap = document.createElement('div');
+        wrap.className = 'cv cv-' + cover.template;
+        const photoUrl = cover.photo && cover.photo.url;
+        const title = cover.title || 'Your Title';
+        const sub = cover.subtitle || '';
+        const titlePlaceholder = !cover.title ? ' cv-ph' : '';
+        const bg = escapeHtml(cover.color);
+        const light = isLightColor(cover.color);
+        const onColor = light ? 'cv-ontxt-dark' : 'cv-ontxt-light';
+        const photoStyle = photoUrl ? `style="background-image:url('${photoUrl}')"` : '';
+        const photoHint = photoUrl ? '' : '<div class="cv-photo-hint">Tap to add a cover photo</div>';
+        const titleEl = (extra) => `<div class="cv-title${titlePlaceholder} ${extra || ''}">${escapeHtml(title)}</div>`;
+        const subEl = (extra) => sub ? `<div class="cv-sub ${extra || ''}">${escapeHtml(sub)}</div>` : '';
+
+        if (cover.template === 'overlay') {
+          wrap.innerHTML = `<div class="cv-photo cv-fill" ${photoStyle}>${photoHint}</div>
+            <div class="cv-scrim"></div>
+            <div class="cv-text cv-bl cv-ontxt-light">${titleEl()}${subEl()}</div>`;
+        } else if (cover.template === 'band') {
+          wrap.innerHTML = `<div class="cv-photo cv-top" ${photoStyle}>${photoHint}</div>
+            <div class="cv-titlebar" style="background:${bg}">${titleEl(onColor)}${subEl(onColor)}</div>`;
+        } else if (cover.template === 'framed') {
+          wrap.style.background = cover.color;
+          wrap.innerHTML = `<div class="cv-frame"><div class="cv-photo cv-fill" ${photoStyle}>${photoHint}</div></div>
+            <div class="cv-text cv-center ${onColor}">${titleEl()}${subEl()}</div>`;
+        } else if (cover.template === 'titletop') {
+          wrap.style.background = cover.color;
+          wrap.innerHTML = `<div class="cv-text cv-tl ${onColor}">${titleEl()}${subEl()}</div>
+            <div class="cv-photo cv-lower" ${photoStyle}>${photoHint}</div>`;
+        } else if (cover.template === 'split') {
+          wrap.style.background = cover.color;
+          wrap.innerHTML = `<div class="cv-photo cv-half" ${photoStyle}>${photoHint}</div>
+            <div class="cv-text cv-right ${onColor}">${titleEl()}${subEl()}</div>`;
+        } else { // color
+          wrap.style.background = cover.color;
+          wrap.innerHTML = `<div class="cv-text cv-center ${onColor}">${titleEl()}${subEl()}</div>`;
+        }
+        return wrap;
+      }
+
+      // Mini cover thumbnail for a template tile (reuses the real renderer).
+      function coverTileHTML(tplKey) {
+        const saved = cover.template; cover.template = tplKey;
+        const html = buildCoverCanvas().outerHTML; cover.template = saved;
+        return html;
+      }
+      function refreshCoverPreview() {
+        const p = document.getElementById('cover-preview');
+        if (p) { p.innerHTML = ''; p.appendChild(buildCoverCanvas()); }
+      }
+
+      // The front-cover editor: template picker + title/subtitle + photo + colour.
+      function openCoverEditor(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        const tpl = COVER_TEMPLATES.find(t => t.key === cover.template) || COVER_TEMPLATES[0];
+        const tiles = COVER_TEMPLATES.map(t =>
+          `<div class="cvtpl ${cover.template === t.key ? 'active' : ''}" data-tpl="${t.key}">
+             <div class="cvtpl-mini">${coverTileHTML(t.key)}</div>
+             <div class="cvtpl-name">${t.name}</div>
+           </div>`).join('');
+        const swatches = COVER_COLORS.map(c =>
+          `<button class="cv-swatch ${cover.color === c ? 'active' : ''}" data-color="${c}" style="background:${c}"></button>`).join('');
+        const photoRow = cover.photo
+          ? `<div class="cover-photo-prev" style="background-image:url('${cover.photo.url}')"></div>
+             <button class="mini-btn" id="cover-change">Change photo</button>
+             <button class="mini-btn" id="cover-remove">Remove</button>`
+          : `<label class="mini-btn solid" id="cover-pick"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Choose cover photo</label>`;
+        openSheet(`
+          <h2>Front cover</h2>
+          <div class="cover-preview" id="cover-preview"></div>
+          <div class="cvtpl-grid">${tiles}</div>
+          <div class="field-label" style="margin-top:14px">Title</div>
+          <input class="text-input" id="cover-title" type="text" maxlength="60" placeholder="e.g. Our 2026 Year"/>
+          <div class="field-label">Subtitle</div>
+          <input class="text-input" id="cover-subtitle" type="text" maxlength="80" placeholder="e.g. Safari with the family"/>
+          <div class="field-label" style="${tpl.needsColor ? '' : 'display:none'}" id="cover-color-label">Colour</div>
+          <div class="cv-swatch-row" id="cover-color-row" style="${tpl.needsColor ? '' : 'display:none'}">${swatches}</div>
+          <div class="field-label" style="margin-top:14px">Cover photo</div>
+          <div class="cover-photo-row">${photoRow}</div>
+          <div class="sheet-actions"><button class="btn-primary" id="cover-done">Done</button></div>
+        `);
+        refreshCoverPreview();
+        const titleInput = document.getElementById('cover-title');
+        const subInput = document.getElementById('cover-subtitle');
+        titleInput.value = cover.title; subInput.value = cover.subtitle;
+        titleInput.addEventListener('input', () => { cover.title = titleInput.value; refreshCoverPreview(); });
+        subInput.addEventListener('input', () => { cover.subtitle = subInput.value; refreshCoverPreview(); });
+        document.querySelectorAll('#sheet .cvtpl').forEach(t =>
+          t.addEventListener('click', () => { cover.template = t.dataset.tpl; openCoverEditor(); }));
+        document.querySelectorAll('#sheet .cv-swatch').forEach(s =>
+          s.addEventListener('click', () => { cover.color = s.dataset.color; openCoverEditor(); }));
+        const pick = document.getElementById('cover-pick');
+        const change = document.getElementById('cover-change');
+        const remove = document.getElementById('cover-remove');
+        if (pick) pick.addEventListener('click', () => chooseCoverPhoto());
+        if (change) change.addEventListener('click', () => chooseCoverPhoto());
+        if (remove) remove.addEventListener('click', () => {
+          if (cover.photo && cover.photo.file) URL.revokeObjectURL(cover.photo.url);
+          cover.photo = null; openCoverEditor();
+        });
+        document.getElementById('cover-done').addEventListener('click', () => { closeSheet(); render(); });
+      }
+
+      function chooseCoverPhoto() {
+        const inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = 'image/*';
+        inp.addEventListener('change', async () => {
+          const f = inp.files[0]; if (!f) return;
+          const out = await optimizePhoto(f);
+          if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
+          if (cover.photo && cover.photo.file) URL.revokeObjectURL(cover.photo.url);
+          cover.photo = { file: out, url: URL.createObjectURL(out), existingUrl: null };
+          openCoverEditor();
+        });
+        inp.click();
       }
 
       // Create one photo slot wired for tap/drag/place. `slotIdx` maps to pg.slots.
@@ -1444,6 +1639,16 @@
             setProgress(`Uploading photos… ${done}/${orderedPhotoIds.length}`, 4 + (done / orderedPhotoIds.length) * 26);
           }
 
+          // 1b. Upload the cover photo (new File only; reuse existing URL otherwise).
+          let coverPhotoUrl = cover.photo ? cover.photo.existingUrl : null;
+          if (cover.photo && cover.photo.file) {
+            setProgress('Uploading cover…', 30);
+            const cpath = `${slug}/book/cover.jpg`;
+            const { error } = await db.storage.from(bucket).upload(cpath, cover.photo.file, { contentType: cover.photo.file.type || 'image/jpeg', upsert: true });
+            if (error) throw new Error('Cover upload failed: ' + error.message);
+            coverPhotoUrl = pub(cpath) + `?v=${Date.now()}`;
+          }
+
           // 2. Compile popcoded photos into a fresh .mind target. Recompiled on
           //    every save so the target order matches the current popcode order.
           setProgress('Preparing scan targets…', 32);
@@ -1497,7 +1702,13 @@
           popcodedIds.forEach((id, i) => { targetIndexByPhoto[id] = i; });
           const bookLayout = {
             size: 'a4-landscape', // Prodigi 11.7 × 8.3" landscape
-
+            cover: {
+              template: cover.template,
+              title: cover.title || null,
+              subtitle: cover.subtitle || null,
+              color: cover.color,
+              photo_url: coverPhotoUrl,
+            },
             pages: pages.map(pg => ({
               id: pg.id,
               layout: pg.layout,
