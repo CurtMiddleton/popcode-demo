@@ -471,8 +471,8 @@
       // landscape (Prodigi 11.7×8.3"). `slots` = photo slots; `grid` = CSS grid;
       // `pad` = the outer white mat; `gap` = white gutter between photos. Full-bleed
       // has no mat/gap; the minimal matted layouts get clean white margins.
-      const MAT = '7.5%';   // outer mat for matted (non-bleed) layouts
-      const GAP = '3.5%';   // gutter between photos
+      const MAT = '11%';    // outer white mat for matted (non-bleed) layouts — generous, minimal
+      const GAP = '4%';     // gutter between photos
       // `bleed` is a separate per-page toggle (the full-bleed icon): when on, the
       // page ignores pad/gap and photos run to the page edges. So a single photo
       // is "centered/matted" by default and "full bleed" when the toggle is on.
@@ -484,9 +484,11 @@
         'two-left':  { name: 'Big left',     slots: 2, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1.7fr 1fr;grid-template-rows:1fr;' },
         'two-right': { name: 'Big right',    slots: 2, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1fr 1.7fr;grid-template-rows:1fr;' },
         'three-row': { name: 'Three across', slots: 3, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr;' },
+        'three-l':   { name: 'Big + two',    slots: 3, pad: MAT,   gap: GAP,  areas: ['a', 'b', 'c'],
+          grid: "grid-template-columns:1.5fr 1fr;grid-template-rows:1fr 1fr;grid-template-areas:'a b' 'a c';" },
       };
       // Pickable arrangements in the layout sheet (blank is structural, not picked).
-      const LAYOUT_ORDER = ['single', 'two-v', 'two-h', 'two-left', 'two-right', 'three-row'];
+      const LAYOUT_ORDER = ['single', 'two-v', 'two-h', 'two-left', 'two-right', 'three-row', 'three-l'];
       const DEFAULT_LAYOUT = 'two-v';   // a plain "add page" default
       const DEFAULT_MULTI_2 = 'two-v';  // auto-fill: facing page with 2 photos
       const DEFAULT_MULTI_3 = 'three-row'; // auto-fill: facing page with 3 photos
@@ -698,6 +700,7 @@
           slot.className = 'slot';
           slot.dataset.pageId = pg.id;
           slot.dataset.slotIdx = slotIdx;
+          if (layout.areas && layout.areas[slotIdx]) slot.style.gridArea = layout.areas[slotIdx];
           const photo = photoId ? photos.get(photoId) : null;
           if (photo) {
             slot.style.backgroundImage = `url('${photo.url}')`;
@@ -888,7 +891,8 @@
       function openLayoutSheet(pg) {
         const opts = LAYOUT_ORDER.map(key => {
           const L = LAYOUTS[key];
-          const cells = new Array(L.slots).fill('<div class="lp-cell"></div>').join('');
+          const cells = Array.from({ length: L.slots }, (_, i) =>
+            `<div class="lp-cell"${L.areas ? ` style="grid-area:${L.areas[i]}"` : ''}></div>`).join('');
           return `<div class="layout-opt ${pg.layout === key ? 'active' : ''}" data-layout="${key}">
             <div class="layout-preview" style="${L.grid}padding:${L.pad};gap:${L.gap};">${cells}</div>
             <div class="layout-name">${escapeHtml(L.name)}</div>
