@@ -146,7 +146,7 @@
         position: relative; width: 100%; aspect-ratio: 117 / 83; background: #ffffff;
         overflow: hidden; border-radius: 3px; box-shadow: 0 3px 14px rgba(0,0,0,0.10);
       }
-      .page-grid { position: absolute; inset: 0; display: grid; }
+      .page-grid { position: absolute; box-sizing: border-box; }
 
       /* Desktop — use the browser real estate like Popsa: a wide ~1015px spread. */
       @media (min-width: 1080px) {
@@ -228,14 +228,15 @@
       .sheet h2 { font-size: 19px; font-weight: 700; margin-bottom: 4px; }
       .sheet p.sheet-sub { font-size: 13px; color: #888; margin-bottom: 18px; line-height: 1.5; }
 
+      .lp-section-title { font-size: 13px; font-weight: 700; color: #1a1a1a; margin: 18px 0 10px; }
+      .lp-section-title:first-of-type { margin-top: 6px; }
       .layout-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
       .layout-opt { border: 2px solid #eceae4; border-radius: 12px; padding: 7px; cursor: pointer; background: white; transition: border-color 0.12s; }
       .layout-opt.active { border-color: #7657FC; }
-      .layout-preview { position: relative; width: 100%; aspect-ratio: 117 / 83; background: #f1efe9; border-radius: 4px; overflow: hidden; }
-      .layout-preview .lp-grid { position: absolute; inset: 0; display: grid; }
-      .layout-preview .lp-cell { background: #cfcabd; border-radius: 1px; }
-      .layout-opt.active .layout-preview .lp-cell { background: #b9a9f6; }
-      .layout-name { font-size: 11px; font-weight: 700; text-align: center; color: #666; margin-top: 6px; }
+      .layout-preview { position: relative; width: 100%; aspect-ratio: 117 / 83; background: #eceae3; border-radius: 5px; overflow: hidden; }
+      .layout-preview .lp-grid { position: absolute; }
+      .layout-preview .lp-cell { background: #fff; border-radius: 2px; }
+      .layout-opt.active .layout-preview .lp-cell { background: #c9bcf9; }
 
       .menu-row { display: flex; align-items: center; gap: 14px; padding: 15px 6px; cursor: pointer; border-bottom: 1px solid #f2f0ea; font-size: 16px; font-weight: 600; color: #1a1a1a; }
       .menu-row:last-child { border-bottom: none; }
@@ -443,15 +444,11 @@
             return id;
           };
 
-          pages = (col.book_layout.pages || []).map(pg => {
-            const norm = normalizeLayout(pg.layout);
-            return {
-              id: pg.id || uid('pg'),
-              layout: pg.layout === 'blank' ? 'blank' : norm.layout,
-              bleed: norm.bleed !== null ? norm.bleed : !!pg.bleed,
-              slots: (pg.slots || []).map(s => (s && s.photo_url) ? getPhotoId(s.photo_url) : null),
-            };
-          });
+          pages = (col.book_layout.pages || []).map(pg => ({
+            id: pg.id || uid('pg'),
+            layout: pg.layout === 'blank' ? 'blank' : normalizeLayout(pg.layout),
+            slots: (pg.slots || []).map(s => (s && s.photo_url) ? getPhotoId(s.photo_url) : null),
+          }));
 
           document.getElementById('title-input').value = col.name || '';
           document.querySelector('h1').textContent = 'Edit Book';
@@ -471,40 +468,65 @@
       const MAX_VIDEO_MB = 200;
       const MAX_COMPILE_DIM = 640;
 
-      // Page layout templates — Popsa "Minimal" set (no text layouts). Pages are
-      // landscape (Prodigi 11.7×8.3"). `slots` = photo slots; `grid` = CSS grid;
-      // `pad` = the outer white mat; `gap` = white gutter between photos. Full-bleed
-      // has no mat/gap; the minimal matted layouts get clean white margins.
-      // Mat = inner-grid `inset` (top/bottom % of page height, left/right % of
-      // page width) → ~even, generous margins on the landscape page. GAP = gutter.
-      const MAT = '11% 7.5%';
-      const GAP = '3%';
-      // `bleed` is a separate per-page toggle (the full-bleed icon): when on, the
-      // page ignores pad/gap and photos run to the page edges. So a single photo
-      // is "centered/matted" by default and "full bleed" when the toggle is on.
+      // Layout engine. Pages are landscape (Prodigi 11.7×8.3"). Each layout places
+      // its photos in slots that keep a NATURAL photo aspect ratio (4:3 landscape,
+      // 3:4 portrait) and are centered with generous white margins — never
+      // stretched to fill the page. Layouts are grouped by photo count.
+      //   o: slot orientation; dir: 'row'|'col'; sz: slot height as % of the page
+      //   content box; mode: 'bleed' (fill the whole page) | 'vbleed' (fill height).
+      const SLOT_AR = { land: '4 / 3', port: '3 / 4' };
       const LAYOUTS = {
-        blank:       { name: 'Blank',        slots: 0, pad: '0',   gap: '0',  grid: '' },
-        single:      { name: 'Single',       slots: 1, pad: MAT,   gap: '0',  grid: 'grid-template-columns:1fr;grid-template-rows:1fr;' },
-        'two-v':     { name: 'Two across',   slots: 2, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1fr 1fr;grid-template-rows:1fr;' },
-        'two-h':     { name: 'Two stacked',  slots: 2, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1fr;grid-template-rows:1fr 1fr;' },
-        'two-left':  { name: 'Big left',     slots: 2, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1.7fr 1fr;grid-template-rows:1fr;' },
-        'two-right': { name: 'Big right',    slots: 2, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1fr 1.7fr;grid-template-rows:1fr;' },
-        'three-row': { name: 'Three across', slots: 3, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr;' },
-        'three-l':   { name: 'Big + two',    slots: 3, pad: MAT,   gap: GAP,  areas: ['a', 'b', 'c'],
-          grid: "grid-template-columns:1.5fr 1fr;grid-template-rows:1fr 1fr;grid-template-areas:'a b' 'a c';" },
+        blank: { count: 0 },
+        // 1 photo
+        'l1':  { group: '1', name: 'Landscape',       count: 1, o: 'land', dir: 'row', sz: 82 },
+        'l1b': { group: '1', name: 'Landscape full',  count: 1, mode: 'bleed' },
+        'p1':  { group: '1', name: 'Portrait',        count: 1, o: 'port', dir: 'row', sz: 92 },
+        'p1b': { group: '1', name: 'Portrait full',   count: 1, o: 'port', mode: 'vbleed' },
+        // 2 photos
+        'l2':  { group: '2', name: 'Two landscape',       count: 2, o: 'land', dir: 'row', sz: 46 },
+        'l2b': { group: '2', name: 'Two landscape big',   count: 2, o: 'land', dir: 'row', sz: 56 },
+        'l2v': { group: '2', name: 'Two stacked',         count: 2, o: 'land', dir: 'col', sz: 40 },
+        'p2':  { group: '2', name: 'Two portrait',        count: 2, o: 'port', dir: 'row', sz: 84 },
+        'p2s': { group: '2', name: 'Two portrait small',  count: 2, o: 'port', dir: 'row', sz: 60 },
+        'l2s': { group: '2', name: 'Two landscape small', count: 2, o: 'land', dir: 'row', sz: 34 },
+        // 3 photos
+        'p3':   { group: '3', name: 'Three portrait',  count: 3, o: 'port', dir: 'row', sz: 62 },
+        'l3s':  { group: '3', name: 'Three landscape', count: 3, o: 'land', dir: 'row', sz: 30 },
+        'l3lr': { group: '3', name: 'Big + two',       count: 3, special: 'lr' },
       };
-      // Pickable arrangements in the layout sheet (blank is structural, not picked).
-      const LAYOUT_ORDER = ['single', 'two-v', 'two-h', 'two-left', 'two-right', 'three-row', 'three-l'];
-      const DEFAULT_LAYOUT = 'two-v';   // a plain "add page" default
-      const DEFAULT_MULTI_2 = 'two-v';  // auto-fill: facing page with 2 photos
-      const DEFAULT_MULTI_3 = 'three-row'; // auto-fill: facing page with 3 photos
-      // Map legacy layout keys (from earlier builds on this branch) to the new model.
+      const LAYOUT_GROUPS = [
+        { title: '1 Photo',  keys: ['l1', 'l1b', 'p1', 'p1b'] },
+        { title: '2 Photos', keys: ['l2', 'l2b', 'l2v', 'p2', 'p2s', 'l2s'] },
+        { title: '3 Photos', keys: ['p3', 'l3s', 'l3lr'] },
+      ];
+      const DEFAULT_MULTI_2 = 'l2';   // auto-fill: facing page with 2 photos
+      const DEFAULT_MULTI_3 = 'p3';   // auto-fill: facing page with 3 photos
+      const slotCount = (key) => (LAYOUTS[key] && LAYOUTS[key].count) || 0;
+
+      // Map legacy layout keys (earlier builds on this branch) to the new engine.
       function normalizeLayout(key) {
-        if (key === 'full') return { layout: 'single', bleed: true };
-        if (key === 'single-mat') return { layout: 'single', bleed: false };
-        return { layout: LAYOUTS[key] ? key : DEFAULT_LAYOUT, bleed: null };
+        if (LAYOUTS[key]) return key;
+        const map = { full: 'l1b', 'single-mat': 'l1', single: 'l1', 'two-v': 'l2',
+          'two-h': 'l2v', 'two-left': 'l2', 'two-right': 'l2', 'three-row': 'p3', 'three-l': 'l3lr' };
+        return map[key] || 'l1';
       }
-      const blankPage = () => ({ id: uid('pg'), layout: 'blank', bleed: false, slots: [] });
+
+      // Geometry (container + per-slot inline style) shared by the page renderer
+      // and the layout-picker previews. {special:'lr'} = the nested 1-big + 2-stacked.
+      function layoutGeometry(L) {
+        if (L.special === 'lr') return { special: 'lr' };
+        if (L.mode === 'bleed') return { container: 'inset:0;display:flex;', slots: ['width:100%;height:100%;'] };
+        const ar = SLOT_AR[L.o];
+        if (L.mode === 'vbleed') return {
+          container: 'inset:0;display:flex;align-items:stretch;justify-content:center;gap:2.5%;',
+          slots: Array(L.count).fill(`height:100%;aspect-ratio:${ar};`) };
+        const dir = L.dir === 'col' ? 'column' : 'row';
+        return {
+          container: `inset:0;display:flex;flex-direction:${dir};align-items:center;justify-content:center;gap:3.5%;padding:6% 5%;`,
+          slots: Array(L.count).fill(`height:${L.sz}%;aspect-ratio:${ar};flex:0 0 auto;`) };
+      }
+
+      const blankPage = () => ({ id: uid('pg'), layout: 'blank', slots: [] });
       // Book label for a page at global index i: first left page is the blank
       // inside-cover; content starts at "Page 1" on the first right page.
       const pageLabel = (i) => (i === 0 ? 'Blank Page' : 'Page ' + i);
@@ -614,11 +636,11 @@
       // Default pattern: each spread has one full-bleed page facing a 2- or
       // 3-photo page. The full-bleed side alternates left/right per spread, and
       // the multi-photo side alternates between 2 and 3 photos.
-      const singlePage = (photoId) => ({ id: uid('pg'), layout: 'single', bleed: true, slots: [photoId || null] });
-      const multiPage = (ml, ids) => {
-        const slots = new Array(LAYOUTS[ml].slots).fill(null);
+      const singlePage = (photoId) => ({ id: uid('pg'), layout: 'l1b', slots: [photoId || null] }); // full-bleed single
+      const multiPage = (key, ids) => {
+        const slots = new Array(slotCount(key)).fill(null);
         (ids || []).forEach((id, i) => { if (i < slots.length) slots[i] = id; });
-        return { id: uid('pg'), layout: ml, bleed: false, slots };
+        return { id: uid('pg'), layout: key, slots };
       };
 
       document.getElementById('autofill-btn').addEventListener('click', () => {
@@ -642,7 +664,7 @@
           let multi = null;
           if (pool.length) {
             const ml = useThree ? DEFAULT_MULTI_3 : DEFAULT_MULTI_2;
-            const take = []; for (let i = 0; i < LAYOUTS[ml].slots && pool.length; i++) take.push(pool.shift().id);
+            const take = []; for (let i = 0; i < slotCount(ml) && pool.length; i++) take.push(pool.shift().id);
             multi = multiPage(ml, take);
           }
           pages.push(...(multi ? (fullLeft ? [single, multi] : [multi, single]) : [single]));
@@ -721,35 +743,29 @@
       }
 
       // SVGs for the per-page tools.
-      const IC_BLEED = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
-      const IC_LAYOUT = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>';
+      const IC_LAYOUT ='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>';
       const IC_MORE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>';
 
       // Build one page (half of a spread): a header (label + Popsa controls) above
       // the landscape canvas with its slots. `globalIndex` sets the page label;
       // `side` mirrors the header; the first page (index 0) is the blank cover.
       function buildPageHalf(pg, globalIndex, side, isSingle) {
-        const layout = LAYOUTS[pg.layout] || LAYOUTS.single;
         const isBlank = pg.layout === 'blank';
         const half = document.createElement('div');
         half.className = 'page-half' + (isSingle ? ' single' : '');
 
-        // Header row above the page (not overlaid): label + Popsa controls
-        // (full-bleed toggle, layout, more). Mirrored — the outer edge holds the
-        // icons, the inner edge (toward the gutter) holds the label. The blank
+        // Header row above the page (not overlaid): label + controls (layout, more).
+        // Mirrored — icons on the outer edge, label toward the gutter. The blank
         // inside-cover shows just its label.
         const head = document.createElement('div');
         head.className = 'page-half-head';
         const label = `<span class="page-label-text">${escapeHtml(pageLabel(globalIndex))}</span>`;
         const controls = isBlank ? '' : `
-          <button class="page-tool tool-bleed ${pg.bleed ? 'active' : ''}" title="Full bleed">${IC_BLEED}</button>
           <button class="page-tool tool-layout" title="Change layout">${IC_LAYOUT}</button>
           <button class="page-tool tool-more" title="More">${IC_MORE}</button>`;
         head.innerHTML = side === 'right'
           ? `<div class="ph-spacer"></div>${label}${controls}`
           : `${controls}${label}<div class="ph-spacer"></div>`;
-        const bleedBtn = head.querySelector('.tool-bleed');
-        if (bleedBtn) bleedBtn.addEventListener('click', () => { pg.bleed = !pg.bleed; render(); });
         const layoutBtn = head.querySelector('.tool-layout');
         if (layoutBtn) layoutBtn.addEventListener('click', () => openLayoutSheet(pg));
         const moreBtn = head.querySelector('.tool-more');
@@ -757,41 +773,56 @@
 
         const canvas = document.createElement('div');
         canvas.className = 'page-canvas' + (isBlank ? ' blank' : '');
-
-        if (!isBlank) {
-          const grid = document.createElement('div');
-          grid.className = 'page-grid';
-          const inset = pg.bleed ? '0' : layout.pad;   // full-bleed → no mat
-          const gap = pg.bleed ? '0' : layout.gap;
-          grid.setAttribute('style', `${layout.grid}inset:${inset};gap:${gap};`);
-
-          pg.slots.forEach((photoId, slotIdx) => {
-            const slot = document.createElement('div');
-            slot.className = 'slot';
-            slot.dataset.pageId = pg.id;
-            slot.dataset.slotIdx = slotIdx;
-            if (layout.areas && layout.areas[slotIdx]) slot.style.gridArea = layout.areas[slotIdx];
-            const photo = photoId ? photos.get(photoId) : null;
-            if (photo) {
-              slot.style.backgroundImage = `url('${photo.url}')`;
-              slot.innerHTML = photoHasMedia(photo)
-                ? `<div class="slot-tag"><img src="/assets/popcode_icon.svg"/>${photo.popcode.mediaType === 'audio' ? 'Audio' : 'Video'}</div>`
-                : '';
-            } else {
-              slot.classList.add('empty');
-            }
-            if (selectedTrayId && !photo) slot.classList.add('place-target');
-            if (swapSource && swapSource.pageId === pg.id && swapSource.slotIdx === slotIdx) slot.classList.add('swap-source');
-            slot.addEventListener('click', () => onSlotTap(pg, slotIdx));
-            enableSlotDrag(slot, pg, slotIdx);
-            grid.appendChild(slot);
-          });
-          canvas.appendChild(grid);
-        }
+        if (!isBlank) canvas.appendChild(buildPageGrid(pg));
 
         half.appendChild(head);
         half.appendChild(canvas);
         return half;
+      }
+
+      // Create one photo slot wired for tap/drag/place. `slotIdx` maps to pg.slots.
+      function mkSlot(pg, slotIdx) {
+        const slot = document.createElement('div');
+        slot.className = 'slot';
+        slot.dataset.pageId = pg.id;
+        slot.dataset.slotIdx = slotIdx;
+        const photo = pg.slots[slotIdx] ? photos.get(pg.slots[slotIdx]) : null;
+        if (photo) {
+          slot.style.backgroundImage = `url('${photo.url}')`;
+          slot.innerHTML = photoHasMedia(photo)
+            ? `<div class="slot-tag"><img src="/assets/popcode_icon.svg"/>${photo.popcode.mediaType === 'audio' ? 'Audio' : 'Video'}</div>`
+            : '';
+        } else {
+          slot.classList.add('empty');
+        }
+        if (selectedTrayId && !photo) slot.classList.add('place-target');
+        if (swapSource && swapSource.pageId === pg.id && swapSource.slotIdx === slotIdx) slot.classList.add('swap-source');
+        slot.addEventListener('click', () => onSlotTap(pg, slotIdx));
+        enableSlotDrag(slot, pg, slotIdx);
+        return slot;
+      }
+
+      // Build the inner grid of a page from its layout geometry (natural aspect
+      // ratios, centered, generous margins). Handles the nested 1-big + 2-stacked.
+      function buildPageGrid(pg) {
+        const L = LAYOUTS[pg.layout] || LAYOUTS.l1;
+        const grid = document.createElement('div');
+        grid.className = 'page-grid';
+        const geo = layoutGeometry(L);
+        if (geo.special === 'lr') {
+          grid.style.cssText = 'inset:0;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:3.5%;padding:6% 5%;';
+          const big = mkSlot(pg, 0); big.style.cssText += 'height:74%;aspect-ratio:4 / 3;flex:0 0 auto;';
+          const col = document.createElement('div');
+          col.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8%;flex:0 0 auto;';
+          const a = mkSlot(pg, 1); a.style.cssText += 'height:33%;aspect-ratio:4 / 3;';
+          const b = mkSlot(pg, 2); b.style.cssText += 'height:33%;aspect-ratio:4 / 3;';
+          col.appendChild(a); col.appendChild(b);
+          grid.appendChild(big); grid.appendChild(col);
+          return grid;
+        }
+        grid.style.cssText = geo.container;
+        geo.slots.forEach((sc, i) => { const s = mkSlot(pg, i); s.style.cssText += sc; grid.appendChild(s); });
+        return grid;
       }
 
       // The per-page "more" (⋯) menu: reorder + delete.
@@ -825,7 +856,7 @@
             // Don't reorder across the blank inside-cover (keep it at index 0).
             if (act === 'up' && i > 0 && pages[i - 1].layout !== 'blank') { [pages[i - 1], pages[i]] = [pages[i], pages[i - 1]]; }
             else if (act === 'down' && i < pages.length - 1 && pages[i + 1].layout !== 'blank') { [pages[i + 1], pages[i]] = [pages[i], pages[i + 1]]; }
-            else if (act === 'clear') { pg.layout = 'blank'; pg.slots = []; pg.bleed = false; }
+            else if (act === 'clear') { pg.layout = 'blank'; pg.slots = []; }
             else if (act === 'delete') { pages.splice(i, 1); }
             closeSheet(); render();
           });
@@ -961,17 +992,29 @@
       // ── Layout sheet ────────────────────────────────────────────
       // Preview each layout as a landscape page with the same grid + mat + gap
       // the real page uses, so what you see matches what you get.
-      function openLayoutSheet(pg) {
-        const opts = LAYOUT_ORDER.map(key => {
-          const L = LAYOUTS[key];
-          const cells = Array.from({ length: L.slots }, (_, i) =>
-            `<div class="lp-cell"${L.areas ? ` style="grid-area:${L.areas[i]}"` : ''}></div>`).join('');
-          return `<div class="layout-opt ${pg.layout === key ? 'active' : ''}" data-layout="${key}">
-            <div class="layout-preview"><div class="lp-grid" style="${L.grid}inset:${L.pad};gap:${L.gap};">${cells}</div></div>
-            <div class="layout-name">${escapeHtml(L.name)}</div>
+      // The inner geometry markup for a layout preview tile (gray cells).
+      function previewHTML(key) {
+        const L = LAYOUTS[key];
+        const geo = layoutGeometry(L);
+        if (geo.special === 'lr') {
+          return `<div class="lp-grid" style="inset:0;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:3.5%;padding:6% 5%;">
+            <div class="lp-cell" style="height:74%;aspect-ratio:4/3"></div>
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8%"><div class="lp-cell" style="height:33%;aspect-ratio:4/3"></div><div class="lp-cell" style="height:33%;aspect-ratio:4/3"></div></div>
           </div>`;
+        }
+        const cells = geo.slots.map(sc => `<div class="lp-cell" style="${sc}"></div>`).join('');
+        return `<div class="lp-grid" style="${geo.container}">${cells}</div>`;
+      }
+
+      function openLayoutSheet(pg) {
+        const groups = LAYOUT_GROUPS.map(g => {
+          const tiles = g.keys.map(key =>
+            `<div class="layout-opt ${pg.layout === key ? 'active' : ''}" data-layout="${key}">
+              <div class="layout-preview">${previewHTML(key)}</div>
+            </div>`).join('');
+          return `<div class="lp-section-title">${g.title}</div><div class="layout-grid">${tiles}</div>`;
         }).join('');
-        openSheet(`<h2>Choose a layout</h2><p class="sheet-sub">Minimal layouts for this page. Up to four photos.</p><div class="layout-grid">${opts}</div>`);
+        openSheet(`<h2>Layouts</h2>${groups}`);
         document.querySelectorAll('#sheet .layout-opt').forEach(opt => {
           opt.addEventListener('click', () => { applyLayout(pg, opt.dataset.layout); closeSheet(); });
         });
@@ -980,11 +1023,10 @@
       // Change a page's layout, preserving photos. Extra photos (when shrinking)
       // go back to the tray; new empty slots (when growing) pull from unplaced.
       function applyLayout(pg, key) {
-        const L = LAYOUTS[key];
-        const kept = pg.slots.filter(Boolean).slice(0, L.slots);
-        const newSlots = new Array(L.slots).fill(null);
+        const n = slotCount(key);
+        const kept = pg.slots.filter(Boolean).slice(0, n);
+        const newSlots = new Array(n).fill(null);
         kept.forEach((id, i) => newSlots[i] = id);
-        // Grow: fill remaining new slots from unplaced pool.
         pg.layout = key; pg.slots = newSlots;
         const pool = unplacedPhotos();
         for (let i = 0; i < newSlots.length && pool.length; i++) {
@@ -1459,7 +1501,6 @@
             pages: pages.map(pg => ({
               id: pg.id,
               layout: pg.layout,
-              bleed: !!pg.bleed,
               slots: pg.slots.map(id => id ? { photo_url: photoUrlById[id], target_index: id in targetIndexByPhoto ? targetIndexByPhoto[id] : null } : null),
             })),
           };
