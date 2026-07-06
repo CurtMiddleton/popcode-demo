@@ -108,56 +108,67 @@
       }
       .tray-hint { font-size: 11px; color: #999; margin-top: 4px; min-height: 14px; }
 
-      /* ── Pages ──────────────────────────────────────────────── */
-      .pages { display: flex; flex-direction: column; gap: 18px; }
-      .page-card {
-        background: white; border-radius: 16px; padding: 14px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      /* ── Spreads (facing pages) ─────────────────────────────── */
+      /* A book is designed as spreads: two landscape pages (Prodigi 11.7×8.3")
+         side by side, meeting at a center gutter. */
+      .pages { display: flex; flex-direction: column; gap: 20px; }
+      .spread {
+        background: white; border-radius: 16px; padding: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
         position: relative; transition: box-shadow 0.15s, opacity 0.2s, transform 0.2s;
       }
-      .page-card.dragging { opacity: 0.6; box-shadow: 0 12px 40px rgba(0,0,0,0.22); transform: scale(1.01); z-index: 50; }
-      .page-card.drop-before { box-shadow: 0 -4px 0 -1px #7657FC, 0 2px 12px rgba(0,0,0,0.06); }
-      .page-card.drop-after { box-shadow: 0 4px 0 -1px #7657FC, 0 2px 12px rgba(0,0,0,0.06); }
-      .page-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-      .page-grip { cursor: grab; padding: 4px; color: #bbb; touch-action: none; display: flex; }
-      .page-grip:active { cursor: grabbing; }
-      .page-num { font-size: 13px; font-weight: 700; color: #1a1a1a; }
-      .page-head-spacer { flex: 1; }
-      .layout-btn, .page-icon-btn {
-        border: 1px solid #e4e2dc; background: white; border-radius: 999px; cursor: pointer;
-        font-family: 'Inter', sans-serif; display: inline-flex; align-items: center; justify-content: center;
+      .spread.dragging { opacity: 0.6; box-shadow: 0 12px 40px rgba(0,0,0,0.22); transform: scale(1.01); z-index: 50; }
+      .spread.drop-before { box-shadow: 0 -4px 0 -1px #7657FC, 0 2px 12px rgba(0,0,0,0.06); }
+      .spread.drop-after { box-shadow: 0 4px 0 -1px #7657FC, 0 2px 12px rgba(0,0,0,0.06); }
+      .spread-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+      .spread-grip { cursor: grab; padding: 4px; color: #c4c0b6; touch-action: none; display: flex; }
+      .spread-grip:active { cursor: grabbing; }
+      .spread-title { font-size: 12px; font-weight: 700; color: #1a1a1a; letter-spacing: 0.02em; }
+      .spread-head-spacer { flex: 1; }
+      .spread-del {
+        border: 1px solid #e4e2dc; background: white; border-radius: 999px; cursor: pointer; color: #999;
+        width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
       }
-      .layout-btn { padding: 6px 12px; font-size: 12px; font-weight: 700; gap: 6px; color: #1a1a1a; }
-      .layout-btn:hover { background: #f6f5f1; }
-      .page-icon-btn { width: 32px; height: 32px; color: #888; }
-      .page-icon-btn:hover { background: #f6f5f1; color: #1a1a1a; }
-      .page-icon-btn.danger:hover { background: #fdecec; color: #d33; border-color: #f4c9c9; }
+      .spread-del:hover { background: #fdecec; color: #d33; border-color: #f4c9c9; }
 
-      /* The page canvas — square book by default. Grid layout set inline per page. */
+      /* Two facing pages with a subtle center fold. */
+      .spread-body { display: flex; align-items: stretch; background: #eceae4; border-radius: 8px; overflow: hidden; }
+      .page-half { position: relative; flex: 1 1 0; min-width: 0; }
+      .spread-fold { width: 2px; background: linear-gradient(90deg, rgba(0,0,0,0.10), rgba(0,0,0,0.02) 50%, rgba(0,0,0,0.10)); flex: 0 0 2px; }
+      .page-half.single { flex-basis: 50%; }
+
+      /* The page canvas — landscape (Prodigi 11.7 × 8.3"). Grid + padding (the
+         "mat") + gap are set inline per layout so full-bleed has none and the
+         minimal matted layouts get clean white margins. */
       .page-canvas {
-        width: 100%; aspect-ratio: 1 / 1; background: #f4f2ec; border-radius: 10px; overflow: hidden;
-        display: grid; gap: 5px; padding: 5px;
+        width: 100%; aspect-ratio: 117 / 83; background: #ffffff; overflow: hidden;
+        display: grid;
       }
+      .page-tools { position: absolute; top: 6px; right: 6px; display: flex; gap: 5px; z-index: 3; }
+      .page-tool {
+        width: 26px; height: 26px; border-radius: 50%; border: none; cursor: pointer;
+        background: rgba(255,255,255,0.92); box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+        display: flex; align-items: center; justify-content: center; color: #444;
+      }
+      .page-tool:hover { background: #fff; color: #111; }
+      .page-tool.danger:hover { color: #d33; }
+      .page-tag { position: absolute; bottom: 5px; left: 7px; z-index: 3; font-size: 10px; font-weight: 700; color: rgba(0,0,0,0.32); }
+
       .slot {
-        position: relative; background: #e9e6df; border-radius: 6px; overflow: hidden;
+        position: relative; background: #e4e1d9; overflow: hidden;
         display: flex; align-items: center; justify-content: center; cursor: pointer;
         background-size: cover; background-position: center; touch-action: none;
       }
-      .slot.empty { border: 2px dashed #cfcabd; }
-      .slot.empty::after { content: '+'; color: #bcb6a6; font-size: 30px; font-weight: 300; }
-      .slot.place-target { outline: 3px solid #7657FC; outline-offset: -3px; }
-      .slot.swap-source { outline: 3px solid #589AF9; outline-offset: -3px; }
+      .slot.empty { outline: 1.5px dashed #d3cec2; outline-offset: -2px; background: #f3f1ea; }
+      .slot.empty::after { content: '+'; color: #c2bbab; font-size: 24px; font-weight: 300; }
+      .slot.place-target { outline: 3px solid #7657FC; outline-offset: -3px; z-index: 2; }
+      .slot.swap-source { outline: 3px solid #589AF9; outline-offset: -3px; z-index: 2; }
       .slot.slot-drag { opacity: 0.4; }
-      .slot-badge {
-        position: absolute; bottom: 6px; right: 6px; width: 26px; height: 26px; border-radius: 50%;
-        background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
-        backdrop-filter: blur(2px);
-      }
-      .slot-badge img { width: 18px; height: 18px; display: block; }
       .slot-tag {
-        position: absolute; top: 6px; left: 6px; padding: 3px 8px; border-radius: 999px;
-        font-size: 10px; font-weight: 700; color: white; display: flex; align-items: center; gap: 4px;
-        background: linear-gradient(135deg,#7657FC,#589AF9); box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+        position: absolute; top: 5px; left: 5px; padding: 2px 7px; border-radius: 999px;
+        font-size: 9px; font-weight: 700; color: white; display: flex; align-items: center; gap: 3px;
+        background: linear-gradient(135deg,#7657FC,#589AF9); box-shadow: 0 1px 4px rgba(0,0,0,0.25); z-index: 2;
       }
+      .slot-tag img { width: 10px; height: 10px; }
 
       .add-page-btn {
         width: 100%; padding: 15px; border-radius: 14px; border: 1.5px dashed #cfcabd; background: transparent;
@@ -210,11 +221,11 @@
       .sheet p.sheet-sub { font-size: 13px; color: #888; margin-bottom: 18px; line-height: 1.5; }
 
       .layout-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-      .layout-opt { border: 2px solid #eceae4; border-radius: 12px; padding: 8px; cursor: pointer; background: white; transition: border-color 0.12s; }
+      .layout-opt { border: 2px solid #eceae4; border-radius: 12px; padding: 7px; cursor: pointer; background: white; transition: border-color 0.12s; }
       .layout-opt.active { border-color: #7657FC; }
-      .layout-preview { width: 100%; aspect-ratio: 1/1; display: grid; gap: 3px; }
-      .layout-preview > div { background: #d8d4ca; border-radius: 3px; }
-      .layout-opt.active .layout-preview > div { background: #b9a9f6; }
+      .layout-preview { width: 100%; aspect-ratio: 117 / 83; display: grid; background: #f1efe9; border-radius: 4px; overflow: hidden; }
+      .layout-preview .lp-cell { background: #cfcabd; border-radius: 1px; }
+      .layout-opt.active .layout-preview .lp-cell { background: #b9a9f6; }
       .layout-name { font-size: 11px; font-weight: 700; text-align: center; color: #666; margin-top: 6px; }
 
       .menu-row { display: flex; align-items: center; gap: 14px; padding: 15px 6px; cursor: pointer; border-bottom: 1px solid #f2f0ea; font-size: 16px; font-weight: 600; color: #1a1a1a; }
@@ -329,7 +340,7 @@
       <div class="pages" id="pages"></div>
       <button class="add-page-btn" id="add-page-btn">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Add a page
+        Add a spread
       </button>
     </div>
 
@@ -448,20 +459,26 @@
       const MAX_PHOTO_MB = 10;
       const MAX_COMPILE_DIM = 640;
 
-      // Layout templates. `slots` = number of photo slots. `grid` = CSS grid for
-      // .page-canvas. `areas` (optional) = grid-template-areas + per-slot area names.
+      // Page layout templates — Popsa "Minimal" set (no text layouts). Pages are
+      // landscape (Prodigi 11.7×8.3"). `slots` = photo slots; `grid` = CSS grid;
+      // `pad` = the outer white mat; `gap` = white gutter between photos. Full-bleed
+      // has no mat/gap; the minimal matted layouts get clean white margins.
+      const MAT = '7.5%';   // outer mat for matted layouts
+      const GAP = '3.5%';   // gutter between photos
       const LAYOUTS = {
-        full:  { name: 'Full',    slots: 1, grid: 'grid-template-columns:1fr;grid-template-rows:1fr;' },
-        'two-v': { name: '2 side', slots: 2, grid: 'grid-template-columns:1fr 1fr;grid-template-rows:1fr;' },
-        'two-h': { name: '2 stack',slots: 2, grid: 'grid-template-columns:1fr;grid-template-rows:1fr 1fr;' },
-        'three-l': { name: '1 + 2', slots: 3,
-          grid: "grid-template-columns:1.4fr 1fr;grid-template-rows:1fr 1fr;grid-template-areas:'a b' 'a c';",
-          areas: ['a', 'b', 'c'] },
-        'three-r': { name: '3 row', slots: 3, grid: 'grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr;' },
-        four:  { name: 'Grid 4',  slots: 4, grid: 'grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;' },
+        full:        { name: 'Full bleed',   slots: 1, pad: '0',   gap: '0',  grid: 'grid-template-columns:1fr;grid-template-rows:1fr;' },
+        'single-mat':{ name: 'Centered',     slots: 1, pad: '12%', gap: '0',  grid: 'grid-template-columns:1fr;grid-template-rows:1fr;' },
+        'two-v':     { name: 'Two across',   slots: 2, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1fr 1fr;grid-template-rows:1fr;' },
+        'two-h':     { name: 'Two stacked',  slots: 2, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1fr;grid-template-rows:1fr 1fr;' },
+        'two-left':  { name: 'Big left',     slots: 2, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1.7fr 1fr;grid-template-rows:1fr;' },
+        'two-right': { name: 'Big right',    slots: 2, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1fr 1.7fr;grid-template-rows:1fr;' },
+        'three-row': { name: 'Three across', slots: 3, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr;' },
+        'four-grid': { name: 'Grid of four', slots: 4, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;' },
       };
-      const LAYOUT_ORDER = ['full', 'two-v', 'two-h', 'three-l', 'three-r', 'four'];
-      const DEFAULT_LAYOUT = 'four';
+      const LAYOUT_ORDER = ['full', 'single-mat', 'two-v', 'two-h', 'two-left', 'two-right', 'three-row', 'four-grid'];
+      const DEFAULT_LAYOUT = 'two-v';   // a plain "add page" default
+      const DEFAULT_MULTI_2 = 'two-v';  // auto-fill: facing page with 2 photos
+      const DEFAULT_MULTI_3 = 'three-row'; // auto-fill: facing page with 3 photos
 
       // ── State ───────────────────────────────────────────────────
       // photos: id -> { id, file, url, popcode|null }
@@ -504,33 +521,49 @@
         render();
       });
 
-      // ── Auto-fill: flow unplaced photos into pages ──────────────
+      // ── Auto-fill: flow unplaced photos into alternating spreads ──
+      // Default pattern: each spread has one full-bleed page facing a 2- or
+      // 3-photo page. The full-bleed side alternates left/right per spread, and
+      // the multi-photo side alternates between 2 and 3 photos.
       document.getElementById('autofill-btn').addEventListener('click', () => {
         let pool = unplacedPhotos();
         if (!pool.length) { showToast('All photos are already placed.'); return; }
-        // Fill empty slots in existing pages first.
+        // Top off empty slots in existing pages first.
         for (const pg of pages) {
           for (let i = 0; i < pg.slots.length && pool.length; i++) {
             if (!pg.slots[i]) pg.slots[i] = pool.shift().id;
           }
         }
-        // Create new pages (default layout) for the remainder.
+        // Then generate alternating spreads for the remainder.
+        let spreadIndex = Math.floor(pages.length / 2);
         while (pool.length) {
-          const layout = DEFAULT_LAYOUT;
-          const slots = new Array(LAYOUTS[layout].slots).fill(null);
-          for (let i = 0; i < slots.length && pool.length; i++) slots[i] = pool.shift().id;
-          pages.push({ id: uid('pg'), layout, slots });
+          const fullLeft = spreadIndex % 2 === 0;
+          const multiLayout = spreadIndex % 2 === 0 ? DEFAULT_MULTI_2 : DEFAULT_MULTI_3;
+          const fullPage = { id: uid('pg'), layout: 'full', slots: [pool.shift().id] };
+          let multiPage = null;
+          if (pool.length) {
+            const slots = new Array(LAYOUTS[multiLayout].slots).fill(null);
+            for (let i = 0; i < slots.length && pool.length; i++) slots[i] = pool.shift().id;
+            multiPage = { id: uid('pg'), layout: multiLayout, slots };
+          }
+          if (multiPage) pages.push(...(fullLeft ? [fullPage, multiPage] : [multiPage, fullPage]));
+          else pages.push(fullPage);
+          spreadIndex++;
         }
         render();
       });
 
+      // "Add spread" appends a blank spread following the alternating default.
       document.getElementById('add-page-btn').addEventListener('click', () => {
-        const layout = DEFAULT_LAYOUT;
-        pages.push({ id: uid('pg'), layout, slots: new Array(LAYOUTS[layout].slots).fill(null) });
+        const spreadIndex = Math.floor(pages.length / 2);
+        const fullLeft = spreadIndex % 2 === 0;
+        const multiLayout = spreadIndex % 2 === 0 ? DEFAULT_MULTI_2 : DEFAULT_MULTI_3;
+        const fullPage = { id: uid('pg'), layout: 'full', slots: [null] };
+        const multiPage = { id: uid('pg'), layout: multiLayout, slots: new Array(LAYOUTS[multiLayout].slots).fill(null) };
+        pages.push(...(fullLeft ? [fullPage, multiPage] : [multiPage, fullPage]));
         render();
-        // Scroll the new page into view.
         requestAnimationFrame(() => {
-          const el = document.querySelector('#pages .page-card:last-child');
+          const el = document.querySelector('#pages .spread:last-child');
           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
       });
@@ -567,62 +600,87 @@
         if (!unplaced.length) document.getElementById('tray-hint').textContent = '';
       }
 
+      // Render pages grouped into spreads (two facing landscape pages).
       function renderPages() {
         const container = document.getElementById('pages');
         container.innerHTML = '';
-        pages.forEach((pg, pageIdx) => {
-          const layout = LAYOUTS[pg.layout] || LAYOUTS.full;
-          const card = document.createElement('div');
-          card.className = 'page-card';
-          card.dataset.pageId = pg.id;
-
-          const canvas = document.createElement('div');
-          canvas.className = 'page-canvas';
-          canvas.setAttribute('style', layout.grid);
-
-          pg.slots.forEach((photoId, slotIdx) => {
-            const slot = document.createElement('div');
-            slot.className = 'slot';
-            if (layout.areas) slot.style.gridArea = layout.areas[slotIdx];
-            const photo = photoId ? photos.get(photoId) : null;
-            if (photo) {
-              slot.style.backgroundImage = `url('${photo.url}')`;
-              slot.innerHTML = photoHasMedia(photo)
-                ? `<div class="slot-tag"><img src="/assets/popcode_icon.svg" style="width:11px;height:11px"/>${photo.popcode.mediaType === 'audio' ? 'Audio' : 'Video'}</div>`
-                : '';
-            } else {
-              slot.classList.add('empty');
-            }
-            if (selectedTrayId && !photo) slot.classList.add('place-target');
-            if (swapSource && swapSource.pageId === pg.id && swapSource.slotIdx === slotIdx) slot.classList.add('swap-source');
-            slot.addEventListener('click', () => onSlotTap(pg, slotIdx));
-            enableSlotDrag(slot, pg, slotIdx);
-            canvas.appendChild(slot);
-          });
+        for (let s = 0; s < pages.length; s += 2) {
+          const left = pages[s], right = pages[s + 1] || null;
+          const spread = document.createElement('div');
+          spread.className = 'spread';
+          spread.dataset.spreadStart = s;
 
           const head = document.createElement('div');
-          head.className = 'page-head';
+          head.className = 'spread-head';
           head.innerHTML = `
-            <div class="page-grip" title="Drag to reorder">
+            <div class="spread-grip" title="Drag to reorder spread">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>
             </div>
-            <div class="page-num">Page ${pageIdx + 1}</div>
-            <div class="page-head-spacer"></div>
-            <button class="layout-btn" title="Change layout">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>
-              Layout
-            </button>
-            <button class="page-icon-btn danger" title="Delete page">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            <div class="spread-title">Spread ${s / 2 + 1}</div>
+            <div class="spread-head-spacer"></div>
+            <button class="spread-del" title="Delete spread">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
             </button>`;
-          head.querySelector('.layout-btn').addEventListener('click', () => openLayoutSheet(pg));
-          head.querySelector('.page-icon-btn.danger').addEventListener('click', () => deletePage(pg.id));
-          enablePageDrag(head.querySelector('.page-grip'), card, pg.id);
+          head.querySelector('.spread-del').addEventListener('click', () => deleteSpread(s));
+          enableSpreadDrag(head.querySelector('.spread-grip'), spread, s);
 
-          card.appendChild(head);
-          card.appendChild(canvas);
-          container.appendChild(card);
+          const body = document.createElement('div');
+          body.className = 'spread-body';
+          body.appendChild(buildPageHalf(left, !right));
+          const fold = document.createElement('div'); fold.className = 'spread-fold';
+          body.appendChild(fold);
+          if (right) body.appendChild(buildPageHalf(right, false));
+          else { const ph = document.createElement('div'); ph.className = 'page-half single'; body.appendChild(ph); }
+
+          spread.appendChild(head);
+          spread.appendChild(body);
+          container.appendChild(spread);
+        }
+      }
+
+      // Build one page (half of a spread): the landscape canvas + its slots and
+      // the per-page layout/delete tools.
+      function buildPageHalf(pg, isSingle) {
+        const layout = LAYOUTS[pg.layout] || LAYOUTS.full;
+        const half = document.createElement('div');
+        half.className = 'page-half' + (isSingle ? ' single' : '');
+
+        const canvas = document.createElement('div');
+        canvas.className = 'page-canvas';
+        canvas.setAttribute('style', `${layout.grid}padding:${layout.pad};gap:${layout.gap};`);
+
+        pg.slots.forEach((photoId, slotIdx) => {
+          const slot = document.createElement('div');
+          slot.className = 'slot';
+          slot.dataset.pageId = pg.id;
+          slot.dataset.slotIdx = slotIdx;
+          const photo = photoId ? photos.get(photoId) : null;
+          if (photo) {
+            slot.style.backgroundImage = `url('${photo.url}')`;
+            slot.innerHTML = photoHasMedia(photo)
+              ? `<div class="slot-tag"><img src="/assets/popcode_icon.svg"/>${photo.popcode.mediaType === 'audio' ? 'Audio' : 'Video'}</div>`
+              : '';
+          } else {
+            slot.classList.add('empty');
+          }
+          if (selectedTrayId && !photo) slot.classList.add('place-target');
+          if (swapSource && swapSource.pageId === pg.id && swapSource.slotIdx === slotIdx) slot.classList.add('swap-source');
+          slot.addEventListener('click', () => onSlotTap(pg, slotIdx));
+          enableSlotDrag(slot, pg, slotIdx);
+          canvas.appendChild(slot);
         });
+
+        const tools = document.createElement('div');
+        tools.className = 'page-tools';
+        tools.innerHTML = `
+          <button class="page-tool" title="Change layout">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>
+          </button>`;
+        tools.querySelector('.page-tool').addEventListener('click', () => openLayoutSheet(pg));
+
+        half.appendChild(canvas);
+        half.appendChild(tools);
+        return half;
       }
 
       function updateSummary() {
@@ -750,29 +808,29 @@
         render();
       }
 
-      function deletePage(id) {
-        const pg = pages.find(p => p.id === id);
-        if (!pg) return;
-        const hasPhotos = pg.slots.some(Boolean);
-        if (hasPhotos && !confirm('Delete this page? Its photos go back to your tray.')) return;
-        pages = pages.filter(p => p.id !== id);
+      // Delete a whole spread (the two pages starting at startIdx). Photos go
+      // back to the tray (they simply become unplaced once the pages are gone).
+      function deleteSpread(startIdx) {
+        const affected = [pages[startIdx], pages[startIdx + 1]].filter(Boolean);
+        const hasPhotos = affected.some(pg => pg.slots.some(Boolean));
+        if (hasPhotos && !confirm('Delete this spread? Its photos go back to your tray.')) return;
+        pages.splice(startIdx, affected.length);
         render();
       }
 
       // ── Layout sheet ────────────────────────────────────────────
+      // Preview each layout as a landscape page with the same grid + mat + gap
+      // the real page uses, so what you see matches what you get.
       function openLayoutSheet(pg) {
         const opts = LAYOUT_ORDER.map(key => {
           const L = LAYOUTS[key];
-          const cells = new Array(L.slots).fill('<div></div>').join('');
-          const previewStyle = L.grid.replace(/grid-template-areas:[^;]*;/, ''); // areas need names; skip for preview simplicity
+          const cells = new Array(L.slots).fill('<div class="lp-cell"></div>').join('');
           return `<div class="layout-opt ${pg.layout === key ? 'active' : ''}" data-layout="${key}">
-            <div class="layout-preview" style="${key === 'three-l' ? 'grid-template-columns:1.4fr 1fr;grid-template-rows:1fr 1fr;' : previewStyle}">
-              ${key === 'three-l' ? '<div style="grid-row:span 2"></div><div></div><div></div>' : cells}
-            </div>
-            <div class="layout-name">${L.name}</div>
+            <div class="layout-preview" style="${L.grid}padding:${L.pad};gap:${L.gap};">${cells}</div>
+            <div class="layout-name">${escapeHtml(L.name)}</div>
           </div>`;
         }).join('');
-        openSheet(`<h2>Choose a layout</h2><p class="sheet-sub">Pick how photos are arranged on page ${pages.indexOf(pg) + 1}.</p><div class="layout-grid">${opts}</div>`);
+        openSheet(`<h2>Choose a layout</h2><p class="sheet-sub">Minimal layouts for this page. Up to four photos.</p><div class="layout-grid">${opts}</div>`);
         document.querySelectorAll('#sheet .layout-opt').forEach(opt => {
           opt.addEventListener('click', () => { applyLayout(pg, opt.dataset.layout); closeSheet(); });
         });
@@ -1056,40 +1114,44 @@
       function closeSheet() { document.getElementById('overlay').classList.remove('visible'); }
       document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') closeSheet(); });
 
-      // ── Drag to reorder pages (pointer-based, touch-friendly) ────
-      function enablePageDrag(grip, card, pageId) {
+      // ── Drag to reorder whole spreads (pointer-based, touch-friendly) ──
+      // Operates on spread units (pairs of pages). `startIdx` is the page index
+      // of the spread's left page; spread number = startIdx/2.
+      function enableSpreadDrag(grip, spreadEl, startIdx) {
         grip.addEventListener('pointerdown', (e) => {
           e.preventDefault();
           const container = document.getElementById('pages');
-          const cards = [...container.querySelectorAll('.page-card')];
-          card.classList.add('dragging');
-          let currentTargetIdx = pages.findIndex(p => p.id === pageId);
+          const els = [...container.querySelectorAll('.spread')];
+          const fromSpread = startIdx / 2;
+          spreadEl.classList.add('dragging');
+          let targetSpread = fromSpread; // insertion position among spreads
           const move = (ev) => {
             const y = ev.clientY;
             let placed = false;
-            cards.forEach((c) => { c.classList.remove('drop-before', 'drop-after'); });
-            for (let i = 0; i < cards.length; i++) {
-              if (cards[i] === card) continue;
-              const r = cards[i].getBoundingClientRect();
-              const mid = r.top + r.height / 2;
-              if (y < mid) { cards[i].classList.add('drop-before'); currentTargetIdx = i; placed = true; break; }
+            els.forEach((c) => c.classList.remove('drop-before', 'drop-after'));
+            for (let i = 0; i < els.length; i++) {
+              if (els[i] === spreadEl) continue;
+              const r = els[i].getBoundingClientRect();
+              if (y < r.top + r.height / 2) { els[i].classList.add('drop-before'); targetSpread = i; placed = true; break; }
             }
-            if (!placed) { cards[cards.length - 1] === card ? cards[cards.length - 2]?.classList.add('drop-after') : cards[cards.length - 1].classList.add('drop-after'); currentTargetIdx = cards.length; }
-            // Auto-scroll near edges
+            if (!placed) { const last = els[els.length - 1]; (last === spreadEl ? els[els.length - 2] : last)?.classList.add('drop-after'); targetSpread = els.length; }
             if (y < 90) window.scrollBy(0, -12);
             else if (y > window.innerHeight - 120) window.scrollBy(0, 12);
           };
           const up = () => {
             document.removeEventListener('pointermove', move);
             document.removeEventListener('pointerup', up);
-            cards.forEach(c => c.classList.remove('drop-before', 'drop-after'));
-            card.classList.remove('dragging');
-            const from = pages.findIndex(p => p.id === pageId);
-            let to = currentTargetIdx;
-            const [moved] = pages.splice(from, 1);
-            if (to > from) to -= 1;
-            to = Math.max(0, Math.min(pages.length, to));
-            pages.splice(to, 0, moved);
+            els.forEach(c => c.classList.remove('drop-before', 'drop-after'));
+            spreadEl.classList.remove('dragging');
+            // Reorder in spread units (each spread = up to 2 pages).
+            const spreads = [];
+            for (let i = 0; i < pages.length; i += 2) spreads.push(pages.slice(i, i + 2));
+            let to = targetSpread;
+            const [moved] = spreads.splice(fromSpread, 1);
+            if (to > fromSpread) to -= 1;
+            to = Math.max(0, Math.min(spreads.length, to));
+            spreads.splice(to, 0, moved);
+            pages = spreads.flat();
             render();
           };
           document.addEventListener('pointermove', move);
@@ -1130,12 +1192,11 @@
               if (ghost) ghost.remove();
               document.querySelectorAll('.slot').forEach(s => s.classList.remove('place-target'));
               const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot');
-              if (under && under !== slot) {
-                // Find target page/slot from DOM position.
-                const targetCard = under.closest('.page-card');
-                const targetPg = pages.find(p => p.id === targetCard.dataset.pageId);
-                const targetIdx = [...under.parentElement.children].indexOf(under);
-                if (targetPg) {
+              if (under && under !== slot && under.dataset.pageId != null) {
+                // Resolve the target page/slot from the dropped-on slot's data.
+                const targetPg = pages.find(p => p.id === under.dataset.pageId);
+                const targetIdx = parseInt(under.dataset.slotIdx, 10);
+                if (targetPg && !Number.isNaN(targetIdx)) {
                   const tmp = targetPg.slots[targetIdx];
                   targetPg.slots[targetIdx] = pg.slots[slotIdx];
                   pg.slots[slotIdx] = tmp;
@@ -1297,7 +1358,8 @@
           const targetIndexByPhoto = {};
           popcodedIds.forEach((id, i) => { targetIndexByPhoto[id] = i; });
           const bookLayout = {
-            size: 'square',
+            size: 'a4-landscape', // Prodigi 11.7 × 8.3" landscape
+
             pages: pages.map(pg => ({
               id: pg.id,
               layout: pg.layout,
