@@ -469,7 +469,6 @@
 
       // ── Constants ───────────────────────────────────────────────
       const MAX_VIDEO_MB = 200;
-      const MAX_PHOTO_MB = 10;
       const MAX_COMPILE_DIM = 640;
 
       // Page layout templates — Popsa "Minimal" set (no text layouts). Pages are
@@ -537,17 +536,77 @@
       }
 
       // ── Add photos ──────────────────────────────────────────────
+      // Downscale + re-encode large photos so big phone images (10–20 MB HEIC/JPEG)
+      // aren't a roadblock. A book photo prints at most ~11.7" wide, so ~2560px on
+      // the long edge at good JPEG quality is plenty and keeps files small.
+      const MAX_PHOTO_DIM = 2560;
+      const PHOTO_QUALITY = 0.85;
+      const HARD_MAX_MB = 40; // only reject originals we can't even decode above this
+
+      async function loadDecodable(file) {
+        if (typeof createImageBitmap === 'function') {
+          try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+          catch (e) { /* fall through to <img> */ }
+        }
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        try {
+          await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('decode')); img.src = url; });
+          return img;
+        } finally { /* revoke after draw by caller via _url */ img._url = url; }
+      }
+
+      // Returns an optimized File, or the original if already small, or null if it
+      // can't be decoded and is over the hard cap.
+      async function optimizePhoto(file) {
+        let src;
+        try { src = await loadDecodable(file); }
+        catch (e) {
+          // Undecodable (e.g. an unsupported HEIC on this browser). Keep the raw
+          // file if it's within a generous cap so upload can still try.
+          return file.size / (1024 * 1024) <= HARD_MAX_MB ? file : null;
+        }
+        const w0 = src.width || src.naturalWidth, h0 = src.height || src.naturalHeight;
+        const scale = Math.min(1, MAX_PHOTO_DIM / Math.max(w0, h0));
+        const oversized = scale < 1;                        // dimensions over the cap
+        const heavy = file.size / (1024 * 1024) > 4;        // large byte size
+        // Already reasonable → keep the original untouched (no needless recompress).
+        if (!oversized && !heavy) { src.close?.(); if (src._url) URL.revokeObjectURL(src._url); return file; }
+        const w = Math.max(1, Math.round(w0 * scale)), h = Math.max(1, Math.round(h0 * scale));
+        const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(src, 0, 0, w, h);
+        src.close?.(); if (src._url) URL.revokeObjectURL(src._url);
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', PHOTO_QUALITY));
+        if (!blob) return file;
+        // When oversized, always take the downscaled version (capping dimensions is
+        // the point). When only heavy, keep whichever is smaller in bytes.
+        const chosen = oversized ? blob : (blob.size < file.size ? blob : file);
+        const name = (file.name || 'photo').replace(/\.[^.]+$/, '') + (chosen === blob ? '.jpg' : '');
+        return new File([chosen], name, { type: chosen.type || 'image/jpeg' });
+      }
+
       document.getElementById('photo-input').addEventListener('change', async (e) => {
         const files = [...e.target.files];
         e.target.value = '';
-        let skipped = 0;
-        for (const file of files) {
-          if (!file.type.startsWith('image/')) { skipped++; continue; }
-          if (file.size / (1024 * 1024) > MAX_PHOTO_MB) { skipped++; continue; }
+        const images = files.filter(f => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
+        const skippedType = files.length - images.length;
+        const hint = document.getElementById('tray-hint');
+        let failed = 0, addedAny = false;
+        for (let i = 0; i < images.length; i++) {
+          if (hint) hint.textContent = `Optimizing photos… ${i + 1}/${images.length}`;
+          const out = await optimizePhoto(images[i]);
+          if (!out) { failed++; continue; }
           const id = uid('ph');
-          photos.set(id, { id, file, url: URL.createObjectURL(file), popcode: null });
+          photos.set(id, { id, file: out, url: URL.createObjectURL(out), popcode: null });
+          addedAny = true;
+          render(); // progressive: photos appear in the tray as they finish
+          await new Promise(r => setTimeout(r, 0)); // yield so the UI paints
         }
-        if (skipped) showToast(`${skipped} photo${skipped > 1 ? 's' : ''} skipped (must be images under ${MAX_PHOTO_MB} MB)`);
+        if (hint) hint.textContent = '';
+        const notes = [];
+        if (skippedType) notes.push(`${skippedType} non-image file${skippedType > 1 ? 's' : ''} skipped`);
+        if (failed) notes.push(`${failed} photo${failed > 1 ? 's' : ''} couldn’t be read`);
+        if (notes.length) showToast(notes.join(' · '));
         render();
       });
 
@@ -878,12 +937,13 @@
       function replaceSlotPhoto(photo) {
         const inp = document.createElement('input');
         inp.type = 'file'; inp.accept = 'image/*';
-        inp.addEventListener('change', () => {
+        inp.addEventListener('change', async () => {
           const f = inp.files[0];
           if (!f) return;
-          if (f.size / (1024 * 1024) > MAX_PHOTO_MB) { showToast(`Photo must be under ${MAX_PHOTO_MB} MB`); return; }
+          const out = await optimizePhoto(f);
+          if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
           if (photo.file) URL.revokeObjectURL(photo.url);
-          photo.file = f; photo.url = URL.createObjectURL(f); photo.existingUrl = null; // re-upload on save
+          photo.file = out; photo.url = URL.createObjectURL(out); photo.existingUrl = null; // re-upload on save
           render();
         });
         inp.click();
