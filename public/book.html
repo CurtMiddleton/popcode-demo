@@ -371,12 +371,74 @@
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
       let currentUser = null;
+      let editingCollection = null;  // set when opened with ?id=slug (edit mode)
       db.auth.getSession().then(({ data }) => {
         if (!data.session) { window.location.href = '/auth.html'; return; }
         currentUser = data.session.user;
         const uName = data.session.user?.user_metadata?.full_name?.split(' ')[0] || data.session.user?.email?.split('@')[0] || '';
         if (uName) document.getElementById('user-greeting').textContent = 'Hi, ' + uName + '!';
+        const editId = new URLSearchParams(location.search).get('id');
+        if (editId) loadBookForEdit(editId);
       });
+
+      // ── Load an existing book into the builder (edit mode) ──────
+      async function loadBookForEdit(slug) {
+        try {
+          const { data: col, error } = await db.from('collections')
+            .select('id, slug, name, kind, book_layout, mind_file_url, user_id')
+            .eq('slug', slug).eq('user_id', currentUser.id).maybeSingle();
+          if (error) throw error;
+          if (!col) { showToast('Book not found.'); return; }
+          if (col.kind !== 'book' || !col.book_layout) {
+            alert('This project is not a book, so it can’t be opened in the book maker.');
+            window.location.href = '/manage.html'; return;
+          }
+          editingCollection = col;
+
+          // Popcoded media, keyed by the photo URL the item was linked to.
+          const { data: items } = await db.from('collection_items')
+            .select('target_index, media_type, video_url, audio_url, photo_url')
+            .eq('collection_id', col.id);
+          const itemByPhotoUrl = {};
+          (items || []).forEach(it => { if (it.photo_url) itemByPhotoUrl[it.photo_url] = it; });
+
+          // Rebuild the photo pool + pages from book_layout. Existing photos have
+          // a remote URL and no File; a photo is re-uploaded on save only if it
+          // gains a File (new or replaced).
+          const idByUrl = {};
+          const getPhotoId = (url) => {
+            if (idByUrl[url]) return idByUrl[url];
+            const id = uid('ph');
+            const it = itemByPhotoUrl[url];
+            photos.set(id, {
+              id, file: null, url, existingUrl: url,
+              popcode: it ? {
+                mediaType: it.media_type || 'video',
+                video: null, audio: null,
+                existingVideoUrl: it.video_url || null,
+                existingAudioUrl: it.audio_url || null,
+              } : null,
+            });
+            idByUrl[url] = id;
+            return id;
+          };
+
+          pages = (col.book_layout.pages || []).map(pg => ({
+            id: pg.id || uid('pg'),
+            layout: LAYOUTS[pg.layout] ? pg.layout : DEFAULT_LAYOUT,
+            slots: (pg.slots || []).map(s => (s && s.photo_url) ? getPhotoId(s.photo_url) : null),
+          }));
+
+          document.getElementById('title-input').value = col.name || '';
+          document.querySelector('h1').textContent = 'Edit Book';
+          document.getElementById('create-btn').textContent = 'Save Changes';
+          render();
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast('Could not load this book: ' + (err.message || 'error'));
+        }
+      }
       document.getElementById('logout-btn').addEventListener('click', async () => {
         await db.auth.signOut(); window.location.href = '/auth.html';
       });
@@ -419,6 +481,13 @@
       function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2200); }
       function placedIds() { const s = new Set(); pages.forEach(pg => pg.slots.forEach(id => { if (id) s.add(id); })); return s; }
       function unplacedPhotos() { const placed = placedIds(); return [...photos.values()].filter(p => !placed.has(p.id)); }
+      // A photo is "popcoded" if it has linked media — a freshly picked File OR
+      // an existing URL carried over from an edited book.
+      function photoHasMedia(p) {
+        if (!p || !p.popcode) return false;
+        const pc = p.popcode;
+        return !!(pc.video || pc.audio || pc.existingVideoUrl || pc.existingAudioUrl);
+      }
 
       // ── Add photos ──────────────────────────────────────────────
       document.getElementById('photo-input').addEventListener('change', async (e) => {
@@ -484,7 +553,7 @@
           el.style.backgroundImage = `url('${p.url}')`;
           el.innerHTML = `
             <div class="tray-x" data-del="${p.id}">&times;</div>
-            ${p.popcode ? '<div class="pop-dot"><img src="/assets/popcode_icon.svg" style="width:11px;height:11px"/></div>' : ''}`;
+            ${photoHasMedia(p) ? '<div class="pop-dot"><img src="/assets/popcode_icon.svg" style="width:11px;height:11px"/></div>' : ''}`;
           el.addEventListener('click', (e) => {
             if (e.target.closest('.tray-x')) return;
             selectedTrayId = (selectedTrayId === p.id) ? null : p.id;
@@ -518,7 +587,7 @@
             const photo = photoId ? photos.get(photoId) : null;
             if (photo) {
               slot.style.backgroundImage = `url('${photo.url}')`;
-              slot.innerHTML = photo.popcode
+              slot.innerHTML = photoHasMedia(photo)
                 ? `<div class="slot-tag"><img src="/assets/popcode_icon.svg" style="width:11px;height:11px"/>${photo.popcode.mediaType === 'audio' ? 'Audio' : 'Video'}</div>`
                 : '';
             } else {
@@ -558,7 +627,7 @@
 
       function updateSummary() {
         const total = photos.size;
-        const popcoded = [...photos.values()].filter(p => p.popcode && (p.popcode.video || p.popcode.audio)).length;
+        const popcoded = [...photos.values()].filter(photoHasMedia).length;
         const pageCount = pages.length;
         const summary = document.getElementById('create-summary');
         const btn = document.getElementById('create-btn');
@@ -626,7 +695,7 @@
       function openSlotMenu(pg, slotIdx) {
         const photo = photos.get(pg.slots[slotIdx]);
         if (!photo) return;
-        const hasPop = !!(photo.popcode && (photo.popcode.video || photo.popcode.audio));
+        const hasPop = photoHasMedia(photo);
         openSheet(`
           <h2>Photo options</h2>
           <p class="sheet-sub">${hasPop ? 'This photo is a Popcode — it plays its ' + (photo.popcode.mediaType === 'audio' ? 'audio' : 'video') + ' when scanned.' : 'Link a video or audio and this page will come to life when scanned.'}</p>
@@ -665,8 +734,8 @@
           const f = inp.files[0];
           if (!f) return;
           if (f.size / (1024 * 1024) > MAX_PHOTO_MB) { showToast(`Photo must be under ${MAX_PHOTO_MB} MB`); return; }
-          URL.revokeObjectURL(photo.url);
-          photo.file = f; photo.url = URL.createObjectURL(f);
+          if (photo.file) URL.revokeObjectURL(photo.url);
+          photo.file = f; photo.url = URL.createObjectURL(f); photo.existingUrl = null; // re-upload on save
           render();
         });
         inp.click();
@@ -734,13 +803,20 @@
           mediaType: photo.popcode?.mediaType || 'video',
           video: photo.popcode?.video || null,
           audio: photo.popcode?.audio || null,
+          existingVideoUrl: photo.popcode?.existingVideoUrl || null,
+          existingAudioUrl: photo.popcode?.existingAudioUrl || null,
         };
         renderPopcodeSheet();
       }
 
+      // Does the popcode-in-progress have media for the currently selected type?
+      function popEditHasMedia(s) {
+        return s.mediaType === 'video' ? !!(s.video || s.existingVideoUrl) : !!(s.audio || s.existingAudioUrl);
+      }
+
       function renderPopcodeSheet() {
         const s = popEditState;
-        const hasMedia = !!(s.video || s.audio);
+        const hasMedia = popEditHasMedia(s);
         openSheet(`
           <h2>${s.photo.popcode ? 'Edit' : 'Add a'} Popcode</h2>
           <p class="sheet-sub">Link a video or audio clip. When someone scans this printed page, it plays automatically.</p>
@@ -770,14 +846,16 @@
         const s = popEditState;
         const body = document.getElementById('pop-body');
         if (s.mediaType === 'video') {
-          if (s.video) {
+          if (s.video || s.existingVideoUrl) {
+            const src = s.video ? URL.createObjectURL(s.video) : s.existingVideoUrl;
+            const caption = s.video ? `${escapeHtml(s.video.name || 'video')} · ${formatMB(s.video.size)}` : 'Current video';
             body.innerHTML = `
               <div class="media-preview show">
-                <video src="${URL.createObjectURL(s.video)}" controls playsinline muted></video>
-                <div class="compress-status">${escapeHtml(s.video.name || 'video')} · ${formatMB(s.video.size)}</div>
+                <video src="${src}" controls playsinline muted></video>
+                <div class="compress-status">${caption}</div>
                 <button class="mini-btn" id="pop-video-change" style="margin-top:10px">Choose a different video</button>
               </div>`;
-            document.getElementById('pop-video-change').addEventListener('click', () => { s.video = null; renderPopBody(); syncPopSave(); });
+            document.getElementById('pop-video-change').addEventListener('click', () => { s.video = null; s.existingVideoUrl = null; renderPopBody(); syncPopSave(); });
           } else {
             body.innerHTML = `
               <div class="drop-zone">
@@ -791,19 +869,20 @@
           }
         } else {
           // Audio
-          if (s.audio) {
+          if (s.audio || s.existingAudioUrl) {
+            const src = s.audio ? URL.createObjectURL(s.audio) : s.existingAudioUrl;
             body.innerHTML = `
               <div class="audio-panel">
                 <div class="audio-player-row">
                   <button class="audio-play-btn" id="pop-audio-play"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
                   <div class="audio-time" id="pop-audio-dur" style="margin:0">0:00</div>
                 </div>
-                <audio id="pop-audio-el" src="${URL.createObjectURL(s.audio)}" preload="metadata"></audio>
-                <button class="mini-btn" id="pop-audio-rerec">Re-record</button>
-                <div class="compress-status">${formatMB(s.audio.size)}</div>
+                <audio id="pop-audio-el" src="${src}" preload="metadata"></audio>
+                <button class="mini-btn" id="pop-audio-rerec">${s.audio ? 'Re-record' : 'Record a new clip'}</button>
+                ${s.audio ? `<div class="compress-status">${formatMB(s.audio.size)}</div>` : '<div class="compress-status">Current audio</div>'}
               </div>`;
             wireAudioPreview();
-            document.getElementById('pop-audio-rerec').addEventListener('click', () => { s.audio = null; renderPopBody(); syncPopSave(); });
+            document.getElementById('pop-audio-rerec').addEventListener('click', () => { s.audio = null; s.existingAudioUrl = null; renderPopBody(); syncPopSave(); });
           } else {
             body.innerHTML = `
               <div class="audio-panel">
@@ -819,13 +898,22 @@
 
       function syncPopSave() {
         const btn = document.getElementById('pop-save');
-        if (btn) btn.disabled = !(popEditState.video || popEditState.audio);
+        if (btn) btn.disabled = !popEditHasMedia(popEditState);
       }
 
       function savePopcode() {
         const s = popEditState;
-        if (!(s.video || s.audio)) return;
-        s.photo.popcode = { mediaType: s.mediaType, video: s.mediaType === 'video' ? s.video : null, audio: s.mediaType === 'audio' ? s.audio : null };
+        if (!popEditHasMedia(s)) return;
+        const isVideo = s.mediaType === 'video';
+        s.photo.popcode = {
+          mediaType: s.mediaType,
+          video: isVideo ? s.video : null,
+          audio: isVideo ? null : s.audio,
+          // Keep the existing URL only when no new File replaced it (and only for
+          // the chosen media type, so switching video↔audio drops the other).
+          existingVideoUrl: isVideo && !s.video ? s.existingVideoUrl : null,
+          existingAudioUrl: !isVideo && !s.audio ? s.existingAudioUrl : null,
+        };
         closeSheet(); render(); showToast('Popcode saved');
       }
 
@@ -1081,10 +1169,18 @@
       });
       function yieldToPaint() { return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); }
 
-      async function loadImageResized(file) {
+      // Load a photo's pixels for compiling — from its File (new photo) or from
+      // its stored URL (existing photo in an edited book). Remote fetch uses
+      // crossOrigin so the canvas isn't tainted (Supabase public URLs allow CORS).
+      async function loadCompileImage(photo) {
         const img = new Image();
-        img.src = URL.createObjectURL(file);
+        if (photo.file) { img.src = URL.createObjectURL(photo.file); }
+        else { img.crossOrigin = 'anonymous'; img.src = photo.url; }
         await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('Could not load a photo for compiling.')); });
+        return resizeForCompile(img);
+      }
+
+      async function resizeForCompile(img) {
         if (img.naturalWidth > MAX_COMPILE_DIM || img.naturalHeight > MAX_COMPILE_DIM) {
           const scale = Math.min(MAX_COMPILE_DIM / img.naturalWidth, MAX_COMPILE_DIM / img.naturalHeight);
           const c = document.createElement('canvas');
@@ -1098,9 +1194,9 @@
         return img;
       }
 
-      document.getElementById('create-btn').addEventListener('click', createBook);
+      document.getElementById('create-btn').addEventListener('click', saveBook);
 
-      async function createBook() {
+      async function saveBook() {
         const placed = placedIds();
         if (!placed.size) { showToast('Place at least one photo on a page first.'); return; }
         if (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler) {
@@ -1110,9 +1206,7 @@
         // Popcoded photos (in book order) → these become AR targets + collection_items.
         const orderedPhotoIds = [];
         pages.forEach(pg => pg.slots.forEach(id => { if (id && !orderedPhotoIds.includes(id)) orderedPhotoIds.push(id); }));
-        const popcodedIds = orderedPhotoIds.filter(id => {
-          const p = photos.get(id); return p.popcode && (p.popcode.video || p.popcode.audio);
-        });
+        const popcodedIds = orderedPhotoIds.filter(id => photoHasMedia(photos.get(id)));
 
         // A book with no linked media compiles no .mind, so popcode.app/{slug}
         // would have nothing to scan. Require at least one Popcode.
@@ -1121,23 +1215,26 @@
           return;
         }
 
+        const editing = !!editingCollection;
         document.getElementById('create-btn').disabled = true;
         document.getElementById('progress').classList.add('visible');
         document.getElementById('p-emoji').textContent = '📖';
         document.getElementById('try-again-btn').style.display = 'none';
 
-        const slug = randomSlug();
+        const slug = editing ? editingCollection.slug : randomSlug();
         const title = document.getElementById('title-input').value.trim() || null;
         const bucket = 'experiences';
         const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 
         try {
-          // 1. Upload every placed photo (popcoded or not) into {slug}/book/.
+          // 1. Upload placed photos that are new/replaced (have a File). Existing
+          //    photos keep their stored URL — no re-upload.
           setProgress('Uploading photos…', 4);
           const photoUrlById = {};
           let done = 0;
           for (const id of orderedPhotoIds) {
             const p = photos.get(id);
+            if (p.existingUrl && !p.file) { photoUrlById[id] = p.existingUrl; done++; continue; }
             const ext = (p.file.name && p.file.name.split('.').pop().toLowerCase()) || 'jpg';
             const safeExt = /^[a-z0-9]+$/.test(ext) ? ext : 'jpg';
             const path = `${slug}/book/${id}.${safeExt}`;
@@ -1148,42 +1245,49 @@
             setProgress(`Uploading photos… ${done}/${orderedPhotoIds.length}`, 4 + (done / orderedPhotoIds.length) * 26);
           }
 
-          // 2. Compile popcoded photos into a .mind target (only if any).
-          let mindUrl = null;
-          if (popcodedIds.length) {
-            setProgress('Preparing scan targets…', 32);
-            const imgs = [];
-            for (const id of popcodedIds) imgs.push(await loadImageResized(photos.get(id).file));
-            setProgress('Compiling scan targets… (this can take a minute)', 36);
-            await yieldToPaint();
-            const compiler = new MINDAR.IMAGE.Compiler();
-            await compiler.compileImageTargets(imgs, (prog) => setProgress(`Compiling scan targets… ${Math.round(prog)}%`, 36 + prog * 0.24));
-            const buffer = await compiler.exportData();
-            setProgress('Uploading scan targets…', 62);
-            const { error: mErr } = await db.storage.from(bucket).upload(`${slug}/target.mind`, new Blob([buffer]), { contentType: 'application/octet-stream', upsert: true });
-            if (mErr) throw new Error('Target upload failed: ' + mErr.message);
-            mindUrl = pub(`${slug}/target.mind`) + `?v=${Date.now()}`;
-          }
+          // 2. Compile popcoded photos into a fresh .mind target. Recompiled on
+          //    every save so the target order matches the current popcode order.
+          setProgress('Preparing scan targets…', 32);
+          const imgs = [];
+          for (const id of popcodedIds) imgs.push(await loadCompileImage(photos.get(id)));
+          setProgress('Compiling scan targets… (this can take a minute)', 36);
+          await yieldToPaint();
+          const compiler = new MINDAR.IMAGE.Compiler();
+          await compiler.compileImageTargets(imgs, (prog) => setProgress(`Compiling scan targets… ${Math.round(prog)}%`, 36 + prog * 0.24));
+          const buffer = await compiler.exportData();
+          setProgress('Uploading scan targets…', 62);
+          const { error: mErr } = await db.storage.from(bucket).upload(`${slug}/target.mind`, new Blob([buffer]), { contentType: 'application/octet-stream', upsert: true });
+          if (mErr) throw new Error('Target upload failed: ' + mErr.message);
+          const mindUrl = pub(`${slug}/target.mind`) + `?v=${Date.now()}`;
 
-          // 3. Upload each popcode's media (video/audio). target_index = order in popcodedIds.
+          // 3. Resolve each popcode's media URL. Upload only NEW Files; reuse the
+          //    stored URL for unchanged media (the item row's URL is authoritative,
+          //    so a reused file at an old index path is fine).
           setProgress('Uploading videos…', 66);
           const itemRows = [];
           for (let i = 0; i < popcodedIds.length; i++) {
             const id = popcodedIds[i];
-            const p = photos.get(id);
-            const pc = p.popcode;
+            const pc = photos.get(id).popcode;
             const row = { target_index: i, media_type: pc.mediaType, video_url: null, audio_url: null, photo_url: photoUrlById[id] };
             if (pc.mediaType === 'video') {
-              const vpath = `${slug}/video_${i}.mp4`;
-              const { error } = await db.storage.from(bucket).upload(vpath, pc.video, { contentType: pc.video.type || 'video/mp4', upsert: true });
-              if (error) throw new Error(`Video ${i + 1} upload failed: ${error.message}`);
-              row.video_url = pub(vpath);
+              if (pc.video) {
+                const vpath = `${slug}/video_${i}.mp4`;
+                const { error } = await db.storage.from(bucket).upload(vpath, pc.video, { contentType: pc.video.type || 'video/mp4', upsert: true });
+                if (error) throw new Error(`Video ${i + 1} upload failed: ${error.message}`);
+                row.video_url = pub(vpath) + `?v=${Date.now()}`;
+              } else {
+                row.video_url = pc.existingVideoUrl;
+              }
             } else {
-              const aext = (pc.audio.name && pc.audio.name.split('.').pop()) || 'webm';
-              const apath = `${slug}/audio_${i}.${aext}`;
-              const { error } = await db.storage.from(bucket).upload(apath, pc.audio, { contentType: pc.audio.type || 'audio/webm', upsert: true });
-              if (error) throw new Error(`Audio ${i + 1} upload failed: ${error.message}`);
-              row.audio_url = pub(apath);
+              if (pc.audio) {
+                const aext = (pc.audio.name && pc.audio.name.split('.').pop()) || 'webm';
+                const apath = `${slug}/audio_${i}.${aext}`;
+                const { error } = await db.storage.from(bucket).upload(apath, pc.audio, { contentType: pc.audio.type || 'audio/webm', upsert: true });
+                if (error) throw new Error(`Audio ${i + 1} upload failed: ${error.message}`);
+                row.audio_url = pub(apath) + `?v=${Date.now()}`;
+              } else {
+                row.audio_url = pc.existingAudioUrl;
+              }
             }
             itemRows.push(row);
             setProgress(`Uploading media… ${i + 1}/${popcodedIds.length}`, 66 + ((i + 1) / Math.max(1, popcodedIds.length)) * 20);
@@ -1201,22 +1305,35 @@
             })),
           };
 
-          // 5. Insert the collection row (kind='book').
-          setProgress('Saving your book…', 90);
-          const { data: col, error: colErr } = await db.from('collections')
-            .insert({ slug, name: title, mind_file_url: mindUrl, user_id: currentUser.id, kind: 'book', book_layout: bookLayout })
-            .select().single();
-          if (colErr) throw new Error('Could not save the book: ' + colErr.message);
-
-          // 6. Insert popcoded collection_items.
-          if (itemRows.length) {
-            const rows = itemRows.map(r => ({ ...r, collection_id: col.id }));
-            const { error: iErr } = await db.from('collection_items').insert(rows);
-            if (iErr) throw new Error('Book saved, but linking videos failed: ' + iErr.message);
+          // 5. Insert (create) or update (edit) the collection row.
+          setProgress(editing ? 'Saving changes…' : 'Saving your book…', 90);
+          let collectionId;
+          if (editing) {
+            const { data: col, error: colErr } = await db.from('collections')
+              .update({ name: title, mind_file_url: mindUrl, book_layout: bookLayout })
+              .eq('id', editingCollection.id).eq('user_id', currentUser.id)
+              .select().single();
+            if (colErr) throw new Error('Could not save changes: ' + colErr.message);
+            if (!col) throw new Error('Save was blocked — you may not own this book.');
+            collectionId = col.id;
+            // Replace the item set so removed/reordered popcodes are reflected.
+            const { error: delErr } = await db.from('collection_items').delete().eq('collection_id', collectionId);
+            if (delErr) throw new Error('Could not update linked media: ' + delErr.message);
+          } else {
+            const { data: col, error: colErr } = await db.from('collections')
+              .insert({ slug, name: title, mind_file_url: mindUrl, user_id: currentUser.id, kind: 'book', book_layout: bookLayout })
+              .select().single();
+            if (colErr) throw new Error('Could not save the book: ' + colErr.message);
+            collectionId = col.id;
           }
 
+          // 6. Insert popcoded collection_items.
+          const rows = itemRows.map(r => ({ ...r, collection_id: collectionId }));
+          const { error: iErr } = await db.from('collection_items').insert(rows);
+          if (iErr) throw new Error('Book saved, but linking videos failed: ' + iErr.message);
+
           setProgress('Done!', 100);
-          showResult(slug);
+          showResult(slug, editing);
         } catch (err) {
           console.error(err);
           if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
@@ -1224,8 +1341,9 @@
         }
       }
 
-      function showResult(slug) {
+      function showResult(slug, editing) {
         document.getElementById('progress').classList.remove('visible');
+        document.querySelector('.result-card h3').textContent = editing ? 'Your book is updated!' : 'Your book is ready!';
         const viewUrl = `https://popcode.app/${slug}`;
         document.getElementById('result-url').textContent = `popcode.app/${slug}`;
         document.getElementById('result-view').href = viewUrl;
