@@ -1030,3 +1030,36 @@ Task was "add Sentry like we just did for Bashō (a Next.js 14 app)." **Popcode 
 - When the real print arrives in a few days, **scan it with the Popcode app** to confirm the badged photo still triggers AR.
 - Roadmap unchanged: commerce-first funnel; multi-tile bundle to compete with Mixtiles' "$16/tile" (their model = 3-tile min, peel-stick frames, shipping amortized); more SKUs (verify each via `GET /v4.0/products/{sku}`).
 - The `print-assets` bucket + its storage policies in the migration are unused (uploads go to the existing `experiences` bucket) — harmless, can drop later.
+
+### 2026-07-06 — Book maker v1 (Popsa-style multi-Popcode photo book builder) — built, tested, on branch
+
+**Branch `claude/nifty-wozniak-x5x1mr`. Committed + pushed (`6570462`). No PR opened, prod untouched.** First Popcode product with **more than one Popcode integrated**. New standalone builder page; kicks off the "books, then calendars" roadmap.
+
+**Scope locked with user: v1 = Builder + AR (option 1a), only linked photos are scannable (option 2a).** Physical print-book (Prodigi book SKU) explicitly deferred to next phase; book editing (reopen a saved book) NOT built yet (create-only).
+
+**What shipped (all on the branch):**
+- **`public/book.html`** — the whole builder, self-contained, vanilla JS, matches app design (gradient header, CooperBT/Inter, bottom-sheet modals). Features: photo tray + **Auto-fill**; 6 layout templates (`full`, `two-v`, `two-h`, `three-l` [1 tall + 2], `three-r`, `four`, default `four`); **tap-to-place / tap-to-swap** as the reliable primary interaction plus **pointer-based drag** to reorder pages (grip) and move photos between slots; delete page/photo (photos return to tray); per-photo **Popcode editor** (video upload reusing create.html's compress path, OR in-browser `MediaRecorder` audio) with a gradient Video/Audio tag on popcoded slots. Save pipeline mirrors create.html: upload all placed photos to `{slug}/book/{photoId}.ext`, compile ONLY popcoded photos into `{slug}/target.mind` (target_index = order across pages), upload each popcode's media as `video_{i}.mp4` / `audio_{i}.ext`, insert the `collections` row (`kind='book'`, `book_layout` jsonb) + popcoded `collection_items`. **Requires ≥1 Popcode to create** (else `/{slug}` has nothing to scan — guarded with a friendly alert).
+- **Migration `supabase/migrations/2026-07-06-book-maker.sql`** (ADDITIVE, operator must run in Supabase SQL editor): `alter table collections add column kind text default 'standard', add column book_layout jsonb`. No new RLS (ordinary columns on the owner's row; the cover_config admin trigger only fires on cover_config change). Existing "standard" collections unaffected.
+- **`public/manage.html`** — now selects `kind`; book collections render a **"Book" pill** and expose only **View / Share / Delete** (Edit→edit.html, Download, and Shop→order.html are single-image flows that would mangle/mislead on a book, so hidden for `kind==='book'`). Guarded the `.btn-download` listener (absent on book cards → was `null.addEventListener`). Added **"Make a Book"** to the top bar + nav drawer.
+- **`public/create.html`** — "Make a Book" nav-drawer link.
+
+**Data model / how it reuses the existing stack (important for future sessions):**
+- A book IS a `collections` row (so viewer/download/delete/print "just work"). `book_layout` jsonb = `{ size, pages:[{ id, layout, slots:[ {photo_url, target_index|null} | null ] }] }`. `target_index` non-null on a slot = that photo is popcoded (has a matching `collection_items` row + is in the `.mind`); null = plain book photo; slot `null` = empty.
+- **Only popcoded photos become `collection_items`** → small `.mind`, fast compile, badge only where it matters. Non-popcoded book photos live only in Storage + `book_layout`. `view.html`/`scan.html` need NO changes — a book with popcodes is just a collection with items + a `.mind`.
+
+**Testing (headless Chromium via playwright-core in scratchpad — book.html is auth-gated + loads supabase-js/Sentry from CDN which are 403 in-sandbox, so I stubbed `window.supabase` by fulfilling the CDN request, and let the vendored MindAR load from a local `python3 -m http.server`):**
+- Builder: add 6 photos → tray; Auto-fill → 2 pages (4-up), 6 filled + 2 empty, tray emptied; slot menu → Popcode sheet (video drop zone + audio record both present); layout picker shows 6, choosing Full collapses page to 1 slot. ✓
+- Full save path: popcode a photo with a fake video File → Save enabled → tag shows → click Create → **real MindAR compile runs** → stubbed uploads/inserts → **result screen reached with a generated slug, 0 page errors**. ✓
+- manage.html: book card = pill + View/Delete only (no edit/shop/download); standard card unchanged; "Make a Book" entry present. ✓
+- **Bug caught by testing:** on narrow screens the create-summary is `display:none`, so the flex Create button slid LEFT and the **Beta Feedback FAB (fixed bottom:20/left:20, z-index 9000) intercepted its clicks**. Fixed with `margin-left:auto` on `.create-btn` (pins it right regardless of summary). Also hid the summary <620px so it never sits under the FAB.
+
+**Gotchas / lessons for next time:**
+- **The bottom-left Beta Feedback FAB (z-index 9000) overlaps ANY bottom-fixed bar.** Keep interactive controls out of the bottom-left ~150px, or pin them right. This will bite any future sticky-bottom UI.
+- Testing book.html in-sandbox needs the supabase-js CDN stub trick (fulfill `**/@supabase/supabase-js@2`) + local http.server for the vendored MindAR; the Sentry SRI `integrity` attr will (correctly) block a stubbed sentry bundle — those console errors are test-only, ignore them.
+- `node_modules` is tracked in this repo; I installed `playwright-core` ONLY in the scratchpad (outside the repo) so nothing leaked into git — verify `git status` shows just the 4 intended files.
+
+**NEXT (queued, user said "let's continue"):**
+1. **Book editing** — `book.html?id={slug}` loads `book_layout` + existing items back into the builder (the obvious missing half; makes it create-AND-edit). Needs: rebuild photos Map from `book_layout` slot URLs, re-hydrate popcodes from `collection_items`, diff on save (re-upload changed, recompile if popcode set changed).
+2. **Physical print book** — new Prodigi book SKU (verify via `GET /v4.0/products/{sku}`) + multi-asset builder; slots into `lib/print/catalog.mjs` (already flagged there as a later phase) + a book-aware order flow. Popsa endgame.
+3. **Calendars** — user's stated follow-up after books; same page-by-page engine, different product/output.
+4. Optional: a dedicated book "cover" page, richer layouts, drag polish, book thumbnail on manage cards (currently uses first `collection_items.photo_url` = first popcoded photo).
