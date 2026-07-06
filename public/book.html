@@ -138,11 +138,15 @@
       /* The page canvas — landscape (Prodigi 11.7 × 8.3"). Grid + padding (the
          "mat") + gap are set inline per layout so full-bleed has none and the
          minimal matted layouts get clean white margins. */
+      /* The canvas holds the aspect ratio with NO padding/grid of its own, so its
+         height is purely ratio-driven. The mat is an absolutely-positioned inner
+         grid (inset), which can never push the canvas taller (the old
+         aspect-ratio + %-padding combo clipped the bottom). */
       .page-canvas {
-        width: 100%; aspect-ratio: 117 / 83; background: #ffffff; overflow: hidden;
-        display: grid; border-radius: 3px; box-shadow: 0 3px 14px rgba(0,0,0,0.10);
+        position: relative; width: 100%; aspect-ratio: 117 / 83; background: #ffffff;
+        overflow: hidden; border-radius: 3px; box-shadow: 0 3px 14px rgba(0,0,0,0.10);
       }
-      .page-canvas.blank { background: #ffffff; }
+      .page-grid { position: absolute; inset: 0; display: grid; }
 
       /* Desktop — use the browser real estate like Popsa: a wide ~1015px spread. */
       @media (min-width: 1080px) {
@@ -227,7 +231,8 @@
       .layout-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
       .layout-opt { border: 2px solid #eceae4; border-radius: 12px; padding: 7px; cursor: pointer; background: white; transition: border-color 0.12s; }
       .layout-opt.active { border-color: #7657FC; }
-      .layout-preview { width: 100%; aspect-ratio: 117 / 83; display: grid; background: #f1efe9; border-radius: 4px; overflow: hidden; }
+      .layout-preview { position: relative; width: 100%; aspect-ratio: 117 / 83; background: #f1efe9; border-radius: 4px; overflow: hidden; }
+      .layout-preview .lp-grid { position: absolute; inset: 0; display: grid; }
       .layout-preview .lp-cell { background: #cfcabd; border-radius: 1px; }
       .layout-opt.active .layout-preview .lp-cell { background: #b9a9f6; }
       .layout-name { font-size: 11px; font-weight: 700; text-align: center; color: #666; margin-top: 6px; }
@@ -471,8 +476,10 @@
       // landscape (Prodigi 11.7×8.3"). `slots` = photo slots; `grid` = CSS grid;
       // `pad` = the outer white mat; `gap` = white gutter between photos. Full-bleed
       // has no mat/gap; the minimal matted layouts get clean white margins.
-      const MAT = '11%';    // outer white mat for matted (non-bleed) layouts — generous, minimal
-      const GAP = '4%';     // gutter between photos
+      // Mat = inner-grid `inset` (top/bottom % of page height, left/right % of
+      // page width) → ~even, generous margins on the landscape page. GAP = gutter.
+      const MAT = '11% 7.5%';
+      const GAP = '3%';
       // `bleed` is a separate per-page toggle (the full-bleed icon): when on, the
       // page ignores pad/gap and photos run to the page edges. So a single photo
       // is "centered/matted" by default and "full bleed" when the toggle is on.
@@ -691,31 +698,37 @@
 
         const canvas = document.createElement('div');
         canvas.className = 'page-canvas' + (isBlank ? ' blank' : '');
-        const pad = pg.bleed ? '0' : layout.pad;
-        const gap = pg.bleed ? '0' : layout.gap;
-        canvas.setAttribute('style', `${layout.grid}padding:${pad};gap:${gap};`);
 
-        pg.slots.forEach((photoId, slotIdx) => {
-          const slot = document.createElement('div');
-          slot.className = 'slot';
-          slot.dataset.pageId = pg.id;
-          slot.dataset.slotIdx = slotIdx;
-          if (layout.areas && layout.areas[slotIdx]) slot.style.gridArea = layout.areas[slotIdx];
-          const photo = photoId ? photos.get(photoId) : null;
-          if (photo) {
-            slot.style.backgroundImage = `url('${photo.url}')`;
-            slot.innerHTML = photoHasMedia(photo)
-              ? `<div class="slot-tag"><img src="/assets/popcode_icon.svg"/>${photo.popcode.mediaType === 'audio' ? 'Audio' : 'Video'}</div>`
-              : '';
-          } else {
-            slot.classList.add('empty');
-          }
-          if (selectedTrayId && !photo) slot.classList.add('place-target');
-          if (swapSource && swapSource.pageId === pg.id && swapSource.slotIdx === slotIdx) slot.classList.add('swap-source');
-          slot.addEventListener('click', () => onSlotTap(pg, slotIdx));
-          enableSlotDrag(slot, pg, slotIdx);
-          canvas.appendChild(slot);
-        });
+        if (!isBlank) {
+          const grid = document.createElement('div');
+          grid.className = 'page-grid';
+          const inset = pg.bleed ? '0' : layout.pad;   // full-bleed → no mat
+          const gap = pg.bleed ? '0' : layout.gap;
+          grid.setAttribute('style', `${layout.grid}inset:${inset};gap:${gap};`);
+
+          pg.slots.forEach((photoId, slotIdx) => {
+            const slot = document.createElement('div');
+            slot.className = 'slot';
+            slot.dataset.pageId = pg.id;
+            slot.dataset.slotIdx = slotIdx;
+            if (layout.areas && layout.areas[slotIdx]) slot.style.gridArea = layout.areas[slotIdx];
+            const photo = photoId ? photos.get(photoId) : null;
+            if (photo) {
+              slot.style.backgroundImage = `url('${photo.url}')`;
+              slot.innerHTML = photoHasMedia(photo)
+                ? `<div class="slot-tag"><img src="/assets/popcode_icon.svg"/>${photo.popcode.mediaType === 'audio' ? 'Audio' : 'Video'}</div>`
+                : '';
+            } else {
+              slot.classList.add('empty');
+            }
+            if (selectedTrayId && !photo) slot.classList.add('place-target');
+            if (swapSource && swapSource.pageId === pg.id && swapSource.slotIdx === slotIdx) slot.classList.add('swap-source');
+            slot.addEventListener('click', () => onSlotTap(pg, slotIdx));
+            enableSlotDrag(slot, pg, slotIdx);
+            grid.appendChild(slot);
+          });
+          canvas.appendChild(grid);
+        }
 
         half.appendChild(head);
         half.appendChild(canvas);
@@ -894,7 +907,7 @@
           const cells = Array.from({ length: L.slots }, (_, i) =>
             `<div class="lp-cell"${L.areas ? ` style="grid-area:${L.areas[i]}"` : ''}></div>`).join('');
           return `<div class="layout-opt ${pg.layout === key ? 'active' : ''}" data-layout="${key}">
-            <div class="layout-preview" style="${L.grid}padding:${L.pad};gap:${L.gap};">${cells}</div>
+            <div class="layout-preview"><div class="lp-grid" style="${L.grid}inset:${L.pad};gap:${L.gap};">${cells}</div></div>
             <div class="layout-name">${escapeHtml(L.name)}</div>
           </div>`;
         }).join('');
