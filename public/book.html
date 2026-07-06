@@ -111,47 +111,51 @@
       /* ── Spreads (facing pages) ─────────────────────────────── */
       /* A book is designed as spreads: two landscape pages (Prodigi 11.7×8.3")
          side by side, meeting at a center gutter. */
-      .pages { display: flex; flex-direction: column; gap: 20px; }
-      .spread {
-        background: white; border-radius: 16px; padding: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-        position: relative; transition: box-shadow 0.15s, opacity 0.2s, transform 0.2s;
-      }
-      .spread.dragging { opacity: 0.6; box-shadow: 0 12px 40px rgba(0,0,0,0.22); transform: scale(1.01); z-index: 50; }
-      .spread.drop-before { box-shadow: 0 -4px 0 -1px #7657FC, 0 2px 12px rgba(0,0,0,0.06); }
-      .spread.drop-after { box-shadow: 0 4px 0 -1px #7657FC, 0 2px 12px rgba(0,0,0,0.06); }
-      .spread-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-      .spread-grip { cursor: grab; padding: 4px; color: #c4c0b6; touch-action: none; display: flex; }
-      .spread-grip:active { cursor: grabbing; }
-      .spread-title { font-size: 12px; font-weight: 700; color: #1a1a1a; letter-spacing: 0.02em; }
-      .spread-head-spacer { flex: 1; }
-      .spread-del {
-        border: 1px solid #e4e2dc; background: white; border-radius: 999px; cursor: pointer; color: #999;
-        width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
-      }
-      .spread-del:hover { background: #fdecec; color: #d33; border-color: #f4c9c9; }
+      .pages { display: flex; flex-direction: column; gap: 30px; }
+      .spread { position: relative; transition: opacity 0.2s, transform 0.2s; }
 
       /* Two facing pages with a subtle center fold. */
-      .spread-body { display: flex; align-items: stretch; background: #eceae4; border-radius: 8px; overflow: hidden; }
-      .page-half { position: relative; flex: 1 1 0; min-width: 0; }
-      .spread-fold { width: 2px; background: linear-gradient(90deg, rgba(0,0,0,0.10), rgba(0,0,0,0.02) 50%, rgba(0,0,0,0.10)); flex: 0 0 2px; }
+      .spread-body { display: flex; align-items: flex-start; }
+      .page-half { position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+      .spread-fold { align-self: stretch; width: 2px; margin-top: 34px; background: linear-gradient(90deg, rgba(0,0,0,0.10), rgba(0,0,0,0.02) 50%, rgba(0,0,0,0.10)); flex: 0 0 2px; }
       .page-half.single { flex-basis: 50%; }
+
+      /* Per-page header row above the page: label + Popsa-style controls
+         (full-bleed / layout / more), icons on the outer edge, label toward the
+         gutter. */
+      .page-half-head { display: flex; align-items: center; gap: 6px; height: 34px; margin-bottom: 6px; padding: 0 2px; }
+      .page-label-text { font-size: 13px; font-weight: 700; color: #6b6558; white-space: nowrap; }
+      .ph-spacer { flex: 1; }
+      .page-tool {
+        width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer;
+        background: #eceae3; display: flex; align-items: center; justify-content: center; color: #666; flex: 0 0 auto;
+        transition: background 0.12s, color 0.12s;
+      }
+      .page-tool:hover { background: #e0ddd4; color: #111; }
+      .page-tool.active { background: #1a1a1a; color: #fff; }
+      .page-tool.danger:hover { background: #fdecec; color: #d33; }
 
       /* The page canvas — landscape (Prodigi 11.7 × 8.3"). Grid + padding (the
          "mat") + gap are set inline per layout so full-bleed has none and the
          minimal matted layouts get clean white margins. */
       .page-canvas {
         width: 100%; aspect-ratio: 117 / 83; background: #ffffff; overflow: hidden;
-        display: grid;
+        display: grid; border-radius: 3px; box-shadow: 0 3px 14px rgba(0,0,0,0.10);
       }
-      .page-tools { position: absolute; top: 6px; right: 6px; display: flex; gap: 5px; z-index: 3; }
-      .page-tool {
-        width: 26px; height: 26px; border-radius: 50%; border: none; cursor: pointer;
-        background: rgba(255,255,255,0.92); box-shadow: 0 1px 4px rgba(0,0,0,0.18);
-        display: flex; align-items: center; justify-content: center; color: #444;
+      .page-canvas.blank { background: #ffffff; }
+
+      /* Desktop — use the browser real estate like Popsa: a wide ~1015px spread. */
+      @media (min-width: 1080px) {
+        .wrap { max-width: 1055px; }  /* → ~1015px spread inside the 20px padding */
+        h1 { font-size: 46px; }
+        .subtitle, .field-label, .text-input { max-width: 640px; }
+        .page-half-head { height: 40px; margin-bottom: 8px; }
+        .page-label-text { font-size: 15px; }
+        .page-tool { width: 36px; height: 36px; }
+        .page-tool svg { width: 17px; height: 17px; }
+        .spread-fold { margin-top: 48px; }
+        .create-bar-inner { max-width: 1015px; }
       }
-      .page-tool:hover { background: #fff; color: #111; }
-      .page-tool.danger:hover { color: #d33; }
-      .page-tag { position: absolute; bottom: 5px; left: 7px; z-index: 3; font-size: 10px; font-weight: 700; color: rgba(0,0,0,0.32); }
 
       .slot {
         position: relative; background: #e4e1d9; overflow: hidden;
@@ -434,11 +438,15 @@
             return id;
           };
 
-          pages = (col.book_layout.pages || []).map(pg => ({
-            id: pg.id || uid('pg'),
-            layout: LAYOUTS[pg.layout] ? pg.layout : DEFAULT_LAYOUT,
-            slots: (pg.slots || []).map(s => (s && s.photo_url) ? getPhotoId(s.photo_url) : null),
-          }));
+          pages = (col.book_layout.pages || []).map(pg => {
+            const norm = normalizeLayout(pg.layout);
+            return {
+              id: pg.id || uid('pg'),
+              layout: pg.layout === 'blank' ? 'blank' : norm.layout,
+              bleed: norm.bleed !== null ? norm.bleed : !!pg.bleed,
+              slots: (pg.slots || []).map(s => (s && s.photo_url) ? getPhotoId(s.photo_url) : null),
+            };
+          });
 
           document.getElementById('title-input').value = col.name || '';
           document.querySelector('h1').textContent = 'Edit Book';
@@ -463,22 +471,35 @@
       // landscape (Prodigi 11.7×8.3"). `slots` = photo slots; `grid` = CSS grid;
       // `pad` = the outer white mat; `gap` = white gutter between photos. Full-bleed
       // has no mat/gap; the minimal matted layouts get clean white margins.
-      const MAT = '7.5%';   // outer mat for matted layouts
+      const MAT = '7.5%';   // outer mat for matted (non-bleed) layouts
       const GAP = '3.5%';   // gutter between photos
+      // `bleed` is a separate per-page toggle (the full-bleed icon): when on, the
+      // page ignores pad/gap and photos run to the page edges. So a single photo
+      // is "centered/matted" by default and "full bleed" when the toggle is on.
       const LAYOUTS = {
-        full:        { name: 'Full bleed',   slots: 1, pad: '0',   gap: '0',  grid: 'grid-template-columns:1fr;grid-template-rows:1fr;' },
-        'single-mat':{ name: 'Centered',     slots: 1, pad: '12%', gap: '0',  grid: 'grid-template-columns:1fr;grid-template-rows:1fr;' },
+        blank:       { name: 'Blank',        slots: 0, pad: '0',   gap: '0',  grid: '' },
+        single:      { name: 'Single',       slots: 1, pad: MAT,   gap: '0',  grid: 'grid-template-columns:1fr;grid-template-rows:1fr;' },
         'two-v':     { name: 'Two across',   slots: 2, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1fr 1fr;grid-template-rows:1fr;' },
         'two-h':     { name: 'Two stacked',  slots: 2, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1fr;grid-template-rows:1fr 1fr;' },
         'two-left':  { name: 'Big left',     slots: 2, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1.7fr 1fr;grid-template-rows:1fr;' },
         'two-right': { name: 'Big right',    slots: 2, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1fr 1.7fr;grid-template-rows:1fr;' },
         'three-row': { name: 'Three across', slots: 3, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr;' },
-        'four-grid': { name: 'Grid of four', slots: 4, pad: MAT,   gap: GAP,  grid: 'grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;' },
       };
-      const LAYOUT_ORDER = ['full', 'single-mat', 'two-v', 'two-h', 'two-left', 'two-right', 'three-row', 'four-grid'];
+      // Pickable arrangements in the layout sheet (blank is structural, not picked).
+      const LAYOUT_ORDER = ['single', 'two-v', 'two-h', 'two-left', 'two-right', 'three-row'];
       const DEFAULT_LAYOUT = 'two-v';   // a plain "add page" default
       const DEFAULT_MULTI_2 = 'two-v';  // auto-fill: facing page with 2 photos
       const DEFAULT_MULTI_3 = 'three-row'; // auto-fill: facing page with 3 photos
+      // Map legacy layout keys (from earlier builds on this branch) to the new model.
+      function normalizeLayout(key) {
+        if (key === 'full') return { layout: 'single', bleed: true };
+        if (key === 'single-mat') return { layout: 'single', bleed: false };
+        return { layout: LAYOUTS[key] ? key : DEFAULT_LAYOUT, bleed: null };
+      }
+      const blankPage = () => ({ id: uid('pg'), layout: 'blank', bleed: false, slots: [] });
+      // Book label for a page at global index i: first left page is the blank
+      // inside-cover; content starts at "Page 1" on the first right page.
+      const pageLabel = (i) => (i === 0 ? 'Blank Page' : 'Page ' + i);
 
       // ── State ───────────────────────────────────────────────────
       // photos: id -> { id, file, url, popcode|null }
@@ -525,42 +546,51 @@
       // Default pattern: each spread has one full-bleed page facing a 2- or
       // 3-photo page. The full-bleed side alternates left/right per spread, and
       // the multi-photo side alternates between 2 and 3 photos.
+      const singlePage = (photoId) => ({ id: uid('pg'), layout: 'single', bleed: true, slots: [photoId || null] });
+      const multiPage = (ml, ids) => {
+        const slots = new Array(LAYOUTS[ml].slots).fill(null);
+        (ids || []).forEach((id, i) => { if (i < slots.length) slots[i] = id; });
+        return { id: uid('pg'), layout: ml, bleed: false, slots };
+      };
+
       document.getElementById('autofill-btn').addEventListener('click', () => {
         let pool = unplacedPhotos();
         if (!pool.length) { showToast('All photos are already placed.'); return; }
-        // Top off empty slots in existing pages first.
+        // Every book opens on a blank inside-cover (the first left page).
+        if (!pages.length) pages.push(blankPage());
+        // Top off empty slots in existing photo pages first.
         for (const pg of pages) {
-          for (let i = 0; i < pg.slots.length && pool.length; i++) {
-            if (!pg.slots[i]) pg.slots[i] = pool.shift().id;
-          }
+          if (pg.layout === 'blank') continue;
+          for (let i = 0; i < pg.slots.length && pool.length; i++) if (!pg.slots[i]) pg.slots[i] = pool.shift().id;
         }
-        // Then generate alternating spreads for the remainder.
-        let spreadIndex = Math.floor(pages.length / 2);
+        // Page 1 (right of the cover spread) is a full-bleed single.
+        if (pages.length === 1 && pool.length) pages.push(singlePage(pool.shift().id));
+        // Then alternating content spreads: a full-bleed single facing a 2- or
+        // 3-photo page; the full-bleed side flips each spread, the multi count 3↔2.
+        let sIdx = 0, useThree = true;
         while (pool.length) {
-          const fullLeft = spreadIndex % 2 === 0;
-          const multiLayout = spreadIndex % 2 === 0 ? DEFAULT_MULTI_2 : DEFAULT_MULTI_3;
-          const fullPage = { id: uid('pg'), layout: 'full', slots: [pool.shift().id] };
-          let multiPage = null;
+          const fullLeft = sIdx % 2 === 0;
+          const single = singlePage(pool.shift().id);
+          let multi = null;
           if (pool.length) {
-            const slots = new Array(LAYOUTS[multiLayout].slots).fill(null);
-            for (let i = 0; i < slots.length && pool.length; i++) slots[i] = pool.shift().id;
-            multiPage = { id: uid('pg'), layout: multiLayout, slots };
+            const ml = useThree ? DEFAULT_MULTI_3 : DEFAULT_MULTI_2;
+            const take = []; for (let i = 0; i < LAYOUTS[ml].slots && pool.length; i++) take.push(pool.shift().id);
+            multi = multiPage(ml, take);
           }
-          if (multiPage) pages.push(...(fullLeft ? [fullPage, multiPage] : [multiPage, fullPage]));
-          else pages.push(fullPage);
-          spreadIndex++;
+          pages.push(...(multi ? (fullLeft ? [single, multi] : [multi, single]) : [single]));
+          useThree = !useThree; sIdx++;
         }
         render();
       });
 
-      // "Add spread" appends a blank spread following the alternating default.
+      // "Add spread" appends an empty content spread (single facing 2-photo).
       document.getElementById('add-page-btn').addEventListener('click', () => {
-        const spreadIndex = Math.floor(pages.length / 2);
-        const fullLeft = spreadIndex % 2 === 0;
-        const multiLayout = spreadIndex % 2 === 0 ? DEFAULT_MULTI_2 : DEFAULT_MULTI_3;
-        const fullPage = { id: uid('pg'), layout: 'full', slots: [null] };
-        const multiPage = { id: uid('pg'), layout: multiLayout, slots: new Array(LAYOUTS[multiLayout].slots).fill(null) };
-        pages.push(...(fullLeft ? [fullPage, multiPage] : [multiPage, fullPage]));
+        if (!pages.length) pages.push(blankPage());
+        const spreadCount = Math.ceil(pages.length / 2);
+        const fullLeft = spreadCount % 2 === 0;
+        const single = singlePage(null);
+        const multi = multiPage(DEFAULT_MULTI_2, []);
+        pages.push(...(fullLeft ? [single, multi] : [multi, single]));
         render();
         requestAnimationFrame(() => {
           const el = document.querySelector('#pages .spread:last-child');
@@ -608,46 +638,60 @@
           const left = pages[s], right = pages[s + 1] || null;
           const spread = document.createElement('div');
           spread.className = 'spread';
-          spread.dataset.spreadStart = s;
-
-          const head = document.createElement('div');
-          head.className = 'spread-head';
-          head.innerHTML = `
-            <div class="spread-grip" title="Drag to reorder spread">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>
-            </div>
-            <div class="spread-title">Spread ${s / 2 + 1}</div>
-            <div class="spread-head-spacer"></div>
-            <button class="spread-del" title="Delete spread">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-            </button>`;
-          head.querySelector('.spread-del').addEventListener('click', () => deleteSpread(s));
-          enableSpreadDrag(head.querySelector('.spread-grip'), spread, s);
 
           const body = document.createElement('div');
           body.className = 'spread-body';
-          body.appendChild(buildPageHalf(left, !right));
+          body.appendChild(buildPageHalf(left, s, 'left', !right));
           const fold = document.createElement('div'); fold.className = 'spread-fold';
           body.appendChild(fold);
-          if (right) body.appendChild(buildPageHalf(right, false));
+          if (right) body.appendChild(buildPageHalf(right, s + 1, 'right', false));
           else { const ph = document.createElement('div'); ph.className = 'page-half single'; body.appendChild(ph); }
 
-          spread.appendChild(head);
           spread.appendChild(body);
           container.appendChild(spread);
         }
       }
 
-      // Build one page (half of a spread): the landscape canvas + its slots and
-      // the per-page layout/delete tools.
-      function buildPageHalf(pg, isSingle) {
-        const layout = LAYOUTS[pg.layout] || LAYOUTS.full;
+      // SVGs for the per-page tools.
+      const IC_BLEED = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+      const IC_LAYOUT = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>';
+      const IC_MORE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>';
+
+      // Build one page (half of a spread): a header (label + Popsa controls) above
+      // the landscape canvas with its slots. `globalIndex` sets the page label;
+      // `side` mirrors the header; the first page (index 0) is the blank cover.
+      function buildPageHalf(pg, globalIndex, side, isSingle) {
+        const layout = LAYOUTS[pg.layout] || LAYOUTS.single;
+        const isBlank = pg.layout === 'blank';
         const half = document.createElement('div');
         half.className = 'page-half' + (isSingle ? ' single' : '');
 
+        // Header row above the page (not overlaid): label + Popsa controls
+        // (full-bleed toggle, layout, more). Mirrored — the outer edge holds the
+        // icons, the inner edge (toward the gutter) holds the label. The blank
+        // inside-cover shows just its label.
+        const head = document.createElement('div');
+        head.className = 'page-half-head';
+        const label = `<span class="page-label-text">${escapeHtml(pageLabel(globalIndex))}</span>`;
+        const controls = isBlank ? '' : `
+          <button class="page-tool tool-bleed ${pg.bleed ? 'active' : ''}" title="Full bleed">${IC_BLEED}</button>
+          <button class="page-tool tool-layout" title="Change layout">${IC_LAYOUT}</button>
+          <button class="page-tool tool-more" title="More">${IC_MORE}</button>`;
+        head.innerHTML = side === 'right'
+          ? `<div class="ph-spacer"></div>${label}${controls}`
+          : `${controls}${label}<div class="ph-spacer"></div>`;
+        const bleedBtn = head.querySelector('.tool-bleed');
+        if (bleedBtn) bleedBtn.addEventListener('click', () => { pg.bleed = !pg.bleed; render(); });
+        const layoutBtn = head.querySelector('.tool-layout');
+        if (layoutBtn) layoutBtn.addEventListener('click', () => openLayoutSheet(pg));
+        const moreBtn = head.querySelector('.tool-more');
+        if (moreBtn) moreBtn.addEventListener('click', () => openPageMenu(pg));
+
         const canvas = document.createElement('div');
-        canvas.className = 'page-canvas';
-        canvas.setAttribute('style', `${layout.grid}padding:${layout.pad};gap:${layout.gap};`);
+        canvas.className = 'page-canvas' + (isBlank ? ' blank' : '');
+        const pad = pg.bleed ? '0' : layout.pad;
+        const gap = pg.bleed ? '0' : layout.gap;
+        canvas.setAttribute('style', `${layout.grid}padding:${pad};gap:${gap};`);
 
         pg.slots.forEach((photoId, slotIdx) => {
           const slot = document.createElement('div');
@@ -670,17 +714,47 @@
           canvas.appendChild(slot);
         });
 
-        const tools = document.createElement('div');
-        tools.className = 'page-tools';
-        tools.innerHTML = `
-          <button class="page-tool" title="Change layout">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>
-          </button>`;
-        tools.querySelector('.page-tool').addEventListener('click', () => openLayoutSheet(pg));
-
+        half.appendChild(head);
         half.appendChild(canvas);
-        half.appendChild(tools);
         return half;
+      }
+
+      // The per-page "more" (⋯) menu: reorder + delete.
+      function openPageMenu(pg) {
+        const idx = pages.indexOf(pg);
+        const isBlank = pg.layout === 'blank';
+        openSheet(`
+          <h2>${escapeHtml(pageLabel(idx))}</h2>
+          <p class="sheet-sub">Reorder or remove this page.</p>
+          <div class="menu-row" data-act="up">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div>
+            <div><div>Move earlier</div></div>
+          </div>
+          <div class="menu-row" data-act="down">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></div>
+            <div><div>Move later</div></div>
+          </div>
+          ${isBlank ? '' : `<div class="menu-row" data-act="clear">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>
+            <div><div>Make blank</div><div class="menu-sub">Clear this page (photos return to your tray)</div></div>
+          </div>`}
+          <div class="menu-row destructive" data-act="delete">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></div>
+            <div><div>Delete page</div></div>
+          </div>
+        `);
+        document.querySelectorAll('#sheet .menu-row').forEach(row => {
+          row.addEventListener('click', () => {
+            const act = row.dataset.act;
+            const i = pages.indexOf(pg);
+            // Don't reorder across the blank inside-cover (keep it at index 0).
+            if (act === 'up' && i > 0 && pages[i - 1].layout !== 'blank') { [pages[i - 1], pages[i]] = [pages[i], pages[i - 1]]; }
+            else if (act === 'down' && i < pages.length - 1 && pages[i + 1].layout !== 'blank') { [pages[i + 1], pages[i]] = [pages[i], pages[i + 1]]; }
+            else if (act === 'clear') { pg.layout = 'blank'; pg.slots = []; pg.bleed = false; }
+            else if (act === 'delete') { pages.splice(i, 1); }
+            closeSheet(); render();
+          });
+        });
       }
 
       function updateSummary() {
@@ -805,16 +879,6 @@
         photos.delete(id);
         pages.forEach(pg => pg.slots = pg.slots.map(s => s === id ? null : s));
         if (selectedTrayId === id) selectedTrayId = null;
-        render();
-      }
-
-      // Delete a whole spread (the two pages starting at startIdx). Photos go
-      // back to the tray (they simply become unplaced once the pages are gone).
-      function deleteSpread(startIdx) {
-        const affected = [pages[startIdx], pages[startIdx + 1]].filter(Boolean);
-        const hasPhotos = affected.some(pg => pg.slots.some(Boolean));
-        if (hasPhotos && !confirm('Delete this spread? Its photos go back to your tray.')) return;
-        pages.splice(startIdx, affected.length);
         render();
       }
 
@@ -1114,51 +1178,6 @@
       function closeSheet() { document.getElementById('overlay').classList.remove('visible'); }
       document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') closeSheet(); });
 
-      // ── Drag to reorder whole spreads (pointer-based, touch-friendly) ──
-      // Operates on spread units (pairs of pages). `startIdx` is the page index
-      // of the spread's left page; spread number = startIdx/2.
-      function enableSpreadDrag(grip, spreadEl, startIdx) {
-        grip.addEventListener('pointerdown', (e) => {
-          e.preventDefault();
-          const container = document.getElementById('pages');
-          const els = [...container.querySelectorAll('.spread')];
-          const fromSpread = startIdx / 2;
-          spreadEl.classList.add('dragging');
-          let targetSpread = fromSpread; // insertion position among spreads
-          const move = (ev) => {
-            const y = ev.clientY;
-            let placed = false;
-            els.forEach((c) => c.classList.remove('drop-before', 'drop-after'));
-            for (let i = 0; i < els.length; i++) {
-              if (els[i] === spreadEl) continue;
-              const r = els[i].getBoundingClientRect();
-              if (y < r.top + r.height / 2) { els[i].classList.add('drop-before'); targetSpread = i; placed = true; break; }
-            }
-            if (!placed) { const last = els[els.length - 1]; (last === spreadEl ? els[els.length - 2] : last)?.classList.add('drop-after'); targetSpread = els.length; }
-            if (y < 90) window.scrollBy(0, -12);
-            else if (y > window.innerHeight - 120) window.scrollBy(0, 12);
-          };
-          const up = () => {
-            document.removeEventListener('pointermove', move);
-            document.removeEventListener('pointerup', up);
-            els.forEach(c => c.classList.remove('drop-before', 'drop-after'));
-            spreadEl.classList.remove('dragging');
-            // Reorder in spread units (each spread = up to 2 pages).
-            const spreads = [];
-            for (let i = 0; i < pages.length; i += 2) spreads.push(pages.slice(i, i + 2));
-            let to = targetSpread;
-            const [moved] = spreads.splice(fromSpread, 1);
-            if (to > fromSpread) to -= 1;
-            to = Math.max(0, Math.min(spreads.length, to));
-            spreads.splice(to, 0, moved);
-            pages = spreads.flat();
-            render();
-          };
-          document.addEventListener('pointermove', move);
-          document.addEventListener('pointerup', up);
-        });
-      }
-
       // ── Drag a photo between slots (pointer-based) ──────────────
       // A press-and-drag on a filled slot picks it up; dropping on another slot
       // swaps them. Short taps fall through to onSlotTap (handled by click).
@@ -1363,6 +1382,7 @@
             pages: pages.map(pg => ({
               id: pg.id,
               layout: pg.layout,
+              bleed: !!pg.bleed,
               slots: pg.slots.map(id => id ? { photo_url: photoUrlById[id], target_index: id in targetIndexByPhoto ? targetIndexByPhoto[id] : null } : null),
             })),
           };
