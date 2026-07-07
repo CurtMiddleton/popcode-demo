@@ -178,6 +178,24 @@
       }
       .slot-tag img { width: 10px; height: 10px; }
 
+      /* Drag-and-drop flourish: a circular photo "chip" follows the pointer, and
+         on drop the photo fills the slot with an expanding-circle reveal. */
+      .drag-ghost {
+        position: fixed; width: 92px; height: 92px; border-radius: 50%;
+        background-size: cover; background-position: center; border: 3px solid #fff;
+        box-shadow: 0 12px 30px rgba(0,0,0,0.34); pointer-events: none; z-index: 700;
+        transform: translate(-50%, -50%); animation: ghost-pop 0.16s ease-out;
+      }
+      @keyframes ghost-pop { from { transform: translate(-50%,-50%) scale(0.5); opacity: 0.5; } to { transform: translate(-50%,-50%) scale(1); opacity: 1; } }
+      .slot-fill {
+        position: absolute; inset: 0; background-size: cover; background-position: center; z-index: 3;
+        clip-path: circle(0% at var(--cx, 50%) var(--cy, 50%)); will-change: clip-path;
+      }
+      .slot-fill.go { animation: slot-reveal 0.42s cubic-bezier(0.22, 0.61, 0.36, 1) forwards; }
+      @keyframes slot-reveal { to { clip-path: circle(150% at var(--cx, 50%) var(--cy, 50%)); } }
+      .tray-thumb { touch-action: pan-x; }
+      .tray-thumb.dragging { opacity: 0.35; }
+
       /* ── Front cover (ported from Bashō: Overlay / Panel / Inset card) ── */
       /* container-type: inline-size lets the cover type scale with the page width
          via cqw, WITHOUT containing the block axis (so aspect-ratio + inset:0 fill
@@ -902,12 +920,14 @@
             ${photoHasMedia(p) ? '<div class="pop-dot"><img src="/assets/popcode_icon.svg" style="width:11px;height:11px"/></div>' : ''}`;
           el.addEventListener('click', (e) => {
             if (e.target.closest('.tray-x')) return;
+            if (justDragged) return; // a drag just ended on this thumb — ignore the trailing click
             selectedTrayId = (selectedTrayId === p.id) ? null : p.id;
             swapSource = null;
             renderTray(); renderPages();
-            document.getElementById('tray-hint').textContent = selectedTrayId ? 'Now tap an empty slot in a page to place this photo.' : '';
+            document.getElementById('tray-hint').textContent = selectedTrayId ? 'Now tap an empty slot in a page to place this photo, or drag it onto a page.' : '';
           });
           el.querySelector('.tray-x').addEventListener('click', (e) => { e.stopPropagation(); deletePhoto(p.id); });
+          enableTrayDrag(el, p);
           tray.appendChild(el);
         });
         if (!unplaced.length) document.getElementById('tray-hint').textContent = '';
@@ -1473,19 +1493,23 @@
 
         // 1) Placing a tray-selected photo into an empty slot.
         if (selectedTrayId && !photoId) {
+          const placedUrl = photos.get(selectedTrayId)?.url;
           pg.slots[slotIdx] = selectedTrayId;
           selectedTrayId = null;
           document.getElementById('tray-hint').textContent = '';
           render();
+          revealSlotFill(pg.id, slotIdx, placedUrl);
           return;
         }
         // Tapping elsewhere cancels a pending tray placement onto a filled slot:
         if (selectedTrayId && photoId) {
           // Replace the photo in this slot, sending the old one back to the tray.
+          const placedUrl = photos.get(selectedTrayId)?.url;
           pg.slots[slotIdx] = selectedTrayId;
           selectedTrayId = null;
           document.getElementById('tray-hint').textContent = '';
           render();
+          revealSlotFill(pg.id, slotIdx, placedUrl);
           return;
         }
 
@@ -1882,9 +1906,42 @@
       function closeSheet() { document.getElementById('overlay').classList.remove('visible'); }
       document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') closeSheet(); });
 
-      // ── Drag a photo between slots (pointer-based) ──────────────
-      // A press-and-drag on a filled slot picks it up; dropping on another slot
-      // swaps them. Short taps fall through to onSlotTap (handled by click).
+      // ── Drag-and-drop flourish ──────────────────────────────────
+      // A circular photo chip follows the pointer; on drop the photo fills the
+      // target slot with an expanding-circle reveal from the drop point.
+      function makeCircleGhost(url, x, y) {
+        const g = document.createElement('div');
+        g.className = 'drag-ghost';
+        g.style.backgroundImage = `url('${url}')`;
+        g.style.left = x + 'px'; g.style.top = y + 'px';
+        document.body.appendChild(g);
+        return g;
+      }
+      // Play the expanding-circle fill on a freshly-rendered slot (call after render()).
+      function revealSlotFill(pageId, slotIdx, url, dropX, dropY) {
+        if (!url) return;
+        const slot = [...document.querySelectorAll('.slot')]
+          .find(s => s.dataset.pageId === pageId && +s.dataset.slotIdx === slotIdx);
+        if (!slot) return;
+        const rect = slot.getBoundingClientRect();
+        let cx = 50, cy = 50;
+        if (dropX != null && rect.width && rect.height) {
+          cx = Math.max(0, Math.min(100, (dropX - rect.left) / rect.width * 100));
+          cy = Math.max(0, Math.min(100, (dropY - rect.top) / rect.height * 100));
+        }
+        const ov = document.createElement('div');
+        ov.className = 'slot-fill';
+        ov.style.backgroundImage = `url('${url}')`;
+        ov.style.setProperty('--cx', cx + '%');
+        ov.style.setProperty('--cy', cy + '%');
+        slot.appendChild(ov);
+        requestAnimationFrame(() => ov.classList.add('go'));
+        ov.addEventListener('animationend', () => ov.remove());
+      }
+
+      // Drag a filled photo between slots (pointer-based). A press-and-drag picks
+      // it up; dropping on another slot swaps them. Short taps fall through to
+      // onSlotTap (handled by click).
       function enableSlotDrag(slot, pg, slotIdx) {
         if (!pg.slots[slotIdx]) return; // only draggable when filled
         let startX, startY, dragging = false, ghost = null, moveH, upH;
@@ -1897,9 +1954,7 @@
             if (!dragging && Math.hypot(dx, dy) > 10) {
               dragging = true;
               slot.classList.add('slot-drag');
-              ghost = document.createElement('div');
-              ghost.style.cssText = `position:fixed;width:70px;height:70px;border-radius:8px;background:url('${photo.url}') center/cover;box-shadow:0 8px 24px rgba(0,0,0,0.3);pointer-events:none;z-index:700;transform:translate(-50%,-50%);`;
-              document.body.appendChild(ghost);
+              ghost = makeCircleGhost(photo.url, ev.clientX, ev.clientY);
             }
             if (dragging) {
               ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
@@ -1915,23 +1970,76 @@
               if (ghost) ghost.remove();
               document.querySelectorAll('.slot').forEach(s => s.classList.remove('place-target'));
               const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot');
+              let dropPg = null, dropIdx = null, dropUrl = null;
               if (under && under !== slot && under.dataset.pageId != null) {
-                // Resolve the target page/slot from the dropped-on slot's data.
                 const targetPg = pages.find(p => p.id === under.dataset.pageId);
                 const targetIdx = parseInt(under.dataset.slotIdx, 10);
                 if (targetPg && !Number.isNaN(targetIdx)) {
                   const tmp = targetPg.slots[targetIdx];
                   targetPg.slots[targetIdx] = pg.slots[slotIdx];
                   pg.slots[slotIdx] = tmp;
+                  dropPg = targetPg.id; dropIdx = targetIdx; dropUrl = photo.url;
                 }
               }
               justDragged = true;
               setTimeout(() => { justDragged = false; }, 0);
               render();
+              if (dropPg != null) revealSlotFill(dropPg, dropIdx, dropUrl, ev.clientX, ev.clientY);
             }
           };
           document.addEventListener('pointermove', moveH);
           document.addEventListener('pointerup', upH);
+        });
+      }
+
+      // Drag a tray photo onto a page slot (with the same circular chip + fill).
+      function enableTrayDrag(el, photo) {
+        el.addEventListener('pointerdown', (e) => {
+          if (e.target.closest('.tray-x')) return; // the delete button owns its taps
+          const startX = e.clientX, startY = e.clientY;
+          let dragging = false, ghost = null;
+          const move = (ev) => {
+            if (!dragging) {
+              if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 8) return;
+              dragging = true;
+              el.classList.add('dragging');
+              ghost = makeCircleGhost(photo.url, ev.clientX, ev.clientY);
+              document.body.style.userSelect = 'none';
+            }
+            ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
+            document.querySelectorAll('.slot').forEach(s => s.classList.remove('place-target'));
+            const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot');
+            if (under) under.classList.add('place-target');
+          };
+          const end = (ev) => {
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', end);
+            document.removeEventListener('pointercancel', end);
+            if (!dragging) return;
+            if (ghost) ghost.remove();
+            document.body.style.userSelect = '';
+            document.querySelectorAll('.slot').forEach(s => s.classList.remove('place-target'));
+            let dropPg = null, dropIdx = null;
+            if (ev.type !== 'pointercancel') {
+              const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot');
+              if (under && under.dataset.pageId != null) {
+                const tPg = pages.find(p => p.id === under.dataset.pageId);
+                const tIdx = parseInt(under.dataset.slotIdx, 10);
+                if (tPg && !Number.isNaN(tIdx)) {
+                  tPg.slots[tIdx] = photo.id;   // any displaced photo returns to the tray automatically
+                  selectedTrayId = null;
+                  dropPg = tPg.id; dropIdx = tIdx;
+                }
+              }
+            }
+            justDragged = true;
+            setTimeout(() => { justDragged = false; }, 0);
+            render();
+            if (dropPg != null) revealSlotFill(dropPg, dropIdx, photo.url, ev.clientX, ev.clientY);
+          };
+          document.addEventListener('pointermove', move);
+          document.addEventListener('pointerup', end);
+          document.addEventListener('pointercancel', end);
         });
       }
 
