@@ -42,7 +42,7 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        padding: 0 0 160px;
+        padding: 0 0 210px;
         overflow-x: hidden;
       }
 
@@ -252,6 +252,38 @@
         100% { box-shadow: 0 0 0 0 rgba(118,87,252,0); }
       }
 
+      /* ── Floating dock (Popsa-style quick actions) ─────────────
+         A centered pill above the create bar so Photos / Pages / Options
+         are always one tap away. Centered horizontally so it never collides
+         with the bottom-left Beta Feedback pill. */
+      .dock {
+        position: fixed; left: 50%; transform: translateX(-50%);
+        bottom: calc(94px + env(safe-area-inset-bottom)); z-index: 95;
+        display: flex; gap: 2px; background: #fff; border-radius: 20px; padding: 6px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.16), 0 1px 3px rgba(0,0,0,0.08);
+        border: 1px solid rgba(0,0,0,0.04);
+      }
+      .dock-btn {
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+        min-width: 72px; padding: 8px 10px 7px; border-radius: 14px; border: none;
+        background: transparent; cursor: pointer; color: #1a1a1a;
+        font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600;
+        transition: background 0.12s;
+      }
+      .dock-btn:hover { background: #f2f0ea; }
+      .dock-btn:active { background: #e8e5dd; }
+      .dock-btn svg { width: 24px; height: 24px; }
+
+      /* Photos sheet grid */
+      .photos-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 6px; }
+      @media (min-width: 620px) { .photos-grid { grid-template-columns: repeat(6, 1fr); } }
+      .pg-thumb {
+        aspect-ratio: 1; border-radius: 10px; background-size: cover; background-position: center;
+        background-color: #eee; cursor: pointer; position: relative; transition: transform 0.1s, box-shadow 0.1s;
+      }
+      .pg-thumb:hover { transform: scale(1.03); box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
+      .menu-row.disabled { opacity: 0.4; pointer-events: none; }
+
       /* ── Modal (shared: layout picker, popcode editor, slot menu) ── */
       .overlay { display: none; position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,0.5); align-items: flex-end; justify-content: center; padding: 0; }
       .overlay.visible { display: flex; }
@@ -389,6 +421,22 @@
       <button class="add-page-btn" id="add-page-btn">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Add a spread
+      </button>
+    </div>
+
+    <!-- Floating quick-action dock -->
+    <div class="dock" id="dock">
+      <button class="dock-btn" id="dock-photos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        Photos
+      </button>
+      <button class="dock-btn" id="dock-pages">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h6.5a3 3 0 0 1 3 3V20a2.5 2.5 0 0 0-2.5-2.5H2z"/><path d="M22 4.5h-6.5a3 3 0 0 0-3 3V20a2.5 2.5 0 0 1 2.5-2.5H22z"/></svg>
+        Pages
+      </button>
+      <button class="dock-btn" id="dock-options">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+        Options
       </button>
     </div>
 
@@ -1089,6 +1137,86 @@
           });
         });
       }
+
+      // ── Floating dock: Photos / Pages / Options quick actions ────
+      function openPhotosSheet() {
+        const unplaced = unplacedPhotos();
+        const total = photos.size;
+        const grid = unplaced.length
+          ? `<div class="photos-grid">${unplaced.map(p => `<div class="pg-thumb" data-id="${p.id}" style="background-image:url('${p.url}')"></div>`).join('')}</div>`
+          : (total ? `<p class="sheet-sub" style="margin-top:6px">Every photo is placed. Tap a page slot to rearrange, or add more below.</p>` : '');
+        openSheet(`
+          <h2>Photos</h2>
+          <p class="sheet-sub">${total ? `${unplaced.length} unused · ${total} total` : 'No photos yet — import some to start your book.'}</p>
+          <div class="menu-row" data-act="add">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+            <div><div>Add photos</div><div class="menu-sub">Import more from your device</div></div>
+          </div>
+          <div class="menu-row${unplaced.length ? '' : ' disabled'}" data-act="autofill">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h16M4 19h10"/></svg></div>
+            <div><div>Auto-fill pages</div><div class="menu-sub">Flow unused photos into spreads</div></div>
+          </div>
+          ${unplaced.length ? `<p class="sheet-sub" style="margin:16px 0 4px">Or tap a photo, then tap an empty page slot to place it.</p>` : ''}
+          ${grid}
+        `);
+        document.querySelector('#sheet [data-act="add"]').addEventListener('click', () => { closeSheet(); document.getElementById('photo-input').click(); });
+        const af = document.querySelector('#sheet [data-act="autofill"]');
+        if (af && unplaced.length) af.addEventListener('click', () => { closeSheet(); document.getElementById('autofill-btn').click(); });
+        document.querySelectorAll('#sheet .pg-thumb').forEach(t => t.addEventListener('click', () => {
+          selectedTrayId = t.dataset.id; swapSource = null;
+          closeSheet(); render();
+          document.getElementById('tray-hint').textContent = 'Now tap an empty slot in a page to place this photo.';
+          showToast('Tap an empty page slot to place it.');
+        }));
+      }
+
+      function openPagesSheet() {
+        openSheet(`
+          <h2>Pages</h2>
+          <p class="sheet-sub">Add pages to your book. Drag a page by its handle to rearrange, or use a page’s ⋯ menu to move or delete it.</p>
+          <div class="menu-row" data-act="spread">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/></svg></div>
+            <div><div>Add a spread</div><div class="menu-sub">A full-bleed page facing a 2-photo page</div></div>
+          </div>
+          <div class="menu-row" data-act="single">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="9" y1="12" x2="15" y2="12"/></svg></div>
+            <div><div>Add a single page</div><div class="menu-sub">One empty page you can lay out yourself</div></div>
+          </div>
+        `);
+        document.querySelector('#sheet [data-act="spread"]').addEventListener('click', () => { closeSheet(); document.getElementById('add-page-btn').click(); });
+        document.querySelector('#sheet [data-act="single"]').addEventListener('click', () => {
+          if (!pages.length) pages.push(blankPage());
+          pages.push({ id: uid('pg'), layout: DEFAULT_MULTI_2, slots: new Array(slotCount(DEFAULT_MULTI_2)).fill(null) });
+          closeSheet(); render();
+          requestAnimationFrame(() => { const el = document.querySelector('#pages .spread:last-child'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+        });
+      }
+
+      function openOptionsSheet() {
+        openSheet(`
+          <h2>Options</h2>
+          <p class="sheet-sub">Edit your book’s title and front cover.</p>
+          <div class="menu-row" data-act="title">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></div>
+            <div><div>Edit book title</div><div class="menu-sub">${escapeHtml((document.getElementById('title-input').value || '').trim()) || 'Untitled book'}</div></div>
+          </div>
+          <div class="menu-row" data-act="cover">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/></svg></div>
+            <div><div>Edit front cover</div><div class="menu-sub">Title, dates & cover photo</div></div>
+          </div>
+        `);
+        document.querySelector('#sheet [data-act="title"]').addEventListener('click', () => {
+          closeSheet();
+          const inp = document.getElementById('title-input');
+          inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(() => inp.focus(), 350);
+        });
+        document.querySelector('#sheet [data-act="cover"]').addEventListener('click', () => { closeSheet(); openCoverEditor(); });
+      }
+
+      document.getElementById('dock-photos').addEventListener('click', openPhotosSheet);
+      document.getElementById('dock-pages').addEventListener('click', openPagesSheet);
+      document.getElementById('dock-options').addEventListener('click', openOptionsSheet);
 
       function updateSummary() {
         const total = photos.size;
