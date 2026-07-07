@@ -169,6 +169,7 @@
       .slot.empty { outline: 1.5px dashed #d3cec2; outline-offset: -2px; background: #f3f1ea; }
       .slot.empty::after { content: '+'; color: #c2bbab; font-size: 24px; font-weight: 300; }
       .slot.place-target { outline: 3px solid #7657FC; outline-offset: -3px; z-index: 2; }
+      .page-canvas.cover.place-target { outline: 3px solid #7657FC; outline-offset: -3px; }
       .slot.swap-source { outline: 3px solid #589AF9; outline-offset: -3px; z-index: 2; }
       .slot.slot-drag { opacity: 0.4; }
       .slot-tag {
@@ -1130,7 +1131,7 @@
         if (pick) pick.addEventListener('click', () => chooseCoverPhoto());
         if (change) change.addEventListener('click', () => chooseCoverPhoto());
         if (remove) remove.addEventListener('click', () => {
-          if (cover.photo && cover.photo.file) URL.revokeObjectURL(cover.photo.url);
+          if (cover.photo && cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
           cover.photo = null; openCoverEditor();
         });
         document.getElementById('cover-done').addEventListener('click', () => { closeSheet(); render(); });
@@ -1143,7 +1144,7 @@
           const f = inp.files[0]; if (!f) return;
           const out = await optimizePhoto(f);
           if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
-          if (cover.photo && cover.photo.file) URL.revokeObjectURL(cover.photo.url);
+          if (cover.photo && cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
           cover.photo = { file: out, url: URL.createObjectURL(out), existingUrl: null };
           openCoverEditor();
         });
@@ -1923,13 +1924,10 @@
         document.body.appendChild(g);
         return g;
       }
-      // Play the expanding-circle fill on a freshly-rendered slot (call after render()).
-      function revealSlotFill(pageId, slotIdx, url, dropX, dropY) {
-        if (!url) return;
-        const slot = [...document.querySelectorAll('.slot')]
-          .find(s => s.dataset.pageId === pageId && +s.dataset.slotIdx === slotIdx);
-        if (!slot) return;
-        const rect = slot.getBoundingClientRect();
+      // Play the expanding-circle fill on any positioned element (from a drop point).
+      function playFill(el, url, dropX, dropY) {
+        if (!el || !url) return;
+        const rect = el.getBoundingClientRect();
         let cx = 50, cy = 50;
         if (dropX != null && rect.width && rect.height) {
           cx = Math.max(0, Math.min(100, (dropX - rect.left) / rect.width * 100));
@@ -1940,9 +1938,15 @@
         ov.style.backgroundImage = `url('${url}')`;
         ov.style.setProperty('--cx', cx + '%');
         ov.style.setProperty('--cy', cy + '%');
-        slot.appendChild(ov);
+        el.appendChild(ov);
         requestAnimationFrame(() => ov.classList.add('go'));
         ov.addEventListener('animationend', () => ov.remove());
+      }
+      // Reveal on a freshly-rendered page slot (call after render()).
+      function revealSlotFill(pageId, slotIdx, url, dropX, dropY) {
+        const slot = [...document.querySelectorAll('.slot')]
+          .find(s => s.dataset.pageId === pageId && +s.dataset.slotIdx === slotIdx);
+        playFill(slot, url, dropX, dropY);
       }
 
       // Drag a filled photo between slots (pointer-based). A press-and-drag picks
@@ -2024,8 +2028,9 @@
             }
             moved = true;
             ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
-            document.querySelectorAll('.slot').forEach(s => s.classList.remove('place-target'));
-            const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot');
+            document.querySelectorAll('.place-target').forEach(s => s.classList.remove('place-target'));
+            const el = document.elementFromPoint(ev.clientX, ev.clientY);
+            const under = el?.closest('.slot') || el?.closest('#pages .page-canvas.cover');
             if (under) under.classList.add('place-target');
           };
           const end = (ev) => {
@@ -2035,22 +2040,32 @@
             if (ghost) ghost.remove();
             el.classList.remove('dragging');
             document.body.style.userSelect = '';
-            document.querySelectorAll('.slot').forEach(s => s.classList.remove('place-target'));
+            document.querySelectorAll('.place-target').forEach(s => s.classList.remove('place-target'));
             // Released without moving (or never started) → treat as a tap.
             if (!moved || ev.type === 'pointercancel') { if (opts.onTap) opts.onTap(); return; }
+            const pt = document.elementFromPoint(ev.clientX, ev.clientY);
+            const coverEl = pt?.closest('#pages .page-canvas.cover');
+            const slotEl = pt?.closest('.slot');
+            justDragged = true;
+            setTimeout(() => { justDragged = false; }, 0);
+            if (coverEl) {
+              // Drop onto the front cover → set the cover photo (a shared reference,
+              // so its blob URL isn't revoked while the source photo still uses it).
+              cover.photo = { file: photo.file || null, url: photo.url, existingUrl: photo.existingUrl || null, shared: true };
+              render();
+              playFill(document.querySelector('#pages .cv-face') || document.querySelector('#pages .page-canvas.cover'), photo.url, ev.clientX, ev.clientY);
+              return;
+            }
             let dropPg = null, dropIdx = null;
-            const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot');
-            if (under && under.dataset.pageId != null) {
-              const tPg = pages.find(p => p.id === under.dataset.pageId);
-              const tIdx = parseInt(under.dataset.slotIdx, 10);
+            if (slotEl && slotEl.dataset.pageId != null) {
+              const tPg = pages.find(p => p.id === slotEl.dataset.pageId);
+              const tIdx = parseInt(slotEl.dataset.slotIdx, 10);
               if (tPg && !Number.isNaN(tIdx)) {
                 tPg.slots[tIdx] = photo.id;   // any displaced photo returns to the tray automatically
                 selectedTrayId = null;
                 dropPg = tPg.id; dropIdx = tIdx;
               }
             }
-            justDragged = true;
-            setTimeout(() => { justDragged = false; }, 0);
             render();
             if (dropPg != null) revealSlotFill(dropPg, dropIdx, photo.url, ev.clientX, ev.clientY);
           };
