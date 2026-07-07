@@ -337,6 +337,12 @@
       .proof-canvas { box-shadow: none !important; border-radius: 0 !important; aspect-ratio: auto !important; width: 1400px; height: 993px; }
       .proof-spread { display: flex; }
       .proof-spread .proof-canvas { width: 1400px; height: 993px; }
+      /* Empty slots are a builder-only affordance — never print the dashed box or
+         the "+" placeholder into the proof. */
+      .proof-canvas .slot.empty { outline: none !important; background: transparent !important; }
+      .proof-canvas .slot.empty::after { content: none !important; }
+      /* The popcode media tag is a builder overlay, not part of the printed page. */
+      .proof-canvas .slot-tag { display: none !important; }
 
       .add-page-btn {
         width: 100%; padding: 15px; border-radius: 14px; border: 1.5px dashed #cfcabd; background: transparent;
@@ -1043,23 +1049,28 @@
       document.getElementById('title-input').addEventListener('input', updateSummary);
 
       // ── Rendering ───────────────────────────────────────────────
-      function render() { ensureInsideBackCover(); renderTray(); renderPages(); updateSummary(); }
+      function render() { ensureBookEndpapers(); renderTray(); renderPages(); updateSummary(); }
 
-      // The book always ends with a spread whose RIGHT page is blank — the inside
-      // back cover (nothing prints there), mirroring the blank inside-front cover
-      // that opens the book. So the final spread reads [last content | blank].
+      // Endpapers: the book ends with exactly ONE blank page — the inside back
+      // cover — on the RIGHT of the final spread ([last content | blank]).
       //
-      // Spreads pair pages (0,1),(2,3),… so a content page is on a spread's RIGHT
-      // when its index is odd. To land the IBC blank on the right, the last
-      // content page must sit on an even index (a spread's LEFT). If it's on the
-      // right, we give it its own finale spread by inserting a blank before it —
-      // never two blanks in a row (which would show an empty [blank|blank]).
-      function ensureInsideBackCover() {
-        if (!pages.some(p => p.layout !== 'blank')) return; // no content yet
-        while (pages.length > 1 && pages[pages.length - 1].layout === 'blank') pages.pop();
-        const lastIdx = pages.length - 1;
-        if (lastIdx % 2 === 1) pages.splice(lastIdx, 0, blankPage()); // slide last page to a LEFT slot
-        pages.push(blankPage()); // inside back cover — RIGHT page of the final spread
+      // Spreads pair pages (0,1),(2,3),… so the inside-back blank only lands on a
+      // spread's RIGHT when the total interior page count is even. With a blank
+      // inside-FRONT cover always present too, that forces the content count to be
+      // even — an odd content count would leave a stray second blank (which the
+      // proof would show as an empty page). So we make the inside-front blank
+      // conditional: keep it when content is even (opening reads [blank | Page 1]);
+      // drop it when content is odd (opening reads [Page 1 | Page 2]). Either way
+      // there is exactly one end blank, on the right, and never a [blank | blank].
+      // Rebuilds from the content pages each render (idempotent) — content page
+      // objects are preserved; only the blank endpapers are regenerated.
+      function ensureBookEndpapers() {
+        const content = pages.filter(p => p.layout !== 'blank');
+        if (!content.length) return; // nothing placed yet
+        pages.length = 0;
+        if (content.length % 2 === 0) pages.push(blankPage()); // inside front cover
+        pages.push(...content);
+        pages.push(blankPage()); // inside back cover — right page of the final spread
       }
 
       function renderTray() {
@@ -1962,6 +1973,45 @@
           await Promise.all(imgs.map(im => (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(r => { im.onload = im.onerror = r; })));
           if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
           await new Promise(r => setTimeout(r, 120));
+
+          // html2canvas (1.4.1) predates CSS `aspect-ratio`, mishandles
+          // `object-fit` on a transformed <img>, and can't do `writing-mode`.
+          // So before capture we: (1) pin the browser-computed px size on every
+          // aspect-ratio box, (2) swap each photo <img> for a <div> using
+          // background-size (cover/contain) — which html2canvas renders faithfully
+          // — carrying over the same crop/zoom transform, and (3) re-lay the
+          // vertical cover spine as a rotated horizontal block. (Layout is correct
+          // off-screen, so getBoundingClientRect is authoritative here.)
+          units.forEach(unit => {
+            unit.querySelectorAll('.slot, .bc-inset').forEach(el => {
+              const r = el.getBoundingClientRect();
+              el.style.width = r.width + 'px';
+              el.style.height = r.height + 'px';
+              el.style.aspectRatio = 'auto';
+            });
+            unit.querySelectorAll('.slot-img, .cv-photo-img, .bc-img').forEach(img => {
+              const isFit = img.classList.contains('fit');
+              const div = document.createElement('div');
+              div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+                + `background-image:url("${img.src}");background-size:${isFit ? 'contain' : 'cover'};`
+                + 'background-position:center;background-repeat:no-repeat;'
+                + `transform:${img.style.transform || 'none'};transform-origin:center center;`;
+              img.replaceWith(div);
+            });
+            unit.querySelectorAll('.cv-spine').forEach(spine => {
+              const r = spine.getBoundingClientRect();
+              const inner = document.createElement('div');
+              inner.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;white-space:nowrap;'
+                + `width:${Math.round(r.height * 0.86)}px;transform:rotate(90deg);transform-origin:center center;`;
+              while (spine.firstChild) inner.appendChild(spine.firstChild);
+              spine.style.writingMode = 'horizontal-tb';
+              spine.style.flexDirection = 'row';
+              spine.style.justifyContent = 'center';
+              spine.style.padding = '0';
+              spine.appendChild(inner);
+            });
+          });
+          await new Promise(r => setTimeout(r, 30));
 
           const { jsPDF } = window.jspdf;
           const fmt = mode === 'spreads' ? [23.4, 8.3] : [11.7, 8.3]; // inches
