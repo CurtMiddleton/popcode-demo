@@ -196,6 +196,9 @@
       @keyframes slot-reveal { to { clip-path: circle(150% at var(--cx, 50%) var(--cy, 50%)); } }
       .tray-thumb { touch-action: pan-x; }
       .tray-thumb.dragging { opacity: 0.35; }
+      /* Placed-photo image inside a slot (carries the Edit Photo crop/zoom/rotate). */
+      .slot-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center center; z-index: 0; user-select: none; -webkit-user-drag: none; }
+      .slot-img.fit { object-fit: contain; }
 
       /* ── Front cover (ported from Bashō: Overlay / Panel / Inset card) ── */
       /* container-type: inline-size lets the cover type scale with the page width
@@ -239,6 +242,34 @@
       .cvtpl-name { font-size: 11px; font-weight: 700; text-align: center; color: #666; margin-top: 5px; }
       .cover-photo-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
       .cover-photo-prev { width: 64px; height: 46px; border-radius: 8px; background-size: cover; background-position: center; flex: 0 0 auto; }
+
+      /* ── Edit Photo modal (Popsa-style) ─────────────────────────── */
+      @media (min-width: 720px) { .sheet.sheet-wide { max-width: 960px; } }
+      .ep-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+      .ep-head h2 { font-size: 20px; font-weight: 700; }
+      .ep-x { border: none; background: transparent; cursor: pointer; color: #444; padding: 4px; display: flex; }
+      .ep-x:hover { color: #000; }
+      .ep-grid { display: flex; flex-direction: column; gap: 18px; }
+      @media (min-width: 720px) { .ep-grid { flex-direction: row; align-items: flex-start; } .ep-preview { flex: 1 1 0; min-width: 0; } .ep-side { flex: 0 0 340px; } }
+      .ep-frame { position: relative; width: 100%; background: #111; border-radius: 10px; overflow: hidden; touch-action: none; cursor: grab; }
+      .ep-frame:active { cursor: grabbing; }
+      .ep-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center center; user-select: none; -webkit-user-drag: none; }
+      .ep-img.fit { object-fit: contain; }
+      .ep-thirds { position: absolute; inset: 0; display: none; pointer-events: none; background-image: linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px); background-size: 33.333% 33.333%; }
+      .ep-hint { text-align: center; font-size: 12px; color: #999; margin-top: 8px; }
+      .ep-quality { display: flex; align-items: center; justify-content: space-between; background: #f2f0ea; border-radius: 12px; padding: 14px 16px; font-weight: 700; color: #444; margin-bottom: 12px; }
+      .ep-quality b { font-size: 18px; color: #1a1a1a; }
+      .ep-quality.good { background: #eaf7ee; } .ep-quality.good b { color: #1a7f45; }
+      .ep-quality.warn { background: #fdecec; } .ep-quality.warn b { color: #d33; }
+      .ep-stat { display: flex; align-items: center; justify-content: space-between; padding: 9px 4px; border-bottom: 1px solid #f2f0ea; font-weight: 600; color: #777; font-size: 15px; }
+      .ep-stat b { color: #1a1a1a; }
+      .ep-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
+      .ep-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 2px; border: 1px solid #e6e3db; border-radius: 12px; background: #fff; cursor: pointer; font-family: 'Inter', sans-serif; font-size: 11.5px; font-weight: 600; color: #1a1a1a; }
+      .ep-btn:hover { background: #faf9f5; }
+      .ep-btn.active { border-color: #7657FC; background: #f3f0ff; color: #5b3fd6; }
+      .ep-btn.ep-danger { color: #d33; } .ep-btn.ep-danger:hover { background: #fdecec; }
+      .ep-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+      .ep-foot button { padding: 12px 28px; border-radius: 14px; font-size: 15px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; border: none; }
 
       .add-page-btn {
         width: 100%; padding: 15px; border-radius: 14px; border: 1.5px dashed #cfcabd; background: transparent;
@@ -620,7 +651,7 @@
             const id = uid('ph');
             const it = itemByPhotoUrl[url];
             photos.set(id, {
-              id, file: null, url, existingUrl: url,
+              id, file: null, url, existingUrl: url, source: 'Saved', adjust: DEFAULT_ADJUST(),
               popcode: it ? {
                 mediaType: it.media_type || 'video',
                 video: null, audio: null,
@@ -635,7 +666,12 @@
           pages = (col.book_layout.pages || []).map(pg => ({
             id: pg.id || uid('pg'),
             layout: pg.layout === 'blank' ? 'blank' : normalizeLayout(pg.layout),
-            slots: (pg.slots || []).map(s => (s && s.photo_url) ? getPhotoId(s.photo_url) : null),
+            slots: (pg.slots || []).map(s => {
+              if (!(s && s.photo_url)) return null;
+              const id = getPhotoId(s.photo_url);
+              if (s.adjust) { const p = photos.get(id); if (p) p.adjust = normalizeAdjust(s.adjust); }
+              return id;
+            }),
           }));
 
           // Restore the front-cover config.
@@ -803,25 +839,26 @@
         catch (e) {
           // Undecodable (e.g. an unsupported HEIC on this browser). Keep the raw
           // file if it's within a generous cap so upload can still try.
-          return file.size / (1024 * 1024) <= HARD_MAX_MB ? file : null;
+          return file.size / (1024 * 1024) <= HARD_MAX_MB ? { file, ow: 0, oh: 0 } : null;
         }
         const w0 = src.width || src.naturalWidth, h0 = src.height || src.naturalHeight;
         const scale = Math.min(1, MAX_PHOTO_DIM / Math.max(w0, h0));
         const oversized = scale < 1;                        // dimensions over the cap
         const heavy = file.size / (1024 * 1024) > 4;        // large byte size
         // Already reasonable → keep the original untouched (no needless recompress).
-        if (!oversized && !heavy) { src.close?.(); if (src._url) URL.revokeObjectURL(src._url); return file; }
+        if (!oversized && !heavy) { src.close?.(); if (src._url) URL.revokeObjectURL(src._url); return { file, ow: w0, oh: h0 }; }
         const w = Math.max(1, Math.round(w0 * scale)), h = Math.max(1, Math.round(h0 * scale));
         const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
         canvas.getContext('2d').drawImage(src, 0, 0, w, h);
         src.close?.(); if (src._url) URL.revokeObjectURL(src._url);
         const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', PHOTO_QUALITY));
-        if (!blob) return file;
+        if (!blob) return { file, ow: w0, oh: h0 };
         // When oversized, always take the downscaled version (capping dimensions is
         // the point). When only heavy, keep whichever is smaller in bytes.
         const chosen = oversized ? blob : (blob.size < file.size ? blob : file);
         const name = (file.name || 'photo').replace(/\.[^.]+$/, '') + (chosen === blob ? '.jpg' : '');
-        return new File([chosen], name, { type: chosen.type || 'image/jpeg' });
+        // ow/oh = the ORIGINAL source dimensions (shown as "Dimensions" in Edit Photo).
+        return { file: new File([chosen], name, { type: chosen.type || 'image/jpeg' }), ow: w0, oh: h0 };
       }
 
       document.getElementById('photo-input').addEventListener('change', async (e) => {
@@ -836,7 +873,7 @@
           const out = await optimizePhoto(images[i]);
           if (!out) { failed++; continue; }
           const id = uid('ph');
-          photos.set(id, { id, file: out, url: URL.createObjectURL(out), popcode: null });
+          photos.set(id, { id, file: out.file, url: URL.createObjectURL(out.file), popcode: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() });
           addedAny = true;
           render(); // progressive: photos appear in the tray as they finish
           await new Promise(r => setTimeout(r, 0)); // yield so the UI paints
@@ -1177,13 +1214,34 @@
           const out = await optimizePhoto(f);
           if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
           if (cover.photo && cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
-          cover.photo = { file: out, url: URL.createObjectURL(out), existingUrl: null };
+          cover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null };
           openCoverEditor();
         });
         inp.click();
       }
 
       // Create one photo slot wired for tap/drag/place. `slotIdx` maps to pg.slots.
+      // Per-photo crop/zoom/rotate adjustments (Edit Photo).
+      const DEFAULT_ADJUST = () => ({ fit: 'fill', scale: 1, ox: 0, oy: 0, rot: 0 });
+      function normalizeAdjust(a) {
+        const d = DEFAULT_ADJUST();
+        if (!a || typeof a !== 'object') return d;
+        return {
+          fit: a.fit === 'fit' ? 'fit' : 'fill',
+          scale: Math.max(1, Math.min(3, +a.scale || 1)),
+          ox: Math.max(-80, Math.min(80, +a.ox || 0)),
+          oy: Math.max(-80, Math.min(80, +a.oy || 0)),
+          rot: ((Math.round((+a.rot || 0) / 90) * 90) % 360 + 360) % 360,
+        };
+      }
+      const adjustTransform = (a) => `translate(${a.ox}%, ${a.oy}%) scale(${a.scale}) rotate(${a.rot}deg)`;
+      // A 1–10 print-quality score from the photo's pixel size and current zoom.
+      function printQuality(w, h, scale) {
+        if (!w || !h) return 10;
+        const eff = Math.min(w, h) / (scale || 1);
+        return Math.max(1, Math.min(10, Math.round(eff / 170)));
+      }
+
       function mkSlot(pg, slotIdx) {
         const slot = document.createElement('div');
         slot.className = 'slot';
@@ -1191,10 +1249,19 @@
         slot.dataset.slotIdx = slotIdx;
         const photo = pg.slots[slotIdx] ? photos.get(pg.slots[slotIdx]) : null;
         if (photo) {
-          slot.style.backgroundImage = `url('${photo.url}')`;
-          slot.innerHTML = photoHasMedia(photo)
-            ? `<div class="slot-tag"><img src="/assets/popcode_icon.svg"/>${photo.popcode.mediaType === 'audio' ? 'Audio' : 'Video'}</div>`
-            : '';
+          const a = photo.adjust || DEFAULT_ADJUST();
+          const img = document.createElement('img');
+          img.className = 'slot-img' + (a.fit === 'fit' ? ' fit' : '');
+          img.src = photo.url;
+          img.draggable = false;
+          img.style.transform = adjustTransform(a);
+          slot.appendChild(img);
+          if (photoHasMedia(photo)) {
+            const tag = document.createElement('div');
+            tag.className = 'slot-tag';
+            tag.innerHTML = `<img src="/assets/popcode_icon.svg"/>${photo.popcode.mediaType === 'audio' ? 'Audio' : 'Video'}`;
+            slot.appendChild(tag);
+          }
         } else {
           slot.classList.add('empty');
         }
@@ -1589,6 +1656,10 @@
             <div class="menu-ic"><img src="/assets/popcode_icon.svg" style="width:20px;height:20px"/></div>
             <div><div>${hasPop ? 'Edit Popcode' : 'Add a Popcode'}</div><div class="menu-sub">${hasPop ? 'Change or remove the linked media' : 'Link a video or audio recording'}</div></div>
           </div>
+          <div class="menu-row" data-act="edit">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></div>
+            <div><div>Edit photo</div><div class="menu-sub">Fill / fit, zoom, reposition, rotate</div></div>
+          </div>
           <div class="menu-row" data-act="swap">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></div>
             <div><div>Move / swap</div><div class="menu-sub">Then tap another slot to swap places</div></div>
@@ -1606,6 +1677,7 @@
           row.addEventListener('click', () => {
             const act = row.dataset.act;
             if (act === 'popcode') { closeSheet(); openPopcodeSheet(photo); }
+            else if (act === 'edit') { closeSheet(); openEditPhoto(pg, slotIdx); }
             else if (act === 'swap') { swapSource = { pageId: pg.id, slotIdx }; closeSheet(); showToast('Now tap another slot to swap.'); render(); }
             else if (act === 'replace') { closeSheet(); replaceSlotPhoto(photo); }
             else if (act === 'remove') { pg.slots[slotIdx] = null; closeSheet(); render(); }
@@ -1622,10 +1694,143 @@
           const out = await optimizePhoto(f);
           if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
           if (photo.file) URL.revokeObjectURL(photo.url);
-          photo.file = out; photo.url = URL.createObjectURL(out); photo.existingUrl = null; // re-upload on save
+          photo.file = out.file; photo.url = URL.createObjectURL(out.file); photo.existingUrl = null; // re-upload on save
+          photo.ow = out.ow; photo.oh = out.oh; photo.source = 'Device'; photo.adjust = DEFAULT_ADJUST();
           render();
         });
         inp.click();
+      }
+
+      // ── Edit Photo (Popsa-style crop/zoom/rotate) ───────────────
+      let editPhotoState = null; // { pg, slotIdx, photo, a, gridOn, ar }
+      const IC_X = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      function epIcon(name) {
+        const o = 'width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+        const P = {
+          fill: '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>',
+          fit: '<polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="10" y1="14" x2="3" y2="21"/>',
+          grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+          rotate: '<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',
+          replace: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
+          remove: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>',
+          zin: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>',
+          zout: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>',
+        };
+        return `<svg ${o}>${P[name] || ''}</svg>`;
+      }
+
+      function openEditPhoto(pg, slotIdx) {
+        const photo = photos.get(pg.slots[slotIdx]);
+        if (!photo) return;
+        // Match the crop frame to the slot's real aspect ratio on the page.
+        let ar = '4 / 3';
+        const liveSlot = [...document.querySelectorAll('.slot')].find(s => s.dataset.pageId === pg.id && +s.dataset.slotIdx === slotIdx);
+        if (liveSlot) { const r = liveSlot.getBoundingClientRect(); if (r.width && r.height) ar = `${r.width} / ${r.height}`; }
+        editPhotoState = { pg, slotIdx, photo, a: { ...(photo.adjust || DEFAULT_ADJUST()) }, gridOn: false, ar };
+        renderEditPhoto();
+      }
+
+      function renderEditPhoto() {
+        const s = editPhotoState;
+        const source = s.photo.source || (s.photo.existingUrl && !s.photo.file ? 'Saved' : 'Device');
+        const btn = (act, label) => `<button class="ep-btn${act === 'remove' ? ' ep-danger' : ''}" data-act="${act}">${epIcon(act)}<span>${label}</span></button>`;
+        openSheet(`
+          <div class="ep-head"><h2>Edit Photo</h2><button class="ep-x" id="ep-close" aria-label="Close">${IC_X}</button></div>
+          <div class="ep-grid">
+            <div class="ep-preview">
+              <div class="ep-frame" id="ep-frame" style="aspect-ratio:${s.ar}">
+                <img class="ep-img" id="ep-img" src="${s.photo.url}" draggable="false"/>
+                <div class="ep-thirds" id="ep-thirds"></div>
+              </div>
+              <div class="ep-hint">Drag the photo to reposition</div>
+            </div>
+            <div class="ep-side">
+              <div class="ep-quality" id="ep-quality"><span>Print Quality</span><b id="ep-q">—</b></div>
+              <div class="ep-stat"><span>Scale</span><b id="ep-scale">100%</b></div>
+              <div class="ep-stat"><span>Dimensions</span><b id="ep-dims">—</b></div>
+              <div class="ep-stat"><span>Source</span><b>${escapeHtml(source)}</b></div>
+              <div class="ep-btns">
+                ${btn('fill', 'Fill')}${btn('fit', 'Fit')}${btn('grid', 'Grid')}${btn('rotate', 'Rotate')}
+                ${btn('replace', 'Replace')}${btn('remove', 'Remove')}${btn('zin', 'Zoom In')}${btn('zout', 'Zoom Out')}
+              </div>
+            </div>
+          </div>
+          <div class="ep-foot"><button class="btn-secondary" id="ep-cancel">Cancel</button><button class="btn-primary" id="ep-save">Save</button></div>
+        `, true);
+        const img = document.getElementById('ep-img');
+        const setDims = (w, h) => { s.photo.iw = w; s.photo.ih = h; if (!s.photo.ow) { s.photo.ow = w; s.photo.oh = h; } updateEp(); };
+        if (img.complete && img.naturalWidth) setDims(img.naturalWidth, img.naturalHeight);
+        else img.addEventListener('load', () => setDims(img.naturalWidth, img.naturalHeight));
+        document.getElementById('ep-close').addEventListener('click', closeSheet);
+        document.getElementById('ep-cancel').addEventListener('click', closeSheet);
+        document.getElementById('ep-save').addEventListener('click', () => { s.photo.adjust = normalizeAdjust(s.a); closeSheet(); render(); showToast('Photo updated'); });
+        document.querySelectorAll('#sheet .ep-btn').forEach(b => b.addEventListener('click', () => epAction(b.dataset.act)));
+        enableEpPan();
+        updateEp();
+      }
+
+      function updateEp() {
+        const s = editPhotoState, a = s.a;
+        const img = document.getElementById('ep-img'); if (!img) return;
+        img.classList.toggle('fit', a.fit === 'fit');
+        img.style.transform = adjustTransform(a);
+        document.getElementById('ep-scale').textContent = Math.round(a.scale * 100) + '%';
+        const w = s.photo.ow || s.photo.iw, h = s.photo.oh || s.photo.ih;
+        document.getElementById('ep-dims').textContent = w ? `${w} × ${h}` : '—';
+        const q = printQuality(w, h, a.scale);
+        const qbox = document.getElementById('ep-quality');
+        document.getElementById('ep-q').textContent = q + '/10';
+        qbox.classList.toggle('good', q >= 8); qbox.classList.toggle('warn', q <= 4);
+        document.getElementById('ep-thirds').style.display = s.gridOn ? 'block' : 'none';
+        const set = (act, on) => { const el = document.querySelector(`.ep-btn[data-act="${act}"]`); if (el) el.classList.toggle('active', on); };
+        set('fill', a.fit === 'fill'); set('fit', a.fit === 'fit'); set('grid', s.gridOn);
+      }
+
+      function epAction(act) {
+        const s = editPhotoState, a = s.a;
+        if (act === 'fill') a.fit = 'fill';
+        else if (act === 'fit') a.fit = 'fit';
+        else if (act === 'grid') s.gridOn = !s.gridOn;
+        else if (act === 'rotate') a.rot = (a.rot + 90) % 360;
+        else if (act === 'zin') a.scale = Math.min(3, Math.round((a.scale + 0.1) * 10) / 10);
+        else if (act === 'zout') a.scale = Math.max(1, Math.round((a.scale - 0.1) * 10) / 10);
+        else if (act === 'replace') { epReplace(); return; }
+        else if (act === 'remove') { s.pg.slots[s.slotIdx] = null; closeSheet(); render(); return; }
+        updateEp();
+      }
+
+      function epReplace() {
+        const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+        inp.addEventListener('change', async () => {
+          const f = inp.files[0]; if (!f) return;
+          const out = await optimizePhoto(f);
+          if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
+          const p = editPhotoState.photo;
+          if (p.file) URL.revokeObjectURL(p.url);
+          p.file = out.file; p.url = URL.createObjectURL(out.file); p.existingUrl = null;
+          p.ow = out.ow; p.oh = out.oh; p.iw = 0; p.ih = 0; p.source = 'Device';
+          editPhotoState.a = DEFAULT_ADJUST(); editPhotoState.gridOn = false;
+          renderEditPhoto();
+        });
+        inp.click();
+      }
+
+      // Drag inside the frame to pan the photo (offset in % of the frame).
+      function enableEpPan() {
+        const frame = document.getElementById('ep-frame'); if (!frame) return;
+        frame.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          const a = editPhotoState.a;
+          const rect = frame.getBoundingClientRect();
+          const sx = e.clientX, sy = e.clientY, ox0 = a.ox, oy0 = a.oy;
+          const move = (ev) => {
+            a.ox = Math.max(-80, Math.min(80, ox0 + (ev.clientX - sx) / rect.width * 100));
+            a.oy = Math.max(-80, Math.min(80, oy0 + (ev.clientY - sy) / rect.height * 100));
+            updateEp();
+          };
+          const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); };
+          document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+        });
       }
 
       function deletePhoto(id) {
@@ -1938,8 +2143,10 @@
       }
 
       // ── Sheet plumbing ──────────────────────────────────────────
-      function openSheet(html) {
-        document.getElementById('sheet').innerHTML = `<div class="sheet-grip"></div>${html}`;
+      function openSheet(html, wide) {
+        const sheet = document.getElementById('sheet');
+        sheet.className = 'sheet' + (wide ? ' sheet-wide' : '');
+        sheet.innerHTML = `<div class="sheet-grip"></div>${html}`;
         document.getElementById('overlay').classList.add('visible');
       }
       function closeSheet() { document.getElementById('overlay').classList.remove('visible'); }
@@ -2275,7 +2482,7 @@
             pages: pages.map(pg => ({
               id: pg.id,
               layout: pg.layout,
-              slots: pg.slots.map(id => id ? { photo_url: photoUrlById[id], target_index: id in targetIndexByPhoto ? targetIndexByPhoto[id] : null } : null),
+              slots: pg.slots.map(id => id ? { photo_url: photoUrlById[id], target_index: id in targetIndexByPhoto ? targetIndexByPhoto[id] : null, adjust: photos.get(id).adjust || DEFAULT_ADJUST() } : null),
             })),
           };
 
