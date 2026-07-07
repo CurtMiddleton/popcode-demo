@@ -252,7 +252,10 @@
       .cv-pick-btn:hover { background: rgba(0,0,0,0.78); }
 
       /* ── Back cover (Bashō model) ─────────────────────────────── */
-      .page-canvas.backcover { background: #fff; container-type: inline-size; overflow: hidden; }
+      /* container-type: size (not inline-size) so the inset can be sized by
+         container HEIGHT (cqh) — 3.5" of the 8.3" cover — independent of the
+         %-padding on .bc-inset-mode (which is relative to width). cqw still works. */
+      .page-canvas.backcover { background: #fff; container-type: size; overflow: hidden; }
       .bc { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; }
       .bc-inset-mode { justify-content: center; padding: 9% 9% 8%; }
       .bc-full-mode { justify-content: flex-end; padding: 0; }
@@ -261,10 +264,13 @@
       .bc-empty { position: absolute; inset: 0; background: #e9e6df; }
       .bc-photo-full { position: absolute; inset: 0; overflow: hidden; }
       .bc-scrim { position: absolute; left: 0; right: 0; bottom: 0; height: 34%; background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.55)); z-index: 2; }
-      .bc-inset { position: relative; overflow: hidden; background: #e9e6df; flex: 0 0 auto; box-shadow: 0 1px 8px rgba(0,0,0,0.08); }
-      .bc-inset.bc-landscape { width: 76%; aspect-ratio: 4 / 3; }
-      .bc-inset.bc-portrait { height: 66%; aspect-ratio: 3 / 4; }
-      .bc-inset.bc-square { height: 62%; aspect-ratio: 1 / 1; }
+      /* Inset ~3.5" tall on the 8.3" cover → 42cqh (of canvas height); landscape
+         5×3.5, portrait 2.6×3.5, square 3.5×3.5. cqh (not %) so the padding on
+         .bc-inset-mode doesn't shrink it. */
+      .bc-inset { position: relative; overflow: hidden; background: #e9e6df; flex: 0 0 auto; height: 42cqh; box-shadow: 0 1px 8px rgba(0,0,0,0.08); }
+      .bc-inset.bc-landscape { aspect-ratio: 10 / 7; }
+      .bc-inset.bc-portrait { aspect-ratio: 3 / 4; }
+      .bc-inset.bc-square { aspect-ratio: 1 / 1; }
       .bc-brand { display: flex; flex-direction: column; align-items: center; gap: 1.3cqw; }
       .bc-inset-mode .bc-brand { margin-top: 7%; }
       .bc-full-mode .bc-brand { position: relative; z-index: 3; margin-bottom: 7%; }
@@ -323,20 +329,14 @@
       .font-card-prev { text-align: center; color: #2a2a2a; line-height: 1.55; font-size: 19px; }
       .font-card-prev div { word-spacing: 2px; }
 
-      /* ── Proof PDF (admin only) — print to A4 landscape, one page/spread per sheet ── */
-      #proof { display: none; }
-      @media print {
-        body { padding: 0 !important; }
-        body > *:not(#proof) { display: none !important; }
-        #proof { display: block !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        @page { size: 297mm 210mm; margin: 0; }
-        .proof-page { width: 297mm; height: 210mm; display: flex; align-items: center; justify-content: center; overflow: hidden; page-break-after: always; background: #fff; }
-        .proof-page:last-child { page-break-after: auto; }
-        .proof-canvas { box-shadow: none !important; border-radius: 0 !important; aspect-ratio: auto !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .proof-pages .proof-canvas { width: 297mm; height: 210mm; }
-        .proof-spread { display: flex; width: 297mm; height: 105.4mm; }
-        .proof-spread .proof-canvas { width: 148.5mm; height: 105.4mm; }
-      }
+      /* ── Proof PDF (admin only) — rendered off-screen at fixed px, captured to
+         a downloadable PDF. Pages are the true book size (11.7×8.3"), spreads
+         are two pages wide. ── */
+      #proof { position: fixed; left: -20000px; top: 0; background: #fff; z-index: -1; pointer-events: none; }
+      .proof-page { background: #fff; }
+      .proof-canvas { box-shadow: none !important; border-radius: 0 !important; aspect-ratio: auto !important; width: 1400px; height: 993px; }
+      .proof-spread { display: flex; }
+      .proof-spread .proof-canvas { width: 1400px; height: 993px; }
 
       .add-page-btn {
         width: 100%; padding: 15px; border-radius: 14px; border: 1.5px dashed #cfcabd; background: transparent;
@@ -839,9 +839,15 @@
       }
 
       const blankPage = () => ({ id: uid('pg'), layout: 'blank', slots: [] });
-      // Book label for an interior page at index i: index 0 is the blank
-      // inside-cover; content starts at "Page 1" on the first right page.
-      const pageLabel = (i) => (i === 0 ? 'Blank Page' : 'Page ' + i);
+      // Book label for an interior page at index i. Blank pages (the inside-cover
+      // endpapers + any finale filler) don't consume a number — content pages
+      // stay sequentially "Page 1, Page 2, …" even with blanks interleaved.
+      const pageLabel = (i) => {
+        if (pages[i] && pages[i].layout === 'blank') return 'Blank Page';
+        let n = 0;
+        for (let k = 0; k <= i && k < pages.length; k++) if (pages[k].layout !== 'blank') n++;
+        return 'Page ' + n;
+      };
 
       // Cover styles — ported from Bashō (trek-folio): Overlay / Panel / Inset card.
       // Each renders the eyebrow + serif title + date line over/beside the photo.
@@ -1037,7 +1043,24 @@
       document.getElementById('title-input').addEventListener('input', updateSummary);
 
       // ── Rendering ───────────────────────────────────────────────
-      function render() { renderTray(); renderPages(); updateSummary(); }
+      function render() { ensureInsideBackCover(); renderTray(); renderPages(); updateSummary(); }
+
+      // The book always ends with a spread whose RIGHT page is blank — the inside
+      // back cover (nothing prints there), mirroring the blank inside-front cover
+      // that opens the book. So the final spread reads [last content | blank].
+      //
+      // Spreads pair pages (0,1),(2,3),… so a content page is on a spread's RIGHT
+      // when its index is odd. To land the IBC blank on the right, the last
+      // content page must sit on an even index (a spread's LEFT). If it's on the
+      // right, we give it its own finale spread by inserting a blank before it —
+      // never two blanks in a row (which would show an empty [blank|blank]).
+      function ensureInsideBackCover() {
+        if (!pages.some(p => p.layout !== 'blank')) return; // no content yet
+        while (pages.length > 1 && pages[pages.length - 1].layout === 'blank') pages.pop();
+        const lastIdx = pages.length - 1;
+        if (lastIdx % 2 === 1) pages.splice(lastIdx, 0, blankPage()); // slide last page to a LEFT slot
+        pages.push(blankPage()); // inside back cover — RIGHT page of the final spread
+      }
 
       function renderTray() {
         const tray = document.getElementById('tray');
@@ -1177,7 +1200,7 @@
         // just its label.
         const head = document.createElement('div');
         head.className = 'page-half-head';
-        const label = `<span class="page-label-text">${escapeHtml(pageLabel(globalIndex))}</span>`;
+        const label = `<span class="page-label-text">${escapeHtml(isBlank ? 'Blank Page' : pageLabel(globalIndex))}</span>`;
         const controls = isBlank ? '' : `
           <button class="page-tool tool-layout" title="Change layout">${IC_LAYOUT}</button>
           <button class="page-tool tool-more" title="More">${IC_MORE}</button>`;
@@ -1656,8 +1679,14 @@
         tip._t = setTimeout(() => tip.classList.remove('show'), 5000);
       }
 
-      // Label for a page at index i in rpPages: index 0 = the blank inside-cover.
-      const rpLabel = (i) => (i === 0 ? 'Blank Page' : 'Page ' + i);
+      // Label for a page at index i in rpPages. Blanks (endpapers/filler) don't
+      // consume a number; content pages stay sequential "Page 1, Page 2, …".
+      const rpLabel = (i) => {
+        if (rpPages[i] && rpPages[i].layout === 'blank') return 'Blank Page';
+        let n = 0;
+        for (let k = 0; k <= i && k < rpPages.length; k++) if (rpPages[k].layout !== 'blank') n++;
+        return 'Page ' + n;
+      };
       let rpDraggingId = null;
 
       // Build one page half inside a spread. Blank + cover are locked; content
@@ -1887,43 +1916,72 @@
       const PROOF_ADMINS = ['curtmid@gmail.com', 'curt@theworkshop.works'];
       const isProofAdmin = () => currentUser && PROOF_ADMINS.includes((currentUser.email || '').toLowerCase());
 
-      // Render the book into #proof at print sizes, then open the print dialog
-      // (choose "Save as PDF"). Reuses the real page/cover renderers so crops,
-      // fonts and the cover all match. "pages" = one book page per sheet;
-      // "spreads" = facing pages together.
-      function buildProof(mode) {
-        const proof = document.getElementById('proof');
-        proof.innerHTML = '';
-        proof.className = 'proof proof-' + mode;
-        const pageCanvas = (pg) => {
-          const c = document.createElement('div');
-          c.className = 'page-canvas proof-canvas' + (pg.layout === 'blank' ? ' blank' : '');
-          if (pg.layout !== 'blank') c.appendChild(buildPageGrid(pg));
-          return c;
-        };
-        const blankCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas proof-canvas blank'; return c; };
-        const coverCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas cover proof-canvas'; c.appendChild(buildCoverCanvas()); return c; };
-        const backCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas backcover proof-canvas'; c.appendChild(buildBackCoverCanvas()); return c; };
-        const sheet = (child) => { const p = document.createElement('div'); p.className = 'proof-page'; p.appendChild(child); proof.appendChild(p); };
-        const spread = (a, b) => { const r = document.createElement('div'); r.className = 'proof-spread'; r.appendChild(a); r.appendChild(b); return r; };
+      // Lazily load jsPDF + html2canvas (only when an admin builds a proof).
+      let proofLibsPromise = null;
+      function loadProofLibs() {
+        if (proofLibsPromise) return proofLibsPromise;
+        const load = (src) => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(s); });
+        proofLibsPromise = Promise.all([
+          load('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'),
+          load('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'),
+        ]).catch(e => { proofLibsPromise = null; throw e; });
+        return proofLibsPromise;
+      }
 
-        if (mode === 'pages') {
-          sheet(coverCanvas());
-          pages.forEach(pg => sheet(pageCanvas(pg)));
-          sheet(backCanvas());
-        } else {
-          sheet(spread(blankCanvas(), coverCanvas()));          // cover on the right, like the builder
-          for (let i = 0; i < pages.length; i += 2) {
-            sheet(spread(pageCanvas(pages[i]), pages[i + 1] ? pageCanvas(pages[i + 1]) : blankCanvas()));
+      // Render the book off-screen and capture it into a downloadable PDF.
+      // Reuses the real page/cover renderers so crops, fonts and the cover match.
+      // "pages" = one book page per PDF page (11.7×8.3"); "spreads" = facing
+      // pages together (23.4×8.3").
+      async function buildProof(mode) {
+        try {
+          showToast('Preparing PDF…');
+          await loadProofLibs();
+          const proof = document.getElementById('proof');
+          proof.innerHTML = '';
+          proof.className = 'proof proof-' + mode;
+          const pageCanvas = (pg) => { const c = document.createElement('div'); c.className = 'page-canvas proof-canvas' + (pg.layout === 'blank' ? ' blank' : ''); if (pg.layout !== 'blank') c.appendChild(buildPageGrid(pg)); return c; };
+          const blankCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas proof-canvas blank'; return c; };
+          const coverCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas cover proof-canvas'; c.appendChild(buildCoverCanvas()); return c; };
+          const backCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas backcover proof-canvas'; c.appendChild(buildBackCoverCanvas()); return c; };
+          const units = [];
+          const addUnit = (el) => { const p = document.createElement('div'); p.className = 'proof-page'; p.appendChild(el); proof.appendChild(p); units.push(el); };
+          const spread = (a, b) => { const r = document.createElement('div'); r.className = 'proof-spread'; r.appendChild(a); r.appendChild(b); return r; };
+
+          if (mode === 'pages') {
+            addUnit(coverCanvas());
+            pages.forEach(pg => addUnit(pageCanvas(pg)));
+            addUnit(backCanvas());
+          } else {
+            addUnit(spread(blankCanvas(), coverCanvas()));       // cover on the right
+            for (let i = 0; i < pages.length; i += 2) addUnit(spread(pageCanvas(pages[i]), pages[i + 1] ? pageCanvas(pages[i + 1]) : blankCanvas()));
+            addUnit(spread(backCanvas(), blankCanvas()));        // back cover on the left
           }
-          sheet(spread(backCanvas(), blankCanvas()));           // back cover on the left
+
+          // Wait for images to decode + fonts to settle before capture.
+          const imgs = [...proof.querySelectorAll('img')];
+          await Promise.all(imgs.map(im => (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(r => { im.onload = im.onerror = r; })));
+          if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
+          await new Promise(r => setTimeout(r, 120));
+
+          const { jsPDF } = window.jspdf;
+          const fmt = mode === 'spreads' ? [23.4, 8.3] : [11.7, 8.3]; // inches
+          const doc = new jsPDF({ unit: 'in', format: fmt, orientation: 'landscape', compress: true });
+          for (let i = 0; i < units.length; i++) {
+            showToast(`Building PDF… ${i + 1}/${units.length}`);
+            const canvas = await html2canvas(units[i], { useCORS: true, backgroundColor: '#ffffff', scale: 2, logging: false, width: units[i].offsetWidth, height: units[i].offsetHeight });
+            const data = canvas.toDataURL('image/jpeg', 0.9);
+            if (i > 0) doc.addPage(fmt, 'landscape');
+            doc.addImage(data, 'JPEG', 0, 0, fmt[0], fmt[1]);
+          }
+          const base = ((document.getElementById('title-input').value || cover.title || 'popcode-book').trim() || 'popcode-book').replace(/[^\w\- ]+/g, '').trim() || 'popcode-book';
+          doc.save(`${base} - ${mode}.pdf`);
+          proof.innerHTML = ''; proof.className = '';
+          showToast('PDF downloaded');
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast('Could not build the PDF — please try again.');
         }
-        // Wait for the images to decode, then print.
-        const imgs = [...proof.querySelectorAll('img')];
-        const cleanup = () => { proof.innerHTML = ''; proof.className = ''; window.removeEventListener('afterprint', cleanup); };
-        window.addEventListener('afterprint', cleanup);
-        Promise.all(imgs.map(im => (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(r => { im.onload = im.onerror = r; })))
-          .then(() => setTimeout(() => window.print(), 150));
       }
 
       document.getElementById('dock-photos').addEventListener('click', openPhotosSheet);
