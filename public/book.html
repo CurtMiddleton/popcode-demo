@@ -214,7 +214,9 @@
       .cv-spine-big.cv-ph { opacity: 0.4; }
       .cv-spine-year { font-family: 'Inter', sans-serif; font-size: 1.7cqw; color: #1A1814; }
       .cv-face { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; background: #605d58; }
-      .cv-photo { background-size: cover; background-position: center; background-color: #6b665f; }
+      .cv-photo { background-size: cover; background-position: center; background-color: #6b665f; overflow: hidden; }
+      .cv-photo-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center center; user-select: none; -webkit-user-drag: none; }
+      .cv-photo-img.fit { object-fit: contain; }
       .cv-photo-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: rgba(255,255,255,0.75); font-size: 3cqw; font-weight: 600; padding: 6%; }
       .cv-tint { position: absolute; inset: 0; }
       .cv-overlay-text { position: absolute; left: 8.5%; right: 7.1%; bottom: 8.5%; z-index: 2; }
@@ -680,7 +682,7 @@
             style: COVER_STYLES.some(s => s.id === c.style) ? c.style : 'A',
             eyebrow: c.eyebrow || '', title: c.title || '', subtitle: c.subtitle || '',
             tint: typeof c.tint === 'number' ? c.tint : 0.28,
-            photo: c.photo_url ? { file: null, url: c.photo_url, existingUrl: c.photo_url } : null,
+            photo: c.photo_url ? { file: null, url: c.photo_url, existingUrl: c.photo_url, source: 'Saved', adjust: normalizeAdjust(c.photo_adjust) } : null,
           };
 
           document.getElementById('title-input').value = col.name || '';
@@ -1085,8 +1087,9 @@
         // In editable mode the text is typed directly on the cover (contenteditable),
         // with placeholders shown via CSS when empty, and the photo hint becomes a
         // "Choose cover photo" button.
+        const cphoto = url ? normalizeAdjust(cover.photo.adjust) : null;
         const photo = (style) => url
-          ? `<div class="cv-photo" style="${style}background-image:url('${url}')"></div>`
+          ? `<div class="cv-photo" style="${style}"><img class="cv-photo-img${cphoto.fit === 'fit' ? ' fit' : ''}" src="${url}" style="transform:${adjustTransform(cphoto)}" draggable="false"/></div>`
           : `<div class="cv-photo" style="${style}"><div class="cv-photo-hint"${editable ? ' data-cv="pick"' : ''}>${editable ? '<span class="cv-pick-btn">＋ Choose cover photo</span>' : 'Tap to add a cover photo'}</div></div>`;
         const ed = (name, plc) => editable ? ` contenteditable="plaintext-only" data-cv="${name}" data-ph="${plc}" spellcheck="false"` : '';
         const block = (light) => {
@@ -1181,6 +1184,7 @@
            </div>`).join('');
         const photoRow = cover.photo
           ? `<div class="cover-photo-prev" style="background-image:url('${cover.photo.url}')"></div>
+             <button class="mini-btn" id="cover-edit">Edit photo</button>
              <button class="mini-btn" id="cover-change">Change photo</button>
              <button class="mini-btn" id="cover-remove">Remove</button>`
           : '';
@@ -1196,8 +1200,10 @@
         wireCoverEditable();
         document.querySelectorAll('#sheet .cvtpl').forEach(t =>
           t.addEventListener('click', () => { cover.style = t.dataset.style; openCoverEditor(); }));
+        const edit = document.getElementById('cover-edit');
         const change = document.getElementById('cover-change');
         const remove = document.getElementById('cover-remove');
+        if (edit) edit.addEventListener('click', () => openCoverPhotoEdit());
         if (change) change.addEventListener('click', () => chooseCoverPhoto());
         if (remove) remove.addEventListener('click', () => {
           if (cover.photo && cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
@@ -1719,6 +1725,7 @@
         return `<svg ${o}>${P[name] || ''}</svg>`;
       }
 
+      // Open the editor for a page slot's photo.
       function openEditPhoto(pg, slotIdx) {
         const photo = photos.get(pg.slots[slotIdx]);
         if (!photo) return;
@@ -1726,7 +1733,39 @@
         let ar = '4 / 3';
         const liveSlot = [...document.querySelectorAll('.slot')].find(s => s.dataset.pageId === pg.id && +s.dataset.slotIdx === slotIdx);
         if (liveSlot) { const r = liveSlot.getBoundingClientRect(); if (r.width && r.height) ar = `${r.width} / ${r.height}`; }
-        editPhotoState = { pg, slotIdx, photo, a: { ...(photo.adjust || DEFAULT_ADJUST()) }, gridOn: false, ar };
+        startEditPhoto(photo, ar, {
+          save: (a) => { photo.adjust = normalizeAdjust(a); closeSheet(); render(); showToast('Photo updated'); },
+          remove: () => { pg.slots[slotIdx] = null; closeSheet(); render(); },
+          replace: (out) => {
+            if (photo.file) URL.revokeObjectURL(photo.url);
+            photo.file = out.file; photo.url = URL.createObjectURL(out.file); photo.existingUrl = null;
+            photo.ow = out.ow; photo.oh = out.oh; photo.iw = 0; photo.ih = 0; photo.source = 'Device';
+            return photo;
+          },
+        });
+      }
+
+      // Open the editor for the front-cover photo.
+      function openCoverPhotoEdit() {
+        if (!cover.photo) return;
+        cover.photo.adjust = cover.photo.adjust || DEFAULT_ADJUST();
+        startEditPhoto(cover.photo, '117 / 83', {
+          back: () => openCoverEditor(),   // Cancel/close returns to the cover editor
+          save: (a) => { cover.photo.adjust = normalizeAdjust(a); render(); openCoverEditor(); showToast('Cover photo updated'); },
+          remove: () => {
+            if (cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
+            cover.photo = null; render(); openCoverEditor();
+          },
+          replace: (out) => {
+            if (cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
+            cover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() };
+            return cover.photo;
+          },
+        });
+      }
+
+      function startEditPhoto(photo, ar, ctx) {
+        editPhotoState = { photo, a: { ...normalizeAdjust(photo.adjust || DEFAULT_ADJUST()) }, gridOn: false, ar, ctx };
         renderEditPhoto();
       }
 
@@ -1761,9 +1800,9 @@
         const setDims = (w, h) => { s.photo.iw = w; s.photo.ih = h; if (!s.photo.ow) { s.photo.ow = w; s.photo.oh = h; } updateEp(); };
         if (img.complete && img.naturalWidth) setDims(img.naturalWidth, img.naturalHeight);
         else img.addEventListener('load', () => setDims(img.naturalWidth, img.naturalHeight));
-        document.getElementById('ep-close').addEventListener('click', closeSheet);
-        document.getElementById('ep-cancel').addEventListener('click', closeSheet);
-        document.getElementById('ep-save').addEventListener('click', () => { s.photo.adjust = normalizeAdjust(s.a); closeSheet(); render(); showToast('Photo updated'); });
+        document.getElementById('ep-close').addEventListener('click', epClose);
+        document.getElementById('ep-cancel').addEventListener('click', epClose);
+        document.getElementById('ep-save').addEventListener('click', () => s.ctx.save(s.a));
         document.querySelectorAll('#sheet .ep-btn').forEach(b => b.addEventListener('click', () => epAction(b.dataset.act)));
         enableEpPan();
         updateEp();
@@ -1786,6 +1825,8 @@
         set('fill', a.fit === 'fill'); set('fit', a.fit === 'fit'); set('grid', s.gridOn);
       }
 
+      function epClose() { const c = editPhotoState && editPhotoState.ctx; if (c && c.back) c.back(); else closeSheet(); }
+
       function epAction(act) {
         const s = editPhotoState, a = s.a;
         if (act === 'fill') a.fit = 'fill';
@@ -1795,7 +1836,7 @@
         else if (act === 'zin') a.scale = Math.min(3, Math.round((a.scale + 0.1) * 10) / 10);
         else if (act === 'zout') a.scale = Math.max(1, Math.round((a.scale - 0.1) * 10) / 10);
         else if (act === 'replace') { epReplace(); return; }
-        else if (act === 'remove') { s.pg.slots[s.slotIdx] = null; closeSheet(); render(); return; }
+        else if (act === 'remove') { s.ctx.remove(); return; }
         updateEp();
       }
 
@@ -1805,10 +1846,8 @@
           const f = inp.files[0]; if (!f) return;
           const out = await optimizePhoto(f);
           if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
-          const p = editPhotoState.photo;
-          if (p.file) URL.revokeObjectURL(p.url);
-          p.file = out.file; p.url = URL.createObjectURL(out.file); p.existingUrl = null;
-          p.ow = out.ow; p.oh = out.oh; p.iw = 0; p.ih = 0; p.source = 'Device';
+          const np = editPhotoState.ctx.replace(out);
+          if (np) editPhotoState.photo = np;
           editPhotoState.a = DEFAULT_ADJUST(); editPhotoState.gridOn = false;
           renderEditPhoto();
         });
@@ -2193,51 +2232,58 @@
       // onSlotTap (handled by click).
       function enableSlotDrag(slot, pg, slotIdx) {
         if (!pg.slots[slotIdx]) return; // only draggable when filled
-        let startX, startY, dragging = false, ghost = null, moveH, upH;
         slot.addEventListener('pointerdown', (e) => {
           if (selectedTrayId || swapSource) return; // placement/swap modes own taps
-          startX = e.clientX; startY = e.clientY;
+          const startX = e.clientX, startY = e.clientY;
           const photo = photos.get(pg.slots[slotIdx]);
-          moveH = (ev) => {
-            const dx = ev.clientX - startX, dy = ev.clientY - startY;
-            if (!dragging && Math.hypot(dx, dy) > 10) {
-              dragging = true;
-              slot.classList.add('slot-drag');
-              ghost = makeCircleGhost(photo.url, ev.clientX, ev.clientY);
-            }
-            if (dragging) {
-              ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
-              document.querySelectorAll('.slot').forEach(s => s.classList.remove('place-target'));
-              const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot');
-              if (under && under !== slot) under.classList.add('place-target');
-            }
+          let dragging = false, moved = false, ghost = null;
+          const startDrag = (x, y) => {
+            if (dragging) return;
+            dragging = true;
+            slot.classList.add('slot-drag');
+            ghost = makeCircleGhost(photo.url, x, y);
           };
-          upH = (ev) => {
+          if (e.pointerType === 'mouse') startDrag(startX, startY); // circle appears on click-and-hold
+          const moveH = (ev) => {
+            if (!dragging) {
+              if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 10) return;
+              startDrag(ev.clientX, ev.clientY);
+            }
+            moved = true;
+            ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
+            document.querySelectorAll('.slot').forEach(s => s.classList.remove('place-target'));
+            const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot');
+            if (under && under !== slot) under.classList.add('place-target');
+          };
+          const upH = (ev) => {
             document.removeEventListener('pointermove', moveH);
             document.removeEventListener('pointerup', upH);
-            if (dragging) {
-              if (ghost) ghost.remove();
-              document.querySelectorAll('.slot').forEach(s => s.classList.remove('place-target'));
-              const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot');
-              let dropPg = null, dropIdx = null, dropUrl = null;
-              if (under && under !== slot && under.dataset.pageId != null) {
-                const targetPg = pages.find(p => p.id === under.dataset.pageId);
-                const targetIdx = parseInt(under.dataset.slotIdx, 10);
-                if (targetPg && !Number.isNaN(targetIdx)) {
-                  const tmp = targetPg.slots[targetIdx];
-                  targetPg.slots[targetIdx] = pg.slots[slotIdx];
-                  pg.slots[slotIdx] = tmp;
-                  dropPg = targetPg.id; dropIdx = targetIdx; dropUrl = photo.url;
-                }
+            document.removeEventListener('pointercancel', upH);
+            if (ghost) ghost.remove();
+            slot.classList.remove('slot-drag');
+            document.querySelectorAll('.slot').forEach(s => s.classList.remove('place-target'));
+            // Released without moving (mouse click-in-place) → let the click open the menu.
+            if (!moved || ev.type === 'pointercancel') return;
+            const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot');
+            let dropPg = null, dropIdx = null, dropUrl = null;
+            if (under && under !== slot && under.dataset.pageId != null) {
+              const targetPg = pages.find(p => p.id === under.dataset.pageId);
+              const targetIdx = parseInt(under.dataset.slotIdx, 10);
+              if (targetPg && !Number.isNaN(targetIdx)) {
+                const tmp = targetPg.slots[targetIdx];
+                targetPg.slots[targetIdx] = pg.slots[slotIdx];
+                pg.slots[slotIdx] = tmp;
+                dropPg = targetPg.id; dropIdx = targetIdx; dropUrl = photo.url;
               }
-              justDragged = true;
-              setTimeout(() => { justDragged = false; }, 0);
-              render();
-              if (dropPg != null) revealSlotFill(dropPg, dropIdx, dropUrl, ev.clientX, ev.clientY);
             }
+            justDragged = true;
+            setTimeout(() => { justDragged = false; }, 0);
+            render();
+            if (dropPg != null) revealSlotFill(dropPg, dropIdx, dropUrl, ev.clientX, ev.clientY);
           };
           document.addEventListener('pointermove', moveH);
           document.addEventListener('pointerup', upH);
+          document.addEventListener('pointercancel', upH);
         });
       }
 
@@ -2478,6 +2524,7 @@
               subtitle: cover.subtitle || null,
               tint: cover.tint,
               photo_url: coverPhotoUrl,
+              photo_adjust: cover.photo ? (cover.photo.adjust || null) : null,
             },
             pages: pages.map(pg => ({
               id: pg.id,
