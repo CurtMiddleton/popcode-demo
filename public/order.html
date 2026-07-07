@@ -324,6 +324,55 @@
         return a;
       }
 
+      // ---- print brightness/vibrancy correction ------------------------------
+      // Screens are backlit and emit light; a print only reflects it, so an
+      // uncorrected photo prints noticeably darker and flatter than it looks on
+      // screen (matte stock like the photo tiles makes it worse). We counter that
+      // by lifting midtones (gamma), adding a little contrast, and boosting
+      // saturation on the exported print asset ONLY — the on-screen preview keeps
+      // showing the true photo, which is the target the print is corrected toward.
+      //
+      // Each preset is (gamma, contrast, saturation). gamma>1 brightens midtones;
+      // contrast/saturation are multipliers around neutral. Order a calibration
+      // tile (add ?calibrate=1 to the URL) to compare all of them printed, then
+      // set ACTIVE_CORRECTION to whichever panel looks right in hand.
+      const CORRECTION_PRESETS = [
+        { key: 'off',    label: 'Off',    gamma: 1.00, contrast: 1.00, saturation: 1.00 },
+        { key: 'light',  label: 'Light',  gamma: 1.10, contrast: 1.02, saturation: 1.06 },
+        { key: 'medium', label: 'Medium', gamma: 1.16, contrast: 1.04, saturation: 1.10 },
+        { key: 'strong', label: 'Strong', gamma: 1.22, contrast: 1.06, saturation: 1.16 },
+        { key: 'max',    label: 'Max',    gamma: 1.30, contrast: 1.08, saturation: 1.22 },
+      ];
+      // The correction baked into real orders. Change this after the calibration
+      // tile tells us which preset matches.
+      const ACTIVE_CORRECTION = 'medium';
+      function correctionByKey(key) {
+        return CORRECTION_PRESETS.find(p => p.key === key) || CORRECTION_PRESETS[0];
+      }
+      // Apply a correction to the pixels already drawn into ctx (w×h region from 0,0).
+      function applyCorrection(ctx, w, h, corr) {
+        if (!corr || (corr.gamma === 1 && corr.contrast === 1 && corr.saturation === 1)) return;
+        // Precompute a 256-entry LUT for the per-channel gamma+contrast curve
+        // (both are independent of the other channels; saturation is not).
+        const invG = 1 / corr.gamma, con = corr.contrast, sat = corr.saturation;
+        const lut = new Uint8ClampedArray(256);
+        for (let i = 0; i < 256; i++) {
+          let v = Math.pow(i / 255, invG);        // gamma lift (midtone brighten)
+          v = (v - 0.5) * con + 0.5;              // contrast around mid
+          lut[i] = Math.max(0, Math.min(255, Math.round(v * 255)));
+        }
+        const imgd = ctx.getImageData(0, 0, w, h), d = imgd.data;
+        for (let i = 0; i < d.length; i += 4) {
+          let r = lut[d[i]], g = lut[d[i + 1]], b = lut[d[i + 2]];
+          if (sat !== 1) {                        // saturation around per-pixel luma
+            const l = 0.299 * r + 0.587 * g + 0.114 * b;
+            r = l + (r - l) * sat; g = l + (g - l) * sat; b = l + (b - l) * sat;
+          }
+          d[i] = r; d[i + 1] = g; d[i + 2] = b;
+        }
+        ctx.putImageData(imgd, 0, 0);
+      }
+
       // ---- badge compositor (inlined; never depends on a separate file) ----
       async function compositeBadgedImage(photoUrl, opts) {
         opts = opts || {};
@@ -362,10 +411,57 @@
         c.width = cropW; c.height = cropH;
         var ctx = c.getContext('2d');
         ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+        // Brighten/pop the photo for print before the badge goes on top.
+        var corr = opts.correction || correctionByKey(ACTIVE_CORRECTION);
+        applyCorrection(ctx, cropW, cropH, corr);
         var badgeSize = Math.round(Math.min(cropW, cropH) * scale);
         var pad = Math.round(Math.min(cropW, cropH) * 0.025);
         ctx.drawImage(iconImg, cropW - badgeSize - pad, cropH - badgeSize - pad, badgeSize, badgeSize);
         return c.toDataURL('image/jpeg', 0.92);
+      }
+
+      // Build a single labeled calibration sheet: the same photo shown at every
+      // correction preset side-by-side, so ONE printed tile settles which preset
+      // is right. Reached via ?calibrate=1. No badge (this asset is disposable).
+      async function buildCalibrationSheet(photoUrl, aspect) {
+        var img = new Image(); img.crossOrigin = 'anonymous';
+        await new Promise(function (res, rej) { img.onload = res; img.onerror = rej; img.src = photoUrl; });
+        var presets = CORRECTION_PRESETS;
+        var cols = 2, rows = Math.ceil(presets.length / cols);
+        var sheetH = 1800, sheetW = Math.round(sheetH * (aspect || 1));
+        var cellW = Math.floor(sheetW / cols), cellH = Math.floor(sheetH / rows);
+        var sheet = document.createElement('canvas');
+        sheet.width = cellW * cols; sheet.height = cellH * rows;
+        var sctx = sheet.getContext('2d');
+        sctx.fillStyle = '#000'; sctx.fillRect(0, 0, sheet.width, sheet.height);
+        var sw = img.naturalWidth, sh = img.naturalHeight;
+        var cellAspect = cellW / cellH;
+        // center-crop source to the cell aspect (cover)
+        var cw = sw, ch = sh, cx = 0, cy = 0;
+        if (sw / sh > cellAspect) { ch = sh; cw = Math.round(sh * cellAspect); cx = Math.round((sw - cw) / 2); }
+        else { cw = sw; ch = Math.round(sw / cellAspect); cy = Math.round((sh - ch) / 2); }
+        for (var i = 0; i < presets.length; i++) {
+          var col = i % cols, row = Math.floor(i / cols);
+          var ox = col * cellW, oy = row * cellH;
+          var cell = document.createElement('canvas'); cell.width = cellW; cell.height = cellH;
+          var cctx = cell.getContext('2d');
+          cctx.drawImage(img, cx, cy, cw, ch, 0, 0, cellW, cellH);
+          applyCorrection(cctx, cellW, cellH, presets[i]);
+          // label bar
+          var barH = Math.round(cellH * 0.11);
+          cctx.fillStyle = 'rgba(0,0,0,0.6)';
+          cctx.fillRect(0, cellH - barH, cellW, barH);
+          cctx.fillStyle = '#fff';
+          cctx.font = '600 ' + Math.round(barH * 0.5) + "px 'Inter', sans-serif";
+          cctx.textBaseline = 'middle';
+          cctx.fillText(presets[i].label + '   γ' + presets[i].gamma.toFixed(2) + '  sat ' + presets[i].saturation.toFixed(2),
+            Math.round(cellW * 0.04), cellH - barH / 2);
+          sctx.drawImage(cell, ox, oy);
+          // thin separators
+          sctx.strokeStyle = '#fff'; sctx.lineWidth = 3;
+          sctx.strokeRect(ox + 1.5, oy + 1.5, cellW - 3, cellH - 3);
+        }
+        return sheet.toDataURL('image/jpeg', 0.92);
       }
       // Composite the badged photo into a real product mockup's art rectangle.
       async function renderProductMockup(targetCanvas, photoUrl, opts) {
@@ -680,10 +776,14 @@
         const payBtn = document.getElementById('pay-btn');
         payBtn.disabled = true; payBtn.textContent = 'Preparing…';
         try {
-          const dataUrl = await compositeBadgedImage(photo.photo_url, { scale: state.scale, aspect: currentAspect() });
+          const calibrate = qs.get('calibrate');
+          const dataUrl = calibrate
+            ? await buildCalibrationSheet(photo.photo_url, currentAspect())
+            : await compositeBadgedImage(photo.photo_url, { scale: state.scale, aspect: currentAspect() });
           const blob = dataUrlToBlob(dataUrl);
           const scalePct = Math.round(state.scale * 100);
-          const path = collection.slug + '/print-' + state.selectedIndex + '-' + state.orientation + '-badge' + scalePct + '.jpg';
+          const path = collection.slug + '/print-' + state.selectedIndex + '-' + state.orientation
+            + (calibrate ? '-calib' : '-badge' + scalePct) + '.jpg';
           const up = await db.storage.from('experiences').upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
           if (up.error) throw new Error('Could not prepare the print image: ' + up.error.message);
           const publicUrl = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
