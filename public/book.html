@@ -183,7 +183,15 @@
          via cqw, WITHOUT containing the block axis (so aspect-ratio + inset:0 fill
          still work — `size` would collapse the height). */
       .page-canvas.cover { background: #1A1814; container-type: inline-size; }
-      .cv { position: absolute; inset: 0; overflow: hidden; background: #1A1814; }
+      .cv { position: absolute; inset: 0; overflow: hidden; background: #1A1814; display: flex; }
+      /* Spine strip on the binding edge — vertical title, year pinned bottom. */
+      .cv-spine { flex: 0 0 9%; background: #fff; border-right: 1px solid rgba(0,0,0,0.14); writing-mode: vertical-rl; display: flex; justify-content: space-between; align-items: center; padding: 9% 0; overflow: hidden; }
+      .cv-spine-title { display: inline-flex; align-items: center; gap: 1.1cqw; }
+      .cv-spine-eyebrow { font-family: 'CooperBT', serif; font-style: italic; font-size: 1.9cqw; color: #1A1814; white-space: nowrap; }
+      .cv-spine-big { font-family: 'CooperBT', serif; font-weight: 400; font-size: 3cqw; color: #1A1814; white-space: nowrap; }
+      .cv-spine-big.cv-ph { opacity: 0.4; }
+      .cv-spine-year { font-family: 'Inter', sans-serif; font-size: 1.7cqw; color: #1A1814; }
+      .cv-face { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; background: #1A1814; }
       .cv-photo { background-size: cover; background-position: center; background-color: #3A3530; }
       .cv-photo-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: rgba(255,255,255,0.75); font-size: 3cqw; font-weight: 600; padding: 6%; }
       .cv-tint { position: absolute; inset: 0; }
@@ -846,10 +854,15 @@
         return half;
       }
 
-      // Render the front cover from `cover` state per its style (Bashō A/B/C).
+      // Pull a 4-digit year out of the date/subtitle line for the spine.
+      function coverYear(s) { const m = (s || '').match(/\b(19|20)\d{2}\b/); return m ? m[0] : ''; }
+
+      // Render the front cover as a jacket: spine (left) + cover face. The face
+      // carries the chosen style (Bashō A/B/C); the spine reads the title
+      // vertically with the year pinned to the bottom.
       function buildCoverCanvas() {
         const wrap = document.createElement('div');
-        wrap.className = 'cv cv-' + cover.style;
+        wrap.className = 'cv';
         const url = cover.photo && cover.photo.url;
         const title = cover.title || 'Your Title';
         const ph = !cover.title ? ' cv-ph' : '';
@@ -863,17 +876,30 @@
           ${cover.subtitle ? `<div class="cv-dates">${escapeHtml(cover.subtitle)}</div>` : ''}
         </div>`;
 
+        let faceInner;
         if (cover.style === 'B') { // Panel — photo top 62%, white panel bottom 38%
-          wrap.innerHTML = photo('position:absolute;top:0;left:0;width:100%;height:62%;')
+          faceInner = photo('position:absolute;top:0;left:0;width:100%;height:62%;')
             + `<div class="cv-panel">${block(false)}</div>`;
         } else if (cover.style === 'C') { // Inset card — full photo + dark card lower-right
-          wrap.innerHTML = photo('position:absolute;inset:0;')
+          faceInner = photo('position:absolute;inset:0;')
             + `<div class="cv-card">${block(true)}</div>`;
         } else { // A — Overlay — full photo + tint + title lower-left
-          wrap.innerHTML = photo('position:absolute;inset:0;')
+          faceInner = photo('position:absolute;inset:0;')
             + `<div class="cv-tint" style="background:rgba(0,0,0,${Math.max(0, Math.min(0.85, cover.tint))})"></div>`
             + `<div class="cv-overlay-text">${block(true)}</div>`;
         }
+
+        // Spine: title block (eyebrow + destination) pinned top, year bottom.
+        const year = coverYear(cover.subtitle);
+        const spine = `<div class="cv-spine">
+          <span class="cv-spine-title">
+            ${cover.eyebrow ? `<span class="cv-spine-eyebrow">${escapeHtml(cover.eyebrow)}</span>` : ''}
+            <span class="cv-spine-big${ph}">${escapeHtml(title)}</span>
+          </span>
+          <span class="cv-spine-year">${escapeHtml(year)}</span>
+        </div>`;
+
+        wrap.innerHTML = spine + `<div class="cv-face cv-${cover.style}">${faceInner}</div>`;
         return wrap;
       }
 
