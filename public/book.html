@@ -251,6 +251,30 @@
       .cv-pick-btn { pointer-events: auto; display: inline-flex; align-items: center; gap: 1.4cqw; background: rgba(0,0,0,0.62); color: #fff; padding: 2.2cqw 3.4cqw; border-radius: 999px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 2.8cqw; cursor: pointer; box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
       .cv-pick-btn:hover { background: rgba(0,0,0,0.78); }
 
+      /* ── Back cover (Bashō model) ─────────────────────────────── */
+      .page-canvas.backcover { background: #fff; container-type: inline-size; overflow: hidden; }
+      .bc { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; }
+      .bc-inset-mode { justify-content: center; padding: 9% 9% 8%; }
+      .bc-full-mode { justify-content: flex-end; padding: 0; }
+      .bc-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center; user-select: none; -webkit-user-drag: none; }
+      .bc-img.fit { object-fit: contain; }
+      .bc-empty { position: absolute; inset: 0; background: #e9e6df; }
+      .bc-photo-full { position: absolute; inset: 0; overflow: hidden; }
+      .bc-scrim { position: absolute; left: 0; right: 0; bottom: 0; height: 34%; background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.55)); z-index: 2; }
+      .bc-inset { position: relative; overflow: hidden; background: #e9e6df; flex: 0 0 auto; box-shadow: 0 1px 8px rgba(0,0,0,0.08); }
+      .bc-inset.bc-landscape { width: 76%; aspect-ratio: 4 / 3; }
+      .bc-inset.bc-portrait { height: 66%; aspect-ratio: 3 / 4; }
+      .bc-inset.bc-square { height: 62%; aspect-ratio: 1 / 1; }
+      .bc-brand { display: flex; flex-direction: column; align-items: center; gap: 1.3cqw; }
+      .bc-inset-mode .bc-brand { margin-top: 7%; }
+      .bc-full-mode .bc-brand { position: relative; z-index: 3; margin-bottom: 7%; }
+      .bc-logo { height: 4.6cqw; width: auto; display: block; }
+      .bc-url { font-family: 'Inter', sans-serif; font-size: 1.85cqw; letter-spacing: 0.06em; color: #8a857c; }
+      .bc-brand-rev .bc-url { color: rgba(255,255,255,0.92); }
+      .bc-seg { display: inline-flex; background: #ececec; border-radius: 999px; padding: 3px; gap: 2px; }
+      .bc-seg-btn { background: transparent; border: none; padding: 8px 16px; font-size: 13px; font-weight: 700; color: #666; border-radius: 999px; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .bc-seg-btn.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
       /* Cover editor sheet */
       .cover-preview { position: relative; width: 100%; aspect-ratio: 117 / 83; border-radius: 8px; overflow: hidden; container-type: inline-size; box-shadow: 0 2px 14px rgba(0,0,0,0.18); margin-bottom: 16px; background: #605d58; }
       .cvtpl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -730,6 +754,14 @@
             photo: c.photo_url ? { file: null, url: c.photo_url, existingUrl: c.photo_url, source: 'Saved', adjust: normalizeAdjust(c.photo_adjust) } : null,
           };
 
+          // Restore the back-cover config.
+          const bc = col.book_layout.back_cover;
+          if (bc) backCover = {
+            mode: bc.mode === 'fullbleed' ? 'fullbleed' : 'inset',
+            shape: ['landscape', 'portrait', 'square'].includes(bc.shape) ? bc.shape : 'landscape',
+            photo: bc.photo_url ? { file: null, url: bc.photo_url, existingUrl: bc.photo_url, source: 'Saved', adjust: normalizeAdjust(bc.photo_adjust) } : null,
+          };
+
           document.getElementById('title-input').value = col.name || '';
           document.querySelector('h1').textContent = 'Edit Book';
           document.getElementById('create-btn').textContent = 'Save Changes';
@@ -847,6 +879,9 @@
       let pages = [];
       // Front-cover config (Bashō model). photo: { file, url, existingUrl } | null.
       let cover = { style: 'A', font: 'cooper', eyebrow: '', title: '', subtitle: '', tint: 0.28, photo: null };
+      // Back-cover config: full-bleed or inset (landscape/portrait/square), with
+      // the Popcode logo + popcode.app centered underneath (Bashō style).
+      let backCover = { mode: 'inset', shape: 'landscape', photo: null };
       let selectedTrayId = null;     // photo selected in tray, waiting to place
       let swapSource = null;         // {pageId, slotIdx} first tap of a swap
       let justDragged = false;       // suppresses the click that trails a photo drag
@@ -1052,6 +1087,39 @@
           spread.appendChild(body);
           container.appendChild(spread);
         }
+        renderBackCoverRow(container);
+      }
+
+      // The back cover: a standalone row (jacket on the left, empty half on the
+      // right — mirrors the front cover, which stands on the right).
+      function renderBackCoverRow(container) {
+        const spread = document.createElement('div');
+        spread.className = 'spread cover-row';
+        const body = document.createElement('div');
+        body.className = 'spread-body';
+
+        const left = document.createElement('div');
+        left.className = 'page-half';
+        const head = document.createElement('div');
+        head.className = 'page-half-head';
+        head.innerHTML = `<button class="page-tool tool-cover" title="Edit back cover">${IC_EDIT}</button><span class="page-label-text">Back Cover</span><div class="ph-spacer"></div>`;
+        head.querySelector('.tool-cover').addEventListener('click', openBackCoverEditor);
+        const canvas = document.createElement('div');
+        canvas.className = 'page-canvas backcover';
+        canvas.appendChild(buildBackCoverCanvas());
+        canvas.addEventListener('click', openBackCoverEditor);
+        const bpick = canvas.querySelector('.cv-pick');
+        if (bpick) bpick.addEventListener('click', (e) => { e.stopPropagation(); chooseBackCoverPhoto(render); });
+        left.appendChild(head); left.appendChild(canvas);
+        body.appendChild(left);
+
+        const fold = document.createElement('div'); fold.className = 'spread-fold'; fold.style.visibility = 'hidden';
+        body.appendChild(fold);
+        const right = document.createElement('div'); right.className = 'page-half cover-empty';
+        body.appendChild(right);
+
+        spread.appendChild(body);
+        container.appendChild(spread);
       }
 
       // The front cover: a standalone row with the jacket on the right (an empty
@@ -1190,6 +1258,25 @@
         return wrap;
       }
 
+      // Back cover (Bashō model): full-bleed OR inset photo (landscape/portrait/
+      // square), with the Popcode logo + popcode.app centered underneath.
+      function buildBackCoverCanvas() {
+        const wrap = document.createElement('div');
+        const url = backCover.photo && backCover.photo.url;
+        const a = url ? normalizeAdjust(backCover.photo.adjust) : null;
+        const img = url ? `<img class="bc-img${a.fit === 'fit' ? ' fit' : ''}" src="${url}" style="transform:${adjustTransform(a)}" draggable="false"/>` : '';
+        const brand = (rev) => `<div class="bc-brand${rev ? ' bc-brand-rev' : ''}"><img class="bc-logo" src="/assets/Popcode_logo${rev ? '.rev' : ''}.png" alt="Popcode"/><div class="bc-url">popcode.app</div></div>`;
+        const pick = !url ? '<div class="cv-pick" data-cv="bpick"><span class="cv-pick-btn">＋ Choose back cover photo</span></div>' : '';
+        if (backCover.mode === 'fullbleed') {
+          wrap.className = 'bc bc-full-mode';
+          wrap.innerHTML = `<div class="bc-photo-full">${url ? img : '<div class="bc-empty"></div>'}</div>${url ? '<div class="bc-scrim"></div>' : ''}${brand(true)}${pick}`;
+        } else {
+          wrap.className = 'bc bc-inset-mode';
+          wrap.innerHTML = `<div class="bc-inset bc-${backCover.shape}">${url ? img : '<div class="bc-empty"></div>'}</div>${brand(false)}${pick}`;
+        }
+        return wrap;
+      }
+
       // Mini cover thumbnail for a style tile (reuses the real renderer).
       function coverTileHTML(styleId) {
         const saved = cover.style; cover.style = styleId;
@@ -1289,6 +1376,79 @@
           (after || openCoverEditor)();
         });
         inp.click();
+      }
+
+      // ── Back cover editor ───────────────────────────────────────
+      function chooseBackCoverPhoto(after) {
+        const inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = 'image/*';
+        inp.addEventListener('change', async () => {
+          const f = inp.files[0]; if (!f) return;
+          const out = await optimizePhoto(f);
+          if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
+          if (backCover.photo && backCover.photo.file) URL.revokeObjectURL(backCover.photo.url);
+          backCover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() };
+          (after || openBackCoverEditor)();
+        });
+        inp.click();
+      }
+
+      function openBackCoverEditor(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        const seg = (name, opts, cur) => `<div class="bc-seg">${opts.map(o => `<button class="bc-seg-btn${cur === o.id ? ' active' : ''}" data-seg="${name}" data-val="${o.id}">${o.label}</button>`).join('')}</div>`;
+        const photoRow = backCover.photo
+          ? `<div class="cover-photo-prev" style="background-image:url('${backCover.photo.url}')"></div>
+             <button class="mini-btn" id="bc-edit">Edit photo</button>
+             <button class="mini-btn" id="bc-change">Change photo</button>
+             <button class="mini-btn" id="bc-remove">Remove</button>`
+          : '';
+        openSheet(`
+          <h2>Back cover</h2>
+          <p class="sheet-sub">A full-bleed image, or an inset photo with the Popcode logo underneath.</p>
+          <div class="cover-preview" id="bc-preview" style="background:#fff"></div>
+          <div class="field-label" style="margin-top:6px">Photo style</div>
+          ${seg('mode', [{ id: 'inset', label: 'Inset photo' }, { id: 'fullbleed', label: 'Full bleed' }], backCover.mode)}
+          ${backCover.mode === 'inset' ? `<div class="field-label" style="margin-top:12px">Shape</div>${seg('shape', [{ id: 'landscape', label: 'Landscape' }, { id: 'portrait', label: 'Portrait' }, { id: 'square', label: 'Square' }], backCover.shape)}` : ''}
+          ${backCover.photo ? `<div class="field-label" style="margin-top:14px">Back cover photo</div><div class="cover-photo-row">${photoRow}</div>` : ''}
+          <div class="sheet-actions"><button class="btn-primary" id="bc-done">Done</button></div>
+        `);
+        refreshBackCoverPreview();
+        document.querySelectorAll('#sheet .bc-seg-btn').forEach(b => b.addEventListener('click', () => {
+          backCover[b.dataset.seg] = b.dataset.val;
+          render(); openBackCoverEditor();
+        }));
+        const pick = document.querySelector('#bc-preview .cv-pick');
+        if (pick) pick.addEventListener('click', () => chooseBackCoverPhoto());
+        const edit = document.getElementById('bc-edit');
+        const change = document.getElementById('bc-change');
+        const remove = document.getElementById('bc-remove');
+        if (edit) edit.addEventListener('click', openBackCoverPhotoEdit);
+        if (change) change.addEventListener('click', () => chooseBackCoverPhoto());
+        if (remove) remove.addEventListener('click', () => {
+          if (backCover.photo && backCover.photo.file) URL.revokeObjectURL(backCover.photo.url);
+          backCover.photo = null; render(); openBackCoverEditor();
+        });
+        document.getElementById('bc-done').addEventListener('click', () => { closeSheet(); render(); });
+      }
+      function refreshBackCoverPreview() {
+        const p = document.getElementById('bc-preview');
+        if (!p) return;
+        p.innerHTML = ''; p.appendChild(buildBackCoverCanvas());
+        p.classList.add('backcover');
+      }
+      function openBackCoverPhotoEdit() {
+        if (!backCover.photo) return;
+        backCover.photo.adjust = backCover.photo.adjust || DEFAULT_ADJUST();
+        startEditPhoto(backCover.photo, '117 / 83', {
+          back: () => openBackCoverEditor(),
+          save: (adj) => { backCover.photo.adjust = normalizeAdjust(adj); render(); openBackCoverEditor(); showToast('Back cover photo updated'); },
+          remove: () => { if (backCover.photo.file) URL.revokeObjectURL(backCover.photo.url); backCover.photo = null; render(); openBackCoverEditor(); },
+          replace: (out) => {
+            if (backCover.photo.file) URL.revokeObjectURL(backCover.photo.url);
+            backCover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() };
+            return backCover.photo;
+          },
+        });
       }
 
       // Create one photo slot wired for tap/drag/place. `slotIdx` maps to pg.slots.
@@ -1743,17 +1903,20 @@
         };
         const blankCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas proof-canvas blank'; return c; };
         const coverCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas cover proof-canvas'; c.appendChild(buildCoverCanvas()); return c; };
+        const backCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas backcover proof-canvas'; c.appendChild(buildBackCoverCanvas()); return c; };
         const sheet = (child) => { const p = document.createElement('div'); p.className = 'proof-page'; p.appendChild(child); proof.appendChild(p); };
         const spread = (a, b) => { const r = document.createElement('div'); r.className = 'proof-spread'; r.appendChild(a); r.appendChild(b); return r; };
 
         if (mode === 'pages') {
           sheet(coverCanvas());
           pages.forEach(pg => sheet(pageCanvas(pg)));
+          sheet(backCanvas());
         } else {
           sheet(spread(blankCanvas(), coverCanvas()));          // cover on the right, like the builder
           for (let i = 0; i < pages.length; i += 2) {
             sheet(spread(pageCanvas(pages[i]), pages[i + 1] ? pageCanvas(pages[i + 1]) : blankCanvas()));
           }
+          sheet(spread(backCanvas(), blankCanvas()));           // back cover on the left
         }
         // Wait for the images to decode, then print.
         const imgs = [...proof.querySelectorAll('img')];
@@ -2651,6 +2814,15 @@
             coverPhotoUrl = pub(cpath) + `?v=${Date.now()}`;
           }
 
+          // 1c. Upload the back-cover photo (new File only; reuse existing URL otherwise).
+          let backCoverPhotoUrl = backCover.photo ? backCover.photo.existingUrl : null;
+          if (backCover.photo && backCover.photo.file) {
+            const bpath = `${slug}/book/back_cover.jpg`;
+            const { error } = await db.storage.from(bucket).upload(bpath, backCover.photo.file, { contentType: backCover.photo.file.type || 'image/jpeg', upsert: true });
+            if (error) throw new Error('Back cover upload failed: ' + error.message);
+            backCoverPhotoUrl = pub(bpath) + `?v=${Date.now()}`;
+          }
+
           // 2. Compile popcoded photos into a fresh .mind target. Recompiled on
           //    every save so the target order matches the current popcode order.
           setProgress('Preparing scan targets…', 32);
@@ -2713,6 +2885,12 @@
               tint: cover.tint,
               photo_url: coverPhotoUrl,
               photo_adjust: cover.photo ? (cover.photo.adjust || null) : null,
+            },
+            back_cover: {
+              mode: backCover.mode,
+              shape: backCover.shape,
+              photo_url: backCoverPhotoUrl,
+              photo_adjust: backCover.photo ? (backCover.photo.adjust || null) : null,
             },
             pages: pages.map(pg => ({
               id: pg.id,
