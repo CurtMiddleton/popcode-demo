@@ -918,16 +918,13 @@
           el.innerHTML = `
             <div class="tray-x" data-del="${p.id}">&times;</div>
             ${photoHasMedia(p) ? '<div class="pop-dot"><img src="/assets/popcode_icon.svg" style="width:11px;height:11px"/></div>' : ''}`;
-          el.addEventListener('click', (e) => {
-            if (e.target.closest('.tray-x')) return;
-            if (justDragged) return; // a drag just ended on this thumb — ignore the trailing click
+          el.querySelector('.tray-x').addEventListener('click', (e) => { e.stopPropagation(); deletePhoto(p.id); });
+          enablePhotoDrag(el, p, { onTap: () => {
             selectedTrayId = (selectedTrayId === p.id) ? null : p.id;
             swapSource = null;
             renderTray(); renderPages();
             document.getElementById('tray-hint').textContent = selectedTrayId ? 'Now tap an empty slot in a page to place this photo, or drag it onto a page.' : '';
-          });
-          el.querySelector('.tray-x').addEventListener('click', (e) => { e.stopPropagation(); deletePhoto(p.id); });
-          enableTrayDrag(el, p);
+          } });
           tray.appendChild(el);
         });
         if (!unplaced.length) document.getElementById('tray-hint').textContent = '';
@@ -1260,12 +1257,21 @@
         document.querySelector('#sheet [data-act="add"]').addEventListener('click', () => { closeSheet(); document.getElementById('photo-input').click(); });
         const af = document.querySelector('#sheet [data-act="autofill"]');
         if (af && unplaced.length) af.addEventListener('click', () => { closeSheet(); document.getElementById('autofill-btn').click(); });
-        document.querySelectorAll('#sheet .pg-thumb').forEach(t => t.addEventListener('click', () => {
-          selectedTrayId = t.dataset.id; swapSource = null;
-          closeSheet(); render();
-          document.getElementById('tray-hint').textContent = 'Now tap an empty slot in a page to place this photo.';
-          showToast('Tap an empty page slot to place it.');
-        }));
+        document.querySelectorAll('#sheet .pg-thumb').forEach(t => {
+          const photo = photos.get(t.dataset.id);
+          if (!photo) return;
+          enablePhotoDrag(t, photo, {
+            // Drag begins → close the sheet so the pages behind become droppable.
+            onDragStart: () => closeSheet(),
+            // Tap → select for tap-placement (same as before).
+            onTap: () => {
+              selectedTrayId = t.dataset.id; swapSource = null;
+              closeSheet(); render();
+              document.getElementById('tray-hint').textContent = 'Now tap an empty slot in a page to place this photo.';
+              showToast('Tap an empty page slot to place it.');
+            },
+          });
+        });
       }
 
       function openPagesSheet() {
@@ -1992,20 +1998,31 @@
         });
       }
 
-      // Drag a tray photo onto a page slot (with the same circular chip + fill).
-      function enableTrayDrag(el, photo) {
+      // Make a photo thumbnail draggable onto a page slot (circular chip + fill).
+      // On a mouse press the chip appears immediately (press-and-hold to pick up);
+      // on touch it waits for movement so the tray/sheet can still scroll. A tap
+      // (no drag) runs opts.onTap; a drag start runs opts.onDragStart (e.g. close
+      // the Photos sheet so the pages behind become droppable).
+      function enablePhotoDrag(el, photo, opts = {}) {
         el.addEventListener('pointerdown', (e) => {
           if (e.target.closest('.tray-x')) return; // the delete button owns its taps
           const startX = e.clientX, startY = e.clientY;
-          let dragging = false, ghost = null;
+          let dragging = false, moved = false, ghost = null;
+          const startDrag = (x, y) => {
+            if (dragging) return;
+            dragging = true;
+            el.classList.add('dragging');
+            ghost = makeCircleGhost(photo.url, x, y);
+            document.body.style.userSelect = 'none';
+            if (opts.onDragStart) opts.onDragStart();
+          };
+          if (e.pointerType === 'mouse') startDrag(startX, startY); // instant on click-and-hold
           const move = (ev) => {
             if (!dragging) {
               if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 8) return;
-              dragging = true;
-              el.classList.add('dragging');
-              ghost = makeCircleGhost(photo.url, ev.clientX, ev.clientY);
-              document.body.style.userSelect = 'none';
+              startDrag(ev.clientX, ev.clientY);
             }
+            moved = true;
             ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
             document.querySelectorAll('.slot').forEach(s => s.classList.remove('place-target'));
             const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot');
@@ -2015,21 +2032,21 @@
             document.removeEventListener('pointermove', move);
             document.removeEventListener('pointerup', end);
             document.removeEventListener('pointercancel', end);
-            if (!dragging) return;
             if (ghost) ghost.remove();
+            el.classList.remove('dragging');
             document.body.style.userSelect = '';
             document.querySelectorAll('.slot').forEach(s => s.classList.remove('place-target'));
+            // Released without moving (or never started) → treat as a tap.
+            if (!moved || ev.type === 'pointercancel') { if (opts.onTap) opts.onTap(); return; }
             let dropPg = null, dropIdx = null;
-            if (ev.type !== 'pointercancel') {
-              const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot');
-              if (under && under.dataset.pageId != null) {
-                const tPg = pages.find(p => p.id === under.dataset.pageId);
-                const tIdx = parseInt(under.dataset.slotIdx, 10);
-                if (tPg && !Number.isNaN(tIdx)) {
-                  tPg.slots[tIdx] = photo.id;   // any displaced photo returns to the tray automatically
-                  selectedTrayId = null;
-                  dropPg = tPg.id; dropIdx = tIdx;
-                }
+            const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot');
+            if (under && under.dataset.pageId != null) {
+              const tPg = pages.find(p => p.id === under.dataset.pageId);
+              const tIdx = parseInt(under.dataset.slotIdx, 10);
+              if (tPg && !Number.isNaN(tIdx)) {
+                tPg.slots[tIdx] = photo.id;   // any displaced photo returns to the tray automatically
+                selectedTrayId = null;
+                dropPg = tPg.id; dropIdx = tIdx;
               }
             }
             justDragged = true;
