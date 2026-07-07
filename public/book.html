@@ -313,6 +313,17 @@
       .rp-half.draggable { cursor: grab; }
       .rp-half.draggable:active { cursor: grabbing; }
       .rp-half.dragging { opacity: 0.30; }
+      /* Hover affordance: a move icon centered on the page (desktop hint). A
+         translucent dark disc + white glyph stays legible on any photo. */
+      .rp-move {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.82);
+        width: 46px; height: 46px; border-radius: 50%; background: rgba(20,20,20,0.55);
+        display: flex; align-items: center; justify-content: center; color: #fff; z-index: 3;
+        opacity: 0; pointer-events: none; transition: opacity 0.14s ease, transform 0.14s ease;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.35); backdrop-filter: blur(1px);
+      }
+      .rp-half.draggable:hover .rp-move { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      .rp-half.dragging .rp-move { opacity: 0; }
       .rp-half.empty { background: transparent; }
       .rp-half .page-canvas { pointer-events: none; }
       .rp-spread .page-canvas { box-shadow: none; border-radius: 0; }
@@ -1304,7 +1315,13 @@
         c.className = 'page-canvas' + (isBlank ? ' blank' : '');
         if (!isBlank) c.appendChild(buildPageGrid(pg));
         half.appendChild(c);
-        if (draggable) attachRpDrag(half, pg);
+        if (draggable) {
+          const move = document.createElement('div');
+          move.className = 'rp-move';
+          move.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>';
+          half.appendChild(move);
+          attachRpDrag(half, pg);
+        }
         return half;
       }
 
