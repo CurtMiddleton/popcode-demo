@@ -30,6 +30,15 @@
     </script>
     <script src="/vendor/mindar/1.2.2/mindar-image-aframe.prod.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
+    <!-- Cover font choices (Change Font): CooperBT + Inter come from fonts.css;
+         FilsonPro is a local brand font; the rest load from Google Fonts. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@400;500;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+      @font-face { font-family: 'FilsonPro'; src: url('/assets/fonts/FilsonProMedium/font.woff2') format('woff2'), url('/assets/fonts/FilsonProMedium/font.woff') format('woff'); font-weight: 400 500; font-display: swap; }
+      @font-face { font-family: 'FilsonPro'; src: url('/assets/fonts/FilsonProBold/font.woff2') format('woff2'), url('/assets/fonts/FilsonProBold/font.woff') format('woff'); font-weight: 600 700; font-display: swap; }
+    </style>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
       html, body { overscroll-behavior: none; }
@@ -277,6 +286,16 @@
       .ep-btn.ep-danger { color: #d33; } .ep-btn.ep-danger:hover { background: #fdecec; }
       .ep-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
       .ep-foot button { padding: 12px 28px; border-radius: 14px; font-size: 15px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; border: none; }
+
+      /* Fonts picker (Change font) */
+      .font-list { display: flex; flex-direction: column; gap: 12px; }
+      .font-card { border: 2px solid #eceae4; border-radius: 14px; padding: 16px 16px 18px; cursor: pointer; background: #fff; transition: border-color 0.12s, background 0.12s; }
+      .font-card:hover { background: #faf9f5; }
+      .font-card.active { border-color: #7657FC; background: #f4f1ff; }
+      .font-card-name { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 700; color: #666; text-align: center; margin-bottom: 12px; }
+      .font-card.active .font-card-name { color: #5b3fd6; }
+      .font-card-prev { text-align: center; color: #2a2a2a; line-height: 1.55; font-size: 19px; }
+      .font-card-prev div { word-spacing: 2px; }
 
       .add-page-btn {
         width: 100%; padding: 15px; border-radius: 14px; border: 1.5px dashed #cfcabd; background: transparent;
@@ -685,6 +704,7 @@
           const c = col.book_layout.cover;
           if (c) cover = {
             style: COVER_STYLES.some(s => s.id === c.style) ? c.style : 'A',
+            font: COVER_FONTS.some(f => f.id === c.font) ? c.font : 'cooper',
             eyebrow: c.eyebrow || '', title: c.title || '', subtitle: c.subtitle || '',
             tint: typeof c.tint === 'number' ? c.tint : 0.28,
             photo: c.photo_url ? { file: null, url: c.photo_url, existingUrl: c.photo_url, source: 'Saved', adjust: normalizeAdjust(c.photo_adjust) } : null,
@@ -778,6 +798,16 @@
         { id: 'B', name: 'Panel' },
         { id: 'C', name: 'Inset card' },
       ];
+      // Font groups for "Change font" — style the cover's headline/title.
+      const COVER_FONTS = [
+        { id: 'cooper', name: 'Cooper', stack: "'CooperBT', Georgia, serif" },
+        { id: 'dmsans', name: 'DM Sans', stack: "'DM Sans', sans-serif" },
+        { id: 'inter', name: 'Inter', stack: "'Inter', sans-serif" },
+        { id: 'filson', name: 'Filson Rounded', stack: "'FilsonPro', 'Nunito', sans-serif" },
+        { id: 'cormorant', name: 'Cormorant Garamond', stack: "'Cormorant Garamond', Georgia, serif" },
+        { id: 'libre', name: 'Libre Baskerville', stack: "'Libre Baskerville', Georgia, serif" },
+      ];
+      const coverFontStack = (id) => (COVER_FONTS.find(f => f.id === id) || COVER_FONTS[0]).stack;
       // Title size (as cqw = % of cover width) by title length — mirrors Bashō's
       // titleFontSize (80/62/48/38/30pt on an 842pt page).
       function coverTitleCqw(t) {
@@ -796,7 +826,7 @@
       const photos = new Map();
       let pages = [];
       // Front-cover config (Bashō model). photo: { file, url, existingUrl } | null.
-      let cover = { style: 'A', eyebrow: '', title: '', subtitle: '', tint: 0.28, photo: null };
+      let cover = { style: 'A', font: 'cooper', eyebrow: '', title: '', subtitle: '', tint: 0.28, photo: null };
       let selectedTrayId = null;     // photo selected in tray, waiting to place
       let swapSource = null;         // {pageId, slotIdx} first tap of a swap
       let justDragged = false;       // suppresses the click that trails a photo drag
@@ -1103,10 +1133,11 @@
         // "Choose cover photo" as a top-layer button (clickable above tint/text)
         // when there's no cover photo yet — shown on the cover itself and in the editor.
         const pickBtn = !url ? '<div class="cv-pick" data-cv="pick"><span class="cv-pick-btn">＋ Choose cover photo</span></div>' : '';
+        const ff = coverFontStack(cover.font);
         const ed = (name, plc) => editable ? ` contenteditable="plaintext-only" data-cv="${name}" data-ph="${plc}" spellcheck="false"` : '';
         const block = (light) => {
-          const eyeHtml = (editable || cover.eyebrow) ? `<div class="cv-eyebrow"${ed('eyebrow', 'Add a small headline')}>${escapeHtml(cover.eyebrow)}</div>` : '';
-          const titHtml = `<div class="cv-title${editable ? '' : ph}"${ed('title', 'Enter a book title')} style="font-size:${tf}cqw">${escapeHtml(editable ? cover.title : title)}</div>`;
+          const eyeHtml = (editable || cover.eyebrow) ? `<div class="cv-eyebrow"${ed('eyebrow', 'Add a small headline')} style="font-family:${ff}">${escapeHtml(cover.eyebrow)}</div>` : '';
+          const titHtml = `<div class="cv-title${editable ? '' : ph}"${ed('title', 'Enter a book title')} style="font-size:${tf}cqw;font-family:${ff}">${escapeHtml(editable ? cover.title : title)}</div>`;
           const subHtml = (editable || cover.subtitle) ? `<div class="cv-dates"${ed('subtitle', 'Add a date or subtitle')}>${escapeHtml(cover.subtitle)}</div>` : '';
           return `<div class="cv-block ${light ? 'cv-light' : 'cv-dark'}">${eyeHtml}${titHtml}${subHtml}</div>`;
         };
@@ -1129,8 +1160,8 @@
         const year = coverYear(cover.subtitle);
         const spine = `<div class="cv-spine">
           <span class="cv-spine-title">
-            ${cover.eyebrow ? `<span class="cv-spine-eyebrow">${escapeHtml(cover.eyebrow)}</span>` : ''}
-            <span class="cv-spine-big${ph}">${escapeHtml(title)}</span>
+            ${cover.eyebrow ? `<span class="cv-spine-eyebrow" style="font-family:${ff}">${escapeHtml(cover.eyebrow)}</span>` : ''}
+            <span class="cv-spine-big${ph}" style="font-family:${ff}">${escapeHtml(title)}</span>
           </span>
           <span class="cv-spine-year">${escapeHtml(year)}</span>
         </div>`;
@@ -1159,7 +1190,8 @@
         const title = cover.title || 'Your Title';
         const ph = !cover.title ? ' cv-ph' : '';
         const year = coverYear(cover.subtitle);
-        sp.innerHTML = `<span class="cv-spine-title">${cover.eyebrow ? `<span class="cv-spine-eyebrow">${escapeHtml(cover.eyebrow)}</span>` : ''}<span class="cv-spine-big${ph}">${escapeHtml(title)}</span></span><span class="cv-spine-year">${escapeHtml(year)}</span>`;
+        const ff = coverFontStack(cover.font);
+        sp.innerHTML = `<span class="cv-spine-title">${cover.eyebrow ? `<span class="cv-spine-eyebrow" style="font-family:${ff}">${escapeHtml(cover.eyebrow)}</span>` : ''}<span class="cv-spine-big${ph}" style="font-family:${ff}">${escapeHtml(title)}</span></span><span class="cv-spine-year">${escapeHtml(year)}</span>`;
       }
 
       // Wire the contenteditable cover text: sync to state, block newlines, keep
@@ -1568,9 +1600,10 @@
       document.getElementById('rp-save').addEventListener('click', () => closeRearrange(true));
 
       function openOptionsSheet() {
+        const curFont = (COVER_FONTS.find(f => f.id === cover.font) || COVER_FONTS[0]).name;
         openSheet(`
           <h2>Options</h2>
-          <p class="sheet-sub">Edit your book’s title and front cover.</p>
+          <p class="sheet-sub">Edit your book’s title, cover, fonts and more.</p>
           <div class="menu-row" data-act="title">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></div>
             <div><div>Edit book title</div><div class="menu-sub">${escapeHtml((document.getElementById('title-input').value || '').trim()) || 'Untitled book'}</div></div>
@@ -1578,6 +1611,22 @@
           <div class="menu-row" data-act="cover">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/></svg></div>
             <div><div>Edit front cover</div><div class="menu-sub">Title, dates & cover photo</div></div>
+          </div>
+          <div class="menu-row" data-act="font">
+            <div class="menu-ic" style="font-family:'CooperBT',serif;font-size:19px;font-weight:400">Aa</div>
+            <div><div>Change font</div><div class="menu-sub">${escapeHtml(curFont)}</div></div>
+          </div>
+          <div class="menu-row" data-act="addpages">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="14" height="16" rx="2"/><line x1="19" y1="9" x2="19" y2="15"/><line x1="16" y1="12" x2="22" y2="12"/></svg></div>
+            <div><div>Add more pages</div><div class="menu-sub">Append a new spread</div></div>
+          </div>
+          <div class="menu-row" data-act="duplicate">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></div>
+            <div><div>Duplicate this book</div><div class="menu-sub">Save the current design as a new copy</div></div>
+          </div>
+          <div class="menu-row" data-act="share">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></div>
+            <div><div>Share</div><div class="menu-sub">Copy the link to your published book</div></div>
           </div>
         `);
         document.querySelector('#sheet [data-act="title"]').addEventListener('click', () => {
@@ -1587,6 +1636,58 @@
           setTimeout(() => inp.focus(), 350);
         });
         document.querySelector('#sheet [data-act="cover"]').addEventListener('click', () => { closeSheet(); openCoverEditor(); });
+        document.querySelector('#sheet [data-act="font"]').addEventListener('click', () => openFontSheet());
+        document.querySelector('#sheet [data-act="addpages"]').addEventListener('click', () => { closeSheet(); document.getElementById('add-page-btn').click(); });
+        document.querySelector('#sheet [data-act="duplicate"]').addEventListener('click', duplicateBook);
+        document.querySelector('#sheet [data-act="share"]').addEventListener('click', shareBook);
+      }
+
+      // Popsa-style font picker — choose a font group for the cover typography.
+      function openFontSheet() {
+        const cards = COVER_FONTS.map(f => `
+          <div class="font-card${cover.font === f.id ? ' active' : ''}" data-font="${f.id}">
+            <div class="font-card-name">${escapeHtml(f.name)}</div>
+            <div class="font-card-prev" style="font-family:${f.stack}">
+              <div>ABCDEFGHIJKLM NOPQRSTUVWXYZ</div>
+              <div>abcdefghijklm nopqrstuvwxyz</div>
+              <div>1234567890</div>
+            </div>
+          </div>`).join('');
+        openSheet(`
+          <div class="ep-head"><h2>Fonts</h2><button class="ep-x" id="font-close" aria-label="Close">${IC_X}</button></div>
+          <p class="sheet-sub">Select a font group to style the headline and title on your cover.</p>
+          <div class="font-list">${cards}</div>
+        `);
+        document.getElementById('font-close').addEventListener('click', openOptionsSheet);
+        document.querySelectorAll('#sheet .font-card').forEach(c => c.addEventListener('click', () => {
+          cover.font = c.dataset.font;
+          document.querySelectorAll('#sheet .font-card').forEach(x => x.classList.toggle('active', x.dataset.font === cover.font));
+          render();
+        }));
+      }
+
+      function duplicateBook() {
+        editingCollection = null; // so the next Create saves a brand-new book
+        const inp = document.getElementById('title-input');
+        inp.value = ((inp.value || cover.title || 'Untitled').trim()) + ' (copy)';
+        document.querySelector('h1').textContent = 'Make a Book';
+        document.getElementById('create-btn').textContent = 'Create Book';
+        closeSheet(); updateSummary();
+        showToast('Duplicated — tap Create Book to save the copy.');
+      }
+
+      async function shareBook() {
+        if (!editingCollection || !editingCollection.slug) {
+          closeSheet();
+          showToast('Create your book first, then you can share it.');
+          return;
+        }
+        const url = `https://popcode.app/${editingCollection.slug}`;
+        const title = cover.title || document.getElementById('title-input').value.trim() || 'My Popcode book';
+        closeSheet();
+        if (navigator.share) { try { await navigator.share({ title, url }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+        try { await navigator.clipboard.writeText(url); showToast('Link copied!'); }
+        catch (e) { prompt('Copy this link:', url); }
       }
 
       document.getElementById('dock-photos').addEventListener('click', openPhotosSheet);
@@ -2532,6 +2633,7 @@
             size: 'a4-landscape', // Prodigi 11.7 × 8.3" landscape
             cover: {
               style: cover.style,
+              font: cover.font,
               eyebrow: cover.eyebrow || null,
               title: cover.title || null,
               subtitle: cover.subtitle || null,
