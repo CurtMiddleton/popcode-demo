@@ -284,6 +284,44 @@
       .pg-thumb:hover { transform: scale(1.03); box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
       .menu-row.disabled { opacity: 0.4; pointer-events: none; }
 
+      /* ── Rearrange Pages (full-screen drag-to-reorder) ─────────── */
+      .rearrange { display: none; position: fixed; inset: 0; z-index: 450; background: #f7f6f2; flex-direction: column; }
+      .rearrange.visible { display: flex; }
+      .rp-header {
+        position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 12px 16px calc(12px); background: #fff; border-bottom: 1px solid #e9e7e0; flex: 0 0 auto;
+      }
+      .rp-close { width: 40px; height: 40px; border-radius: 50%; border: none; background: #f2f0ea; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #333; flex: 0 0 auto; }
+      .rp-close:hover { background: #e6e3db; }
+      .rp-title { position: absolute; left: 50%; transform: translateX(-50%); font-size: 17px; font-weight: 700; color: #1a1a1a; }
+      .rp-save { border: none; background: #1a1a1a; color: #fff; border-radius: 22px; padding: 10px 26px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; flex: 0 0 auto; }
+      .rp-save:hover { background: #000; }
+      .rp-body { flex: 1; overflow-y: auto; padding: 26px 20px 80px; }
+      .rp-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px 18px; max-width: 1100px; margin: 0 auto; }
+      @media (min-width: 720px) { .rp-grid { grid-template-columns: repeat(3, 1fr); } }
+      @media (min-width: 1000px) { .rp-grid { grid-template-columns: repeat(4, 1fr); } }
+      .rp-tile { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+      .rp-label { font-size: 14px; font-weight: 700; color: #6b6558; }
+      .rp-tile.locked .rp-label { color: #b3ac9d; }
+      .rp-canvas { width: 100%; position: relative; touch-action: none; border-radius: 6px; }
+      .rp-canvas .page-canvas { pointer-events: none; }
+      .rp-tile.draggable .rp-canvas { cursor: grab; }
+      .rp-tile.draggable .rp-canvas:active { cursor: grabbing; }
+      .rp-tile.dragging { opacity: 0.32; }
+      .rp-ghost { position: fixed; z-index: 600; pointer-events: none; opacity: 0.95; border-radius: 6px; box-shadow: 0 16px 44px rgba(0,0,0,0.28); }
+      .rp-ghost .page-canvas { pointer-events: none; }
+
+      /* Auto-fading instructional tip */
+      .rp-tip {
+        position: fixed; left: 50%; bottom: 38px; transform: translateX(-50%) translateY(8px);
+        z-index: 470; width: calc(100% - 44px); max-width: 440px;
+        background: rgba(255,255,255,0.98); border-radius: 16px; box-shadow: 0 10px 34px rgba(0,0,0,0.18);
+        padding: 16px 20px; opacity: 0; pointer-events: none; transition: opacity 0.5s ease, transform 0.5s ease;
+      }
+      .rp-tip.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+      .rp-tip h4 { font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 4px; }
+      .rp-tip p { font-size: 14px; color: #6a6558; line-height: 1.45; }
+
       /* ── Modal (shared: layout picker, popcode editor, slot menu) ── */
       .overlay { display: none; position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,0.5); align-items: flex-end; justify-content: center; padding: 0; }
       .overlay.visible { display: flex; }
@@ -445,6 +483,22 @@
       <div class="create-bar-inner">
         <div class="create-summary" id="create-summary">Add photos to begin.</div>
         <button class="create-btn" id="create-btn" disabled>Create Book</button>
+      </div>
+    </div>
+
+    <!-- Rearrange Pages (full-screen) -->
+    <div class="rearrange" id="rearrange">
+      <div class="rp-header">
+        <button class="rp-close" id="rp-close" title="Cancel">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <div class="rp-title">Rearrange Pages</div>
+        <button class="rp-save" id="rp-save">Save</button>
+      </div>
+      <div class="rp-body"><div class="rp-grid" id="rp-grid"></div></div>
+      <div class="rp-tip" id="rp-tip">
+        <h4>Rearrange Pages</h4>
+        <p>To change the order of your book, drag the pages around until they are in the position you want.</p>
       </div>
     </div>
 
@@ -1182,6 +1236,10 @@
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="9" y1="12" x2="15" y2="12"/></svg></div>
             <div><div>Add a single page</div><div class="menu-sub">One empty page you can lay out yourself</div></div>
           </div>
+          <div class="menu-row${pages.filter(p => p.layout !== 'blank').length ? '' : ' disabled'}" data-act="rearrange">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 4 7 20"/><polyline points="4 7 7 4 10 7"/><polyline points="17 20 17 4"/><polyline points="14 17 17 20 20 17"/></svg></div>
+            <div><div>Rearrange pages</div><div class="menu-sub">Drag pages to reorder your book</div></div>
+          </div>
         `);
         document.querySelector('#sheet [data-act="spread"]').addEventListener('click', () => { closeSheet(); document.getElementById('add-page-btn').click(); });
         document.querySelector('#sheet [data-act="single"]').addEventListener('click', () => {
@@ -1190,7 +1248,132 @@
           closeSheet(); render();
           requestAnimationFrame(() => { const el = document.querySelector('#pages .spread:last-child'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
         });
+        const rr = document.querySelector('#sheet [data-act="rearrange"]');
+        if (rr && pages.filter(p => p.layout !== 'blank').length) rr.addEventListener('click', () => { closeSheet(); openRearrange(); });
       }
+
+      // ── Rearrange Pages: full-screen drag-to-reorder ─────────────
+      // Works on a shallow copy of `pages` (same page objects); applied on Save,
+      // discarded on Cancel. The front cover and the blank inside-cover are shown
+      // but locked in place — only content pages reorder.
+      let rpPages = null;
+      function openRearrange() {
+        rpPages = pages.slice();
+        renderRearrange();
+        document.getElementById('rearrange').classList.add('visible');
+        showRearrangeTip();
+      }
+      function closeRearrange(save) {
+        if (save && rpPages) { pages.length = 0; pages.push(...rpPages); render(); }
+        document.getElementById('rearrange').classList.remove('visible');
+        rpPages = null;
+      }
+      function showRearrangeTip() {
+        const tip = document.getElementById('rp-tip');
+        tip.classList.add('show');
+        clearTimeout(tip._t);
+        tip._t = setTimeout(() => tip.classList.remove('show'), 5000);
+      }
+
+      function rpTile(pg, isCover) {
+        const tile = document.createElement('div');
+        const isBlank = !isCover && pg.layout === 'blank';
+        const draggable = !isCover && !isBlank;
+        tile.className = 'rp-tile' + (draggable ? ' draggable' : ' locked');
+        tile.dataset.pgid = isCover ? '__cover' : pg.id;
+        const label = document.createElement('div');
+        label.className = 'rp-label';
+        tile.appendChild(label);
+        const canvasWrap = document.createElement('div');
+        canvasWrap.className = 'rp-canvas';
+        if (isCover) {
+          const c = document.createElement('div'); c.className = 'page-canvas cover'; c.appendChild(buildCoverCanvas());
+          canvasWrap.appendChild(c);
+        } else if (isBlank) {
+          const c = document.createElement('div'); c.className = 'page-canvas blank'; canvasWrap.appendChild(c);
+        } else {
+          const c = document.createElement('div'); c.className = 'page-canvas'; c.appendChild(buildPageGrid(pg)); canvasWrap.appendChild(c);
+        }
+        tile.appendChild(canvasWrap);
+        if (draggable) attachRpDrag(tile);
+        return tile;
+      }
+
+      function relabelRpTiles() {
+        let n = 0;
+        [...document.getElementById('rp-grid').children].forEach(tile => {
+          const label = tile.querySelector('.rp-label');
+          if (tile.dataset.pgid === '__cover') { label.textContent = 'Front Cover'; return; }
+          label.textContent = n === 0 ? 'Blank Page' : 'Page ' + n;
+          n++;
+        });
+      }
+
+      function renderRearrange() {
+        const grid = document.getElementById('rp-grid');
+        grid.innerHTML = '';
+        grid.appendChild(rpTile(null, true));            // front cover (locked)
+        rpPages.forEach(pg => grid.appendChild(rpTile(pg, false)));
+        relabelRpTiles();
+      }
+
+      // Rebuild rpPages from the current DOM order (blank stays first).
+      function commitRpOrder() {
+        const grid = document.getElementById('rp-grid');
+        const byId = {}; rpPages.forEach(p => byId[p.id] = p);
+        rpPages = [...grid.querySelectorAll('.rp-tile[data-pgid]')]
+          .filter(t => t.dataset.pgid !== '__cover')
+          .map(t => byId[t.dataset.pgid])
+          .filter(Boolean);
+      }
+
+      function attachRpDrag(tile) {
+        const grid = document.getElementById('rp-grid');
+        const canvas = tile.querySelector('.rp-canvas');
+        canvas.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          const sx = e.clientX, sy = e.clientY;
+          const rect = canvas.getBoundingClientRect();
+          const offX = sx - rect.left, offY = sy - rect.top;
+          let dragging = false, ghost = null;
+          const onMove = (ev) => {
+            if (!dragging) {
+              if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+              dragging = true;
+              ghost = canvas.cloneNode(true);
+              ghost.classList.add('rp-ghost');
+              ghost.style.width = rect.width + 'px'; ghost.style.height = rect.height + 'px';
+              document.body.appendChild(ghost);
+              tile.classList.add('dragging');
+            }
+            ghost.style.left = (ev.clientX - offX) + 'px';
+            ghost.style.top = (ev.clientY - offY) + 'px';
+            ghost.style.display = 'none';
+            const under = document.elementFromPoint(ev.clientX, ev.clientY);
+            ghost.style.display = '';
+            const overTile = under && under.closest && under.closest('.rp-tile.draggable');
+            if (overTile && overTile !== tile) {
+              const kids = [...grid.children];
+              const di = kids.indexOf(tile), ti = kids.indexOf(overTile);
+              if (di < ti) grid.insertBefore(tile, overTile.nextSibling);
+              else grid.insertBefore(tile, overTile);
+              relabelRpTiles();
+            }
+          };
+          const onUp = () => {
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+            if (ghost) ghost.remove();
+            tile.classList.remove('dragging');
+            if (dragging) commitRpOrder();
+          };
+          document.addEventListener('pointermove', onMove);
+          document.addEventListener('pointerup', onUp);
+        });
+      }
+
+      document.getElementById('rp-close').addEventListener('click', () => closeRearrange(false));
+      document.getElementById('rp-save').addEventListener('click', () => closeRearrange(true));
 
       function openOptionsSheet() {
         openSheet(`
