@@ -574,9 +574,9 @@
       }
 
       const blankPage = () => ({ id: uid('pg'), layout: 'blank', slots: [] });
-      // Book label for a page at global index i: the first page (index 0) is the
-      // Front Cover; content starts at "Page 1" on the first right page.
-      const pageLabel = (i) => (i === 0 ? 'Front Cover' : 'Page ' + i);
+      // Book label for an interior page at index i: index 0 is the blank
+      // inside-cover; content starts at "Page 1" on the first right page.
+      const pageLabel = (i) => (i === 0 ? 'Blank Page' : 'Page ' + i);
 
       // Cover styles — ported from Bashō (trek-folio): Overlay / Panel / Inset card.
       // Each renders the eyebrow + serif title + date line over/beside the photo.
@@ -787,10 +787,12 @@
         if (!unplaced.length) document.getElementById('tray-hint').textContent = '';
       }
 
-      // Render pages grouped into spreads (two facing landscape pages).
+      // Render: the front cover stands alone (right), then interior spreads —
+      // the first opening is [blank inside-cover | Page 1], then Page 2 | Page 3…
       function renderPages() {
         const container = document.getElementById('pages');
         container.innerHTML = '';
+        renderCoverRow(container);
         for (let s = 0; s < pages.length; s += 2) {
           const left = pages[s], right = pages[s + 1] || null;
           const spread = document.createElement('div');
@@ -809,31 +811,61 @@
         }
       }
 
+      // The front cover: a standalone row with the jacket on the right (an empty
+      // half on the left), since a closed book shows only its front face.
+      function renderCoverRow(container) {
+        const spread = document.createElement('div');
+        spread.className = 'spread cover-row';
+        const body = document.createElement('div');
+        body.className = 'spread-body';
+
+        const left = document.createElement('div');
+        left.className = 'page-half single cover-empty';
+        body.appendChild(left);
+        const fold = document.createElement('div'); fold.className = 'spread-fold'; fold.style.visibility = 'hidden';
+        body.appendChild(fold);
+
+        const right = document.createElement('div');
+        right.className = 'page-half';
+        const head = document.createElement('div');
+        head.className = 'page-half-head';
+        head.innerHTML = `<div class="ph-spacer"></div><span class="page-label-text">Front Cover</span>
+          <button class="page-tool tool-cover" title="Edit cover">${IC_EDIT}</button>`;
+        head.querySelector('.tool-cover').addEventListener('click', openCoverEditor);
+        const canvas = document.createElement('div');
+        canvas.className = 'page-canvas cover';
+        canvas.appendChild(buildCoverCanvas());
+        canvas.addEventListener('click', openCoverEditor);
+        right.appendChild(head);
+        right.appendChild(canvas);
+        body.appendChild(right);
+
+        spread.appendChild(body);
+        container.appendChild(spread);
+      }
+
       // SVGs for the per-page tools.
       const IC_LAYOUT ='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>';
       const IC_MORE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>';
       const IC_EDIT = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
 
-      // Build one page (half of a spread): a header (label + Popsa controls) above
-      // the landscape canvas with its slots. `globalIndex` sets the page label;
-      // `side` mirrors the header; the first page (index 0) is the blank cover.
+      // Build one page (half of a spread): a header (label + controls) above the
+      // landscape canvas with its slots. `globalIndex` sets the page label; the
+      // first page (index 0) is the blank inside-cover (nothing prints there).
       function buildPageHalf(pg, globalIndex, side, isSingle) {
-        const isCover = globalIndex === 0;      // the first page is the front cover
-        const isBlank = pg.layout === 'blank' && !isCover;
+        const isBlank = pg.layout === 'blank';
         const half = document.createElement('div');
         half.className = 'page-half' + (isSingle ? ' single' : '');
 
         // Header row above the page (not overlaid): label + controls. Mirrored —
-        // icons on the outer edge, label toward the gutter. The cover gets an Edit
-        // button; a plain blank page shows just its label.
+        // icons on the outer edge, label toward the gutter. A blank page shows
+        // just its label.
         const head = document.createElement('div');
         head.className = 'page-half-head';
         const label = `<span class="page-label-text">${escapeHtml(pageLabel(globalIndex))}</span>`;
-        const controls = isCover
-          ? `<button class="page-tool tool-cover" title="Edit cover">${IC_EDIT}</button>`
-          : (isBlank ? '' : `
+        const controls = isBlank ? '' : `
           <button class="page-tool tool-layout" title="Change layout">${IC_LAYOUT}</button>
-          <button class="page-tool tool-more" title="More">${IC_MORE}</button>`);
+          <button class="page-tool tool-more" title="More">${IC_MORE}</button>`;
         head.innerHTML = side === 'right'
           ? `<div class="ph-spacer"></div>${label}${controls}`
           : `${controls}${label}<div class="ph-spacer"></div>`;
@@ -841,13 +873,10 @@
         if (layoutBtn) layoutBtn.addEventListener('click', () => openLayoutSheet(pg));
         const moreBtn = head.querySelector('.tool-more');
         if (moreBtn) moreBtn.addEventListener('click', () => openPageMenu(pg));
-        const coverBtn = head.querySelector('.tool-cover');
-        if (coverBtn) coverBtn.addEventListener('click', openCoverEditor);
 
         const canvas = document.createElement('div');
-        canvas.className = 'page-canvas' + (isCover ? ' cover' : (isBlank ? ' blank' : ''));
-        if (isCover) { canvas.appendChild(buildCoverCanvas()); canvas.addEventListener('click', openCoverEditor); }
-        else if (!isBlank) canvas.appendChild(buildPageGrid(pg));
+        canvas.className = 'page-canvas' + (isBlank ? ' blank' : '');
+        if (!isBlank) canvas.appendChild(buildPageGrid(pg));
 
         half.appendChild(head);
         half.appendChild(canvas);
