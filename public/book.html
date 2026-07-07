@@ -232,8 +232,12 @@
       /* Inline-editable cover text (typed directly on the preview). */
       .cv [contenteditable] { outline: none; cursor: text; min-width: 6px; }
       .cv [contenteditable]:empty::before { content: attr(data-ph); opacity: 0.55; }
-      .cv-pick-btn { display: inline-flex; align-items: center; gap: 1.4cqw; background: rgba(0,0,0,0.6); color: #fff; padding: 2cqw 3.2cqw; border-radius: 999px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 2.8cqw; cursor: pointer; }
-      .cv-photo-hint[data-cv="pick"] { cursor: pointer; }
+      /* "Choose cover photo" — a top-layer button; the wrapper ignores pointer
+         events so only the pill is clickable and the rest of the cover still
+         opens the editor / accepts drops. */
+      .cv-pick { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 6; pointer-events: none; }
+      .cv-pick-btn { pointer-events: auto; display: inline-flex; align-items: center; gap: 1.4cqw; background: rgba(0,0,0,0.62); color: #fff; padding: 2.2cqw 3.4cqw; border-radius: 999px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 2.8cqw; cursor: pointer; box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+      .cv-pick-btn:hover { background: rgba(0,0,0,0.78); }
 
       /* Cover editor sheet */
       .cover-preview { position: relative; width: 100%; aspect-ratio: 117 / 83; border-radius: 8px; overflow: hidden; container-type: inline-size; box-shadow: 0 2px 14px rgba(0,0,0,0.18); margin-bottom: 16px; background: #605d58; }
@@ -1024,6 +1028,10 @@
         canvas.className = 'page-canvas cover';
         canvas.appendChild(buildCoverCanvas());
         canvas.addEventListener('click', openCoverEditor);
+        // "Choose cover photo" pill on the cover itself → pick a photo directly
+        // (without opening the editor). Everything else on the cover opens the editor.
+        const coverPick = canvas.querySelector('.cv-pick');
+        if (coverPick) coverPick.addEventListener('click', (e) => { e.stopPropagation(); chooseCoverPhoto(render); });
         right.appendChild(head);
         right.appendChild(canvas);
         body.appendChild(right);
@@ -1090,7 +1098,10 @@
         const cphoto = url ? normalizeAdjust(cover.photo.adjust) : null;
         const photo = (style) => url
           ? `<div class="cv-photo" style="${style}"><img class="cv-photo-img${cphoto.fit === 'fit' ? ' fit' : ''}" src="${url}" style="transform:${adjustTransform(cphoto)}" draggable="false"/></div>`
-          : `<div class="cv-photo" style="${style}"><div class="cv-photo-hint"${editable ? ' data-cv="pick"' : ''}>${editable ? '<span class="cv-pick-btn">＋ Choose cover photo</span>' : 'Tap to add a cover photo'}</div></div>`;
+          : `<div class="cv-photo" style="${style}"></div>`;
+        // "Choose cover photo" as a top-layer button (clickable above tint/text)
+        // when there's no cover photo yet — shown on the cover itself and in the editor.
+        const pickBtn = !url ? '<div class="cv-pick" data-cv="pick"><span class="cv-pick-btn">＋ Choose cover photo</span></div>' : '';
         const ed = (name, plc) => editable ? ` contenteditable="plaintext-only" data-cv="${name}" data-ph="${plc}" spellcheck="false"` : '';
         const block = (light) => {
           const eyeHtml = (editable || cover.eyebrow) ? `<div class="cv-eyebrow"${ed('eyebrow', 'Add a small headline')}>${escapeHtml(cover.eyebrow)}</div>` : '';
@@ -1111,6 +1122,7 @@
             + `<div class="cv-tint" style="background:rgba(0,0,0,${Math.max(0, Math.min(0.85, cover.tint))})"></div>`
             + `<div class="cv-overlay-text">${block(true)}</div>`;
         }
+        faceInner += pickBtn;
 
         // Spine: title block (eyebrow + destination) pinned top, year bottom.
         const year = coverYear(cover.subtitle);
@@ -1212,7 +1224,7 @@
         document.getElementById('cover-done').addEventListener('click', () => { closeSheet(); render(); });
       }
 
-      function chooseCoverPhoto() {
+      function chooseCoverPhoto(after) {
         const inp = document.createElement('input');
         inp.type = 'file'; inp.accept = 'image/*';
         inp.addEventListener('change', async () => {
@@ -1220,8 +1232,8 @@
           const out = await optimizePhoto(f);
           if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
           if (cover.photo && cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
-          cover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null };
-          openCoverEditor();
+          cover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() };
+          (after || openCoverEditor)();
         });
         inp.click();
       }
