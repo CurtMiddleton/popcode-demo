@@ -299,6 +299,21 @@
       .font-card-prev { text-align: center; color: #2a2a2a; line-height: 1.55; font-size: 19px; }
       .font-card-prev div { word-spacing: 2px; }
 
+      /* ── Proof PDF (admin only) — print to A4 landscape, one page/spread per sheet ── */
+      #proof { display: none; }
+      @media print {
+        body { padding: 0 !important; }
+        body > *:not(#proof) { display: none !important; }
+        #proof { display: block !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        @page { size: 297mm 210mm; margin: 0; }
+        .proof-page { width: 297mm; height: 210mm; display: flex; align-items: center; justify-content: center; overflow: hidden; page-break-after: always; background: #fff; }
+        .proof-page:last-child { page-break-after: auto; }
+        .proof-canvas { box-shadow: none !important; border-radius: 0 !important; aspect-ratio: auto !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .proof-pages .proof-canvas { width: 297mm; height: 210mm; }
+        .proof-spread { display: flex; width: 297mm; height: 105.4mm; }
+        .proof-spread .proof-canvas { width: 148.5mm; height: 105.4mm; }
+      }
+
       .add-page-btn {
         width: 100%; padding: 15px; border-radius: 14px; border: 1.5px dashed #cfcabd; background: transparent;
         color: #6a6455; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 18px;
@@ -634,6 +649,9 @@
     </div>
 
     <div class="toast" id="toast"></div>
+
+    <!-- Admin proof-PDF render target (populated on demand, printed to PDF). -->
+    <div id="proof"></div>
 
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -1630,6 +1648,15 @@
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></div>
             <div><div>Share</div><div class="menu-sub">Copy the link to your published book</div></div>
           </div>
+          ${isProofAdmin() ? `
+          <div class="menu-row" data-act="proof-spreads">
+            <div class="menu-ic" style="background:#f3f0ff;color:#5b3fd6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="12" y1="5" x2="12" y2="19"/></svg></div>
+            <div><div>Proof: PDF spreads</div><div class="menu-sub">Admin · print facing pages to PDF</div></div>
+          </div>
+          <div class="menu-row" data-act="proof-pages">
+            <div class="menu-ic" style="background:#f3f0ff;color:#5b3fd6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/></svg></div>
+            <div><div>Proof: PDF pages</div><div class="menu-sub">Admin · print one page per sheet to PDF</div></div>
+          </div>` : ''}
         `);
         document.querySelector('#sheet [data-act="title"]').addEventListener('click', () => {
           closeSheet();
@@ -1642,6 +1669,10 @@
         document.querySelector('#sheet [data-act="addpages"]').addEventListener('click', () => { closeSheet(); document.getElementById('add-page-btn').click(); });
         document.querySelector('#sheet [data-act="duplicate"]').addEventListener('click', duplicateBook);
         document.querySelector('#sheet [data-act="share"]').addEventListener('click', shareBook);
+        const ps = document.querySelector('#sheet [data-act="proof-spreads"]');
+        if (ps) ps.addEventListener('click', () => { closeSheet(); buildProof('spreads'); });
+        const pp = document.querySelector('#sheet [data-act="proof-pages"]');
+        if (pp) pp.addEventListener('click', () => { closeSheet(); buildProof('pages'); });
       }
 
       // Popsa-style font picker — choose a font group for the cover typography.
@@ -1690,6 +1721,46 @@
         if (navigator.share) { try { await navigator.share({ title, url }); return; } catch (e) { if (e.name === 'AbortError') return; } }
         try { await navigator.clipboard.writeText(url); showToast('Link copied!'); }
         catch (e) { prompt('Copy this link:', url); }
+      }
+
+      // ── Proof PDF (admin only) ──────────────────────────────────
+      const PROOF_ADMINS = ['curtmid@gmail.com', 'curt@theworkshop.works'];
+      const isProofAdmin = () => currentUser && PROOF_ADMINS.includes((currentUser.email || '').toLowerCase());
+
+      // Render the book into #proof at print sizes, then open the print dialog
+      // (choose "Save as PDF"). Reuses the real page/cover renderers so crops,
+      // fonts and the cover all match. "pages" = one book page per sheet;
+      // "spreads" = facing pages together.
+      function buildProof(mode) {
+        const proof = document.getElementById('proof');
+        proof.innerHTML = '';
+        proof.className = 'proof proof-' + mode;
+        const pageCanvas = (pg) => {
+          const c = document.createElement('div');
+          c.className = 'page-canvas proof-canvas' + (pg.layout === 'blank' ? ' blank' : '');
+          if (pg.layout !== 'blank') c.appendChild(buildPageGrid(pg));
+          return c;
+        };
+        const blankCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas proof-canvas blank'; return c; };
+        const coverCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas cover proof-canvas'; c.appendChild(buildCoverCanvas()); return c; };
+        const sheet = (child) => { const p = document.createElement('div'); p.className = 'proof-page'; p.appendChild(child); proof.appendChild(p); };
+        const spread = (a, b) => { const r = document.createElement('div'); r.className = 'proof-spread'; r.appendChild(a); r.appendChild(b); return r; };
+
+        if (mode === 'pages') {
+          sheet(coverCanvas());
+          pages.forEach(pg => sheet(pageCanvas(pg)));
+        } else {
+          sheet(spread(blankCanvas(), coverCanvas()));          // cover on the right, like the builder
+          for (let i = 0; i < pages.length; i += 2) {
+            sheet(spread(pageCanvas(pages[i]), pages[i + 1] ? pageCanvas(pages[i + 1]) : blankCanvas()));
+          }
+        }
+        // Wait for the images to decode, then print.
+        const imgs = [...proof.querySelectorAll('img')];
+        const cleanup = () => { proof.innerHTML = ''; proof.className = ''; window.removeEventListener('afterprint', cleanup); };
+        window.addEventListener('afterprint', cleanup);
+        Promise.all(imgs.map(im => (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(r => { im.onload = im.onerror = r; })))
+          .then(() => setTimeout(() => window.print(), 150));
       }
 
       document.getElementById('dock-photos').addEventListener('click', openPhotosSheet);
