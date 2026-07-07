@@ -296,20 +296,33 @@
       .rp-title { position: absolute; left: 50%; transform: translateX(-50%); font-size: 17px; font-weight: 700; color: #1a1a1a; }
       .rp-save { border: none; background: #1a1a1a; color: #fff; border-radius: 22px; padding: 10px 26px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; flex: 0 0 auto; }
       .rp-save:hover { background: #000; }
-      .rp-body { flex: 1; overflow-y: auto; padding: 26px 20px 80px; }
-      .rp-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px 18px; max-width: 1100px; margin: 0 auto; }
-      @media (min-width: 720px) { .rp-grid { grid-template-columns: repeat(3, 1fr); } }
-      @media (min-width: 1000px) { .rp-grid { grid-template-columns: repeat(4, 1fr); } }
-      .rp-tile { display: flex; flex-direction: column; align-items: center; gap: 9px; }
-      .rp-label { font-size: 14px; font-weight: 700; color: #6b6558; }
-      .rp-tile.locked .rp-label { color: #b3ac9d; }
-      .rp-canvas { width: 100%; position: relative; touch-action: none; border-radius: 6px; }
-      .rp-canvas .page-canvas { pointer-events: none; }
-      .rp-tile.draggable .rp-canvas { cursor: grab; }
-      .rp-tile.draggable .rp-canvas:active { cursor: grabbing; }
-      .rp-tile.dragging { opacity: 0.32; }
-      .rp-ghost { position: fixed; z-index: 600; pointer-events: none; opacity: 0.95; border-radius: 6px; box-shadow: 0 16px 44px rgba(0,0,0,0.28); }
-      .rp-ghost .page-canvas { pointer-events: none; }
+      .rp-body { flex: 1; overflow-y: auto; padding: 28px 20px 80px; }
+      /* One spread per grid cell; two spreads per row on wide screens (like Popsa).
+         Cell order: [cover] [Blank|Page1] then [Page2|Page3] [Page4|Page5] … */
+      .rp-grid { display: grid; grid-template-columns: 1fr; gap: 34px 30px; max-width: 1180px; margin: 0 auto; }
+      @media (min-width: 900px) { .rp-grid { grid-template-columns: repeat(2, 1fr); } }
+      .rp-spread-wrap { display: flex; flex-direction: column; gap: 9px; }
+      .rp-spread-labels { display: flex; }
+      .rp-spread-labels .rp-label { flex: 1 1 0; text-align: center; font-size: 14px; font-weight: 700; color: #6b6558; }
+      .rp-spread-labels .rp-label.locked { color: #b3ac9d; }
+      /* A spread = two facing pages joined at a center fold, with one shadow around
+         the pair so it reads as a single connected object. */
+      .rp-spread { display: flex; align-items: stretch; border-radius: 8px; }
+      .rp-spread:not(.cover-cell) { background: #fff; overflow: hidden; box-shadow: 0 10px 26px rgba(0,0,0,0.13), 0 2px 6px rgba(0,0,0,0.06); }
+      .rp-half { flex: 1 1 0; min-width: 0; position: relative; touch-action: none; }
+      .rp-half.draggable { cursor: grab; }
+      .rp-half.draggable:active { cursor: grabbing; }
+      .rp-half.dragging { opacity: 0.30; }
+      .rp-half.empty { background: transparent; }
+      .rp-half .page-canvas { pointer-events: none; }
+      .rp-spread .page-canvas { box-shadow: none; border-radius: 0; }
+      .rp-fold { flex: 0 0 1px; align-self: stretch; background: linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.03) 50%, rgba(0,0,0,0.12)); }
+      /* Front cover stands alone on the right of its cell (empty left half). */
+      .rp-spread.cover-cell { background: transparent; box-shadow: none; }
+      .rp-spread.cover-cell .rp-fold { visibility: hidden; }
+      .rp-spread.cover-cell .page-canvas.cover { box-shadow: 0 10px 26px rgba(0,0,0,0.13), 0 2px 6px rgba(0,0,0,0.06); border-radius: 8px; }
+      .rp-ghost { position: fixed; z-index: 600; pointer-events: none; opacity: 0.95; border-radius: 6px; box-shadow: 0 16px 44px rgba(0,0,0,0.28); overflow: hidden; }
+      .rp-ghost .page-canvas { pointer-events: none; box-shadow: none; border-radius: 6px; }
 
       /* Auto-fading instructional tip */
       .rp-tip {
@@ -1275,62 +1288,74 @@
         tip._t = setTimeout(() => tip.classList.remove('show'), 5000);
       }
 
-      function rpTile(pg, isCover) {
-        const tile = document.createElement('div');
-        const isBlank = !isCover && pg.layout === 'blank';
-        const draggable = !isCover && !isBlank;
-        tile.className = 'rp-tile' + (draggable ? ' draggable' : ' locked');
-        tile.dataset.pgid = isCover ? '__cover' : pg.id;
-        const label = document.createElement('div');
-        label.className = 'rp-label';
-        tile.appendChild(label);
-        const canvasWrap = document.createElement('div');
-        canvasWrap.className = 'rp-canvas';
-        if (isCover) {
-          const c = document.createElement('div'); c.className = 'page-canvas cover'; c.appendChild(buildCoverCanvas());
-          canvasWrap.appendChild(c);
-        } else if (isBlank) {
-          const c = document.createElement('div'); c.className = 'page-canvas blank'; canvasWrap.appendChild(c);
-        } else {
-          const c = document.createElement('div'); c.className = 'page-canvas'; c.appendChild(buildPageGrid(pg)); canvasWrap.appendChild(c);
-        }
-        tile.appendChild(canvasWrap);
-        if (draggable) attachRpDrag(tile);
-        return tile;
+      // Label for a page at index i in rpPages: index 0 = the blank inside-cover.
+      const rpLabel = (i) => (i === 0 ? 'Blank Page' : 'Page ' + i);
+      let rpDraggingId = null;
+
+      // Build one page half inside a spread. Blank + cover are locked; content
+      // pages are draggable and carry data-pgid for hit-testing during a drag.
+      function rpHalf(pg, idx) {
+        const half = document.createElement('div');
+        const isBlank = pg.layout === 'blank';
+        const draggable = !isBlank;
+        half.className = 'rp-half' + (draggable ? ' draggable' : ' locked') + (pg.id === rpDraggingId ? ' dragging' : '');
+        half.dataset.pgid = pg.id;
+        const c = document.createElement('div');
+        c.className = 'page-canvas' + (isBlank ? ' blank' : '');
+        if (!isBlank) c.appendChild(buildPageGrid(pg));
+        half.appendChild(c);
+        if (draggable) attachRpDrag(half, pg);
+        return half;
       }
 
-      function relabelRpTiles() {
-        let n = 0;
-        [...document.getElementById('rp-grid').children].forEach(tile => {
-          const label = tile.querySelector('.rp-label');
-          if (tile.dataset.pgid === '__cover') { label.textContent = 'Front Cover'; return; }
-          label.textContent = n === 0 ? 'Blank Page' : 'Page ' + n;
-          n++;
-        });
+      // The standalone front-cover cell: empty left half, cover on the right.
+      function rpCoverCell() {
+        const wrap = document.createElement('div'); wrap.className = 'rp-spread-wrap';
+        const labels = document.createElement('div'); labels.className = 'rp-spread-labels';
+        labels.innerHTML = `<span class="rp-label locked"></span><span class="rp-label locked">Front Cover</span>`;
+        const spread = document.createElement('div'); spread.className = 'rp-spread cover-cell';
+        const emptyHalf = document.createElement('div'); emptyHalf.className = 'rp-half empty';
+        const fold = document.createElement('div'); fold.className = 'rp-fold';
+        const coverHalf = document.createElement('div'); coverHalf.className = 'rp-half locked';
+        const c = document.createElement('div'); c.className = 'page-canvas cover'; c.appendChild(buildCoverCanvas());
+        coverHalf.appendChild(c);
+        spread.append(emptyHalf, fold, coverHalf);
+        wrap.append(labels, spread);
+        return wrap;
+      }
+
+      // A connected two-page spread: pages i (left) and i+1 (right) joined by a fold.
+      function rpSpreadCell(left, right, i) {
+        const wrap = document.createElement('div'); wrap.className = 'rp-spread-wrap';
+        const labels = document.createElement('div'); labels.className = 'rp-spread-labels';
+        const lLocked = left.layout === 'blank' ? ' locked' : '';
+        labels.innerHTML = `<span class="rp-label${lLocked}">${escapeHtml(rpLabel(i))}</span>` +
+          `<span class="rp-label">${right ? escapeHtml(rpLabel(i + 1)) : ''}</span>`;
+        const spread = document.createElement('div'); spread.className = 'rp-spread';
+        spread.appendChild(rpHalf(left, i));
+        const fold = document.createElement('div'); fold.className = 'rp-fold';
+        spread.appendChild(fold);
+        if (right) spread.appendChild(rpHalf(right, i + 1));
+        else { const eh = document.createElement('div'); eh.className = 'rp-half empty'; spread.appendChild(eh); }
+        wrap.append(labels, spread);
+        return wrap;
       }
 
       function renderRearrange() {
         const grid = document.getElementById('rp-grid');
         grid.innerHTML = '';
-        grid.appendChild(rpTile(null, true));            // front cover (locked)
-        rpPages.forEach(pg => grid.appendChild(rpTile(pg, false)));
-        relabelRpTiles();
+        grid.appendChild(rpCoverCell());                       // cover standalone
+        for (let i = 0; i < rpPages.length; i += 2) {          // then connected spreads
+          grid.appendChild(rpSpreadCell(rpPages[i], rpPages[i + 1] || null, i));
+        }
       }
 
-      // Rebuild rpPages from the current DOM order (blank stays first).
-      function commitRpOrder() {
-        const grid = document.getElementById('rp-grid');
-        const byId = {}; rpPages.forEach(p => byId[p.id] = p);
-        rpPages = [...grid.querySelectorAll('.rp-tile[data-pgid]')]
-          .filter(t => t.dataset.pgid !== '__cover')
-          .map(t => byId[t.dataset.pgid])
-          .filter(Boolean);
-      }
-
-      function attachRpDrag(tile) {
-        const grid = document.getElementById('rp-grid');
-        const canvas = tile.querySelector('.rp-canvas');
-        canvas.addEventListener('pointerdown', (e) => {
+      // Render-based drag: reorder rpPages on hover and re-render (rebuilds spreads),
+      // so pages re-pair naturally. The blank inside-cover stays first — content
+      // pages only ever drop at index ≥ 1 (targets are draggable content pages).
+      function attachRpDrag(half, pg) {
+        const canvas = half.querySelector('.page-canvas');
+        half.addEventListener('pointerdown', (e) => {
           e.preventDefault();
           const sx = e.clientX, sy = e.clientY;
           const rect = canvas.getBoundingClientRect();
@@ -1339,33 +1364,38 @@
           const onMove = (ev) => {
             if (!dragging) {
               if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
-              dragging = true;
+              dragging = true; rpDraggingId = pg.id;
               ghost = canvas.cloneNode(true);
               ghost.classList.add('rp-ghost');
               ghost.style.width = rect.width + 'px'; ghost.style.height = rect.height + 'px';
               document.body.appendChild(ghost);
-              tile.classList.add('dragging');
+              renderRearrange();               // dim the source
             }
             ghost.style.left = (ev.clientX - offX) + 'px';
             ghost.style.top = (ev.clientY - offY) + 'px';
             ghost.style.display = 'none';
             const under = document.elementFromPoint(ev.clientX, ev.clientY);
             ghost.style.display = '';
-            const overTile = under && under.closest && under.closest('.rp-tile.draggable');
-            if (overTile && overTile !== tile) {
-              const kids = [...grid.children];
-              const di = kids.indexOf(tile), ti = kids.indexOf(overTile);
-              if (di < ti) grid.insertBefore(tile, overTile.nextSibling);
-              else grid.insertBefore(tile, overTile);
-              relabelRpTiles();
+            const overHalf = under && under.closest && under.closest('.rp-half.draggable');
+            if (overHalf) {
+              const tid = overHalf.dataset.pgid;
+              if (tid && tid !== pg.id) {
+                const from = rpPages.findIndex(p => p.id === pg.id);
+                const to = rpPages.findIndex(p => p.id === tid);
+                if (from > -1 && to > -1 && from !== to) {
+                  rpPages.splice(from, 1);
+                  rpPages.splice(to, 0, pg);
+                  renderRearrange();
+                }
+              }
             }
           };
           const onUp = () => {
             document.removeEventListener('pointermove', onMove);
             document.removeEventListener('pointerup', onUp);
             if (ghost) ghost.remove();
-            tile.classList.remove('dragging');
-            if (dragging) commitRpOrder();
+            rpDraggingId = null;
+            if (dragging) renderRearrange();
           };
           document.addEventListener('pointermove', onMove);
           document.addEventListener('pointerup', onUp);
