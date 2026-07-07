@@ -214,7 +214,7 @@
       .cv-photo { background-size: cover; background-position: center; background-color: #6b665f; }
       .cv-photo-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: rgba(255,255,255,0.75); font-size: 3cqw; font-weight: 600; padding: 6%; }
       .cv-tint { position: absolute; inset: 0; }
-      .cv-overlay-text { position: absolute; left: 16.1%; right: 7.1%; bottom: 14.1%; z-index: 2; }
+      .cv-overlay-text { position: absolute; left: 8.5%; right: 7.1%; bottom: 8.5%; z-index: 2; }
       .cv-panel { position: absolute; left: 0; right: 0; bottom: 0; height: 38%; background: #fff; display: flex; flex-direction: column; justify-content: center; padding: 0 5.7%; z-index: 2; }
       .cv-card { position: absolute; right: 0; bottom: 0; width: 55%; height: 42%; background: rgba(12,11,9,0.92); display: flex; flex-direction: column; justify-content: center; padding: 0 3.8%; z-index: 2; }
       .cv-block { display: flex; flex-direction: column; }
@@ -224,6 +224,11 @@
       .cv-dates { font-family: 'Inter', sans-serif; font-weight: 400; font-size: 1.6cqw; line-height: 1.2; margin-top: 3%; letter-spacing: 0.02em; }
       .cv-light .cv-eyebrow { color: rgba(255,255,255,0.9); } .cv-light .cv-title { color: #fff; } .cv-light .cv-dates { color: rgba(255,255,255,0.85); }
       .cv-dark .cv-eyebrow { color: #3A352D; } .cv-dark .cv-title { color: #1A1814; } .cv-dark .cv-dates { color: rgba(26,24,20,0.65); }
+      /* Inline-editable cover text (typed directly on the preview). */
+      .cv [contenteditable] { outline: none; cursor: text; min-width: 6px; }
+      .cv [contenteditable]:empty::before { content: attr(data-ph); opacity: 0.55; }
+      .cv-pick-btn { display: inline-flex; align-items: center; gap: 1.4cqw; background: rgba(0,0,0,0.6); color: #fff; padding: 2cqw 3.2cqw; border-radius: 999px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 2.8cqw; cursor: pointer; }
+      .cv-photo-hint[data-cv="pick"] { cursor: pointer; }
 
       /* Cover editor sheet */
       .cover-preview { position: relative; width: 100%; aspect-ratio: 117 / 83; border-radius: 8px; overflow: hidden; container-type: inline-size; box-shadow: 0 2px 14px rgba(0,0,0,0.18); margin-bottom: 16px; background: #605d58; }
@@ -1033,21 +1038,26 @@
       // Render the front cover as a jacket: spine (left) + cover face. The face
       // carries the chosen style (Bashō A/B/C); the spine reads the title
       // vertically with the year pinned to the bottom.
-      function buildCoverCanvas() {
+      function buildCoverCanvas(editable) {
         const wrap = document.createElement('div');
         wrap.className = 'cv';
         const url = cover.photo && cover.photo.url;
         const title = cover.title || 'Your Title';
         const ph = !cover.title ? ' cv-ph' : '';
-        const tf = coverTitleCqw(title);
+        const tf = coverTitleCqw(cover.title || (editable ? 'Enter a book title' : 'Your Title'));
+        // In editable mode the text is typed directly on the cover (contenteditable),
+        // with placeholders shown via CSS when empty, and the photo hint becomes a
+        // "Choose cover photo" button.
         const photo = (style) => url
           ? `<div class="cv-photo" style="${style}background-image:url('${url}')"></div>`
-          : `<div class="cv-photo" style="${style}"><div class="cv-photo-hint">Tap to add a cover photo</div></div>`;
-        const block = (light) => `<div class="cv-block ${light ? 'cv-light' : 'cv-dark'}">
-          ${cover.eyebrow ? `<div class="cv-eyebrow">${escapeHtml(cover.eyebrow)}</div>` : ''}
-          <div class="cv-title${ph}" style="font-size:${tf}cqw">${escapeHtml(title)}</div>
-          ${cover.subtitle ? `<div class="cv-dates">${escapeHtml(cover.subtitle)}</div>` : ''}
-        </div>`;
+          : `<div class="cv-photo" style="${style}"><div class="cv-photo-hint"${editable ? ' data-cv="pick"' : ''}>${editable ? '<span class="cv-pick-btn">＋ Choose cover photo</span>' : 'Tap to add a cover photo'}</div></div>`;
+        const ed = (name, plc) => editable ? ` contenteditable="plaintext-only" data-cv="${name}" data-ph="${plc}" spellcheck="false"` : '';
+        const block = (light) => {
+          const eyeHtml = (editable || cover.eyebrow) ? `<div class="cv-eyebrow"${ed('eyebrow', 'Add a small headline')}>${escapeHtml(cover.eyebrow)}</div>` : '';
+          const titHtml = `<div class="cv-title${editable ? '' : ph}"${ed('title', 'Enter a book title')} style="font-size:${tf}cqw">${escapeHtml(editable ? cover.title : title)}</div>`;
+          const subHtml = (editable || cover.subtitle) ? `<div class="cv-dates"${ed('subtitle', 'Add a date or subtitle')}>${escapeHtml(cover.subtitle)}</div>` : '';
+          return `<div class="cv-block ${light ? 'cv-light' : 'cv-dark'}">${eyeHtml}${titHtml}${subHtml}</div>`;
+        };
 
         let faceInner;
         if (cover.style === 'B') { // Panel — photo top 62%, white panel bottom 38%
@@ -1082,9 +1092,45 @@
         const html = buildCoverCanvas().outerHTML; cover.style = saved;
         return html;
       }
-      function refreshCoverPreview() {
+      function refreshCoverPreview(editable) {
         const p = document.getElementById('cover-preview');
-        if (p) { p.innerHTML = ''; p.appendChild(buildCoverCanvas()); }
+        if (p) { p.innerHTML = ''; p.appendChild(buildCoverCanvas(editable)); }
+      }
+
+      // Keep the vertical spine in sync while the user types on the cover (the
+      // spine isn't editable, so we re-render just it — the editable text nodes
+      // are left untouched so the caret doesn't jump).
+      function updateCoverSpine() {
+        const sp = document.querySelector('#cover-preview .cv-spine');
+        if (!sp) return;
+        const title = cover.title || 'Your Title';
+        const ph = !cover.title ? ' cv-ph' : '';
+        const year = coverYear(cover.subtitle);
+        sp.innerHTML = `<span class="cv-spine-title">${cover.eyebrow ? `<span class="cv-spine-eyebrow">${escapeHtml(cover.eyebrow)}</span>` : ''}<span class="cv-spine-big${ph}">${escapeHtml(title)}</span></span><span class="cv-spine-year">${escapeHtml(year)}</span>`;
+      }
+
+      // Wire the contenteditable cover text: sync to state, block newlines, keep
+      // the placeholder showing when empty, and live-resize the title.
+      function wireCoverEditable() {
+        const p = document.getElementById('cover-preview');
+        if (!p) return;
+        const noNewline = (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } };
+        const bind = (name, apply) => {
+          const el = p.querySelector(`[data-cv="${name}"]`);
+          if (!el) return;
+          el.addEventListener('keydown', noNewline);
+          el.addEventListener('input', () => {
+            const val = el.textContent.replace(/\n/g, ' ').trim();
+            if (!val) el.innerHTML = ''; // let :empty placeholder show again
+            apply(val, el);
+            updateCoverSpine();
+          });
+        };
+        bind('eyebrow', (v) => { cover.eyebrow = v; });
+        bind('title', (v, el) => { cover.title = v; el.style.fontSize = coverTitleCqw(v || 'Enter a book title') + 'cqw'; });
+        bind('subtitle', (v) => { cover.subtitle = v; });
+        const pick = p.querySelector('[data-cv="pick"]');
+        if (pick) pick.addEventListener('click', () => chooseCoverPhoto());
       }
 
       // The front-cover editor: style picker (Overlay/Panel/Inset card) + eyebrow,
@@ -1100,35 +1146,21 @@
           ? `<div class="cover-photo-prev" style="background-image:url('${cover.photo.url}')"></div>
              <button class="mini-btn" id="cover-change">Change photo</button>
              <button class="mini-btn" id="cover-remove">Remove</button>`
-          : `<label class="mini-btn solid" id="cover-pick"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Choose cover photo</label>`;
+          : '';
         openSheet(`
           <h2>Front cover</h2>
           <div class="cover-preview" id="cover-preview"></div>
+          <p class="sheet-sub" style="margin:10px 0 2px">Tap the cover to type your headline, title and date. Pick a style below.</p>
           <div class="cvtpl-grid">${tiles}</div>
-          <div class="field-label" style="margin-top:14px">Eyebrow <span style="font-weight:500;color:#999">(small line above)</span></div>
-          <input class="text-input" id="cover-eyebrow" type="text" maxlength="60" placeholder="e.g. Safari with the Montags"/>
-          <div class="field-label">Title</div>
-          <input class="text-input" id="cover-title" type="text" maxlength="48" placeholder="e.g. Rwanda &amp; South Africa"/>
-          <div class="field-label">Date / subtitle</div>
-          <input class="text-input" id="cover-subtitle" type="text" maxlength="60" placeholder="e.g. March 1 – 9, 2026"/>
-          <div class="field-label" style="margin-top:14px">Cover photo</div>
-          <div class="cover-photo-row">${photoRow}</div>
+          ${cover.photo ? `<div class="field-label" style="margin-top:14px">Cover photo</div><div class="cover-photo-row">${photoRow}</div>` : ''}
           <div class="sheet-actions"><button class="btn-primary" id="cover-done">Done</button></div>
         `);
-        refreshCoverPreview();
-        const eyeInput = document.getElementById('cover-eyebrow');
-        const titleInput = document.getElementById('cover-title');
-        const subInput = document.getElementById('cover-subtitle');
-        eyeInput.value = cover.eyebrow; titleInput.value = cover.title; subInput.value = cover.subtitle;
-        eyeInput.addEventListener('input', () => { cover.eyebrow = eyeInput.value; refreshCoverPreview(); });
-        titleInput.addEventListener('input', () => { cover.title = titleInput.value; refreshCoverPreview(); });
-        subInput.addEventListener('input', () => { cover.subtitle = subInput.value; refreshCoverPreview(); });
+        refreshCoverPreview(true);
+        wireCoverEditable();
         document.querySelectorAll('#sheet .cvtpl').forEach(t =>
           t.addEventListener('click', () => { cover.style = t.dataset.style; openCoverEditor(); }));
-        const pick = document.getElementById('cover-pick');
         const change = document.getElementById('cover-change');
         const remove = document.getElementById('cover-remove');
-        if (pick) pick.addEventListener('click', () => chooseCoverPhoto());
         if (change) change.addEventListener('click', () => chooseCoverPhoto());
         if (remove) remove.addEventListener('click', () => {
           if (cover.photo && cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
