@@ -1052,26 +1052,27 @@
       // ── Rendering ───────────────────────────────────────────────
       function render() { ensureBookEndpapers(); renderTray(); renderPages(); updateSummary(); }
 
-      // Endpapers: the book ends with exactly ONE blank page — the inside back
-      // cover — on the RIGHT of the final spread ([last content | blank]).
+      // Endpapers. The book ALWAYS opens with a blank inside-front cover on the
+      // left of the first spread ([blank | Page 1]).
       //
-      // Spreads pair pages (0,1),(2,3),… so the inside-back blank only lands on a
-      // spread's RIGHT when the total interior page count is even. With a blank
-      // inside-FRONT cover always present too, that forces the content count to be
-      // even — an odd content count would leave a stray second blank (which the
-      // proof would show as an empty page). So we make the inside-front blank
-      // conditional: keep it when content is even (opening reads [blank | Page 1]);
-      // drop it when content is odd (opening reads [Page 1 | Page 2]). Either way
-      // there is exactly one end blank, on the right, and never a [blank | blank].
-      // Rebuilds from the content pages each render (idempotent) — content page
-      // objects are preserved; only the blank endpapers are regenerated.
+      // Spreads pair pages (0,1),(2,3),… and a physical book needs an even total
+      // page count. With the inside-front blank always present, the inside-BACK
+      // blank only lands cleanly on the final spread's right when the content
+      // count is even; when it's odd the last content pages already pair up, so
+      // adding a back blank would leave a stray/empty page. So the inside-back
+      // blank is the conditional one: present when content is even, omitted when
+      // content is odd (the book then ends on a full content spread). Either way
+      // the opening always shows the inside-front blank, the total stays even, and
+      // there is never a [blank | blank] spread. Rebuilds from the content pages
+      // each render (idempotent) — content objects are preserved; only the blank
+      // endpapers are regenerated.
       function ensureBookEndpapers() {
         const content = pages.filter(p => p.layout !== 'blank');
         if (!content.length) return; // nothing placed yet
         pages.length = 0;
-        if (content.length % 2 === 0) pages.push(blankPage()); // inside front cover
+        pages.push(blankPage()); // inside front cover — always
         pages.push(...content);
-        pages.push(blankPage()); // inside back cover — right page of the final spread
+        if (content.length % 2 === 0) pages.push(blankPage()); // inside back cover
       }
 
       function renderTray() {
