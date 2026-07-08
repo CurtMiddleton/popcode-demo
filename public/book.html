@@ -1547,15 +1547,16 @@
         const geo = layoutGeometry(L);
         if (geo.special === 'lr') {
           // Portrait hero on the left + two smaller landscape photos stacked right.
+          // The column gets a DEFINITE height and the two slots use flex:1 (not a
+          // percentage height) so their sizes resolve consistently — a nested
+          // percentage-of-flex height collapses to 0 in Safari, which left only the
+          // hero showing and made the stacked photos overlap.
           grid.style.cssText = 'inset:0;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:4%;padding:6% 5%;';
           const big = mkSlot(pg, 0); big.style.cssText += 'height:88%;aspect-ratio:3 / 4;flex:0 0 auto;';
           const col = document.createElement('div');
-          // align-self:stretch gives the column a definite height so the slots'
-          // percentage heights resolve (otherwise they collapse to 0 and only the
-          // hero shows — which read as a "1 photo" layout).
-          col.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9%;flex:0 0 auto;align-self:stretch;';
-          const a = mkSlot(pg, 1); a.style.cssText += 'height:40%;aspect-ratio:4 / 3;';
-          const b = mkSlot(pg, 2); b.style.cssText += 'height:40%;aspect-ratio:4 / 3;';
+          col.style.cssText = 'height:88%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8%;flex:0 0 auto;';
+          const a = mkSlot(pg, 1); a.style.cssText += 'height:45%;aspect-ratio:4 / 3;';
+          const b = mkSlot(pg, 2); b.style.cssText += 'height:45%;aspect-ratio:4 / 3;';
           col.appendChild(a); col.appendChild(b);
           grid.appendChild(big); grid.appendChild(col);
           return grid;
@@ -2354,7 +2355,7 @@
         if (geo.special === 'lr') {
           return `<div class="lp-grid" style="inset:0;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:4%;padding:6% 5%;">
             <div class="lp-cell" style="height:88%;aspect-ratio:3/4"></div>
-            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9%;align-self:stretch"><div class="lp-cell" style="height:40%;aspect-ratio:4/3"></div><div class="lp-cell" style="height:40%;aspect-ratio:4/3"></div></div>
+            <div style="height:88%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8%"><div class="lp-cell" style="height:45%;aspect-ratio:4/3"></div><div class="lp-cell" style="height:45%;aspect-ratio:4/3"></div></div>
           </div>`;
         }
         const cells = geo.slots.map(sc => `<div class="lp-cell" style="${sc}"></div>`).join('');
