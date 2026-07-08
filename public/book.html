@@ -1,0 +1,3068 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+    <!-- Sentry error monitoring (errors-only; init in /sentry-init.js) -->
+    <script
+      src="https://browser.sentry-cdn.com/10.59.0/bundle.min.js"
+      integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
+      crossorigin="anonymous"></script>
+    <script src="/sentry-init.js"></script>
+    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
+    <meta property="og:title" content="Popcode — Make a Book">
+    <meta property="og:description" content="Design a photo book where any page can come to life with video.">
+    <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=2">
+    <meta property="og:type" content="website">
+    <title>Popcode — Make a Book</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <!-- book.html only needs MINDAR.IMAGE.Compiler (to compile popcoded photos
+         into a .mind target), not AR rendering. Stub AFRAME so the compiler
+         bundle loads without booting a real WebGL renderer — same trick as
+         create.html. -->
+    <script>
+      window.AFRAME = window.AFRAME || {
+        registerSystem(){}, registerComponent(){}, registerShader(){},
+        registerGeometry(){}, registerPrimitive(){}, registerElement(){}
+      };
+    </script>
+    <script src="/vendor/mindar/1.2.2/mindar-image-aframe.prod.js"></script>
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <!-- Cover font choices (Change Font): CooperBT + Inter come from fonts.css;
+         FilsonPro is a local brand font; the rest load from Google Fonts. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@400;500;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+      @font-face { font-family: 'FilsonPro'; src: url('/assets/fonts/FilsonProMedium/font.woff2') format('woff2'), url('/assets/fonts/FilsonProMedium/font.woff') format('woff'); font-weight: 400 500; font-display: swap; }
+      @font-face { font-family: 'FilsonPro'; src: url('/assets/fonts/FilsonProBold/font.woff2') format('woff2'), url('/assets/fonts/FilsonProBold/font.woff') format('woff'); font-weight: 600 700; font-display: swap; }
+    </style>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+      html, body { overscroll-behavior: none; }
+      body {
+        min-height: 100vh;
+        background: #f7f6f2;
+        font-family: 'Inter', sans-serif;
+        font-weight: 400;
+        color: #1a1a1a;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0 0 210px;
+        overflow-x: hidden;
+      }
+
+      /* ── Header ─────────────────────────────────────────────── */
+      .site-header {
+        width: 100vw;
+        background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
+        padding: 22px 24px 30px;
+        min-height: 150px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        position: relative;
+        margin-bottom: 52px;
+      }
+      .site-header img.logo { height: 64px; }
+      .header-right { position:absolute; right:20px; top:20px; display:flex; align-items:center; gap:10px; }
+      #user-greeting { color:white; font-size:13px; font-weight:500; opacity:0.9; }
+      #logout-btn { background:#78A7FF; color:white; border:none; border-radius:20px; padding:7px 16px; font-size:13px; font-weight:500; cursor:pointer; font-family:'Inter',sans-serif; }
+
+      .wrap { width: 100%; max-width: 560px; padding: 0 20px; }
+
+      h1 { font-size: 34px; font-weight: 400; font-family: 'CooperBT', serif; letter-spacing: 0; line-height: 1.05; margin-bottom: 6px; }
+      .subtitle { font-size: 15px; color: #666; line-height: 1.5; margin-bottom: 26px; }
+
+      .field-label { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
+      input.text-input {
+        width: 100%; padding: 13px 15px; border-radius: 12px;
+        border: 1px solid #e4e2dc; font-size: 16px; color: #1a1a1a; outline: none;
+        background: white; font-family: 'Inter', sans-serif; margin-bottom: 24px;
+      }
+      input.text-input:focus { border-color: #7657FC; }
+
+      /* ── Photo tray ─────────────────────────────────────────── */
+      .tray-card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 22px; }
+      .tray-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; }
+      .tray-title { font-size: 14px; font-weight: 700; }
+      .tray-title span { color: #999; font-weight: 500; }
+      .tray-actions { display: flex; gap: 8px; }
+      .mini-btn { border: 1px solid #e0ded8; background: white; color: #1a1a1a; border-radius: 999px; padding: 7px 13px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; display: inline-flex; align-items: center; gap: 5px; }
+      .mini-btn:hover { background: #f6f5f1; }
+      .mini-btn.solid { background: #1a1a1a; color: white; border-color: #1a1a1a; }
+      .mini-btn.solid:hover { background: #000; }
+      .mini-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+      .tray { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 8px; scroll-behavior: smooth; }
+      .tray:empty::after { content: 'Add photos to get started — they’ll appear here to place into your book.'; color: #aaa; font-size: 13px; line-height: 1.5; padding: 18px 4px; }
+      .tray-thumb {
+        position: relative; width: 76px; height: 76px; min-width: 76px; border-radius: 10px;
+        background-size: cover; background-position: center; background-color: #eee;
+        background-origin: border-box; background-clip: border-box;
+        cursor: pointer; border: 2px solid transparent; transition: transform 0.12s, border-color 0.12s;
+      }
+      .tray-thumb.selected { border-color: #7657FC; transform: translateY(-3px); }
+      .tray-thumb .tray-x {
+        position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%;
+        background: #1a1a1a; color: white; border: 2px solid white; display: flex; align-items: center; justify-content: center;
+        font-size: 13px; cursor: pointer; line-height: 1;
+      }
+      .tray-thumb .pop-dot {
+        position: absolute; bottom: 4px; left: 4px; width: 16px; height: 16px; border-radius: 50%;
+        background: linear-gradient(135deg,#7657FC,#589AF9); display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      }
+      .tray-hint { font-size: 11px; color: #999; margin-top: 4px; min-height: 14px; }
+
+      /* ── Spreads (facing pages) ─────────────────────────────── */
+      /* A book is designed as spreads: two landscape pages (Prodigi 11.7×8.3")
+         side by side, meeting at a center gutter. */
+      .pages { display: flex; flex-direction: column; gap: 30px; }
+      .spread { position: relative; transition: opacity 0.2s, transform 0.2s; }
+
+      /* Two facing pages with a subtle center fold. */
+      .spread-body { display: flex; align-items: flex-start; }
+      .page-half { position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+      .spread-fold { align-self: stretch; width: 2px; margin-top: 34px; background: linear-gradient(90deg, rgba(0,0,0,0.10), rgba(0,0,0,0.02) 50%, rgba(0,0,0,0.10)); flex: 0 0 2px; }
+      .page-half.single { flex-basis: 50%; }
+
+      /* Per-page header row above the page: label + Popsa-style controls
+         (full-bleed / layout / more), icons on the outer edge, label toward the
+         gutter. */
+      .page-half-head { display: flex; align-items: center; gap: 6px; height: 34px; margin-bottom: 6px; padding: 0 2px; }
+      .page-label-text { font-size: 13px; font-weight: 700; color: #6b6558; white-space: nowrap; }
+      .ph-spacer { flex: 1; }
+      .page-tool {
+        width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer;
+        background: #eceae3; display: flex; align-items: center; justify-content: center; color: #666; flex: 0 0 auto;
+        transition: background 0.12s, color 0.12s;
+      }
+      .page-tool:hover { background: #e0ddd4; color: #111; }
+      .page-tool.active { background: #1a1a1a; color: #fff; }
+      .page-tool.danger:hover { background: #fdecec; color: #d33; }
+
+      /* The page canvas — landscape (Prodigi 11.7 × 8.3"). Grid + padding (the
+         "mat") + gap are set inline per layout so full-bleed has none and the
+         minimal matted layouts get clean white margins. */
+      /* The canvas holds the aspect ratio with NO padding/grid of its own, so its
+         height is purely ratio-driven. The mat is an absolutely-positioned inner
+         grid (inset), which can never push the canvas taller (the old
+         aspect-ratio + %-padding combo clipped the bottom). */
+      .page-canvas {
+        position: relative; width: 100%; aspect-ratio: 117 / 83; background: #ffffff;
+        overflow: hidden; border-radius: 3px; box-shadow: 0 3px 14px rgba(0,0,0,0.10);
+      }
+      .page-grid { position: absolute; box-sizing: border-box; }
+
+      /* Desktop — use the browser real estate like Popsa: a wide ~1015px spread. */
+      @media (min-width: 1080px) {
+        .wrap { max-width: 1055px; }  /* → ~1015px spread inside the 20px padding */
+        h1 { font-size: 46px; }
+        .subtitle, .field-label, .text-input { max-width: 640px; }
+        .page-half-head { height: 40px; margin-bottom: 8px; }
+        .page-label-text { font-size: 15px; }
+        .page-tool { width: 36px; height: 36px; }
+        .page-tool svg { width: 17px; height: 17px; }
+        .spread-fold { margin-top: 48px; }
+        .create-bar-inner { max-width: 1015px; }
+      }
+
+      .slot {
+        position: relative; background: #e4e1d9; overflow: hidden;
+        display: flex; align-items: center; justify-content: center; cursor: pointer;
+        background-size: cover; background-position: center; touch-action: none;
+      }
+      .slot.empty { outline: 1.5px dashed #d3cec2; outline-offset: -2px; background: #f3f1ea; }
+      .slot.empty::after { content: '+'; color: #c2bbab; font-size: 24px; font-weight: 300; }
+      .slot.place-target { outline: 3px solid #7657FC; outline-offset: -3px; z-index: 2; }
+      .page-canvas.cover.place-target { outline: 3px solid #7657FC; outline-offset: -3px; }
+      .slot.swap-source { outline: 3px solid #589AF9; outline-offset: -3px; z-index: 2; }
+      .slot.slot-drag { opacity: 0.4; }
+      .slot-tag {
+        position: absolute; bottom: 5px; right: 5px; padding: 2px 7px; border-radius: 999px;
+        font-size: 9px; font-weight: 700; color: white; display: flex; align-items: center; gap: 3px;
+        background: linear-gradient(135deg,#7657FC,#589AF9); box-shadow: 0 1px 4px rgba(0,0,0,0.25); z-index: 2;
+      }
+      .slot-tag img { width: 10px; height: 10px; }
+
+      /* Drag-and-drop flourish: a circular photo "chip" follows the pointer, and
+         on drop the photo fills the slot with an expanding-circle reveal. */
+      .drag-ghost {
+        position: fixed; width: 92px; height: 92px; border-radius: 50%;
+        background-size: cover; background-position: center; border: 3px solid #fff;
+        box-shadow: 0 12px 30px rgba(0,0,0,0.34); pointer-events: none; z-index: 700;
+        transform: translate(-50%, -50%); animation: ghost-pop 0.16s ease-out;
+      }
+      @keyframes ghost-pop { from { transform: translate(-50%,-50%) scale(0.5); opacity: 0.5; } to { transform: translate(-50%,-50%) scale(1); opacity: 1; } }
+      .slot-fill {
+        position: absolute; inset: 0; background-size: cover; background-position: center; z-index: 3;
+        clip-path: circle(0% at var(--cx, 50%) var(--cy, 50%)); will-change: clip-path;
+      }
+      .slot-fill.go { animation: slot-reveal 0.42s cubic-bezier(0.22, 0.61, 0.36, 1) forwards; }
+      @keyframes slot-reveal { to { clip-path: circle(150% at var(--cx, 50%) var(--cy, 50%)); } }
+      .tray-thumb { touch-action: pan-x; }
+      .tray-thumb.dragging { opacity: 0.35; }
+      /* Placed-photo image inside a slot (carries the Edit Photo crop/zoom/rotate). */
+      .slot-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center center; z-index: 0; user-select: none; -webkit-user-drag: none; }
+      .slot-img.fit { object-fit: contain; }
+
+      /* ── Front cover (ported from Bashō: Overlay / Panel / Inset card) ── */
+      /* container-type: inline-size lets the cover type scale with the page width
+         via cqw, WITHOUT containing the block axis (so aspect-ratio + inset:0 fill
+         still work — `size` would collapse the height). */
+      .page-canvas.cover { background: #605d58; container-type: inline-size; }
+      .cv { position: absolute; inset: 0; overflow: hidden; background: #605d58; display: flex; }
+      /* Spine strip on the binding edge — vertical title, year pinned bottom. */
+      /* Spine — small type, eyebrow+title centered across the spine width (so it
+         reads centered when the book lies flat), year pinned to the bottom. */
+      .cv-spine { flex: 0 0 9%; background: #fff; border-right: 1px solid rgba(0,0,0,0.14); writing-mode: vertical-rl; display: flex; justify-content: space-between; align-items: center; padding: 7% 0.7cqw; overflow: hidden; }
+      .cv-spine-title { display: inline-flex; align-items: baseline; gap: 0.9cqw; }
+      .cv-spine-eyebrow { font-family: 'CooperBT', serif; font-style: italic; font-size: 1.35cqw; color: #1A1814; white-space: nowrap; }
+      .cv-spine-big { font-family: 'CooperBT', serif; font-weight: 400; font-size: 2.1cqw; color: #1A1814; white-space: nowrap; }
+      .cv-spine-big.cv-ph { opacity: 0.4; }
+      .cv-spine-year { font-family: 'Inter', sans-serif; font-size: 1.25cqw; color: #1A1814; }
+      .cv-face { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; background: #605d58; }
+      .cv-photo { background-size: cover; background-position: center; background-color: #6b665f; overflow: hidden; }
+      .cv-photo-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center center; user-select: none; -webkit-user-drag: none; }
+      .cv-photo-img.fit { object-fit: contain; }
+      .cv-photo-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: rgba(255,255,255,0.75); font-size: 3cqw; font-weight: 600; padding: 6%; }
+      .cv-tint { position: absolute; inset: 0; }
+      .cv-overlay-text { position: absolute; left: 8.5%; right: 7.1%; bottom: 8.5%; z-index: 2; }
+      .cv-panel { position: absolute; left: 0; right: 0; bottom: 0; height: 38%; background: #fff; display: flex; flex-direction: column; justify-content: center; padding: 0 5.7%; z-index: 2; }
+      .cv-card { position: absolute; right: 0; bottom: 0; width: 55%; height: 42%; background: rgba(12,11,9,0.92); display: flex; flex-direction: column; justify-content: center; padding: 0 3.8%; z-index: 2; }
+      .cv-block { display: flex; flex-direction: column; }
+      .cv-eyebrow { font-family: 'CooperBT', serif; font-style: italic; font-size: 2.6cqw; line-height: 1.1; margin-bottom: 1.4%; }
+      .cv-title { font-family: 'CooperBT', serif; font-weight: 400; line-height: 0.98; letter-spacing: -0.02em; word-break: break-word; }
+      .cv-title.cv-ph { opacity: 0.45; }
+      .cv-dates { font-family: 'Inter', sans-serif; font-weight: 400; font-size: 1.6cqw; line-height: 1.2; margin-top: 3%; letter-spacing: 0.02em; }
+      .cv-light .cv-eyebrow { color: rgba(255,255,255,0.9); } .cv-light .cv-title { color: #fff; } .cv-light .cv-dates { color: rgba(255,255,255,0.85); }
+      .cv-dark .cv-eyebrow { color: #3A352D; } .cv-dark .cv-title { color: #1A1814; } .cv-dark .cv-dates { color: rgba(26,24,20,0.65); }
+      /* Inline-editable cover text (typed directly on the preview). */
+      .cv [contenteditable] { outline: none; cursor: text; min-width: 6px; }
+      .cv [contenteditable]:empty::before { content: attr(data-ph); opacity: 0.55; }
+      /* "Choose cover photo" — a top-layer button; the wrapper ignores pointer
+         events so only the pill is clickable and the rest of the cover still
+         opens the editor / accepts drops. */
+      .cv-pick { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 6; pointer-events: none; }
+      .cv-pick-btn { pointer-events: auto; display: inline-flex; align-items: center; gap: 1.4cqw; background: rgba(0,0,0,0.62); color: #fff; padding: 2.2cqw 3.4cqw; border-radius: 999px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 2.8cqw; cursor: pointer; box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+      .cv-pick-btn:hover { background: rgba(0,0,0,0.78); }
+
+      /* ── Back cover (Bashō model) ─────────────────────────────── */
+      /* container-type: size (not inline-size) so the inset can be sized by
+         container HEIGHT (cqh) — 3.5" of the 8.3" cover — independent of the
+         %-padding on .bc-inset-mode (which is relative to width). cqw still works. */
+      .page-canvas.backcover { background: #fff; container-type: size; overflow: hidden; }
+      .bc { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; }
+      .bc-inset-mode { justify-content: center; padding: 9% 9% 8%; }
+      .bc-full-mode { justify-content: flex-end; padding: 0; }
+      .bc-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center; user-select: none; -webkit-user-drag: none; }
+      .bc-img.fit { object-fit: contain; }
+      .bc-empty { position: absolute; inset: 0; background: #e9e6df; }
+      .bc-photo-full { position: absolute; inset: 0; overflow: hidden; }
+      .bc-scrim { position: absolute; left: 0; right: 0; bottom: 0; height: 34%; background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.55)); z-index: 2; }
+      /* Inset ~3.5" tall on the 8.3" cover → 42cqh (of canvas height); landscape
+         5×3.5, portrait 2.6×3.5, square 3.5×3.5. cqh (not %) so the padding on
+         .bc-inset-mode doesn't shrink it. */
+      .bc-inset { position: relative; overflow: hidden; background: #e9e6df; flex: 0 0 auto; height: 42cqh; box-shadow: 0 1px 8px rgba(0,0,0,0.08); }
+      .bc-inset.bc-landscape { aspect-ratio: 10 / 7; }
+      .bc-inset.bc-portrait { aspect-ratio: 3 / 4; }
+      .bc-inset.bc-square { aspect-ratio: 1 / 1; }
+      .bc-brand { display: flex; flex-direction: column; align-items: center; gap: 1.3cqw; }
+      .bc-inset-mode .bc-brand { margin-top: 7%; }
+      .bc-full-mode .bc-brand { position: relative; z-index: 3; margin-bottom: 7%; }
+      .bc-logo { height: 4.6cqw; width: auto; display: block; }
+      .bc-url { font-family: 'Inter', sans-serif; font-size: 1.85cqw; letter-spacing: 0.06em; color: #8a857c; }
+      .bc-brand-rev .bc-url { color: rgba(255,255,255,0.92); }
+      .bc-seg { display: inline-flex; background: #ececec; border-radius: 999px; padding: 3px; gap: 2px; }
+      .bc-seg-btn { background: transparent; border: none; padding: 8px 16px; font-size: 13px; font-weight: 700; color: #666; border-radius: 999px; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .bc-seg-btn.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+      /* Cover editor sheet */
+      .cover-preview { position: relative; width: 100%; aspect-ratio: 117 / 83; border-radius: 8px; overflow: hidden; container-type: inline-size; box-shadow: 0 2px 14px rgba(0,0,0,0.18); margin-bottom: 16px; background: #605d58; }
+      .cvtpl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+      .cvtpl { cursor: pointer; }
+      .cvtpl-mini { position: relative; width: 100%; aspect-ratio: 117 / 83; container-type: inline-size; border-radius: 6px; overflow: hidden; border: 2px solid #eceae4; }
+      .cvtpl.active .cvtpl-mini { border-color: #7657FC; }
+      .cvtpl-name { font-size: 11px; font-weight: 700; text-align: center; color: #666; margin-top: 5px; }
+      .cover-photo-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .cover-photo-prev { width: 64px; height: 46px; border-radius: 8px; background-size: cover; background-position: center; flex: 0 0 auto; }
+
+      /* ── Edit Photo modal (Popsa-style) ─────────────────────────── */
+      @media (min-width: 720px) { .sheet.sheet-wide { max-width: 960px; } }
+      .ep-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+      .ep-head h2 { font-size: 20px; font-weight: 700; }
+      .ep-x { border: none; background: transparent; cursor: pointer; color: #444; padding: 4px; display: flex; }
+      .ep-x:hover { color: #000; }
+      .ep-grid { display: flex; flex-direction: column; gap: 18px; }
+      @media (min-width: 720px) { .ep-grid { flex-direction: row; align-items: flex-start; } .ep-preview { flex: 1 1 0; min-width: 0; } .ep-side { flex: 0 0 340px; } }
+      .ep-frame { position: relative; width: 100%; background: #111; border-radius: 10px; overflow: hidden; touch-action: none; cursor: grab; }
+      .ep-frame:active { cursor: grabbing; }
+      .ep-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center center; user-select: none; -webkit-user-drag: none; }
+      .ep-img.fit { object-fit: contain; }
+      .ep-thirds { position: absolute; inset: 0; display: none; pointer-events: none; background-image: linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px); background-size: 33.333% 33.333%; }
+      .ep-hint { text-align: center; font-size: 12px; color: #999; margin-top: 8px; }
+      .ep-quality { display: flex; align-items: center; justify-content: space-between; background: #f2f0ea; border-radius: 12px; padding: 14px 16px; font-weight: 700; color: #444; margin-bottom: 12px; }
+      .ep-quality b { font-size: 18px; color: #1a1a1a; }
+      .ep-quality.good { background: #eaf7ee; } .ep-quality.good b { color: #1a7f45; }
+      .ep-quality.warn { background: #fdecec; } .ep-quality.warn b { color: #d33; }
+      .ep-stat { display: flex; align-items: center; justify-content: space-between; padding: 9px 4px; border-bottom: 1px solid #f2f0ea; font-weight: 600; color: #777; font-size: 15px; }
+      .ep-stat b { color: #1a1a1a; }
+      .ep-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
+      .ep-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 2px; border: 1px solid #e6e3db; border-radius: 12px; background: #fff; cursor: pointer; font-family: 'Inter', sans-serif; font-size: 11.5px; font-weight: 600; color: #1a1a1a; }
+      .ep-btn:hover { background: #faf9f5; }
+      .ep-btn.active { border-color: #7657FC; background: #f3f0ff; color: #5b3fd6; }
+      .ep-btn.ep-danger { color: #d33; } .ep-btn.ep-danger:hover { background: #fdecec; }
+      .ep-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+      .ep-foot button { padding: 12px 28px; border-radius: 14px; font-size: 15px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; border: none; }
+
+      /* Fonts picker (Change font) */
+      .font-list { display: flex; flex-direction: column; gap: 12px; }
+      .font-card { border: 2px solid #eceae4; border-radius: 14px; padding: 16px 16px 18px; cursor: pointer; background: #fff; transition: border-color 0.12s, background 0.12s; }
+      .font-card:hover { background: #faf9f5; }
+      .font-card.active { border-color: #7657FC; background: #f4f1ff; }
+      .font-card-name { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 700; color: #666; text-align: center; margin-bottom: 12px; }
+      .font-card.active .font-card-name { color: #5b3fd6; }
+      .font-card-prev { text-align: center; color: #2a2a2a; line-height: 1.55; font-size: 19px; }
+      .font-card-prev div { word-spacing: 2px; }
+
+      /* ── Proof PDF (admin only) — rendered off-screen at fixed px, captured to
+         a downloadable PDF. Pages are the true book size (11.7×8.3"), spreads
+         are two pages wide. ── */
+      #proof { position: fixed; left: -20000px; top: 0; background: #fff; z-index: -1; pointer-events: none; }
+      .proof-page { background: #fff; }
+      .proof-canvas { box-shadow: none !important; border-radius: 0 !important; aspect-ratio: auto !important; width: 1400px; height: 993px; }
+      .proof-spread { display: flex; }
+      .proof-spread .proof-canvas { width: 1400px; height: 993px; }
+      /* Empty slots are a builder-only affordance — never print the dashed box or
+         the "+" placeholder into the proof. */
+      .proof-canvas .slot.empty { outline: none !important; background: transparent !important; }
+      .proof-canvas .slot.empty::after { content: none !important; }
+      /* The popcode media tag is a builder overlay, not part of the printed page. */
+      .proof-canvas .slot-tag { display: none !important; }
+
+      .add-page-btn {
+        width: 100%; padding: 15px; border-radius: 14px; border: 1.5px dashed #cfcabd; background: transparent;
+        color: #6a6455; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 18px;
+        font-family: 'Inter', sans-serif; display: flex; align-items: center; justify-content: center; gap: 8px;
+      }
+      .add-page-btn:hover { background: #faf9f5; border-color: #b7b0a0; }
+
+      /* ── Sticky create bar ──────────────────────────────────── */
+      .create-bar {
+        position: fixed; bottom: 0; left: 0; right: 0; z-index: 90;
+        background: rgba(247,246,242,0.92); backdrop-filter: blur(10px);
+        border-top: 1px solid #e4e2dc; padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
+        display: flex; justify-content: center;
+      }
+      .create-bar-inner { width: 100%; max-width: 560px; display: flex; align-items: center; gap: 14px; }
+      /* Hidden on narrow screens so it never sits under the bottom-left Beta
+         Feedback pill (fixed at bottom:20px/left:20px). The same counts show in
+         the photo tray and on each page. Shown again ≥620px where there's room. */
+      .create-summary { display: none; font-size: 12px; color: #888; flex: 1; line-height: 1.35; padding-left: 4px; }
+      @media (min-width: 620px) { .create-summary { display: block; } }
+      .create-summary strong { color: #1a1a1a; }
+      .create-btn {
+        border: none; background: #1a1a1a; color: white; border-radius: 30px; padding: 15px 30px;
+        font-size: 16px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; white-space: nowrap;
+        transition: opacity 0.2s, box-shadow 0.3s;
+        margin-left: auto; /* keep pinned right even when the summary is hidden, clear of the bottom-left Beta Feedback pill */
+      }
+      .create-btn:hover { background: #000; }
+      .create-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      .create-btn.ready { box-shadow: 0 0 0 0 rgba(118,87,252,0.5); animation: pulse-ring 1.8s ease-out infinite; }
+      @keyframes pulse-ring {
+        0% { box-shadow: 0 0 0 0 rgba(118,87,252,0.45); }
+        70% { box-shadow: 0 0 0 12px rgba(118,87,252,0); }
+        100% { box-shadow: 0 0 0 0 rgba(118,87,252,0); }
+      }
+
+      /* ── Floating dock (Popsa-style quick actions) ─────────────
+         A centered pill above the create bar so Photos / Pages / Options
+         are always one tap away. Centered horizontally so it never collides
+         with the bottom-left Beta Feedback pill. */
+      .dock {
+        position: fixed; left: 50%; transform: translateX(-50%);
+        bottom: calc(94px + env(safe-area-inset-bottom)); z-index: 95;
+        display: flex; gap: 2px; background: #fff; border-radius: 20px; padding: 6px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.16), 0 1px 3px rgba(0,0,0,0.08);
+        border: 1px solid rgba(0,0,0,0.04);
+      }
+      .dock-btn {
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+        min-width: 72px; padding: 8px 10px 7px; border-radius: 14px; border: none;
+        background: transparent; cursor: pointer; color: #1a1a1a;
+        font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600;
+        transition: background 0.12s;
+      }
+      .dock-btn:hover { background: #f2f0ea; }
+      .dock-btn:active { background: #e8e5dd; }
+      .dock-btn svg { width: 24px; height: 24px; }
+
+      /* Photos sheet grid */
+      .photos-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 6px; }
+      @media (min-width: 620px) { .photos-grid { grid-template-columns: repeat(6, 1fr); } }
+      .pg-thumb {
+        aspect-ratio: 1; border-radius: 10px; background-size: cover; background-position: center;
+        background-color: #eee; cursor: pointer; position: relative; transition: transform 0.1s, box-shadow 0.1s;
+      }
+      .pg-thumb:hover { transform: scale(1.03); box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
+      .menu-row.disabled { opacity: 0.4; pointer-events: none; }
+
+      /* ── Rearrange Pages (full-screen drag-to-reorder) ─────────── */
+      .rearrange { display: none; position: fixed; inset: 0; z-index: 450; background: #f7f6f2; flex-direction: column; }
+      .rearrange.visible { display: flex; }
+      .rp-header {
+        position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 12px 16px calc(12px); background: #fff; border-bottom: 1px solid #e9e7e0; flex: 0 0 auto;
+      }
+      .rp-close { width: 40px; height: 40px; border-radius: 50%; border: none; background: #f2f0ea; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #333; flex: 0 0 auto; }
+      .rp-close:hover { background: #e6e3db; }
+      .rp-title { position: absolute; left: 50%; transform: translateX(-50%); font-size: 17px; font-weight: 700; color: #1a1a1a; }
+      .rp-save { border: none; background: #1a1a1a; color: #fff; border-radius: 22px; padding: 10px 26px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; flex: 0 0 auto; }
+      .rp-save:hover { background: #000; }
+      .rp-body { flex: 1; overflow-y: auto; padding: 28px 20px 80px; }
+      /* One spread per grid cell; two spreads per row on wide screens (like Popsa).
+         Cell order: [cover] [Blank|Page1] then [Page2|Page3] [Page4|Page5] … */
+      .rp-grid { display: grid; grid-template-columns: 1fr; gap: 34px 30px; max-width: 1180px; margin: 0 auto; }
+      @media (min-width: 900px) { .rp-grid { grid-template-columns: repeat(2, 1fr); } }
+      .rp-spread-wrap { display: flex; flex-direction: column; gap: 9px; }
+      .rp-spread-labels { display: flex; }
+      .rp-spread-labels .rp-label { flex: 1 1 0; text-align: center; font-size: 14px; font-weight: 600; color: #6b6558; }
+      .rp-spread-labels .rp-label.locked { color: #b3ac9d; }
+      /* A spread = two facing pages joined at a center fold, with one shadow around
+         the pair so it reads as a single connected object. */
+      .rp-spread { display: flex; align-items: stretch; border-radius: 8px; }
+      .rp-spread:not(.cover-cell) { background: #fff; overflow: hidden; box-shadow: 0 10px 26px rgba(0,0,0,0.13), 0 2px 6px rgba(0,0,0,0.06); }
+      .rp-half { flex: 1 1 0; min-width: 0; position: relative; touch-action: none; }
+      .rp-half.draggable { cursor: grab; }
+      .rp-half.draggable:active { cursor: grabbing; }
+      .rp-half.dragging { opacity: 0.30; }
+      /* Hover affordance: a move icon centered on the page (desktop hint). A
+         translucent dark disc + white glyph stays legible on any photo. */
+      .rp-move {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.82);
+        width: 46px; height: 46px; border-radius: 50%; background: rgba(20,20,20,0.55);
+        display: flex; align-items: center; justify-content: center; color: #fff; z-index: 3;
+        opacity: 0; pointer-events: none; transition: opacity 0.14s ease, transform 0.14s ease;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.35); backdrop-filter: blur(1px);
+      }
+      .rp-half.draggable:hover .rp-move { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      .rp-half.dragging .rp-move { opacity: 0; }
+      .rp-half.empty { background: transparent; }
+      .rp-half .page-canvas { pointer-events: none; }
+      .rp-spread .page-canvas { box-shadow: none; border-radius: 0; }
+      .rp-fold { flex: 0 0 1px; align-self: stretch; background: linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.03) 50%, rgba(0,0,0,0.12)); }
+      /* Front cover stands alone on the right of its cell (empty left half). */
+      .rp-spread.cover-cell { background: transparent; box-shadow: none; }
+      .rp-spread.cover-cell .rp-fold { visibility: hidden; }
+      .rp-spread.cover-cell .page-canvas.cover { box-shadow: 0 10px 26px rgba(0,0,0,0.13), 0 2px 6px rgba(0,0,0,0.06); border-radius: 8px; }
+      .rp-ghost { position: fixed; z-index: 600; pointer-events: none; opacity: 0.95; border-radius: 6px; box-shadow: 0 16px 44px rgba(0,0,0,0.28); overflow: hidden; }
+      .rp-ghost .page-canvas { pointer-events: none; box-shadow: none; border-radius: 6px; }
+
+      /* Auto-fading instructional tip */
+      .rp-tip {
+        position: fixed; left: 50%; bottom: 38px; transform: translateX(-50%) translateY(8px);
+        z-index: 470; width: calc(100% - 44px); max-width: 440px;
+        background: rgba(255,255,255,0.98); border-radius: 16px; box-shadow: 0 10px 34px rgba(0,0,0,0.18);
+        padding: 16px 20px; opacity: 0; pointer-events: none; transition: opacity 0.5s ease, transform 0.5s ease;
+      }
+      .rp-tip.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+      .rp-tip h4 { font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 4px; }
+      .rp-tip p { font-size: 14px; color: #6a6558; line-height: 1.45; }
+
+      /* ── Modal (shared: layout picker, popcode editor, slot menu) ── */
+      .overlay { display: none; position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,0.5); align-items: flex-end; justify-content: center; padding: 0; }
+      .overlay.visible { display: flex; }
+      @media (min-width: 620px) { .overlay { align-items: center; padding: 24px; } }
+      .sheet {
+        background: white; width: 100%; max-width: 520px; border-radius: 22px 22px 0 0;
+        padding: 8px 22px calc(26px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 40px rgba(0,0,0,0.2);
+        max-height: 92vh; overflow-y: auto;
+      }
+      @media (min-width: 620px) { .sheet { border-radius: 22px; } }
+      .sheet-grip { width: 38px; height: 4px; border-radius: 99px; background: #e0ded8; margin: 6px auto 14px; }
+      .sheet h2 { font-size: 19px; font-weight: 700; margin-bottom: 4px; }
+      .sheet p.sheet-sub { font-size: 13px; color: #888; margin-bottom: 18px; line-height: 1.5; }
+
+      .lp-section-title { font-size: 13px; font-weight: 700; color: #1a1a1a; margin: 18px 0 10px; }
+      .lp-section-title:first-of-type { margin-top: 6px; }
+      .layout-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+      .layout-opt { border: 2px solid #eceae4; border-radius: 12px; padding: 7px; cursor: pointer; background: white; transition: border-color 0.12s; }
+      .layout-opt.active { border-color: #7657FC; }
+      .layout-preview { position: relative; width: 100%; aspect-ratio: 117 / 83; background: #eceae3; border-radius: 5px; overflow: hidden; }
+      .layout-preview .lp-grid { position: absolute; }
+      .layout-preview .lp-cell { background: #fff; border-radius: 2px; }
+      .layout-opt.active .layout-preview .lp-cell { background: #c9bcf9; }
+
+      .menu-row { display: flex; align-items: center; gap: 14px; padding: 15px 6px; cursor: pointer; border-bottom: 1px solid #f2f0ea; font-size: 16px; font-weight: 600; color: #1a1a1a; }
+      .menu-row:last-child { border-bottom: none; }
+      .menu-row:hover { background: #faf9f5; }
+      .menu-row .menu-ic { width: 40px; height: 40px; border-radius: 50%; background: #f2f0ea; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #555; }
+      .menu-row.destructive { color: #d33; }
+      .menu-row.destructive .menu-ic { background: #fdecec; color: #d33; }
+      .menu-sub { font-size: 12px; font-weight: 500; color: #999; margin-top: 2px; }
+
+      /* Popcode editor bits (video upload + audio record) */
+      .pop-media-toggle { display: inline-flex; background: #ececec; border-radius: 999px; padding: 3px; margin-bottom: 16px; }
+      .pop-media-toggle button { background: transparent; border: none; padding: 8px 20px; font-size: 13px; font-weight: 700; color: #666; border-radius: 999px; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .pop-media-toggle button.active { background: white; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+      .drop-zone {
+        border: 2px dashed #d6d2c8; border-radius: 14px; padding: 26px 16px; text-align: center; cursor: pointer;
+        position: relative; background: #faf9f5; transition: border-color 0.12s, background 0.12s;
+      }
+      .drop-zone:hover { border-color: #7657FC; background: #f6f3ff; }
+      .drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+      .drop-zone .dz-icon { width: 46px; height: 46px; margin: 0 auto 10px; }
+      .drop-zone .dz-title { font-size: 14px; font-weight: 700; color: #1a1a1a; }
+      .drop-zone .dz-sub { font-size: 12px; color: #999; margin-top: 3px; }
+      .media-preview { display: none; margin-top: 4px; }
+      .media-preview.show { display: block; }
+      .media-preview video { width: 100%; border-radius: 12px; max-height: 260px; background: #000; }
+      .compress-status { font-size: 12px; color: #555; font-weight: 600; margin-top: 10px; }
+      .compress-bar-wrap { background: #e8e8e8; border-radius: 99px; height: 5px; margin-top: 6px; overflow: hidden; }
+      .compress-bar { height: 100%; background: #1a1a1a; border-radius: 99px; width: 0%; transition: width 0.2s; }
+      .warn-banner { background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:10px 12px; font-size:12px; color:#555; line-height:1.5; margin-top:10px; }
+      .warn-banner a { color:#1a1a1a; font-weight:700; }
+
+      .audio-panel { text-align: center; padding: 10px 0 4px; }
+      .audio-rec-btn { background:#1a1a1a; color:white; border:none; border-radius:999px; padding:13px 26px; font-size:15px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; }
+      .audio-rec-btn.stop { background:#dc2626; }
+      .audio-time { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; margin:14px 0; color:#1a1a1a; }
+      .rec-dot { display:inline-block; width:10px; height:10px; border-radius:50%; background:#dc2626; margin-right:8px; vertical-align:middle; animation:rec-pulse 1s infinite; }
+      @keyframes rec-pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+      .audio-player-row { display:flex; align-items:center; justify-content:center; gap:14px; margin:12px 0; }
+      .audio-play-btn { width:56px; height:56px; border-radius:50%; background:#1a1a1a; border:none; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+
+      .sheet-actions { display: flex; gap: 12px; margin-top: 22px; }
+      .sheet-actions button { flex: 1; padding: 14px; border-radius: 14px; font-size: 15px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; border: none; }
+      .btn-secondary { background: #f0eeea; color: #1a1a1a; }
+      .btn-primary { background: #1a1a1a; color: white; }
+      .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+      .btn-danger-ghost { background: white; color: #d33; border: 1px solid #f0cccc !important; }
+
+      /* ── Progress + result ──────────────────────────────────── */
+      #progress { display: none; position: fixed; inset: 0; z-index: 500; background: rgba(247,246,242,0.97); flex-direction: column; align-items: center; justify-content: center; padding: 30px; text-align: center; }
+      #progress.visible { display: flex; }
+      #progress .p-emoji { font-size: 40px; margin-bottom: 14px; }
+      #progress-label { font-size: 18px; font-weight: 700; max-width: 420px; line-height: 1.4; }
+      #progress-label.error { color: #cc3333; }
+      .progress-bar-wrap { width: 100%; max-width: 320px; background: #e4e2dc; border-radius: 99px; height: 12px; margin: 20px 0; overflow: hidden; }
+      #progress-bar { height: 100%; width: 0%; background: linear-gradient(135deg,#7657FC,#589AF9); border-radius: 99px; transition: width 0.3s; }
+      #try-again-btn { display:none; margin-top: 10px; background:white; border:1px solid #d8d8d8; border-radius:24px; padding:11px 26px; font-size:14px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; }
+
+      #result { display:none; position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.5); align-items:center; justify-content:center; padding:24px; }
+      #result.visible { display:flex; }
+      .result-card { background:white; border-radius:22px; padding:30px 26px; max-width:400px; width:100%; text-align:center; box-shadow:0 12px 48px rgba(0,0,0,0.25); }
+      .result-card .r-emoji { font-size:44px; margin-bottom:10px; }
+      .result-card h3 { font-size:22px; font-weight:700; margin-bottom:8px; font-family:'CooperBT',serif; font-weight:400; }
+      .result-card p { font-size:14px; color:#777; margin-bottom:18px; line-height:1.5; }
+      .result-url { background:#f2f0eb; border-radius:12px; padding:12px 14px; font-size:14px; font-weight:700; word-break:break-all; margin-bottom:16px; }
+      .result-actions { display:flex; flex-direction:column; gap:10px; }
+      .result-actions a, .result-actions button { padding:13px; border-radius:14px; font-size:15px; font-weight:700; font-family:'Inter',sans-serif; text-decoration:none; cursor:pointer; border:none; }
+      .r-primary { background:#1a1a1a; color:white; }
+      .r-secondary { background:#f0eeea; color:#1a1a1a; }
+
+      .toast { position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 22px; border-radius: 24px; font-size: 14px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 600; white-space: nowrap; }
+      .toast.show { opacity: 1; }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <a href="/manage.html"><img class="logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/></a>
+      <div class="header-right">
+        <span id="user-greeting"></span>
+        <button id="logout-btn">Sign Out</button>
+      </div>
+    </header>
+
+    <div class="wrap">
+      <h1>Make a Book</h1>
+      <p class="subtitle">Design a photo book, then bring any page to life — link a photo to a video and it plays when someone scans the printed page.</p>
+
+      <div class="field-label">Book title</div>
+      <input class="text-input" id="title-input" type="text" placeholder="e.g. Our 2026 Year" autocomplete="off"/>
+
+      <!-- Photo tray -->
+      <div class="tray-card">
+        <div class="tray-head">
+          <div class="tray-title">Your photos <span id="tray-count"></span></div>
+          <div class="tray-actions">
+            <button class="mini-btn" id="autofill-btn" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h16M4 19h10"/></svg>
+              Auto-fill
+            </button>
+            <label class="mini-btn solid">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add photos
+              <input type="file" id="photo-input" accept="image/*" multiple style="display:none"/>
+            </label>
+          </div>
+        </div>
+        <div class="tray" id="tray"></div>
+        <div class="tray-hint" id="tray-hint"></div>
+      </div>
+
+      <!-- Pages -->
+      <div class="pages" id="pages"></div>
+      <button class="add-page-btn" id="add-page-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add a spread
+      </button>
+    </div>
+
+    <!-- Floating quick-action dock -->
+    <div class="dock" id="dock">
+      <button class="dock-btn" id="dock-photos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        Photos
+      </button>
+      <button class="dock-btn" id="dock-pages">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h6.5a3 3 0 0 1 3 3V20a2.5 2.5 0 0 0-2.5-2.5H2z"/><path d="M22 4.5h-6.5a3 3 0 0 0-3 3V20a2.5 2.5 0 0 1 2.5-2.5H22z"/></svg>
+        Pages
+      </button>
+      <button class="dock-btn" id="dock-options">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+        Options
+      </button>
+    </div>
+
+    <!-- Sticky create bar -->
+    <div class="create-bar">
+      <div class="create-bar-inner">
+        <div class="create-summary" id="create-summary">Add photos to begin.</div>
+        <button class="create-btn" id="create-btn" disabled>Create Book</button>
+      </div>
+    </div>
+
+    <!-- Rearrange Pages (full-screen) -->
+    <div class="rearrange" id="rearrange">
+      <div class="rp-header">
+        <button class="rp-close" id="rp-close" title="Cancel">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <div class="rp-title">Rearrange Pages</div>
+        <button class="rp-save" id="rp-save">Save</button>
+      </div>
+      <div class="rp-body"><div class="rp-grid" id="rp-grid"></div></div>
+      <div class="rp-tip" id="rp-tip">
+        <h4>Rearrange Pages</h4>
+        <p>To change the order of your book, drag the pages around until they are in the position you want.</p>
+      </div>
+    </div>
+
+    <!-- Overlays -->
+    <div class="overlay" id="overlay"><div class="sheet" id="sheet"></div></div>
+
+    <div id="progress">
+      <div class="p-emoji" id="p-emoji">📖</div>
+      <div id="progress-label">Starting…</div>
+      <div class="progress-bar-wrap"><div id="progress-bar"></div></div>
+      <button id="try-again-btn">Try Again</button>
+    </div>
+
+    <div id="result">
+      <div class="result-card">
+        <div class="r-emoji">🎉</div>
+        <h3>Your book is ready!</h3>
+        <p>Popcoded pages will play their video when scanned. Share the link or view your book.</p>
+        <div class="result-url" id="result-url"></div>
+        <div class="result-actions">
+          <a class="r-primary" id="result-view" target="_blank" rel="noopener">View book</a>
+          <button class="r-secondary" id="result-copy">Copy link</button>
+          <a class="r-secondary" href="/manage.html">Back to My Projects</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <!-- Admin proof-PDF render target (populated on demand, printed to PDF). -->
+    <div id="proof"></div>
+
+    <script>
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      let currentUser = null;
+      let editingCollection = null;  // set when opened with ?id=slug (edit mode)
+      db.auth.getSession().then(({ data }) => {
+        if (!data.session) { window.location.href = '/auth.html'; return; }
+        currentUser = data.session.user;
+        const uName = data.session.user?.user_metadata?.full_name?.split(' ')[0] || data.session.user?.email?.split('@')[0] || '';
+        if (uName) document.getElementById('user-greeting').textContent = 'Hi, ' + uName + '!';
+        const editId = new URLSearchParams(location.search).get('id');
+        if (editId) loadBookForEdit(editId);
+      });
+
+      // ── Load an existing book into the builder (edit mode) ──────
+      async function loadBookForEdit(slug) {
+        try {
+          const { data: col, error } = await db.from('collections')
+            .select('id, slug, name, kind, book_layout, mind_file_url, user_id')
+            .eq('slug', slug).eq('user_id', currentUser.id).maybeSingle();
+          if (error) throw error;
+          if (!col) { showToast('Book not found.'); return; }
+          if (col.kind !== 'book' || !col.book_layout) {
+            alert('This project is not a book, so it can’t be opened in the book maker.');
+            window.location.href = '/manage.html'; return;
+          }
+          editingCollection = col;
+
+          // Popcoded media, keyed by the photo URL the item was linked to.
+          const { data: items } = await db.from('collection_items')
+            .select('target_index, media_type, video_url, audio_url, photo_url')
+            .eq('collection_id', col.id);
+          const itemByPhotoUrl = {};
+          (items || []).forEach(it => { if (it.photo_url) itemByPhotoUrl[it.photo_url] = it; });
+
+          // Rebuild the photo pool + pages from book_layout. Existing photos have
+          // a remote URL and no File; a photo is re-uploaded on save only if it
+          // gains a File (new or replaced).
+          const idByUrl = {};
+          const getPhotoId = (url) => {
+            if (idByUrl[url]) return idByUrl[url];
+            const id = uid('ph');
+            const it = itemByPhotoUrl[url];
+            photos.set(id, {
+              id, file: null, url, existingUrl: url, source: 'Saved', adjust: DEFAULT_ADJUST(),
+              popcode: it ? {
+                mediaType: it.media_type || 'video',
+                video: null, audio: null,
+                existingVideoUrl: it.video_url || null,
+                existingAudioUrl: it.audio_url || null,
+              } : null,
+            });
+            idByUrl[url] = id;
+            return id;
+          };
+
+          pages = (col.book_layout.pages || []).map(pg => ({
+            id: pg.id || uid('pg'),
+            layout: pg.layout === 'blank' ? 'blank' : normalizeLayout(pg.layout),
+            slots: (pg.slots || []).map(s => {
+              if (!(s && s.photo_url)) return null;
+              const id = getPhotoId(s.photo_url);
+              if (s.adjust) { const p = photos.get(id); if (p) p.adjust = normalizeAdjust(s.adjust); }
+              return id;
+            }),
+          }));
+
+          // Restore the front-cover config.
+          const c = col.book_layout.cover;
+          if (c) cover = {
+            style: COVER_STYLES.some(s => s.id === c.style) ? c.style : 'A',
+            font: COVER_FONTS.some(f => f.id === c.font) ? c.font : 'cooper',
+            eyebrow: c.eyebrow || '', title: c.title || '', subtitle: c.subtitle || '',
+            tint: typeof c.tint === 'number' ? c.tint : 0.28,
+            photo: c.photo_url ? { file: null, url: c.photo_url, existingUrl: c.photo_url, source: 'Saved', adjust: normalizeAdjust(c.photo_adjust) } : null,
+          };
+
+          // Restore the back-cover config.
+          const bc = col.book_layout.back_cover;
+          if (bc) backCover = {
+            mode: bc.mode === 'fullbleed' ? 'fullbleed' : 'inset',
+            shape: ['landscape', 'portrait', 'square'].includes(bc.shape) ? bc.shape : 'landscape',
+            photo: bc.photo_url ? { file: null, url: bc.photo_url, existingUrl: bc.photo_url, source: 'Saved', adjust: normalizeAdjust(bc.photo_adjust) } : null,
+          };
+
+          document.getElementById('title-input').value = col.name || '';
+          document.querySelector('h1').textContent = 'Edit Book';
+          document.getElementById('create-btn').textContent = 'Save Changes';
+          render();
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast('Could not load this book: ' + (err.message || 'error'));
+        }
+      }
+      document.getElementById('logout-btn').addEventListener('click', async () => {
+        await db.auth.signOut(); window.location.href = '/auth.html';
+      });
+
+      // ── Constants ───────────────────────────────────────────────
+      const MAX_VIDEO_MB = 200;
+      const MAX_COMPILE_DIM = 640;
+
+      // Layout engine. Pages are landscape (Prodigi 11.7×8.3"). Each layout places
+      // its photos in slots that keep a NATURAL photo aspect ratio (4:3 landscape,
+      // 3:4 portrait) and are centered with generous white margins — never
+      // stretched to fill the page. Layouts are grouped by photo count.
+      //   o: slot orientation; dir: 'row'|'col'; sz: slot height as % of the page
+      //   content box; mode: 'bleed' (fill the whole page) | 'vbleed' (fill height).
+      const SLOT_AR = { land: '4 / 3', port: '3 / 4' };
+      const LAYOUTS = {
+        blank: { count: 0 },
+        // 1 photo
+        'l1':  { group: '1', name: 'Landscape',       count: 1, o: 'land', dir: 'row', sz: 82 },
+        'l1s': { group: '1', name: 'Landscape wide',  count: 1, o: 'land', dir: 'row', sz: 94 },
+        'l1b': { group: '1', name: 'Landscape full',  count: 1, mode: 'bleed' },
+        'p1':  { group: '1', name: 'Portrait',        count: 1, o: 'port', dir: 'row', sz: 92 },
+        'p1b': { group: '1', name: 'Portrait full',   count: 1, o: 'port', mode: 'vbleed' },
+        // 2 photos
+        'l2':  { group: '2', name: 'Two landscape',       count: 2, o: 'land', dir: 'row', sz: 46 },
+        'l2b': { group: '2', name: 'Two landscape big',   count: 2, o: 'land', dir: 'row', sz: 56 },
+        'l2v': { group: '2', name: 'Two stacked',         count: 2, o: 'land', dir: 'col', sz: 40 },
+        'p2':  { group: '2', name: 'Two portrait',        count: 2, o: 'port', dir: 'row', sz: 84 },
+        'p2s': { group: '2', name: 'Two portrait small',  count: 2, o: 'port', dir: 'row', sz: 60 },
+        'l2s': { group: '2', name: 'Two landscape small', count: 2, o: 'land', dir: 'row', sz: 34 },
+        // 3 photos
+        'p3':   { group: '3', name: 'Three portrait',  count: 3, o: 'port', dir: 'row', sz: 62 },
+        'l3s':  { group: '3', name: 'Three landscape', count: 3, o: 'land', dir: 'row', sz: 30 },
+        'l3lr': { group: '3', name: 'Big + two',       count: 3, special: 'lr' },
+      };
+      const LAYOUT_GROUPS = [
+        { title: '1 Photo',  keys: ['l1', 'l1s', 'l1b', 'p1', 'p1b'] },
+        { title: '2 Photos', keys: ['l2', 'l2b', 'l2v', 'p2', 'p2s', 'l2s'] },
+        { title: '3 Photos', keys: ['p3', 'l3s', 'l3lr'] },
+      ];
+      const DEFAULT_MULTI_2 = 'l2';   // auto-fill: facing page with 2 photos
+      const DEFAULT_MULTI_3 = 'p3';   // auto-fill: facing page with 3 photos
+      const slotCount = (key) => (LAYOUTS[key] && LAYOUTS[key].count) || 0;
+
+      // Map legacy layout keys (earlier builds on this branch) to the new engine.
+      function normalizeLayout(key) {
+        if (LAYOUTS[key]) return key;
+        const map = { full: 'l1b', 'single-mat': 'l1', single: 'l1', 'two-v': 'l2',
+          'two-h': 'l2v', 'two-left': 'l2', 'two-right': 'l2', 'three-row': 'p3', 'three-l': 'l3lr' };
+        return map[key] || 'l1';
+      }
+
+      // Geometry (container + per-slot inline style) shared by the page renderer
+      // and the layout-picker previews. {special:'lr'} = the nested 1-big + 2-stacked.
+      function layoutGeometry(L) {
+        if (L.special === 'lr') return { special: 'lr' };
+        if (L.mode === 'bleed') return { container: 'inset:0;display:flex;', slots: ['width:100%;height:100%;'] };
+        const ar = SLOT_AR[L.o];
+        if (L.mode === 'vbleed') return {
+          container: 'inset:0;display:flex;align-items:stretch;justify-content:center;gap:2.5%;',
+          slots: Array(L.count).fill(`height:100%;aspect-ratio:${ar};`) };
+        const dir = L.dir === 'col' ? 'column' : 'row';
+        return {
+          container: `inset:0;display:flex;flex-direction:${dir};align-items:center;justify-content:center;gap:3.5%;padding:6% 5%;`,
+          slots: Array(L.count).fill(`height:${L.sz}%;aspect-ratio:${ar};flex:0 0 auto;`) };
+      }
+
+      const blankPage = () => ({ id: uid('pg'), layout: 'blank', slots: [] });
+      // Book label for an interior page at index i. Blank pages (the inside-cover
+      // endpapers + any finale filler) don't consume a number — content pages
+      // stay sequentially "Page 1, Page 2, …" even with blanks interleaved.
+      const pageLabel = (i) => {
+        if (pages[i] && pages[i].layout === 'blank') return 'Blank Page';
+        let n = 0;
+        for (let k = 0; k <= i && k < pages.length; k++) if (pages[k].layout !== 'blank') n++;
+        return 'Page ' + n;
+      };
+
+      // Cover styles — ported from Bashō (trek-folio): Overlay / Panel / Inset card.
+      // Each renders the eyebrow + serif title + date line over/beside the photo.
+      const COVER_STYLES = [
+        { id: 'A', name: 'Overlay' },
+        { id: 'B', name: 'Panel' },
+        { id: 'C', name: 'Inset card' },
+      ];
+      // Font groups for "Change font" — style the cover's headline/title.
+      const COVER_FONTS = [
+        { id: 'cooper', name: 'Cooper', stack: "'CooperBT', Georgia, serif" },
+        { id: 'dmsans', name: 'DM Sans', stack: "'DM Sans', sans-serif" },
+        { id: 'inter', name: 'Inter', stack: "'Inter', sans-serif" },
+        { id: 'filson', name: 'Filson Rounded', stack: "'FilsonPro', 'Nunito', sans-serif" },
+        { id: 'cormorant', name: 'Cormorant Garamond', stack: "'Cormorant Garamond', Georgia, serif" },
+        { id: 'libre', name: 'Libre Baskerville', stack: "'Libre Baskerville', Georgia, serif" },
+      ];
+      const coverFontStack = (id) => (COVER_FONTS.find(f => f.id === id) || COVER_FONTS[0]).stack;
+      // Title size (as cqw = % of cover width) by title length — mirrors Bashō's
+      // titleFontSize (80/62/48/38/30pt on an 842pt page).
+      function coverTitleCqw(t) {
+        const n = (t || '').trim().length;
+        if (n <= 11) return 9.5;
+        if (n <= 16) return 7.4;
+        if (n <= 24) return 5.7;
+        if (n <= 36) return 4.5;
+        return 3.6;
+      }
+
+      // ── State ───────────────────────────────────────────────────
+      // photos: id -> { id, file, url, popcode|null }
+      //   popcode: { mediaType:'video'|'audio', video:File|null, audio:File|null }
+      // pages: [ { id, layout, slots:[photoId|null,...] } ]
+      const photos = new Map();
+      let pages = [];
+      // Front-cover config (Bashō model). photo: { file, url, existingUrl } | null.
+      let cover = { style: 'A', font: 'cooper', eyebrow: '', title: '', subtitle: '', tint: 0.28, photo: null };
+      // Back-cover config: full-bleed or inset (landscape/portrait/square), with
+      // the Popcode logo + popcode.app centered underneath (Bashō style).
+      let backCover = { mode: 'inset', shape: 'landscape', photo: null };
+      let selectedTrayId = null;     // photo selected in tray, waiting to place
+      let swapSource = null;         // {pageId, slotIdx} first tap of a swap
+      let justDragged = false;       // suppresses the click that trails a photo drag
+      let idSeq = 0;
+      const uid = (p) => `${p}_${(idSeq++).toString(36)}${Math.floor(performance.now()).toString(36)}`;
+
+      // ── Helpers ─────────────────────────────────────────────────
+      function escapeHtml(str) { const d = document.createElement('div'); d.appendChild(document.createTextNode(str == null ? '' : String(str))); return d.innerHTML; }
+      function formatMB(bytes) { return (bytes / (1024 * 1024)).toFixed(1) + ' MB'; }
+      function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2200); }
+      function placedIds() { const s = new Set(); pages.forEach(pg => pg.slots.forEach(id => { if (id) s.add(id); })); return s; }
+      function unplacedPhotos() { const placed = placedIds(); return [...photos.values()].filter(p => !placed.has(p.id)); }
+      // A photo is "popcoded" if it has linked media — a freshly picked File OR
+      // an existing URL carried over from an edited book.
+      function photoHasMedia(p) {
+        if (!p || !p.popcode) return false;
+        const pc = p.popcode;
+        return !!(pc.video || pc.audio || pc.existingVideoUrl || pc.existingAudioUrl);
+      }
+
+      // ── Add photos ──────────────────────────────────────────────
+      // Downscale + re-encode large photos so big phone images (10–20 MB HEIC/JPEG)
+      // aren't a roadblock. A book photo prints at most ~11.7" wide, so ~2560px on
+      // the long edge at good JPEG quality is plenty and keeps files small.
+      const MAX_PHOTO_DIM = 2560;
+      const PHOTO_QUALITY = 0.85;
+      const HARD_MAX_MB = 40; // only reject originals we can't even decode above this
+
+      async function loadDecodable(file) {
+        if (typeof createImageBitmap === 'function') {
+          try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+          catch (e) { /* fall through to <img> */ }
+        }
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        try {
+          await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('decode')); img.src = url; });
+          return img;
+        } finally { /* revoke after draw by caller via _url */ img._url = url; }
+      }
+
+      // Returns an optimized File, or the original if already small, or null if it
+      // can't be decoded and is over the hard cap.
+      async function optimizePhoto(file) {
+        let src;
+        try { src = await loadDecodable(file); }
+        catch (e) {
+          // Undecodable (e.g. an unsupported HEIC on this browser). Keep the raw
+          // file if it's within a generous cap so upload can still try.
+          return file.size / (1024 * 1024) <= HARD_MAX_MB ? { file, ow: 0, oh: 0 } : null;
+        }
+        const w0 = src.width || src.naturalWidth, h0 = src.height || src.naturalHeight;
+        const scale = Math.min(1, MAX_PHOTO_DIM / Math.max(w0, h0));
+        const oversized = scale < 1;                        // dimensions over the cap
+        const heavy = file.size / (1024 * 1024) > 4;        // large byte size
+        // Already reasonable → keep the original untouched (no needless recompress).
+        if (!oversized && !heavy) { src.close?.(); if (src._url) URL.revokeObjectURL(src._url); return { file, ow: w0, oh: h0 }; }
+        const w = Math.max(1, Math.round(w0 * scale)), h = Math.max(1, Math.round(h0 * scale));
+        const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(src, 0, 0, w, h);
+        src.close?.(); if (src._url) URL.revokeObjectURL(src._url);
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', PHOTO_QUALITY));
+        if (!blob) return { file, ow: w0, oh: h0 };
+        // When oversized, always take the downscaled version (capping dimensions is
+        // the point). When only heavy, keep whichever is smaller in bytes.
+        const chosen = oversized ? blob : (blob.size < file.size ? blob : file);
+        const name = (file.name || 'photo').replace(/\.[^.]+$/, '') + (chosen === blob ? '.jpg' : '');
+        // ow/oh = the ORIGINAL source dimensions (shown as "Dimensions" in Edit Photo).
+        return { file: new File([chosen], name, { type: chosen.type || 'image/jpeg' }), ow: w0, oh: h0 };
+      }
+
+      document.getElementById('photo-input').addEventListener('change', async (e) => {
+        const files = [...e.target.files];
+        e.target.value = '';
+        const images = files.filter(f => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
+        const skippedType = files.length - images.length;
+        const hint = document.getElementById('tray-hint');
+        let failed = 0, addedAny = false;
+        for (let i = 0; i < images.length; i++) {
+          if (hint) hint.textContent = `Optimizing photos… ${i + 1}/${images.length}`;
+          const out = await optimizePhoto(images[i]);
+          if (!out) { failed++; continue; }
+          const id = uid('ph');
+          photos.set(id, { id, file: out.file, url: URL.createObjectURL(out.file), popcode: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() });
+          addedAny = true;
+          render(); // progressive: photos appear in the tray as they finish
+          await new Promise(r => setTimeout(r, 0)); // yield so the UI paints
+        }
+        if (hint) hint.textContent = '';
+        const notes = [];
+        if (skippedType) notes.push(`${skippedType} non-image file${skippedType > 1 ? 's' : ''} skipped`);
+        if (failed) notes.push(`${failed} photo${failed > 1 ? 's' : ''} couldn’t be read`);
+        if (notes.length) showToast(notes.join(' · '));
+        render();
+      });
+
+      // ── Auto-fill: flow unplaced photos into alternating spreads ──
+      // Default pattern: each spread has one full-bleed page facing a 2- or
+      // 3-photo page. The full-bleed side alternates left/right per spread, and
+      // the multi-photo side alternates between 2 and 3 photos.
+      const singlePage = (photoId) => ({ id: uid('pg'), layout: 'l1b', slots: [photoId || null] }); // full-bleed single
+      const multiPage = (key, ids) => {
+        const slots = new Array(slotCount(key)).fill(null);
+        (ids || []).forEach((id, i) => { if (i < slots.length) slots[i] = id; });
+        return { id: uid('pg'), layout: key, slots };
+      };
+
+      document.getElementById('autofill-btn').addEventListener('click', () => {
+        let pool = unplacedPhotos();
+        if (!pool.length) { showToast('All photos are already placed.'); return; }
+        // Every book opens on a blank inside-cover (the first left page).
+        if (!pages.length) pages.push(blankPage());
+        // Top off empty slots in existing photo pages first.
+        for (const pg of pages) {
+          if (pg.layout === 'blank') continue;
+          for (let i = 0; i < pg.slots.length && pool.length; i++) if (!pg.slots[i]) pg.slots[i] = pool.shift().id;
+        }
+        // Page 1 (right of the cover spread) is a full-bleed single.
+        if (pages.length === 1 && pool.length) pages.push(singlePage(pool.shift().id));
+        // Then alternating content spreads: a full-bleed single facing a 2- or
+        // 3-photo page; the full-bleed side flips each spread, the multi count 3↔2.
+        let sIdx = 0, useThree = true;
+        while (pool.length) {
+          const fullLeft = sIdx % 2 === 0;
+          const single = singlePage(pool.shift().id);
+          let multi = null;
+          if (pool.length) {
+            const ml = useThree ? DEFAULT_MULTI_3 : DEFAULT_MULTI_2;
+            const take = []; for (let i = 0; i < slotCount(ml) && pool.length; i++) take.push(pool.shift().id);
+            multi = multiPage(ml, take);
+          }
+          pages.push(...(multi ? (fullLeft ? [single, multi] : [multi, single]) : [single]));
+          useThree = !useThree; sIdx++;
+        }
+        render();
+      });
+
+      // "Add spread" appends an empty content spread (single facing 2-photo).
+      document.getElementById('add-page-btn').addEventListener('click', () => {
+        if (!pages.length) pages.push(blankPage());
+        const spreadCount = Math.ceil(pages.length / 2);
+        const fullLeft = spreadCount % 2 === 0;
+        const single = singlePage(null);
+        const multi = multiPage(DEFAULT_MULTI_2, []);
+        pages.push(...(fullLeft ? [single, multi] : [multi, single]));
+        render();
+        requestAnimationFrame(() => {
+          const el = document.querySelector('#pages .spread:last-child');
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+      });
+
+      document.getElementById('title-input').addEventListener('input', updateSummary);
+
+      // ── Rendering ───────────────────────────────────────────────
+      function render() { ensureBookEndpapers(); renderTray(); renderPages(); updateSummary(); }
+
+      // Endpapers: the book ends with exactly ONE blank page — the inside back
+      // cover — on the RIGHT of the final spread ([last content | blank]).
+      //
+      // Spreads pair pages (0,1),(2,3),… so the inside-back blank only lands on a
+      // spread's RIGHT when the total interior page count is even. With a blank
+      // inside-FRONT cover always present too, that forces the content count to be
+      // even — an odd content count would leave a stray second blank (which the
+      // proof would show as an empty page). So we make the inside-front blank
+      // conditional: keep it when content is even (opening reads [blank | Page 1]);
+      // drop it when content is odd (opening reads [Page 1 | Page 2]). Either way
+      // there is exactly one end blank, on the right, and never a [blank | blank].
+      // Rebuilds from the content pages each render (idempotent) — content page
+      // objects are preserved; only the blank endpapers are regenerated.
+      function ensureBookEndpapers() {
+        const content = pages.filter(p => p.layout !== 'blank');
+        if (!content.length) return; // nothing placed yet
+        pages.length = 0;
+        if (content.length % 2 === 0) pages.push(blankPage()); // inside front cover
+        pages.push(...content);
+        pages.push(blankPage()); // inside back cover — right page of the final spread
+      }
+
+      function renderTray() {
+        const tray = document.getElementById('tray');
+        const unplaced = unplacedPhotos();
+        const total = photos.size;
+        document.getElementById('tray-count').textContent = total ? `(${unplaced.length} unplaced · ${total} total)` : '';
+        document.getElementById('autofill-btn').disabled = unplaced.length === 0;
+        tray.innerHTML = '';
+        unplaced.forEach(p => {
+          const el = document.createElement('div');
+          el.className = 'tray-thumb' + (selectedTrayId === p.id ? ' selected' : '');
+          el.style.backgroundImage = `url('${p.url}')`;
+          el.innerHTML = `
+            <div class="tray-x" data-del="${p.id}">&times;</div>
+            ${photoHasMedia(p) ? '<div class="pop-dot"><img src="/assets/popcode_icon.svg" style="width:11px;height:11px"/></div>' : ''}`;
+          el.querySelector('.tray-x').addEventListener('click', (e) => { e.stopPropagation(); deletePhoto(p.id); });
+          enablePhotoDrag(el, p, { onTap: () => {
+            selectedTrayId = (selectedTrayId === p.id) ? null : p.id;
+            swapSource = null;
+            renderTray(); renderPages();
+            document.getElementById('tray-hint').textContent = selectedTrayId ? 'Now tap an empty slot in a page to place this photo, or drag it onto a page.' : '';
+          } });
+          tray.appendChild(el);
+        });
+        if (!unplaced.length) document.getElementById('tray-hint').textContent = '';
+      }
+
+      // Render: the front cover stands alone (right), then interior spreads —
+      // the first opening is [blank inside-cover | Page 1], then Page 2 | Page 3…
+      function renderPages() {
+        const container = document.getElementById('pages');
+        container.innerHTML = '';
+        renderCoverRow(container);
+        for (let s = 0; s < pages.length; s += 2) {
+          const left = pages[s], right = pages[s + 1] || null;
+          const spread = document.createElement('div');
+          spread.className = 'spread';
+
+          const body = document.createElement('div');
+          body.className = 'spread-body';
+          body.appendChild(buildPageHalf(left, s, 'left', !right));
+          const fold = document.createElement('div'); fold.className = 'spread-fold';
+          body.appendChild(fold);
+          if (right) body.appendChild(buildPageHalf(right, s + 1, 'right', false));
+          else { const ph = document.createElement('div'); ph.className = 'page-half single'; body.appendChild(ph); }
+
+          spread.appendChild(body);
+          container.appendChild(spread);
+        }
+        renderBackCoverRow(container);
+      }
+
+      // The back cover: a standalone row (jacket on the left, empty half on the
+      // right — mirrors the front cover, which stands on the right).
+      function renderBackCoverRow(container) {
+        const spread = document.createElement('div');
+        spread.className = 'spread cover-row';
+        const body = document.createElement('div');
+        body.className = 'spread-body';
+
+        const left = document.createElement('div');
+        left.className = 'page-half';
+        const head = document.createElement('div');
+        head.className = 'page-half-head';
+        head.innerHTML = `<button class="page-tool tool-cover" title="Edit back cover">${IC_EDIT}</button><span class="page-label-text">Back Cover</span><div class="ph-spacer"></div>`;
+        head.querySelector('.tool-cover').addEventListener('click', openBackCoverEditor);
+        const canvas = document.createElement('div');
+        canvas.className = 'page-canvas backcover';
+        canvas.appendChild(buildBackCoverCanvas());
+        canvas.addEventListener('click', openBackCoverEditor);
+        const bpick = canvas.querySelector('.cv-pick');
+        if (bpick) bpick.addEventListener('click', (e) => { e.stopPropagation(); chooseBackCoverPhoto(render); });
+        left.appendChild(head); left.appendChild(canvas);
+        body.appendChild(left);
+
+        const fold = document.createElement('div'); fold.className = 'spread-fold'; fold.style.visibility = 'hidden';
+        body.appendChild(fold);
+        const right = document.createElement('div'); right.className = 'page-half cover-empty';
+        body.appendChild(right);
+
+        spread.appendChild(body);
+        container.appendChild(spread);
+      }
+
+      // The front cover: a standalone row with the jacket on the right (an empty
+      // half on the left), since a closed book shows only its front face.
+      function renderCoverRow(container) {
+        const spread = document.createElement('div');
+        spread.className = 'spread cover-row';
+        const body = document.createElement('div');
+        body.className = 'spread-body';
+
+        const left = document.createElement('div');
+        left.className = 'page-half cover-empty';
+        body.appendChild(left);
+        const fold = document.createElement('div'); fold.className = 'spread-fold'; fold.style.visibility = 'hidden';
+        body.appendChild(fold);
+
+        const right = document.createElement('div');
+        right.className = 'page-half';
+        const head = document.createElement('div');
+        head.className = 'page-half-head';
+        head.innerHTML = `<div class="ph-spacer"></div><span class="page-label-text">Front Cover</span>
+          <button class="page-tool tool-cover" title="Edit cover">${IC_EDIT}</button>`;
+        head.querySelector('.tool-cover').addEventListener('click', openCoverEditor);
+        const canvas = document.createElement('div');
+        canvas.className = 'page-canvas cover';
+        canvas.appendChild(buildCoverCanvas());
+        canvas.addEventListener('click', openCoverEditor);
+        // "Choose cover photo" pill on the cover itself → pick a photo directly
+        // (without opening the editor). Everything else on the cover opens the editor.
+        const coverPick = canvas.querySelector('.cv-pick');
+        if (coverPick) coverPick.addEventListener('click', (e) => { e.stopPropagation(); chooseCoverPhoto(render); });
+        right.appendChild(head);
+        right.appendChild(canvas);
+        body.appendChild(right);
+
+        spread.appendChild(body);
+        container.appendChild(spread);
+      }
+
+      // SVGs for the per-page tools.
+      const IC_LAYOUT ='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>';
+      const IC_MORE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>';
+      const IC_EDIT = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
+
+      // Build one page (half of a spread): a header (label + controls) above the
+      // landscape canvas with its slots. `globalIndex` sets the page label; the
+      // first page (index 0) is the blank inside-cover (nothing prints there).
+      function buildPageHalf(pg, globalIndex, side, isSingle) {
+        const isBlank = pg.layout === 'blank';
+        const half = document.createElement('div');
+        half.className = 'page-half' + (isSingle ? ' single' : '');
+
+        // Header row above the page (not overlaid): label + controls. Mirrored —
+        // icons on the outer edge, label toward the gutter. A blank page shows
+        // just its label.
+        const head = document.createElement('div');
+        head.className = 'page-half-head';
+        const label = `<span class="page-label-text">${escapeHtml(isBlank ? 'Blank Page' : pageLabel(globalIndex))}</span>`;
+        const controls = isBlank ? '' : `
+          <button class="page-tool tool-layout" title="Change layout">${IC_LAYOUT}</button>
+          <button class="page-tool tool-more" title="More">${IC_MORE}</button>`;
+        head.innerHTML = side === 'right'
+          ? `<div class="ph-spacer"></div>${label}${controls}`
+          : `${controls}${label}<div class="ph-spacer"></div>`;
+        const layoutBtn = head.querySelector('.tool-layout');
+        if (layoutBtn) layoutBtn.addEventListener('click', () => openLayoutSheet(pg));
+        const moreBtn = head.querySelector('.tool-more');
+        if (moreBtn) moreBtn.addEventListener('click', () => openPageMenu(pg));
+
+        const canvas = document.createElement('div');
+        canvas.className = 'page-canvas' + (isBlank ? ' blank' : '');
+        if (!isBlank) canvas.appendChild(buildPageGrid(pg));
+
+        half.appendChild(head);
+        half.appendChild(canvas);
+        return half;
+      }
+
+      // Pull a 4-digit year out of the date/subtitle line for the spine.
+      function coverYear(s) { const m = (s || '').match(/\b(19|20)\d{2}\b/); return m ? m[0] : ''; }
+
+      // Render the front cover as a jacket: spine (left) + cover face. The face
+      // carries the chosen style (Bashō A/B/C); the spine reads the title
+      // vertically with the year pinned to the bottom.
+      function buildCoverCanvas(editable) {
+        const wrap = document.createElement('div');
+        wrap.className = 'cv';
+        const url = cover.photo && cover.photo.url;
+        const title = cover.title || 'Your Title';
+        const ph = !cover.title ? ' cv-ph' : '';
+        const tf = coverTitleCqw(cover.title || (editable ? 'Enter a book title' : 'Your Title'));
+        // In editable mode the text is typed directly on the cover (contenteditable),
+        // with placeholders shown via CSS when empty, and the photo hint becomes a
+        // "Choose cover photo" button.
+        const cphoto = url ? normalizeAdjust(cover.photo.adjust) : null;
+        const photo = (style) => url
+          ? `<div class="cv-photo" style="${style}"><img class="cv-photo-img${cphoto.fit === 'fit' ? ' fit' : ''}" src="${url}" style="transform:${adjustTransform(cphoto)}" draggable="false"/></div>`
+          : `<div class="cv-photo" style="${style}"></div>`;
+        // "Choose cover photo" as a top-layer button (clickable above tint/text)
+        // when there's no cover photo yet — shown on the cover itself and in the editor.
+        const pickBtn = !url ? '<div class="cv-pick" data-cv="pick"><span class="cv-pick-btn">＋ Choose cover photo</span></div>' : '';
+        const ff = coverFontStack(cover.font);
+        const ed = (name, plc) => editable ? ` contenteditable="plaintext-only" data-cv="${name}" data-ph="${plc}" spellcheck="false"` : '';
+        const block = (light) => {
+          const eyeHtml = (editable || cover.eyebrow) ? `<div class="cv-eyebrow"${ed('eyebrow', 'Add a small headline')} style="font-family:${ff}">${escapeHtml(cover.eyebrow)}</div>` : '';
+          const titHtml = `<div class="cv-title${editable ? '' : ph}"${ed('title', 'Enter a book title')} style="font-size:${tf}cqw;font-family:${ff}">${escapeHtml(editable ? cover.title : title)}</div>`;
+          const subHtml = (editable || cover.subtitle) ? `<div class="cv-dates"${ed('subtitle', 'Add a date or subtitle')}>${escapeHtml(cover.subtitle)}</div>` : '';
+          return `<div class="cv-block ${light ? 'cv-light' : 'cv-dark'}">${eyeHtml}${titHtml}${subHtml}</div>`;
+        };
+
+        let faceInner;
+        if (cover.style === 'B') { // Panel — photo top 62%, white panel bottom 38%
+          faceInner = photo('position:absolute;top:0;left:0;width:100%;height:62%;')
+            + `<div class="cv-panel">${block(false)}</div>`;
+        } else if (cover.style === 'C') { // Inset card — full photo + dark card lower-right
+          faceInner = photo('position:absolute;inset:0;')
+            + `<div class="cv-card">${block(true)}</div>`;
+        } else { // A — Overlay — full photo + tint + title lower-left
+          faceInner = photo('position:absolute;inset:0;')
+            + `<div class="cv-tint" style="background:rgba(0,0,0,${Math.max(0, Math.min(0.85, cover.tint))})"></div>`
+            + `<div class="cv-overlay-text">${block(true)}</div>`;
+        }
+        faceInner += pickBtn;
+
+        // Spine: title block (eyebrow + destination) pinned top, year bottom.
+        const year = coverYear(cover.subtitle);
+        const spine = `<div class="cv-spine">
+          <span class="cv-spine-title">
+            ${cover.eyebrow ? `<span class="cv-spine-eyebrow" style="font-family:${ff}">${escapeHtml(cover.eyebrow)}</span>` : ''}
+            <span class="cv-spine-big${ph}" style="font-family:${ff}">${escapeHtml(title)}</span>
+          </span>
+          <span class="cv-spine-year">${escapeHtml(year)}</span>
+        </div>`;
+
+        wrap.innerHTML = spine + `<div class="cv-face cv-${cover.style}">${faceInner}</div>`;
+        return wrap;
+      }
+
+      // Back cover (Bashō model): full-bleed OR inset photo (landscape/portrait/
+      // square), with the Popcode logo + popcode.app centered underneath.
+      function buildBackCoverCanvas() {
+        const wrap = document.createElement('div');
+        const url = backCover.photo && backCover.photo.url;
+        const a = url ? normalizeAdjust(backCover.photo.adjust) : null;
+        const img = url ? `<img class="bc-img${a.fit === 'fit' ? ' fit' : ''}" src="${url}" style="transform:${adjustTransform(a)}" draggable="false"/>` : '';
+        const brand = (rev) => `<div class="bc-brand${rev ? ' bc-brand-rev' : ''}"><img class="bc-logo" src="/assets/Popcode_logo${rev ? '.rev' : ''}.png" alt="Popcode"/><div class="bc-url">popcode.app</div></div>`;
+        const pick = !url ? '<div class="cv-pick" data-cv="bpick"><span class="cv-pick-btn">＋ Choose back cover photo</span></div>' : '';
+        if (backCover.mode === 'fullbleed') {
+          wrap.className = 'bc bc-full-mode';
+          wrap.innerHTML = `<div class="bc-photo-full">${url ? img : '<div class="bc-empty"></div>'}</div>${url ? '<div class="bc-scrim"></div>' : ''}${brand(true)}${pick}`;
+        } else {
+          wrap.className = 'bc bc-inset-mode';
+          wrap.innerHTML = `<div class="bc-inset bc-${backCover.shape}">${url ? img : '<div class="bc-empty"></div>'}</div>${brand(false)}${pick}`;
+        }
+        return wrap;
+      }
+
+      // Mini cover thumbnail for a style tile (reuses the real renderer).
+      function coverTileHTML(styleId) {
+        const saved = cover.style; cover.style = styleId;
+        const html = buildCoverCanvas().outerHTML; cover.style = saved;
+        return html;
+      }
+      function refreshCoverPreview(editable) {
+        const p = document.getElementById('cover-preview');
+        if (p) { p.innerHTML = ''; p.appendChild(buildCoverCanvas(editable)); }
+      }
+
+      // Keep the vertical spine in sync while the user types on the cover (the
+      // spine isn't editable, so we re-render just it — the editable text nodes
+      // are left untouched so the caret doesn't jump).
+      function updateCoverSpine() {
+        const sp = document.querySelector('#cover-preview .cv-spine');
+        if (!sp) return;
+        const title = cover.title || 'Your Title';
+        const ph = !cover.title ? ' cv-ph' : '';
+        const year = coverYear(cover.subtitle);
+        const ff = coverFontStack(cover.font);
+        sp.innerHTML = `<span class="cv-spine-title">${cover.eyebrow ? `<span class="cv-spine-eyebrow" style="font-family:${ff}">${escapeHtml(cover.eyebrow)}</span>` : ''}<span class="cv-spine-big${ph}" style="font-family:${ff}">${escapeHtml(title)}</span></span><span class="cv-spine-year">${escapeHtml(year)}</span>`;
+      }
+
+      // Wire the contenteditable cover text: sync to state, block newlines, keep
+      // the placeholder showing when empty, and live-resize the title.
+      function wireCoverEditable() {
+        const p = document.getElementById('cover-preview');
+        if (!p) return;
+        const noNewline = (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } };
+        const bind = (name, apply) => {
+          const el = p.querySelector(`[data-cv="${name}"]`);
+          if (!el) return;
+          el.addEventListener('keydown', noNewline);
+          el.addEventListener('input', () => {
+            const val = el.textContent.replace(/\n/g, ' ').trim();
+            if (!val) el.innerHTML = ''; // let :empty placeholder show again
+            apply(val, el);
+            updateCoverSpine();
+          });
+        };
+        bind('eyebrow', (v) => { cover.eyebrow = v; });
+        bind('title', (v, el) => { cover.title = v; el.style.fontSize = coverTitleCqw(v || 'Enter a book title') + 'cqw'; });
+        bind('subtitle', (v) => { cover.subtitle = v; });
+        const pick = p.querySelector('[data-cv="pick"]');
+        if (pick) pick.addEventListener('click', () => chooseCoverPhoto());
+      }
+
+      // The front-cover editor: style picker (Overlay/Panel/Inset card) + eyebrow,
+      // title, date line + cover photo.
+      function openCoverEditor(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        const tiles = COVER_STYLES.map(s =>
+          `<div class="cvtpl ${cover.style === s.id ? 'active' : ''}" data-style="${s.id}">
+             <div class="cvtpl-mini">${coverTileHTML(s.id)}</div>
+             <div class="cvtpl-name">${s.name}</div>
+           </div>`).join('');
+        const photoRow = cover.photo
+          ? `<div class="cover-photo-prev" style="background-image:url('${cover.photo.url}')"></div>
+             <button class="mini-btn" id="cover-edit">Edit photo</button>
+             <button class="mini-btn" id="cover-change">Change photo</button>
+             <button class="mini-btn" id="cover-remove">Remove</button>`
+          : '';
+        openSheet(`
+          <h2>Front cover</h2>
+          <div class="cover-preview" id="cover-preview"></div>
+          <p class="sheet-sub" style="margin:10px 0 2px">Tap the cover to type your headline, title and date. Pick a style below.</p>
+          <div class="cvtpl-grid">${tiles}</div>
+          ${cover.photo ? `<div class="field-label" style="margin-top:14px">Cover photo</div><div class="cover-photo-row">${photoRow}</div>` : ''}
+          <div class="sheet-actions"><button class="btn-primary" id="cover-done">Done</button></div>
+        `);
+        refreshCoverPreview(true);
+        wireCoverEditable();
+        document.querySelectorAll('#sheet .cvtpl').forEach(t =>
+          t.addEventListener('click', () => { cover.style = t.dataset.style; openCoverEditor(); }));
+        const edit = document.getElementById('cover-edit');
+        const change = document.getElementById('cover-change');
+        const remove = document.getElementById('cover-remove');
+        if (edit) edit.addEventListener('click', () => openCoverPhotoEdit());
+        if (change) change.addEventListener('click', () => chooseCoverPhoto());
+        if (remove) remove.addEventListener('click', () => {
+          if (cover.photo && cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
+          cover.photo = null; openCoverEditor();
+        });
+        document.getElementById('cover-done').addEventListener('click', () => { closeSheet(); render(); });
+      }
+
+      function chooseCoverPhoto(after) {
+        const inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = 'image/*';
+        inp.addEventListener('change', async () => {
+          const f = inp.files[0]; if (!f) return;
+          const out = await optimizePhoto(f);
+          if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
+          if (cover.photo && cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
+          cover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() };
+          (after || openCoverEditor)();
+        });
+        inp.click();
+      }
+
+      // ── Back cover editor ───────────────────────────────────────
+      function chooseBackCoverPhoto(after) {
+        const inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = 'image/*';
+        inp.addEventListener('change', async () => {
+          const f = inp.files[0]; if (!f) return;
+          const out = await optimizePhoto(f);
+          if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
+          if (backCover.photo && backCover.photo.file) URL.revokeObjectURL(backCover.photo.url);
+          backCover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() };
+          (after || openBackCoverEditor)();
+        });
+        inp.click();
+      }
+
+      function openBackCoverEditor(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        const seg = (name, opts, cur) => `<div class="bc-seg">${opts.map(o => `<button class="bc-seg-btn${cur === o.id ? ' active' : ''}" data-seg="${name}" data-val="${o.id}">${o.label}</button>`).join('')}</div>`;
+        const photoRow = backCover.photo
+          ? `<div class="cover-photo-prev" style="background-image:url('${backCover.photo.url}')"></div>
+             <button class="mini-btn" id="bc-edit">Edit photo</button>
+             <button class="mini-btn" id="bc-change">Change photo</button>
+             <button class="mini-btn" id="bc-remove">Remove</button>`
+          : '';
+        openSheet(`
+          <h2>Back cover</h2>
+          <p class="sheet-sub">A full-bleed image, or an inset photo with the Popcode logo underneath.</p>
+          <div class="cover-preview" id="bc-preview" style="background:#fff"></div>
+          <div class="field-label" style="margin-top:6px">Photo style</div>
+          ${seg('mode', [{ id: 'inset', label: 'Inset photo' }, { id: 'fullbleed', label: 'Full bleed' }], backCover.mode)}
+          ${backCover.mode === 'inset' ? `<div class="field-label" style="margin-top:12px">Shape</div>${seg('shape', [{ id: 'landscape', label: 'Landscape' }, { id: 'portrait', label: 'Portrait' }, { id: 'square', label: 'Square' }], backCover.shape)}` : ''}
+          ${backCover.photo ? `<div class="field-label" style="margin-top:14px">Back cover photo</div><div class="cover-photo-row">${photoRow}</div>` : ''}
+          <div class="sheet-actions"><button class="btn-primary" id="bc-done">Done</button></div>
+        `);
+        refreshBackCoverPreview();
+        document.querySelectorAll('#sheet .bc-seg-btn').forEach(b => b.addEventListener('click', () => {
+          backCover[b.dataset.seg] = b.dataset.val;
+          render(); openBackCoverEditor();
+        }));
+        const pick = document.querySelector('#bc-preview .cv-pick');
+        if (pick) pick.addEventListener('click', () => chooseBackCoverPhoto());
+        const edit = document.getElementById('bc-edit');
+        const change = document.getElementById('bc-change');
+        const remove = document.getElementById('bc-remove');
+        if (edit) edit.addEventListener('click', openBackCoverPhotoEdit);
+        if (change) change.addEventListener('click', () => chooseBackCoverPhoto());
+        if (remove) remove.addEventListener('click', () => {
+          if (backCover.photo && backCover.photo.file) URL.revokeObjectURL(backCover.photo.url);
+          backCover.photo = null; render(); openBackCoverEditor();
+        });
+        document.getElementById('bc-done').addEventListener('click', () => { closeSheet(); render(); });
+      }
+      function refreshBackCoverPreview() {
+        const p = document.getElementById('bc-preview');
+        if (!p) return;
+        p.innerHTML = ''; p.appendChild(buildBackCoverCanvas());
+        p.classList.add('backcover');
+      }
+      function openBackCoverPhotoEdit() {
+        if (!backCover.photo) return;
+        backCover.photo.adjust = backCover.photo.adjust || DEFAULT_ADJUST();
+        startEditPhoto(backCover.photo, '117 / 83', {
+          back: () => openBackCoverEditor(),
+          save: (adj) => { backCover.photo.adjust = normalizeAdjust(adj); render(); openBackCoverEditor(); showToast('Back cover photo updated'); },
+          remove: () => { if (backCover.photo.file) URL.revokeObjectURL(backCover.photo.url); backCover.photo = null; render(); openBackCoverEditor(); },
+          replace: (out) => {
+            if (backCover.photo.file) URL.revokeObjectURL(backCover.photo.url);
+            backCover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() };
+            return backCover.photo;
+          },
+        });
+      }
+
+      // Create one photo slot wired for tap/drag/place. `slotIdx` maps to pg.slots.
+      // Per-photo crop/zoom/rotate adjustments (Edit Photo).
+      const DEFAULT_ADJUST = () => ({ fit: 'fill', scale: 1, ox: 0, oy: 0, rot: 0 });
+      function normalizeAdjust(a) {
+        const d = DEFAULT_ADJUST();
+        if (!a || typeof a !== 'object') return d;
+        return {
+          fit: a.fit === 'fit' ? 'fit' : 'fill',
+          scale: Math.max(1, Math.min(3, +a.scale || 1)),
+          ox: Math.max(-80, Math.min(80, +a.ox || 0)),
+          oy: Math.max(-80, Math.min(80, +a.oy || 0)),
+          rot: ((Math.round((+a.rot || 0) / 90) * 90) % 360 + 360) % 360,
+        };
+      }
+      const adjustTransform = (a) => `translate(${a.ox}%, ${a.oy}%) scale(${a.scale}) rotate(${a.rot}deg)`;
+      // A 1–10 print-quality score from the photo's pixel size and current zoom.
+      function printQuality(w, h, scale) {
+        if (!w || !h) return 10;
+        const eff = Math.min(w, h) / (scale || 1);
+        return Math.max(1, Math.min(10, Math.round(eff / 170)));
+      }
+
+      function mkSlot(pg, slotIdx) {
+        const slot = document.createElement('div');
+        slot.className = 'slot';
+        slot.dataset.pageId = pg.id;
+        slot.dataset.slotIdx = slotIdx;
+        const photo = pg.slots[slotIdx] ? photos.get(pg.slots[slotIdx]) : null;
+        if (photo) {
+          const a = photo.adjust || DEFAULT_ADJUST();
+          const img = document.createElement('img');
+          img.className = 'slot-img' + (a.fit === 'fit' ? ' fit' : '');
+          img.src = photo.url;
+          img.draggable = false;
+          img.style.transform = adjustTransform(a);
+          slot.appendChild(img);
+          if (photoHasMedia(photo)) {
+            const tag = document.createElement('div');
+            tag.className = 'slot-tag';
+            tag.innerHTML = `<img src="/assets/popcode_icon.svg"/>${photo.popcode.mediaType === 'audio' ? 'Audio' : 'Video'}`;
+            slot.appendChild(tag);
+          }
+        } else {
+          slot.classList.add('empty');
+        }
+        if (selectedTrayId && !photo) slot.classList.add('place-target');
+        if (swapSource && swapSource.pageId === pg.id && swapSource.slotIdx === slotIdx) slot.classList.add('swap-source');
+        slot.addEventListener('click', () => onSlotTap(pg, slotIdx));
+        enableSlotDrag(slot, pg, slotIdx);
+        return slot;
+      }
+
+      // Build the inner grid of a page from its layout geometry (natural aspect
+      // ratios, centered, generous margins). Handles the nested 1-big + 2-stacked.
+      function buildPageGrid(pg) {
+        const L = LAYOUTS[pg.layout] || LAYOUTS.l1;
+        const grid = document.createElement('div');
+        grid.className = 'page-grid';
+        const geo = layoutGeometry(L);
+        if (geo.special === 'lr') {
+          // Portrait hero on the left + two smaller landscape photos stacked right.
+          // The column gets a DEFINITE height and the two slots use flex:1 (not a
+          // percentage height) so their sizes resolve consistently — a nested
+          // percentage-of-flex height collapses to 0 in Safari, which left only the
+          // hero showing and made the stacked photos overlap.
+          grid.style.cssText = 'inset:0;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:4%;padding:6% 5%;';
+          const big = mkSlot(pg, 0); big.style.cssText += 'height:88%;aspect-ratio:3 / 4;flex:0 0 auto;';
+          const col = document.createElement('div');
+          col.style.cssText = 'height:88%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8%;flex:0 0 auto;';
+          const a = mkSlot(pg, 1); a.style.cssText += 'height:45%;aspect-ratio:4 / 3;';
+          const b = mkSlot(pg, 2); b.style.cssText += 'height:45%;aspect-ratio:4 / 3;';
+          col.appendChild(a); col.appendChild(b);
+          grid.appendChild(big); grid.appendChild(col);
+          return grid;
+        }
+        grid.style.cssText = geo.container;
+        geo.slots.forEach((sc, i) => { const s = mkSlot(pg, i); s.style.cssText += sc; grid.appendChild(s); });
+        return grid;
+      }
+
+      // The per-page "more" (⋯) menu: reorder + delete.
+      function openPageMenu(pg) {
+        const idx = pages.indexOf(pg);
+        const isBlank = pg.layout === 'blank';
+        openSheet(`
+          <h2>${escapeHtml(pageLabel(idx))}</h2>
+          <p class="sheet-sub">Reorder or remove this page.</p>
+          <div class="menu-row" data-act="up">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div>
+            <div><div>Move earlier</div></div>
+          </div>
+          <div class="menu-row" data-act="down">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></div>
+            <div><div>Move later</div></div>
+          </div>
+          ${isBlank ? '' : `<div class="menu-row" data-act="clear">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>
+            <div><div>Make blank</div><div class="menu-sub">Clear this page (photos return to your tray)</div></div>
+          </div>`}
+          <div class="menu-row destructive" data-act="delete">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></div>
+            <div><div>Delete page</div></div>
+          </div>
+        `);
+        document.querySelectorAll('#sheet .menu-row').forEach(row => {
+          row.addEventListener('click', () => {
+            const act = row.dataset.act;
+            const i = pages.indexOf(pg);
+            // Don't reorder across the blank inside-cover (keep it at index 0).
+            if (act === 'up' && i > 0 && pages[i - 1].layout !== 'blank') { [pages[i - 1], pages[i]] = [pages[i], pages[i - 1]]; }
+            else if (act === 'down' && i < pages.length - 1 && pages[i + 1].layout !== 'blank') { [pages[i + 1], pages[i]] = [pages[i], pages[i + 1]]; }
+            else if (act === 'clear') { pg.layout = 'blank'; pg.slots = []; }
+            else if (act === 'delete') { pages.splice(i, 1); }
+            closeSheet(); render();
+          });
+        });
+      }
+
+      // ── Floating dock: Photos / Pages / Options quick actions ────
+      function openPhotosSheet() {
+        const unplaced = unplacedPhotos();
+        const total = photos.size;
+        const grid = unplaced.length
+          ? `<div class="photos-grid">${unplaced.map(p => `<div class="pg-thumb" data-id="${p.id}" style="background-image:url('${p.url}')"></div>`).join('')}</div>`
+          : (total ? `<p class="sheet-sub" style="margin-top:6px">Every photo is placed. Tap a page slot to rearrange, or add more below.</p>` : '');
+        openSheet(`
+          <h2>Photos</h2>
+          <p class="sheet-sub">${total ? `${unplaced.length} unused · ${total} total` : 'No photos yet — import some to start your book.'}</p>
+          <div class="menu-row" data-act="add">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+            <div><div>Add photos</div><div class="menu-sub">Import more from your device</div></div>
+          </div>
+          <div class="menu-row${unplaced.length ? '' : ' disabled'}" data-act="autofill">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h16M4 19h10"/></svg></div>
+            <div><div>Auto-fill pages</div><div class="menu-sub">Flow unused photos into spreads</div></div>
+          </div>
+          ${unplaced.length ? `<p class="sheet-sub" style="margin:16px 0 4px">Or tap a photo, then tap an empty page slot to place it.</p>` : ''}
+          ${grid}
+        `);
+        document.querySelector('#sheet [data-act="add"]').addEventListener('click', () => { closeSheet(); document.getElementById('photo-input').click(); });
+        const af = document.querySelector('#sheet [data-act="autofill"]');
+        if (af && unplaced.length) af.addEventListener('click', () => { closeSheet(); document.getElementById('autofill-btn').click(); });
+        document.querySelectorAll('#sheet .pg-thumb').forEach(t => {
+          const photo = photos.get(t.dataset.id);
+          if (!photo) return;
+          enablePhotoDrag(t, photo, {
+            // Drag begins → close the sheet so the pages behind become droppable.
+            onDragStart: () => closeSheet(),
+            // Tap → select for tap-placement (same as before).
+            onTap: () => {
+              selectedTrayId = t.dataset.id; swapSource = null;
+              closeSheet(); render();
+              document.getElementById('tray-hint').textContent = 'Now tap an empty slot in a page to place this photo.';
+              showToast('Tap an empty page slot to place it.');
+            },
+          });
+        });
+      }
+
+      function openPagesSheet() {
+        openSheet(`
+          <h2>Pages</h2>
+          <p class="sheet-sub">Add pages to your book. Drag a page by its handle to rearrange, or use a page’s ⋯ menu to move or delete it.</p>
+          <div class="menu-row" data-act="spread">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/></svg></div>
+            <div><div>Add a spread</div><div class="menu-sub">A full-bleed page facing a 2-photo page</div></div>
+          </div>
+          <div class="menu-row" data-act="single">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="9" y1="12" x2="15" y2="12"/></svg></div>
+            <div><div>Add a single page</div><div class="menu-sub">One empty page you can lay out yourself</div></div>
+          </div>
+          <div class="menu-row${pages.filter(p => p.layout !== 'blank').length ? '' : ' disabled'}" data-act="rearrange">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 4 7 20"/><polyline points="4 7 7 4 10 7"/><polyline points="17 20 17 4"/><polyline points="14 17 17 20 20 17"/></svg></div>
+            <div><div>Rearrange pages</div><div class="menu-sub">Drag pages to reorder your book</div></div>
+          </div>
+        `);
+        document.querySelector('#sheet [data-act="spread"]').addEventListener('click', () => { closeSheet(); document.getElementById('add-page-btn').click(); });
+        document.querySelector('#sheet [data-act="single"]').addEventListener('click', () => {
+          if (!pages.length) pages.push(blankPage());
+          pages.push({ id: uid('pg'), layout: DEFAULT_MULTI_2, slots: new Array(slotCount(DEFAULT_MULTI_2)).fill(null) });
+          closeSheet(); render();
+          requestAnimationFrame(() => { const el = document.querySelector('#pages .spread:last-child'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+        });
+        const rr = document.querySelector('#sheet [data-act="rearrange"]');
+        if (rr && pages.filter(p => p.layout !== 'blank').length) rr.addEventListener('click', () => { closeSheet(); openRearrange(); });
+      }
+
+      // ── Rearrange Pages: full-screen drag-to-reorder ─────────────
+      // Works on a shallow copy of `pages` (same page objects); applied on Save,
+      // discarded on Cancel. The front cover and the blank inside-cover are shown
+      // but locked in place — only content pages reorder.
+      let rpPages = null;
+      function openRearrange() {
+        rpPages = pages.slice();
+        renderRearrange();
+        document.getElementById('rearrange').classList.add('visible');
+        showRearrangeTip();
+      }
+      function closeRearrange(save) {
+        if (save && rpPages) { pages.length = 0; pages.push(...rpPages); render(); }
+        document.getElementById('rearrange').classList.remove('visible');
+        rpPages = null;
+      }
+      function showRearrangeTip() {
+        const tip = document.getElementById('rp-tip');
+        tip.classList.add('show');
+        clearTimeout(tip._t);
+        tip._t = setTimeout(() => tip.classList.remove('show'), 5000);
+      }
+
+      // Label for a page at index i in rpPages. Blanks (endpapers/filler) don't
+      // consume a number; content pages stay sequential "Page 1, Page 2, …".
+      const rpLabel = (i) => {
+        if (rpPages[i] && rpPages[i].layout === 'blank') return 'Blank Page';
+        let n = 0;
+        for (let k = 0; k <= i && k < rpPages.length; k++) if (rpPages[k].layout !== 'blank') n++;
+        return 'Page ' + n;
+      };
+      let rpDraggingId = null;
+
+      // Build one page half inside a spread. Blank + cover are locked; content
+      // pages are draggable and carry data-pgid for hit-testing during a drag.
+      function rpHalf(pg, idx) {
+        const half = document.createElement('div');
+        const isBlank = pg.layout === 'blank';
+        const draggable = !isBlank;
+        half.className = 'rp-half' + (draggable ? ' draggable' : ' locked') + (pg.id === rpDraggingId ? ' dragging' : '');
+        half.dataset.pgid = pg.id;
+        const c = document.createElement('div');
+        c.className = 'page-canvas' + (isBlank ? ' blank' : '');
+        if (!isBlank) c.appendChild(buildPageGrid(pg));
+        half.appendChild(c);
+        if (draggable) {
+          const move = document.createElement('div');
+          move.className = 'rp-move';
+          move.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>';
+          half.appendChild(move);
+          attachRpDrag(half, pg);
+        }
+        return half;
+      }
+
+      // The standalone front-cover cell: empty left half, cover on the right.
+      function rpCoverCell() {
+        const wrap = document.createElement('div'); wrap.className = 'rp-spread-wrap';
+        const labels = document.createElement('div'); labels.className = 'rp-spread-labels';
+        labels.innerHTML = `<span class="rp-label locked"></span><span class="rp-label locked">Front Cover</span>`;
+        const spread = document.createElement('div'); spread.className = 'rp-spread cover-cell';
+        const emptyHalf = document.createElement('div'); emptyHalf.className = 'rp-half empty';
+        const fold = document.createElement('div'); fold.className = 'rp-fold';
+        const coverHalf = document.createElement('div'); coverHalf.className = 'rp-half locked';
+        const c = document.createElement('div'); c.className = 'page-canvas cover'; c.appendChild(buildCoverCanvas());
+        coverHalf.appendChild(c);
+        spread.append(emptyHalf, fold, coverHalf);
+        wrap.append(labels, spread);
+        return wrap;
+      }
+
+      // A connected two-page spread: pages i (left) and i+1 (right) joined by a fold.
+      function rpSpreadCell(left, right, i) {
+        const wrap = document.createElement('div'); wrap.className = 'rp-spread-wrap';
+        const labels = document.createElement('div'); labels.className = 'rp-spread-labels';
+        const lLocked = left.layout === 'blank' ? ' locked' : '';
+        labels.innerHTML = `<span class="rp-label${lLocked}">${escapeHtml(rpLabel(i))}</span>` +
+          `<span class="rp-label${right ? '' : ' locked'}">${right ? escapeHtml(rpLabel(i + 1)) : 'Blank Page'}</span>`;
+        const spread = document.createElement('div'); spread.className = 'rp-spread';
+        spread.appendChild(rpHalf(left, i));
+        const fold = document.createElement('div'); fold.className = 'rp-fold';
+        spread.appendChild(fold);
+        if (right) spread.appendChild(rpHalf(right, i + 1));
+        else { const eh = document.createElement('div'); eh.className = 'rp-half empty'; spread.appendChild(eh); }
+        wrap.append(labels, spread);
+        return wrap;
+      }
+
+      function renderRearrange() {
+        const grid = document.getElementById('rp-grid');
+        grid.innerHTML = '';
+        grid.appendChild(rpCoverCell());                       // cover standalone
+        for (let i = 0; i < rpPages.length; i += 2) {          // then connected spreads
+          grid.appendChild(rpSpreadCell(rpPages[i], rpPages[i + 1] || null, i));
+        }
+      }
+
+      // Render-based drag: reorder rpPages on hover and re-render (rebuilds spreads),
+      // so pages re-pair naturally. The blank inside-cover stays first — content
+      // pages only ever drop at index ≥ 1 (targets are draggable content pages).
+      function attachRpDrag(half, pg) {
+        const canvas = half.querySelector('.page-canvas');
+        half.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          const sx = e.clientX, sy = e.clientY;
+          const rect = canvas.getBoundingClientRect();
+          const offX = sx - rect.left, offY = sy - rect.top;
+          let dragging = false, ghost = null;
+          const onMove = (ev) => {
+            if (!dragging) {
+              if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+              dragging = true; rpDraggingId = pg.id;
+              ghost = canvas.cloneNode(true);
+              ghost.classList.add('rp-ghost');
+              ghost.style.width = rect.width + 'px'; ghost.style.height = rect.height + 'px';
+              document.body.appendChild(ghost);
+              renderRearrange();               // dim the source
+            }
+            ghost.style.left = (ev.clientX - offX) + 'px';
+            ghost.style.top = (ev.clientY - offY) + 'px';
+            ghost.style.display = 'none';
+            const under = document.elementFromPoint(ev.clientX, ev.clientY);
+            ghost.style.display = '';
+            const overHalf = under && under.closest && under.closest('.rp-half.draggable');
+            if (overHalf) {
+              const tid = overHalf.dataset.pgid;
+              if (tid && tid !== pg.id) {
+                const from = rpPages.findIndex(p => p.id === pg.id);
+                const to = rpPages.findIndex(p => p.id === tid);
+                if (from > -1 && to > -1 && from !== to) {
+                  rpPages.splice(from, 1);
+                  rpPages.splice(to, 0, pg);
+                  renderRearrange();
+                }
+              }
+            }
+          };
+          const onUp = () => {
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+            if (ghost) ghost.remove();
+            rpDraggingId = null;
+            if (dragging) renderRearrange();
+          };
+          document.addEventListener('pointermove', onMove);
+          document.addEventListener('pointerup', onUp);
+        });
+      }
+
+      document.getElementById('rp-close').addEventListener('click', () => closeRearrange(false));
+      document.getElementById('rp-save').addEventListener('click', () => closeRearrange(true));
+
+      function openOptionsSheet() {
+        const curFont = (COVER_FONTS.find(f => f.id === cover.font) || COVER_FONTS[0]).name;
+        openSheet(`
+          <h2>Options</h2>
+          <p class="sheet-sub">Edit your book’s title, cover, fonts and more.</p>
+          <div class="menu-row" data-act="title">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></div>
+            <div><div>Edit book title</div><div class="menu-sub">${escapeHtml((document.getElementById('title-input').value || '').trim()) || 'Untitled book'}</div></div>
+          </div>
+          <div class="menu-row" data-act="cover">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/></svg></div>
+            <div><div>Edit front cover</div><div class="menu-sub">Title, dates & cover photo</div></div>
+          </div>
+          <div class="menu-row" data-act="font">
+            <div class="menu-ic" style="font-family:'CooperBT',serif;font-size:19px;font-weight:400">Aa</div>
+            <div><div>Change font</div><div class="menu-sub">${escapeHtml(curFont)}</div></div>
+          </div>
+          <div class="menu-row" data-act="addpages">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="14" height="16" rx="2"/><line x1="19" y1="9" x2="19" y2="15"/><line x1="16" y1="12" x2="22" y2="12"/></svg></div>
+            <div><div>Add more pages</div><div class="menu-sub">Append a new spread</div></div>
+          </div>
+          <div class="menu-row" data-act="duplicate">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></div>
+            <div><div>Duplicate this book</div><div class="menu-sub">Save the current design as a new copy</div></div>
+          </div>
+          <div class="menu-row" data-act="share">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></div>
+            <div><div>Share</div><div class="menu-sub">Copy the link to your published book</div></div>
+          </div>
+          ${isProofAdmin() ? `
+          <div class="menu-row" data-act="proof-spreads">
+            <div class="menu-ic" style="background:#f3f0ff;color:#5b3fd6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="12" y1="5" x2="12" y2="19"/></svg></div>
+            <div><div>Proof: PDF spreads</div><div class="menu-sub">Admin · print facing pages to PDF</div></div>
+          </div>
+          <div class="menu-row" data-act="proof-pages">
+            <div class="menu-ic" style="background:#f3f0ff;color:#5b3fd6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/></svg></div>
+            <div><div>Proof: PDF pages</div><div class="menu-sub">Admin · print one page per sheet to PDF</div></div>
+          </div>` : ''}
+        `);
+        document.querySelector('#sheet [data-act="title"]').addEventListener('click', () => {
+          closeSheet();
+          const inp = document.getElementById('title-input');
+          inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(() => inp.focus(), 350);
+        });
+        document.querySelector('#sheet [data-act="cover"]').addEventListener('click', () => { closeSheet(); openCoverEditor(); });
+        document.querySelector('#sheet [data-act="font"]').addEventListener('click', () => openFontSheet());
+        document.querySelector('#sheet [data-act="addpages"]').addEventListener('click', () => { closeSheet(); document.getElementById('add-page-btn').click(); });
+        document.querySelector('#sheet [data-act="duplicate"]').addEventListener('click', duplicateBook);
+        document.querySelector('#sheet [data-act="share"]').addEventListener('click', shareBook);
+        const ps = document.querySelector('#sheet [data-act="proof-spreads"]');
+        if (ps) ps.addEventListener('click', () => { closeSheet(); buildProof('spreads'); });
+        const pp = document.querySelector('#sheet [data-act="proof-pages"]');
+        if (pp) pp.addEventListener('click', () => { closeSheet(); buildProof('pages'); });
+      }
+
+      // Popsa-style font picker — choose a font group for the cover typography.
+      function openFontSheet() {
+        const cards = COVER_FONTS.map(f => `
+          <div class="font-card${cover.font === f.id ? ' active' : ''}" data-font="${f.id}">
+            <div class="font-card-name">${escapeHtml(f.name)}</div>
+            <div class="font-card-prev" style="font-family:${f.stack}">
+              <div>ABCDEFGHIJKLM NOPQRSTUVWXYZ</div>
+              <div>abcdefghijklm nopqrstuvwxyz</div>
+              <div>1234567890</div>
+            </div>
+          </div>`).join('');
+        openSheet(`
+          <div class="ep-head"><h2>Fonts</h2><button class="ep-x" id="font-close" aria-label="Close">${IC_X}</button></div>
+          <p class="sheet-sub">Select a font group to style the headline and title on your cover.</p>
+          <div class="font-list">${cards}</div>
+        `);
+        document.getElementById('font-close').addEventListener('click', openOptionsSheet);
+        document.querySelectorAll('#sheet .font-card').forEach(c => c.addEventListener('click', () => {
+          cover.font = c.dataset.font;
+          document.querySelectorAll('#sheet .font-card').forEach(x => x.classList.toggle('active', x.dataset.font === cover.font));
+          render();
+        }));
+      }
+
+      function duplicateBook() {
+        editingCollection = null; // so the next Create saves a brand-new book
+        const inp = document.getElementById('title-input');
+        inp.value = ((inp.value || cover.title || 'Untitled').trim()) + ' (copy)';
+        document.querySelector('h1').textContent = 'Make a Book';
+        document.getElementById('create-btn').textContent = 'Create Book';
+        closeSheet(); updateSummary();
+        showToast('Duplicated — tap Create Book to save the copy.');
+      }
+
+      async function shareBook() {
+        if (!editingCollection || !editingCollection.slug) {
+          closeSheet();
+          showToast('Create your book first, then you can share it.');
+          return;
+        }
+        const url = `https://popcode.app/${editingCollection.slug}`;
+        const title = cover.title || document.getElementById('title-input').value.trim() || 'My Popcode book';
+        closeSheet();
+        if (navigator.share) { try { await navigator.share({ title, url }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+        try { await navigator.clipboard.writeText(url); showToast('Link copied!'); }
+        catch (e) { prompt('Copy this link:', url); }
+      }
+
+      // ── Proof PDF (admin only) ──────────────────────────────────
+      const PROOF_ADMINS = ['curtmid@gmail.com', 'curt@theworkshop.works'];
+      const isProofAdmin = () => currentUser && PROOF_ADMINS.includes((currentUser.email || '').toLowerCase());
+
+      // Lazily load jsPDF + html2canvas (only when an admin builds a proof).
+      let proofLibsPromise = null;
+      function loadProofLibs() {
+        if (proofLibsPromise) return proofLibsPromise;
+        const load = (src) => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(s); });
+        proofLibsPromise = Promise.all([
+          load('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'),
+          load('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'),
+        ]).catch(e => { proofLibsPromise = null; throw e; });
+        return proofLibsPromise;
+      }
+
+      // Render the book off-screen and capture it into a downloadable PDF.
+      // Reuses the real page/cover renderers so crops, fonts and the cover match.
+      // "pages" = one book page per PDF page (11.7×8.3"); "spreads" = facing
+      // pages together (23.4×8.3").
+      async function buildProof(mode) {
+        try {
+          showToast('Preparing PDF…');
+          await loadProofLibs();
+          const proof = document.getElementById('proof');
+          proof.innerHTML = '';
+          proof.className = 'proof proof-' + mode;
+          const pageCanvas = (pg) => { const c = document.createElement('div'); c.className = 'page-canvas proof-canvas' + (pg.layout === 'blank' ? ' blank' : ''); if (pg.layout !== 'blank') c.appendChild(buildPageGrid(pg)); return c; };
+          const blankCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas proof-canvas blank'; return c; };
+          const coverCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas cover proof-canvas'; c.appendChild(buildCoverCanvas()); return c; };
+          const backCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas backcover proof-canvas'; c.appendChild(buildBackCoverCanvas()); return c; };
+          const units = [];
+          const addUnit = (el) => { const p = document.createElement('div'); p.className = 'proof-page'; p.appendChild(el); proof.appendChild(p); units.push(el); };
+          const spread = (a, b) => { const r = document.createElement('div'); r.className = 'proof-spread'; r.appendChild(a); r.appendChild(b); return r; };
+
+          if (mode === 'pages') {
+            addUnit(coverCanvas());
+            pages.forEach(pg => addUnit(pageCanvas(pg)));
+            addUnit(backCanvas());
+          } else {
+            addUnit(spread(blankCanvas(), coverCanvas()));       // cover on the right
+            for (let i = 0; i < pages.length; i += 2) addUnit(spread(pageCanvas(pages[i]), pages[i + 1] ? pageCanvas(pages[i + 1]) : blankCanvas()));
+            addUnit(spread(backCanvas(), blankCanvas()));        // back cover on the left
+          }
+
+          // Wait for images to decode + fonts to settle before capture.
+          const imgs = [...proof.querySelectorAll('img')];
+          await Promise.all(imgs.map(im => (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(r => { im.onload = im.onerror = r; })));
+          if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
+          await new Promise(r => setTimeout(r, 120));
+
+          // html2canvas (1.4.1) predates CSS `aspect-ratio`, mishandles
+          // `object-fit` on a transformed <img>, and can't do `writing-mode`.
+          // So before capture we: (1) pin the browser-computed px size on every
+          // aspect-ratio box, (2) swap each photo <img> for a <div> using
+          // background-size (cover/contain) — which html2canvas renders faithfully
+          // — carrying over the same crop/zoom transform, and (3) re-lay the
+          // vertical cover spine as a rotated horizontal block. (Layout is correct
+          // off-screen, so getBoundingClientRect is authoritative here.)
+          units.forEach(unit => {
+            unit.querySelectorAll('.slot, .bc-inset').forEach(el => {
+              const r = el.getBoundingClientRect();
+              el.style.width = r.width + 'px';
+              el.style.height = r.height + 'px';
+              el.style.aspectRatio = 'auto';
+            });
+            unit.querySelectorAll('.slot-img, .cv-photo-img, .bc-img').forEach(img => {
+              const isFit = img.classList.contains('fit');
+              const div = document.createElement('div');
+              div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+                + `background-image:url("${img.src}");background-size:${isFit ? 'contain' : 'cover'};`
+                + 'background-position:center;background-repeat:no-repeat;'
+                + `transform:${img.style.transform || 'none'};transform-origin:center center;`;
+              img.replaceWith(div);
+            });
+            unit.querySelectorAll('.cv-spine').forEach(spine => {
+              const r = spine.getBoundingClientRect();
+              const inner = document.createElement('div');
+              inner.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;white-space:nowrap;'
+                + `width:${Math.round(r.height * 0.86)}px;transform:rotate(90deg);transform-origin:center center;`;
+              while (spine.firstChild) inner.appendChild(spine.firstChild);
+              spine.style.writingMode = 'horizontal-tb';
+              spine.style.flexDirection = 'row';
+              spine.style.justifyContent = 'center';
+              spine.style.padding = '0';
+              spine.appendChild(inner);
+            });
+          });
+          await new Promise(r => setTimeout(r, 30));
+
+          const { jsPDF } = window.jspdf;
+          const fmt = mode === 'spreads' ? [23.4, 8.3] : [11.7, 8.3]; // inches
+          const doc = new jsPDF({ unit: 'in', format: fmt, orientation: 'landscape', compress: true });
+          for (let i = 0; i < units.length; i++) {
+            showToast(`Building PDF… ${i + 1}/${units.length}`);
+            const canvas = await html2canvas(units[i], { useCORS: true, backgroundColor: '#ffffff', scale: 2, logging: false, width: units[i].offsetWidth, height: units[i].offsetHeight });
+            const data = canvas.toDataURL('image/jpeg', 0.9);
+            if (i > 0) doc.addPage(fmt, 'landscape');
+            doc.addImage(data, 'JPEG', 0, 0, fmt[0], fmt[1]);
+          }
+          const base = ((document.getElementById('title-input').value || cover.title || 'popcode-book').trim() || 'popcode-book').replace(/[^\w\- ]+/g, '').trim() || 'popcode-book';
+          doc.save(`${base} - ${mode}.pdf`);
+          proof.innerHTML = ''; proof.className = '';
+          showToast('PDF downloaded');
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast('Could not build the PDF — please try again.');
+        }
+      }
+
+      document.getElementById('dock-photos').addEventListener('click', openPhotosSheet);
+      document.getElementById('dock-pages').addEventListener('click', openPagesSheet);
+      document.getElementById('dock-options').addEventListener('click', openOptionsSheet);
+
+      function updateSummary() {
+        const total = photos.size;
+        const popcoded = [...photos.values()].filter(photoHasMedia).length;
+        const pageCount = pages.length;
+        const summary = document.getElementById('create-summary');
+        const btn = document.getElementById('create-btn');
+        const placedCount = placedIds().size;
+
+        if (!total) { summary.textContent = 'Add photos to begin.'; }
+        else {
+          summary.innerHTML = `<strong>${pageCount}</strong> page${pageCount !== 1 ? 's' : ''} · <strong>${placedCount}</strong> placed · <strong>${popcoded}</strong> popcoded`;
+        }
+        // Ready = at least one page with a placed photo.
+        const ready = pageCount > 0 && placedCount > 0;
+        btn.disabled = !ready;
+        btn.classList.toggle('ready', ready);
+      }
+
+      // ── Slot interactions (tap-to-place / tap-to-swap / menu) ────
+      function onSlotTap(pg, slotIdx) {
+        if (justDragged) return; // a photo drag just ended on this slot — ignore the trailing click
+        const photoId = pg.slots[slotIdx];
+
+        // 1) Placing a tray-selected photo into an empty slot.
+        if (selectedTrayId && !photoId) {
+          const placedUrl = photos.get(selectedTrayId)?.url;
+          pg.slots[slotIdx] = selectedTrayId;
+          selectedTrayId = null;
+          document.getElementById('tray-hint').textContent = '';
+          render();
+          revealSlotFill(pg.id, slotIdx, placedUrl);
+          return;
+        }
+        // Tapping elsewhere cancels a pending tray placement onto a filled slot:
+        if (selectedTrayId && photoId) {
+          // Replace the photo in this slot, sending the old one back to the tray.
+          const placedUrl = photos.get(selectedTrayId)?.url;
+          pg.slots[slotIdx] = selectedTrayId;
+          selectedTrayId = null;
+          document.getElementById('tray-hint').textContent = '';
+          render();
+          revealSlotFill(pg.id, slotIdx, placedUrl);
+          return;
+        }
+
+        // 2) Empty slot with nothing selected → prompt to add photos.
+        if (!photoId) {
+          if (unplacedPhotos().length) { showToast('Tap a photo in "Your photos" first, then this slot.'); }
+          else { document.getElementById('photo-input').click(); }
+          return;
+        }
+
+        // 3) Swap mode: first tap marks source, second tap swaps.
+        if (swapSource) {
+          const a = swapSource;
+          const src = pages.find(p => p.id === a.pageId);
+          if (src) {
+            const tmp = src.slots[a.slotIdx];
+            src.slots[a.slotIdx] = pg.slots[slotIdx];
+            pg.slots[slotIdx] = tmp;
+          }
+          swapSource = null;
+          render();
+          return;
+        }
+
+        // 4) Filled slot tapped fresh → open slot menu.
+        openSlotMenu(pg, slotIdx);
+      }
+
+      // ── Slot menu ───────────────────────────────────────────────
+      function openSlotMenu(pg, slotIdx) {
+        const photo = photos.get(pg.slots[slotIdx]);
+        if (!photo) return;
+        const hasPop = photoHasMedia(photo);
+        openSheet(`
+          <h2>Photo options</h2>
+          <p class="sheet-sub">${hasPop ? 'This photo is a Popcode — it plays its ' + (photo.popcode.mediaType === 'audio' ? 'audio' : 'video') + ' when scanned.' : 'Link a video or audio and this page will come to life when scanned.'}</p>
+          <div class="menu-row" data-act="popcode">
+            <div class="menu-ic"><img src="/assets/popcode_icon.svg" style="width:20px;height:20px"/></div>
+            <div><div>${hasPop ? 'Edit Popcode' : 'Add a Popcode'}</div><div class="menu-sub">${hasPop ? 'Change or remove the linked media' : 'Link a video or audio recording'}</div></div>
+          </div>
+          <div class="menu-row" data-act="edit">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></div>
+            <div><div>Edit photo</div><div class="menu-sub">Fill / fit, zoom, reposition, rotate</div></div>
+          </div>
+          <div class="menu-row" data-act="swap">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></div>
+            <div><div>Move / swap</div><div class="menu-sub">Then tap another slot to swap places</div></div>
+          </div>
+          <div class="menu-row" data-act="replace">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+            <div><div>Replace photo</div><div class="menu-sub">Upload a different image here</div></div>
+          </div>
+          <div class="menu-row destructive" data-act="remove">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>
+            <div><div>Remove from page</div><div class="menu-sub">Sends the photo back to your tray</div></div>
+          </div>
+        `);
+        document.querySelectorAll('#sheet .menu-row').forEach(row => {
+          row.addEventListener('click', () => {
+            const act = row.dataset.act;
+            if (act === 'popcode') { closeSheet(); openPopcodeSheet(photo); }
+            else if (act === 'edit') { closeSheet(); openEditPhoto(pg, slotIdx); }
+            else if (act === 'swap') { swapSource = { pageId: pg.id, slotIdx }; closeSheet(); showToast('Now tap another slot to swap.'); render(); }
+            else if (act === 'replace') { closeSheet(); replaceSlotPhoto(photo); }
+            else if (act === 'remove') { pg.slots[slotIdx] = null; closeSheet(); render(); }
+          });
+        });
+      }
+
+      function replaceSlotPhoto(photo) {
+        const inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = 'image/*';
+        inp.addEventListener('change', async () => {
+          const f = inp.files[0];
+          if (!f) return;
+          const out = await optimizePhoto(f);
+          if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
+          if (photo.file) URL.revokeObjectURL(photo.url);
+          photo.file = out.file; photo.url = URL.createObjectURL(out.file); photo.existingUrl = null; // re-upload on save
+          photo.ow = out.ow; photo.oh = out.oh; photo.source = 'Device'; photo.adjust = DEFAULT_ADJUST();
+          render();
+        });
+        inp.click();
+      }
+
+      // ── Edit Photo (Popsa-style crop/zoom/rotate) ───────────────
+      let editPhotoState = null; // { pg, slotIdx, photo, a, gridOn, ar }
+      const IC_X = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      function epIcon(name) {
+        const o = 'width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+        const P = {
+          fill: '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>',
+          fit: '<polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="10" y1="14" x2="3" y2="21"/>',
+          grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+          rotate: '<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',
+          replace: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
+          remove: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>',
+          zin: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>',
+          zout: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>',
+        };
+        return `<svg ${o}>${P[name] || ''}</svg>`;
+      }
+
+      // Open the editor for a page slot's photo.
+      function openEditPhoto(pg, slotIdx) {
+        const photo = photos.get(pg.slots[slotIdx]);
+        if (!photo) return;
+        // Match the crop frame to the slot's real aspect ratio on the page.
+        let ar = '4 / 3';
+        const liveSlot = [...document.querySelectorAll('.slot')].find(s => s.dataset.pageId === pg.id && +s.dataset.slotIdx === slotIdx);
+        if (liveSlot) { const r = liveSlot.getBoundingClientRect(); if (r.width && r.height) ar = `${r.width} / ${r.height}`; }
+        startEditPhoto(photo, ar, {
+          save: (a) => { photo.adjust = normalizeAdjust(a); closeSheet(); render(); showToast('Photo updated'); },
+          remove: () => { pg.slots[slotIdx] = null; closeSheet(); render(); },
+          replace: (out) => {
+            if (photo.file) URL.revokeObjectURL(photo.url);
+            photo.file = out.file; photo.url = URL.createObjectURL(out.file); photo.existingUrl = null;
+            photo.ow = out.ow; photo.oh = out.oh; photo.iw = 0; photo.ih = 0; photo.source = 'Device';
+            return photo;
+          },
+        });
+      }
+
+      // Open the editor for the front-cover photo.
+      function openCoverPhotoEdit() {
+        if (!cover.photo) return;
+        cover.photo.adjust = cover.photo.adjust || DEFAULT_ADJUST();
+        startEditPhoto(cover.photo, '117 / 83', {
+          back: () => openCoverEditor(),   // Cancel/close returns to the cover editor
+          save: (a) => { cover.photo.adjust = normalizeAdjust(a); render(); openCoverEditor(); showToast('Cover photo updated'); },
+          remove: () => {
+            if (cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
+            cover.photo = null; render(); openCoverEditor();
+          },
+          replace: (out) => {
+            if (cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
+            cover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() };
+            return cover.photo;
+          },
+        });
+      }
+
+      function startEditPhoto(photo, ar, ctx) {
+        editPhotoState = { photo, a: { ...normalizeAdjust(photo.adjust || DEFAULT_ADJUST()) }, gridOn: false, ar, ctx };
+        renderEditPhoto();
+      }
+
+      function renderEditPhoto() {
+        const s = editPhotoState;
+        const source = s.photo.source || (s.photo.existingUrl && !s.photo.file ? 'Saved' : 'Device');
+        const btn = (act, label) => `<button class="ep-btn${act === 'remove' ? ' ep-danger' : ''}" data-act="${act}">${epIcon(act)}<span>${label}</span></button>`;
+        openSheet(`
+          <div class="ep-head"><h2>Edit Photo</h2><button class="ep-x" id="ep-close" aria-label="Close">${IC_X}</button></div>
+          <div class="ep-grid">
+            <div class="ep-preview">
+              <div class="ep-frame" id="ep-frame" style="aspect-ratio:${s.ar}">
+                <img class="ep-img" id="ep-img" src="${s.photo.url}" draggable="false"/>
+                <div class="ep-thirds" id="ep-thirds"></div>
+              </div>
+              <div class="ep-hint">Drag the photo to reposition</div>
+            </div>
+            <div class="ep-side">
+              <div class="ep-quality" id="ep-quality"><span>Print Quality</span><b id="ep-q">—</b></div>
+              <div class="ep-stat"><span>Scale</span><b id="ep-scale">100%</b></div>
+              <div class="ep-stat"><span>Dimensions</span><b id="ep-dims">—</b></div>
+              <div class="ep-stat"><span>Source</span><b>${escapeHtml(source)}</b></div>
+              <div class="ep-btns">
+                ${btn('fill', 'Fill')}${btn('fit', 'Fit')}${btn('grid', 'Grid')}${btn('rotate', 'Rotate')}
+                ${btn('replace', 'Replace')}${btn('remove', 'Remove')}${btn('zin', 'Zoom In')}${btn('zout', 'Zoom Out')}
+              </div>
+            </div>
+          </div>
+          <div class="ep-foot"><button class="btn-secondary" id="ep-cancel">Cancel</button><button class="btn-primary" id="ep-save">Save</button></div>
+        `, true);
+        const img = document.getElementById('ep-img');
+        const setDims = (w, h) => { s.photo.iw = w; s.photo.ih = h; if (!s.photo.ow) { s.photo.ow = w; s.photo.oh = h; } updateEp(); };
+        if (img.complete && img.naturalWidth) setDims(img.naturalWidth, img.naturalHeight);
+        else img.addEventListener('load', () => setDims(img.naturalWidth, img.naturalHeight));
+        document.getElementById('ep-close').addEventListener('click', epClose);
+        document.getElementById('ep-cancel').addEventListener('click', epClose);
+        document.getElementById('ep-save').addEventListener('click', () => s.ctx.save(s.a));
+        document.querySelectorAll('#sheet .ep-btn').forEach(b => b.addEventListener('click', () => epAction(b.dataset.act)));
+        enableEpPan();
+        updateEp();
+      }
+
+      function updateEp() {
+        const s = editPhotoState, a = s.a;
+        const img = document.getElementById('ep-img'); if (!img) return;
+        img.classList.toggle('fit', a.fit === 'fit');
+        img.style.transform = adjustTransform(a);
+        document.getElementById('ep-scale').textContent = Math.round(a.scale * 100) + '%';
+        const w = s.photo.ow || s.photo.iw, h = s.photo.oh || s.photo.ih;
+        document.getElementById('ep-dims').textContent = w ? `${w} × ${h}` : '—';
+        const q = printQuality(w, h, a.scale);
+        const qbox = document.getElementById('ep-quality');
+        document.getElementById('ep-q').textContent = q + '/10';
+        qbox.classList.toggle('good', q >= 8); qbox.classList.toggle('warn', q <= 4);
+        document.getElementById('ep-thirds').style.display = s.gridOn ? 'block' : 'none';
+        const set = (act, on) => { const el = document.querySelector(`.ep-btn[data-act="${act}"]`); if (el) el.classList.toggle('active', on); };
+        set('fill', a.fit === 'fill'); set('fit', a.fit === 'fit'); set('grid', s.gridOn);
+      }
+
+      function epClose() { const c = editPhotoState && editPhotoState.ctx; if (c && c.back) c.back(); else closeSheet(); }
+
+      function epAction(act) {
+        const s = editPhotoState, a = s.a;
+        if (act === 'fill') a.fit = 'fill';
+        else if (act === 'fit') a.fit = 'fit';
+        else if (act === 'grid') s.gridOn = !s.gridOn;
+        else if (act === 'rotate') a.rot = (a.rot + 90) % 360;
+        else if (act === 'zin') a.scale = Math.min(3, Math.round((a.scale + 0.1) * 10) / 10);
+        else if (act === 'zout') a.scale = Math.max(1, Math.round((a.scale - 0.1) * 10) / 10);
+        else if (act === 'replace') { epReplace(); return; }
+        else if (act === 'remove') { s.ctx.remove(); return; }
+        updateEp();
+      }
+
+      function epReplace() {
+        const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+        inp.addEventListener('change', async () => {
+          const f = inp.files[0]; if (!f) return;
+          const out = await optimizePhoto(f);
+          if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
+          const np = editPhotoState.ctx.replace(out);
+          if (np) editPhotoState.photo = np;
+          editPhotoState.a = DEFAULT_ADJUST(); editPhotoState.gridOn = false;
+          renderEditPhoto();
+        });
+        inp.click();
+      }
+
+      // Drag inside the frame to pan the photo (offset in % of the frame).
+      function enableEpPan() {
+        const frame = document.getElementById('ep-frame'); if (!frame) return;
+        frame.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          const a = editPhotoState.a;
+          const rect = frame.getBoundingClientRect();
+          const sx = e.clientX, sy = e.clientY, ox0 = a.ox, oy0 = a.oy;
+          const move = (ev) => {
+            a.ox = Math.max(-80, Math.min(80, ox0 + (ev.clientX - sx) / rect.width * 100));
+            a.oy = Math.max(-80, Math.min(80, oy0 + (ev.clientY - sy) / rect.height * 100));
+            updateEp();
+          };
+          const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); };
+          document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+        });
+      }
+
+      function deletePhoto(id) {
+        const p = photos.get(id);
+        if (p) URL.revokeObjectURL(p.url);
+        photos.delete(id);
+        pages.forEach(pg => pg.slots = pg.slots.map(s => s === id ? null : s));
+        if (selectedTrayId === id) selectedTrayId = null;
+        render();
+      }
+
+      // ── Layout sheet ────────────────────────────────────────────
+      // Preview each layout as a landscape page with the same grid + mat + gap
+      // the real page uses, so what you see matches what you get.
+      // The inner geometry markup for a layout preview tile (gray cells).
+      function previewHTML(key) {
+        const L = LAYOUTS[key];
+        const geo = layoutGeometry(L);
+        if (geo.special === 'lr') {
+          return `<div class="lp-grid" style="inset:0;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:4%;padding:6% 5%;">
+            <div class="lp-cell" style="height:88%;aspect-ratio:3/4"></div>
+            <div style="height:88%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8%"><div class="lp-cell" style="height:45%;aspect-ratio:4/3"></div><div class="lp-cell" style="height:45%;aspect-ratio:4/3"></div></div>
+          </div>`;
+        }
+        const cells = geo.slots.map(sc => `<div class="lp-cell" style="${sc}"></div>`).join('');
+        return `<div class="lp-grid" style="${geo.container}">${cells}</div>`;
+      }
+
+      function openLayoutSheet(pg) {
+        const groups = LAYOUT_GROUPS.map(g => {
+          const tiles = g.keys.map(key =>
+            `<div class="layout-opt ${pg.layout === key ? 'active' : ''}" data-layout="${key}">
+              <div class="layout-preview">${previewHTML(key)}</div>
+            </div>`).join('');
+          return `<div class="lp-section-title">${g.title}</div><div class="layout-grid">${tiles}</div>`;
+        }).join('');
+        openSheet(`<h2>Layouts</h2>${groups}`);
+        document.querySelectorAll('#sheet .layout-opt').forEach(opt => {
+          opt.addEventListener('click', () => { applyLayout(pg, opt.dataset.layout); closeSheet(); });
+        });
+      }
+
+      // Change a page's layout, preserving photos. Extra photos (when shrinking)
+      // go back to the tray; new empty slots (when growing) pull from unplaced.
+      function applyLayout(pg, key) {
+        const n = slotCount(key);
+        const kept = pg.slots.filter(Boolean).slice(0, n);
+        const newSlots = new Array(n).fill(null);
+        kept.forEach((id, i) => newSlots[i] = id);
+        pg.layout = key; pg.slots = newSlots;
+        const pool = unplacedPhotos();
+        for (let i = 0; i < newSlots.length && pool.length; i++) {
+          if (!newSlots[i]) newSlots[i] = pool.shift().id;
+        }
+        render();
+      }
+
+      // ── Popcode editor (video upload OR audio record) ───────────
+      let popEditState = null; // { photo, mediaType, video, audio }
+
+      function openPopcodeSheet(photo) {
+        popEditState = {
+          photo,
+          mediaType: photo.popcode?.mediaType || 'video',
+          video: photo.popcode?.video || null,
+          audio: photo.popcode?.audio || null,
+          existingVideoUrl: photo.popcode?.existingVideoUrl || null,
+          existingAudioUrl: photo.popcode?.existingAudioUrl || null,
+        };
+        renderPopcodeSheet();
+      }
+
+      // Does the popcode-in-progress have media for the currently selected type?
+      function popEditHasMedia(s) {
+        return s.mediaType === 'video' ? !!(s.video || s.existingVideoUrl) : !!(s.audio || s.existingAudioUrl);
+      }
+
+      function renderPopcodeSheet() {
+        const s = popEditState;
+        const hasMedia = popEditHasMedia(s);
+        openSheet(`
+          <h2>${s.photo.popcode ? 'Edit' : 'Add a'} Popcode</h2>
+          <p class="sheet-sub">Link a video or audio clip. When someone scans this printed page, it plays automatically.</p>
+          <div class="pop-media-toggle">
+            <button data-mode="video" class="${s.mediaType === 'video' ? 'active' : ''}">Video</button>
+            <button data-mode="audio" class="${s.mediaType === 'audio' ? 'active' : ''}">Audio</button>
+          </div>
+          <div id="pop-body"></div>
+          <div class="sheet-actions">
+            ${s.photo.popcode ? '<button class="btn-danger-ghost" id="pop-unlink">Remove Popcode</button>' : '<button class="btn-secondary" id="pop-cancel">Cancel</button>'}
+            <button class="btn-primary" id="pop-save" ${hasMedia ? '' : 'disabled'}>Save Popcode</button>
+          </div>
+        `);
+        document.querySelectorAll('#sheet .pop-media-toggle button').forEach(b => {
+          b.addEventListener('click', () => { s.mediaType = b.dataset.mode; renderPopcodeSheet(); });
+        });
+        document.getElementById('pop-save').addEventListener('click', savePopcode);
+        const unlink = document.getElementById('pop-unlink');
+        if (unlink) unlink.addEventListener('click', () => { s.photo.popcode = null; closeSheet(); render(); showToast('Popcode removed'); });
+        const cancel = document.getElementById('pop-cancel');
+        if (cancel) cancel.addEventListener('click', closeSheet);
+
+        renderPopBody();
+      }
+
+      function renderPopBody() {
+        const s = popEditState;
+        const body = document.getElementById('pop-body');
+        if (s.mediaType === 'video') {
+          if (s.video || s.existingVideoUrl) {
+            const src = s.video ? URL.createObjectURL(s.video) : s.existingVideoUrl;
+            const caption = s.video ? `${escapeHtml(s.video.name || 'video')} · ${formatMB(s.video.size)}` : 'Current video';
+            body.innerHTML = `
+              <div class="media-preview show">
+                <video src="${src}" controls playsinline muted></video>
+                <div class="compress-status">${caption}</div>
+                <button class="mini-btn" id="pop-video-change" style="margin-top:10px">Choose a different video</button>
+              </div>`;
+            document.getElementById('pop-video-change').addEventListener('click', () => { s.video = null; s.existingVideoUrl = null; renderPopBody(); syncPopSave(); });
+          } else {
+            body.innerHTML = `
+              <div class="drop-zone">
+                <input type="file" accept="video/*" id="pop-video-input"/>
+                <img class="dz-icon" src="/assets/video.png" alt=""/>
+                <div class="dz-title">Choose a video</div>
+                <div class="dz-sub">Up to ${MAX_VIDEO_MB} MB · large files can be compressed</div>
+              </div>
+              <div id="pop-video-msg"></div>`;
+            document.getElementById('pop-video-input').addEventListener('change', (e) => handleVideoPick(e.target));
+          }
+        } else {
+          // Audio
+          if (s.audio || s.existingAudioUrl) {
+            const src = s.audio ? URL.createObjectURL(s.audio) : s.existingAudioUrl;
+            body.innerHTML = `
+              <div class="audio-panel">
+                <div class="audio-player-row">
+                  <button class="audio-play-btn" id="pop-audio-play"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+                  <div class="audio-time" id="pop-audio-dur" style="margin:0">0:00</div>
+                </div>
+                <audio id="pop-audio-el" src="${src}" preload="metadata"></audio>
+                <button class="mini-btn" id="pop-audio-rerec">${s.audio ? 'Re-record' : 'Record a new clip'}</button>
+                ${s.audio ? `<div class="compress-status">${formatMB(s.audio.size)}</div>` : '<div class="compress-status">Current audio</div>'}
+              </div>`;
+            wireAudioPreview();
+            document.getElementById('pop-audio-rerec').addEventListener('click', () => { s.audio = null; s.existingAudioUrl = null; renderPopBody(); syncPopSave(); });
+          } else {
+            body.innerHTML = `
+              <div class="audio-panel">
+                <div class="audio-time" id="pop-audio-elapsed">0:00</div>
+                <button class="audio-rec-btn" id="pop-audio-rec">● Record</button>
+                <div class="dz-sub" style="margin-top:12px">Tap record and speak. Tap again to stop.</div>
+              </div>`;
+            document.getElementById('pop-audio-rec').addEventListener('click', toggleRecord);
+          }
+        }
+        syncPopSave();
+      }
+
+      function syncPopSave() {
+        const btn = document.getElementById('pop-save');
+        if (btn) btn.disabled = !popEditHasMedia(popEditState);
+      }
+
+      function savePopcode() {
+        const s = popEditState;
+        if (!popEditHasMedia(s)) return;
+        const isVideo = s.mediaType === 'video';
+        s.photo.popcode = {
+          mediaType: s.mediaType,
+          video: isVideo ? s.video : null,
+          audio: isVideo ? null : s.audio,
+          // Keep the existing URL only when no new File replaced it (and only for
+          // the chosen media type, so switching video↔audio drops the other).
+          existingVideoUrl: isVideo && !s.video ? s.existingVideoUrl : null,
+          existingAudioUrl: !isVideo && !s.audio ? s.existingAudioUrl : null,
+        };
+        closeSheet(); render(); showToast('Popcode saved');
+      }
+
+      // Video pick + compress (ported from create.html) ------------
+      function canCompressVideo() {
+        try {
+          const canvas = document.createElement('canvas');
+          if (typeof canvas.captureStream !== 'function') return false;
+          if (typeof MediaRecorder === 'undefined') return false;
+          return ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].some(t => MediaRecorder.isTypeSupported(t));
+        } catch (e) { return false; }
+      }
+      function compressVideo(file, onProgress) {
+        const types = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+        const mimeType = types.find(t => MediaRecorder.isTypeSupported(t));
+        return new Promise((resolve, reject) => {
+          const video = document.createElement('video');
+          const srcUrl = URL.createObjectURL(file);
+          video.src = srcUrl; video.muted = true; video.playsInline = true;
+          video.onloadedmetadata = () => {
+            const MAX_DIM = 1280;
+            const scale = Math.min(1, MAX_DIM / Math.max(video.videoWidth || 1, video.videoHeight || 1));
+            const w = Math.max(2, Math.round(video.videoWidth * scale / 2) * 2);
+            const h = Math.max(2, Math.round(video.videoHeight * scale / 2) * 2);
+            const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            const stream = canvas.captureStream(30);
+            const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2500000 });
+            const chunks = [];
+            recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+            recorder.onstop = () => { URL.revokeObjectURL(srcUrl); resolve(new Blob(chunks, { type: mimeType.split(';')[0] })); };
+            recorder.onerror = e => { URL.revokeObjectURL(srcUrl); reject(e.error || new Error('Compression error')); };
+            let animId;
+            const draw = () => { if (!video.ended && !video.paused) { ctx.drawImage(video, 0, 0, w, h); onProgress && onProgress(video.currentTime / (video.duration || 1)); animId = requestAnimationFrame(draw); } };
+            video.onended = () => { cancelAnimationFrame(animId); recorder.stop(); };
+            recorder.start(200);
+            video.play().then(draw).catch(reject);
+          };
+          video.onerror = () => reject(new Error('Could not load video for compression'));
+          video.load();
+        });
+      }
+      async function handleVideoPick(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const sizeMB = file.size / (1024 * 1024);
+        const msg = document.getElementById('pop-video-msg');
+        if (sizeMB > MAX_VIDEO_MB) {
+          if (canCompressVideo()) {
+            if (!confirm(`This video is ${sizeMB.toFixed(1)} MB — over the ${MAX_VIDEO_MB} MB limit.\n\nCompress it now? This can take a minute.`)) { input.value = ''; return; }
+            msg.innerHTML = `<div class="compress-status">Compressing… 0%</div><div class="compress-bar-wrap"><div class="compress-bar" id="cbar"></div></div>`;
+            let compressed;
+            try {
+              compressed = await compressVideo(file, p => {
+                document.getElementById('cbar').style.width = Math.round(p * 100) + '%';
+                msg.querySelector('.compress-status').textContent = `Compressing… ${Math.round(p * 100)}%`;
+              });
+            } catch (e) { compressed = null; }
+            const cMB = compressed ? compressed.size / (1024 * 1024) : Infinity;
+            if (compressed && cMB <= MAX_VIDEO_MB) {
+              popEditState.video = new File([compressed], (file.name || 'video').replace(/\.[^.]+$/, '.webm'), { type: compressed.type });
+              renderPopBody(); syncPopSave();
+            } else {
+              msg.innerHTML = `<div class="warn-banner">Still too large${cMB < Infinity ? ' (' + cMB.toFixed(0) + ' MB)' : ''}. Compress further at <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a>, then choose it again.</div>`;
+              input.value = '';
+            }
+          } else {
+            msg.innerHTML = `<div class="warn-banner">${sizeMB.toFixed(1)} MB — over the ${MAX_VIDEO_MB} MB limit. Compress free at <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a>, then choose it again.</div>`;
+            input.value = '';
+          }
+          return;
+        }
+        popEditState.video = file;
+        renderPopBody(); syncPopSave();
+      }
+
+      // Audio record (ported from create.html) ---------------------
+      let recorder = null; // { mediaRecorder, chunks, stream, ext, timerId, startTs }
+      function pickAudioMime() {
+        const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/ogg;codecs=opus'];
+        if (typeof MediaRecorder === 'undefined') return null;
+        for (const c of candidates) if (MediaRecorder.isTypeSupported(c)) {
+          const ext = c.startsWith('audio/webm') ? 'webm' : c.startsWith('audio/mp4') ? 'm4a' : c.startsWith('audio/ogg') ? 'ogg' : 'webm';
+          return { mime: c, ext };
+        }
+        return { mime: '', ext: 'webm' };
+      }
+      async function toggleRecord() {
+        if (recorder) { // stop
+          if (recorder.timerId) clearInterval(recorder.timerId);
+          try { recorder.mediaRecorder.stop(); } catch (e) {}
+          return;
+        }
+        const pick = pickAudioMime();
+        if (!pick) { alert('Audio recording is not supported in this browser.'); return; }
+        let stream;
+        try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+        catch (e) { alert('Microphone access was denied. Enable it in your browser settings and try again.'); return; }
+        const mr = new MediaRecorder(stream, pick.mime ? { mimeType: pick.mime } : {});
+        const chunks = [];
+        mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+        mr.onstop = () => {
+          const blob = new Blob(chunks, { type: pick.mime || mr.mimeType || 'audio/webm' });
+          stream.getTracks().forEach(t => t.stop());
+          recorder = null;
+          popEditState.audio = new File([blob], `audio.${pick.ext}`, { type: blob.type });
+          renderPopBody(); syncPopSave();
+        };
+        mr.start();
+        recorder = { mediaRecorder: mr, chunks, stream, ext: pick.ext, startTs: Date.now(), timerId: null };
+        const recBtn = document.getElementById('pop-audio-rec');
+        if (recBtn) { recBtn.textContent = '■ Stop'; recBtn.classList.add('stop'); }
+        recorder.timerId = setInterval(() => {
+          const s = Math.floor((Date.now() - recorder.startTs) / 1000);
+          const el = document.getElementById('pop-audio-elapsed');
+          if (el) el.innerHTML = `<span class="rec-dot"></span>${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+        }, 250);
+      }
+      function wireAudioPreview() {
+        const audio = document.getElementById('pop-audio-el');
+        const btn = document.getElementById('pop-audio-play');
+        const dur = document.getElementById('pop-audio-dur');
+        if (!audio || !btn) return;
+        const play = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+        const pause = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+        const fmt = s => (s && isFinite(s)) ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00';
+        audio.addEventListener('loadedmetadata', () => dur.textContent = fmt(audio.duration));
+        audio.addEventListener('play', () => btn.innerHTML = pause);
+        audio.addEventListener('pause', () => btn.innerHTML = play);
+        audio.addEventListener('timeupdate', () => { if (!audio.paused) dur.textContent = fmt(audio.currentTime); });
+        audio.addEventListener('ended', () => { dur.textContent = fmt(audio.duration); btn.innerHTML = play; });
+        btn.addEventListener('click', () => { if (audio.paused) audio.play(); else audio.pause(); });
+      }
+
+      // ── Sheet plumbing ──────────────────────────────────────────
+      function openSheet(html, wide) {
+        const sheet = document.getElementById('sheet');
+        sheet.className = 'sheet' + (wide ? ' sheet-wide' : '');
+        sheet.innerHTML = `<div class="sheet-grip"></div>${html}`;
+        document.getElementById('overlay').classList.add('visible');
+      }
+      function closeSheet() { document.getElementById('overlay').classList.remove('visible'); }
+      document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') closeSheet(); });
+
+      // ── Drag-and-drop flourish ──────────────────────────────────
+      // A circular photo chip follows the pointer; on drop the photo fills the
+      // target slot with an expanding-circle reveal from the drop point.
+      function makeCircleGhost(url, x, y) {
+        const g = document.createElement('div');
+        g.className = 'drag-ghost';
+        g.style.backgroundImage = `url('${url}')`;
+        g.style.left = x + 'px'; g.style.top = y + 'px';
+        document.body.appendChild(g);
+        return g;
+      }
+      // Play the expanding-circle fill on any positioned element (from a drop point).
+      function playFill(el, url, dropX, dropY) {
+        if (!el || !url) return;
+        const rect = el.getBoundingClientRect();
+        let cx = 50, cy = 50;
+        if (dropX != null && rect.width && rect.height) {
+          cx = Math.max(0, Math.min(100, (dropX - rect.left) / rect.width * 100));
+          cy = Math.max(0, Math.min(100, (dropY - rect.top) / rect.height * 100));
+        }
+        const ov = document.createElement('div');
+        ov.className = 'slot-fill';
+        ov.style.backgroundImage = `url('${url}')`;
+        ov.style.setProperty('--cx', cx + '%');
+        ov.style.setProperty('--cy', cy + '%');
+        el.appendChild(ov);
+        requestAnimationFrame(() => ov.classList.add('go'));
+        ov.addEventListener('animationend', () => ov.remove());
+      }
+      // Reveal on a freshly-rendered page slot (call after render()).
+      function revealSlotFill(pageId, slotIdx, url, dropX, dropY) {
+        const slot = [...document.querySelectorAll('.slot')]
+          .find(s => s.dataset.pageId === pageId && +s.dataset.slotIdx === slotIdx);
+        playFill(slot, url, dropX, dropY);
+      }
+
+      // Drag a filled photo between slots (pointer-based). A press-and-drag picks
+      // it up; dropping on another slot swaps them. Short taps fall through to
+      // onSlotTap (handled by click).
+      function enableSlotDrag(slot, pg, slotIdx) {
+        if (!pg.slots[slotIdx]) return; // only draggable when filled
+        slot.addEventListener('pointerdown', (e) => {
+          if (selectedTrayId || swapSource) return; // placement/swap modes own taps
+          const startX = e.clientX, startY = e.clientY;
+          const photo = photos.get(pg.slots[slotIdx]);
+          let dragging = false, moved = false, ghost = null;
+          const startDrag = (x, y) => {
+            if (dragging) return;
+            dragging = true;
+            slot.classList.add('slot-drag');
+            ghost = makeCircleGhost(photo.url, x, y);
+          };
+          if (e.pointerType === 'mouse') startDrag(startX, startY); // circle appears on click-and-hold
+          const moveH = (ev) => {
+            if (!dragging) {
+              if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 10) return;
+              startDrag(ev.clientX, ev.clientY);
+            }
+            moved = true;
+            ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
+            document.querySelectorAll('.slot').forEach(s => s.classList.remove('place-target'));
+            const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot');
+            if (under && under !== slot) under.classList.add('place-target');
+          };
+          const upH = (ev) => {
+            document.removeEventListener('pointermove', moveH);
+            document.removeEventListener('pointerup', upH);
+            document.removeEventListener('pointercancel', upH);
+            if (ghost) ghost.remove();
+            slot.classList.remove('slot-drag');
+            document.querySelectorAll('.slot').forEach(s => s.classList.remove('place-target'));
+            // Released without moving (mouse click-in-place) → let the click open the menu.
+            if (!moved || ev.type === 'pointercancel') return;
+            const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot');
+            let dropPg = null, dropIdx = null, dropUrl = null;
+            if (under && under !== slot && under.dataset.pageId != null) {
+              const targetPg = pages.find(p => p.id === under.dataset.pageId);
+              const targetIdx = parseInt(under.dataset.slotIdx, 10);
+              if (targetPg && !Number.isNaN(targetIdx)) {
+                const tmp = targetPg.slots[targetIdx];
+                targetPg.slots[targetIdx] = pg.slots[slotIdx];
+                pg.slots[slotIdx] = tmp;
+                dropPg = targetPg.id; dropIdx = targetIdx; dropUrl = photo.url;
+              }
+            }
+            justDragged = true;
+            setTimeout(() => { justDragged = false; }, 0);
+            render();
+            if (dropPg != null) revealSlotFill(dropPg, dropIdx, dropUrl, ev.clientX, ev.clientY);
+          };
+          document.addEventListener('pointermove', moveH);
+          document.addEventListener('pointerup', upH);
+          document.addEventListener('pointercancel', upH);
+        });
+      }
+
+      // Make a photo thumbnail draggable onto a page slot (circular chip + fill).
+      // On a mouse press the chip appears immediately (press-and-hold to pick up);
+      // on touch it waits for movement so the tray/sheet can still scroll. A tap
+      // (no drag) runs opts.onTap; a drag start runs opts.onDragStart (e.g. close
+      // the Photos sheet so the pages behind become droppable).
+      function enablePhotoDrag(el, photo, opts = {}) {
+        el.addEventListener('pointerdown', (e) => {
+          if (e.target.closest('.tray-x')) return; // the delete button owns its taps
+          const startX = e.clientX, startY = e.clientY;
+          let dragging = false, moved = false, ghost = null;
+          const startDrag = (x, y) => {
+            if (dragging) return;
+            dragging = true;
+            el.classList.add('dragging');
+            ghost = makeCircleGhost(photo.url, x, y);
+            document.body.style.userSelect = 'none';
+            if (opts.onDragStart) opts.onDragStart();
+          };
+          if (e.pointerType === 'mouse') startDrag(startX, startY); // instant on click-and-hold
+          const move = (ev) => {
+            if (!dragging) {
+              if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 8) return;
+              startDrag(ev.clientX, ev.clientY);
+            }
+            moved = true;
+            ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
+            document.querySelectorAll('.place-target').forEach(s => s.classList.remove('place-target'));
+            const el = document.elementFromPoint(ev.clientX, ev.clientY);
+            const under = el?.closest('.slot') || el?.closest('#pages .page-canvas.cover');
+            if (under) under.classList.add('place-target');
+          };
+          const end = (ev) => {
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', end);
+            document.removeEventListener('pointercancel', end);
+            if (ghost) ghost.remove();
+            el.classList.remove('dragging');
+            document.body.style.userSelect = '';
+            document.querySelectorAll('.place-target').forEach(s => s.classList.remove('place-target'));
+            // Released without moving (or never started) → treat as a tap.
+            if (!moved || ev.type === 'pointercancel') { if (opts.onTap) opts.onTap(); return; }
+            const pt = document.elementFromPoint(ev.clientX, ev.clientY);
+            const coverEl = pt?.closest('#pages .page-canvas.cover');
+            const slotEl = pt?.closest('.slot');
+            justDragged = true;
+            setTimeout(() => { justDragged = false; }, 0);
+            if (coverEl) {
+              // Drop onto the front cover → set the cover photo (a shared reference,
+              // so its blob URL isn't revoked while the source photo still uses it).
+              cover.photo = { file: photo.file || null, url: photo.url, existingUrl: photo.existingUrl || null, shared: true };
+              render();
+              playFill(document.querySelector('#pages .cv-face') || document.querySelector('#pages .page-canvas.cover'), photo.url, ev.clientX, ev.clientY);
+              return;
+            }
+            let dropPg = null, dropIdx = null;
+            if (slotEl && slotEl.dataset.pageId != null) {
+              const tPg = pages.find(p => p.id === slotEl.dataset.pageId);
+              const tIdx = parseInt(slotEl.dataset.slotIdx, 10);
+              if (tPg && !Number.isNaN(tIdx)) {
+                tPg.slots[tIdx] = photo.id;   // any displaced photo returns to the tray automatically
+                selectedTrayId = null;
+                dropPg = tPg.id; dropIdx = tIdx;
+              }
+            }
+            render();
+            if (dropPg != null) revealSlotFill(dropPg, dropIdx, photo.url, ev.clientX, ev.clientY);
+          };
+          document.addEventListener('pointermove', move);
+          document.addEventListener('pointerup', end);
+          document.addEventListener('pointercancel', end);
+        });
+      }
+
+      // ── Save / create the book ──────────────────────────────────
+      function randomSlug() { return Math.random().toString(36).substring(2, 10); }
+      function setProgress(label, pct, isError) {
+        document.getElementById('progress-label').textContent = label;
+        document.getElementById('progress-label').className = isError ? 'error' : '';
+        document.getElementById('progress-bar').style.width = pct + '%';
+      }
+      function showBuildError(msg) {
+        setProgress(msg, 0, true);
+        document.getElementById('p-emoji').textContent = '⚠️';
+        document.getElementById('try-again-btn').style.display = 'inline-block';
+      }
+      document.getElementById('try-again-btn').addEventListener('click', () => {
+        document.getElementById('progress').classList.remove('visible');
+        document.getElementById('try-again-btn').style.display = 'none';
+      });
+      function yieldToPaint() { return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); }
+
+      // Load a photo's pixels for compiling — from its File (new photo) or from
+      // its stored URL (existing photo in an edited book). Remote fetch uses
+      // crossOrigin so the canvas isn't tainted (Supabase public URLs allow CORS).
+      async function loadCompileImage(photo) {
+        const img = new Image();
+        if (photo.file) { img.src = URL.createObjectURL(photo.file); }
+        else { img.crossOrigin = 'anonymous'; img.src = photo.url; }
+        await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('Could not load a photo for compiling.')); });
+        return resizeForCompile(img);
+      }
+
+      async function resizeForCompile(img) {
+        if (img.naturalWidth > MAX_COMPILE_DIM || img.naturalHeight > MAX_COMPILE_DIM) {
+          const scale = Math.min(MAX_COMPILE_DIM / img.naturalWidth, MAX_COMPILE_DIM / img.naturalHeight);
+          const c = document.createElement('canvas');
+          c.width = Math.round(img.naturalWidth * scale);
+          c.height = Math.round(img.naturalHeight * scale);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          const r = new Image();
+          await new Promise((res, rej) => { r.onload = res; r.onerror = rej; r.src = c.toDataURL('image/jpeg', 0.92); });
+          return r;
+        }
+        return img;
+      }
+
+      document.getElementById('create-btn').addEventListener('click', saveBook);
+
+      async function saveBook() {
+        const placed = placedIds();
+        if (!placed.size) { showToast('Place at least one photo on a page first.'); return; }
+        if (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler) {
+          alert('The compiler is still loading — please wait a moment and try again.'); return;
+        }
+
+        // Popcoded photos (in book order) → these become AR targets + collection_items.
+        const orderedPhotoIds = [];
+        pages.forEach(pg => pg.slots.forEach(id => { if (id && !orderedPhotoIds.includes(id)) orderedPhotoIds.push(id); }));
+        const popcodedIds = orderedPhotoIds.filter(id => photoHasMedia(photos.get(id)));
+
+        // A book with no linked media compiles no .mind, so popcode.app/{slug}
+        // would have nothing to scan. Require at least one Popcode.
+        if (!popcodedIds.length) {
+          alert('None of your photos are linked yet.\n\nTap a photo, choose “Add a Popcode”, and link a video or audio — so at least one page comes to life when it’s scanned.');
+          return;
+        }
+
+        const editing = !!editingCollection;
+        document.getElementById('create-btn').disabled = true;
+        document.getElementById('progress').classList.add('visible');
+        document.getElementById('p-emoji').textContent = '📖';
+        document.getElementById('try-again-btn').style.display = 'none';
+
+        const slug = editing ? editingCollection.slug : randomSlug();
+        const title = document.getElementById('title-input').value.trim() || null;
+        const bucket = 'experiences';
+        const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+
+        try {
+          // 1. Upload placed photos that are new/replaced (have a File). Existing
+          //    photos keep their stored URL — no re-upload.
+          setProgress('Uploading photos…', 4);
+          const photoUrlById = {};
+          let done = 0;
+          for (const id of orderedPhotoIds) {
+            const p = photos.get(id);
+            if (p.existingUrl && !p.file) { photoUrlById[id] = p.existingUrl; done++; continue; }
+            const ext = (p.file.name && p.file.name.split('.').pop().toLowerCase()) || 'jpg';
+            const safeExt = /^[a-z0-9]+$/.test(ext) ? ext : 'jpg';
+            const path = `${slug}/book/${id}.${safeExt}`;
+            const { error } = await db.storage.from(bucket).upload(path, p.file, { contentType: p.file.type || 'image/jpeg', upsert: true });
+            if (error) throw new Error('Photo upload failed: ' + error.message);
+            photoUrlById[id] = pub(path);
+            done++;
+            setProgress(`Uploading photos… ${done}/${orderedPhotoIds.length}`, 4 + (done / orderedPhotoIds.length) * 26);
+          }
+
+          // 1b. Upload the cover photo (new File only; reuse existing URL otherwise).
+          let coverPhotoUrl = cover.photo ? cover.photo.existingUrl : null;
+          if (cover.photo && cover.photo.file) {
+            setProgress('Uploading cover…', 30);
+            const cpath = `${slug}/book/cover.jpg`;
+            const { error } = await db.storage.from(bucket).upload(cpath, cover.photo.file, { contentType: cover.photo.file.type || 'image/jpeg', upsert: true });
+            if (error) throw new Error('Cover upload failed: ' + error.message);
+            coverPhotoUrl = pub(cpath) + `?v=${Date.now()}`;
+          }
+
+          // 1c. Upload the back-cover photo (new File only; reuse existing URL otherwise).
+          let backCoverPhotoUrl = backCover.photo ? backCover.photo.existingUrl : null;
+          if (backCover.photo && backCover.photo.file) {
+            const bpath = `${slug}/book/back_cover.jpg`;
+            const { error } = await db.storage.from(bucket).upload(bpath, backCover.photo.file, { contentType: backCover.photo.file.type || 'image/jpeg', upsert: true });
+            if (error) throw new Error('Back cover upload failed: ' + error.message);
+            backCoverPhotoUrl = pub(bpath) + `?v=${Date.now()}`;
+          }
+
+          // 2. Compile popcoded photos into a fresh .mind target. Recompiled on
+          //    every save so the target order matches the current popcode order.
+          setProgress('Preparing scan targets…', 32);
+          const imgs = [];
+          for (const id of popcodedIds) imgs.push(await loadCompileImage(photos.get(id)));
+          setProgress('Compiling scan targets… (this can take a minute)', 36);
+          await yieldToPaint();
+          const compiler = new MINDAR.IMAGE.Compiler();
+          await compiler.compileImageTargets(imgs, (prog) => setProgress(`Compiling scan targets… ${Math.round(prog)}%`, 36 + prog * 0.24));
+          const buffer = await compiler.exportData();
+          setProgress('Uploading scan targets…', 62);
+          const { error: mErr } = await db.storage.from(bucket).upload(`${slug}/target.mind`, new Blob([buffer]), { contentType: 'application/octet-stream', upsert: true });
+          if (mErr) throw new Error('Target upload failed: ' + mErr.message);
+          const mindUrl = pub(`${slug}/target.mind`) + `?v=${Date.now()}`;
+
+          // 3. Resolve each popcode's media URL. Upload only NEW Files; reuse the
+          //    stored URL for unchanged media (the item row's URL is authoritative,
+          //    so a reused file at an old index path is fine).
+          setProgress('Uploading videos…', 66);
+          const itemRows = [];
+          for (let i = 0; i < popcodedIds.length; i++) {
+            const id = popcodedIds[i];
+            const pc = photos.get(id).popcode;
+            const row = { target_index: i, media_type: pc.mediaType, video_url: null, audio_url: null, photo_url: photoUrlById[id] };
+            if (pc.mediaType === 'video') {
+              if (pc.video) {
+                const vpath = `${slug}/video_${i}.mp4`;
+                const { error } = await db.storage.from(bucket).upload(vpath, pc.video, { contentType: pc.video.type || 'video/mp4', upsert: true });
+                if (error) throw new Error(`Video ${i + 1} upload failed: ${error.message}`);
+                row.video_url = pub(vpath) + `?v=${Date.now()}`;
+              } else {
+                row.video_url = pc.existingVideoUrl;
+              }
+            } else {
+              if (pc.audio) {
+                const aext = (pc.audio.name && pc.audio.name.split('.').pop()) || 'webm';
+                const apath = `${slug}/audio_${i}.${aext}`;
+                const { error } = await db.storage.from(bucket).upload(apath, pc.audio, { contentType: pc.audio.type || 'audio/webm', upsert: true });
+                if (error) throw new Error(`Audio ${i + 1} upload failed: ${error.message}`);
+                row.audio_url = pub(apath) + `?v=${Date.now()}`;
+              } else {
+                row.audio_url = pc.existingAudioUrl;
+              }
+            }
+            itemRows.push(row);
+            setProgress(`Uploading media… ${i + 1}/${popcodedIds.length}`, 66 + ((i + 1) / Math.max(1, popcodedIds.length)) * 20);
+          }
+
+          // 4. Build book_layout jsonb (references public photo URLs + target_index).
+          const targetIndexByPhoto = {};
+          popcodedIds.forEach((id, i) => { targetIndexByPhoto[id] = i; });
+          const bookLayout = {
+            size: 'a4-landscape', // Prodigi 11.7 × 8.3" landscape
+            cover: {
+              style: cover.style,
+              font: cover.font,
+              eyebrow: cover.eyebrow || null,
+              title: cover.title || null,
+              subtitle: cover.subtitle || null,
+              tint: cover.tint,
+              photo_url: coverPhotoUrl,
+              photo_adjust: cover.photo ? (cover.photo.adjust || null) : null,
+            },
+            back_cover: {
+              mode: backCover.mode,
+              shape: backCover.shape,
+              photo_url: backCoverPhotoUrl,
+              photo_adjust: backCover.photo ? (backCover.photo.adjust || null) : null,
+            },
+            pages: pages.map(pg => ({
+              id: pg.id,
+              layout: pg.layout,
+              slots: pg.slots.map(id => id ? { photo_url: photoUrlById[id], target_index: id in targetIndexByPhoto ? targetIndexByPhoto[id] : null, adjust: photos.get(id).adjust || DEFAULT_ADJUST() } : null),
+            })),
+          };
+
+          // 5. Insert (create) or update (edit) the collection row.
+          setProgress(editing ? 'Saving changes…' : 'Saving your book…', 90);
+          let collectionId;
+          if (editing) {
+            const { data: col, error: colErr } = await db.from('collections')
+              .update({ name: title, mind_file_url: mindUrl, book_layout: bookLayout })
+              .eq('id', editingCollection.id).eq('user_id', currentUser.id)
+              .select().single();
+            if (colErr) throw new Error('Could not save changes: ' + colErr.message);
+            if (!col) throw new Error('Save was blocked — you may not own this book.');
+            collectionId = col.id;
+            // Replace the item set so removed/reordered popcodes are reflected.
+            const { error: delErr } = await db.from('collection_items').delete().eq('collection_id', collectionId);
+            if (delErr) throw new Error('Could not update linked media: ' + delErr.message);
+          } else {
+            const { data: col, error: colErr } = await db.from('collections')
+              .insert({ slug, name: title, mind_file_url: mindUrl, user_id: currentUser.id, kind: 'book', book_layout: bookLayout })
+              .select().single();
+            if (colErr) throw new Error('Could not save the book: ' + colErr.message);
+            collectionId = col.id;
+          }
+
+          // 6. Insert popcoded collection_items.
+          const rows = itemRows.map(r => ({ ...r, collection_id: collectionId }));
+          const { error: iErr } = await db.from('collection_items').insert(rows);
+          if (iErr) throw new Error('Book saved, but linking videos failed: ' + iErr.message);
+
+          setProgress('Done!', 100);
+          showResult(slug, editing);
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showBuildError(err.message || 'Something went wrong. Please try again.');
+        }
+      }
+
+      function showResult(slug, editing) {
+        document.getElementById('progress').classList.remove('visible');
+        document.querySelector('.result-card h3').textContent = editing ? 'Your book is updated!' : 'Your book is ready!';
+        const viewUrl = `https://popcode.app/${slug}`;
+        document.getElementById('result-url').textContent = `popcode.app/${slug}`;
+        document.getElementById('result-view').href = viewUrl;
+        document.getElementById('result-copy').onclick = () => {
+          navigator.clipboard.writeText(viewUrl).then(() => showToast('Link copied!')).catch(() => prompt('Copy this link:', viewUrl));
+        };
+        document.getElementById('result').classList.add('visible');
+      }
+
+      render();
+    </script>
+    <script src="/beta-feedback.js"></script>
+  </body>
+</html>
