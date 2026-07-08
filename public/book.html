@@ -2701,14 +2701,17 @@
           if (selectedTrayId || swapSource) return; // placement/swap modes own taps
           const startX = e.clientX, startY = e.clientY;
           const photo = photos.get(pg.slots[slotIdx]);
-          let dragging = false, moved = false, ghost = null;
+          let dragging = false, moved = false, ghost = null, holdTimer = null;
           const startDrag = (x, y) => {
             if (dragging) return;
+            clearTimeout(holdTimer);
             dragging = true;
             slot.classList.add('slot-drag');
             ghost = makeCircleGhost(photo.url, x, y);
           };
-          if (e.pointerType === 'mouse') startDrag(startX, startY); // circle appears on click-and-hold
+          // Mouse: pick up only after a brief press-and-hold (or a move), so a
+          // quick click opens the photo editor instead of starting a drag.
+          if (e.pointerType === 'mouse') holdTimer = setTimeout(() => startDrag(startX, startY), 200);
           const moveH = (ev) => {
             if (!dragging) {
               if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 10) return;
@@ -2721,6 +2724,7 @@
             if (under && under !== slot) under.classList.add('place-target');
           };
           const upH = (ev) => {
+            clearTimeout(holdTimer);
             document.removeEventListener('pointermove', moveH);
             document.removeEventListener('pointerup', upH);
             document.removeEventListener('pointercancel', upH);
@@ -2761,16 +2765,19 @@
         el.addEventListener('pointerdown', (e) => {
           if (e.target.closest('.tray-x')) return; // the delete button owns its taps
           const startX = e.clientX, startY = e.clientY;
-          let dragging = false, moved = false, ghost = null;
+          let dragging = false, moved = false, ghost = null, holdTimer = null;
           const startDrag = (x, y) => {
             if (dragging) return;
+            clearTimeout(holdTimer);
             dragging = true;
             el.classList.add('dragging');
             ghost = makeCircleGhost(photo.url, x, y);
             document.body.style.userSelect = 'none';
             if (opts.onDragStart) opts.onDragStart();
           };
-          if (e.pointerType === 'mouse') startDrag(startX, startY); // instant on click-and-hold
+          // Mouse: pick up only after a brief press-and-hold (or a move), so a
+          // quick click still selects the photo instead of starting a drag.
+          if (e.pointerType === 'mouse') holdTimer = setTimeout(() => startDrag(startX, startY), 200);
           const move = (ev) => {
             if (!dragging) {
               if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 8) return;
@@ -2784,6 +2791,7 @@
             if (under) under.classList.add('place-target');
           };
           const end = (ev) => {
+            clearTimeout(holdTimer);
             document.removeEventListener('pointermove', move);
             document.removeEventListener('pointerup', end);
             document.removeEventListener('pointercancel', end);
