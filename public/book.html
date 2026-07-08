@@ -1052,27 +1052,21 @@
       // ── Rendering ───────────────────────────────────────────────
       function render() { ensureBookEndpapers(); renderTray(); renderPages(); updateSummary(); }
 
-      // Endpapers. The book ALWAYS opens with a blank inside-front cover on the
-      // left of the first spread ([blank | Page 1]).
-      //
-      // Spreads pair pages (0,1),(2,3),… and a physical book needs an even total
-      // page count. With the inside-front blank always present, the inside-BACK
-      // blank only lands cleanly on the final spread's right when the content
-      // count is even; when it's odd the last content pages already pair up, so
-      // adding a back blank would leave a stray/empty page. So the inside-back
-      // blank is the conditional one: present when content is even, omitted when
-      // content is odd (the book then ends on a full content spread). Either way
-      // the opening always shows the inside-front blank, the total stays even, and
-      // there is never a [blank | blank] spread. Rebuilds from the content pages
-      // each render (idempotent) — content objects are preserved; only the blank
-      // endpapers are regenerated.
+      // Endpapers. The book always opens with a blank inside-front cover
+      // ([blank | Page 1]) and always ends with a blank inside-back cover on the
+      // final spread's RIGHT. When the content count is even the inside-back blank
+      // pairs with the last content page ([last page | blank]); when it's odd it
+      // is a lone trailing page, which renderPages draws on the right of an empty
+      // final spread ([empty | blank]) so the endpaper is always on the right.
+      // Rebuilds from the content pages each render (idempotent) — content objects
+      // are preserved; only the blank endpapers are regenerated.
       function ensureBookEndpapers() {
         const content = pages.filter(p => p.layout !== 'blank');
         if (!content.length) return; // nothing placed yet
         pages.length = 0;
         pages.push(blankPage()); // inside front cover — always
         pages.push(...content);
-        if (content.length % 2 === 0) pages.push(blankPage()); // inside back cover
+        pages.push(blankPage()); // inside back cover — always
       }
 
       function renderTray() {
@@ -1114,11 +1108,22 @@
 
           const body = document.createElement('div');
           body.className = 'spread-body';
-          body.appendChild(buildPageHalf(left, s, 'left', !right));
-          const fold = document.createElement('div'); fold.className = 'spread-fold';
-          body.appendChild(fold);
-          if (right) body.appendChild(buildPageHalf(right, s + 1, 'right', false));
-          else { const ph = document.createElement('div'); ph.className = 'page-half single'; body.appendChild(ph); }
+          // A lone trailing blank (odd content → the inside-back endpaper) is drawn
+          // on the RIGHT of an otherwise-empty final spread, so the endpaper always
+          // sits on the right.
+          if (!right && left.layout === 'blank') {
+            const ph = document.createElement('div'); ph.className = 'page-half single';
+            body.appendChild(ph);
+            const fold = document.createElement('div'); fold.className = 'spread-fold';
+            body.appendChild(fold);
+            body.appendChild(buildPageHalf(left, s, 'right', false));
+          } else {
+            body.appendChild(buildPageHalf(left, s, 'left', !right));
+            const fold = document.createElement('div'); fold.className = 'spread-fold';
+            body.appendChild(fold);
+            if (right) body.appendChild(buildPageHalf(right, s + 1, 'right', false));
+            else { const ph = document.createElement('div'); ph.className = 'page-half single'; body.appendChild(ph); }
+          }
 
           spread.appendChild(body);
           container.appendChild(spread);
