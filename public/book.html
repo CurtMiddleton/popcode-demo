@@ -718,6 +718,14 @@
           const itemByPhotoUrl = {};
           (items || []).forEach(it => { if (it.photo_url) itemByPhotoUrl[it.photo_url] = it; });
 
+          // Baseline signature of what the current .mind was compiled from: the
+          // popcoded photo URLs in target_index order. On save we only recompile
+          // when this ordered set changes (see saveBook step 2).
+          editingCollection._mindTargetUrls = (items || [])
+            .filter(it => it.photo_url != null && it.target_index != null)
+            .slice().sort((a, b) => a.target_index - b.target_index)
+            .map(it => it.photo_url);
+
           // Rebuild the photo pool + pages from book_layout. Existing photos have
           // a remote URL and no File; a photo is re-uploaded on save only if it
           // gains a File (new or replaced).
@@ -727,7 +735,7 @@
             const id = uid('ph');
             const it = itemByPhotoUrl[url];
             photos.set(id, {
-              id, file: null, url, existingUrl: url, source: 'Saved', adjust: DEFAULT_ADJUST(),
+              id, file: null, url, existingUrl: url, source: 'Saved', ow: 0, oh: 0, adjust: DEFAULT_ADJUST(),
               popcode: it ? {
                 mediaType: it.media_type || 'video',
                 video: null, audio: null,
@@ -2951,20 +2959,38 @@
             backCoverPhotoUrl = pub(bpath) + `?v=${Date.now()}`;
           }
 
-          // 2. Compile popcoded photos into a fresh .mind target. Recompiled on
-          //    every save so the target order matches the current popcode order.
-          setProgress('Preparing scan targets…', 32);
-          const imgs = [];
-          for (const id of popcodedIds) imgs.push(await loadCompileImage(photos.get(id)));
-          setProgress('Compiling scan targets… (this can take a minute)', 36);
-          await yieldToPaint();
-          const compiler = new MINDAR.IMAGE.Compiler();
-          await compiler.compileImageTargets(imgs, (prog) => setProgress(`Compiling scan targets… ${Math.round(prog)}%`, 36 + prog * 0.24));
-          const buffer = await compiler.exportData();
-          setProgress('Uploading scan targets…', 62);
-          const { error: mErr } = await db.storage.from(bucket).upload(`${slug}/target.mind`, new Blob([buffer]), { contentType: 'application/octet-stream', upsert: true });
-          if (mErr) throw new Error('Target upload failed: ' + mErr.message);
-          const mindUrl = pub(`${slug}/target.mind`) + `?v=${Date.now()}`;
+          // 2. Compile popcoded photos into a .mind target — but ONLY when the
+          //    target set actually changed. The .mind encodes each popcoded
+          //    photo's features in target_index order, so it must be rebuilt if a
+          //    photo gained/lost a popcode, the popcode order changed, or a
+          //    popcoded photo's image was replaced. If the ordered set of target
+          //    images is byte-for-byte what's already compiled, reuse the existing
+          //    .mind — compiling is the slow part of a save.
+          let mindUrl;
+          const targetUrlsNow = popcodedIds.map(id => photos.get(id).existingUrl || null);
+          const anyNewTargetImage = popcodedIds.some(id => !!photos.get(id).file);
+          const baseTargetUrls = editing ? editingCollection._mindTargetUrls : null;
+          const targetsUnchanged = editing && baseTargetUrls && !anyNewTargetImage
+            && targetUrlsNow.length === baseTargetUrls.length
+            && targetUrlsNow.every((u, i) => u && u === baseTargetUrls[i]);
+
+          if (editing && editingCollection.mind_file_url && targetsUnchanged) {
+            setProgress('Scan targets unchanged — reusing…', 62);
+            mindUrl = editingCollection.mind_file_url;
+          } else {
+            setProgress('Preparing scan targets…', 32);
+            const imgs = [];
+            for (const id of popcodedIds) imgs.push(await loadCompileImage(photos.get(id)));
+            setProgress('Compiling scan targets… (this can take a minute)', 36);
+            await yieldToPaint();
+            const compiler = new MINDAR.IMAGE.Compiler();
+            await compiler.compileImageTargets(imgs, (prog) => setProgress(`Compiling scan targets… ${Math.round(prog)}%`, 36 + prog * 0.24));
+            const buffer = await compiler.exportData();
+            setProgress('Uploading scan targets…', 62);
+            const { error: mErr } = await db.storage.from(bucket).upload(`${slug}/target.mind`, new Blob([buffer]), { contentType: 'application/octet-stream', upsert: true });
+            if (mErr) throw new Error('Target upload failed: ' + mErr.message);
+            mindUrl = pub(`${slug}/target.mind`) + `?v=${Date.now()}`;
+          }
 
           // 3. Resolve each popcode's media URL. Upload only NEW Files; reuse the
           //    stored URL for unchanged media (the item row's URL is authoritative,
