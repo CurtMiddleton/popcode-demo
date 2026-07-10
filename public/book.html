@@ -2054,7 +2054,7 @@
       // Popcoded pages get the Popcode scan badge baked into the bottom-right of
       // each linked slot (same asset/corner as order.html) so a printed page
       // signals it's scannable. Returns { blob, pageCount } — never downloads.
-      const PRINT_A4L = { wIn: 11.6929, hIn: 8.2677, dpi: 300, minPages: 18, maxPages: 122, badgeScale: 0.09 };
+      const PRINT_A4L = { wIn: 11.6929, hIn: 8.2677, dpi: 300, minPages: 24, maxPages: 122, badgeScale: 0.09 };
 
       // Rasterize the Popcode badge SVG (viewBox-only, no intrinsic size) to a
       // PNG data-URL so html2canvas renders it (it drops external SVG <img>s).
@@ -2080,11 +2080,13 @@
         const coverCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas cover proof-canvas'; c.appendChild(buildCoverCanvas()); return c; };
         const backCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas backcover proof-canvas'; c.appendChild(buildBackCoverCanvas()); return c; };
 
-        // Interior pages already include the endpaper blanks. Pad with extra
-        // blanks (before the back cover) until the TOTAL PDF page count is even
-        // and at least the layflat minimum.
-        const interior = pages.slice();
-        let total = 1 + interior.length + 1; // cover + interior + back
+        // Prodigi's layflat PDF is: page 1 = front cover, page 2 = first content
+        // (right-hand), … , last page = back cover. The inside front/back covers
+        // are physically blank and NOT PDF pages, so drop our on-screen endpaper
+        // blanks. Then pad with blank pages BEFORE the back cover until the TOTAL
+        // page count is even and within the layflat range (24–122).
+        const interior = pages.filter(pg => pg.layout !== 'blank');
+        let total = 1 + interior.length + 1; // cover + content + back
         while (total < PRINT_A4L.minPages || total % 2 !== 0) { interior.push({ layout: 'blank', slots: [] }); total++; }
 
         const units = [];
@@ -2154,6 +2156,65 @@
         }
         proof.innerHTML = ''; proof.className = '';
         return { blob: doc.output('blob'), pageCount: units.length };
+      }
+
+      // ── Spine artwork (separate Prodigi `spine` asset) ──────────
+      // Ported from Bashō (trek-folio spine-title.ts). Prodigi returns the spine
+      // width (mm) for the page count + destination lab; we render a strip that
+      // wide × the book height (210mm) with the cover title set along the length.
+      // Type scales to the spine thickness, capped at the reference sizes.
+      const SPINE_PT_PER_MM = 72 / 25.4;
+      function spineParts() {
+        const eyebrow = (cover.eyebrow || '').trim() || null;
+        const big = (cover.title || document.getElementById('title-input').value || 'My book').trim();
+        const year = (coverYear(cover.subtitle) || coverYear(cover.title) || '').trim() || null;
+        return { eyebrow, big, year };
+      }
+      // Render the spine strip to a single-page PDF Blob at 300 DPI.
+      async function buildSpinePdf(widthMm, parts) {
+        await loadProofLibs();
+        const H_MM = 210;
+        const usablePt = Math.max(0, (widthMm - 4) * SPINE_PT_PER_MM);   // 2mm safety each long edge
+        const bigPt = Math.min(32, usablePt / 1.25);
+        const scale = bigPt > 0 ? bigPt / 32 : 0;
+        const namePt = 14 * scale, yearPt = 12 * scale, gapPt = 5 * SPINE_PT_PER_MM * scale;
+
+        // Horizontal strip: length = 210mm, thickness = widthMm. Rendered upright
+        // (readable), then rotated 90° into the final widthMm×210mm page.
+        const LEN_CSS = 1000, pxPerMm = LEN_CSS / H_MM, pxPerPt = pxPerMm * 25.4 / 72;
+        const thickCss = Math.max(6, widthMm) * pxPerMm;
+        const inset = 16.5 * pxPerMm;
+
+        const proof = document.getElementById('proof');
+        proof.innerHTML = ''; proof.className = '';
+        const strip = document.createElement('div');
+        strip.style.cssText = 'position:fixed;left:-99999px;top:0;width:' + LEN_CSS + 'px;height:' + thickCss + 'px;'
+          + 'background:#1a1a1a;color:#fff;overflow:hidden;';
+        const serif = "'Cormorant Garamond', Georgia, serif";
+        const titleHtml = (parts.eyebrow ? '<span style="font-style:italic;font-size:' + (namePt * pxPerPt) + 'px;">' + escapeHtml(parts.eyebrow) + '</span><span style="display:inline-block;width:' + (gapPt * pxPerPt) + 'px"></span>' : '')
+          + '<span style="font-size:' + (bigPt * pxPerPt) + 'px;">' + escapeHtml(parts.big) + '</span>';
+        strip.innerHTML =
+          '<div style="position:absolute;left:' + inset + 'px;top:50%;transform:translateY(-50%);white-space:nowrap;font-family:' + serif + ';display:flex;align-items:baseline;">' + titleHtml + '</div>'
+          + (parts.year ? '<div style="position:absolute;right:' + inset + 'px;top:50%;transform:translateY(-50%);white-space:nowrap;font-family:\'Inter\',sans-serif;font-size:' + (yearPt * pxPerPt) + 'px;">' + escapeHtml(parts.year) + '</div>' : '');
+        proof.appendChild(strip);
+        if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
+        await new Promise(r => setTimeout(r, 40));
+
+        // Capture the upright strip at 300 DPI, then rotate 90° onto a vertical canvas.
+        const capScale = (H_MM / 25.4 * PRINT_A4L.dpi) / LEN_CSS;   // → 210mm @ 300dpi across the length
+        const h = await html2canvas(strip, { backgroundColor: '#1a1a1a', scale: capScale, logging: false, width: LEN_CSS, height: thickCss });
+        proof.innerHTML = '';
+        const v = document.createElement('canvas');
+        v.width = h.height; v.height = h.width;               // swap dims (90° rotation)
+        const ctx = v.getContext('2d');
+        ctx.translate(v.width / 2, v.height / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.drawImage(h, -h.width / 2, -h.height / 2);
+        const data = v.toDataURL('image/jpeg', 0.92);
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'mm', format: [widthMm, H_MM], orientation: 'portrait', compress: true });
+        doc.addImage(data, 'JPEG', 0, 0, widthMm, H_MM);
+        return doc.output('blob');
       }
 
       // ── Order a printed book (Prodigi via Stripe) ───────────────
@@ -2241,6 +2302,32 @@
           const { data: { session } } = await db.auth.getSession();
           const token = session && session.access_token;
           if (!token) throw new Error('Please sign in again.');
+
+          // Interior PDF → the `default` print area. Then a best-effort spine:
+          // query Prodigi for the width, render a matched strip, add it as the
+          // `spine` asset. A spine failure never blocks the order (the book still
+          // binds without a custom spine).
+          const assetUrls = [{ url: pdfUrl, print_area: 'default' }];
+          try {
+            const sResp = await fetch('/api/book-spine', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+              body: JSON.stringify({
+                productType: 'book', variantId: BOOK_VARIANT_ID,
+                numberOfPages: pageCount,
+                destinationCountryCode: recipient.address.countryCode,
+                state: recipient.address.stateOrCounty || undefined,
+              }),
+            });
+            const sData = await sResp.json().catch(() => ({}));
+            if (sData && sData.widthMm > 0) {
+              const spineBlob = await buildSpinePdf(sData.widthMm, spineParts());
+              const spath = `${editingCollection.slug}/print/spine_${Date.now()}.pdf`;
+              const { error: sErr } = await db.storage.from('experiences').upload(spath, spineBlob, { contentType: 'application/pdf', upsert: true });
+              if (!sErr) assetUrls.push({ url: db.storage.from('experiences').getPublicUrl(spath).data.publicUrl, print_area: 'spine' });
+            }
+          } catch (e) { /* best-effort: interior-only if the spine step fails */ }
+
           const resp = await fetch('/api/create-checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -2251,7 +2338,7 @@
               copies,
               shippingMethod: 'Standard',
               recipient,
-              assetUrls: [{ url: pdfUrl, print_area: 'default' }],
+              assetUrls,
               pageCount,
             }),
           });

@@ -110,10 +110,11 @@ export default async function handler(req, res) {
 
     // 5. Persist a pending order. (service role bypasses RLS)
     const copiesInt = Math.max(1, parseInt(copies, 10) || 1);
-    // For books, stamp the page count onto each asset so finalize-order submits
-    // it to Prodigi (page-priced) without needing the catalog variant.
+    // For books, stamp the page count onto the INTERIOR asset only (Prodigi's
+    // page-priced default print area) so finalize-order submits it without the
+    // catalog variant. The spine asset must not carry pageCount.
     const storedAssets = bookPageCount
-      ? assetUrls.map((a) => ({ ...a, page_count: bookPageCount }))
+      ? assetUrls.map((a) => ((a.print_area || 'default') === 'spine' ? a : { ...a, page_count: bookPageCount }))
       : assetUrls;
     const { data: order, error: insErr } = await admin
       .from('print_orders')
