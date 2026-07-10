@@ -2224,6 +2224,24 @@
       // pages carry the baked scan badge, so a printed page stays scannable.
       const BOOK_VARIANT_ID = 'book-a4l-layflat';
 
+      // Confirm before padding a short book up to the layflat minimum, so the
+      // extra blank pages aren't a surprise. Resolves true = continue.
+      function confirmBookPadding(total, blanks) {
+        return new Promise((resolve) => {
+          const btn = 'width:100%;border:none;border-radius:14px;font-family:\'Inter\',sans-serif;font-weight:600;font-size:16px;padding:15px;cursor:pointer;';
+          openSheet(
+            '<div class="ep-head"><h2>Add a few more pages?</h2><button class="ep-x" id="pad-x" aria-label="Close">' + IC_X + '</button></div>'
+            + '<p class="sheet-sub">Layflat books print at a minimum of <strong>' + PRINT_A4L.minPages + ' pages</strong>. Yours is shorter, so we’ll add <strong>' + blanks + ' blank page' + (blanks !== 1 ? 's' : '') + '</strong> at the end to reach ' + total + '. Add more photos to fill them, or continue.</p>'
+            + '<button id="pad-add" style="' + btn + 'background:#1a1a1a;color:#fff;">Add more photos first</button>'
+            + '<button id="pad-go" style="' + btn + 'background:#eee;color:#1a1a1a;margin-top:9px;">Continue with ' + blanks + ' blank page' + (blanks !== 1 ? 's' : '') + '</button>'
+          );
+          const done = (v) => { closeSheet(); resolve(v); };
+          document.getElementById('pad-x').addEventListener('click', () => done(false));
+          document.getElementById('pad-add').addEventListener('click', () => done(false));
+          document.getElementById('pad-go').addEventListener('click', () => done(true));
+        });
+      }
+
       async function orderPrintedBook() {
         if (!editingCollection || !editingCollection.id || !editingCollection.slug) {
           closeSheet();
@@ -2231,6 +2249,15 @@
           return;
         }
         if (!placedIds().size) { showToast('Add photos to your book first.'); return; }
+        // Warn if the book will be padded up to the layflat minimum.
+        const contentCount = pages.filter(pg => pg.layout !== 'blank').length;
+        const projected = 1 + contentCount + 1; // cover + content + back
+        if (projected < PRINT_A4L.minPages || projected % 2 !== 0) {
+          let target = Math.max(PRINT_A4L.minPages, projected);
+          if (target % 2 !== 0) target += 1;
+          const blanks = target - projected;
+          if (blanks > 0 && !(await confirmBookPadding(target, blanks))) return;
+        }
         closeSheet();
         let pdfUrl, pageCount;
         try {
