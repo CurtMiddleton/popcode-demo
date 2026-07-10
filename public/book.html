@@ -2040,6 +2040,115 @@
         }
       }
 
+      // ── Print-ready PDF for Prodigi (layflat A4 landscape) ──────
+      // Prodigi layflat A4-landscape books take a SINGLE PDF, one book page per
+      // PDF page, cover FIRST + back cover LAST, at 300 DPI, RGB, with an EVEN
+      // page count (18–122 for layflat). There is no spine asset for layflat.
+      // Popcoded pages get the Popcode scan badge baked into the bottom-right of
+      // each linked slot (same asset/corner as order.html) so a printed page
+      // signals it's scannable. Returns { blob, pageCount } — never downloads.
+      const PRINT_A4L = { wIn: 11.6929, hIn: 8.2677, dpi: 300, minPages: 18, maxPages: 122, badgeScale: 0.09 };
+
+      // Rasterize the Popcode badge SVG (viewBox-only, no intrinsic size) to a
+      // PNG data-URL so html2canvas renders it (it drops external SVG <img>s).
+      async function rasterizeBadge() {
+        let svg = await (await fetch('/assets/popcode_icon.svg')).text();
+        if (!/<svg[^>]*\bwidth=/.test(svg)) svg = svg.replace('<svg ', '<svg width="302" height="302" ');
+        const img = new Image();
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        await (img.decode ? img.decode().catch(() => {}) : new Promise(r => { img.onload = img.onerror = r; }));
+        const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+        c.getContext('2d').drawImage(img, 0, 0, 256, 256);
+        return c.toDataURL('image/png');
+      }
+
+      async function buildBookPrintPdf() {
+        await loadProofLibs();
+        const proof = document.getElementById('proof');
+        proof.innerHTML = '';
+        proof.className = 'proof proof-pages';
+
+        const pageCanvas = (pg) => { const c = document.createElement('div'); c.className = 'page-canvas proof-canvas' + (pg.layout === 'blank' ? ' blank' : ''); if (pg.layout !== 'blank') c.appendChild(buildPageGrid(pg)); return c; };
+        const blankCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas proof-canvas blank'; return c; };
+        const coverCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas cover proof-canvas'; c.appendChild(buildCoverCanvas()); return c; };
+        const backCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas backcover proof-canvas'; c.appendChild(buildBackCoverCanvas()); return c; };
+
+        // Interior pages already include the endpaper blanks. Pad with extra
+        // blanks (before the back cover) until the TOTAL PDF page count is even
+        // and at least the layflat minimum.
+        const interior = pages.slice();
+        let total = 1 + interior.length + 1; // cover + interior + back
+        while (total < PRINT_A4L.minPages || total % 2 !== 0) { interior.push({ layout: 'blank', slots: [] }); total++; }
+
+        const units = [];
+        const addUnit = (el) => { const p = document.createElement('div'); p.className = 'proof-page'; p.appendChild(el); proof.appendChild(p); units.push(el); };
+        addUnit(coverCanvas());
+        interior.forEach(pg => addUnit(pg.layout === 'blank' ? blankCanvas() : pageCanvas(pg)));
+        addUnit(backCanvas());
+
+        // Force every unit to an exact A4-landscape box so the PDF pages are true
+        // A4 (content is %-sized, so it scales proportionally).
+        const PXW = 1400, PXH = Math.round(PXW * PRINT_A4L.hIn / PRINT_A4L.wIn);
+        units.forEach(u => { u.style.width = PXW + 'px'; u.style.height = PXH + 'px'; u.style.aspectRatio = 'auto'; });
+
+        // Wait for images to decode + fonts to settle before capture.
+        const imgEls = [...proof.querySelectorAll('img')];
+        await Promise.all(imgEls.map(im => (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(r => { im.onload = im.onerror = r; })));
+        if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
+        await new Promise(r => setTimeout(r, 120));
+
+        // html2canvas 1.4.1 silently drops external SVG <img>s, so rasterize the
+        // scan badge to a PNG data-URL once and paint it (and every photo) as a
+        // background <div> — the one image path html2canvas renders reliably.
+        const badgePng = await rasterizeBadge();
+
+        // Bake the badge onto popcoded slots + apply the buildProof fixups (pin
+        // aspect-ratio boxes, swap transformed photo <img>s to background <div>s).
+        // Layflat has NO spine, so drop the cover spine strip (don't print it).
+        units.forEach(unit => {
+          unit.querySelectorAll('.slot').forEach(slot => {
+            const tag = slot.querySelector('.slot-tag');
+            if (!tag) return;               // slot isn't popcoded
+            tag.remove();                   // drop the on-screen pill
+            // Square badge sized off the slot's shorter edge (matches order.html).
+            const r = slot.getBoundingClientRect();
+            const size = Math.round(Math.min(r.width, r.height) * PRINT_A4L.badgeScale);
+            const pad = Math.round(size * 0.5);
+            const b = document.createElement('div');
+            b.style.cssText = 'position:absolute;z-index:3;right:' + pad + 'px;bottom:' + pad + 'px;'
+              + 'width:' + size + 'px;height:' + size + 'px;pointer-events:none;'
+              + 'background-image:url("' + badgePng + '");background-size:contain;background-repeat:no-repeat;background-position:center;';
+            slot.appendChild(b);
+          });
+          unit.querySelectorAll('.slot, .bc-inset').forEach(el => { const r = el.getBoundingClientRect(); el.style.width = r.width + 'px'; el.style.height = r.height + 'px'; el.style.aspectRatio = 'auto'; });
+          unit.querySelectorAll('.slot-img, .cv-photo-img, .bc-img').forEach(img => {
+            const isFit = img.classList.contains('fit');
+            const div = document.createElement('div');
+            div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+              + 'background-image:url("' + img.src + '");background-size:' + (isFit ? 'contain' : 'cover') + ';'
+              + 'background-position:center;background-repeat:no-repeat;'
+              + 'transform:' + (img.style.transform || 'none') + ';transform-origin:center center;';
+            img.replaceWith(div);
+          });
+          unit.querySelectorAll('.cv-spine').forEach(spine => spine.remove());
+        });
+        await new Promise(r => setTimeout(r, 30));
+
+        const { jsPDF } = window.jspdf;
+        const fmt = [PRINT_A4L.wIn, PRINT_A4L.hIn]; // inches, A4 landscape
+        const doc = new jsPDF({ unit: 'in', format: fmt, orientation: 'landscape', compress: true });
+        const scale = (PRINT_A4L.wIn * PRINT_A4L.dpi) / PXW; // → ~3508px wide (300 DPI)
+        for (let i = 0; i < units.length; i++) {
+          showToast(`Rendering print file… ${i + 1}/${units.length}`);
+          const canvas = await html2canvas(units[i], { useCORS: true, backgroundColor: '#ffffff', scale, logging: false, width: PXW, height: PXH });
+          const data = canvas.toDataURL('image/jpeg', 0.92);
+          if (i > 0) doc.addPage(fmt, 'landscape');
+          doc.addImage(data, 'JPEG', 0, 0, fmt[0], fmt[1]);
+        }
+        proof.innerHTML = ''; proof.className = '';
+        return { blob: doc.output('blob'), pageCount: units.length };
+      }
+
       document.getElementById('dock-photos').addEventListener('click', openPhotosSheet);
       document.getElementById('dock-pages').addEventListener('click', openPagesSheet);
       document.getElementById('dock-options').addEventListener('click', openOptionsSheet);
