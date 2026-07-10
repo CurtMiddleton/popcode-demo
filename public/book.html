@@ -772,6 +772,8 @@
           document.querySelector('h1').textContent = 'Edit Book';
           document.getElementById('create-btn').textContent = 'Save Changes';
           render();
+          // "Shop" deep-link from My Projects opens straight into the order flow.
+          if (new URLSearchParams(location.search).get('order') === '1') orderPrintedBook();
         } catch (err) {
           console.error(err);
           if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
@@ -1830,6 +1832,10 @@
         openSheet(`
           <h2>Options</h2>
           <p class="sheet-sub">Edit your book’s title, cover, fonts and more.</p>
+          <div class="menu-row" data-act="order" style="background:#f0eefe">
+            <div class="menu-ic" style="background:#1a1a1a;color:#fff"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>
+            <div><div>Order a printed book</div><div class="menu-sub">Layflat · A4 landscape · printed &amp; shipped</div></div>
+          </div>
           <div class="menu-row" data-act="title">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></div>
             <div><div>Edit book title</div><div class="menu-sub">${escapeHtml((document.getElementById('title-input').value || '').trim()) || 'Untitled book'}</div></div>
@@ -1864,6 +1870,7 @@
             <div><div>Proof: PDF pages</div><div class="menu-sub">Admin · print one page per sheet to PDF</div></div>
           </div>` : ''}
         `);
+        document.querySelector('#sheet [data-act="order"]').addEventListener('click', orderPrintedBook);
         document.querySelector('#sheet [data-act="title"]').addEventListener('click', () => {
           closeSheet();
           const inp = document.getElementById('title-input');
@@ -2147,6 +2154,116 @@
         }
         proof.innerHTML = ''; proof.className = '';
         return { blob: doc.output('blob'), pageCount: units.length };
+      }
+
+      // ── Order a printed book (Prodigi via Stripe) ───────────────
+      // Builds the print-ready PDF, uploads it to the public experiences bucket,
+      // collects a shipping address, then hands off to /api/create-checkout (which
+      // re-quotes Prodigi server-side and opens Stripe Checkout). The .mind-linked
+      // pages carry the baked scan badge, so a printed page stays scannable.
+      const BOOK_VARIANT_ID = 'book-a4l-layflat';
+
+      async function orderPrintedBook() {
+        if (!editingCollection || !editingCollection.id || !editingCollection.slug) {
+          closeSheet();
+          showToast('Save your book first, then order a printed copy.');
+          return;
+        }
+        if (!placedIds().size) { showToast('Add photos to your book first.'); return; }
+        closeSheet();
+        let pdfUrl, pageCount;
+        try {
+          showToast('Building your print file…');
+          const out = await buildBookPrintPdf();
+          pageCount = out.pageCount;
+          const path = `${editingCollection.slug}/print/book_${Date.now()}.pdf`;
+          const { error } = await db.storage.from('experiences').upload(path, out.blob, { contentType: 'application/pdf', upsert: true });
+          if (error) throw new Error('Upload failed: ' + error.message);
+          pdfUrl = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast('Could not build the print file: ' + (err.message || 'error'));
+          return;
+        }
+        openBookAddressSheet(pdfUrl, pageCount);
+      }
+
+      function openBookAddressSheet(pdfUrl, pageCount) {
+        const email = (currentUser && currentUser.email) || '';
+        const name = (currentUser && currentUser.user_metadata && currentUser.user_metadata.full_name) || '';
+        openSheet(`
+          <style>
+            .bo-form { display:flex; flex-direction:column; gap:9px; margin:6px 0 14px; }
+            .bo-form input { width:100%; border:1px solid #d9d5cf; border-radius:11px; padding:12px 13px; font-size:15px; font-family:'Inter',sans-serif; background:#fff; }
+            .bo-form input:focus { outline:none; border-color:#7657FC; }
+            .bo-row { display:flex; gap:9px; } .bo-row input { flex:1; min-width:0; }
+            .bo-pay { width:100%; border:none; border-radius:14px; background:#1a1a1a; color:#fff; font-family:'Inter',sans-serif; font-weight:600; font-size:16px; padding:15px; cursor:pointer; }
+            .bo-pay:disabled { opacity:.5; cursor:default; }
+            .bo-note { text-align:center; color:#8a857d; font-size:12px; margin-top:9px; }
+          </style>
+          <div class="ep-head"><h2>Ship your book</h2><button class="ep-x" id="bo-close" aria-label="Close">${IC_X}</button></div>
+          <p class="sheet-sub">Layflat photo book · A4 landscape · ${pageCount} pages. We’ll print it and ship it to you.</p>
+          <div class="bo-form">
+            <input id="bo-name" placeholder="Full name" value="${escapeHtml(name)}" autocomplete="name"/>
+            <input id="bo-email" type="email" placeholder="Email" value="${escapeHtml(email)}" autocomplete="email"/>
+            <input id="bo-line1" placeholder="Address line 1" autocomplete="address-line1"/>
+            <input id="bo-line2" placeholder="Address line 2 (optional)" autocomplete="address-line2"/>
+            <input id="bo-city" placeholder="City" autocomplete="address-level2"/>
+            <div class="bo-row"><input id="bo-state" placeholder="State / County" autocomplete="address-level1"/><input id="bo-zip" placeholder="ZIP / Postcode" autocomplete="postal-code"/></div>
+            <div class="bo-row"><input id="bo-country" placeholder="Country code" value="US" maxlength="2" style="text-transform:uppercase"/><input id="bo-copies" type="number" min="1" value="1" placeholder="Copies"/></div>
+          </div>
+          <button class="bo-pay" id="bo-pay">Continue to payment</button>
+          <p class="bo-note">You’ll see the price and pay securely on the next screen.</p>
+        `);
+        document.getElementById('bo-close').addEventListener('click', closeSheet);
+        document.getElementById('bo-pay').addEventListener('click', () => submitBookOrder(pdfUrl, pageCount));
+      }
+
+      async function submitBookOrder(pdfUrl, pageCount) {
+        const val = (id) => (document.getElementById(id).value || '').trim();
+        const recipient = {
+          name: val('bo-name'), email: val('bo-email'),
+          address: {
+            line1: val('bo-line1'), line2: val('bo-line2'),
+            townOrCity: val('bo-city'), stateOrCounty: val('bo-state'),
+            postalOrZipCode: val('bo-zip'), countryCode: val('bo-country').toUpperCase(),
+          },
+        };
+        const copies = Math.max(1, parseInt(val('bo-copies'), 10) || 1);
+        if (!recipient.name || !recipient.email || !recipient.address.line1 ||
+            !recipient.address.townOrCity || !recipient.address.postalOrZipCode || !recipient.address.countryCode) {
+          showToast('Please fill in name, email and full address.'); return;
+        }
+        const btn = document.getElementById('bo-pay');
+        btn.disabled = true; btn.textContent = 'Preparing checkout…';
+        try {
+          const { data: { session } } = await db.auth.getSession();
+          const token = session && session.access_token;
+          if (!token) throw new Error('Please sign in again.');
+          const resp = await fetch('/api/create-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({
+              collectionId: editingCollection.id,
+              productType: 'book',
+              variantId: BOOK_VARIANT_ID,
+              copies,
+              shippingMethod: 'Standard',
+              recipient,
+              assetUrls: [{ url: pdfUrl, print_area: 'default' }],
+              pageCount,
+            }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok || !data.url) throw new Error(data.error || 'Checkout failed');
+          window.location.href = data.url;
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast(err.message || 'Could not start checkout.');
+          btn.disabled = false; btn.textContent = 'Continue to payment';
+        }
       }
 
       document.getElementById('dock-photos').addEventListener('click', openPhotosSheet);
