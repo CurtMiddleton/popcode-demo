@@ -54,39 +54,17 @@
       .sub { color: #8a857d; font-size: 15px; margin-bottom: 26px; }
       @media (max-width: 420px) { h1 { font-size: 28px; } }
 
-      /* Product grid (mirrors order.html's Shop Products cat-grid) */
-      .cat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; }
-      @media (max-width: 680px) { .cat-grid { grid-template-columns: 1fr; gap: 30px; } }
-      .cat-card { cursor: pointer; text-align: left; }
-      .cat-thumb {
-        width: 100%; aspect-ratio: 4 / 3; background: #fff; border-radius: 10px;
-        display: flex; align-items: center; justify-content: center; overflow: hidden;
-        box-shadow: 0 2px 14px rgba(0,0,0,0.06); transition: transform 0.12s, box-shadow 0.12s;
-      }
-      .cat-card:hover .cat-thumb { transform: translateY(-3px); box-shadow: 0 8px 26px rgba(0,0,0,0.12); }
-      .cat-thumb img { max-width: 94%; max-height: 94%; object-fit: contain; display: block; }
-      .cat-name { font-family: 'CooperBT', serif; font-size: 24px; margin-top: 14px; }
-      .cat-badge { display: inline-block; font-size: 10px; font-weight: 700; color: #fff; background: linear-gradient(135deg,#7657FC,#589AF9); border-radius: 999px; padding: 2px 8px; margin-left: 8px; vertical-align: middle; position: relative; top: -3px; font-family: 'Inter', sans-serif; }
-      .cat-desc { color: #6b6862; font-size: 14px; line-height: 1.45; margin-top: 5px; }
-      .cat-from { color: #7657FC; font-weight: 600; font-size: 14px; margin-top: 8px; }
-
-      /* Rendered hardcover photo-book mockup (no Prodigi template image yet) */
-      .book-mock { position: relative; width: 66%; aspect-ratio: 1 / 1; }
-      .book-cover {
-        position: absolute; inset: 0; border-radius: 3px 8px 8px 3px;
-        background-size: cover; background-position: center;
-        box-shadow: 6px 10px 22px rgba(0,0,0,0.28);
-        border-left: 7px solid rgba(0,0,0,0.22);
-      }
-      .book-cover::after {
-        content: ''; position: absolute; top: 3px; bottom: 3px; right: -6px; width: 6px;
-        background: repeating-linear-gradient(to bottom, #efece6 0, #efece6 1px, #cfccc4 1px, #cfccc4 2px);
-        border-radius: 0 3px 3px 0;
-      }
-      .book-cover::before {
-        content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 14px;
-        background: linear-gradient(to right, rgba(0,0,0,0.20), rgba(0,0,0,0));
-      }
+      /* Product grid — matches order.html's Shop Products (big Popsa-style tiles) */
+      .cat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:44px; margin-top:8px; }
+      @media (max-width:680px){ .cat-grid { grid-template-columns:1fr; gap:32px; } }
+      .cat-card { background:#fff; border-radius:24px; padding:30px; box-shadow:0 2px 14px rgba(0,0,0,0.06); cursor:pointer; border:1px solid #eee; transition:transform .12s, box-shadow .15s, border-color .15s; text-align:left; }
+      .cat-card:hover { transform:translateY(-3px); box-shadow:0 12px 32px rgba(0,0,0,0.12); border-color:#e3dffb; }
+      .cat-thumb { width:100%; height:400px; border-radius:16px; background:#fafafa; display:flex; align-items:center; justify-content:center; overflow:hidden; margin-bottom:28px; }
+      .cat-thumb img { max-width:98%; max-height:98%; object-fit:contain; display:block; }
+      .cat-name { font-family:'CooperBT', Georgia, serif; font-size:31px; font-weight:400; letter-spacing:-0.01em; }
+      .cat-badge { display:inline-block; font-size:11px; font-weight:700; color:#fff; background:linear-gradient(135deg,#7657FC,#589AF9); border-radius:999px; padding:2px 9px; margin-left:10px; vertical-align:middle; position:relative; top:-4px; font-family:'Inter',sans-serif; }
+      .cat-desc { color:#777; font-size:15px; margin:10px 0 22px; line-height:1.55; }
+      .cat-from { font-size:16px; font-weight:600; color:#1a1a1a; }
 
       /* Nav drawer (mobile) */
       #nav-overlay { display: none; position: fixed; inset: 0; z-index: 200; }
@@ -197,16 +175,12 @@
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       let currentUser = null, popcodes = [];
 
-      // Sample photo used for the book-cover mockup (product-first: no user photo
-      // chosen yet). Reuses the leopard from the Prodigi print template.
-      const BOOK_COVER_PHOTO = '/assets/mockups/print.jpg';
-
       // Products. Photo Book is the hero (builds from scratch → book.html).
       // The print products need a photo, so they open a picker of the user's
       // Popcodes → order.html with the chosen category pre-selected. Photo-product
       // thumbnails are the real Prodigi product mockups shown as-is.
       const PRODUCTS = [
-        { id: 'book',   name: 'Photo Book',    desc: 'Lay-flat hardcover photo book — scannable pages come to life.', badge: 'New', kind: 'build' },
+        { id: 'book',   name: 'Photo Book',    desc: 'Lay-flat hardcover photo book — scannable pages come to life.', badge: 'New', kind: 'build', mockup: '/assets/mockups/book.jpg' },
         { id: 'print',  name: 'Prints',        desc: 'Museum-quality enhanced matte fine-art prints.',                kind: 'photo', type: 'print',  mockup: '/assets/mockups/print.jpg' },
         { id: 'tile',   name: 'Photo Tiles',   desc: 'Framed, ready-to-hang tiles — great on their own or clustered.', kind: 'photo', type: 'tile',   mockup: '/assets/mockups/tile.jpg' },
         { id: 'canvas', name: 'Canvas',        desc: 'Gallery-style stretched canvas with mirror-wrapped edges.',      kind: 'photo', type: 'canvas', mockup: '/assets/mockups/canvas.jpg' },
@@ -233,12 +207,9 @@
           const card = document.createElement('div');
           card.className = 'cat-card';
           const badge = p.badge ? `<span class="cat-badge">${p.badge}</span>` : '';
-          const art = p.id === 'book'
-            ? `<div class="book-mock"><div class="book-cover" style="background-image:url('${BOOK_COVER_PHOTO}')"></div></div>`
-            : `<img src="${p.mockup}" alt="${p.name}" loading="lazy">`;
-          const cta = p.id === 'book' ? 'Start your book' : 'See sizes & pricing';
+          const cta = p.id === 'book' ? 'Start your book' : 'See more details and pricing';
           card.innerHTML =
-            `<div class="cat-thumb ${p.type || ''}">${art}</div>` +
+            `<div class="cat-thumb"><img src="${p.mockup}" alt="${p.name}" loading="lazy"></div>` +
             `<div class="cat-name">${p.name}${badge}</div>` +
             `<div class="cat-desc">${p.desc}</div>` +
             `<div class="cat-from">${cta} &rarr;</div>`;

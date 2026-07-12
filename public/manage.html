@@ -95,6 +95,28 @@
 
       .collections-list { width: 100%; max-width: 560px; padding: 0 24px; display: flex; flex-direction: column; gap: 16px; }
 
+      /* My Designs — distinct product grid (not the stacked Popcode list) */
+      .designs-grid {
+        width: 100%; max-width: 820px; padding: 0 24px;
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 26px;
+      }
+      @media (max-width: 560px) { .designs-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; } }
+      .design-card {
+        background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        overflow: hidden; display: flex; flex-direction: column; transition: transform 0.12s, box-shadow 0.12s;
+      }
+      .design-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
+      .design-mock {
+        aspect-ratio: 4 / 3; background: #fff;
+        display: flex; align-items: center; justify-content: center; overflow: hidden;
+      }
+      .design-mock .book-canvas { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .design-photo { width: 74%; aspect-ratio: 4 / 5; margin: 20px; border-radius: 3px; background: #e8e4f0 center/cover; box-shadow: 3px 6px 16px rgba(0,0,0,0.2); }
+      .design-body { padding: 13px 15px 14px; display: flex; flex-direction: column; }
+      .design-title { font-family: 'CooperBT', serif; font-size: 20px; line-height: 1.15; color: #1a1a1a; }
+      .design-meta { font-size: 12px; color: #999; margin-top: 5px; }
+      .design-actions { display: flex; gap: 6px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+
       .card {
         background: white;
         border-radius: 6px;
@@ -451,7 +473,7 @@
         try {
           const { data: collections, error } = await db
             .from('collections')
-            .select('id, slug, name, created_at, kind')
+            .select('id, slug, name, created_at, kind, book_layout')
             .eq('user_id', currentUser.id)
             .order('created_at', { ascending: false });
 
@@ -515,9 +537,12 @@
           cta.href = isDesigns ? '/shop.html' : '/create.html';
         }
         document.title = isDesigns ? 'Popcode — My Designs' : 'Popcode — My Popcodes';
+        // Designs get a distinct product-mockup grid; Popcodes keep the list.
+        content.className = isDesigns ? 'designs-grid' : 'collections-list';
         const list = allCollections.filter(c => isDesigns ? isDesignKind(c.kind) : !isDesignKind(c.kind));
-        if (!list.length) { content.appendChild(buildEmptyState(activeTab)); return; }
-        list.forEach(col => content.appendChild(buildCard(col, countMap[col.id] || 0, photoMap[col.id] || null)));
+        if (!list.length) { content.className = 'collections-list'; content.appendChild(buildEmptyState(activeTab)); return; }
+        if (isDesigns) list.forEach(col => content.appendChild(buildDesignCard(col, photoMap[col.id] || null)));
+        else list.forEach(col => content.appendChild(buildCard(col, countMap[col.id] || 0, photoMap[col.id] || null)));
       }
 
       function buildEmptyState(tab) {
@@ -623,6 +648,125 @@
         });
 
         return card;
+      }
+
+      // Shared card-action wiring (share popup / share options / delete /
+      // download) used by both the stacked Popcode card and the Designs grid card.
+      function wireCardActions(card, col) {
+        const coverTitle = col.cover_config && col.cover_config.enabled && col.cover_config.title;
+        const title = coverTitle || col.name || 'Untitled';
+
+        const shareBtn = card.querySelector('.btn-share-id');
+        if (shareBtn) shareBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          const popup = document.getElementById('share-popup-' + this.dataset.slug);
+          document.querySelectorAll('.share-popup.visible').forEach(function (p) { if (p !== popup) p.classList.remove('visible'); });
+          if (popup) popup.classList.toggle('visible');
+        });
+        const copyOpt = card.querySelector('.share-opt-copy');
+        if (copyOpt) copyOpt.addEventListener('click', function (e) {
+          e.stopPropagation();
+          const url = this.dataset.url;
+          navigator.clipboard.writeText(url).then(() => showToast('Link copied!')).catch(() => prompt('Copy this link:', url));
+          this.closest('.share-popup').classList.remove('visible');
+        });
+        const emailOpt = card.querySelector('.share-opt-email');
+        if (emailOpt) emailOpt.addEventListener('click', function (e) {
+          e.stopPropagation();
+          window.location.href = 'mailto:?subject=' + encodeURIComponent('Your Popcode project "' + this.dataset.title + '" is ready to scan!') + '&body=' + encodeURIComponent('Your Popcode project "' + this.dataset.title + '" is ready to scan!\n\n' + this.dataset.url);
+          this.closest('.share-popup').classList.remove('visible');
+        });
+        const msgOpt = card.querySelector('.share-opt-message');
+        if (msgOpt) msgOpt.addEventListener('click', function (e) {
+          e.stopPropagation();
+          window.location.href = 'sms:?&body=' + encodeURIComponent('"' + this.dataset.title + '" is ready to scan with Popcode! ' + this.dataset.url);
+          this.closest('.share-popup').classList.remove('visible');
+        });
+        const delBtn = card.querySelector('.btn-delete');
+        if (delBtn) delBtn.addEventListener('click', function () {
+          confirmDelete(card, col.id, this.dataset.slug, this.dataset.title, this);
+        });
+        const dlBtn = card.querySelector('.btn-download');
+        if (dlBtn) dlBtn.addEventListener('click', function () { openDownloadModal(this.dataset.slug, this.dataset.title); });
+      }
+
+      // A design (product) card for My Designs — a distinct grid tile showing the
+      // product in a mockup with one of its own photos, rather than the stacked
+      // Popcode list. Books render as a hardcover with the cover photo.
+      function buildDesignCard(col, thumbUrl) {
+        const card = document.createElement('div');
+        card.className = 'design-card';
+        card.dataset.id = col.id;
+        const coverTitle = col.cover_config && col.cover_config.enabled && col.cover_config.title;
+        const title = coverTitle || col.name || 'Untitled';
+        const isBook = col.kind === 'book';
+        const kindLabel = isBook ? 'Book' : (col.kind ? col.kind.charAt(0).toUpperCase() + col.kind.slice(1) : 'Design');
+        const viewUrl = `https://popcode.app/${col.slug}`;
+        // Prefer the book's own cover photo; fall back to its first page photo.
+        const coverPhoto = (isBook && col.book_layout && col.book_layout.cover && col.book_layout.cover.photo_url) || thumbUrl || '';
+        const mock = isBook
+          ? `<canvas class="book-canvas"></canvas>`
+          : `<div class="design-photo" style="${thumbUrl ? `background-image:url('${escapeHtml(thumbUrl)}')` : ''}"></div>`;
+
+        card.innerHTML = `
+          <div class="design-mock">${mock}</div>
+          <div class="design-body">
+            <div class="design-title">${escapeHtml(title)} <span class="kind-pill">${escapeHtml(kindLabel)}</span></div>
+            <div class="design-meta" style="position:relative;">Ordered ${formatDate(col.created_at)}
+              <div class="share-popup" id="share-popup-${escapeHtml(col.slug)}">
+                <div class="share-popup-title">Share options</div>
+                <button class="share-option share-opt-copy" data-url="${escapeHtml(viewUrl)}"><span class="share-option-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>Copy link</button>
+                <button class="share-option share-opt-email" data-url="${escapeHtml(viewUrl)}" data-title="${escapeHtml(title)}"><span class="share-option-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>Email</button>
+                <button class="share-option share-opt-message" data-url="${escapeHtml(viewUrl)}" data-title="${escapeHtml(title)}"><span class="share-option-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>Message</button>
+              </div>
+            </div>
+            <div class="design-actions">
+              <a class="icon-btn" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></a>
+              <a class="icon-btn" href="${isBook ? '/book.html' : '/edit.html'}?id=${escapeHtml(col.slug)}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></a>
+              <button class="icon-btn btn-share-id" data-slug="${escapeHtml(col.slug)}" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
+              <a class="shop-btn" href="${isBook ? `/book.html?id=${escapeHtml(col.slug)}&order=1` : `/order.html?id=${escapeHtml(col.slug)}`}" title="Order"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Order</a>
+              <button class="btn btn-delete" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+            </div>
+          </div>`;
+        wireCardActions(card, col);
+        if (isBook) {
+          const cv = card.querySelector('.book-canvas');
+          if (cv) renderBookMockup(cv, coverPhoto).catch(() => {});
+        }
+        return card;
+      }
+
+      // Composite a book's cover photo into the real Prodigi layflat-book mockup
+      // (front cover is axis-aligned; rect measured as fractions of the template).
+      const BOOK_MOCK = { template: '/assets/mockups/book.jpg', rect: { x: 0.141, y: 0.264, w: 0.732, h: 0.519 } };
+      async function renderBookMockup(canvas, coverUrl) {
+        const tpl = new Image(); tpl.crossOrigin = 'anonymous';
+        await new Promise((res, rej) => { tpl.onload = res; tpl.onerror = rej; tpl.src = BOOK_MOCK.template; });
+        const tw = tpl.naturalWidth, th = tpl.naturalHeight;
+        canvas.width = tw; canvas.height = th;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(tpl, 0, 0, tw, th);
+        if (!coverUrl) return;
+        const r = { x: BOOK_MOCK.rect.x * tw, y: BOOK_MOCK.rect.y * th, w: BOOK_MOCK.rect.w * tw, h: BOOK_MOCK.rect.h * th };
+        let art;
+        try {
+          art = new Image(); art.crossOrigin = 'anonymous';
+          await new Promise((res, rej) => { art.onload = res; art.onerror = rej; art.src = coverUrl; });
+        } catch (_) { return; }
+        // cover-crop the photo to the cover rect's aspect
+        const ar = r.w / r.h, sw = art.naturalWidth, sh = art.naturalHeight;
+        let cw = sw, ch = sh, sx = 0, sy = 0;
+        if (sw / sh > ar) { ch = sh; cw = Math.round(sh * ar); sx = Math.round((sw - cw) / 2); }
+        else { cw = sw; ch = Math.round(sw / ar); sy = Math.round((sh - ch) / 2); }
+        ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+        ctx.drawImage(art, sx, sy, cw, ch, r.x, r.y, r.w, r.h);
+        // subtle glossy sheen so the photo reads as the printed cover, not a paste
+        const g = ctx.createLinearGradient(r.x, r.y, r.x + r.w, r.y + r.h);
+        g.addColorStop(0, 'rgba(255,255,255,0.16)');
+        g.addColorStop(0.25, 'rgba(255,255,255,0.03)');
+        g.addColorStop(1, 'rgba(0,0,0,0.06)');
+        ctx.fillStyle = g; ctx.fillRect(r.x, r.y, r.w, r.h);
+        ctx.restore();
       }
 
       // Download-modal state (shared so the badge-size toggle can re-render).
