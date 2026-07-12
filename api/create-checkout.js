@@ -54,10 +54,20 @@ export default async function handler(req, res) {
     if (userError || !user) return res.status(401).json({ error: 'Invalid token' });
 
     // 2. Validate the request shape against the catalog.
-    const { collectionId, productType, variantId, copies, shippingMethod, recipient, assetUrls } = req.body || {};
+    const { collectionId, productType, variantId, copies, shippingMethod, recipient, assetUrls, pageCount } = req.body || {};
     const { findVariant, buildProdigiItems, priceFromQuote, sumQuoteMinor } = await import('../lib/print/catalog.mjs');
     const variant = findVariant(productType, variantId);
     if (!variant) return res.status(400).json({ error: 'Unknown product' });
+
+    // Books are page-priced: require an even page count within the SKU's range.
+    let bookPageCount = null;
+    if (variant.isBook) {
+      bookPageCount = parseInt(pageCount, 10);
+      if (!Number.isInteger(bookPageCount) || bookPageCount % 2 !== 0 ||
+          bookPageCount < (variant.minPages || 2) || bookPageCount > (variant.maxPages || 1000)) {
+        return res.status(400).json({ error: 'Invalid book page count' });
+      }
+    }
 
     if (!recipient?.name || !recipient?.email || !recipient?.address?.line1 ||
         !recipient?.address?.townOrCity || !recipient?.address?.postalOrZipCode ||
@@ -86,7 +96,7 @@ export default async function handler(req, res) {
     if (collection.user_id !== user.id) return res.status(403).json({ error: 'Not your project' });
 
     // 4. Authoritative re-quote (never trust the client's displayed price).
-    const items = buildProdigiItems({ variant, copies, forQuote: true });
+    const items = buildProdigiItems({ variant, copies, forQuote: true, pageCount: bookPageCount });
     // Retry transient empty quotes so a Prodigi blip can't fail a paid checkout.
     let summed = null;
     for (let attempt = 0; attempt < 3 && !summed; attempt++) {
@@ -100,6 +110,12 @@ export default async function handler(req, res) {
 
     // 5. Persist a pending order. (service role bypasses RLS)
     const copiesInt = Math.max(1, parseInt(copies, 10) || 1);
+    // For books, stamp the page count onto the INTERIOR asset only (Prodigi's
+    // page-priced default print area) so finalize-order submits it without the
+    // catalog variant. The spine asset must not carry pageCount.
+    const storedAssets = bookPageCount
+      ? assetUrls.map((a) => ((a.print_area || 'default') === 'spine' ? a : { ...a, page_count: bookPageCount }))
+      : assetUrls;
     const { data: order, error: insErr } = await admin
       .from('print_orders')
       .insert({
@@ -111,7 +127,7 @@ export default async function handler(req, res) {
         copies: copiesInt,
         sizing: variant.sizing || 'fillPrintArea',
         attributes: variant.attributes || {},
-        asset_urls: assetUrls,
+        asset_urls: storedAssets,
         recipient,
         shipping_method: shippingMethod || 'Standard',
         currency: summed.currency,

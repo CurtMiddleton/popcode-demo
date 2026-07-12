@@ -780,6 +780,8 @@
           document.querySelector('h1').textContent = 'Edit Book';
           document.getElementById('create-btn').textContent = 'Save Changes';
           render();
+          // "Shop" deep-link from My Projects opens straight into the order flow.
+          if (new URLSearchParams(location.search).get('order') === '1') orderPrintedBook();
         } catch (err) {
           console.error(err);
           if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
@@ -1844,6 +1846,10 @@
         openSheet(`
           <h2>Options</h2>
           <p class="sheet-sub">Edit your book’s title, cover, fonts and more.</p>
+          <div class="menu-row" data-act="order" style="background:#f0eefe">
+            <div class="menu-ic" style="background:#1a1a1a;color:#fff"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>
+            <div><div>Order a printed book</div><div class="menu-sub">Layflat · A4 landscape · printed &amp; shipped</div></div>
+          </div>
           <div class="menu-row" data-act="title">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></div>
             <div><div>Edit book title</div><div class="menu-sub">${escapeHtml((document.getElementById('title-input').value || '').trim()) || 'Untitled book'}</div></div>
@@ -1878,6 +1884,7 @@
             <div><div>Proof: PDF pages</div><div class="menu-sub">Admin · print one page per sheet to PDF</div></div>
           </div>` : ''}
         `);
+        document.querySelector('#sheet [data-act="order"]').addEventListener('click', orderPrintedBook);
         document.querySelector('#sheet [data-act="title"]').addEventListener('click', () => {
           closeSheet();
           const inp = document.getElementById('title-input');
@@ -2051,6 +2058,339 @@
           console.error(err);
           if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
           showToast('Could not build the PDF — please try again.');
+        }
+      }
+
+      // ── Print-ready PDF for Prodigi (layflat A4 landscape) ──────
+      // Prodigi layflat A4-landscape books take a SINGLE PDF, one book page per
+      // PDF page, cover FIRST + back cover LAST, at 300 DPI, RGB, with an EVEN
+      // page count (18–122 for layflat). There is no spine asset for layflat.
+      // Popcoded pages get the Popcode scan badge baked into the bottom-right of
+      // each linked slot (same asset/corner as order.html) so a printed page
+      // signals it's scannable. Returns { blob, pageCount } — never downloads.
+      const PRINT_A4L = { wIn: 11.6929, hIn: 8.2677, dpi: 300, minPages: 24, maxPages: 122, badgeScale: 0.09 };
+
+      // Rasterize the Popcode badge SVG (viewBox-only, no intrinsic size) to a
+      // PNG data-URL so html2canvas renders it (it drops external SVG <img>s).
+      async function rasterizeBadge() {
+        let svg = await (await fetch('/assets/popcode_icon.svg')).text();
+        if (!/<svg[^>]*\bwidth=/.test(svg)) svg = svg.replace('<svg ', '<svg width="302" height="302" ');
+        const img = new Image();
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        await (img.decode ? img.decode().catch(() => {}) : new Promise(r => { img.onload = img.onerror = r; }));
+        const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+        c.getContext('2d').drawImage(img, 0, 0, 256, 256);
+        return c.toDataURL('image/png');
+      }
+
+      async function buildBookPrintPdf() {
+        await loadProofLibs();
+        const proof = document.getElementById('proof');
+        proof.innerHTML = '';
+        proof.className = 'proof proof-pages';
+
+        const pageCanvas = (pg) => { const c = document.createElement('div'); c.className = 'page-canvas proof-canvas' + (pg.layout === 'blank' ? ' blank' : ''); if (pg.layout !== 'blank') c.appendChild(buildPageGrid(pg)); return c; };
+        const blankCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas proof-canvas blank'; return c; };
+        const coverCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas cover proof-canvas'; c.appendChild(buildCoverCanvas()); return c; };
+        const backCanvas = () => { const c = document.createElement('div'); c.className = 'page-canvas backcover proof-canvas'; c.appendChild(buildBackCoverCanvas()); return c; };
+
+        // Prodigi's layflat PDF is: page 1 = front cover, page 2 = first content
+        // (right-hand), … , last page = back cover. The inside front/back covers
+        // are physically blank and NOT PDF pages, so drop our on-screen endpaper
+        // blanks. Then pad with blank pages BEFORE the back cover until the TOTAL
+        // page count is even and within the layflat range (24–122).
+        const interior = pages.filter(pg => pg.layout !== 'blank');
+        let total = 1 + interior.length + 1; // cover + content + back
+        while (total < PRINT_A4L.minPages || total % 2 !== 0) { interior.push({ layout: 'blank', slots: [] }); total++; }
+
+        const units = [];
+        const addUnit = (el) => { const p = document.createElement('div'); p.className = 'proof-page'; p.appendChild(el); proof.appendChild(p); units.push(el); };
+        addUnit(coverCanvas());
+        interior.forEach(pg => addUnit(pg.layout === 'blank' ? blankCanvas() : pageCanvas(pg)));
+        addUnit(backCanvas());
+
+        // Force every unit to an exact A4-landscape box so the PDF pages are true
+        // A4 (content is %-sized, so it scales proportionally).
+        const PXW = 1400, PXH = Math.round(PXW * PRINT_A4L.hIn / PRINT_A4L.wIn);
+        units.forEach(u => { u.style.width = PXW + 'px'; u.style.height = PXH + 'px'; u.style.aspectRatio = 'auto'; });
+
+        // Wait for images to decode + fonts to settle before capture.
+        const imgEls = [...proof.querySelectorAll('img')];
+        await Promise.all(imgEls.map(im => (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(r => { im.onload = im.onerror = r; })));
+        if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
+        await new Promise(r => setTimeout(r, 120));
+
+        // html2canvas 1.4.1 silently drops external SVG <img>s, so rasterize the
+        // scan badge to a PNG data-URL once and paint it (and every photo) as a
+        // background <div> — the one image path html2canvas renders reliably.
+        const badgePng = await rasterizeBadge();
+
+        // Bake the badge onto popcoded slots + apply the buildProof fixups (pin
+        // aspect-ratio boxes, swap transformed photo <img>s to background <div>s).
+        // Layflat has NO spine, so drop the cover spine strip (don't print it).
+        units.forEach(unit => {
+          unit.querySelectorAll('.slot').forEach(slot => {
+            const tag = slot.querySelector('.slot-tag');
+            if (!tag) return;               // slot isn't popcoded
+            tag.remove();                   // drop the on-screen pill
+            // Square badge sized off the slot's shorter edge (matches order.html).
+            const r = slot.getBoundingClientRect();
+            const size = Math.round(Math.min(r.width, r.height) * PRINT_A4L.badgeScale);
+            const pad = Math.round(size * 0.5);
+            const b = document.createElement('div');
+            b.style.cssText = 'position:absolute;z-index:3;right:' + pad + 'px;bottom:' + pad + 'px;'
+              + 'width:' + size + 'px;height:' + size + 'px;pointer-events:none;'
+              + 'background-image:url("' + badgePng + '");background-size:contain;background-repeat:no-repeat;background-position:center;';
+            slot.appendChild(b);
+          });
+          unit.querySelectorAll('.slot, .bc-inset').forEach(el => { const r = el.getBoundingClientRect(); el.style.width = r.width + 'px'; el.style.height = r.height + 'px'; el.style.aspectRatio = 'auto'; });
+          unit.querySelectorAll('.slot-img, .cv-photo-img, .bc-img').forEach(img => {
+            const isFit = img.classList.contains('fit');
+            const div = document.createElement('div');
+            div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+              + 'background-image:url("' + img.src + '");background-size:' + (isFit ? 'contain' : 'cover') + ';'
+              + 'background-position:center;background-repeat:no-repeat;'
+              + 'transform:' + (img.style.transform || 'none') + ';transform-origin:center center;';
+            img.replaceWith(div);
+          });
+          unit.querySelectorAll('.cv-spine').forEach(spine => spine.remove());
+        });
+        await new Promise(r => setTimeout(r, 30));
+
+        const { jsPDF } = window.jspdf;
+        const fmt = [PRINT_A4L.wIn, PRINT_A4L.hIn]; // inches, A4 landscape
+        const doc = new jsPDF({ unit: 'in', format: fmt, orientation: 'landscape', compress: true });
+        const scale = (PRINT_A4L.wIn * PRINT_A4L.dpi) / PXW; // → ~3508px wide (300 DPI)
+        for (let i = 0; i < units.length; i++) {
+          showToast(`Rendering print file… ${i + 1}/${units.length}`);
+          const canvas = await html2canvas(units[i], { useCORS: true, backgroundColor: '#ffffff', scale, logging: false, width: PXW, height: PXH });
+          const data = canvas.toDataURL('image/jpeg', 0.92);
+          if (i > 0) doc.addPage(fmt, 'landscape');
+          doc.addImage(data, 'JPEG', 0, 0, fmt[0], fmt[1]);
+        }
+        proof.innerHTML = ''; proof.className = '';
+        return { blob: doc.output('blob'), pageCount: units.length };
+      }
+
+      // ── Spine artwork (separate Prodigi `spine` asset) ──────────
+      // Ported from Bashō (trek-folio spine-title.ts). Prodigi returns the spine
+      // width (mm) for the page count + destination lab; we render a strip that
+      // wide × the book height (210mm) with the cover title set along the length.
+      // Type scales to the spine thickness, capped at the reference sizes.
+      const SPINE_PT_PER_MM = 72 / 25.4;
+      function spineParts() {
+        const eyebrow = (cover.eyebrow || '').trim() || null;
+        const big = (cover.title || document.getElementById('title-input').value || 'My book').trim();
+        const year = (coverYear(cover.subtitle) || coverYear(cover.title) || '').trim() || null;
+        return { eyebrow, big, year };
+      }
+      // Render the spine strip to a single-page PDF Blob at 300 DPI.
+      async function buildSpinePdf(widthMm, parts) {
+        await loadProofLibs();
+        const H_MM = 210;
+        const usablePt = Math.max(0, (widthMm - 4) * SPINE_PT_PER_MM);   // 2mm safety each long edge
+        const bigPt = Math.min(32, usablePt / 1.25);
+        const scale = bigPt > 0 ? bigPt / 32 : 0;
+        const namePt = 14 * scale, yearPt = 12 * scale, gapPt = 5 * SPINE_PT_PER_MM * scale;
+
+        // Horizontal strip: length = 210mm, thickness = widthMm. Rendered upright
+        // (readable), then rotated 90° into the final widthMm×210mm page.
+        const LEN_CSS = 1000, pxPerMm = LEN_CSS / H_MM, pxPerPt = pxPerMm * 25.4 / 72;
+        const thickCss = Math.max(6, widthMm) * pxPerMm;
+        const inset = 16.5 * pxPerMm;
+
+        const proof = document.getElementById('proof');
+        proof.innerHTML = ''; proof.className = '';
+        const strip = document.createElement('div');
+        strip.style.cssText = 'position:fixed;left:-99999px;top:0;width:' + LEN_CSS + 'px;height:' + thickCss + 'px;'
+          + 'background:#1a1a1a;color:#fff;overflow:hidden;';
+        const serif = "'Cormorant Garamond', Georgia, serif";
+        const titleHtml = (parts.eyebrow ? '<span style="font-style:italic;font-size:' + (namePt * pxPerPt) + 'px;">' + escapeHtml(parts.eyebrow) + '</span><span style="display:inline-block;width:' + (gapPt * pxPerPt) + 'px"></span>' : '')
+          + '<span style="font-size:' + (bigPt * pxPerPt) + 'px;">' + escapeHtml(parts.big) + '</span>';
+        strip.innerHTML =
+          '<div style="position:absolute;left:' + inset + 'px;top:50%;transform:translateY(-50%);white-space:nowrap;font-family:' + serif + ';display:flex;align-items:baseline;">' + titleHtml + '</div>'
+          + (parts.year ? '<div style="position:absolute;right:' + inset + 'px;top:50%;transform:translateY(-50%);white-space:nowrap;font-family:\'Inter\',sans-serif;font-size:' + (yearPt * pxPerPt) + 'px;">' + escapeHtml(parts.year) + '</div>' : '');
+        proof.appendChild(strip);
+        if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
+        await new Promise(r => setTimeout(r, 40));
+
+        // Capture the upright strip at 300 DPI, then rotate 90° onto a vertical canvas.
+        const capScale = (H_MM / 25.4 * PRINT_A4L.dpi) / LEN_CSS;   // → 210mm @ 300dpi across the length
+        const h = await html2canvas(strip, { backgroundColor: '#1a1a1a', scale: capScale, logging: false, width: LEN_CSS, height: thickCss });
+        proof.innerHTML = '';
+        const v = document.createElement('canvas');
+        v.width = h.height; v.height = h.width;               // swap dims (90° rotation)
+        const ctx = v.getContext('2d');
+        ctx.translate(v.width / 2, v.height / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.drawImage(h, -h.width / 2, -h.height / 2);
+        const data = v.toDataURL('image/jpeg', 0.92);
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'mm', format: [widthMm, H_MM], orientation: 'portrait', compress: true });
+        doc.addImage(data, 'JPEG', 0, 0, widthMm, H_MM);
+        return doc.output('blob');
+      }
+
+      // ── Order a printed book (Prodigi via Stripe) ───────────────
+      // Builds the print-ready PDF, uploads it to the public experiences bucket,
+      // collects a shipping address, then hands off to /api/create-checkout (which
+      // re-quotes Prodigi server-side and opens Stripe Checkout). The .mind-linked
+      // pages carry the baked scan badge, so a printed page stays scannable.
+      const BOOK_VARIANT_ID = 'book-a4l-layflat';
+
+      // Confirm before padding a short book up to the layflat minimum, so the
+      // extra blank pages aren't a surprise. Resolves true = continue.
+      function confirmBookPadding(total, blanks) {
+        return new Promise((resolve) => {
+          const btn = 'width:100%;border:none;border-radius:14px;font-family:\'Inter\',sans-serif;font-weight:600;font-size:16px;padding:15px;cursor:pointer;';
+          openSheet(
+            '<div class="ep-head"><h2>Add a few more pages?</h2><button class="ep-x" id="pad-x" aria-label="Close">' + IC_X + '</button></div>'
+            + '<p class="sheet-sub">Layflat books print at a minimum of <strong>' + PRINT_A4L.minPages + ' pages</strong>. Yours is shorter, so we’ll add <strong>' + blanks + ' blank page' + (blanks !== 1 ? 's' : '') + '</strong> at the end to reach ' + total + '. Add more photos to fill them, or continue.</p>'
+            + '<button id="pad-add" style="' + btn + 'background:#1a1a1a;color:#fff;">Add more photos first</button>'
+            + '<button id="pad-go" style="' + btn + 'background:#eee;color:#1a1a1a;margin-top:9px;">Continue with ' + blanks + ' blank page' + (blanks !== 1 ? 's' : '') + '</button>'
+          );
+          const done = (v) => { closeSheet(); resolve(v); };
+          document.getElementById('pad-x').addEventListener('click', () => done(false));
+          document.getElementById('pad-add').addEventListener('click', () => done(false));
+          document.getElementById('pad-go').addEventListener('click', () => done(true));
+        });
+      }
+
+      async function orderPrintedBook() {
+        if (!editingCollection || !editingCollection.id || !editingCollection.slug) {
+          closeSheet();
+          showToast('Save your book first, then order a printed copy.');
+          return;
+        }
+        if (!placedIds().size) { showToast('Add photos to your book first.'); return; }
+        // Warn if the book will be padded up to the layflat minimum.
+        const contentCount = pages.filter(pg => pg.layout !== 'blank').length;
+        const projected = 1 + contentCount + 1; // cover + content + back
+        if (projected < PRINT_A4L.minPages || projected % 2 !== 0) {
+          let target = Math.max(PRINT_A4L.minPages, projected);
+          if (target % 2 !== 0) target += 1;
+          const blanks = target - projected;
+          if (blanks > 0 && !(await confirmBookPadding(target, blanks))) return;
+        }
+        closeSheet();
+        let pdfUrl, pageCount;
+        try {
+          showToast('Building your print file…');
+          const out = await buildBookPrintPdf();
+          pageCount = out.pageCount;
+          const path = `${editingCollection.slug}/print/book_${Date.now()}.pdf`;
+          const { error } = await db.storage.from('experiences').upload(path, out.blob, { contentType: 'application/pdf', upsert: true });
+          if (error) throw new Error('Upload failed: ' + error.message);
+          pdfUrl = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast('Could not build the print file: ' + (err.message || 'error'));
+          return;
+        }
+        openBookAddressSheet(pdfUrl, pageCount);
+      }
+
+      function openBookAddressSheet(pdfUrl, pageCount) {
+        const email = (currentUser && currentUser.email) || '';
+        const name = (currentUser && currentUser.user_metadata && currentUser.user_metadata.full_name) || '';
+        openSheet(`
+          <style>
+            .bo-form { display:flex; flex-direction:column; gap:9px; margin:6px 0 14px; }
+            .bo-form input { width:100%; border:1px solid #d9d5cf; border-radius:11px; padding:12px 13px; font-size:15px; font-family:'Inter',sans-serif; background:#fff; }
+            .bo-form input:focus { outline:none; border-color:#7657FC; }
+            .bo-row { display:flex; gap:9px; } .bo-row input { flex:1; min-width:0; }
+            .bo-pay { width:100%; border:none; border-radius:14px; background:#1a1a1a; color:#fff; font-family:'Inter',sans-serif; font-weight:600; font-size:16px; padding:15px; cursor:pointer; }
+            .bo-pay:disabled { opacity:.5; cursor:default; }
+            .bo-note { text-align:center; color:#8a857d; font-size:12px; margin-top:9px; }
+          </style>
+          <div class="ep-head"><h2>Ship your book</h2><button class="ep-x" id="bo-close" aria-label="Close">${IC_X}</button></div>
+          <p class="sheet-sub">Layflat photo book · A4 landscape · ${pageCount} pages. We’ll print it and ship it to you.</p>
+          <div class="bo-form">
+            <input id="bo-name" placeholder="Full name" value="${escapeHtml(name)}" autocomplete="name"/>
+            <input id="bo-email" type="email" placeholder="Email" value="${escapeHtml(email)}" autocomplete="email"/>
+            <input id="bo-line1" placeholder="Address line 1" autocomplete="address-line1"/>
+            <input id="bo-line2" placeholder="Address line 2 (optional)" autocomplete="address-line2"/>
+            <input id="bo-city" placeholder="City" autocomplete="address-level2"/>
+            <div class="bo-row"><input id="bo-state" placeholder="State / County" autocomplete="address-level1"/><input id="bo-zip" placeholder="ZIP / Postcode" autocomplete="postal-code"/></div>
+            <div class="bo-row"><input id="bo-country" placeholder="Country code" value="US" maxlength="2" style="text-transform:uppercase"/><input id="bo-copies" type="number" min="1" value="1" placeholder="Copies"/></div>
+          </div>
+          <button class="bo-pay" id="bo-pay">Continue to payment</button>
+          <p class="bo-note">You’ll see the price and pay securely on the next screen.</p>
+        `);
+        document.getElementById('bo-close').addEventListener('click', closeSheet);
+        document.getElementById('bo-pay').addEventListener('click', () => submitBookOrder(pdfUrl, pageCount));
+      }
+
+      async function submitBookOrder(pdfUrl, pageCount) {
+        const val = (id) => (document.getElementById(id).value || '').trim();
+        const recipient = {
+          name: val('bo-name'), email: val('bo-email'),
+          address: {
+            line1: val('bo-line1'), line2: val('bo-line2'),
+            townOrCity: val('bo-city'), stateOrCounty: val('bo-state'),
+            postalOrZipCode: val('bo-zip'), countryCode: val('bo-country').toUpperCase(),
+          },
+        };
+        const copies = Math.max(1, parseInt(val('bo-copies'), 10) || 1);
+        if (!recipient.name || !recipient.email || !recipient.address.line1 ||
+            !recipient.address.townOrCity || !recipient.address.postalOrZipCode || !recipient.address.countryCode) {
+          showToast('Please fill in name, email and full address.'); return;
+        }
+        const btn = document.getElementById('bo-pay');
+        btn.disabled = true; btn.textContent = 'Preparing checkout…';
+        try {
+          const { data: { session } } = await db.auth.getSession();
+          const token = session && session.access_token;
+          if (!token) throw new Error('Please sign in again.');
+
+          // Interior PDF → the `default` print area. Then a best-effort spine:
+          // query Prodigi for the width, render a matched strip, add it as the
+          // `spine` asset. A spine failure never blocks the order (the book still
+          // binds without a custom spine).
+          const assetUrls = [{ url: pdfUrl, print_area: 'default' }];
+          try {
+            const sResp = await fetch('/api/book-spine', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+              body: JSON.stringify({
+                productType: 'book', variantId: BOOK_VARIANT_ID,
+                numberOfPages: pageCount,
+                destinationCountryCode: recipient.address.countryCode,
+                state: recipient.address.stateOrCounty || undefined,
+              }),
+            });
+            const sData = await sResp.json().catch(() => ({}));
+            if (sData && sData.widthMm > 0) {
+              const spineBlob = await buildSpinePdf(sData.widthMm, spineParts());
+              const spath = `${editingCollection.slug}/print/spine_${Date.now()}.pdf`;
+              const { error: sErr } = await db.storage.from('experiences').upload(spath, spineBlob, { contentType: 'application/pdf', upsert: true });
+              if (!sErr) assetUrls.push({ url: db.storage.from('experiences').getPublicUrl(spath).data.publicUrl, print_area: 'spine' });
+            }
+          } catch (e) { /* best-effort: interior-only if the spine step fails */ }
+
+          const resp = await fetch('/api/create-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({
+              collectionId: editingCollection.id,
+              productType: 'book',
+              variantId: BOOK_VARIANT_ID,
+              copies,
+              shippingMethod: 'Standard',
+              recipient,
+              assetUrls,
+              pageCount,
+            }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok || !data.url) throw new Error(data.error || 'Checkout failed');
+          window.location.href = data.url;
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast(err.message || 'Could not start checkout.');
+          btn.disabled = false; btn.textContent = 'Continue to payment';
         }
       }
 
