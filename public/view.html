@@ -1119,9 +1119,16 @@
       function tryGoFullscreen() {
         const el = fullScreen;
         try {
-          if (el.requestFullscreen) el.requestFullscreen();
-          else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-          else if (fullVid.webkitEnterFullscreen) fullVid.webkitEnterFullscreen();
+          // requestFullscreen() returns a Promise that REJECTS (rather than
+          // throwing) when there's no transient activation — this fires from the
+          // video's loadedmetadata event, which isn't a user gesture, so it's
+          // expected to fail on some browsers. Swallow the rejection so it doesn't
+          // surface as an unhandled error (Sentry noise); fullscreen is optional.
+          let p;
+          if (el.requestFullscreen) p = el.requestFullscreen();
+          else if (el.webkitRequestFullscreen) p = el.webkitRequestFullscreen();
+          else if (fullVid.webkitEnterFullscreen) p = fullVid.webkitEnterFullscreen();
+          if (p && typeof p.catch === 'function') p.catch(() => {});
         } catch(e) {}
       }
       function tryExitFullscreen() {
