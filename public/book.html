@@ -718,6 +718,14 @@
           const itemByPhotoUrl = {};
           (items || []).forEach(it => { if (it.photo_url) itemByPhotoUrl[it.photo_url] = it; });
 
+          // Baseline signature of what the current .mind was compiled from: the
+          // popcoded photo URLs in target_index order. On save we only recompile
+          // when this ordered set changes (see saveBook step 2).
+          editingCollection._mindTargetUrls = (items || [])
+            .filter(it => it.photo_url != null && it.target_index != null)
+            .slice().sort((a, b) => a.target_index - b.target_index)
+            .map(it => it.photo_url);
+
           // Rebuild the photo pool + pages from book_layout. Existing photos have
           // a remote URL and no File; a photo is re-uploaded on save only if it
           // gains a File (new or replaced).
@@ -727,7 +735,7 @@
             const id = uid('ph');
             const it = itemByPhotoUrl[url];
             photos.set(id, {
-              id, file: null, url, existingUrl: url, source: 'Saved', adjust: DEFAULT_ADJUST(),
+              id, file: null, url, existingUrl: url, source: 'Saved', ow: 0, oh: 0, adjust: DEFAULT_ADJUST(),
               popcode: it ? {
                 mediaType: it.media_type || 'video',
                 video: null, audio: null,
@@ -1052,26 +1060,21 @@
       // ── Rendering ───────────────────────────────────────────────
       function render() { ensureBookEndpapers(); renderTray(); renderPages(); updateSummary(); }
 
-      // Endpapers: the book ends with exactly ONE blank page — the inside back
-      // cover — on the RIGHT of the final spread ([last content | blank]).
-      //
-      // Spreads pair pages (0,1),(2,3),… so the inside-back blank only lands on a
-      // spread's RIGHT when the total interior page count is even. With a blank
-      // inside-FRONT cover always present too, that forces the content count to be
-      // even — an odd content count would leave a stray second blank (which the
-      // proof would show as an empty page). So we make the inside-front blank
-      // conditional: keep it when content is even (opening reads [blank | Page 1]);
-      // drop it when content is odd (opening reads [Page 1 | Page 2]). Either way
-      // there is exactly one end blank, on the right, and never a [blank | blank].
-      // Rebuilds from the content pages each render (idempotent) — content page
-      // objects are preserved; only the blank endpapers are regenerated.
+      // Endpapers. The book always opens with a blank inside-front cover
+      // ([blank | Page 1]) and always ends with a blank inside-back cover on the
+      // final spread's RIGHT. When the content count is even the inside-back blank
+      // pairs with the last content page ([last page | blank]); when it's odd it
+      // is a lone trailing page, which renderPages draws on the right of an empty
+      // final spread ([empty | blank]) so the endpaper is always on the right.
+      // Rebuilds from the content pages each render (idempotent) — content objects
+      // are preserved; only the blank endpapers are regenerated.
       function ensureBookEndpapers() {
         const content = pages.filter(p => p.layout !== 'blank');
         if (!content.length) return; // nothing placed yet
         pages.length = 0;
-        if (content.length % 2 === 0) pages.push(blankPage()); // inside front cover
+        pages.push(blankPage()); // inside front cover — always
         pages.push(...content);
-        pages.push(blankPage()); // inside back cover — right page of the final spread
+        pages.push(blankPage()); // inside back cover — always
       }
 
       function renderTray() {
@@ -1113,11 +1116,22 @@
 
           const body = document.createElement('div');
           body.className = 'spread-body';
-          body.appendChild(buildPageHalf(left, s, 'left', !right));
-          const fold = document.createElement('div'); fold.className = 'spread-fold';
-          body.appendChild(fold);
-          if (right) body.appendChild(buildPageHalf(right, s + 1, 'right', false));
-          else { const ph = document.createElement('div'); ph.className = 'page-half single'; body.appendChild(ph); }
+          // A lone trailing blank (odd content → the inside-back endpaper) is drawn
+          // on the RIGHT of an otherwise-empty final spread, so the endpaper always
+          // sits on the right.
+          if (!right && left.layout === 'blank') {
+            const ph = document.createElement('div'); ph.className = 'page-half single';
+            body.appendChild(ph);
+            const fold = document.createElement('div'); fold.className = 'spread-fold';
+            body.appendChild(fold);
+            body.appendChild(buildPageHalf(left, s, 'right', false));
+          } else {
+            body.appendChild(buildPageHalf(left, s, 'left', !right));
+            const fold = document.createElement('div'); fold.className = 'spread-fold';
+            body.appendChild(fold);
+            if (right) body.appendChild(buildPageHalf(right, s + 1, 'right', false));
+            else { const ph = document.createElement('div'); ph.className = 'page-half single'; body.appendChild(ph); }
+          }
 
           spread.appendChild(body);
           container.appendChild(spread);
@@ -2700,14 +2714,17 @@
           if (selectedTrayId || swapSource) return; // placement/swap modes own taps
           const startX = e.clientX, startY = e.clientY;
           const photo = photos.get(pg.slots[slotIdx]);
-          let dragging = false, moved = false, ghost = null;
+          let dragging = false, moved = false, ghost = null, holdTimer = null;
           const startDrag = (x, y) => {
             if (dragging) return;
+            clearTimeout(holdTimer);
             dragging = true;
             slot.classList.add('slot-drag');
             ghost = makeCircleGhost(photo.url, x, y);
           };
-          if (e.pointerType === 'mouse') startDrag(startX, startY); // circle appears on click-and-hold
+          // Mouse: pick up only after a brief press-and-hold (or a move), so a
+          // quick click opens the photo editor instead of starting a drag.
+          if (e.pointerType === 'mouse') holdTimer = setTimeout(() => startDrag(startX, startY), 200);
           const moveH = (ev) => {
             if (!dragging) {
               if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 10) return;
@@ -2720,6 +2737,7 @@
             if (under && under !== slot) under.classList.add('place-target');
           };
           const upH = (ev) => {
+            clearTimeout(holdTimer);
             document.removeEventListener('pointermove', moveH);
             document.removeEventListener('pointerup', upH);
             document.removeEventListener('pointercancel', upH);
@@ -2760,16 +2778,19 @@
         el.addEventListener('pointerdown', (e) => {
           if (e.target.closest('.tray-x')) return; // the delete button owns its taps
           const startX = e.clientX, startY = e.clientY;
-          let dragging = false, moved = false, ghost = null;
+          let dragging = false, moved = false, ghost = null, holdTimer = null;
           const startDrag = (x, y) => {
             if (dragging) return;
+            clearTimeout(holdTimer);
             dragging = true;
             el.classList.add('dragging');
             ghost = makeCircleGhost(photo.url, x, y);
             document.body.style.userSelect = 'none';
             if (opts.onDragStart) opts.onDragStart();
           };
-          if (e.pointerType === 'mouse') startDrag(startX, startY); // instant on click-and-hold
+          // Mouse: pick up only after a brief press-and-hold (or a move), so a
+          // quick click still selects the photo instead of starting a drag.
+          if (e.pointerType === 'mouse') holdTimer = setTimeout(() => startDrag(startX, startY), 200);
           const move = (ev) => {
             if (!dragging) {
               if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 8) return;
@@ -2783,6 +2804,7 @@
             if (under) under.classList.add('place-target');
           };
           const end = (ev) => {
+            clearTimeout(holdTimer);
             document.removeEventListener('pointermove', move);
             document.removeEventListener('pointerup', end);
             document.removeEventListener('pointercancel', end);
@@ -2937,20 +2959,38 @@
             backCoverPhotoUrl = pub(bpath) + `?v=${Date.now()}`;
           }
 
-          // 2. Compile popcoded photos into a fresh .mind target. Recompiled on
-          //    every save so the target order matches the current popcode order.
-          setProgress('Preparing scan targets…', 32);
-          const imgs = [];
-          for (const id of popcodedIds) imgs.push(await loadCompileImage(photos.get(id)));
-          setProgress('Compiling scan targets… (this can take a minute)', 36);
-          await yieldToPaint();
-          const compiler = new MINDAR.IMAGE.Compiler();
-          await compiler.compileImageTargets(imgs, (prog) => setProgress(`Compiling scan targets… ${Math.round(prog)}%`, 36 + prog * 0.24));
-          const buffer = await compiler.exportData();
-          setProgress('Uploading scan targets…', 62);
-          const { error: mErr } = await db.storage.from(bucket).upload(`${slug}/target.mind`, new Blob([buffer]), { contentType: 'application/octet-stream', upsert: true });
-          if (mErr) throw new Error('Target upload failed: ' + mErr.message);
-          const mindUrl = pub(`${slug}/target.mind`) + `?v=${Date.now()}`;
+          // 2. Compile popcoded photos into a .mind target — but ONLY when the
+          //    target set actually changed. The .mind encodes each popcoded
+          //    photo's features in target_index order, so it must be rebuilt if a
+          //    photo gained/lost a popcode, the popcode order changed, or a
+          //    popcoded photo's image was replaced. If the ordered set of target
+          //    images is byte-for-byte what's already compiled, reuse the existing
+          //    .mind — compiling is the slow part of a save.
+          let mindUrl;
+          const targetUrlsNow = popcodedIds.map(id => photos.get(id).existingUrl || null);
+          const anyNewTargetImage = popcodedIds.some(id => !!photos.get(id).file);
+          const baseTargetUrls = editing ? editingCollection._mindTargetUrls : null;
+          const targetsUnchanged = editing && baseTargetUrls && !anyNewTargetImage
+            && targetUrlsNow.length === baseTargetUrls.length
+            && targetUrlsNow.every((u, i) => u && u === baseTargetUrls[i]);
+
+          if (editing && editingCollection.mind_file_url && targetsUnchanged) {
+            setProgress('Scan targets unchanged — reusing…', 62);
+            mindUrl = editingCollection.mind_file_url;
+          } else {
+            setProgress('Preparing scan targets…', 32);
+            const imgs = [];
+            for (const id of popcodedIds) imgs.push(await loadCompileImage(photos.get(id)));
+            setProgress('Compiling scan targets… (this can take a minute)', 36);
+            await yieldToPaint();
+            const compiler = new MINDAR.IMAGE.Compiler();
+            await compiler.compileImageTargets(imgs, (prog) => setProgress(`Compiling scan targets… ${Math.round(prog)}%`, 36 + prog * 0.24));
+            const buffer = await compiler.exportData();
+            setProgress('Uploading scan targets…', 62);
+            const { error: mErr } = await db.storage.from(bucket).upload(`${slug}/target.mind`, new Blob([buffer]), { contentType: 'application/octet-stream', upsert: true });
+            if (mErr) throw new Error('Target upload failed: ' + mErr.message);
+            mindUrl = pub(`${slug}/target.mind`) + `?v=${Date.now()}`;
+          }
 
           // 3. Resolve each popcode's media URL. Upload only NEW Files; reuse the
           //    stored URL for unchanged media (the item row's URL is authoritative,
