@@ -33,41 +33,52 @@
         align-items: center;
         padding: 0 0 80px; overflow-x: hidden;
       }
+      /* Compact top nav bar (Popsa-style): logo upper-left, inline nav items in a
+         line on desktop + tablet; hamburger only on mobile. */
       .site-header {
         width: 100vw;
         background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
-        padding: 24px 24px 40px;
-        min-height: 200px;
+        padding: 0 20px;
+        height: 60px;
         display: flex;
-        align-items: flex-end;
-        justify-content: center;
-        position: relative;
-        margin-bottom: 32px;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 28px;
         align-self: stretch;
       }
-      .logo-text {
-        font-family: 'Inter', sans-serif;
-        font-weight: 700;
-        font-size: 36px;
-        color: white;
-        letter-spacing: -0.02em;
+      .brand { display: flex; align-items: center; flex-shrink: 0; }
+      .brand img { height: 30px; display: block; }
+      .nav-inline { display: flex; align-items: center; gap: 2px; }
+      .nav-inline a {
+        color: #fff; text-decoration: none; font-family: 'Inter', sans-serif;
+        font-size: 14px; font-weight: 500; padding: 8px 12px; border-radius: 20px;
+        opacity: 0.9; white-space: nowrap; transition: background 0.15s, opacity 0.15s;
+      }
+      .nav-inline a:hover { background: rgba(255,255,255,0.16); opacity: 1; }
+      .nav-inline a.active { background: rgba(255,255,255,0.22); opacity: 1; }
+      .header-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+      #user-greeting { color: #fff; font-size: 13px; font-weight: 500; font-family: 'Inter', sans-serif; opacity: 0.9; }
+      #logout-btn {
+        background: #78A7FF; color: #fff; border: none; border-radius: 20px;
+        padding: 7px 16px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: 'Inter', sans-serif;
+      }
+      .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+      /* Tablet: keep inline nav, drop the greeting to save room */
+      @media (max-width: 1000px) { #user-greeting { display: none; } }
+      /* Mobile: hamburger only */
+      @media (max-width: 760px) {
+        .nav-inline { display: none; }
+        .hamburger { display: block; }
       }
 
       .top-bar {
         width: 100%; max-width: 560px; padding: 0 24px;
-        display: flex; align-items: center; justify-content: flex-start;
-        margin-bottom: 28px; gap: 12px; flex-wrap: wrap;
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 22px; gap: 12px; flex-wrap: wrap;
       }
-      .top-bar h1 { font-size: 36px; font-weight: 400; color: #1a1a1a; font-family: 'CooperBT', serif; letter-spacing: 0; }
+      .top-bar h1 { font-size: 34px; font-weight: 400; color: #1a1a1a; font-family: 'CooperBT', serif; letter-spacing: 0; }
       .top-bar-actions { display: flex; gap: 10px; align-items: center; }
-
-      /* Library tabs — My Popcodes (AR experiences) vs My Designs (products) */
-      .lib-tabs { display: flex; gap: 8px; }
-      .lib-tab { border: none; background: none; cursor: pointer; font-family: 'CooperBT', serif; font-size: 30px; font-weight: 400; color: #bdb8ad; letter-spacing: 0; padding: 0; transition: color 0.15s; }
-      .lib-tab.active { color: #1a1a1a; }
-      .lib-tab:not(.active):hover { color: #8a857d; }
-      @media (min-width: 960px) { .lib-tab { font-size: 36px; } }
-      @media (max-width: 420px) { .lib-tab { font-size: 24px; } }
+      @media (max-width: 420px) { .top-bar h1 { font-size: 28px; } }
 
       .create-btn {
         background: #1a1a1a; color: white;
@@ -287,13 +298,22 @@
   </head>
   <body>
     <header class="site-header">
-      <button id="nav-btn" style="position:absolute;left:20px;top:20px;background:none;border:none;cursor:pointer;padding:4px;" aria-label="Menu">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-      </button>
-      <a href="/manage.html"><img src="/assets/Popcode_logo.rev.svg" alt="Popcode" style="height:80px;"/></a>
-      <div style="position:absolute;right:20px;top:20px;display:flex;align-items:center;gap:10px;">
-        <span id="user-greeting" style="color:white;font-size:13px;font-weight:500;font-family:'Inter',sans-serif;opacity:0.9;"></span>
-        <button id="logout-btn" style="background:#78A7FF;color:white;border:none;border-radius:20px;padding:7px 16px;font-size:13px;font-weight:500;cursor:pointer;font-family:'Inter',sans-serif;">Sign Out</button>
+      <a href="/manage.html" class="brand"><img src="/assets/Popcode_logo.rev.svg" alt="Popcode"/></a>
+      <nav class="nav-inline" id="nav-inline">
+        <a href="/manage.html" data-nav="popcodes">My Popcodes</a>
+        <a href="/manage.html?tab=designs" data-nav="designs">My Designs</a>
+        <a href="/shop.html" data-nav="shop">Shop</a>
+        <a href="/views.html">Past Views</a>
+        <a href="/howto.html">How It Works</a>
+        <a href="/account.html">Account</a>
+        <a href="/analytics.html" class="nav-inline-admin" style="display:none;">Analytics</a>
+      </nav>
+      <div class="header-right">
+        <span id="user-greeting"></span>
+        <button id="logout-btn">Sign Out</button>
+        <button id="nav-btn" class="hamburger" aria-label="Menu">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
       </div>
     </header>
 
@@ -372,13 +392,9 @@
     </div>
 
     <div class="top-bar">
-      <div class="lib-tabs" id="lib-tabs">
-        <button class="lib-tab active" data-tab="popcodes">My Popcodes</button>
-        <button class="lib-tab" data-tab="designs">My Designs</button>
-      </div>
+      <h1 id="lib-title">My Popcodes</h1>
       <div class="top-bar-actions">
-        <a class="create-btn" href="/create.html" style="background:#eeeeee;color:#333;">+ New Popcode</a>
-        <a class="create-btn" href="/shop.html">🛍️ Shop</a>
+        <a class="create-btn" id="lib-cta" href="/create.html">+ New Popcode</a>
       </div>
     </div>
 
@@ -487,20 +503,22 @@
       function renderActiveTab() {
         const content = document.getElementById('content');
         content.innerHTML = '';
-        document.querySelectorAll('.lib-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === activeTab));
-        const list = allCollections.filter(c => activeTab === 'designs' ? isDesignKind(c.kind) : !isDesignKind(c.kind));
+        // Reflect the active library in the inline nav + page title/CTA.
+        document.querySelectorAll('.nav-inline a[data-nav]').forEach(a =>
+          a.classList.toggle('active', a.dataset.nav === activeTab));
+        const isDesigns = activeTab === 'designs';
+        const title = document.getElementById('lib-title');
+        if (title) title.textContent = isDesigns ? 'My Designs' : 'My Popcodes';
+        const cta = document.getElementById('lib-cta');
+        if (cta) {
+          cta.textContent = isDesigns ? '🛍️ Shop' : '+ New Popcode';
+          cta.href = isDesigns ? '/shop.html' : '/create.html';
+        }
+        document.title = isDesigns ? 'Popcode — My Designs' : 'Popcode — My Popcodes';
+        const list = allCollections.filter(c => isDesigns ? isDesignKind(c.kind) : !isDesignKind(c.kind));
         if (!list.length) { content.appendChild(buildEmptyState(activeTab)); return; }
         list.forEach(col => content.appendChild(buildCard(col, countMap[col.id] || 0, photoMap[col.id] || null)));
       }
-
-      function setTab(tab) {
-        activeTab = tab === 'designs' ? 'designs' : 'popcodes';
-        const url = new URL(location.href);
-        if (activeTab === 'designs') url.searchParams.set('tab', 'designs'); else url.searchParams.delete('tab');
-        history.replaceState(null, '', url);
-        renderActiveTab();
-      }
-      document.querySelectorAll('.lib-tab').forEach(btn => btn.addEventListener('click', () => setTab(btn.dataset.tab)));
 
       function buildEmptyState(tab) {
         const div = document.createElement('div');

@@ -10,30 +10,103 @@
       crossorigin="anonymous"></script>
     <script src="/sentry-init.js"></script>
     <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
     <title>Popcode — Shop</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { min-height: 100vh; background: #f7f6f2; font-family: 'Inter', sans-serif; color: #1a1a1a; padding: 0 0 80px; overflow-x: hidden; }
-      .site-header { width: 100vw; background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%); padding: 24px 24px 40px; min-height: 160px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 28px; }
-      .logo-text { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 32px; color: #fff; letter-spacing: -0.02em; }
-      .wrap { width: 100%; max-width: 900px; margin: 0 auto; padding: 0 24px; }
-      .backlink { display: inline-block; color: #7657FC; font-weight: 600; font-size: 14px; text-decoration: none; margin-bottom: 14px; }
-      h1 { font-family: 'CooperBT', serif; font-size: 40px; font-weight: 400; margin-bottom: 4px; }
-      .sub { color: #8a857d; font-size: 15px; margin-bottom: 28px; }
-      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; }
-      .prod { background: #fff; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); overflow: hidden; cursor: pointer; border: none; text-align: left; padding: 0; transition: transform 0.12s, box-shadow 0.12s; font-family: inherit; }
-      .prod:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
-      .prod-art { height: 150px; display: flex; align-items: center; justify-content: center; font-size: 52px; background: #f2f0ea; }
-      .prod-body { padding: 14px 16px 18px; }
-      .prod-name { font-family: 'CooperBT', serif; font-size: 22px; }
-      .prod-tag { color: #8a857d; font-size: 13px; margin-top: 3px; }
-      .prod.featured .prod-art { background: linear-gradient(135deg, #efe9ff, #e3edff); }
-      .prod-badge { display: inline-block; font-size: 10px; font-weight: 700; color: #fff; background: linear-gradient(135deg,#7657FC,#589AF9); border-radius: 999px; padding: 2px 8px; margin-left: 6px; vertical-align: middle; position: relative; top: -2px; }
+      body {
+        min-height: 100vh; background: #f7f6f2; font-family: 'Inter', sans-serif;
+        font-weight: 400; color: #1a1a1a; display: flex; flex-direction: column;
+        align-items: center; padding: 0 0 80px; overflow-x: hidden;
+      }
+
+      /* Compact top nav bar (matches manage.html) */
+      .site-header {
+        width: 100vw; background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
+        padding: 0 20px; height: 60px; display: flex; align-items: center; gap: 16px;
+        margin-bottom: 28px; align-self: stretch;
+      }
+      .brand { display: flex; align-items: center; flex-shrink: 0; }
+      .brand img { height: 30px; display: block; }
+      .nav-inline { display: flex; align-items: center; gap: 2px; }
+      .nav-inline a {
+        color: #fff; text-decoration: none; font-family: 'Inter', sans-serif;
+        font-size: 14px; font-weight: 500; padding: 8px 12px; border-radius: 20px;
+        opacity: 0.9; white-space: nowrap; transition: background 0.15s, opacity 0.15s;
+      }
+      .nav-inline a:hover { background: rgba(255,255,255,0.16); opacity: 1; }
+      .nav-inline a.active { background: rgba(255,255,255,0.22); opacity: 1; }
+      .header-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+      #user-greeting { color: #fff; font-size: 13px; font-weight: 500; font-family: 'Inter', sans-serif; opacity: 0.9; }
+      #logout-btn {
+        background: #78A7FF; color: #fff; border: none; border-radius: 20px;
+        padding: 7px 16px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: 'Inter', sans-serif;
+      }
+      .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+      @media (max-width: 1000px) { #user-greeting { display: none; } }
+      @media (max-width: 760px) { .nav-inline { display: none; } .hamburger { display: block; } }
+
+      .wrap { width: 100%; max-width: 900px; padding: 0 24px; }
+      h1 { font-family: 'CooperBT', serif; font-size: 34px; font-weight: 400; margin-bottom: 4px; }
+      .sub { color: #8a857d; font-size: 15px; margin-bottom: 26px; }
+      @media (max-width: 420px) { h1 { font-size: 28px; } }
+
+      /* Product grid (mirrors order.html's Shop Products cat-grid) */
+      .cat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; }
+      @media (max-width: 680px) { .cat-grid { grid-template-columns: 1fr; gap: 30px; } }
+      .cat-card { cursor: pointer; text-align: left; }
+      .cat-thumb {
+        width: 100%; aspect-ratio: 4 / 3; background: #fff; border-radius: 10px;
+        display: flex; align-items: center; justify-content: center; overflow: hidden;
+        box-shadow: 0 2px 14px rgba(0,0,0,0.06); transition: transform 0.12s, box-shadow 0.12s;
+      }
+      .cat-card:hover .cat-thumb { transform: translateY(-3px); box-shadow: 0 8px 26px rgba(0,0,0,0.12); }
+      .cat-thumb img { max-width: 94%; max-height: 94%; object-fit: contain; display: block; }
+      .cat-name { font-family: 'CooperBT', serif; font-size: 24px; margin-top: 14px; }
+      .cat-badge { display: inline-block; font-size: 10px; font-weight: 700; color: #fff; background: linear-gradient(135deg,#7657FC,#589AF9); border-radius: 999px; padding: 2px 8px; margin-left: 8px; vertical-align: middle; position: relative; top: -3px; font-family: 'Inter', sans-serif; }
+      .cat-desc { color: #6b6862; font-size: 14px; line-height: 1.45; margin-top: 5px; }
+      .cat-from { color: #7657FC; font-weight: 600; font-size: 14px; margin-top: 8px; }
+
+      /* Rendered hardcover photo-book mockup (no Prodigi template image yet) */
+      .book-mock { position: relative; width: 66%; aspect-ratio: 1 / 1; }
+      .book-cover {
+        position: absolute; inset: 0; border-radius: 3px 8px 8px 3px;
+        background-size: cover; background-position: center;
+        box-shadow: 6px 10px 22px rgba(0,0,0,0.28);
+        border-left: 7px solid rgba(0,0,0,0.22);
+      }
+      .book-cover::after {
+        content: ''; position: absolute; top: 3px; bottom: 3px; right: -6px; width: 6px;
+        background: repeating-linear-gradient(to bottom, #efece6 0, #efece6 1px, #cfccc4 1px, #cfccc4 2px);
+        border-radius: 0 3px 3px 0;
+      }
+      .book-cover::before {
+        content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 14px;
+        background: linear-gradient(to right, rgba(0,0,0,0.20), rgba(0,0,0,0));
+      }
+
+      /* Nav drawer (mobile) */
+      #nav-overlay { display: none; position: fixed; inset: 0; z-index: 200; }
+      #nav-overlay.open { display: block; }
+      #nav-drawer-bg { position: absolute; inset: 0; background: rgba(0,0,0,0.18); }
+      #nav-drawer {
+        position: absolute; top: 14px; left: 14px; width: 264px; background: #fff;
+        border-radius: 18px; box-shadow: 0 12px 48px rgba(0,0,0,0.18); padding: 8px 0;
+        opacity: 0; transform: translateY(-8px) scale(0.97); transform-origin: top left;
+        transition: opacity 0.18s ease, transform 0.18s ease;
+      }
+      #nav-overlay.open #nav-drawer { opacity: 1; transform: translateY(0) scale(1); }
+      .nav-link { display: flex; align-items: center; gap: 14px; padding: 11px 20px; font-size: 15px; font-weight: 500; color: #1a1a1a; text-decoration: none; font-family: 'Inter', sans-serif; }
+      .nav-link:hover { background: #f5f4f0; }
+      .nav-link svg { flex-shrink: 0; color: #555; }
+      .nav-link.external { color: #666; font-size: 14px; }
+      .nav-divider { height: 1px; background: #ececec; margin: 8px 0; }
+
       /* Popcode picker overlay (for print products that need a photo) */
-      .pk-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: flex-end; justify-content: center; z-index: 100; }
+      .pk-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: flex-end; justify-content: center; z-index: 300; }
       .pk-overlay.open { display: flex; }
       .pk-sheet { background: #fff; width: 100%; max-width: 560px; border-radius: 18px 18px 0 0; padding: 22px; max-height: 82vh; overflow-y: auto; }
       .pk-sheet h2 { font-family: 'CooperBT', serif; font-size: 24px; margin-bottom: 4px; }
@@ -47,12 +120,68 @@
     </style>
   </head>
   <body>
-    <div class="site-header"><span class="logo-text">popcode</span></div>
+    <header class="site-header">
+      <a href="/manage.html" class="brand"><img src="/assets/Popcode_logo.rev.svg" alt="Popcode"/></a>
+      <nav class="nav-inline" id="nav-inline">
+        <a href="/manage.html">My Popcodes</a>
+        <a href="/manage.html?tab=designs">My Designs</a>
+        <a href="/shop.html" class="active">Shop</a>
+        <a href="/views.html">Past Views</a>
+        <a href="/howto.html">How It Works</a>
+        <a href="/account.html">Account</a>
+      </nav>
+      <div class="header-right">
+        <span id="user-greeting"></span>
+        <button id="logout-btn">Sign Out</button>
+        <button id="nav-btn" class="hamburger" aria-label="Menu">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="nav-overlay">
+      <div id="nav-drawer-bg"></div>
+      <div id="nav-drawer">
+        <a class="nav-link" href="/manage.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          My Popcodes
+        </a>
+        <a class="nav-link" href="/manage.html?tab=designs">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          My Designs
+        </a>
+        <a class="nav-link" href="/shop.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          Shop
+        </a>
+        <a class="nav-link" href="/create.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          New Popcode
+        </a>
+        <a class="nav-link" href="/views.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Past Views
+        </a>
+        <a class="nav-link" href="/account.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          My Account
+        </a>
+        <a class="nav-link" href="/howto.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          How It Works
+        </a>
+        <div class="nav-divider"></div>
+        <a class="nav-link external" href="https://popcodeapp.com" target="_blank">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          popcodeapp.com
+        </a>
+      </div>
+    </div>
+
     <div class="wrap">
-      <a class="backlink" href="/manage.html">&larr; My Popcodes</a>
       <h1>Shop</h1>
-      <div class="sub">Choose a product to make. Every product can come to life — link videos to its photos.</div>
-      <div class="grid" id="grid"></div>
+      <div class="sub">Pick a product to design. Every product can come to life — link videos to its photos.</div>
+      <div class="cat-grid" id="cat-grid"></div>
     </div>
 
     <div class="pk-overlay" id="pk-overlay">
@@ -68,39 +197,58 @@
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       let currentUser = null, popcodes = [];
 
-      // Products. Photo Book is the hero (builds from scratch). The print products
-      // need a photo, so they open a picker of the user's Popcodes → order.html.
+      // Sample photo used for the book-cover mockup (product-first: no user photo
+      // chosen yet). Reuses the leopard from the Prodigi print template.
+      const BOOK_COVER_PHOTO = '/assets/mockups/print.jpg';
+
+      // Products. Photo Book is the hero (builds from scratch → book.html).
+      // The print products need a photo, so they open a picker of the user's
+      // Popcodes → order.html with the chosen category pre-selected. Photo-product
+      // thumbnails are the real Prodigi product mockups shown as-is.
       const PRODUCTS = [
-        { id: 'book',   name: 'Photo Book',  tag: 'Layflat, lay-flat photo book', emoji: '📖', featured: true, kind: 'build' },
-        { id: 'print',  name: 'Prints',      tag: 'Museum-quality fine-art prints', emoji: '🖼️', kind: 'photo' },
-        { id: 'tile',   name: 'Photo Tiles', tag: 'Framed, ready-to-hang tiles',    emoji: '🧩', kind: 'photo' },
-        { id: 'canvas', name: 'Canvas',      tag: 'Gallery-style stretched canvas', emoji: '🎨', kind: 'photo' },
+        { id: 'book',   name: 'Photo Book',    desc: 'Lay-flat hardcover photo book — scannable pages come to life.', badge: 'New', kind: 'build' },
+        { id: 'print',  name: 'Prints',        desc: 'Museum-quality enhanced matte fine-art prints.',                kind: 'photo', type: 'print',  mockup: '/assets/mockups/print.jpg' },
+        { id: 'tile',   name: 'Photo Tiles',   desc: 'Framed, ready-to-hang tiles — great on their own or clustered.', kind: 'photo', type: 'tile',   mockup: '/assets/mockups/tile.jpg' },
+        { id: 'canvas', name: 'Canvas',        desc: 'Gallery-style stretched canvas with mirror-wrapped edges.',      kind: 'photo', type: 'canvas', mockup: '/assets/mockups/canvas.jpg' },
+        { id: 'framed', name: 'Framed Prints', desc: 'Fine-art print in a classic black frame behind perspex glaze.',  kind: 'photo', type: 'framed', mockup: '/assets/mockups/framed.jpg' },
       ];
 
       db.auth.getSession().then(async ({ data }) => {
         if (!data.session) { window.location.href = '/auth.html'; return; }
         currentUser = data.session.user;
+        const uName = currentUser?.user_metadata?.full_name?.split(' ')[0] || currentUser?.email?.split('@')[0] || '';
+        if (uName) document.getElementById('user-greeting').textContent = 'Hi, ' + uName + '!';
         renderProducts();
         loadPopcodes();
       });
 
+      document.getElementById('logout-btn').addEventListener('click', async () => { await db.auth.signOut(); window.location.href = '/auth.html'; });
+      document.getElementById('nav-btn').addEventListener('click', () => document.getElementById('nav-overlay').classList.add('open'));
+      document.getElementById('nav-overlay').addEventListener('click', (e) => { if (e.target === document.getElementById('nav-drawer-bg')) document.getElementById('nav-overlay').classList.remove('open'); });
+
       function renderProducts() {
-        const grid = document.getElementById('grid');
+        const grid = document.getElementById('cat-grid');
         grid.innerHTML = '';
         PRODUCTS.forEach(p => {
-          const b = document.createElement('button');
-          b.className = 'prod' + (p.featured ? ' featured' : '');
-          b.innerHTML = `<div class="prod-art">${p.emoji}</div>`
-            + `<div class="prod-body"><div class="prod-name">${p.name}${p.featured ? '<span class="prod-badge">New</span>' : ''}</div>`
-            + `<div class="prod-tag">${p.tag}</div></div>`;
-          b.addEventListener('click', () => chooseProduct(p));
-          grid.appendChild(b);
+          const card = document.createElement('div');
+          card.className = 'cat-card';
+          const badge = p.badge ? `<span class="cat-badge">${p.badge}</span>` : '';
+          const art = p.id === 'book'
+            ? `<div class="book-mock"><div class="book-cover" style="background-image:url('${BOOK_COVER_PHOTO}')"></div></div>`
+            : `<img src="${p.mockup}" alt="${p.name}" loading="lazy">`;
+          const cta = p.id === 'book' ? 'Start your book' : 'See sizes & pricing';
+          card.innerHTML =
+            `<div class="cat-thumb ${p.type || ''}">${art}</div>` +
+            `<div class="cat-name">${p.name}${badge}</div>` +
+            `<div class="cat-desc">${p.desc}</div>` +
+            `<div class="cat-from">${cta} &rarr;</div>`;
+          card.addEventListener('click', () => chooseProduct(p));
+          grid.appendChild(card);
         });
       }
 
       function chooseProduct(p) {
         if (p.kind === 'build') { window.location.href = '/book.html'; return; }
-        // Photo product: pick which Popcode to print.
         openPicker(p);
       }
 
@@ -108,9 +256,7 @@
         const { data } = await db.from('collections')
           .select('id, slug, name, kind').eq('user_id', currentUser.id)
           .order('created_at', { ascending: false });
-        // Only standalone Popcodes (not book/other product designs) can be printed here.
         popcodes = (data || []).filter(c => !['book','print','tile','canvas','calendar'].includes(c.kind));
-        // Grab a thumbnail per popcode.
         if (popcodes.length) {
           const ids = popcodes.map(c => c.id);
           const { data: items } = await db.from('collection_items')
@@ -133,7 +279,10 @@
             const b = document.createElement('button');
             b.className = 'pk-item';
             b.innerHTML = `<div class="pk-thumb" style="${c.thumb ? `background-image:url('${c.thumb}')` : ''}"></div><div class="pk-name">${c.name || c.slug}</div>`;
-            b.addEventListener('click', () => { window.location.href = `/order.html?id=${encodeURIComponent(c.slug)}`; });
+            b.addEventListener('click', () => {
+              const q = '/order.html?id=' + encodeURIComponent(c.slug) + (p.type ? '&type=' + p.type : '');
+              window.location.href = q;
+            });
             g.appendChild(b);
           });
         }
