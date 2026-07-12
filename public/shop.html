@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <!-- Sentry error monitoring (errors-only; init in /sentry-init.js) -->
+    <script
+      src="https://browser.sentry-cdn.com/10.59.0/bundle.min.js"
+      integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
+      crossorigin="anonymous"></script>
+    <script src="/sentry-init.js"></script>
+    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <title>Popcode — Shop</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { min-height: 100vh; background: #f7f6f2; font-family: 'Inter', sans-serif; color: #1a1a1a; padding: 0 0 80px; overflow-x: hidden; }
+      .site-header { width: 100vw; background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%); padding: 24px 24px 40px; min-height: 160px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 28px; }
+      .logo-text { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 32px; color: #fff; letter-spacing: -0.02em; }
+      .wrap { width: 100%; max-width: 900px; margin: 0 auto; padding: 0 24px; }
+      .backlink { display: inline-block; color: #7657FC; font-weight: 600; font-size: 14px; text-decoration: none; margin-bottom: 14px; }
+      h1 { font-family: 'CooperBT', serif; font-size: 40px; font-weight: 400; margin-bottom: 4px; }
+      .sub { color: #8a857d; font-size: 15px; margin-bottom: 28px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; }
+      .prod { background: #fff; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); overflow: hidden; cursor: pointer; border: none; text-align: left; padding: 0; transition: transform 0.12s, box-shadow 0.12s; font-family: inherit; }
+      .prod:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
+      .prod-art { height: 150px; display: flex; align-items: center; justify-content: center; font-size: 52px; background: #f2f0ea; }
+      .prod-body { padding: 14px 16px 18px; }
+      .prod-name { font-family: 'CooperBT', serif; font-size: 22px; }
+      .prod-tag { color: #8a857d; font-size: 13px; margin-top: 3px; }
+      .prod.featured .prod-art { background: linear-gradient(135deg, #efe9ff, #e3edff); }
+      .prod-badge { display: inline-block; font-size: 10px; font-weight: 700; color: #fff; background: linear-gradient(135deg,#7657FC,#589AF9); border-radius: 999px; padding: 2px 8px; margin-left: 6px; vertical-align: middle; position: relative; top: -2px; }
+      /* Popcode picker overlay (for print products that need a photo) */
+      .pk-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: flex-end; justify-content: center; z-index: 100; }
+      .pk-overlay.open { display: flex; }
+      .pk-sheet { background: #fff; width: 100%; max-width: 560px; border-radius: 18px 18px 0 0; padding: 22px; max-height: 82vh; overflow-y: auto; }
+      .pk-sheet h2 { font-family: 'CooperBT', serif; font-size: 24px; margin-bottom: 4px; }
+      .pk-sub { color: #8a857d; font-size: 14px; margin-bottom: 16px; }
+      .pk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px,1fr)); gap: 12px; }
+      .pk-item { border: none; background: none; cursor: pointer; padding: 0; text-align: center; font-family: inherit; }
+      .pk-thumb { width: 100%; aspect-ratio: 1; border-radius: 10px; background: #e8e4f0 center/cover; }
+      .pk-name { font-size: 12px; color: #444; margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .pk-close { float: right; border: none; background: none; font-size: 24px; cursor: pointer; color: #999; line-height: 1; }
+      .pk-empty { color: #8a857d; font-size: 14px; padding: 10px 0 4px; }
+    </style>
+  </head>
+  <body>
+    <div class="site-header"><span class="logo-text">popcode</span></div>
+    <div class="wrap">
+      <a class="backlink" href="/manage.html">&larr; My Popcodes</a>
+      <h1>Shop</h1>
+      <div class="sub">Choose a product to make. Every product can come to life — link videos to its photos.</div>
+      <div class="grid" id="grid"></div>
+    </div>
+
+    <div class="pk-overlay" id="pk-overlay">
+      <div class="pk-sheet">
+        <button class="pk-close" id="pk-close">&times;</button>
+        <h2 id="pk-title">Choose a photo</h2>
+        <div class="pk-sub" id="pk-sub">Pick one of your Popcodes to print.</div>
+        <div class="pk-grid" id="pk-grid"></div>
+      </div>
+    </div>
+
+    <script>
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      let currentUser = null, popcodes = [];
+
+      // Products. Photo Book is the hero (builds from scratch). The print products
+      // need a photo, so they open a picker of the user's Popcodes → order.html.
+      const PRODUCTS = [
+        { id: 'book',   name: 'Photo Book',  tag: 'Layflat, lay-flat photo book', emoji: '📖', featured: true, kind: 'build' },
+        { id: 'print',  name: 'Prints',      tag: 'Museum-quality fine-art prints', emoji: '🖼️', kind: 'photo' },
+        { id: 'tile',   name: 'Photo Tiles', tag: 'Framed, ready-to-hang tiles',    emoji: '🧩', kind: 'photo' },
+        { id: 'canvas', name: 'Canvas',      tag: 'Gallery-style stretched canvas', emoji: '🎨', kind: 'photo' },
+      ];
+
+      db.auth.getSession().then(async ({ data }) => {
+        if (!data.session) { window.location.href = '/auth.html'; return; }
+        currentUser = data.session.user;
+        renderProducts();
+        loadPopcodes();
+      });
+
+      function renderProducts() {
+        const grid = document.getElementById('grid');
+        grid.innerHTML = '';
+        PRODUCTS.forEach(p => {
+          const b = document.createElement('button');
+          b.className = 'prod' + (p.featured ? ' featured' : '');
+          b.innerHTML = `<div class="prod-art">${p.emoji}</div>`
+            + `<div class="prod-body"><div class="prod-name">${p.name}${p.featured ? '<span class="prod-badge">New</span>' : ''}</div>`
+            + `<div class="prod-tag">${p.tag}</div></div>`;
+          b.addEventListener('click', () => chooseProduct(p));
+          grid.appendChild(b);
+        });
+      }
+
+      function chooseProduct(p) {
+        if (p.kind === 'build') { window.location.href = '/book.html'; return; }
+        // Photo product: pick which Popcode to print.
+        openPicker(p);
+      }
+
+      async function loadPopcodes() {
+        const { data } = await db.from('collections')
+          .select('id, slug, name, kind').eq('user_id', currentUser.id)
+          .order('created_at', { ascending: false });
+        // Only standalone Popcodes (not book/other product designs) can be printed here.
+        popcodes = (data || []).filter(c => !['book','print','tile','canvas','calendar'].includes(c.kind));
+        // Grab a thumbnail per popcode.
+        if (popcodes.length) {
+          const ids = popcodes.map(c => c.id);
+          const { data: items } = await db.from('collection_items')
+            .select('collection_id, photo_url, target_index').in('collection_id', ids).order('target_index');
+          const thumb = {};
+          (items || []).forEach(it => { if (!thumb[it.collection_id] && it.photo_url) thumb[it.collection_id] = it.photo_url; });
+          popcodes.forEach(c => c.thumb = thumb[c.id] || null);
+        }
+      }
+
+      function openPicker(p) {
+        document.getElementById('pk-title').textContent = 'Choose a photo to print';
+        document.getElementById('pk-sub').textContent = `Pick one of your Popcodes to order ${p.name.toLowerCase()}.`;
+        const g = document.getElementById('pk-grid');
+        g.innerHTML = '';
+        if (!popcodes.length) {
+          g.innerHTML = `<div class="pk-empty">You have no Popcodes yet. <a href="/create.html">Create one first</a>, then order prints of it.</div>`;
+        } else {
+          popcodes.forEach(c => {
+            const b = document.createElement('button');
+            b.className = 'pk-item';
+            b.innerHTML = `<div class="pk-thumb" style="${c.thumb ? `background-image:url('${c.thumb}')` : ''}"></div><div class="pk-name">${c.name || c.slug}</div>`;
+            b.addEventListener('click', () => { window.location.href = `/order.html?id=${encodeURIComponent(c.slug)}`; });
+            g.appendChild(b);
+          });
+        }
+        document.getElementById('pk-overlay').classList.add('open');
+      }
+
+      document.getElementById('pk-close').addEventListener('click', () => document.getElementById('pk-overlay').classList.remove('open'));
+      document.getElementById('pk-overlay').addEventListener('click', (e) => { if (e.target.id === 'pk-overlay') e.currentTarget.classList.remove('open'); });
+    </script>
+    <script src="/beta-feedback.js"></script>
+  </body>
+</html>
