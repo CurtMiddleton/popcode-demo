@@ -1079,10 +1079,15 @@
       let montageState = null;
       let montageBusy = false;
       let montageResult = null; // rendered montage File awaiting the user's confirm
+      let mtgDragId = null;     // id of the thumbnail being dragged (mouse reorder)
 
       // Preview the rendered montage before committing it to the page.
-      function mtgShowPreview(file) {
+      function mtgShowPreview(file, musicSkipped) {
         montageResult = file;
+        const note = document.querySelector('.mtg-preview-note');
+        if (note) note.textContent = musicSkipped
+          ? "Here's your montage — the chosen music isn't available yet, so it's silent for now. Use it, or start over."
+          : "Here's your montage. Use it, or start over to change photos, order, or music.";
         const vid = document.getElementById('mtg-preview-video');
         vid.src = URL.createObjectURL(file);
         document.getElementById('mtg-body-scroll').style.display = 'none';
@@ -1244,8 +1249,8 @@
           const CHEV_R = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
           const X_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
           strip.innerHTML = photos.map((p, i) => `
-            <div class="mtg-thumb">
-              <img src="${p.url}" alt=""/>
+            <div class="mtg-thumb${mtgDragId === p.id ? ' dragging' : ''}" data-id="${p.id}">
+              <img src="${p.url}" alt="" draggable="false"/>
               <span class="mtg-order">${i + 1}</span>
               <button type="button" class="mtg-del" title="Remove" onclick="mtgRemove(${i})">${X_ICON}</button>
               <div class="mtg-thumb-actions">
@@ -1253,8 +1258,76 @@
                 <button type="button" class="mtg-move" title="Move right" onclick="mtgMove(${i},1)" ${i === photos.length - 1 ? 'disabled' : ''}>${CHEV_R}</button>
               </div>
             </div>`).join('');
+          photos.forEach(p => {
+            const el = strip.querySelector(`.mtg-thumb[data-id="${p.id}"]`);
+            if (el) mtgEnableDrag(el, p.id);
+          });
         }
+        const hint = document.getElementById('mtg-reorder-hint');
+        if (hint) hint.style.display = photos.length > 1 ? 'block' : 'none';
         mtgUpdateEstimate();
+      }
+
+      // Mouse drag-to-reorder for the thumbnail strip. Touch keeps the ‹ › arrows
+      // (a drag there would fight the strip's horizontal scroll).
+      function mtgMakeGhost(url, x, y) {
+        const g = document.createElement('div');
+        g.style.cssText = 'position:fixed;width:88px;height:88px;border-radius:14px;transform:translate(-50%,-50%);pointer-events:none;z-index:9700;box-shadow:0 10px 26px rgba(0,0,0,.35);opacity:.92;background-size:cover;background-position:center;';
+        g.style.left = x + 'px'; g.style.top = y + 'px';
+        g.style.backgroundImage = 'url("' + url + '")';
+        document.body.appendChild(g);
+        return g;
+      }
+      function mtgEnableDrag(el, photoId) {
+        el.addEventListener('pointerdown', (e) => {
+          if (e.pointerType !== 'mouse') return;                 // touch → use the arrows
+          if (e.target.closest('.mtg-del') || e.target.closest('.mtg-move')) return;
+          const photo = montageState && montageState.photos.find(p => p.id === photoId);
+          if (!photo) return;
+          const startX = e.clientX, startY = e.clientY;
+          let dragging = false, ghost = null, holdTimer = null;
+          const startDrag = (x, y) => {
+            if (dragging) return;
+            clearTimeout(holdTimer); dragging = true; mtgDragId = photoId;
+            ghost = mtgMakeGhost(photo.url, x, y);
+            document.body.style.userSelect = 'none';
+            const c = document.querySelector(`.mtg-thumb[data-id="${photoId}"]`);
+            if (c) c.classList.add('dragging');
+          };
+          holdTimer = setTimeout(() => startDrag(startX, startY), 160);
+          const move = (ev) => {
+            if (!dragging) {
+              if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 8) return;
+              startDrag(ev.clientX, ev.clientY);
+            }
+            ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
+            const over = document.elementFromPoint(ev.clientX, ev.clientY);
+            const overThumb = over && over.closest('.mtg-thumb');
+            if (overThumb && overThumb.dataset.id && overThumb.dataset.id !== mtgDragId) {
+              const from = montageState.photos.findIndex(p => p.id === mtgDragId);
+              const to = montageState.photos.findIndex(p => p.id === overThumb.dataset.id);
+              if (from !== -1 && to !== -1) {
+                const [it] = montageState.photos.splice(from, 1);
+                montageState.photos.splice(to, 0, it);
+                mtgRenderStrip();
+              }
+            }
+          };
+          const endDrag = () => {
+            clearTimeout(holdTimer);
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', endDrag);
+            document.removeEventListener('pointercancel', endDrag);
+            if (ghost) ghost.remove();
+            document.body.style.userSelect = '';
+            const wasDragging = dragging;
+            mtgDragId = null;
+            if (wasDragging) mtgRenderStrip();
+          };
+          document.addEventListener('pointermove', move);
+          document.addEventListener('pointerup', endDrag);
+          document.addEventListener('pointercancel', endDrag);
+        });
       }
 
       function mtgMove(i, dir) {
@@ -1367,7 +1440,7 @@
           const file = new File([blob], 'montage.mp4', { type: 'video/mp4' });
           mtgStatus('', null, '');
           montageBusy = false; createBtn.disabled = false; closeBtn.disabled = false;
-          mtgShowPreview(file); // let the user watch it before committing to the page
+          mtgShowPreview(file, !!startRes.musicSkipped); // let the user watch it before committing
         } catch (e) {
           console.error('montage error:', e);
           mtgStatus('Something went wrong: ' + e.message, null, 'err');
@@ -1458,9 +1531,11 @@
     }
     .mtg-thumb {
       position: relative; flex: 0 0 auto; width: 104px; height: 104px; border-radius: 14px;
-      overflow: hidden; background: #ededed;
+      overflow: hidden; background: #ededed; touch-action: pan-x; cursor: grab;
     }
-    .mtg-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .mtg-thumb.dragging { opacity: .35; }
+    .mtg-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; }
+    .mtg-reorder-hint { font-size: 12px; color: #aaa; margin: -4px 0 18px; font-family: 'Inter', sans-serif; }
     .mtg-order {
       position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,.62); color: #fff;
       font-size: 11px; font-weight: 700; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px;
@@ -1571,6 +1646,7 @@
         <p class="mtg-sub">Pick photos, set the order, add music. We'll turn them into a memory video and link it to this page's photo.</p>
 
         <div class="mtg-strip" id="mtg-strip"></div>
+        <div class="mtg-reorder-hint" id="mtg-reorder-hint" style="display:none;">Drag to reorder — or use the arrows.</div>
         <label class="mtg-add">
           <input type="file" accept="image/*" multiple onchange="mtgAddPhotos(this)"/>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add photos
