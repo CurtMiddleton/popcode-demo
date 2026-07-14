@@ -99,7 +99,7 @@
       }
       #code-input { text-transform: lowercase; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
       #code-input::placeholder { font-size: 13px; text-transform: none; letter-spacing: 0; color: #aaa; }
-      .pages { width: 100%; max-width: 420px; }
+      .pages { width: 100%; max-width: 420px; align-self: center; }
 
       @media (min-width: 960px) {
         .pages { max-width: 640px; }
@@ -1106,6 +1106,7 @@
       function mtgUsePreview() {
         if (!montageResult || !montageState) return;
         mtgApplyToPage(montageState.page, montageResult);
+        montageResult = null; // consumed — don't re-apply on close
         mtgHidePreview(false);
         closeMontage();
       }
@@ -1129,6 +1130,9 @@
       }
       function closeMontage() {
         if (montageBusy) return;
+        // Don't lose a rendered montage the user didn't explicitly "Use": if a
+        // preview is still showing on close, keep it by applying it to the page.
+        if (montageResult && montageState) mtgApplyToPage(montageState.page, montageResult);
         mtgHidePreview(true); // revoke the preview video + reset
         const ov = document.getElementById('mtg-overlay');
         ov.classList.remove('open');
@@ -1245,18 +1249,12 @@
         if (!photos.length) {
           strip.innerHTML = `<div class="mtg-empty">No photos yet. Add photos to build your montage.</div>`;
         } else {
-          const CHEV_L = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
-          const CHEV_R = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
           const X_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
           strip.innerHTML = photos.map((p, i) => `
             <div class="mtg-thumb${mtgDragId === p.id ? ' dragging' : ''}" data-id="${p.id}">
               <img src="${p.url}" alt="" draggable="false"/>
               <span class="mtg-order">${i + 1}</span>
               <button type="button" class="mtg-del" title="Remove" onclick="mtgRemove(${i})">${X_ICON}</button>
-              <div class="mtg-thumb-actions">
-                <button type="button" class="mtg-move" title="Move left" onclick="mtgMove(${i},-1)" ${i === 0 ? 'disabled' : ''}>${CHEV_L}</button>
-                <button type="button" class="mtg-move" title="Move right" onclick="mtgMove(${i},1)" ${i === photos.length - 1 ? 'disabled' : ''}>${CHEV_R}</button>
-              </div>
             </div>`).join('');
           photos.forEach(p => {
             const el = strip.querySelector(`.mtg-thumb[data-id="${p.id}"]`);
@@ -1268,8 +1266,9 @@
         mtgUpdateEstimate();
       }
 
-      // Mouse drag-to-reorder for the thumbnail strip. Touch keeps the ‹ › arrows
-      // (a drag there would fight the strip's horizontal scroll).
+      // Drag-to-reorder for the thumbnail grid (mouse + touch). The grid wraps
+      // (no horizontal scroll) and thumbs are touch-action:none, so a touch drag
+      // reorders instead of scrolling.
       function mtgMakeGhost(url, x, y) {
         const g = document.createElement('div');
         g.style.cssText = 'position:fixed;width:88px;height:88px;border-radius:14px;transform:translate(-50%,-50%);pointer-events:none;z-index:9700;box-shadow:0 10px 26px rgba(0,0,0,.35);opacity:.92;background-size:cover;background-position:center;';
@@ -1280,8 +1279,7 @@
       }
       function mtgEnableDrag(el, photoId) {
         el.addEventListener('pointerdown', (e) => {
-          if (e.pointerType !== 'mouse') return;                 // touch → use the arrows
-          if (e.target.closest('.mtg-del') || e.target.closest('.mtg-move')) return;
+          if (e.target.closest('.mtg-del')) return;              // the remove button owns its taps
           const photo = montageState && montageState.photos.find(p => p.id === photoId);
           if (!photo) return;
           const startX = e.clientX, startY = e.clientY;
@@ -1479,16 +1477,23 @@
     /* ── Montage maker (book-maker look: black / white / warm-gray, line icons) ── */
     /* Hidden by default — shown only for admins until Shotstack is wired live in
        prod (regular users would otherwise hit the dry-run "preview mode" path). */
+    /* "Make a montage" is a peer video CHOICE, styled like the upload tile and
+       stacked under it (shown for admins). Hidden once a video/montage is chosen. */
     .mtg-open-btn {
-      display: none; align-items: center; justify-content: center; gap: 7px;
-      margin-top: 10px; width: 100%; border: 1px solid #e4e2dc; background: #fff;
-      color: #1a1a1a; font-weight: 700; font-size: 13px; padding: 11px 12px;
-      border-radius: 999px; cursor: pointer; font-family: 'Inter', sans-serif;
+      display: none; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+      margin-top: 14px; width: 130px; height: 110px; border: 1px solid #e8e8e8; background: #fff;
+      color: #1a1a1a; font-weight: 600; font-size: 11px; border-radius: 14px; cursor: pointer;
+      font-family: 'Inter', sans-serif; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
       transition: background .15s, border-color .15s;
     }
-    body.mtg-admin .mtg-open-btn { display: inline-flex; }
-    .mtg-open-btn:hover { background: #f3f2ef; border-color: #d8d5cd; }
-    .mtg-open-btn svg { width: 16px; height: 16px; }
+    body.mtg-admin .mtg-open-btn { display: flex; }
+    .video-slot .upload-btn.selected ~ .mtg-open-btn { display: none !important; }
+    .mtg-open-btn:hover { background: #f7f6f3; border-color: #dcdcdc; }
+    .mtg-open-btn svg { width: 34px; height: 34px; stroke-width: 1.6; }
+    @media (min-width: 960px) {
+      .mtg-open-btn { width: 200px; height: 165px; font-size: 13px; }
+      .mtg-open-btn svg { width: 52px; height: 52px; }
+    }
 
     .mtg-overlay {
       position: fixed; inset: 0; z-index: 9500; display: none;
@@ -1507,9 +1512,9 @@
 
     .mtg-head {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 22px 24px 6px; color: #1a1a1a;
+      padding: 30px 24px 14px; color: #1a1a1a;
     }
-    .mtg-title { font-size: 26px; font-weight: 400; color: #1a1a1a; letter-spacing: -0.01em; font-family: Georgia, 'Times New Roman', serif; }
+    .mtg-title { font-size: 32px; font-weight: 400; color: #1a1a1a; letter-spacing: 0; font-family: 'CooperBT', Georgia, serif; }
     .mtg-close {
       background: #f3f2ef; border: none; color: #1a1a1a; width: 36px; height: 36px;
       border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;
@@ -1522,8 +1527,7 @@
     .mtg-sub { font-size: 14px; color: #8a8a8a; margin: 0 0 20px; line-height: 1.5; font-family: 'Inter', sans-serif; }
 
     .mtg-strip {
-      display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 12px;
-      -webkit-overflow-scrolling: touch;
+      display: flex; flex-wrap: wrap; gap: 10px; padding: 4px 2px 12px;
     }
     .mtg-empty {
       color: #aaa; font-size: 13px; padding: 26px 12px; text-align: center; width: 100%;
@@ -1531,7 +1535,7 @@
     }
     .mtg-thumb {
       position: relative; flex: 0 0 auto; width: 104px; height: 104px; border-radius: 14px;
-      overflow: hidden; background: #ededed; touch-action: pan-x; cursor: grab;
+      overflow: hidden; background: #ededed; touch-action: none; cursor: grab; user-select: none;
     }
     .mtg-thumb.dragging { opacity: .35; }
     .mtg-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; }
@@ -1547,16 +1551,6 @@
       display: flex; align-items: center; justify-content: center;
     }
     .mtg-del svg { width: 10px; height: 10px; }
-    .mtg-thumb-actions {
-      position: absolute; bottom: 0; left: 0; right: 0; display: flex; gap: 4px;
-      padding: 5px; background: linear-gradient(transparent, rgba(0,0,0,.5));
-    }
-    .mtg-move {
-      flex: 1; border: none; background: rgba(255,255,255,.92); color: #1a1a1a;
-      border-radius: 8px; padding: 3px 0; cursor: pointer; display: flex; align-items: center; justify-content: center;
-    }
-    .mtg-move:disabled { opacity: .3; cursor: default; }
-    .mtg-move svg { width: 14px; height: 14px; }
 
     .mtg-add {
       display: inline-flex; align-items: center; gap: 7px; margin: 6px 0 26px;
@@ -1646,7 +1640,7 @@
         <p class="mtg-sub">Pick photos, set the order, add music. We'll turn them into a memory video and link it to this page's photo.</p>
 
         <div class="mtg-strip" id="mtg-strip"></div>
-        <div class="mtg-reorder-hint" id="mtg-reorder-hint" style="display:none;">Drag to reorder — or use the arrows.</div>
+        <div class="mtg-reorder-hint" id="mtg-reorder-hint" style="display:none;">Drag the photos to reorder them.</div>
         <label class="mtg-add">
           <input type="file" accept="image/*" multiple onchange="mtgAddPhotos(this)"/>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add photos
