@@ -864,6 +864,19 @@
         g.addColorStop(0.25, 'rgba(255,255,255,0.03)');
         g.addColorStop(1, 'rgba(0,0,0,0.06)');
         ctx.fillStyle = g; ctx.fillRect(r.x, r.y, r.w, r.h);
+        // lay-flat spine groove near the left edge, so the fold reads through
+        // the custom photo (highlight ridge + dark indent + falloff shadow).
+        const spineX = r.x + r.w * 0.039;
+        const band = (xc, halfW, color, aPeak) => {
+          const gg = ctx.createLinearGradient(xc - halfW, 0, xc + halfW, 0);
+          gg.addColorStop(0, `rgba(${color},0)`);
+          gg.addColorStop(0.5, `rgba(${color},${aPeak})`);
+          gg.addColorStop(1, `rgba(${color},0)`);
+          ctx.fillStyle = gg; ctx.fillRect(xc - halfW, r.y, halfW * 2, r.h);
+        };
+        band(spineX - r.w * 0.014, r.w * 0.020, '255,255,255', 0.34); // raised highlight
+        band(spineX,               r.w * 0.018, '0,0,0',       0.62); // indent groove
+        band(spineX + r.w * 0.045, r.w * 0.050, '0,0,0',       0.16); // falloff shadow
         ctx.restore();
       }
 
