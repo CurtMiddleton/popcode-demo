@@ -14,13 +14,13 @@
   var css = `
   .site-header {
     position: sticky; top: 0; z-index: 50; width: 100vw;
-    background: rgba(255,255,255,0.82);
-    -webkit-backdrop-filter: saturate(180%) blur(12px);
-    backdrop-filter: saturate(180%) blur(12px);
-    padding: 0 28px; height: 68px; min-height: 0; display: flex; align-items: center; justify-content: flex-start; gap: 0;
-    margin: 0 0 30px; align-self: stretch;
+    background:
+      linear-gradient(to right, #ffffff 0%, rgba(255,255,255,0) 16%, rgba(255,255,255,0) 84%, #ffffff 100%),
+      linear-gradient(to bottom, #ececec 0%, #ffffff 100%);
+    padding: 0 28px; height: 100px; min-height: 0; display: flex; align-items: center; justify-content: flex-start; gap: 0;
+    margin: 0; align-self: stretch;
   }
-  .site-header .brand { display: flex; align-items: center; flex-shrink: 0; margin-left: 20px; }
+  .site-header .brand { display: flex; align-items: center; flex-shrink: 0; margin-left: 52px; }
   .site-header .brand img { height: 32px; display: block; }
   .site-header .nav-inline { display: flex; align-items: center; gap: 6px; margin-left: 170px; }
   .site-header .nav-inline a {
