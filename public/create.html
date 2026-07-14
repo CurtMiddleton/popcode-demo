@@ -407,7 +407,7 @@
                 <div class="file-name" id="video-name-${n}"></div>
                 <div class="file-size" id="video-size-${n}"></div>
                 <div class="video-msg" id="video-msg-${n}"></div>
-                <button type="button" class="mtg-open-btn" onclick="openMontage(${n})">✨ Make a montage</button>
+                <button type="button" class="mtg-open-btn" onclick="openMontage(${n})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Make a montage</button>
               </div>
               <div class="audio-slot" id="audio-slot-${n}" style="display:none;">
                 <div class="audio-tile" id="audio-tile-${n}">
@@ -1112,8 +1112,7 @@
       function openMontage(n) {
         if (montageBusy) return;
         montageState = { page: n, photos: [], perSec: 3, transition: 'kenburns', aspect: 'portrait', musicId: 'none' };
-        document.getElementById('mtg-sec').value = 3;
-        mtgSecLabel();
+        mtgSecRender();
         mtgSetSeg('mtg-transition', 'kenburns');
         mtgSetSeg('mtg-aspect', 'portrait');
         mtgRenderMusic();
@@ -1134,10 +1133,16 @@
         montageState = null;
       }
 
-      function mtgSecLabel() {
-        const v = parseFloat(document.getElementById('mtg-sec').value);
-        if (montageState) montageState.perSec = v;
+      function mtgSecStep(delta) {
+        if (!montageState) return;
+        montageState.perSec = Math.min(5, Math.max(1.5, +(montageState.perSec + delta).toFixed(1)));
+        mtgSecRender();
+      }
+      function mtgSecRender() {
+        const v = montageState ? montageState.perSec : 3;
         document.getElementById('mtg-sec-val').textContent = v.toFixed(1) + 's';
+        document.getElementById('mtg-sec-dec').disabled = v <= 1.5;
+        document.getElementById('mtg-sec-inc').disabled = v >= 5;
         mtgUpdateEstimate();
       }
 
@@ -1235,14 +1240,17 @@
         if (!photos.length) {
           strip.innerHTML = `<div class="mtg-empty">No photos yet. Add photos to build your montage.</div>`;
         } else {
+          const CHEV_L = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
+          const CHEV_R = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+          const X_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
           strip.innerHTML = photos.map((p, i) => `
             <div class="mtg-thumb">
               <img src="${p.url}" alt=""/>
               <span class="mtg-order">${i + 1}</span>
+              <button type="button" class="mtg-del" title="Remove" onclick="mtgRemove(${i})">${X_ICON}</button>
               <div class="mtg-thumb-actions">
-                <button type="button" title="Move left" onclick="mtgMove(${i},-1)" ${i === 0 ? 'disabled' : ''}>‹</button>
-                <button type="button" title="Move right" onclick="mtgMove(${i},1)" ${i === photos.length - 1 ? 'disabled' : ''}>›</button>
-                <button type="button" title="Remove" class="mtg-del" onclick="mtgRemove(${i})">✕</button>
+                <button type="button" class="mtg-move" title="Move left" onclick="mtgMove(${i},-1)" ${i === 0 ? 'disabled' : ''}>${CHEV_L}</button>
+                <button type="button" class="mtg-move" title="Move right" onclick="mtgMove(${i},1)" ${i === photos.length - 1 ? 'disabled' : ''}>${CHEV_R}</button>
               </div>
             </div>`).join('');
         }
@@ -1395,146 +1403,169 @@
       }
     </script>
   <style>
-    /* ── Montage maker ────────────────────────────────────────────────────── */
+    /* ── Montage maker (book-maker look: black / white / warm-gray, line icons) ── */
     /* Hidden by default — shown only for admins until Shotstack is wired live in
        prod (regular users would otherwise hit the dry-run "preview mode" path). */
     .mtg-open-btn {
-      display: none;
-      margin-top: 8px; width: 100%; border: 1px dashed #b9a9ff; background: #f4f1ff;
-      color: #6a49f2; font-weight: 700; font-size: 13px; padding: 8px 10px;
-      border-radius: 10px; cursor: pointer; font-family: inherit;
+      display: none; align-items: center; justify-content: center; gap: 7px;
+      margin-top: 10px; width: 100%; border: 1px solid #e4e2dc; background: #fff;
+      color: #1a1a1a; font-weight: 700; font-size: 13px; padding: 11px 12px;
+      border-radius: 999px; cursor: pointer; font-family: 'Inter', sans-serif;
       transition: background .15s, border-color .15s;
     }
-    body.mtg-admin .mtg-open-btn { display: block; }
-    .mtg-open-btn:hover { background: #ece6ff; border-color: #7657FC; }
+    body.mtg-admin .mtg-open-btn { display: inline-flex; }
+    .mtg-open-btn:hover { background: #f3f2ef; border-color: #d8d5cd; }
+    .mtg-open-btn svg { width: 16px; height: 16px; }
 
     .mtg-overlay {
       position: fixed; inset: 0; z-index: 9500; display: none;
       align-items: flex-end; justify-content: center;
-      background: rgba(20, 16, 40, .55); backdrop-filter: blur(2px);
+      background: rgba(0, 0, 0, .5); backdrop-filter: blur(2px);
     }
     .mtg-overlay.open { display: flex; }
     .mtg-sheet {
       background: #fff; width: 100%; max-width: 640px; max-height: 92vh;
-      border-radius: 20px 20px 0 0; display: flex; flex-direction: column;
-      overflow: hidden; box-shadow: 0 -10px 40px rgba(0,0,0,.25);
+      border-radius: 22px 22px 0 0; display: flex; flex-direction: column;
+      overflow: hidden; box-shadow: 0 -10px 44px rgba(0,0,0,.22);
       animation: mtgUp .22s ease;
     }
     @keyframes mtgUp { from { transform: translateY(30px); opacity: .6; } to { transform: none; opacity: 1; } }
-    @media (min-width: 680px) { .mtg-overlay { align-items: center; } .mtg-sheet { border-radius: 20px; } }
+    @media (min-width: 680px) { .mtg-overlay { align-items: center; } .mtg-sheet { border-radius: 22px; } }
 
     .mtg-head {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 16px 18px; color: #fff;
-      background: linear-gradient(120deg, #7657FC, #2dc0f7);
+      padding: 22px 24px 6px; color: #1a1a1a;
     }
-    .mtg-title { font-size: 18px; font-weight: 800; font-family: 'CooperBT', 'Inter', sans-serif; }
+    .mtg-title { font-size: 26px; font-weight: 400; color: #1a1a1a; letter-spacing: -0.01em; font-family: Georgia, 'Times New Roman', serif; }
     .mtg-close {
-      background: rgba(255,255,255,.2); border: none; color: #fff; width: 32px; height: 32px;
-      border-radius: 50%; font-size: 16px; cursor: pointer; line-height: 1;
+      background: #f3f2ef; border: none; color: #1a1a1a; width: 36px; height: 36px;
+      border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;
     }
+    .mtg-close:hover { background: #ecebe5; }
     .mtg-close:disabled { opacity: .4; cursor: default; }
+    .mtg-close svg { width: 18px; height: 18px; }
 
-    .mtg-body { padding: 16px 18px; overflow-y: auto; }
-    .mtg-sub { font-size: 13px; color: #666; margin: 0 0 14px; font-family: 'Inter', sans-serif; }
+    .mtg-body { padding: 8px 24px 20px; overflow-y: auto; }
+    .mtg-sub { font-size: 14px; color: #8a8a8a; margin: 0 0 20px; line-height: 1.5; font-family: 'Inter', sans-serif; }
 
     .mtg-strip {
-      display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 10px;
+      display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 12px;
       -webkit-overflow-scrolling: touch;
     }
     .mtg-empty {
-      color: #999; font-size: 13px; padding: 22px 12px; text-align: center; width: 100%;
-      border: 1px dashed #ddd; border-radius: 12px; font-family: 'Inter', sans-serif;
+      color: #aaa; font-size: 13px; padding: 26px 12px; text-align: center; width: 100%;
+      border: 1px dashed #e0ded6; border-radius: 14px; font-family: 'Inter', sans-serif;
     }
     .mtg-thumb {
-      position: relative; flex: 0 0 auto; width: 96px; height: 96px; border-radius: 12px;
-      overflow: hidden; background: #eee;
+      position: relative; flex: 0 0 auto; width: 104px; height: 104px; border-radius: 14px;
+      overflow: hidden; background: #ededed;
     }
     .mtg-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .mtg-order {
-      position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,.6); color: #fff;
-      font-size: 11px; font-weight: 700; width: 18px; height: 18px; border-radius: 50%;
+      position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,.62); color: #fff;
+      font-size: 11px; font-weight: 700; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px;
       display: flex; align-items: center; justify-content: center;
     }
+    .mtg-del {
+      position: absolute; top: 5px; right: 5px; width: 22px; height: 22px; border-radius: 50%;
+      background: #1a1a1a; color: #fff; border: 2px solid #fff; cursor: pointer; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .mtg-del svg { width: 10px; height: 10px; }
     .mtg-thumb-actions {
-      position: absolute; bottom: 0; left: 0; right: 0; display: flex; gap: 2px;
-      padding: 3px; background: linear-gradient(transparent, rgba(0,0,0,.55));
+      position: absolute; bottom: 0; left: 0; right: 0; display: flex; gap: 4px;
+      padding: 5px; background: linear-gradient(transparent, rgba(0,0,0,.5));
     }
-    .mtg-thumb-actions button {
-      flex: 1; border: none; background: rgba(255,255,255,.9); color: #333; font-weight: 700;
-      border-radius: 6px; padding: 2px 0; cursor: pointer; font-size: 14px; line-height: 1.2;
+    .mtg-move {
+      flex: 1; border: none; background: rgba(255,255,255,.92); color: #1a1a1a;
+      border-radius: 8px; padding: 3px 0; cursor: pointer; display: flex; align-items: center; justify-content: center;
     }
-    .mtg-thumb-actions button:disabled { opacity: .35; cursor: default; }
-    .mtg-thumb-actions .mtg-del { background: rgba(220,38,38,.92); color: #fff; flex: 0 0 26px; }
+    .mtg-move:disabled { opacity: .3; cursor: default; }
+    .mtg-move svg { width: 14px; height: 14px; }
 
     .mtg-add {
-      display: inline-flex; align-items: center; gap: 6px; margin: 4px 0 18px;
-      background: #f4f1ff; color: #6a49f2; border: 1px solid #dfd6ff; font-weight: 700;
-      font-size: 13px; padding: 9px 14px; border-radius: 10px; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 7px; margin: 6px 0 26px;
+      background: #1a1a1a; color: #fff; border: 1px solid #1a1a1a; font-weight: 700;
+      font-size: 13px; padding: 11px 18px; border-radius: 999px; cursor: pointer;
       font-family: 'Inter', sans-serif;
     }
+    .mtg-add:hover { background: #000; }
+    .mtg-add svg { width: 15px; height: 15px; }
     .mtg-add input { display: none; }
 
-    .mtg-field { margin-bottom: 16px; }
+    .mtg-field { margin-bottom: 24px; }
     .mtg-field > label {
-      display: block; font-size: 12px; font-weight: 700; color: #444;
-      text-transform: uppercase; letter-spacing: .04em; margin-bottom: 7px;
+      display: block; font-size: 12px; font-weight: 700; color: #1a1a1a;
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px;
       font-family: 'Inter', sans-serif;
     }
-    .mtg-field input[type=range] { width: calc(100% - 52px); vertical-align: middle; accent-color: #7657FC; }
-    #mtg-sec-val { display: inline-block; width: 44px; text-align: right; font-weight: 700; color: #7657FC; font-size: 13px; }
 
-    .mtg-seg { display: inline-flex; background: #f0eef7; border-radius: 10px; padding: 3px; gap: 3px; flex-wrap: wrap; }
-    .mtg-seg button {
-      border: none; background: transparent; color: #555; font-weight: 700; font-size: 13px;
-      padding: 7px 14px; border-radius: 8px; cursor: pointer; font-family: 'Inter', sans-serif;
+    /* Seconds stepper (− value +) */
+    .mtg-stepper { display: inline-flex; align-items: center; border: 1px solid #e4e2dc; border-radius: 999px; overflow: hidden; }
+    .mtg-step {
+      border: none; background: #fff; color: #1a1a1a; width: 42px; height: 42px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
     }
-    .mtg-seg button.active { background: #fff; color: #7657FC; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    .mtg-step:hover { background: #f3f2ef; }
+    .mtg-step:disabled { opacity: .3; cursor: default; }
+    .mtg-step svg { width: 16px; height: 16px; }
+    #mtg-sec-val { min-width: 64px; text-align: center; font-weight: 700; color: #1a1a1a; font-size: 15px; font-family: 'Inter', sans-serif; }
+
+    .mtg-seg { display: inline-flex; background: #f3f2ef; border-radius: 999px; padding: 4px; gap: 4px; flex-wrap: wrap; }
+    .mtg-seg button {
+      border: none; background: transparent; color: #8a8a8a; font-weight: 700; font-size: 13px;
+      padding: 9px 18px; border-radius: 999px; cursor: pointer; font-family: 'Inter', sans-serif;
+    }
+    .mtg-seg button.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
 
     .mtg-music { display: flex; flex-wrap: wrap; gap: 8px; }
     .mtg-track {
-      border: 1px solid #e2e0ea; background: #fff; border-radius: 10px; padding: 8px 12px;
-      cursor: pointer; text-align: left; min-width: 96px; font-family: 'Inter', sans-serif;
+      border: 1px solid #e4e2dc; background: #fff; border-radius: 12px; padding: 10px 14px;
+      cursor: pointer; text-align: left; min-width: 100px; font-family: 'Inter', sans-serif; transition: border-color .12s;
     }
-    .mtg-track.active { border-color: #7657FC; background: #f4f1ff; }
-    .mtg-track-name { display: block; font-weight: 700; font-size: 13px; color: #333; }
-    .mtg-track-mood { display: block; font-size: 11px; color: #888; margin-top: 1px; }
+    .mtg-track:hover { border-color: #d8d5cd; }
+    .mtg-track.active { border-color: #1a1a1a; background: #1a1a1a; }
+    .mtg-track.active .mtg-track-name { color: #fff; }
+    .mtg-track.active .mtg-track-mood { color: rgba(255,255,255,.7); }
+    .mtg-track-name { display: block; font-weight: 700; font-size: 13px; color: #1a1a1a; }
+    .mtg-track-mood { display: block; font-size: 11px; color: #999; margin-top: 2px; }
 
-    .mtg-status { display: none; margin-top: 6px; }
+    .mtg-status { display: none; margin-top: 8px; }
     .mtg-status.show { display: block; }
-    .mtg-status-msg { font-size: 13px; color: #444; font-weight: 600; font-family: 'Inter', sans-serif; }
-    .mtg-status.ok .mtg-status-msg { color: #059669; }
-    .mtg-status.err .mtg-status-msg { color: #dc2626; }
-    .mtg-bar-wrap { height: 6px; background: #eee; border-radius: 4px; overflow: hidden; margin-top: 8px; }
-    .mtg-bar { height: 100%; background: linear-gradient(90deg, #7657FC, #2dc0f7); transition: width .3s; }
+    .mtg-status-msg { font-size: 13px; color: #555; font-weight: 600; font-family: 'Inter', sans-serif; }
+    .mtg-status.ok .mtg-status-msg { color: #1a1a1a; }
+    .mtg-status.err .mtg-status-msg { color: #c92a2a; }
+    .mtg-bar-wrap { height: 6px; background: #eee; border-radius: 4px; overflow: hidden; margin-top: 10px; }
+    .mtg-bar { height: 100%; background: #1a1a1a; transition: width .3s; }
 
     .mtg-foot {
       display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      padding: 14px 18px; border-top: 1px solid #eee; background: #fafafa;
+      padding: 16px 24px; border-top: 1px solid #eee; background: #fff;
     }
-    .mtg-est { font-size: 13px; color: #666; font-weight: 600; font-family: 'Inter', sans-serif; }
+    .mtg-est { font-size: 13px; color: #8a8a8a; font-weight: 600; font-family: 'Inter', sans-serif; }
     .mtg-create {
-      background: linear-gradient(120deg, #7657FC, #2dc0f7); color: #fff; border: none;
-      font-weight: 800; font-size: 15px; padding: 12px 22px; border-radius: 12px; cursor: pointer;
+      background: #1a1a1a; color: #fff; border: none;
+      font-weight: 700; font-size: 15px; padding: 14px 28px; border-radius: 999px; cursor: pointer;
       font-family: 'Inter', sans-serif;
     }
-    .mtg-create:disabled { opacity: .5; cursor: default; }
+    .mtg-create:hover { background: #000; }
+    .mtg-create:disabled { opacity: .4; cursor: default; }
 
-    .mtg-preview { display: none; flex-direction: column; flex: 1; min-height: 0; padding: 16px 18px; }
-    .mtg-preview-inner { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 0; }
-    .mtg-preview video { max-width: 100%; max-height: 56vh; border-radius: 12px; background: #000; }
-    .mtg-preview-note { font-size: 13px; color: #666; font-family: 'Inter', sans-serif; margin: 0; text-align: center; }
-    .mtg-preview-actions { display: flex; gap: 10px; padding-top: 14px; margin-top: 4px; border-top: 1px solid #eee; }
-    .mtg-preview-actions button { flex: 1; border: none; border-radius: 12px; font-weight: 800; font-size: 15px; padding: 12px; cursor: pointer; font-family: 'Inter', sans-serif; }
-    .mtg-redo { background: #f0eef7; color: #555; }
-    .mtg-use { background: linear-gradient(120deg, #7657FC, #2dc0f7); color: #fff; }
+    .mtg-preview { display: none; flex-direction: column; flex: 1; min-height: 0; padding: 20px 24px; }
+    .mtg-preview-inner { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 0; }
+    .mtg-preview video { max-width: 100%; max-height: 56vh; border-radius: 14px; background: #000; }
+    .mtg-preview-note { font-size: 14px; color: #8a8a8a; font-family: 'Inter', sans-serif; margin: 0; text-align: center; }
+    .mtg-preview-actions { display: flex; gap: 12px; padding-top: 16px; border-top: 1px solid #eee; }
+    .mtg-preview-actions button { flex: 1; border: none; border-radius: 999px; font-weight: 700; font-size: 15px; padding: 14px; cursor: pointer; font-family: 'Inter', sans-serif; }
+    .mtg-redo { background: #fff; color: #1a1a1a; border: 1px solid #e4e2dc !important; }
+    .mtg-use { background: #1a1a1a; color: #fff; }
   </style>
 
   <div id="mtg-overlay" class="mtg-overlay" aria-hidden="true">
     <div class="mtg-sheet" role="dialog" aria-modal="true" aria-label="Make a montage">
       <div class="mtg-head">
-        <div class="mtg-title">✨ Make a Montage</div>
-        <button type="button" class="mtg-close" id="mtg-close-btn" onclick="closeMontage()" title="Close">✕</button>
+        <div class="mtg-title">Make a montage</div>
+        <button type="button" class="mtg-close" id="mtg-close-btn" onclick="closeMontage()" title="Close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
       <div class="mtg-body" id="mtg-body-scroll">
         <p class="mtg-sub">Pick photos, set the order, add music. We'll turn them into a memory video and link it to this page's photo.</p>
@@ -1542,13 +1573,16 @@
         <div class="mtg-strip" id="mtg-strip"></div>
         <label class="mtg-add">
           <input type="file" accept="image/*" multiple onchange="mtgAddPhotos(this)"/>
-          + Add photos
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add photos
         </label>
 
         <div class="mtg-field">
           <label>Seconds per photo</label>
-          <input type="range" min="1.5" max="5" step="0.5" value="3" id="mtg-sec" oninput="mtgSecLabel()"/>
-          <span id="mtg-sec-val">3.0s</span>
+          <div class="mtg-stepper">
+            <button type="button" class="mtg-step" id="mtg-sec-dec" onclick="mtgSecStep(-0.5)" aria-label="Fewer seconds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <span id="mtg-sec-val">3.0s</span>
+            <button type="button" class="mtg-step" id="mtg-sec-inc" onclick="mtgSecStep(0.5)" aria-label="More seconds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
         </div>
 
         <div class="mtg-field">
@@ -1585,8 +1619,8 @@
           <p class="mtg-preview-note">Here's your montage. Use it, or start over to change photos, order, or music.</p>
         </div>
         <div class="mtg-preview-actions">
-          <button type="button" class="mtg-redo" onclick="mtgRedoPreview()">↺ Start over</button>
-          <button type="button" class="mtg-use" onclick="mtgUsePreview()">✓ Use this montage</button>
+          <button type="button" class="mtg-redo" onclick="mtgRedoPreview()">Start over</button>
+          <button type="button" class="mtg-use" onclick="mtgUsePreview()">Use this montage</button>
         </div>
       </div>
     </div>
