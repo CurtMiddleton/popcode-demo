@@ -93,6 +93,40 @@
       .badge-video_complete{ background: #ede9fe; color: #7657FC; }
       .badge-video_error   { background: #ffe8e8; color: #c92a2a; }
 
+      /* Print-order status pills + Retry action */
+      .ps { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+      .ps-green { background: #e8f9ee; color: #2b8a3e; }
+      .ps-blue  { background: #e8f0fe; color: #3b5bdb; }
+      .ps-amber { background: #fff4e0; color: #b8860b; }
+      .ps-red   { background: #ffe8e8; color: #c92a2a; }
+      .ps-gray  { background: #f0f0f0; color: #888; }
+      .retry-btn { padding: 4px 12px; border-radius: 14px; border: 1px solid #f0c9c9; background: #fff; font-size: 11px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; color: #c92a2a; white-space: nowrap; }
+      .retry-btn:hover { background: #fff5f5; }
+      .retry-btn:disabled { opacity: 0.5; cursor: default; }
+      .prints-err { color: #c92a2a; font-size: 10.5px; margin-top: 3px; max-width: 280px; line-height: 1.3; }
+      .card-value.danger { color: #c92a2a; }
+      .prints-cards { grid-template-columns: repeat(4, 1fr); }
+      @media (max-width: 720px) { .prints-cards { grid-template-columns: repeat(2, 1fr); } }
+
+      /* Tabs */
+      .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 22px; border-bottom: 1px solid #ececec; }
+      .tab { padding: 9px 16px; border: none; background: none; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 700; color: #999; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+      .tab:hover { color: #1a1a1a; }
+      .tab.active { color: #1a1a1a; border-bottom-color: #7657FC; }
+
+      /* By Video (per-photo scan breakdown) */
+      .byvideo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+      .bv-card { background: #fff; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); padding: 14px 16px; }
+      .bv-card h4 { font-size: 13px; font-weight: 700; margin-bottom: 12px; }
+      .bv-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+      .bv-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: #f0eeea; flex-shrink: 0; }
+      .bv-meta { flex: 1; min-width: 0; }
+      .bv-name { font-size: 12px; font-weight: 600; }
+      .bv-bartrack { height: 6px; background: #f0eeea; border-radius: 99px; margin-top: 5px; overflow: hidden; }
+      .bv-barfill { height: 100%; background: #7657FC; border-radius: 99px; }
+      .bv-count { font-size: 14px; font-weight: 700; flex-shrink: 0; }
+      .bv-count span { font-size: 10px; color: #aaa; font-weight: 600; display: block; text-align: right; }
+
       /* Flat status dots for beta feedback */
       .status-btn { background: none; border: none; cursor: pointer; padding: 3px 4px; display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
       .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; opacity: 0.22; transition: opacity 0.15s; }
@@ -228,14 +262,24 @@
     </div>
 
     <div class="content">
-      <div id="cost-section"></div>
-      <div class="range-bar">
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-tab="activity">Activity Log</button>
+        <button class="tab" data-tab="overview">Overview</button>
+        <button class="tab" data-tab="projects">Projects</button>
+        <button class="tab" data-tab="accounts">Accounts</button>
+        <button class="tab" data-tab="prints">Prints</button>
+        <button class="tab" data-tab="feedback">Feedback</button>
+        <button class="tab" data-tab="cost">Cost</button>
+      </div>
+      <div class="range-bar" id="range-bar">
         <button class="range-btn" data-days="1">Today</button>
         <button class="range-btn" data-days="7">7 days</button>
         <button class="range-btn active" data-days="30">30 days</button>
         <button class="range-btn" data-days="90">90 days</button>
         <button class="range-btn" data-days="0">All time</button>
       </div>
+      <div id="cost-section" class="tab-body" data-tab="cost"></div>
+      <div id="prints-section" class="tab-body" data-tab="prints"></div>
       <div id="main-content">
         <div class="loading-msg"><div class="spinner"></div>Loading analytics...</div>
       </div>
@@ -251,8 +295,12 @@
       let activityShown = 25;   // how many sessions are currently visible in the activity log
       let cachedAccounts = null;
       let accountsExpanded = false;
+      let activeTab = 'activity';
+      let cachedThumbs = null;   // { collectionId: { targetIndex: photo_url } }
+      let cachedSlugId = null;   // { slug: collectionId }
 
       const ADMIN_EMAIL = 'curtmid@gmail.com';
+      const RANGE_TABS = new Set(['activity', 'overview', 'projects']);
 
       document.getElementById('main-content').innerHTML = '<p class="empty">Checking session...</p>';
       db.auth.getSession().then(({ data, error }) => {
@@ -268,6 +316,7 @@
         loadAnalytics();
         loadCostData();
         loadAccounts();
+        loadPrints();
       }).catch(e => {
         document.getElementById('main-content').innerHTML = '<p class="empty">JS error: ' + e.message + '</p>';
       });
@@ -285,6 +334,20 @@
           loadAnalytics();
         });
       });
+
+      // Tabs: show one panel at a time; the date range only applies to the
+      // scan-derived tabs (Activity / Overview / Projects).
+      function showTab(name) {
+        activeTab = name;
+        document.querySelectorAll('#tabs .tab').forEach(function(b) { b.classList.toggle('active', b.dataset.tab === name); });
+        document.querySelectorAll('.tab-body').forEach(function(el) { el.style.display = (el.dataset.tab === name) ? '' : 'none'; });
+        const rb = document.getElementById('range-bar');
+        if (rb) rb.style.display = RANGE_TABS.has(name) ? '' : 'none';
+      }
+      document.querySelectorAll('#tabs .tab').forEach(function(btn) {
+        btn.addEventListener('click', function() { showTab(btn.dataset.tab); });
+      });
+      showTab(activeTab);
 
       function formatDate(iso) {
         return new Date(iso).toLocaleString(undefined, {
@@ -795,6 +858,243 @@
         }
       }
 
+      // ── Print Orders section ─────────────────────────────────────────────
+      // All orders across users via the admin-only get_all_print_orders RPC
+      // (RLS otherwise limits reads to the buyer's own rows). Independent of the
+      // scan-analytics date range, so it lives outside #main-content and loads
+      // once. A "Retry" button resubmits a failed order to Prodigi.
+      let cachedPrints = null;
+
+      const PS_CLASS = {
+        pending: 'ps-amber', paid: 'ps-blue', submitting: 'ps-blue',
+        submitted: 'ps-green', in_production: 'ps-green', shipped: 'ps-green', complete: 'ps-green',
+        prodigi_failed: 'ps-red', payment_failed: 'ps-red', cancelled: 'ps-gray',
+      };
+      const PS_LABEL = {
+        pending: 'Pending', paid: 'Paid', submitting: 'Submitting',
+        submitted: 'Submitted', in_production: 'In production', shipped: 'Shipped', complete: 'Complete',
+        prodigi_failed: 'Print failed', payment_failed: 'Payment failed', cancelled: 'Cancelled',
+      };
+      // Money the customer was actually charged (paid + everything past it).
+      const PAID_PLUS = new Set(['paid', 'submitting', 'submitted', 'in_production', 'shipped', 'complete', 'prodigi_failed']);
+      // Successfully handed to Prodigi.
+      const FULFILLED = new Set(['submitted', 'in_production', 'shipped', 'complete']);
+      // Paid but not fulfilled — needs a human.
+      const ACTION_NEEDED = new Set(['prodigi_failed', 'paid', 'submitting']);
+
+      function money(minor, cur) {
+        if (minor == null) return '—';
+        const v = minor / 100;
+        const s = v.toLocaleString(undefined, { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 });
+        return (!cur || cur === 'USD') ? '$' + s : s + ' ' + cur;
+      }
+      function prodigiErr(resp) {
+        if (!resp || typeof resp !== 'object') return '';
+        if (resp.message) return resp.message;
+        if (resp.error) return typeof resp.error === 'string' ? resp.error : JSON.stringify(resp.error);
+        if (resp.outcome && resp.outcome !== 'Ok' && resp.outcome !== 'Created') return resp.outcome;
+        return '';
+      }
+
+      async function loadPrints() {
+        const el = document.getElementById('prints-section');
+        if (!el) return;
+        if (cachedPrints !== null) { renderPrints(); return; }
+        el.innerHTML =
+          '<div class="section"><div class="section-title" style="margin-bottom:12px">Print Orders</div>' +
+          '<div class="table-wrap"><div class="loading-msg" style="padding:24px"><div class="spinner"></div>Loading print orders…</div></div></div>';
+        try {
+          const { data, error } = await db.rpc('get_all_print_orders', { max_rows: 200 });
+          if (error) throw error;
+          cachedPrints = data || [];
+          renderPrints();
+        } catch (e) {
+          console.error('loadPrints error:', e);
+          el.innerHTML =
+            '<div class="section"><div class="section-title" style="margin-bottom:12px">Print Orders</div>' +
+            '<div class="empty" style="padding:20px">Could not load print orders: ' + escapeHtml(e.message || String(e)) +
+            '<br><span style="font-size:11px;color:#aaa">If this says the function does not exist, run <code>get_all_print_orders</code> in Supabase (<code>supabase/migrations/2026-07-14-print-orders-admin-rpc.sql</code>).</span></div></div>';
+        }
+      }
+
+      function renderPrints() {
+        const el = document.getElementById('prints-section');
+        if (!el) return;
+        const orders = cachedPrints || [];
+
+        const total = orders.length;
+        const actionNeeded = orders.filter(o => ACTION_NEEDED.has(o.status)).length;
+        const fulfilled = orders.filter(o => FULFILLED.has(o.status)).length;
+        const revenue = orders.filter(o => PAID_PLUS.has(o.status))
+          .reduce((s, o) => s + (o.total_charged_minor || 0), 0);
+
+        const cards =
+          '<div class="cards prints-cards">' +
+            '<div class="card"><div class="card-value">' + total + '</div><div class="card-label">Total Orders</div></div>' +
+            '<div class="card"><div class="card-value' + (actionNeeded ? ' danger' : '') + '">' + actionNeeded + '</div><div class="card-label">Action Needed</div></div>' +
+            '<div class="card"><div class="card-value">' + fulfilled + '</div><div class="card-label">Fulfilled</div></div>' +
+            '<div class="card highlight"><div class="card-value">' + money(revenue, 'USD') + '</div><div class="card-label">Revenue</div></div>' +
+          '</div>';
+
+        let table;
+        if (!total) {
+          table = '<div class="table-wrap"><div class="empty" style="padding:20px">No print orders yet.</div></div>';
+        } else {
+          const rows = orders.map(o => {
+            const r = o.recipient || {};
+            const buyerName = r.name || '—';
+            const buyerEmail = o.buyer_email || r.email || '';
+            const product = (o.product_type ? o.product_type.charAt(0).toUpperCase() + o.product_type.slice(1) : '—') +
+              (o.sku ? ' <span class="muted">· ' + escapeHtml(o.sku) + '</span>' : '');
+            const asset = Array.isArray(o.asset_urls) && o.asset_urls[0] && o.asset_urls[0].url;
+            const pid = o.prodigi_order_id;
+            const pidCell = pid
+              ? (pid.indexOf('DRYRUN') === 0
+                  ? '<span class="muted">dry-run</span>'
+                  : '<span style="font-family:monospace;font-size:10.5px">' + escapeHtml(pid) + '</span>')
+              : '<span class="muted">—</span>';
+            const errMsg = (o.status === 'prodigi_failed') ? prodigiErr(o.prodigi_response) : '';
+            const retryable = ACTION_NEEDED.has(o.status) && !o.prodigi_order_id;
+            const actionCell = retryable
+              ? '<button class="retry-btn" data-id="' + o.id + '">Retry</button>' +
+                (errMsg ? '<div class="prints-err">' + escapeHtml(errMsg) + '</div>' : '')
+              : (asset ? '<a href="' + encodeURI(asset) + '" target="_blank" rel="noopener" style="font-size:11px;font-weight:700;color:#3b5bdb;text-decoration:none">Asset ↗</a>' : '');
+
+            return '<tr>' +
+              '<td class="muted" style="white-space:nowrap">' + formatDate(o.created_at) + '</td>' +
+              '<td><div style="font-weight:600">' + escapeHtml(buyerName) + '</div>' +
+                (buyerEmail ? '<div class="muted" style="font-size:10.5px">' + escapeHtml(buyerEmail) + '</div>' : '') + '</td>' +
+              '<td>' + product + '</td>' +
+              '<td style="text-align:center">' + (o.copies || 1) + '</td>' +
+              '<td style="font-weight:700;white-space:nowrap">' + money(o.total_charged_minor, o.currency) + '</td>' +
+              '<td><span class="ps ' + (PS_CLASS[o.status] || 'ps-gray') + '">' + (PS_LABEL[o.status] || o.status) + '</span></td>' +
+              '<td>' + pidCell + '</td>' +
+              '<td>' + actionCell + '</td>' +
+            '</tr>';
+          }).join('');
+
+          table =
+            '<div class="table-wrap"><table>' +
+              '<thead><tr><th>Date</th><th>Buyer</th><th>Product</th><th style="text-align:center">Qty</th><th>Amount</th><th>Status</th><th>Prodigi ID</th><th>Action</th></tr></thead>' +
+              '<tbody>' + rows + '</tbody>' +
+            '</table></div>';
+        }
+
+        el.innerHTML =
+          '<div class="section"><div class="section-title" style="margin-bottom:12px">Print Orders</div>' +
+          cards + table + '</div>';
+
+        el.querySelectorAll('.retry-btn').forEach(btn => {
+          btn.addEventListener('click', () => retryPrintOrder(btn.dataset.id, btn));
+        });
+      }
+
+      async function retryPrintOrder(orderId, btn) {
+        if (!orderId) return;
+        btn.disabled = true;
+        const original = btn.textContent;
+        btn.textContent = 'Retrying…';
+        try {
+          const { data: { session } } = await db.auth.getSession();
+          const token = session && session.access_token;
+          if (!token) throw new Error('Not signed in');
+          const resp = await fetch('/api/retry-print-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ orderId }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+          if (data.status === 'submitted') {
+            cachedPrints = null;   // force a fresh pull so KPIs + row update
+            await loadPrints();
+          } else {
+            btn.textContent = original;
+            btn.disabled = false;
+            alert('Still failed: ' + (prodigiErr(data.prodigi) || data.error || data.status || 'unknown'));
+          }
+        } catch (e) {
+          btn.textContent = original;
+          btn.disabled = false;
+          alert('Retry failed: ' + (e.message || e));
+        }
+      }
+
+      // ── By Photo (per-target scan counts) ────────────────────────────────
+      // scan_events records target_index on 'target_found', so we can show which
+      // photo in a project actually gets scanned. Counts come from an admin RPC
+      // (RLS-safe); thumbnails are joined from collection_items.
+      async function loadThumbs() {
+        if (cachedThumbs !== null) return;
+        cachedThumbs = {}; cachedSlugId = {};
+        try {
+          const { data: cols } = await db.from('collections').select('id, slug');
+          (cols || []).forEach(c => { cachedSlugId[c.slug] = c.id; });
+          const { data: items } = await db.from('collection_items').select('collection_id, target_index, photo_url');
+          (items || []).forEach(it => {
+            if (!cachedThumbs[it.collection_id]) cachedThumbs[it.collection_id] = {};
+            if (cachedThumbs[it.collection_id][it.target_index] == null) {
+              cachedThumbs[it.collection_id][it.target_index] = it.photo_url || '';
+            }
+          });
+        } catch (e) { console.warn('loadThumbs error', e); }
+      }
+
+      async function loadByVideo() {
+        const wrap = document.getElementById('byvideo-wrap');
+        if (!wrap) return;
+        try {
+          await loadThumbs();
+          const { data, error } = await db.rpc('get_target_scan_counts', { days_back: activeDays });
+          if (error) throw error;
+          renderByVideo(data || []);
+        } catch (e) {
+          console.error('loadByVideo error:', e);
+          wrap.innerHTML =
+            '<div class="empty" style="padding:20px">Could not load photo scans: ' + escapeHtml(e.message || String(e)) +
+            '<br><span style="font-size:11px;color:#aaa">If this says the function does not exist, run <code>get_target_scan_counts</code> in Supabase (<code>supabase/migrations/2026-07-14-target-scan-counts.sql</code>).</span></div>';
+        }
+      }
+
+      function renderByVideo(rows) {
+        const wrap = document.getElementById('byvideo-wrap');
+        if (!wrap) return;
+        if (!rows.length) {
+          wrap.innerHTML = '<div class="empty" style="padding:20px">No photo-level scans in this range yet.</div>';
+          return;
+        }
+        const bySlug = {};
+        rows.forEach(r => { (bySlug[r.slug] = bySlug[r.slug] || []).push(r); });
+        const projects = Object.entries(bySlug).map(([slug, list]) => ({
+          slug, list, total: list.reduce((s, r) => s + Number(r.found_count || 0), 0),
+        })).sort((a, b) => b.total - a.total);
+
+        const cards = projects.map(p => {
+          const cid = cachedSlugId ? cachedSlugId[p.slug] : null;
+          const thumbs = (cid && cachedThumbs[cid]) || {};
+          const max = Math.max.apply(null, p.list.map(r => Number(r.found_count || 0)).concat([1]));
+          const rowsHtml = p.list.slice()
+            .sort((a, b) => Number(b.found_count || 0) - Number(a.found_count || 0))
+            .map(r => {
+              const ti = r.target_index;
+              const count = Number(r.found_count || 0);
+              const thumb = thumbs[ti];
+              const img = thumb
+                ? '<img class="bv-thumb" src="' + encodeURI(thumb) + '" alt="" loading="lazy">'
+                : '<div class="bv-thumb"></div>';
+              return '<div class="bv-row">' + img +
+                '<div class="bv-meta"><div class="bv-name">Photo ' + (ti + 1) + '</div>' +
+                  '<div class="bv-bartrack"><div class="bv-barfill" style="width:' + Math.round(count / max * 100) + '%"></div></div></div>' +
+                '<div class="bv-count">' + count + '<span>scans</span></div>' +
+              '</div>';
+            }).join('');
+          const name = (cachedColNames && cachedColNames[p.slug]) || p.slug;
+          return '<div class="bv-card"><h4>' + escapeHtml(name) + '</h4>' + rowsHtml + '</div>';
+        }).join('');
+
+        wrap.innerHTML = '<div class="byvideo-grid">' + cards + '</div>';
+      }
+
       async function loadAnalytics() {
         document.getElementById('main-content').innerHTML =
           '<div class="loading-msg"><div class="spinner"></div>Loading...</div>';
@@ -874,96 +1174,111 @@
         cachedColNames = colNames;
 
         document.getElementById('main-content').innerHTML = `
-          <!-- Summary cards -->
-          <div class="cards">
-            <div class="card"><div class="card-value">${opens}</div><div class="card-label">Total Opens</div></div>
-            <div class="card highlight" title="How often a photo was successfully detected after the scanner was opened."><div class="card-value">${pct(sessionsWithFound,sessionOpens)}</div><div class="card-label">Scan Rate</div></div>
-            <div class="card"><div class="card-value">${plays}</div><div class="card-label">Videos Played</div></div>
-            <div class="card highlight"><div class="card-value">${pct(completes,plays)}</div><div class="card-label">Completion Rate</div></div>
-            <div class="card"><div class="card-value">${uniqueIPs}</div><div class="card-label">Unique Visitors</div></div>
-            <div class="card"><div class="card-value">${errors}</div><div class="card-label">Errors</div></div>
+          <!-- Activity Log (default tab) -->
+          <div class="tab-body" data-tab="activity">
+            <div class="section">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
+                <div class="section-title">Activity Log</div>
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                  <div class="limit-bar">
+                    <button class="limit-btn${activityLimit===25?' active':''}" data-limit="25">Show 25</button>
+                    <button class="limit-btn${activityLimit===50?' active':''}" data-limit="50">Show 50</button>
+                    <button class="limit-btn${activityLimit===100?' active':''}" data-limit="100">Show 100</button>
+                  </div>
+                  <input id="activity-search" type="search" placeholder="Search user, project, location…" style="padding:7px 14px;border-radius:20px;border:1px solid #e0ddd6;font-size:13px;font-family:inherit;outline:none;width:260px;"/>
+                </div>
+              </div>
+              <div class="table-wrap" id="activity-wrap"></div>
+            </div>
           </div>
 
-          <!-- Breakdowns row -->
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:28px;">
+          <!-- Overview -->
+          <div class="tab-body" data-tab="overview">
+            <div class="cards">
+              <div class="card"><div class="card-value">${opens}</div><div class="card-label">Total Opens</div></div>
+              <div class="card highlight" title="How often a photo was successfully detected after the scanner was opened."><div class="card-value">${pct(sessionsWithFound,sessionOpens)}</div><div class="card-label">Scan Rate</div></div>
+              <div class="card"><div class="card-value">${plays}</div><div class="card-label">Videos Played</div></div>
+              <div class="card highlight"><div class="card-value">${pct(completes,plays)}</div><div class="card-label">Completion Rate</div></div>
+              <div class="card"><div class="card-value">${uniqueIPs}</div><div class="card-label">Unique Visitors</div></div>
+              <div class="card"><div class="card-value">${errors}</div><div class="card-label">Errors</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:28px;">
+              <div class="section">
+                <div class="section-title" style="margin-bottom:12px">Devices</div>
+                <div class="table-wrap" style="padding:16px;min-width:0;">
+                  ${Object.keys(deviceCounts).length ? barRows(deviceCounts, maxDevice) : '<p class="empty" style="padding:8px">No data</p>'}
+                </div>
+              </div>
+              <div class="section">
+                <div class="section-title" style="margin-bottom:12px">Browsers</div>
+                <div class="table-wrap" style="padding:16px;min-width:0;">
+                  ${Object.keys(browserCounts).length ? barRows(browserCounts, maxBrowser) : '<p class="empty" style="padding:8px">No data</p>'}
+                </div>
+              </div>
+              <div class="section">
+                <div class="section-title" style="margin-bottom:12px">Countries</div>
+                <div class="table-wrap" style="padding:16px;min-width:0;">
+                  ${Object.keys(countryCounts).length ? barRows(countryCounts, maxCountry) : '<p class="empty" style="padding:8px">No data</p>'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Projects (per-project + per-photo) -->
+          <div class="tab-body" data-tab="projects">
             <div class="section">
-              <div class="section-title" style="margin-bottom:12px">Devices</div>
-              <div class="table-wrap" style="padding:16px;min-width:0;">
-                ${Object.keys(deviceCounts).length ? barRows(deviceCounts, maxDevice) : '<p class="empty" style="padding:8px">No data</p>'}
+              <div class="section-title" style="margin-bottom:12px">By Project</div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr>
+                    <th>Project</th><th>Opens</th><th>Detected</th><th title="How often a photo was successfully detected after the scanner was opened.">Scan Rate</th><th>Videos</th><th>Completed</th><th>Comp. Rate</th>
+                  </tr></thead>
+                  <tbody>
+                    ${Object.entries(colStats).sort((a,b)=>b[1].opens-a[1].opens).map(([slug,s])=>`
+                      <tr>
+                        <td style="font-weight:700">${colNames[slug]||slug}</td>
+                        <td>${s.opens}</td>
+                        <td>${s.found}</td>
+                        <td style="color:#7657FC;font-weight:700">${pct(s.found,s.opens)}</td>
+                        <td>${s.plays}</td>
+                        <td>${s.completes}</td>
+                        <td style="color:#7657FC;font-weight:700">${pct(s.completes,s.plays)}</td>
+                      </tr>`).join('')}
+                  </tbody>
+                </table>
               </div>
             </div>
             <div class="section">
-              <div class="section-title" style="margin-bottom:12px">Browsers</div>
-              <div class="table-wrap" style="padding:16px;min-width:0;">
-                ${Object.keys(browserCounts).length ? barRows(browserCounts, maxBrowser) : '<p class="empty" style="padding:8px">No data</p>'}
-              </div>
-            </div>
-            <div class="section">
-              <div class="section-title" style="margin-bottom:12px">Countries</div>
-              <div class="table-wrap" style="padding:16px;min-width:0;">
-                ${Object.keys(countryCounts).length ? barRows(countryCounts, maxCountry) : '<p class="empty" style="padding:8px">No data</p>'}
-              </div>
+              <div class="section-title" style="margin-bottom:4px">By Photo</div>
+              <p class="muted" style="font-size:12px;margin-bottom:12px">Which photo in each project gets scanned most (counted from photo detections).</p>
+              <div id="byvideo-wrap"><div class="loading-msg" style="padding:24px"><div class="spinner"></div>Loading photo scans…</div></div>
             </div>
           </div>
 
           <!-- Accounts -->
-          <div class="section">
-            <div class="section-title" style="margin-bottom:12px">Accounts</div>
-            <div class="table-wrap" id="accounts-wrap">
-              <div class="loading-msg" style="padding:24px"><div class="spinner"></div>Loading accounts…</div>
-            </div>
-          </div>
-
-          <!-- By project -->
-          <div class="section">
-            <div class="section-title" style="margin-bottom:12px">By Project</div>
-            <div class="table-wrap">
-              <table>
-                <thead><tr>
-                  <th>Project</th><th>Opens</th><th>Detected</th><th title="How often a photo was successfully detected after the scanner was opened.">Scan Rate</th><th>Videos</th><th>Completed</th><th>Comp. Rate</th>
-                </tr></thead>
-                <tbody>
-                  ${Object.entries(colStats).sort((a,b)=>b[1].opens-a[1].opens).map(([slug,s])=>`
-                    <tr>
-                      <td style="font-weight:700">${colNames[slug]||slug}</td>
-                      <td>${s.opens}</td>
-                      <td>${s.found}</td>
-                      <td style="color:#7657FC;font-weight:700">${pct(s.found,s.opens)}</td>
-                      <td>${s.plays}</td>
-                      <td>${s.completes}</td>
-                      <td style="color:#7657FC;font-weight:700">${pct(s.completes,s.plays)}</td>
-                    </tr>`).join('')}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Recent activity -->
-          <div class="section">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
-              <div class="section-title">Activity Log</div>
-              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                <div class="limit-bar">
-                  <button class="limit-btn${activityLimit===25?' active':''}" data-limit="25">Show 25</button>
-                  <button class="limit-btn${activityLimit===50?' active':''}" data-limit="50">Show 50</button>
-                  <button class="limit-btn${activityLimit===100?' active':''}" data-limit="100">Show 100</button>
-                </div>
-                <input id="activity-search" type="search" placeholder="Search user, project, location…" style="padding:7px 14px;border-radius:20px;border:1px solid #e0ddd6;font-size:13px;font-family:inherit;outline:none;width:260px;"/>
+          <div class="tab-body" data-tab="accounts">
+            <div class="section">
+              <div class="section-title" style="margin-bottom:12px">Accounts</div>
+              <div class="table-wrap" id="accounts-wrap">
+                <div class="loading-msg" style="padding:24px"><div class="spinner"></div>Loading accounts…</div>
               </div>
             </div>
-            <div class="table-wrap" id="activity-wrap"></div>
           </div>
 
           <!-- Beta Feedback -->
-          <div class="section">
-            <div class="section-title" style="margin-bottom:12px">Beta Feedback</div>
-            <div class="table-wrap" id="feedback-wrap"><div class="empty">Loading...</div></div>
+          <div class="tab-body" data-tab="feedback">
+            <div class="section">
+              <div class="section-title" style="margin-bottom:12px">Beta Feedback</div>
+              <div class="table-wrap" id="feedback-wrap"><div class="empty">Loading...</div></div>
+            </div>
           </div>
         `;
 
         renderActivityTable();
         loadFeedback();
         loadAccounts();
+        loadByVideo();
+        showTab(activeTab);
 
         document.getElementById('activity-search').addEventListener('input', function() {
           searchQuery = this.value;
