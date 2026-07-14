@@ -74,7 +74,9 @@
   @keyframes navDrawerFade { from { opacity: 0; } to { opacity: 1; } }
   /* Logo + every nav item share the same 28px left edge as the closed mobile
      header, so the logo never shifts when the menu opens. */
-  .nav-drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 22px 28px 10px 28px; }
+  /* Match the closed header exactly (100px tall, vertically-centered, same 28px
+     inset) so the logo doesn't shift up/down when the menu opens. */
+  .nav-drawer-head { display: flex; align-items: center; justify-content: space-between; height: 100px; padding: 0 28px; }
   /* Override each page's legacy bare .brand margin-left so the open drawer's
      logo sits at 28px, same as the closed header logo. */
   .nav-drawer-head .brand { margin-left: 0; }
