@@ -93,6 +93,21 @@
       .badge-video_complete{ background: #ede9fe; color: #7657FC; }
       .badge-video_error   { background: #ffe8e8; color: #c92a2a; }
 
+      /* Print-order status pills + Retry action */
+      .ps { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+      .ps-green { background: #e8f9ee; color: #2b8a3e; }
+      .ps-blue  { background: #e8f0fe; color: #3b5bdb; }
+      .ps-amber { background: #fff4e0; color: #b8860b; }
+      .ps-red   { background: #ffe8e8; color: #c92a2a; }
+      .ps-gray  { background: #f0f0f0; color: #888; }
+      .retry-btn { padding: 4px 12px; border-radius: 14px; border: 1px solid #f0c9c9; background: #fff; font-size: 11px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; color: #c92a2a; white-space: nowrap; }
+      .retry-btn:hover { background: #fff5f5; }
+      .retry-btn:disabled { opacity: 0.5; cursor: default; }
+      .prints-err { color: #c92a2a; font-size: 10.5px; margin-top: 3px; max-width: 280px; line-height: 1.3; }
+      .card-value.danger { color: #c92a2a; }
+      .prints-cards { grid-template-columns: repeat(4, 1fr); }
+      @media (max-width: 720px) { .prints-cards { grid-template-columns: repeat(2, 1fr); } }
+
       /* Flat status dots for beta feedback */
       .status-btn { background: none; border: none; cursor: pointer; padding: 3px 4px; display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
       .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; opacity: 0.22; transition: opacity 0.15s; }
@@ -229,6 +244,7 @@
 
     <div class="content">
       <div id="cost-section"></div>
+      <div id="prints-section"></div>
       <div class="range-bar">
         <button class="range-btn" data-days="1">Today</button>
         <button class="range-btn" data-days="7">7 days</button>
@@ -268,6 +284,7 @@
         loadAnalytics();
         loadCostData();
         loadAccounts();
+        loadPrints();
       }).catch(e => {
         document.getElementById('main-content').innerHTML = '<p class="empty">JS error: ' + e.message + '</p>';
       });
@@ -792,6 +809,168 @@
             accountsExpanded = !accountsExpanded;
             renderAccounts();
           });
+        }
+      }
+
+      // ── Print Orders section ─────────────────────────────────────────────
+      // All orders across users via the admin-only get_all_print_orders RPC
+      // (RLS otherwise limits reads to the buyer's own rows). Independent of the
+      // scan-analytics date range, so it lives outside #main-content and loads
+      // once. A "Retry" button resubmits a failed order to Prodigi.
+      let cachedPrints = null;
+
+      const PS_CLASS = {
+        pending: 'ps-amber', paid: 'ps-blue', submitting: 'ps-blue',
+        submitted: 'ps-green', in_production: 'ps-green', shipped: 'ps-green', complete: 'ps-green',
+        prodigi_failed: 'ps-red', payment_failed: 'ps-red', cancelled: 'ps-gray',
+      };
+      const PS_LABEL = {
+        pending: 'Pending', paid: 'Paid', submitting: 'Submitting',
+        submitted: 'Submitted', in_production: 'In production', shipped: 'Shipped', complete: 'Complete',
+        prodigi_failed: 'Print failed', payment_failed: 'Payment failed', cancelled: 'Cancelled',
+      };
+      // Money the customer was actually charged (paid + everything past it).
+      const PAID_PLUS = new Set(['paid', 'submitting', 'submitted', 'in_production', 'shipped', 'complete', 'prodigi_failed']);
+      // Successfully handed to Prodigi.
+      const FULFILLED = new Set(['submitted', 'in_production', 'shipped', 'complete']);
+      // Paid but not fulfilled — needs a human.
+      const ACTION_NEEDED = new Set(['prodigi_failed', 'paid', 'submitting']);
+
+      function money(minor, cur) {
+        if (minor == null) return '—';
+        const v = minor / 100;
+        const s = v.toLocaleString(undefined, { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 });
+        return (!cur || cur === 'USD') ? '$' + s : s + ' ' + cur;
+      }
+      function prodigiErr(resp) {
+        if (!resp || typeof resp !== 'object') return '';
+        if (resp.message) return resp.message;
+        if (resp.error) return typeof resp.error === 'string' ? resp.error : JSON.stringify(resp.error);
+        if (resp.outcome && resp.outcome !== 'Ok' && resp.outcome !== 'Created') return resp.outcome;
+        return '';
+      }
+
+      async function loadPrints() {
+        const el = document.getElementById('prints-section');
+        if (!el) return;
+        if (cachedPrints !== null) { renderPrints(); return; }
+        el.innerHTML =
+          '<div class="section"><div class="section-title" style="margin-bottom:12px">Print Orders</div>' +
+          '<div class="table-wrap"><div class="loading-msg" style="padding:24px"><div class="spinner"></div>Loading print orders…</div></div></div>';
+        try {
+          const { data, error } = await db.rpc('get_all_print_orders', { max_rows: 200 });
+          if (error) throw error;
+          cachedPrints = data || [];
+          renderPrints();
+        } catch (e) {
+          console.error('loadPrints error:', e);
+          el.innerHTML =
+            '<div class="section"><div class="section-title" style="margin-bottom:12px">Print Orders</div>' +
+            '<div class="empty" style="padding:20px">Could not load print orders: ' + escapeHtml(e.message || String(e)) +
+            '<br><span style="font-size:11px;color:#aaa">If this says the function does not exist, run <code>get_all_print_orders</code> in Supabase (<code>supabase/migrations/2026-07-14-print-orders-admin-rpc.sql</code>).</span></div></div>';
+        }
+      }
+
+      function renderPrints() {
+        const el = document.getElementById('prints-section');
+        if (!el) return;
+        const orders = cachedPrints || [];
+
+        const total = orders.length;
+        const actionNeeded = orders.filter(o => ACTION_NEEDED.has(o.status)).length;
+        const fulfilled = orders.filter(o => FULFILLED.has(o.status)).length;
+        const revenue = orders.filter(o => PAID_PLUS.has(o.status))
+          .reduce((s, o) => s + (o.total_charged_minor || 0), 0);
+
+        const cards =
+          '<div class="cards prints-cards">' +
+            '<div class="card"><div class="card-value">' + total + '</div><div class="card-label">Total Orders</div></div>' +
+            '<div class="card"><div class="card-value' + (actionNeeded ? ' danger' : '') + '">' + actionNeeded + '</div><div class="card-label">Action Needed</div></div>' +
+            '<div class="card"><div class="card-value">' + fulfilled + '</div><div class="card-label">Fulfilled</div></div>' +
+            '<div class="card highlight"><div class="card-value">' + money(revenue, 'USD') + '</div><div class="card-label">Revenue</div></div>' +
+          '</div>';
+
+        let table;
+        if (!total) {
+          table = '<div class="table-wrap"><div class="empty" style="padding:20px">No print orders yet.</div></div>';
+        } else {
+          const rows = orders.map(o => {
+            const r = o.recipient || {};
+            const buyerName = r.name || '—';
+            const buyerEmail = o.buyer_email || r.email || '';
+            const product = (o.product_type ? o.product_type.charAt(0).toUpperCase() + o.product_type.slice(1) : '—') +
+              (o.sku ? ' <span class="muted">· ' + escapeHtml(o.sku) + '</span>' : '');
+            const asset = Array.isArray(o.asset_urls) && o.asset_urls[0] && o.asset_urls[0].url;
+            const pid = o.prodigi_order_id;
+            const pidCell = pid
+              ? (pid.indexOf('DRYRUN') === 0
+                  ? '<span class="muted">dry-run</span>'
+                  : '<span style="font-family:monospace;font-size:10.5px">' + escapeHtml(pid) + '</span>')
+              : '<span class="muted">—</span>';
+            const errMsg = (o.status === 'prodigi_failed') ? prodigiErr(o.prodigi_response) : '';
+            const retryable = ACTION_NEEDED.has(o.status) && !o.prodigi_order_id;
+            const actionCell = retryable
+              ? '<button class="retry-btn" data-id="' + o.id + '">Retry</button>' +
+                (errMsg ? '<div class="prints-err">' + escapeHtml(errMsg) + '</div>' : '')
+              : (asset ? '<a href="' + encodeURI(asset) + '" target="_blank" rel="noopener" style="font-size:11px;font-weight:700;color:#3b5bdb;text-decoration:none">Asset ↗</a>' : '');
+
+            return '<tr>' +
+              '<td class="muted" style="white-space:nowrap">' + formatDate(o.created_at) + '</td>' +
+              '<td><div style="font-weight:600">' + escapeHtml(buyerName) + '</div>' +
+                (buyerEmail ? '<div class="muted" style="font-size:10.5px">' + escapeHtml(buyerEmail) + '</div>' : '') + '</td>' +
+              '<td>' + product + '</td>' +
+              '<td style="text-align:center">' + (o.copies || 1) + '</td>' +
+              '<td style="font-weight:700;white-space:nowrap">' + money(o.total_charged_minor, o.currency) + '</td>' +
+              '<td><span class="ps ' + (PS_CLASS[o.status] || 'ps-gray') + '">' + (PS_LABEL[o.status] || o.status) + '</span></td>' +
+              '<td>' + pidCell + '</td>' +
+              '<td>' + actionCell + '</td>' +
+            '</tr>';
+          }).join('');
+
+          table =
+            '<div class="table-wrap"><table>' +
+              '<thead><tr><th>Date</th><th>Buyer</th><th>Product</th><th style="text-align:center">Qty</th><th>Amount</th><th>Status</th><th>Prodigi ID</th><th>Action</th></tr></thead>' +
+              '<tbody>' + rows + '</tbody>' +
+            '</table></div>';
+        }
+
+        el.innerHTML =
+          '<div class="section"><div class="section-title" style="margin-bottom:12px">Print Orders</div>' +
+          cards + table + '</div>';
+
+        el.querySelectorAll('.retry-btn').forEach(btn => {
+          btn.addEventListener('click', () => retryPrintOrder(btn.dataset.id, btn));
+        });
+      }
+
+      async function retryPrintOrder(orderId, btn) {
+        if (!orderId) return;
+        btn.disabled = true;
+        const original = btn.textContent;
+        btn.textContent = 'Retrying…';
+        try {
+          const { data: { session } } = await db.auth.getSession();
+          const token = session && session.access_token;
+          if (!token) throw new Error('Not signed in');
+          const resp = await fetch('/api/retry-print-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ orderId }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+          if (data.status === 'submitted') {
+            cachedPrints = null;   // force a fresh pull so KPIs + row update
+            await loadPrints();
+          } else {
+            btn.textContent = original;
+            btn.disabled = false;
+            alert('Still failed: ' + (prodigiErr(data.prodigi) || data.error || data.status || 'unknown'));
+          }
+        } catch (e) {
+          btn.textContent = original;
+          btn.disabled = false;
+          alert('Retry failed: ' + (e.message || e));
         }
       }
 
