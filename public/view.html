@@ -552,6 +552,10 @@
         } catch(e) {} // never let analytics break the app
       }
 
+      // Target index of the photo currently showing, so play/complete events can
+      // be attributed to a specific asset (analytics "By Photo" per-asset metrics).
+      let currentTargetIndex = null;
+
       if (!id) { showError(); } else { loadCollection(id); }
 
       // Code-entry form: wired up independently of loadCollection so it works
@@ -610,7 +614,8 @@
           target.setAttribute('mindar-image-target', `targetIndex: ${idx}`);
           target.addEventListener('targetFound', () => {
             if (!mediaActive) {
-              logEvent('target_found', parseInt(idx));
+              currentTargetIndex = parseInt(idx);
+              logEvent('target_found', currentTargetIndex);
               triggerMedia(mediaMap[idx]);
             }
           });
@@ -919,8 +924,8 @@
         fullVid.muted = true;
         const startT = fullVid.currentTime;
         fullVid.play()
-          .then(() => { fullVid.muted = false; logEvent('video_play'); armFrozenFrameWatch(startT); })
-          .catch(() => { logEvent('video_error'); showTapToPlay(); });
+          .then(() => { fullVid.muted = false; logEvent('video_play', currentTargetIndex); armFrozenFrameWatch(startT); })
+          .catch(() => { logEvent('video_error', currentTargetIndex); showTapToPlay(); });
       }
 
       // If the element claims to be playing and has data but currentTime never
@@ -955,7 +960,7 @@
         fullVid.muted = false;
         const startT = fullVid.currentTime;
         fullVid.play()
-          .then(() => { logEvent('video_play_tap'); armFrozenFrameWatch(startT); })
+          .then(() => { logEvent('video_play_tap', currentTargetIndex); armFrozenFrameWatch(startT); })
           .catch(() => { showMediaError('Video failed to play — tap X and try again'); });
       });
 
@@ -995,7 +1000,7 @@
           setTimeout(() => {
             if (!mediaActive) return;
             apAudio.play()
-              .then(() => { logEvent('audio_play'); apPlay.textContent = '❚❚'; hideAudioTapHint(); })
+              .then(() => { logEvent('audio_play', currentTargetIndex); apPlay.textContent = '❚❚'; hideAudioTapHint(); })
               .catch(() => showAudioTapHint());
           }, 350);
         } catch (e) { showAudioTapHint(); }
@@ -1047,7 +1052,7 @@
           audioPlayer.classList.add('visible');
 
           apAudio.play()
-            .then(() => { logEvent('audio_play'); apPlay.textContent = '❚❚'; })
+            .then(() => { logEvent('audio_play', currentTargetIndex); apPlay.textContent = '❚❚'; })
             .catch(() => attemptAudioRecover());
         }, 900);
       }
@@ -1098,7 +1103,7 @@
         }
       });
       apAudio.addEventListener('ended', () => {
-        logEvent('audio_complete');
+        logEvent('audio_complete', currentTargetIndex);
         apPlay.textContent = '▶';
         apResetUi();
       });
@@ -1185,7 +1190,7 @@
       }
 
       fullVid.addEventListener('ended', () => {
-        logEvent('video_complete');
+        logEvent('video_complete', currentTargetIndex);
         hideTapToPlay();
         const fade = document.getElementById('fade-overlay');
         fade.style.display = 'block';

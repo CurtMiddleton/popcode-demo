@@ -1154,11 +1154,13 @@
         try {
           const { data: cols } = await db.from('collections').select('id, slug');
           (cols || []).forEach(c => { cachedSlugId[c.slug] = c.id; });
-          const { data: items } = await db.from('collection_items').select('collection_id, target_index, photo_url');
+          const { data: items } = await db.from('collection_items').select('collection_id, target_index, photo_url, asset_name, media_type');
           (items || []).forEach(it => {
             if (!cachedThumbs[it.collection_id]) cachedThumbs[it.collection_id] = {};
             if (cachedThumbs[it.collection_id][it.target_index] == null) {
-              cachedThumbs[it.collection_id][it.target_index] = it.photo_url || '';
+              cachedThumbs[it.collection_id][it.target_index] = {
+                url: it.photo_url || '', name: it.asset_name || '', media: it.media_type || 'video',
+              };
             }
           });
         } catch (e) { console.warn('loadThumbs error', e); }
@@ -1201,15 +1203,23 @@
             .sort((a, b) => Number(b.found_count || 0) - Number(a.found_count || 0))
             .map(r => {
               const ti = r.target_index;
-              const count = Number(r.found_count || 0);
-              const thumb = thumbs[ti];
-              const img = thumb
-                ? '<img class="bv-thumb" src="' + encodeURI(thumb) + '" alt="" loading="lazy">'
+              const found = Number(r.found_count || 0);
+              const plays = Number(r.play_count || 0);
+              const dones = Number(r.complete_count || 0);
+              const t = thumbs[ti] || {};
+              const label = t.name || ('Photo ' + (ti + 1));
+              const playWord = t.media === 'audio' ? 'listened' : 'watched';
+              const img = t.url
+                ? '<img class="bv-thumb" src="' + encodeURI(t.url) + '" alt="" loading="lazy">'
                 : '<div class="bv-thumb"></div>';
               return '<div class="bv-row">' + img +
-                '<div class="bv-meta"><div class="bv-name">Photo ' + (ti + 1) + '</div>' +
-                  '<div class="bv-bartrack"><div class="bv-barfill" style="width:' + Math.round(count / max * 100) + '%"></div></div></div>' +
-                '<div class="bv-count">' + count + '<span>scans</span></div>' +
+                '<div class="bv-meta">' +
+                  '<div class="bv-name">' + escapeHtml(label) + '</div>' +
+                  '<div class="muted" style="font-size:10.5px;margin:2px 0 1px">' +
+                    found + ' scans · ' + plays + ' ' + playWord + ' · ' + dones + ' finished</div>' +
+                  '<div class="bv-bartrack"><div class="bv-barfill" style="width:' + Math.round(found / max * 100) + '%"></div></div>' +
+                '</div>' +
+                '<div class="bv-count">' + found + '<span>scans</span></div>' +
               '</div>';
             }).join('');
           const name = (cachedColNames && cachedColNames[p.slug]) || p.slug;
@@ -1381,7 +1391,7 @@
             </div>
             <div class="section">
               <div class="section-title" style="margin-bottom:4px">By Photo</div>
-              <p class="muted" style="font-size:12px;margin-bottom:12px">Which photo in each project gets scanned most (counted from photo detections).</p>
+              <p class="muted" style="font-size:12px;margin-bottom:12px">Which photo gets scanned, and whether viewers watched the video / listened to the audio. Watched &amp; finished counts accrue from new scans onward.</p>
               <div id="byvideo-wrap"><div class="loading-msg" style="padding:24px"><div class="spinner"></div>Loading photo scans…</div></div>
             </div>
           </div>
