@@ -66,7 +66,7 @@
       .detail { display:grid; grid-template-columns:1fr 1fr; gap:48px; margin-top:8px; }
       @media (max-width:680px){ .detail { grid-template-columns:1fr; gap:32px; } }
       .detail-preview { background:#fff; border-radius:22px; padding:36px; box-shadow:0 2px 12px rgba(0,0,0,0.05); display:flex; align-items:center; justify-content:center; min-height:380px; }
-      .detail-preview canvas { max-width:100%; max-height:400px; }
+      .detail-preview canvas { max-width:100%; max-height:400px; box-shadow:0 8px 26px rgba(0,0,0,0.16); border-radius:2px; }
       .detail-preview.frame-framed canvas { border:14px solid #1a1a1a; background:#fff; padding:12px; box-shadow:0 6px 18px rgba(0,0,0,0.25); }
       .detail-preview.frame-tile canvas { border:8px solid #fff; box-shadow:0 6px 18px rgba(0,0,0,0.22); }
       .detail-preview.frame-canvas canvas { box-shadow:10px 10px 0 #d9d4ca, 0 6px 18px rgba(0,0,0,0.18); }
@@ -98,6 +98,9 @@
       .photo-cell { position:relative; border:3px solid transparent; border-radius:12px; overflow:hidden; cursor:pointer; aspect-ratio:1; background:#f0eeea; }
       .photo-cell.selected { border-color:#7657FC; }
       .photo-cell canvas { width:100%; height:100%; object-fit:cover; display:block; }
+      .photo-cell.tray-new { border:2px dashed #d7d4cd; background:#fafafa; display:flex; align-items:center; justify-content:center; text-decoration:none; color:#8a857d; }
+      .photo-cell.tray-new:hover { border-color:#7657FC; color:#7657FC; }
+      .tray-new-inner { display:flex; flex-direction:column; align-items:center; gap:6px; font-size:12px; font-weight:600; font-family:'Inter',sans-serif; text-align:center; }
       .badge-size-toggle { display:inline-flex; background:#eee; border-radius:16px; padding:3px; gap:2px; }
       .badge-size-btn { border:none; background:none; border-radius:14px; padding:7px 14px; font-size:13px; font-weight:500; color:#666; cursor:pointer; font-family:'Inter',sans-serif; }
       .badge-size-btn.active { background:#fff; color:#1a1a1a; box-shadow:0 1px 4px rgba(0,0,0,0.12); font-weight:600; }
@@ -126,7 +129,7 @@
     <div class="wrap">
       <a class="back" href="/manage.html">&larr; My Popcodes</a>
       <h1>Shop</h1>
-      <div class="sub" id="project-name">Loading project…</div>
+      <div class="sub" id="project-name">Pick a size, choose a photo, and we’ll print it with a scannable Popcode badge.</div>
 
       <div id="cancel-banner" class="banner cancel" style="display:none;">Checkout cancelled — your order wasn't placed. Adjust anything and try again.</div>
       <div id="error-banner" class="banner error" style="display:none;"></div>
@@ -156,12 +159,22 @@
             <div class="detail-price" id="detail-price">From —</div>
             <div class="detail-price-note" id="detail-price-note">per print, incl. shipping &amp; handling</div>
             <ul class="specs" id="detail-specs"></ul>
-            <button class="primary-btn" id="create-btn">Create</button>
+            <button class="primary-btn" id="create-btn">Choose a photo</button>
           </div>
         </div>
       </div>
 
-      <!-- Step 3: choose photo + checkout -->
+      <!-- Step: choose a photo (tray of the user's Popcode photos) -->
+      <div id="step-photo" style="display:none;">
+        <button class="linkback" id="photo-back">&larr; Back to product</button>
+        <div class="card">
+          <h2>Choose a photo</h2>
+          <p class="muted">Pick one of your Popcode photos to print, or start a new one.</p>
+          <div class="photo-grid" id="tray-grid"></div>
+        </div>
+      </div>
+
+      <!-- Step: checkout -->
       <div id="step-create" style="display:none;">
         <button class="linkback" id="to-detail">&larr; Back to product</button>
         <div class="card">
@@ -175,9 +188,13 @@
         </div>
 
         <div class="card">
-          <h2>Choose your photo</h2>
-          <p class="muted">We add a badge to indicate that the photo can be scanned by the Popcode app.</p>
-          <div style="margin:14px 0 6px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <h2>Your photo</h2>
+          <p class="muted">We add a badge so the printed photo can be scanned by the Popcode app.</p>
+          <div style="display:flex;align-items:center;gap:16px;margin-top:14px;flex-wrap:wrap;">
+            <canvas id="chosen-thumb" width="200" height="200" style="width:88px;height:88px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.14);"></canvas>
+            <button class="linkback" id="change-photo" style="margin:0;">Change photo</button>
+          </div>
+          <div style="margin:20px 0 2px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
             <span style="font-size:13px;font-weight:700;">Badge size</span>
             <div class="badge-size-toggle" id="badge-size-toggle">
               <button type="button" class="badge-size-btn active" data-scale="0.06">Small</button>
@@ -185,7 +202,6 @@
               <button type="button" class="badge-size-btn" data-scale="0.12">Large</button>
             </div>
           </div>
-          <div class="photo-grid" id="photo-grid"></div>
         </div>
 
         <div class="card">
@@ -307,7 +323,7 @@
       let currentUser = null;
       let collection = null;
       let photos = [];
-      let state = { step: 'category', productType: null, variantId: null, orientation: 'portrait', scale: 0.06, selectedIndex: null };
+      let state = { step: 'detail', productType: null, variantId: null, orientation: 'portrait', scale: 0.06, selectedPhoto: null };
 
       function variantOf(type, id) { return (PRODUCTS[type] || []).find(v => v.id === id) || null; }
       function baseAspect() { const v = variantOf(state.productType, state.variantId); return v ? v.aspect : null; }
@@ -542,60 +558,81 @@
         currentUser = data.session.user;
         const uName = currentUser?.user_metadata?.full_name?.split(' ')[0] || currentUser?.email?.split('@')[0] || '';
         if (uName) document.getElementById('user-greeting').textContent = 'Hi, ' + uName + '!';
-        await loadProject();
+        await loadUserPhotos();
+        // Preselect a photo when arriving with ?id&photo (e.g. from a project link).
+        const wantSlug = qs.get('id'), wantPhoto = qs.get('photo');
+        if (wantSlug) {
+          const pre = photos.find(p => p.slug === wantSlug && (wantPhoto == null || String(p.target_index) === String(wantPhoto)));
+          if (pre) state.selectedPhoto = pre;
+        }
+        const wantType = qs.get('type');
+        openCategory(CATEGORIES.includes(wantType) ? wantType : 'print');
       });
 
       document.getElementById('logout-btn').addEventListener('click', async () => { await db.auth.signOut(); window.location.href = '/auth.html'; });
       document.getElementById('nav-btn').addEventListener('click', () => document.getElementById('nav-overlay').classList.add('open'));
       document.getElementById('nav-overlay').addEventListener('click', (e) => { if (e.target === document.getElementById('nav-drawer-bg')) document.getElementById('nav-overlay').classList.remove('open'); });
 
-      async function loadProject() {
+      // Load ALL of the user's printable photos (across their Popcodes) into the
+      // tray. Each carries its own collection so checkout can target it.
+      async function loadUserPhotos() {
         try {
-          const { data: col, error } = await db
-            .from('collections').select('id, slug, name, user_id').eq('slug', slug).single();
-          if (error || !col) throw new Error('Project not found');
-          if (col.user_id && col.user_id !== currentUser.id) throw new Error('This is not your project');
-          collection = col;
-          const pn = document.getElementById('project-name');
-          pn.textContent = 'For ';
-          const st = document.createElement('strong'); st.textContent = col.name || col.slug; pn.appendChild(st);
-
-          const { data: items } = await db
-            .from('collection_items').select('target_index, photo_url')
-            .eq('collection_id', col.id).order('target_index');
-          const seen = new Set();
-          photos = (items || []).filter(it => {
-            if (it.target_index == null || !it.photo_url) return false;
-            if (seen.has(it.target_index)) return false;
-            seen.add(it.target_index); return true;
-          });
-          if (!photos.length) throw new Error('This project has no printable photos yet');
-          state.selectedIndex = photos[0].target_index;
-          // Honor a photo pre-selected in the Shop picker (?photo=target_index).
-          const wantPhoto = qs.get('photo');
-          if (wantPhoto != null) {
-            const pre = photos.find(x => String(x.target_index) === String(wantPhoto));
-            if (pre) state.selectedIndex = pre.target_index;
+          const { data: cols } = await db.from('collections')
+            .select('id, slug, name, kind').eq('user_id', currentUser.id)
+            .order('created_at', { ascending: false });
+          const src = (cols || []).filter(c => !['book', 'print', 'tile', 'canvas', 'calendar'].includes(c.kind));
+          photos = [];
+          if (src.length) {
+            const ids = src.map(c => c.id);
+            const byId = {}; src.forEach(c => { byId[c.id] = c; });
+            const { data: items } = await db.from('collection_items')
+              .select('collection_id, photo_url, target_index').in('collection_id', ids).order('target_index');
+            const seen = new Set();
+            (items || []).forEach(it => {
+              if (!it.photo_url || it.target_index == null) return;
+              const key = it.collection_id + ':' + it.target_index;
+              if (seen.has(key)) return; seen.add(key);
+              const c = byId[it.collection_id];
+              photos.push({ url: it.photo_url, target_index: it.target_index, slug: c.slug, collectionId: c.id, name: c.name || c.slug });
+            });
           }
-
-          document.getElementById('loading').style.display = 'none';
-          renderCategories();
-          // Product-first funnel (Shop → pick photo) can pre-select a category.
-          const wantType = qs.get('type');
-          if (wantType && CATEGORIES.includes(wantType)) openCategory(wantType);
-          else showStep('category');
-        } catch (e) {
-          document.getElementById('loading').style.display = 'none';
-          showError(e.message);
-        }
+        } catch (e) { photos = []; }
+        document.getElementById('loading').style.display = 'none';
       }
 
       function showStep(step) {
         state.step = step;
         document.getElementById('step-category').style.display = step === 'category' ? 'block' : 'none';
         document.getElementById('step-detail').style.display   = step === 'detail'   ? 'block' : 'none';
+        document.getElementById('step-photo').style.display    = step === 'photo'    ? 'block' : 'none';
         document.getElementById('step-create').style.display   = step === 'create'   ? 'block' : 'none';
         window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      // ---- dynamic-aspect preview: draw the product at the SELECTED size's aspect
+      // (square size → square) with a neutral placeholder until a photo is picked. --
+      function roundRectPath(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+      }
+      function drawImageIcon(ctx, cx, cy, size) {
+        const s = size / 24, ox = cx - size / 2, oy = cy - size / 2;
+        const X = v => ox + v * s, Y = v => oy + v * s;
+        ctx.strokeStyle = '#bbbbbb'; ctx.lineWidth = Math.max(1.5, 1.8 * s); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        roundRectPath(ctx, X(3), Y(3), 18 * s, 18 * s, 2 * s); ctx.stroke();
+        ctx.beginPath(); ctx.arc(X(8.5), Y(8.5), 1.5 * s, 0, 2 * Math.PI); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(X(21), Y(15)); ctx.lineTo(X(16), Y(10)); ctx.lineTo(X(5), Y(21)); ctx.stroke();
+      }
+      function drawPlaceholder(cv, aspect) {
+        const base = 440;
+        let w, h;
+        if (aspect >= 1) { w = base; h = Math.round(base / aspect); } else { h = base; w = Math.round(base * aspect); }
+        cv.width = w; cv.height = h;
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = '#ededed'; ctx.fillRect(0, 0, w, h);
+        drawImageIcon(ctx, w / 2, h / 2, Math.min(w, h) * 0.2);
       }
 
       // ---- Step 1: categories ----
@@ -636,9 +673,7 @@
         document.getElementById('detail-name').textContent = meta.name;
         document.getElementById('detail-tagline').textContent = meta.tagline;
         document.getElementById('detail-specs').innerHTML = meta.specs.map(s => '<li>' + s + '</li>').join('');
-        // A real mockup provides its own framing/scene, so drop the CSS frame.
-        const hasMockup = !!(MOCKUPS[type] && MOCKUPS[type].template);
-        document.getElementById('detail-preview').className = 'detail-preview' + (hasMockup ? '' : ' frame-' + type);
+        document.getElementById('detail-preview').className = 'detail-preview';
         // reset orientation toggle UI
         document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b.dataset.orientation === 'portrait'));
         renderSizeChips();
@@ -666,13 +701,20 @@
         const a = baseAspect();
         document.getElementById('orient-row').style.display = (a && a !== 1) ? 'flex' : 'none';
       }
+      // Draw the product at the selected size's aspect: the chosen photo if one is
+      // picked, else a neutral placeholder. Square size → square thumbnail.
       function renderDetailPreview() {
         const cv = document.getElementById('detail-canvas');
-        const mk = MOCKUPS[state.productType];
-        const fallback = () => compositeBadgedImage(photos[0].photo_url, { scale: 0.06, aspect: currentAspect(), previewCanvas: cv, returnDataUrl: false }).catch(() => {});
-        if (mk && mk.template) {
-          renderProductMockup(cv, photos[0].photo_url, { scale: 0.06, aspect: currentAspect(), mockup: mk }).catch(fallback);
-        } else { fallback(); }
+        if (state.selectedPhoto) {
+          compositeBadgedImage(state.selectedPhoto.url, { scale: state.scale, aspect: currentAspect(), previewCanvas: cv, returnDataUrl: false })
+            .catch(() => drawPlaceholder(cv, currentAspect()));
+        } else {
+          drawPlaceholder(cv, currentAspect());
+        }
+        updateDetailCta();
+      }
+      function updateDetailCta() {
+        document.getElementById('create-btn').textContent = state.selectedPhoto ? 'Continue' : 'Choose a photo';
       }
       async function refreshDetailPrice() {
         const el = document.getElementById('detail-price');
@@ -690,41 +732,63 @@
         document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b === btn));
         renderDetailPreview();
       });
-      document.getElementById('to-category').addEventListener('click', () => showStep('category'));
-      document.getElementById('create-btn').addEventListener('click', goCreate);
+      // "All products" goes back to the Shop; the funnel now starts on detail.
+      document.getElementById('to-category').addEventListener('click', () => { window.location.href = '/shop.html'; });
+      document.getElementById('create-btn').addEventListener('click', () => {
+        if (state.selectedPhoto) goPay(); else openPhotoStep();
+      });
 
-      // ---- Step 3: create / checkout ----
-      function goCreate() {
+      // ---- choose a photo (tray of the user's Popcode photos) ----
+      function openPhotoStep() { renderTray(); showStep('photo'); }
+      function renderTray() {
+        const grid = document.getElementById('tray-grid');
+        grid.innerHTML = '';
+        // "New Popcode" tile — start a fresh image + video/audio pair.
+        const mk = document.createElement('a');
+        mk.className = 'photo-cell tray-new';
+        mk.href = '/create.html';
+        mk.innerHTML = '<span class="tray-new-inner"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Popcode</span>';
+        grid.appendChild(mk);
+        photos.forEach(p => {
+          const cell = document.createElement('div');
+          cell.className = 'photo-cell' + (state.selectedPhoto && state.selectedPhoto.url === p.url ? ' selected' : '');
+          const cv = document.createElement('canvas'); cv.width = 200; cv.height = 200;
+          cell.appendChild(cv);
+          cell.onclick = () => { state.selectedPhoto = p; renderDetailPreview(); showStep('detail'); };
+          grid.appendChild(cell);
+          compositeBadgedImage(p.url, { scale: state.scale, aspect: 1, previewCanvas: cv, returnDataUrl: false }).catch(() => {});
+        });
+        if (!photos.length) {
+          const note = document.createElement('div');
+          note.className = 'muted'; note.style.gridColumn = '1 / -1'; note.style.padding = '6px 0';
+          note.textContent = 'No photos yet — create a Popcode first, then come back to print it.';
+          grid.appendChild(note);
+        }
+      }
+      document.getElementById('photo-back').addEventListener('click', () => showStep('detail'));
+
+      // ---- checkout ----
+      function goPay() {
         const v = variantOf(state.productType, state.variantId);
         document.getElementById('summary-title').textContent = CATEGORY_META[state.productType].name + ' · ' + v.size;
         document.getElementById('summary-sub').textContent = (baseAspect() !== 1 ? (state.orientation === 'landscape' ? 'Landscape' : 'Portrait') : 'Square');
-        renderPhotos();
+        renderChosenThumb();
         showStep('create');
         requestQuote();
       }
       document.getElementById('to-detail').addEventListener('click', () => showStep('detail'));
       document.getElementById('change-product').addEventListener('click', () => showStep('detail'));
-
-      function renderPhotos() {
-        const grid = document.getElementById('photo-grid');
-        grid.innerHTML = '';
-        photos.forEach(p => {
-          const cell = document.createElement('div');
-          cell.className = 'photo-cell' + (p.target_index === state.selectedIndex ? ' selected' : '');
-          const cv = document.createElement('canvas'); cv.width = 200; cv.height = 200;
-          cell.appendChild(cv);
-          cell.onclick = () => { state.selectedIndex = p.target_index; renderPhotos(); };
-          grid.appendChild(cell);
-          // square thumbnail for the grid (cover), badge baked at chosen scale
-          compositeBadgedImage(p.photo_url, { scale: state.scale, aspect: 1, previewCanvas: cv, returnDataUrl: false }).catch(() => {});
-        });
+      document.getElementById('change-photo').addEventListener('click', () => openPhotoStep());
+      function renderChosenThumb() {
+        const cv = document.getElementById('chosen-thumb');
+        if (state.selectedPhoto) compositeBadgedImage(state.selectedPhoto.url, { scale: state.scale, aspect: 1, previewCanvas: cv, returnDataUrl: false }).catch(() => {});
       }
 
       document.getElementById('badge-size-toggle').addEventListener('click', e => {
         const btn = e.target.closest('.badge-size-btn'); if (!btn) return;
         state.scale = parseFloat(btn.dataset.scale);
         document.querySelectorAll('.badge-size-btn').forEach(b => b.classList.toggle('active', b === btn));
-        renderPhotos();
+        renderChosenThumb();
       });
       document.getElementById('copies').addEventListener('input', requestQuoteDebounced);
       document.getElementById('country').addEventListener('change', requestQuote);
@@ -772,7 +836,7 @@
             !recipient.address.townOrCity || !recipient.address.postalOrZipCode) {
           showError('Please fill in name, email, address, city and postal code.'); return;
         }
-        const photo = photos.find(p => p.target_index === state.selectedIndex);
+        const photo = state.selectedPhoto;
         if (!photo) { showError('Pick a photo to print.'); return; }
 
         const payBtn = document.getElementById('pay-btn');
@@ -780,11 +844,11 @@
         try {
           const calibrate = qs.get('calibrate');
           const dataUrl = calibrate
-            ? await buildCalibrationSheet(photo.photo_url, currentAspect())
-            : await compositeBadgedImage(photo.photo_url, { scale: state.scale, aspect: currentAspect() });
+            ? await buildCalibrationSheet(photo.url, currentAspect())
+            : await compositeBadgedImage(photo.url, { scale: state.scale, aspect: currentAspect() });
           const blob = dataUrlToBlob(dataUrl);
           const scalePct = Math.round(state.scale * 100);
-          const path = collection.slug + '/print-' + state.selectedIndex + '-' + state.orientation
+          const path = photo.slug + '/print-' + photo.target_index + '-' + state.orientation
             + (calibrate ? '-calib' : '-badge' + scalePct) + '.jpg';
           const up = await db.storage.from('experiences').upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
           if (up.error) throw new Error('Could not prepare the print image: ' + up.error.message);
@@ -796,13 +860,13 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
             body: JSON.stringify({
-              collectionId: collection.id,
+              collectionId: photo.collectionId,
               productType: state.productType,
               variantId: state.variantId,
               copies: Math.max(1, parseInt(document.getElementById('copies').value, 10) || 1),
               shippingMethod: document.getElementById('shipping').value,
               recipient,
-              assetUrls: [{ target_index: state.selectedIndex, print_area: 'default', url: publicUrl }],
+              assetUrls: [{ target_index: photo.target_index, print_area: 'default', url: publicUrl }],
             }),
           });
           const data = await resp.json();
