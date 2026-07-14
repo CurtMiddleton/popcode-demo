@@ -21,10 +21,10 @@
   /* Soft gray shelf that starts just below the 100px white nav and fades down +
      out to white at the left/right, defining the nav edge from the content. */
   .site-header::after {
-    content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 72px; pointer-events: none;
-    background: linear-gradient(to bottom, #e6e6e6 0%, rgba(230,230,230,0) 100%);
-    -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 16%, #000 84%, transparent 100%);
-    mask-image: linear-gradient(to right, transparent 0%, #000 16%, #000 84%, transparent 100%);
+    content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 66px; pointer-events: none;
+    background: linear-gradient(to bottom, #eef0f1 0%, rgba(238,240,241,0) 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, transparent 22%, #000 34%, #000 64%, transparent 78%, transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0%, transparent 22%, #000 34%, #000 64%, transparent 78%, transparent 100%);
   }
   .site-header .brand { display: flex; align-items: center; flex-shrink: 0; margin-left: 52px; }
   .site-header .brand img { height: 32px; display: block; }
