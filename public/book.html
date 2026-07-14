@@ -44,7 +44,7 @@
       html, body { overscroll-behavior: none; }
       body {
         min-height: 100vh;
-        background: #f7f6f2;
+        background: #ffffff;
         font-family: 'Inter', sans-serif;
         font-weight: 400;
         color: #1a1a1a;
@@ -55,27 +55,30 @@
         overflow-x: hidden;
       }
 
-      /* ── Header ─────────────────────────────────────────────── */
-      .site-header {
-        width: 100vw;
-        background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
-        padding: 22px 24px 30px;
-        min-height: 150px;
-        display: flex;
-        align-items: flex-end;
-        justify-content: center;
-        position: relative;
-        margin-bottom: 52px;
+      /* ── Header: shared white nav injected by /nav.js ───────────── */
+      /* Nav drawer (mobile hamburger) */
+      #nav-overlay { display:none; position:fixed; inset:0; z-index:200; }
+      #nav-overlay.open { display:block; }
+      #nav-drawer-bg { position:absolute; inset:0; background:rgba(0,0,0,0.18); }
+      #nav-drawer {
+        position:absolute; top:14px; left:14px; width:264px;
+        background:#ffffff; border-radius:18px;
+        box-shadow:0 12px 48px rgba(0,0,0,0.18);
+        padding:8px 0; opacity:0;
+        transform:translateY(-8px) scale(0.97); transform-origin:top left;
+        transition:opacity 0.18s ease, transform 0.18s ease;
       }
-      .site-header img.logo { height: 64px; }
-      .header-right { position:absolute; right:20px; top:20px; display:flex; align-items:center; gap:10px; }
-      #user-greeting { color:white; font-size:13px; font-weight:500; opacity:0.9; }
-      #logout-btn { background:#78A7FF; color:white; border:none; border-radius:20px; padding:7px 16px; font-size:13px; font-weight:500; cursor:pointer; font-family:'Inter',sans-serif; }
+      #nav-overlay.open #nav-drawer { opacity:1; transform:translateY(0) scale(1); }
+      .nav-link { display:flex; align-items:center; gap:14px; padding:11px 20px; font-size:15px; font-weight:500; color:#1a1a1a; text-decoration:none; font-family:'Inter',sans-serif; }
+      .nav-link:hover { background:#f5f4f0; }
+      .nav-link svg { flex-shrink:0; color:#555; }
+      .nav-link.external { color:#666; font-size:14px; }
+      .nav-divider { height:1px; background:#ececec; margin:8px 0; }
 
-      .wrap { width: 100%; max-width: 560px; padding: 0 20px; }
+      .wrap { width: 100%; max-width: 560px; padding: 80px 20px 0; margin: 0 auto; }
 
-      h1 { font-size: 34px; font-weight: 400; font-family: 'CooperBT', serif; letter-spacing: 0; line-height: 1.05; margin-bottom: 6px; }
-      .subtitle { font-size: 15px; color: #666; line-height: 1.5; margin-bottom: 26px; }
+      h1 { font-size: 44px; font-weight: 400; font-family: 'CooperBT', serif; letter-spacing: 0; line-height: 1.05; margin-bottom: 6px; }
+      .subtitle { font-size: 16px; color: #656565; line-height: 1.5; margin-bottom: 26px; }
 
       .field-label { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
       input.text-input {
@@ -160,8 +163,8 @@
 
       /* Desktop — use the browser real estate like Popsa: a wide ~1015px spread. */
       @media (min-width: 1080px) {
-        .wrap { max-width: 1055px; }  /* → ~1015px spread inside the 20px padding */
-        h1 { font-size: 46px; }
+        .wrap { max-width: 1040px; padding: 80px 28px 0; }  /* → ~984px spread inside the 28px padding */
+        h1 { font-size: 44px; }
         .subtitle, .field-label, .text-input { max-width: 640px; }
         .page-half-head { height: 40px; margin-bottom: 8px; }
         .page-label-text { font-size: 15px; }
@@ -219,13 +222,18 @@
       /* Spine strip on the binding edge — vertical title, year pinned bottom. */
       /* Spine — small type, eyebrow+title centered across the spine width (so it
          reads centered when the book lies flat), year pinned to the bottom. */
-      .cv-spine { flex: 0 0 9%; background: #fff; border-right: 1px solid rgba(0,0,0,0.14); writing-mode: vertical-rl; display: flex; justify-content: space-between; align-items: center; padding: 7% 0.7cqw; overflow: hidden; }
+      /* Rounded lay-flat spine: shaded outer edge, bright highlight at the hinge
+         (right), so it reads as a real book spine rather than a flat strip. */
+      .cv-spine { position: relative; z-index: 4; flex: 0 0 9%; background: linear-gradient(to right, #d7d2ca 0%, #eeeae4 13%, #ffffff 48%, #ffffff 84%, #fffefd 100%); writing-mode: vertical-rl; display: flex; justify-content: space-between; align-items: center; padding: 7% 0.7cqw; overflow: hidden; }
       .cv-spine-title { display: inline-flex; align-items: baseline; gap: 0.9cqw; }
       .cv-spine-eyebrow { font-family: 'CooperBT', serif; font-style: italic; font-size: 1.35cqw; color: #1A1814; white-space: nowrap; }
       .cv-spine-big { font-family: 'CooperBT', serif; font-weight: 400; font-size: 2.1cqw; color: #1A1814; white-space: nowrap; }
       .cv-spine-big.cv-ph { opacity: 0.4; }
       .cv-spine-year { font-family: 'Inter', sans-serif; font-size: 1.25cqw; color: #1A1814; }
       .cv-face { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; background: #605d58; }
+      /* Fold groove: soft shadow the spine casts onto the left of the cover, giving
+         the hinge dimension. Sits above the photo but inside the cover's left 6.5%. */
+      .cv-face::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6.5%; z-index: 3; pointer-events: none; background: linear-gradient(to right, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.09) 45%, rgba(0,0,0,0) 100%); }
       .cv-photo { background-size: cover; background-position: center; background-color: #6b665f; overflow: hidden; }
       .cv-photo-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center center; user-select: none; -webkit-user-drag: none; }
       .cv-photo-img.fit { object-fit: contain; }
@@ -413,7 +421,7 @@
       .menu-row.disabled { opacity: 0.4; pointer-events: none; }
 
       /* ── Rearrange Pages (full-screen drag-to-reorder) ─────────── */
-      .rearrange { display: none; position: fixed; inset: 0; z-index: 450; background: #f7f6f2; flex-direction: column; }
+      .rearrange { display: none; position: fixed; inset: 0; z-index: 450; background: #ffffff; flex-direction: column; }
       .rearrange.visible { display: flex; }
       .rp-header {
         position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -571,13 +579,39 @@
     </style>
   </head>
   <body>
-    <header class="site-header">
-      <a href="/manage.html"><img class="logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/></a>
-      <div class="header-right">
-        <span id="user-greeting"></span>
-        <button id="logout-btn">Sign Out</button>
+    <script src="/nav.js"></script>
+    <div id="nav-overlay">
+      <div id="nav-drawer-bg"></div>
+      <div id="nav-drawer">
+        <a class="nav-link" href="/manage.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          My Popcodes
+        </a>
+        <a class="nav-link" href="/manage.html?tab=designs"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>My Designs</a>
+        <a class="nav-link" href="/shop.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>
+        <a class="nav-link" href="/create.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          New Popcode
+        </a>
+        <a class="nav-link" href="/views.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Past Views
+        </a>
+        <a class="nav-link" href="/account.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          My Account
+        </a>
+        <a class="nav-link" href="/howto.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          How It Works
+        </a>
+        <div class="nav-divider"></div>
+        <a class="nav-link external" href="https://popcodeapp.com" target="_blank">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          popcodeapp.com
+        </a>
       </div>
-    </header>
+    </div>
 
     <div class="wrap">
       <h1>Make a Book</h1>
@@ -673,7 +707,7 @@
         <div class="result-actions">
           <a class="r-primary" id="result-view" target="_blank" rel="noopener">View book</a>
           <button class="r-secondary" id="result-copy">Copy link</button>
-          <a class="r-secondary" href="/manage.html">Back to My Projects</a>
+          <a class="r-secondary" href="/manage.html?tab=designs">Back to My Designs</a>
         </div>
       </div>
     </div>
@@ -762,7 +796,7 @@
           const c = col.book_layout.cover;
           if (c) cover = {
             style: COVER_STYLES.some(s => s.id === c.style) ? c.style : 'A',
-            font: COVER_FONTS.some(f => f.id === c.font) ? c.font : 'cooper',
+            font: COVER_FONTS.some(f => f.id === c.font) ? c.font : 'cormorant',
             eyebrow: c.eyebrow || '', title: c.title || '', subtitle: c.subtitle || '',
             tint: typeof c.tint === 'number' ? c.tint : 0.28,
             photo: c.photo_url ? { file: null, url: c.photo_url, existingUrl: c.photo_url, source: 'Saved', adjust: normalizeAdjust(c.photo_adjust) } : null,
@@ -780,7 +814,7 @@
           document.querySelector('h1').textContent = 'Edit Book';
           document.getElementById('create-btn').textContent = 'Save Changes';
           render();
-          // "Shop" deep-link from My Projects opens straight into the order flow.
+          // "Shop" deep-link from My Designs opens straight into the order flow.
           if (new URLSearchParams(location.search).get('order') === '1') orderPrintedBook();
         } catch (err) {
           console.error(err);
@@ -901,7 +935,7 @@
       const photos = new Map();
       let pages = [];
       // Front-cover config (Bashō model). photo: { file, url, existingUrl } | null.
-      let cover = { style: 'A', font: 'cooper', eyebrow: '', title: '', subtitle: '', tint: 0.28, photo: null };
+      let cover = { style: 'A', font: 'cormorant', eyebrow: '', title: '', subtitle: '', tint: 0.28, photo: null };
       // Back-cover config: full-bleed or inset (landscape/portrait/square), with
       // the Popcode logo + popcode.app centered underneath (Bashō style).
       let backCover = { mode: 'inset', shape: 'landscape', photo: null };
@@ -1153,12 +1187,13 @@
         left.className = 'page-half';
         const head = document.createElement('div');
         head.className = 'page-half-head';
-        head.innerHTML = `<button class="page-tool tool-cover" title="Edit back cover">${IC_EDIT}</button><span class="page-label-text">Back Cover</span><div class="ph-spacer"></div>`;
-        head.querySelector('.tool-cover').addEventListener('click', openBackCoverEditor);
+        head.innerHTML = `<button class="page-tool tool-layout" title="Change layout">${IC_LAYOUT}</button><button class="page-tool tool-more" title="More">${IC_MORE}</button><span class="page-label-text">Back Cover</span><div class="ph-spacer"></div>`;
+        head.querySelector('.tool-layout').addEventListener('click', openBackCoverLayoutSheet);
+        head.querySelector('.tool-more').addEventListener('click', openBackCoverMenu);
         const canvas = document.createElement('div');
         canvas.className = 'page-canvas backcover';
         canvas.appendChild(buildBackCoverCanvas());
-        canvas.addEventListener('click', openBackCoverEditor);
+        canvas.addEventListener('click', openBackCoverLayoutSheet);
         const bpick = canvas.querySelector('.cv-pick');
         if (bpick) bpick.addEventListener('click', (e) => { e.stopPropagation(); chooseBackCoverPhoto(render); });
         left.appendChild(head); left.appendChild(canvas);
@@ -1192,12 +1227,14 @@
         const head = document.createElement('div');
         head.className = 'page-half-head';
         head.innerHTML = `<div class="ph-spacer"></div><span class="page-label-text">Front Cover</span>
-          <button class="page-tool tool-cover" title="Edit cover">${IC_EDIT}</button>`;
-        head.querySelector('.tool-cover').addEventListener('click', openCoverEditor);
+          <button class="page-tool tool-layout" title="Change layout">${IC_LAYOUT}</button>
+          <button class="page-tool tool-more" title="More">${IC_MORE}</button>`;
+        head.querySelector('.tool-layout').addEventListener('click', openCoverLayoutSheet);
+        head.querySelector('.tool-more').addEventListener('click', openCoverMenu);
         const canvas = document.createElement('div');
         canvas.className = 'page-canvas cover';
         canvas.appendChild(buildCoverCanvas());
-        canvas.addEventListener('click', openCoverEditor);
+        canvas.addEventListener('click', openCoverTitleSheet);
         // "Choose cover photo" pill on the cover itself → pick a photo directly
         // (without opening the editor). Everything else on the cover opens the editor.
         const coverPick = canvas.querySelector('.cv-pick');
@@ -1214,6 +1251,10 @@
       const IC_LAYOUT ='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>';
       const IC_MORE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>';
       const IC_EDIT = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
+      const IC_IMAGE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+      const IC_TEXT = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>';
+      const IC_CROP = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>';
+      const IC_TRASH = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>';
 
       // Build one page (half of a spread): a header (label + controls) above the
       // landscape canvas with its slots. `globalIndex` sets the page label; the
@@ -1373,46 +1414,79 @@
         bind('title', (v, el) => { cover.title = v; el.style.fontSize = coverTitleCqw(v || 'Enter a book title') + 'cqw'; });
         bind('subtitle', (v) => { cover.subtitle = v; });
         const pick = p.querySelector('[data-cv="pick"]');
-        if (pick) pick.addEventListener('click', () => chooseCoverPhoto());
+        if (pick) pick.addEventListener('click', () => chooseCoverPhoto(openCoverTitleSheet));
       }
 
-      // The front-cover editor: style picker (Overlay/Panel/Inset card) + eyebrow,
-      // title, date line + cover photo.
-      function openCoverEditor(e) {
+
+      // ── Front cover, Popsa-style split controls ──────────────────
+      // Layout icon → schematic style picker (Overlay / Panel / Inset card).
+      function openCoverLayoutSheet(e) {
         if (e && e.stopPropagation) e.stopPropagation();
         const tiles = COVER_STYLES.map(s =>
           `<div class="cvtpl ${cover.style === s.id ? 'active' : ''}" data-style="${s.id}">
              <div class="cvtpl-mini">${coverTileHTML(s.id)}</div>
              <div class="cvtpl-name">${s.name}</div>
            </div>`).join('');
-        const photoRow = cover.photo
-          ? `<div class="cover-photo-prev" style="background-image:url('${cover.photo.url}')"></div>
-             <button class="mini-btn" id="cover-edit">Edit photo</button>
-             <button class="mini-btn" id="cover-change">Change photo</button>
-             <button class="mini-btn" id="cover-remove">Remove</button>`
-          : '';
         openSheet(`
-          <h2>Front cover</h2>
-          <div class="cover-preview" id="cover-preview"></div>
-          <p class="sheet-sub" style="margin:10px 0 2px">Tap the cover to type your headline, title and date. Pick a style below.</p>
+          <h2>Cover layout</h2>
+          <p class="sheet-sub">Choose how the title and photo are arranged on your front cover.</p>
           <div class="cvtpl-grid">${tiles}</div>
-          ${cover.photo ? `<div class="field-label" style="margin-top:14px">Cover photo</div><div class="cover-photo-row">${photoRow}</div>` : ''}
+          <div class="sheet-actions"><button class="btn-primary" id="cvlay-done">Done</button></div>
+        `);
+        document.querySelectorAll('#sheet .cvtpl').forEach(t =>
+          t.addEventListener('click', () => { cover.style = t.dataset.style; render(); openCoverLayoutSheet(); }));
+        document.getElementById('cvlay-done').addEventListener('click', () => { closeSheet(); render(); });
+      }
+
+      // Tap the cover (or ⋯ → Edit title) → type headline / title / date inline.
+      function openCoverTitleSheet(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        openSheet(`
+          <h2>Edit title</h2>
+          <div class="cover-preview" id="cover-preview"></div>
+          <p class="sheet-sub" style="margin:10px 0 2px">Tap the cover to type your headline, title and date.</p>
           <div class="sheet-actions"><button class="btn-primary" id="cover-done">Done</button></div>
         `);
         refreshCoverPreview(true);
         wireCoverEditable();
-        document.querySelectorAll('#sheet .cvtpl').forEach(t =>
-          t.addEventListener('click', () => { cover.style = t.dataset.style; openCoverEditor(); }));
-        const edit = document.getElementById('cover-edit');
-        const change = document.getElementById('cover-change');
-        const remove = document.getElementById('cover-remove');
-        if (edit) edit.addEventListener('click', () => openCoverPhotoEdit());
-        if (change) change.addEventListener('click', () => chooseCoverPhoto());
-        if (remove) remove.addEventListener('click', () => {
-          if (cover.photo && cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
-          cover.photo = null; openCoverEditor();
-        });
         document.getElementById('cover-done').addEventListener('click', () => { closeSheet(); render(); });
+      }
+
+      // ⋯ more-info menu: Replace photo + Edit title (+ crop when a photo is set).
+      function openCoverMenu(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        openSheet(`
+          <h2>Front cover</h2>
+          <p class="sheet-sub">Manage the cover photo and title.</p>
+          <div class="menu-row" data-act="photo">
+            <div class="menu-ic">${IC_IMAGE}</div>
+            <div><div>${cover.photo ? 'Replace photo' : 'Add photo'}</div><div class="menu-sub">Choose the cover image</div></div>
+          </div>
+          ${cover.photo ? `<div class="menu-row" data-act="crop">
+            <div class="menu-ic">${IC_CROP}</div>
+            <div><div>Edit photo</div><div class="menu-sub">Crop, zoom and reposition</div></div>
+          </div>` : ''}
+          <div class="menu-row" data-act="title">
+            <div class="menu-ic">${IC_TEXT}</div>
+            <div><div>Edit title</div><div class="menu-sub">Headline, title and date</div></div>
+          </div>
+          ${cover.photo ? `<div class="menu-row destructive" data-act="remove">
+            <div class="menu-ic">${IC_TRASH}</div>
+            <div><div>Remove photo</div></div>
+          </div>` : ''}
+        `);
+        document.querySelectorAll('#sheet .menu-row').forEach(row => {
+          row.addEventListener('click', () => {
+            const act = row.dataset.act;
+            if (act === 'photo') { closeSheet(); chooseCoverPhoto(render); }
+            else if (act === 'crop') { openCoverPhotoEdit(); }
+            else if (act === 'title') { openCoverTitleSheet(); }
+            else if (act === 'remove') {
+              if (cover.photo && cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
+              cover.photo = null; closeSheet(); render();
+            }
+          });
+        });
       }
 
       function chooseCoverPhoto(after) {
@@ -1424,7 +1498,7 @@
           if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
           if (cover.photo && cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
           cover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() };
-          (after || openCoverEditor)();
+          (after || render)();
         });
         inp.click();
       }
@@ -1439,48 +1513,11 @@
           if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
           if (backCover.photo && backCover.photo.file) URL.revokeObjectURL(backCover.photo.url);
           backCover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() };
-          (after || openBackCoverEditor)();
+          (after || render)();
         });
         inp.click();
       }
 
-      function openBackCoverEditor(e) {
-        if (e && e.stopPropagation) e.stopPropagation();
-        const seg = (name, opts, cur) => `<div class="bc-seg">${opts.map(o => `<button class="bc-seg-btn${cur === o.id ? ' active' : ''}" data-seg="${name}" data-val="${o.id}">${o.label}</button>`).join('')}</div>`;
-        const photoRow = backCover.photo
-          ? `<div class="cover-photo-prev" style="background-image:url('${backCover.photo.url}')"></div>
-             <button class="mini-btn" id="bc-edit">Edit photo</button>
-             <button class="mini-btn" id="bc-change">Change photo</button>
-             <button class="mini-btn" id="bc-remove">Remove</button>`
-          : '';
-        openSheet(`
-          <h2>Back cover</h2>
-          <p class="sheet-sub">A full-bleed image, or an inset photo with the Popcode logo underneath.</p>
-          <div class="cover-preview" id="bc-preview" style="background:#fff"></div>
-          <div class="field-label" style="margin-top:6px">Photo style</div>
-          ${seg('mode', [{ id: 'inset', label: 'Inset photo' }, { id: 'fullbleed', label: 'Full bleed' }], backCover.mode)}
-          ${backCover.mode === 'inset' ? `<div class="field-label" style="margin-top:12px">Shape</div>${seg('shape', [{ id: 'landscape', label: 'Landscape' }, { id: 'portrait', label: 'Portrait' }, { id: 'square', label: 'Square' }], backCover.shape)}` : ''}
-          ${backCover.photo ? `<div class="field-label" style="margin-top:14px">Back cover photo</div><div class="cover-photo-row">${photoRow}</div>` : ''}
-          <div class="sheet-actions"><button class="btn-primary" id="bc-done">Done</button></div>
-        `);
-        refreshBackCoverPreview();
-        document.querySelectorAll('#sheet .bc-seg-btn').forEach(b => b.addEventListener('click', () => {
-          backCover[b.dataset.seg] = b.dataset.val;
-          render(); openBackCoverEditor();
-        }));
-        const pick = document.querySelector('#bc-preview .cv-pick');
-        if (pick) pick.addEventListener('click', () => chooseBackCoverPhoto());
-        const edit = document.getElementById('bc-edit');
-        const change = document.getElementById('bc-change');
-        const remove = document.getElementById('bc-remove');
-        if (edit) edit.addEventListener('click', openBackCoverPhotoEdit);
-        if (change) change.addEventListener('click', () => chooseBackCoverPhoto());
-        if (remove) remove.addEventListener('click', () => {
-          if (backCover.photo && backCover.photo.file) URL.revokeObjectURL(backCover.photo.url);
-          backCover.photo = null; render(); openBackCoverEditor();
-        });
-        document.getElementById('bc-done').addEventListener('click', () => { closeSheet(); render(); });
-      }
       function refreshBackCoverPreview() {
         const p = document.getElementById('bc-preview');
         if (!p) return;
@@ -1491,14 +1528,70 @@
         if (!backCover.photo) return;
         backCover.photo.adjust = backCover.photo.adjust || DEFAULT_ADJUST();
         startEditPhoto(backCover.photo, '117 / 83', {
-          back: () => openBackCoverEditor(),
-          save: (adj) => { backCover.photo.adjust = normalizeAdjust(adj); render(); openBackCoverEditor(); showToast('Back cover photo updated'); },
-          remove: () => { if (backCover.photo.file) URL.revokeObjectURL(backCover.photo.url); backCover.photo = null; render(); openBackCoverEditor(); },
+          back: () => openBackCoverMenu(),
+          save: (adj) => { backCover.photo.adjust = normalizeAdjust(adj); render(); openBackCoverMenu(); showToast('Back cover photo updated'); },
+          remove: () => { if (backCover.photo.file) URL.revokeObjectURL(backCover.photo.url); backCover.photo = null; render(); openBackCoverMenu(); },
           replace: (out) => {
             if (backCover.photo.file) URL.revokeObjectURL(backCover.photo.url);
             backCover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() };
             return backCover.photo;
           },
+        });
+      }
+
+      // ── Back cover, Popsa-style split controls ───────────────────
+      // Layout icon → schematic style picker (full bleed vs inset + shape).
+      function openBackCoverLayoutSheet(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        const seg = (name, opts, cur) => `<div class="bc-seg">${opts.map(o => `<button class="bc-seg-btn${cur === o.id ? ' active' : ''}" data-seg="${name}" data-val="${o.id}">${o.label}</button>`).join('')}</div>`;
+        openSheet(`
+          <h2>Back cover layout</h2>
+          <p class="sheet-sub">A full-bleed image, or an inset photo with the Popcode logo underneath.</p>
+          <div class="cover-preview" id="bc-preview" style="background:#fff"></div>
+          <div class="field-label" style="margin-top:6px">Photo style</div>
+          ${seg('mode', [{ id: 'inset', label: 'Inset photo' }, { id: 'fullbleed', label: 'Full bleed' }], backCover.mode)}
+          ${backCover.mode === 'inset' ? `<div class="field-label" style="margin-top:12px">Shape</div>${seg('shape', [{ id: 'landscape', label: 'Landscape' }, { id: 'portrait', label: 'Portrait' }, { id: 'square', label: 'Square' }], backCover.shape)}` : ''}
+          <div class="sheet-actions"><button class="btn-primary" id="bc-done">Done</button></div>
+        `);
+        refreshBackCoverPreview();
+        document.querySelectorAll('#sheet .bc-seg-btn').forEach(b => b.addEventListener('click', () => {
+          backCover[b.dataset.seg] = b.dataset.val;
+          render(); openBackCoverLayoutSheet();
+        }));
+        const pick = document.querySelector('#bc-preview .cv-pick');
+        if (pick) pick.addEventListener('click', () => chooseBackCoverPhoto(openBackCoverLayoutSheet));
+        document.getElementById('bc-done').addEventListener('click', () => { closeSheet(); render(); });
+      }
+
+      // ⋯ more-info menu: Replace photo (+ crop / remove when a photo is set).
+      function openBackCoverMenu(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        openSheet(`
+          <h2>Back cover</h2>
+          <p class="sheet-sub">Manage the back-cover photo.</p>
+          <div class="menu-row" data-act="photo">
+            <div class="menu-ic">${IC_IMAGE}</div>
+            <div><div>${backCover.photo ? 'Replace photo' : 'Add photo'}</div><div class="menu-sub">Choose the back-cover image</div></div>
+          </div>
+          ${backCover.photo ? `<div class="menu-row" data-act="crop">
+            <div class="menu-ic">${IC_CROP}</div>
+            <div><div>Edit photo</div><div class="menu-sub">Crop, zoom and reposition</div></div>
+          </div>
+          <div class="menu-row destructive" data-act="remove">
+            <div class="menu-ic">${IC_TRASH}</div>
+            <div><div>Remove photo</div></div>
+          </div>` : ''}
+        `);
+        document.querySelectorAll('#sheet .menu-row').forEach(row => {
+          row.addEventListener('click', () => {
+            const act = row.dataset.act;
+            if (act === 'photo') { closeSheet(); chooseBackCoverPhoto(render); }
+            else if (act === 'crop') { openBackCoverPhotoEdit(); }
+            else if (act === 'remove') {
+              if (backCover.photo && backCover.photo.file) URL.revokeObjectURL(backCover.photo.url);
+              backCover.photo = null; closeSheet(); render();
+            }
+          });
         });
       }
 
@@ -1891,7 +1984,7 @@
           inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
           setTimeout(() => inp.focus(), 350);
         });
-        document.querySelector('#sheet [data-act="cover"]').addEventListener('click', () => { closeSheet(); openCoverEditor(); });
+        document.querySelector('#sheet [data-act="cover"]').addEventListener('click', () => { closeSheet(); openCoverMenu(); });
         document.querySelector('#sheet [data-act="font"]').addEventListener('click', () => openFontSheet());
         document.querySelector('#sheet [data-act="addpages"]').addEventListener('click', () => { closeSheet(); document.getElementById('add-page-btn').click(); });
         document.querySelector('#sheet [data-act="duplicate"]').addEventListener('click', duplicateBook);
@@ -2568,11 +2661,11 @@
         if (!cover.photo) return;
         cover.photo.adjust = cover.photo.adjust || DEFAULT_ADJUST();
         startEditPhoto(cover.photo, '117 / 83', {
-          back: () => openCoverEditor(),   // Cancel/close returns to the cover editor
-          save: (a) => { cover.photo.adjust = normalizeAdjust(a); render(); openCoverEditor(); showToast('Cover photo updated'); },
+          back: () => openCoverMenu(),   // Cancel/close returns to the cover menu
+          save: (a) => { cover.photo.adjust = normalizeAdjust(a); render(); openCoverMenu(); showToast('Cover photo updated'); },
           remove: () => {
             if (cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
-            cover.photo = null; render(); openCoverEditor();
+            cover.photo = null; render(); openCoverMenu();
           },
           replace: (out) => {
             if (cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);

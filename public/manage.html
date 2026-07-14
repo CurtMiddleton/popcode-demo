@@ -16,7 +16,7 @@
     <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=2">
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
-    <title>Popcode — My Projects</title>
+    <title>Popcode — My Popcodes</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
@@ -24,7 +24,7 @@
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
         min-height: 100vh;
-        background: #f7f6f2;
+        background: #ffffff;
         font-family: 'Inter', sans-serif;
         font-weight: 400;
         color: #1a1a1a;
@@ -33,33 +33,70 @@
         align-items: center;
         padding: 0 0 80px; overflow-x: hidden;
       }
+      /* White top nav bar (Popsa-style): gradient logo upper-left, black inline nav
+         in a line on desktop + tablet; cart + profile icons upper-right; hamburger
+         only on mobile. */
       .site-header {
+        position: sticky; top: 0; z-index: 50;
         width: 100vw;
-        background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
-        padding: 24px 24px 40px;
-        min-height: 200px;
+        background: #ffffff;
+        padding: 0 28px;
+        height: 100px;
         display: flex;
-        align-items: flex-end;
-        justify-content: center;
-        position: relative;
-        margin-bottom: 32px;
+        align-items: center;
+        gap: 0;
+        margin: 0;
         align-self: stretch;
       }
-      .logo-text {
-        font-family: 'Inter', sans-serif;
-        font-weight: 700;
-        font-size: 36px;
-        color: white;
-        letter-spacing: -0.02em;
+      /* Soft gray shelf below the white nav (starts at 100px, fades down + out). */
+      .site-header::after {
+        content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 66px; pointer-events: none;
+        background: linear-gradient(to bottom, #eef0f1 0%, rgba(238,240,241,0) 100%);
+        -webkit-mask-image: linear-gradient(to right, transparent 0%, transparent 9%, #000 18%, #000 82%, transparent 91%, transparent 100%);
+        mask-image: linear-gradient(to right, transparent 0%, transparent 9%, #000 18%, #000 82%, transparent 91%, transparent 100%);
+      }
+      .brand { display: flex; align-items: center; flex-shrink: 0; margin-left: 52px; }
+      .brand img { height: 32px; display: block; }
+      .nav-inline { display: flex; align-items: center; gap: 6px; margin-left: 170px; }
+      .nav-inline a {
+        color: #8a8a8a; text-decoration: none; font-family: 'Inter', sans-serif;
+        font-size: 14px; font-weight: 600; padding: 8px 12px; border-radius: 8px;
+        white-space: nowrap; transition: color 0.15s;
+      }
+      .nav-inline a:hover { color: #1a1a1a; }
+      .nav-inline a.active { color: #1a1a1a; }
+      .header-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+      @media (max-width: 1040px) { .nav-inline { margin-left: 40px; } }
+      .hicon {
+        position: relative; display: flex; align-items: center; justify-content: center;
+        width: 42px; height: 42px; border-radius: 50%; background: none; border: none;
+        cursor: pointer; text-decoration: none; color: #1a1a1a; transition: background 0.15s;
+      }
+      .hicon:hover { background: #f3f2ef; }
+      .hicon.profile-btn { background: #f0eeea; }
+      .hicon.profile-btn:hover { background: #e7e4dd; }
+      .cart-badge {
+        position: absolute; top: 4px; right: 4px; min-width: 16px; height: 16px; padding: 0 4px;
+        border-radius: 999px; background: #ff3b6b; color: #fff; font-size: 10px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center; line-height: 1;
+      }
+      .hamburger { display: none; }
+      /* Mobile: hamburger only (cart + profile stay) */
+      @media (max-width: 760px) {
+        .site-header { padding: 0 18px; gap: 14px; }
+        .nav-inline { display: none; }
+        .hamburger { display: flex; }
       }
 
       .top-bar {
-        width: 100%; max-width: 560px; padding: 0 24px;
-        display: flex; align-items: center; justify-content: flex-start;
-        margin-bottom: 28px; gap: 12px; flex-wrap: wrap;
+        width: 100%; max-width: 1040px; padding: 80px 28px 0;
+        display: flex; align-items: flex-start; justify-content: space-between;
+        margin-bottom: 80px; gap: 16px; flex-wrap: wrap;
       }
-      .top-bar h1 { font-size: 36px; font-weight: 400; color: #1a1a1a; font-family: 'CooperBT', serif; letter-spacing: 0; }
-      .top-bar-actions { display: flex; gap: 10px; align-items: center; }
+      .top-bar h1 { font-size: 44px; font-weight: 400; color: #1a1a1a; font-family: 'CooperBT', Georgia, serif; letter-spacing: -0.01em; }
+      .lib-sub { color: #656565; font-size: 16px; line-height: 1.5; margin-top: 40px; max-width: 560px; font-family: 'Inter', sans-serif; }
+      .top-bar-actions { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+      @media (max-width: 680px) { .top-bar h1 { font-size: 30px; } .top-bar { padding-top: 48px; margin-bottom: 48px; } }
 
       .create-btn {
         background: #1a1a1a; color: white;
@@ -74,7 +111,51 @@
         .create-btn { font-size: 13px; padding: 9px 14px; }
       }
 
-      .collections-list { width: 100%; max-width: 560px; padding: 0 24px; display: flex; flex-direction: column; gap: 16px; }
+      .collections-list { width: 100%; max-width: 1040px; padding: 0 28px; display: flex; flex-direction: column; gap: 16px; }
+
+      /* My Designs — Popsa-style light-gray tiles, 3 columns */
+      .designs-grid {
+        /* 384px tiles, left-aligned with the header (same 1040 container) */
+        width: 100%; max-width: 1040px; padding: 0 28px;
+        display: grid; grid-template-columns: repeat(auto-fill, 384px); gap: 36px;
+        justify-content: start; align-items: start; align-content: start;
+      }
+      @media (max-width: 480px) { .designs-grid { grid-template-columns: 1fr; } }
+      .design-card {
+        background: #f2f2f2; border-radius: 18px; padding: 26px;
+        display: flex; flex-direction: column; position: relative; transition: box-shadow 0.15s;
+      }
+      .design-card:hover { box-shadow: 0 6px 22px rgba(0,0,0,0.08); }
+      .design-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+      .design-kind { font-size: 13px; color: #8a857d; font-weight: 500; font-family: 'Inter', sans-serif; }
+      .design-title { font-family: 'CooperBT', Georgia, serif; font-weight: 400; font-size: 27px; line-height: 1.12; letter-spacing: -0.01em; color: #1a1a1a; margin-top: 4px; }
+      .dots-btn { background: none; border: none; cursor: pointer; color: #8a857d; padding: 4px 6px; border-radius: 8px; line-height: 0; flex-shrink: 0; }
+      .dots-btn:hover { background: rgba(0,0,0,0.06); color: #1a1a1a; }
+      .design-mat {
+        margin-top: 20px; background: #fff; border-radius: 10px; padding: 16px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.09); display: flex; align-items: center; justify-content: center;
+        aspect-ratio: 3 / 2; overflow: hidden; cursor: pointer;
+      }
+      .design-mat .book-canvas { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .design-mat .design-photo { max-width: 100%; max-height: 100%; border-radius: 2px; box-shadow: 0 2px 8px rgba(0,0,0,0.16); }
+      .design-date { font-size: 13px; color: #a09a90; margin-top: 20px; font-family: 'Inter', sans-serif; }
+
+      /* ⋯ menu popover */
+      .design-menu {
+        position: absolute; top: 48px; right: 16px; z-index: 20;
+        background: #fff; border-radius: 14px; box-shadow: 0 12px 44px rgba(0,0,0,0.20);
+        padding: 8px 0; min-width: 262px; display: none;
+      }
+      .design-menu.open { display: block; }
+      .dmenu-item {
+        display: flex; align-items: center; gap: 14px; padding: 13px 20px;
+        font-size: 16px; font-weight: 500; color: #1a1a1a; font-family: 'Inter', sans-serif;
+        cursor: pointer; text-decoration: none; background: none; border: none; width: 100%; text-align: left;
+      }
+      .dmenu-item:hover { background: #f5f4f0; }
+      .dmenu-item svg { flex-shrink: 0; color: #1a1a1a; }
+      .dmenu-sep { height: 1px; background: #ececec; margin: 6px 0; }
+      .dmenu-item.danger, .dmenu-item.danger svg { color: #ff2d6b; }
 
       .card {
         background: white;
@@ -106,6 +187,7 @@
       .card-info { flex: 1; align-self: center; display: flex; flex-direction: column; min-width: 0; }
       .card-title { font-size: 22px; font-weight: 400; color: #1a1a1a; margin-bottom: 4px; line-height: 1.15; font-family: 'CooperBT', serif; letter-spacing: 0; }
       .kind-pill { display: inline-block; vertical-align: middle; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; color: #fff; background: linear-gradient(135deg,#7657FC,#589AF9); border-radius: 999px; padding: 2px 9px; letter-spacing: 0.02em; margin-left: 6px; position: relative; top: -2px; }
+      .pop-pill { align-self: flex-start; display: inline-block; font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600; color: #656565; background: #ededed; border-radius: 999px; padding: 3px 9px; letter-spacing: 0.03em; text-transform: uppercase; margin-bottom: 8px; }
       .card-meta { font-size: 12px; color: #888; margin-top: auto; }
       .card-id { font-size: 12px; color: #aaa; margin-top: 12px; }
       .card-id strong { color: #1a1a1a; font-weight: 700; }
@@ -133,9 +215,6 @@
       .btn-delete:disabled { opacity: 0.5; cursor: not-allowed; }
 
       @media (min-width: 960px) {
-        .top-bar { max-width: 820px; }
-        .top-bar h1 { font-size: 42px; }
-        .collections-list { max-width: 820px; padding: 0 24px; gap: 16px; }
         .card { padding: 16px; min-height: 232px; }
         .card-thumb { width: 200px; height: 200px; min-width: 200px; border-radius: 6px; }
         .card-main { gap: 32px; margin-bottom: 0; align-items: flex-start; }
@@ -279,13 +358,26 @@
   </head>
   <body>
     <header class="site-header">
-      <button id="nav-btn" style="position:absolute;left:20px;top:20px;background:none;border:none;cursor:pointer;padding:4px;" aria-label="Menu">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-      </button>
-      <a href="/manage.html"><img src="/assets/Popcode_logo.rev.svg" alt="Popcode" style="height:80px;"/></a>
-      <div style="position:absolute;right:20px;top:20px;display:flex;align-items:center;gap:10px;">
-        <span id="user-greeting" style="color:white;font-size:13px;font-weight:500;font-family:'Inter',sans-serif;opacity:0.9;"></span>
-        <button id="logout-btn" style="background:#78A7FF;color:white;border:none;border-radius:20px;padding:7px 16px;font-size:13px;font-weight:500;cursor:pointer;font-family:'Inter',sans-serif;">Sign Out</button>
+      <a href="/manage.html" class="brand"><img src="/assets/Popcode_logo.png" alt="Popcode"/></a>
+      <nav class="nav-inline" id="nav-inline">
+        <a href="/manage.html" data-nav="popcodes">My Popcodes</a>
+        <a href="/manage.html?tab=designs" data-nav="designs">My Designs</a>
+        <a href="/shop.html" data-nav="shop">Shop</a>
+        <a href="/views.html">Past Views</a>
+        <a href="/howto.html">How It Works</a>
+        <a href="/analytics.html" class="nav-inline-admin" style="display:none;">Analytics</a>
+      </nav>
+      <div class="header-right">
+        <a class="hicon cart-btn" href="/shop.html" title="Cart" aria-label="Cart">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+          <span class="cart-badge" id="cart-badge" style="display:none;">0</span>
+        </a>
+        <a class="hicon profile-btn" href="/account.html" title="My Account" aria-label="My Account">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </a>
+        <button id="nav-btn" class="hicon hamburger" aria-label="Menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
       </div>
     </header>
 
@@ -294,15 +386,19 @@
       <div id="nav-drawer">
         <a class="nav-link" href="/manage.html">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-          My Projects
+          My Popcodes
+        </a>
+        <a class="nav-link" href="/manage.html?tab=designs">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          My Designs
+        </a>
+        <a class="nav-link" href="/shop.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          Shop
         </a>
         <a class="nav-link" href="/create.html">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-          New Project
-        </a>
-        <a class="nav-link" href="/book.html">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-          Make a Book
+          New Popcode
         </a>
         <a class="nav-link" href="/views.html">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -360,10 +456,12 @@
     </div>
 
     <div class="top-bar">
-      <h1>My Projects</h1>
+      <div class="top-bar-text">
+        <h1 id="lib-title">My Popcodes</h1>
+        <p class="lib-sub" id="lib-sub"></p>
+      </div>
       <div class="top-bar-actions">
-        <a class="create-btn" href="/create.html" style="background:#eeeeee;color:#333;">+ New Popcode</a>
-        <a class="create-btn" href="/book.html">📖 Make a Book</a>
+        <a class="create-btn" id="lib-cta" href="/create.html">+ New Popcode</a>
       </div>
     </div>
 
@@ -390,7 +488,8 @@
         }
       });
 
-      document.getElementById('logout-btn').addEventListener('click', async () => {
+      const logoutBtn = document.getElementById('logout-btn');
+      if (logoutBtn) logoutBtn.addEventListener('click', async () => {
         await db.auth.signOut();
         window.location.href = '/auth.html';
       });
@@ -408,22 +507,26 @@
         return d.getMonth() + 1 + '.' + d.getDate() + '.' + String(d.getFullYear()).slice(-2);
       }
 
+      // Designs = physical products bought from us; everything else is a Popcode
+      // (a standalone AR experience — museum exhibit, grandma's album, etc.).
+      const PRODUCT_KINDS = ['book', 'print', 'tile', 'canvas', 'calendar'];
+      const isDesignKind = (k) => PRODUCT_KINDS.includes(k);
+      let allCollections = [], countMap = {}, photoMap = {};
+      let activeTab = (new URLSearchParams(location.search).get('tab') === 'designs') ? 'designs' : 'popcodes';
+
       async function loadCollections() {
         const content = document.getElementById('content');
         try {
           const { data: collections, error } = await db
             .from('collections')
-            .select('id, slug, name, created_at, kind')
+            .select('id, slug, name, created_at, kind, book_layout')
             .eq('user_id', currentUser.id)
             .order('created_at', { ascending: false });
 
           if (error) throw error;
 
-          if (!collections || collections.length === 0) {
-            content.innerHTML = '';
-            content.appendChild(buildEmptyState());
-            return;
-          }
+          allCollections = collections || [];
+          if (!allCollections.length) { renderActiveTab(); return; }
 
           const ids = collections.map(c => c.id);
           const { data: items, error: itemsError } = await db
@@ -434,8 +537,7 @@
 
           if (itemsError) throw itemsError;
 
-          const countMap = {};
-          const photoMap = {};
+          countMap = {}; photoMap = {};
           const seenIndex = {};
           (items || []).forEach(item => {
             const dedupKey = item.collection_id + '|' + item.target_index;
@@ -447,11 +549,7 @@
             }
           });
 
-          content.innerHTML = '';
-          collections.forEach(col => {
-            const pageCount = countMap[col.id] || 0;
-            content.appendChild(buildCard(col, pageCount, photoMap[col.id] || null));
-          });
+          renderActiveTab();
 
         } catch (err) {
           content.innerHTML = '';
@@ -468,13 +566,41 @@
         }
       }
 
-      function buildEmptyState() {
+      // Render the collections for the active tab: Popcodes (AR experiences) or
+      // Designs (products). Filters the already-loaded list; no re-fetch.
+      function renderActiveTab() {
+        const content = document.getElementById('content');
+        content.innerHTML = '';
+        // Reflect the active library in the inline nav + page title/CTA.
+        document.querySelectorAll('.nav-inline a[data-nav]').forEach(a =>
+          a.classList.toggle('active', a.dataset.nav === activeTab));
+        const isDesigns = activeTab === 'designs';
+        const title = document.getElementById('lib-title');
+        if (title) title.textContent = isDesigns ? 'My Designs' : 'My Popcodes';
+        const cta = document.getElementById('lib-cta');
+        if (cta) {
+          cta.textContent = isDesigns ? 'Create New Design' : '+ New Popcode';
+          cta.href = isDesigns ? '/shop.html' : '/create.html';
+        }
+        const sub = document.getElementById('lib-sub');
+        if (sub) sub.innerHTML = isDesigns
+          ? 'Everything you’ve made to print and keep.<br>Start something new or edit an existing design.'
+          : 'Collections or single images that link to video or audio<br>when scanned with the Popcode app.';
+        document.title = isDesigns ? 'Popcode — My Designs' : 'Popcode — My Popcodes';
+        // Designs get a distinct product-mockup grid; Popcodes keep the list.
+        content.className = isDesigns ? 'designs-grid' : 'collections-list';
+        const list = allCollections.filter(c => isDesigns ? isDesignKind(c.kind) : !isDesignKind(c.kind));
+        if (!list.length) { content.className = 'collections-list'; content.appendChild(buildEmptyState(activeTab)); return; }
+        if (isDesigns) list.forEach(col => content.appendChild(buildDesignCard(col, photoMap[col.id] || null)));
+        else list.forEach(col => content.appendChild(buildCard(col, countMap[col.id] || 0, photoMap[col.id] || null)));
+      }
+
+      function buildEmptyState(tab) {
         const div = document.createElement('div');
         div.className = 'empty-state';
-        div.innerHTML = `
-          <p>You have no projects yet.</p>
-          <a href="/create.html">+ New Project</a>
-        `;
+        div.innerHTML = tab === 'designs'
+          ? `<p>No designs yet — books, prints and more you order from us.</p><a href="/shop.html">🛍️ Shop products</a>`
+          : `<p>No Popcodes yet.</p><a href="/create.html">+ New Popcode</a>`;
         return div;
       }
 
@@ -486,6 +612,7 @@
         const coverTitle = col.cover_config && col.cover_config.enabled && col.cover_config.title;
         const title = coverTitle || col.name || 'Untitled';
         const isBook = col.kind === 'book';
+        const isCollection = !isBook && pageCount > 1;
         const viewUrl = `https://popcode.app/${col.slug}`;
         const shortUrl = `popcode.app/${col.slug}`;
 
@@ -493,6 +620,7 @@
           <div class="card-main">
             ${thumbUrl ? `<div class="card-thumb" style="background-image:url('${escapeHtml(thumbUrl)}')"></div>` : '<div class="card-thumb"></div>'}
             <div class="card-info">
+              ${isCollection ? '<div class="pop-pill">Collection</div>' : ''}
               <div class="card-title">${escapeHtml(title)}${isBook ? ' <span class="kind-pill">Book</span>' : ''}</div>
               <div class="card-meta">Created ${formatDate(col.created_at)} &nbsp;/&nbsp; ${isBook ? 'photo book' : pageCount + ' image' + (pageCount !== 1 ? 's' : '')}</div>
               <div class="card-id" style="position:relative;">ID: <strong>${escapeHtml(col.slug)}</strong>
@@ -572,6 +700,184 @@
         });
 
         return card;
+      }
+
+      // Shared card-action wiring (share popup / share options / delete /
+      // download) used by both the stacked Popcode card and the Designs grid card.
+      function wireCardActions(card, col) {
+        const coverTitle = col.cover_config && col.cover_config.enabled && col.cover_config.title;
+        const title = coverTitle || col.name || 'Untitled';
+
+        const shareBtn = card.querySelector('.btn-share-id');
+        if (shareBtn) shareBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          const popup = document.getElementById('share-popup-' + this.dataset.slug);
+          document.querySelectorAll('.share-popup.visible').forEach(function (p) { if (p !== popup) p.classList.remove('visible'); });
+          if (popup) popup.classList.toggle('visible');
+        });
+        const copyOpt = card.querySelector('.share-opt-copy');
+        if (copyOpt) copyOpt.addEventListener('click', function (e) {
+          e.stopPropagation();
+          const url = this.dataset.url;
+          navigator.clipboard.writeText(url).then(() => showToast('Link copied!')).catch(() => prompt('Copy this link:', url));
+          this.closest('.share-popup').classList.remove('visible');
+        });
+        const emailOpt = card.querySelector('.share-opt-email');
+        if (emailOpt) emailOpt.addEventListener('click', function (e) {
+          e.stopPropagation();
+          window.location.href = 'mailto:?subject=' + encodeURIComponent('Your Popcode project "' + this.dataset.title + '" is ready to scan!') + '&body=' + encodeURIComponent('Your Popcode project "' + this.dataset.title + '" is ready to scan!\n\n' + this.dataset.url);
+          this.closest('.share-popup').classList.remove('visible');
+        });
+        const msgOpt = card.querySelector('.share-opt-message');
+        if (msgOpt) msgOpt.addEventListener('click', function (e) {
+          e.stopPropagation();
+          window.location.href = 'sms:?&body=' + encodeURIComponent('"' + this.dataset.title + '" is ready to scan with Popcode! ' + this.dataset.url);
+          this.closest('.share-popup').classList.remove('visible');
+        });
+        const delBtn = card.querySelector('.btn-delete');
+        if (delBtn) delBtn.addEventListener('click', function () {
+          confirmDelete(card, col.id, this.dataset.slug, this.dataset.title, this);
+        });
+        const dlBtn = card.querySelector('.btn-download');
+        if (dlBtn) dlBtn.addEventListener('click', function () { openDownloadModal(this.dataset.slug, this.dataset.title); });
+      }
+
+      // Product naming for the Popsa-style menu / label.
+      const PRODUCT_NOUN = { book: 'Book', tile: 'Box of Tiles', print: 'Print', canvas: 'Canvas', calendar: 'Calendar' };
+      const PRODUCT_LABEL = { book: 'Photo Book', tile: 'Photo Tiles', print: 'Prints', canvas: 'Canvas', calendar: 'Calendar' };
+      function relTime(iso) {
+        if (!iso) return '';
+        const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+        if (s < 60) return 'just now';
+        if (s < 3600) return Math.max(1, Math.floor(s / 60)) + ' min ago';
+        if (s < 86400) return Math.floor(s / 3600) + ' hr ago';
+        const d = Math.floor(s / 86400);
+        if (d === 1) return 'yesterday';
+        if (d < 30) return d + ' days ago';
+        if (d < 365) return Math.floor(d / 30) + ' mo ago';
+        return Math.floor(d / 365) + ' yr ago';
+      }
+      async function shareDesign(url, title) {
+        try {
+          if (navigator.share) { await navigator.share({ title, url }); return; }
+        } catch (_) { return; }
+        try { await navigator.clipboard.writeText(url); showToast('Link copied!'); }
+        catch (_) { prompt('Copy this link:', url); }
+      }
+
+      // A design (product) card for My Designs — a Popsa-style light-gray tile: the
+      // product shown in its mockup on a white mat, with a ⋯ menu of actions.
+      function buildDesignCard(col, thumbUrl) {
+        const card = document.createElement('div');
+        card.className = 'design-card';
+        card.dataset.id = col.id;
+        const coverTitle = col.cover_config && col.cover_config.enabled && col.cover_config.title;
+        const title = coverTitle || col.name || 'Untitled';
+        const isBook = col.kind === 'book';
+        const noun = PRODUCT_NOUN[col.kind] || 'Design';
+        const kindLabel = PRODUCT_LABEL[col.kind] || 'Design';
+        const viewUrl = `https://popcode.app/${col.slug}`;
+        const editHref = (isBook ? '/book.html' : '/edit.html') + '?id=' + encodeURIComponent(col.slug);
+        const orderHref = isBook ? ('/book.html?id=' + encodeURIComponent(col.slug) + '&order=1') : ('/order.html?id=' + encodeURIComponent(col.slug));
+        const coverPhoto = (isBook && col.book_layout && col.book_layout.cover && col.book_layout.cover.photo_url) || thumbUrl || '';
+        const mat = isBook
+          ? `<canvas class="book-canvas"></canvas>`
+          : `<img class="design-photo" src="${thumbUrl ? escapeHtml(thumbUrl) : ''}" alt="">`;
+
+        card.innerHTML = `
+          <div class="design-top">
+            <div>
+              <div class="design-kind">${escapeHtml(kindLabel)}</div>
+              <div class="design-title">${escapeHtml(title)}</div>
+            </div>
+            <button class="dots-btn" title="More" aria-label="More">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+            </button>
+          </div>
+          <div class="design-mat">${mat}</div>
+          <div class="design-date">${escapeHtml(relTime(col.created_at))}</div>
+          <div class="design-menu">
+            <a class="dmenu-item" href="${orderHref}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>Order This ${escapeHtml(noun)}</a>
+            <a class="dmenu-item" href="${editHref}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit This ${escapeHtml(noun)}</a>
+            <button class="dmenu-item dm-share"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>Share</button>
+            <div class="dmenu-sep"></div>
+            <button class="dmenu-item danger dm-delete"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>Delete This ${escapeHtml(noun)}</button>
+          </div>`;
+
+        const menu = card.querySelector('.design-menu');
+        const dots = card.querySelector('.dots-btn');
+        dots.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isOpen = menu.classList.contains('open');
+          closeAllDesignMenus();
+          if (!isOpen) { menu.classList.add('open'); card.style.zIndex = '30'; }
+        });
+        // Tapping the product opens the editor.
+        card.querySelector('.design-mat').addEventListener('click', () => { window.location.href = editHref; });
+        card.querySelector('.dm-share').addEventListener('click', (e) => { e.stopPropagation(); closeAllDesignMenus(); shareDesign(viewUrl, title); });
+        card.querySelector('.dm-delete').addEventListener('click', (e) => {
+          e.stopPropagation(); closeAllDesignMenus();
+          confirmDelete(card, col.id, col.slug, title, dots);
+        });
+
+        if (isBook) {
+          const cv = card.querySelector('.book-canvas');
+          if (cv) renderBookMockup(cv, coverPhoto).catch(() => {});
+        }
+        return card;
+      }
+      function closeAllDesignMenus() {
+        document.querySelectorAll('.design-menu.open').forEach(m => {
+          m.classList.remove('open');
+          const c = m.closest('.design-card'); if (c) c.style.zIndex = '';
+        });
+      }
+      document.addEventListener('click', closeAllDesignMenus);
+
+      // Composite a book's cover photo into the real Prodigi layflat-book mockup
+      // (front cover is axis-aligned; rect measured as fractions of the template).
+      const BOOK_MOCK = { template: '/assets/mockups/book-white.jpg', rect: { x: 0.141, y: 0.264, w: 0.732, h: 0.519 } };
+      async function renderBookMockup(canvas, coverUrl) {
+        const tpl = new Image(); tpl.crossOrigin = 'anonymous';
+        await new Promise((res, rej) => { tpl.onload = res; tpl.onerror = rej; tpl.src = BOOK_MOCK.template; });
+        const tw = tpl.naturalWidth, th = tpl.naturalHeight;
+        canvas.width = tw; canvas.height = th;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(tpl, 0, 0, tw, th);
+        if (!coverUrl) return;
+        const r = { x: BOOK_MOCK.rect.x * tw, y: BOOK_MOCK.rect.y * th, w: BOOK_MOCK.rect.w * tw, h: BOOK_MOCK.rect.h * th };
+        let art;
+        try {
+          art = new Image(); art.crossOrigin = 'anonymous';
+          await new Promise((res, rej) => { art.onload = res; art.onerror = rej; art.src = coverUrl; });
+        } catch (_) { return; }
+        // cover-crop the photo to the cover rect's aspect
+        const ar = r.w / r.h, sw = art.naturalWidth, sh = art.naturalHeight;
+        let cw = sw, ch = sh, sx = 0, sy = 0;
+        if (sw / sh > ar) { ch = sh; cw = Math.round(sh * ar); sx = Math.round((sw - cw) / 2); }
+        else { cw = sw; ch = Math.round(sw / ar); sy = Math.round((sh - ch) / 2); }
+        ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+        ctx.drawImage(art, sx, sy, cw, ch, r.x, r.y, r.w, r.h);
+        // subtle glossy sheen so the photo reads as the printed cover, not a paste
+        const g = ctx.createLinearGradient(r.x, r.y, r.x + r.w, r.y + r.h);
+        g.addColorStop(0, 'rgba(255,255,255,0.16)');
+        g.addColorStop(0.25, 'rgba(255,255,255,0.03)');
+        g.addColorStop(1, 'rgba(0,0,0,0.06)');
+        ctx.fillStyle = g; ctx.fillRect(r.x, r.y, r.w, r.h);
+        // lay-flat spine groove near the left edge, so the fold reads through
+        // the custom photo (highlight ridge + dark indent + falloff shadow).
+        const spineX = r.x + r.w * 0.039;
+        const band = (xc, halfW, color, aPeak) => {
+          const gg = ctx.createLinearGradient(xc - halfW, 0, xc + halfW, 0);
+          gg.addColorStop(0, `rgba(${color},0)`);
+          gg.addColorStop(0.5, `rgba(${color},${aPeak})`);
+          gg.addColorStop(1, `rgba(${color},0)`);
+          ctx.fillStyle = gg; ctx.fillRect(xc - halfW, r.y, halfW * 2, r.h);
+        };
+        band(spineX - r.w * 0.014, r.w * 0.020, '255,255,255', 0.34); // raised highlight
+        band(spineX,               r.w * 0.018, '0,0,0',       0.62); // indent groove
+        band(spineX + r.w * 0.045, r.w * 0.050, '0,0,0',       0.16); // falloff shadow
+        ctx.restore();
       }
 
       // Download-modal state (shared so the badge-size toggle can re-render).
