@@ -799,7 +799,47 @@
         if (product === 'framed') { ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = Math.max(1, w * 0.004); ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1); }
       }
 
-      function renderScene(cv, id, art, aspect, thumb) {
+      // ── Photoreal backdrops (Path B) ──────────────────────────────────────────
+      // Real Prodigi scene renders. As backdrops are added to /assets/mockups/scenes/,
+      // list them here per product+scene with the art rectangle (fractions of the
+      // image, measured from the placeholder region). When an entry exists it is used
+      // instead of the drawn scene; otherwise the drawn scene is the fallback.
+      const SCENE_DIR = '/assets/mockups/scenes/';
+      const SCENE_BACKDROPS = {
+        // framed: { wall:  { file: 'framed-wall.png',  rect: { x: 0.30, y: 0.18, w: 0.40, h: 0.50 } },
+        //          shelf: { file: 'framed-shelf.png', rect: { ... } }, ... },
+        // print:  { ... }, canvas: { ... }, tile: { ... },
+      };
+      const _imgCache = {};
+      function loadImg(src) {
+        if (_imgCache[src]) return _imgCache[src];
+        _imgCache[src] = new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
+        return _imgCache[src];
+      }
+      async function renderPhotoScene(cv, bd, thumb) {
+        const bg = await loadImg(SCENE_DIR + bd.file);
+        const maxDim = thumb ? 340 : 1100;
+        const s = Math.min(1, maxDim / Math.max(bg.naturalWidth, bg.naturalHeight));
+        const W = Math.round(bg.naturalWidth * s), H = Math.round(bg.naturalHeight * s);
+        cv.width = W; cv.height = H;
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(bg, 0, 0, W, H);
+        const r = { x: bd.rect.x * W, y: bd.rect.y * H, w: bd.rect.w * W, h: bd.rect.h * H };
+        ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+        if (state.selectedPhoto) {
+          const artUrl = await compositeBadgedImage(state.selectedPhoto.url, { scale: state.scale, aspect: r.w / r.h });
+          const art = new Image(); await new Promise((res, rej) => { art.onload = res; art.onerror = rej; art.src = artUrl; });
+          ctx.drawImage(art, r.x, r.y, r.w, r.h);
+        } else {
+          ctx.fillStyle = '#ededed'; ctx.fillRect(r.x, r.y, r.w, r.h);
+          drawImageIcon(ctx, r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) * 0.2);
+        }
+        ctx.restore();
+      }
+
+      async function renderScene(cv, id, art, aspect, thumb) {
+        const bd = SCENE_BACKDROPS[state.productType] && SCENE_BACKDROPS[state.productType][id];
+        if (bd && bd.file) { try { await renderPhotoScene(cv, bd, thumb); return; } catch (_) { /* fall back to drawn */ } }
         const W = thumb ? 300 : 1040, H = thumb ? 336 : 1180;
         cv.width = W; cv.height = H;
         const ctx = cv.getContext('2d');
