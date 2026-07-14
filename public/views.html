@@ -48,19 +48,20 @@
         position: relative; margin-bottom: 32px; align-self: stretch;
       }
       .top-bar {
-        width: 100%; max-width: 560px; padding: 0 24px;
-        display: flex; align-items: center; justify-content: space-between;
-        margin-bottom: 28px;
+        width: 100%; max-width: 1040px; padding: 80px 28px 0;
+        display: flex; align-items: flex-start; justify-content: flex-start;
+        margin-bottom: 40px; align-self: center;
       }
-      .top-bar h1 { font-size: 36px; font-weight: 400; color: #1a1a1a; font-family: 'CooperBT', serif; letter-spacing: 0; }
-      @media (min-width: 960px) { .top-bar h1 { font-size: 42px; } }
-      .content { width: 100%; max-width: 560px; padding: 0 24px; display: flex; flex-direction: column; gap: 14px; }
+      .top-bar h1 { font-size: 44px; font-weight: 400; color: #1a1a1a; font-family: 'CooperBT', Georgia, serif; letter-spacing: -0.01em; text-align: left; }
+      @media (max-width: 680px) { .top-bar { padding-top: 48px; } .top-bar h1 { font-size: 30px; } }
+      .content { width: 100%; max-width: 1040px; padding: 0 28px; display: flex; flex-direction: column; gap: 14px; align-self: center; }
 
       .view-card {
-        background: white; border-radius: 16px; padding: 18px 20px;
+        background: white; border-radius: 16px; padding: 16px 20px;
         box-shadow: 0 2px 12px rgba(0,0,0,0.06);
         display: flex; align-items: center; justify-content: space-between; gap: 16px;
       }
+      .view-thumb { width: 60px; height: 60px; border-radius: 10px; background: #e8e4f0 center/cover; flex-shrink: 0; }
       .view-info { flex: 1; min-width: 0; }
       .view-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .view-date { font-size: 12px; color: #aaa; }
@@ -165,6 +166,7 @@
         }
         content.innerHTML = views.map(function(v) {
           return '<div class="view-card">' +
+            '<div class="view-thumb"' + (v.thumb ? ' style="background-image:url(\'' + v.thumb + '\')"' : '') + '></div>' +
             '<div class="view-info">' +
               '<div class="view-name">' + v.name + '</div>' +
               '<div class="view-date">Last viewed ' + formatDate(v.last_viewed) + '</div>' +
@@ -172,6 +174,24 @@
             '<a class="view-btn" href="/' + v.slug + '">View Again</a>' +
           '</div>';
         }).join('');
+      }
+
+      // Attach each view's first photo as a thumbnail.
+      async function attachThumbs(views) {
+        if (!views.length) return;
+        try {
+          var slugs = views.map(function(v){ return v.slug; });
+          var { data: cols } = await db.from('collections').select('id, slug').in('slug', slugs);
+          if (!cols || !cols.length) return;
+          var slugById = {};
+          cols.forEach(function(c){ slugById[c.id] = c.slug; });
+          var { data: rows } = await db.from('collection_items')
+            .select('collection_id, photo_url, target_index')
+            .in('collection_id', cols.map(function(c){ return c.id; })).order('target_index');
+          var firstBySlug = {};
+          (rows || []).forEach(function(r){ var s = slugById[r.collection_id]; if (s && !firstBySlug[s] && r.photo_url) firstBySlug[s] = r.photo_url; });
+          views.forEach(function(v){ v.thumb = firstBySlug[v.slug] || null; });
+        } catch (e) {}
       }
 
       async function loadViews() {
@@ -216,12 +236,14 @@
             return { slug: slug, name: nameMap[slug] || local[slug]?.name || slug, last_viewed: seen[slug] };
           }).sort(function(a, b) { return b.last_viewed.localeCompare(a.last_viewed); });
 
+          await attachThumbs(views);
           renderCards(views);
         } else {
           // Anonymous: localStorage only
           var views = Object.keys(local).map(function(slug) {
             return { slug: slug, name: local[slug].name || slug, last_viewed: local[slug].last_viewed };
           }).sort(function(a, b) { return b.last_viewed.localeCompare(a.last_viewed); });
+          await attachThumbs(views);
           renderCards(views);
         }
       }
