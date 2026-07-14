@@ -344,6 +344,9 @@
           window.location.href = '/auth.html';
         } else {
           currentUser = data.session.user;
+          // Admin-only montage button until Shotstack is wired live in prod.
+          const email = (currentUser?.email || '').toLowerCase();
+          if (['curtmid@gmail.com', 'curt@theworkshop.works'].includes(email)) document.body.classList.add('mtg-admin');
           const uName = data.session.user?.user_metadata?.full_name?.split(' ')[0] || data.session.user?.email?.split('@')[0] || '';
           if (uName) { const g = document.getElementById('user-greeting'); if (g) g.textContent = 'Hi, ' + uName + '!'; }
         }
@@ -1310,12 +1313,16 @@
     </script>
   <style>
     /* ── Montage maker ────────────────────────────────────────────────────── */
+    /* Hidden by default — shown only for admins until Shotstack is wired live in
+       prod (regular users would otherwise hit the dry-run "preview mode" path). */
     .mtg-open-btn {
+      display: none;
       margin-top: 8px; width: 100%; border: 1px dashed #b9a9ff; background: #f4f1ff;
       color: #6a49f2; font-weight: 700; font-size: 13px; padding: 8px 10px;
       border-radius: 10px; cursor: pointer; font-family: inherit;
       transition: background .15s, border-color .15s;
     }
+    body.mtg-admin .mtg-open-btn { display: block; }
     .mtg-open-btn:hover { background: #ece6ff; border-color: #7657FC; }
 
     .mtg-overlay {
