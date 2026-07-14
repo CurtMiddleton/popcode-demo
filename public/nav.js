@@ -23,8 +23,8 @@
   .site-header::after {
     content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 66px; pointer-events: none;
     background: linear-gradient(to bottom, #eef0f1 0%, rgba(238,240,241,0) 100%);
-    -webkit-mask-image: linear-gradient(to right, transparent 0%, transparent 22%, #000 34%, #000 64%, transparent 78%, transparent 100%);
-    mask-image: linear-gradient(to right, transparent 0%, transparent 22%, #000 34%, #000 64%, transparent 78%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, transparent 9%, #000 18%, #000 82%, transparent 91%, transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0%, transparent 9%, #000 18%, #000 82%, transparent 91%, transparent 100%);
   }
   .site-header .brand { display: flex; align-items: center; flex-shrink: 0; margin-left: 52px; }
   .site-header .brand img { height: 32px; display: block; }
