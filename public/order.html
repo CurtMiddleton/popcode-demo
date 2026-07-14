@@ -678,6 +678,7 @@
         state.productType = type;
         state.variantId = PRODUCTS[type][0].id;
         state.orientation = 'portrait';
+        state.scene = 'plain'; // reset the active view so a framed-only scene doesn't linger on other products
         const meta = CATEGORY_META[type];
         document.getElementById('detail-name').textContent = meta.name;
         document.getElementById('detail-tagline').textContent = meta.tagline;
@@ -720,6 +721,16 @@
         { id: 'shelf', label: 'Shelf' },
         { id: 'tone',  label: 'Styled' },
       ];
+      // Framed has real photoreal room backdrops (see SCENE_BACKDROPS), so it shows a
+      // dedicated 4-room set + Studio. Other products fall back to the drawn scenes above.
+      const SCENES_FRAMED = [
+        { id: 'plain', label: 'Studio' },
+        { id: 'wall',  label: 'Wall' },
+        { id: 'shelf', label: 'Bench' },
+        { id: 'tone',  label: 'Plant' },
+        { id: 'nook',  label: 'Books' },
+      ];
+      const scenesFor = p => (p === 'framed' ? SCENES_FRAMED : SCENES);
 
       // Badged photo (at aspect) as an <img>, or null → placeholder.
       async function getArtImage(aspect) {
@@ -805,10 +816,16 @@
       // image, measured from the placeholder region). When an entry exists it is used
       // instead of the drawn scene; otherwise the drawn scene is the fallback.
       const SCENE_DIR = '/assets/mockups/scenes/';
+      // rect = the magenta art region (fractions of the image), auto-measured from the
+      // solid-magenta placeholder render. Scene id → file mapping matches SCENES_FRAMED.
       const SCENE_BACKDROPS = {
-        // framed: { wall:  { file: 'framed-wall.png',  rect: { x: 0.30, y: 0.18, w: 0.40, h: 0.50 } },
-        //          shelf: { file: 'framed-shelf.png', rect: { ... } }, ... },
-        // print:  { ... }, canvas: { ... }, tile: { ... },
+        framed: {
+          wall:  { file: 'framed-wall.png',  rect: { x: 0.2010, y: 0.1440, w: 0.5940, h: 0.3960 } }, // landscape console
+          shelf: { file: 'framed-bench.png', rect: { x: 0.3520, y: 0.1900, w: 0.2930, h: 0.2920 } }, // square, over bench
+          tone:  { file: 'framed-plant.png', rect: { x: 0.2340, y: 0.2340, w: 0.5270, h: 0.5260 } }, // square, banana plant
+          nook:  { file: 'framed-books.png', rect: { x: 0.2450, y: 0.2130, w: 0.4990, h: 0.6240 } }, // portrait, mug + books
+        },
+        // print: { ... }, canvas: { ... }, tile: { ... },  // add renders + measured rects later
       };
       const _imgCache = {};
       function loadImg(src) {
@@ -868,7 +885,7 @@
         renderScene(document.getElementById('detail-canvas'), state.scene, art, aspect, false);
         const row = document.getElementById('view-row');
         row.innerHTML = '';
-        SCENES.forEach(s => {
+        scenesFor(state.productType).forEach(s => {
           const btn = document.createElement('button');
           btn.type = 'button'; btn.className = 'view-thumb' + (s.id === state.scene ? ' active' : ''); btn.title = s.label;
           const c = document.createElement('canvas'); btn.appendChild(c);

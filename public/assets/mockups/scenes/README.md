@@ -18,20 +18,30 @@ frame region of each backdrop.
    `print-desk.png`. Drop it in this folder and push.
 
 ## Wiring (done in code once files land)
-For each file, the magenta rectangle is measured (fractions of the image) and added to
-`SCENE_BACKDROPS` in `public/order.html`:
+For each file, the magenta rectangle is auto-measured (min/max of magenta pixels →
+fractions of the image), then **expanded by a small outward bleed (~0.4%)** so the
+composited photo overfills into the black frame edge and no magenta sliver shows.
+The result is added to `SCENE_BACKDROPS` in `public/order.html`:
 
 ```js
 SCENE_BACKDROPS = {
   framed: {
-    wall:  { file: 'framed-wall.png',  rect: { x: 0.30, y: 0.18, w: 0.40, h: 0.50 } },
-    shelf: { file: 'framed-shelf.png', rect: { ... } },
+    wall:  { file: 'framed-wall.png',  rect: { x: 0.2010, y: 0.1440, w: 0.5940, h: 0.3960 } },
+    shelf: { file: 'framed-bench.png', rect: { x: 0.3520, y: 0.1900, w: 0.2930, h: 0.2920 } },
+    tone:  { file: 'framed-plant.png', rect: { x: 0.2340, y: 0.2340, w: 0.5270, h: 0.5260 } },
+    nook:  { file: 'framed-books.png', rect: { x: 0.2450, y: 0.2130, w: 0.4990, h: 0.6240 } },
   },
 };
 ```
 
-When an entry exists it replaces the drawn scene for that product+scene; otherwise the
-drawn fallback scene is used, so partial coverage is fine.
+`framed` currently has 4 photoreal room scenes, so it uses a dedicated view list
+(`SCENES_FRAMED` = Studio + Wall/Bench/Plant/Books). Products without backdrops fall
+back to the drawn scenes, so partial coverage is fine — add `print`/`canvas`/`tile`
+entries (and, if >3 scenes, their own `SCENES_*` list) as their renders arrive.
+
+Foreground caveat: the photo is drawn on top of the backdrop's art region, so a scene
+where a plant/object crosses *in front* of the frame will paint over that object. Prefer
+scenes where foreground props sit beside the frame, not across it.
 
 ## Caveats
 - **Straight-on only** — perspective scenes distort a flat composite.
