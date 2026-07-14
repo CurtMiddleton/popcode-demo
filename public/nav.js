@@ -47,26 +47,70 @@
   .site-header .hamburger { display: none; }
   @media (max-width: 1040px) { .site-header .nav-inline { margin-left: 40px; } }
   @media (max-width: 760px) {
-    .site-header { padding: 0 18px; gap: 14px; }
+    /* Mobile: just the logo (pinned left) and the hamburger — cart + profile
+       move into the full-screen drawer. */
+    .site-header { padding: 0 16px; gap: 0; }
+    .site-header .brand { margin-left: 0; }
     .site-header .nav-inline { display: none; }
-    .site-header .hamburger { display: flex; }
-  }`;
+    .site-header .cart-btn, .site-header .profile-btn { display: none; }
+    .site-header .hamburger { display: flex; margin-left: auto; }
+  }
+
+  /* ── Full-screen mobile drawer (Popsa-style) ──────────────────────
+     Overrides each page's small dropdown drawer (this stylesheet is appended
+     last, so it wins). White full-bleed sheet: logo top-left + X, big nav list,
+     and account/cart/log-out pinned to the bottom. */
+  #nav-overlay { position: fixed; inset: 0; z-index: 200; display: none; }
+  #nav-overlay.open { display: block; }
+  #nav-overlay #nav-drawer-bg { display: none; }
+  #nav-overlay #nav-drawer {
+    position: absolute; inset: 0; width: 100%; max-width: none; height: 100%;
+    background: #ffffff; border-radius: 0; box-shadow: none; padding: 0;
+    opacity: 1; transform: none;
+    display: flex; flex-direction: column; overflow-y: auto;
+    animation: navDrawerFade 0.16s ease;
+  }
+  @keyframes navDrawerFade { from { opacity: 0; } to { opacity: 1; } }
+  .nav-drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 22px 16px 10px; }
+  .nav-drawer-head .brand img { height: 30px; display: block; }
+  .nav-drawer-close { background: none; border: none; cursor: pointer; padding: 8px; color: #1a1a1a; line-height: 0; border-radius: 8px; }
+  .nav-drawer-close:hover { background: #f3f2ef; }
+  #nav-overlay #nav-drawer .nav-link {
+    display: flex; align-items: center; gap: 16px; padding: 15px 22px;
+    font-size: 22px; font-weight: 600; color: #1a1a1a; text-decoration: none;
+    font-family: 'Inter', sans-serif; background: none; border: none; width: 100%;
+    text-align: left; cursor: pointer;
+  }
+  #nav-overlay #nav-drawer .nav-link:hover { background: #f6f6f6; }
+  #nav-overlay #nav-drawer .nav-link svg { flex-shrink: 0; color: #555; width: 22px; height: 22px; }
+  #nav-overlay #nav-drawer .nav-link.external { color: #666; font-size: 15px; }
+  #nav-overlay #nav-drawer .nav-divider { height: 1px; background: #ececec; margin: 10px 22px; }
+  .nav-drawer-bottom { margin-top: auto; padding-bottom: 20px; }
+  .nav-drawer-bottom .nav-cart-count {
+    margin-left: auto; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
+    background: #ff3b6b; color: #fff; font-size: 12px; font-weight: 700;
+    display: none; align-items: center; justify-content: center; line-height: 1;
+  }
+  .nav-drawer-bottom .nav-logout { color: #c92a2a; }
+  .nav-drawer-bottom .nav-logout svg { color: #c92a2a; }`;
   var style = document.createElement('style');
   style.textContent = css;
   document.head.appendChild(style);
 
   var items = [
-    { href: '/manage.html', label: 'My Popcodes', match: function (p, s) { return p === '/manage.html' && s.indexOf('designs') === -1; } },
-    { href: '/manage.html?tab=designs', label: 'My Designs', match: function (p, s) { return p === '/manage.html' && s.indexOf('designs') !== -1; } },
-    { href: '/shop.html', label: 'Shop', match: function (p) { return p === '/shop.html' || p === '/order.html'; } },
+    { href: '/manage.html', label: 'My Popcodes', nav: 'popcodes', match: function (p, s) { return p === '/manage.html' && s.indexOf('designs') === -1; } },
+    { href: '/manage.html?tab=designs', label: 'My Designs', nav: 'designs', match: function (p, s) { return p === '/manage.html' && s.indexOf('designs') !== -1; } },
+    { href: '/shop.html', label: 'Shop', nav: 'shop', match: function (p) { return p === '/shop.html' || p === '/order.html'; } },
     { href: '/views.html', label: 'Past Views', match: function (p) { return p === '/views.html'; } },
     { href: '/howto.html', label: 'How It Works', match: function (p) { return p === '/howto.html'; } },
   ];
   var path = location.pathname;
   var search = location.search || '';
   var nav = items.map(function (it) {
+    // data-nav lets manage.html's client-side tab switch highlight the active link.
+    var dn = it.nav ? ' data-nav="' + it.nav + '"' : '';
     var active = it.match(path, search) ? ' class="active"' : '';
-    return '<a href="' + it.href + '"' + active + '>' + it.label + '</a>';
+    return '<a href="' + it.href + '"' + dn + active + '>' + it.label + '</a>';
   }).join('');
 
   var header =
@@ -85,14 +129,75 @@
 
   if (document.body) document.body.insertAdjacentHTML('afterbegin', header);
 
-  // Fallback hamburger wiring (in case a page doesn't wire #nav-btn itself).
+  var IC_CART = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>';
+  var IC_LOGOUT = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
+  var IC_CLOSE = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+
+  function signOut() {
+    try {
+      if (window.supabase && typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_KEY !== 'undefined') {
+        var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        db.auth.signOut().finally(function () { location.href = '/auth.html'; });
+        return;
+      }
+    } catch (e) {}
+    location.href = '/auth.html';
+  }
+
+  // Turn each page's small dropdown drawer into a Popsa-style full-screen sheet:
+  // add a logo + close header, and pin account / cart / log-out to the bottom.
   document.addEventListener('DOMContentLoaded', function () {
     var btn = document.getElementById('nav-btn');
     var overlay = document.getElementById('nav-overlay');
+    var drawer = document.getElementById('nav-drawer');
+    function close() { if (overlay) overlay.classList.remove('open'); }
+
     if (btn && overlay && !btn.__wired) {
+      btn.__wired = true;
       btn.addEventListener('click', function () { overlay.classList.add('open'); });
-      var bg = document.getElementById('nav-drawer-bg');
-      overlay.addEventListener('click', function (e) { if (e.target === bg) overlay.classList.remove('open'); });
+      overlay.addEventListener('click', function (e) {
+        if (e.target === document.getElementById('nav-drawer-bg')) close();
+      });
+    }
+
+    if (drawer && !drawer.__enhanced) {
+      drawer.__enhanced = true;
+      // Header: logo (same top-left spot as the closed nav) + close button.
+      var head = document.createElement('div');
+      head.className = 'nav-drawer-head';
+      head.innerHTML = '<a href="/manage.html" class="brand"><img src="/assets/Popcode_logo.png" alt="Popcode"/></a>' +
+        '<button class="nav-drawer-close" type="button" aria-label="Close menu">' + IC_CLOSE + '</button>';
+      drawer.insertBefore(head, drawer.firstChild);
+      head.querySelector('.nav-drawer-close').addEventListener('click', close);
+
+      // Bottom-pinned account cluster: My Account (moved from the list) + Cart +
+      // Log Out, plus the external site link. These replace the cart/profile
+      // icons hidden from the mobile bar.
+      var bottom = document.createElement('div');
+      bottom.className = 'nav-drawer-bottom';
+      bottom.appendChild(document.createElement('div')).className = 'nav-divider';
+      var account = drawer.querySelector('.nav-link[href="/account.html"]');
+      if (account) bottom.appendChild(account);
+      var cart = document.createElement('a');
+      cart.className = 'nav-link'; cart.href = '/shop.html';
+      cart.innerHTML = IC_CART + 'Cart<span class="nav-cart-count" id="nav-cart-count">0</span>';
+      bottom.appendChild(cart);
+      var logout = document.createElement('button');
+      logout.type = 'button'; logout.className = 'nav-link nav-logout';
+      logout.innerHTML = IC_LOGOUT + 'Log Out';
+      logout.addEventListener('click', signOut);
+      bottom.appendChild(logout);
+      var external = drawer.querySelector('.nav-link.external');
+      if (external) bottom.appendChild(external);
+      // Drop the now-orphaned divider that used to precede the external link.
+      var strayDivider = drawer.querySelector(':scope > .nav-divider');
+      if (strayDivider) strayDivider.remove();
+      drawer.appendChild(bottom);
+
+      // Close the sheet whenever a link inside it is tapped.
+      drawer.addEventListener('click', function (e) {
+        if (e.target.closest('a.nav-link')) close();
+      });
     }
   });
 })();
