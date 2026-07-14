@@ -48,9 +48,10 @@
   .site-header .hamburger { display: none; }
   @media (max-width: 1040px) { .site-header .nav-inline { margin-left: 40px; } }
   @media (max-width: 760px) {
-    /* Mobile: same 80px logo offset, just the logo + hamburger — cart + profile
-       move into the full-screen drawer. */
-    .site-header { padding: 0 16px 0 80px; gap: 0; }
+    /* Mobile: align the logo to the content margin (28px, where the page's h1
+       sits) instead of the desktop 80px offset, and mirror it on the right so
+       the hamburger sits the same distance from the edge. */
+    .site-header { padding: 0 28px; gap: 0; }
     .site-header .nav-inline { display: none; }
     .site-header .cart-btn, .site-header .profile-btn { display: none; }
     .site-header .hamburger { display: flex; margin-left: auto; }
@@ -71,23 +72,28 @@
     animation: navDrawerFade 0.16s ease;
   }
   @keyframes navDrawerFade { from { opacity: 0; } to { opacity: 1; } }
-  /* Logo + every nav item share the same 80px left edge as the closed header,
-     so the logo never shifts when the menu opens. */
-  .nav-drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 22px 20px 10px 80px; }
+  /* Logo + every nav item share the same 28px left edge as the closed mobile
+     header, so the logo never shifts when the menu opens. */
+  .nav-drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 22px 28px 10px 28px; }
+  /* Override each page's legacy bare .brand margin-left so the open drawer's
+     logo sits at 28px, same as the closed header logo. */
+  .nav-drawer-head .brand { margin-left: 0; }
   .nav-drawer-head .brand img { height: 35px; display: block; }
   .nav-drawer-close { background: none; border: none; cursor: pointer; padding: 8px; color: #1a1a1a; line-height: 0; border-radius: 8px; }
   .nav-drawer-close:hover { background: #f3f2ef; }
   #nav-overlay #nav-drawer .nav-link {
-    display: flex; align-items: center; gap: 14px; padding: 12px 20px 12px 80px;
-    font-size: 16px; font-weight: 600; color: #1a1a1a; text-decoration: none;
+    display: flex; align-items: center; gap: 16px; padding: 15px 20px 15px 28px;
+    font-size: 18px; font-weight: 600; color: #1a1a1a; text-decoration: none;
     font-family: 'Inter', sans-serif; background: none; border: none; width: 100%;
     text-align: left; cursor: pointer;
   }
   #nav-overlay #nav-drawer .nav-link:hover { background: #f6f6f6; }
-  #nav-overlay #nav-drawer .nav-link svg { flex-shrink: 0; color: #555; width: 20px; height: 20px; }
-  #nav-overlay #nav-drawer .nav-link.external { color: #666; font-size: 14px; }
-  #nav-overlay #nav-drawer .nav-divider { height: 1px; background: #ececec; margin: 10px 20px 10px 80px; }
-  .nav-drawer-bottom { margin-top: auto; padding-bottom: 20px; }
+  #nav-overlay #nav-drawer .nav-link svg { flex-shrink: 0; color: #555; width: 24px; height: 24px; }
+  #nav-overlay #nav-drawer .nav-link.external { color: #666; font-size: 16px; }
+  #nav-overlay #nav-drawer .nav-divider { height: 1px; background: #ececec; margin: 8px 20px 8px 28px; }
+  /* Bottom cluster follows the top list directly (no auto-push to the screen
+     bottom) so the two groups sit close together. */
+  .nav-drawer-bottom { margin-top: 2px; padding-bottom: 20px; }
   .nav-drawer-bottom .nav-cart-count {
     margin-left: auto; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
     background: #ff3b6b; color: #fff; font-size: 12px; font-weight: 700;
