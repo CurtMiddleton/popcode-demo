@@ -144,6 +144,11 @@ export default async function handler(req, res) {
     const base = process.env.PUBLIC_BASE_URL || `https://${req.headers.host}`;
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
+      // Show a promo-code box on the Stripe Checkout page. Lets a valid
+      // promotion code (e.g. a 100%-off test/comp code) be entered to reduce
+      // the charged amount. Note: the server re-quote still drives the base
+      // price; the code only discounts from there.
+      allow_promotion_codes: true,
       customer_email: recipient.email,
       client_reference_id: order.id,
       metadata: { print_order_id: order.id },
