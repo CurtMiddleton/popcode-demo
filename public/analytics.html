@@ -139,7 +139,13 @@
       .bv-card { background: #fff; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); padding: 14px 16px; }
       .bv-card h4 { font-size: 13px; font-weight: 700; margin-bottom: 12px; }
       .bv-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-      .bv-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: #f0eeea; flex-shrink: 0; }
+      .bv-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: #f0eeea; flex-shrink: 0; display: block; }
+      .bv-thumb-wrap { position: relative; width: 40px; height: 40px; flex-shrink: 0; border-radius: 8px; overflow: hidden; }
+      .bv-thumb-wrap:has(.bv-video), .bv-thumb-wrap:has(.bv-audio-btn) { cursor: pointer; }
+      .bv-play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; text-shadow: 0 1px 3px rgba(0,0,0,0.7); pointer-events: none; opacity: 0.9; }
+      .bv-thumb-wrap:hover .bv-play { opacity: 0; }
+      .bv-audio-btn { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.32); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 10px; padding: 0; }
+      .bv-audio-btn:hover { background: rgba(0,0,0,0.5); }
       .bv-meta { flex: 1; min-width: 0; }
       .bv-name { font-size: 12px; font-weight: 600; }
       .bv-bartrack { height: 6px; background: #f0eeea; border-radius: 99px; margin-top: 5px; overflow: hidden; }
@@ -1154,12 +1160,13 @@
         try {
           const { data: cols } = await db.from('collections').select('id, slug');
           (cols || []).forEach(c => { cachedSlugId[c.slug] = c.id; });
-          const { data: items } = await db.from('collection_items').select('collection_id, target_index, photo_url, asset_name, media_type');
+          const { data: items } = await db.from('collection_items').select('collection_id, target_index, photo_url, asset_name, media_type, video_url, audio_url');
           (items || []).forEach(it => {
             if (!cachedThumbs[it.collection_id]) cachedThumbs[it.collection_id] = {};
             if (cachedThumbs[it.collection_id][it.target_index] == null) {
               cachedThumbs[it.collection_id][it.target_index] = {
                 url: it.photo_url || '', name: it.asset_name || '', media: it.media_type || 'video',
+                video: it.video_url || '', audio: it.audio_url || '',
               };
             }
           });
@@ -1209,9 +1216,20 @@
               const t = thumbs[ti] || {};
               const label = t.name || ('Photo ' + (ti + 1));
               const playWord = t.media === 'audio' ? 'listened' : 'watched';
-              const img = t.url
-                ? '<img class="bv-thumb" src="' + encodeURI(t.url) + '" alt="" loading="lazy">'
-                : '<div class="bv-thumb"></div>';
+              let thumbHtml;
+              if (t.media !== 'audio' && t.video) {
+                // Video asset → hover-to-play muted preview (poster = the photo).
+                thumbHtml = '<video class="bv-thumb bv-video" src="' + encodeURI(t.video) + '"' +
+                  (t.url ? ' poster="' + encodeURI(t.url) + '"' : '') + ' muted loop playsinline preload="none"></video>' +
+                  '<span class="bv-play">▶</span>';
+              } else if (t.media === 'audio' && t.audio) {
+                // Audio asset → click-to-play button over the photo.
+                thumbHtml = (t.url ? '<img class="bv-thumb" src="' + encodeURI(t.url) + '" alt="" loading="lazy">' : '<div class="bv-thumb"></div>') +
+                  '<button class="bv-audio-btn" data-audio="' + encodeURI(t.audio) + '" title="Play audio">▶</button>';
+              } else {
+                thumbHtml = t.url ? '<img class="bv-thumb" src="' + encodeURI(t.url) + '" alt="" loading="lazy">' : '<div class="bv-thumb"></div>';
+              }
+              const img = '<div class="bv-thumb-wrap">' + thumbHtml + '</div>';
               return '<div class="bv-row">' + img +
                 '<div class="bv-meta">' +
                   '<div class="bv-name">' + escapeHtml(label) + '</div>' +
@@ -1227,7 +1245,30 @@
         }).join('');
 
         wrap.innerHTML = '<div class="byvideo-grid">' + cards + '</div>';
+
+        // Video: hover (desktop) or tap (touch) to play the muted preview.
+        wrap.querySelectorAll('.bv-video').forEach(v => {
+          v.addEventListener('mouseenter', () => { v.play().catch(() => {}); });
+          v.addEventListener('mouseleave', () => { v.pause(); try { v.currentTime = 0; } catch (e) {} });
+          v.addEventListener('click', () => { if (v.paused) v.play().catch(() => {}); else v.pause(); });
+        });
+        // Audio: click the button to toggle playback (one at a time).
+        wrap.querySelectorAll('.bv-audio-btn').forEach(btn => {
+          const audio = new Audio();
+          btn.addEventListener('click', () => {
+            if (byVideoAudio && byVideoAudio !== audio) { byVideoAudio.pause(); if (byVideoAudio._btn) byVideoAudio._btn.textContent = '▶'; }
+            if (audio.paused) {
+              if (!audio.src) audio.src = btn.dataset.audio;
+              audio._btn = btn;
+              audio.play().then(() => { btn.textContent = '❚❚'; byVideoAudio = audio; }).catch(() => {});
+              audio.onended = () => { btn.textContent = '▶'; };
+            } else {
+              audio.pause(); btn.textContent = '▶';
+            }
+          });
+        });
       }
+      let byVideoAudio = null;
 
       async function loadAnalytics() {
         document.getElementById('main-content').innerHTML =
