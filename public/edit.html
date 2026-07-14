@@ -161,6 +161,10 @@
       .asset-name-input { width: 290px; max-width: 100%; margin: 0 auto 12px; display: block; padding: 8px 12px; border-radius: 10px; border: 1.5px solid #e0ddd6; font-size: 13px; font-family: 'Inter', sans-serif; outline: none; text-align: center; color: #1a1a1a; }
       .asset-name-input:focus { border-color: #1a1a1a; }
       .edit-main .asset-name-input { width: 430px; }
+      /* Read-only per-photo engagement (creator's own scan metrics). */
+      .asset-stats { width: 290px; max-width: 100%; margin: -6px auto 12px; text-align: center; font-size: 11px; color: #999; font-weight: 600; }
+      .asset-stats b { color: #1a1a1a; }
+      .edit-main .asset-stats { width: 430px; }
       .remove-page-btn { background: #1a1a1a; border: none; color: white; border-radius: 50%; width: 32px; height: 32px; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 0; flex-shrink: 0; }
       .remove-page-btn:hover { background: #333; }
       .upload-row { display: flex; gap: 24px; justify-content: flex-start; }
@@ -1194,6 +1198,26 @@
 
         existingItems.forEach(item => renderExistingPage(item));
         renumberPages();
+        loadEngagement();
+      }
+
+      // Read-only per-photo engagement for the creator's own project.
+      async function loadEngagement() {
+        try {
+          const { data, error } = await db.rpc('get_my_target_metrics');
+          if (error) return; // RPC not installed yet — leave the strip blank
+          const map = {};
+          (data || []).forEach(r => { if (r.slug === slug) map[r.target_index] = r; });
+          existingItems.forEach(item => {
+            const el = document.getElementById('stats-existing-' + item.id);
+            if (!el) return;
+            const m = map[item.target_index];
+            if (!m) { el.textContent = 'No scans yet'; return; }
+            const word = getExistingMediaType(item) === 'audio' ? 'listened' : 'watched';
+            el.innerHTML = '<b>' + Number(m.found_count) + '</b> scans · <b>' + Number(m.play_count) + '</b> ' + word +
+              ' · <b>' + Number(m.complete_count) + '</b> finished';
+          });
+        } catch (e) { /* silent — never block the editor */ }
       }
 
       // ── Render existing page (tap photo or video to replace) ─────────────────
@@ -1224,6 +1248,7 @@
             <button class="remove-page-btn" title="Remove page"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
           </div>
           <input class="asset-name-input" id="assetname-${key}" type="text" maxlength="60" placeholder="Name this photo (optional)" value="${escapeHtml(item.asset_name || '')}"/>
+          <div class="asset-stats" id="stats-existing-${item.id}"></div>
           <div class="upload-row">
             <div class="upload-wrapper">
               <label class="upload-btn selected replaceable" id="photo-btn-${key}" title="Tap to replace photo">
