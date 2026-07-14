@@ -14,11 +14,17 @@
   var css = `
   .site-header {
     position: sticky; top: 0; z-index: 50; width: 100vw;
-    background:
-      linear-gradient(to right, #ffffff 0%, rgba(255,255,255,0) 16%, rgba(255,255,255,0) 84%, #ffffff 100%),
-      linear-gradient(to bottom, #ececec 0%, #ffffff 100%);
+    background: #ffffff;
     padding: 0 28px; height: 100px; min-height: 0; display: flex; align-items: center; justify-content: flex-start; gap: 0;
     margin: 0; align-self: stretch;
+  }
+  /* Soft gray shelf that starts just below the 100px white nav and fades down +
+     out to white at the left/right, defining the nav edge from the content. */
+  .site-header::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 72px; pointer-events: none;
+    background: linear-gradient(to bottom, #e6e6e6 0%, rgba(230,230,230,0) 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 16%, #000 84%, transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0%, #000 16%, #000 84%, transparent 100%);
   }
   .site-header .brand { display: flex; align-items: center; flex-shrink: 0; margin-left: 52px; }
   .site-header .brand img { height: 32px; display: block; }
