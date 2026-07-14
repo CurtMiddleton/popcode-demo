@@ -110,6 +110,24 @@
       .prints-cards { grid-template-columns: repeat(4, 1fr); }
       @media (max-width: 720px) { .prints-cards { grid-template-columns: repeat(2, 1fr); } }
 
+      /* Expandable print-order detail editor */
+      tr.print-row { cursor: pointer; }
+      .pd-caret { display: inline-block; color: #bbb; transition: transform 0.15s; font-size: 10px; }
+      tr.print-row.pd-open .pd-caret { transform: rotate(90deg); color: #1a1a1a; }
+      .pd-detail-cell { background: #fbfaf8; padding: 0 !important; }
+      .pd-grid { padding: 18px 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+      @media (max-width: 720px) { .pd-grid { grid-template-columns: 1fr; } }
+      .pd-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #999; margin-bottom: 4px; }
+      .pd-title { font-family: 'CooperBT', Georgia, serif; font-size: 20px; line-height: 1.1; margin-bottom: 2px; }
+      .pd-field { width: 100%; padding: 9px 12px; border-radius: 10px; border: 1.5px solid #e0ddd6; font-size: 13px; font-family: 'Inter', sans-serif; outline: none; background: #fff; color: #1a1a1a; }
+      .pd-field:focus { border-color: #1a1a1a; }
+      textarea.pd-field { resize: vertical; }
+      .pd-btn { padding: 8px 14px; border-radius: 12px; border: 1px solid #e0ddd6; background: #fff; font-size: 12px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; color: #1a1a1a; text-decoration: none; display: inline-block; }
+      .pd-btn.pd-save { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+      .pd-btn.pd-resubmit { color: #c92a2a; border-color: #f0c9c9; }
+      .pd-btn:disabled { opacity: 0.5; cursor: default; }
+      .pd-msg { font-size: 12px; margin-top: 10px; min-height: 16px; }
+
       /* Tabs */
       .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 22px; border-bottom: 1px solid #ececec; }
       .tab { padding: 9px 16px; border: none; background: none; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 700; color: #999; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
@@ -948,47 +966,151 @@
             const buyerEmail = o.buyer_email || r.email || '';
             const product = (o.product_type ? o.product_type.charAt(0).toUpperCase() + o.product_type.slice(1) : '—') +
               (o.sku ? ' <span class="muted">· ' + escapeHtml(o.sku) + '</span>' : '');
-            const asset = Array.isArray(o.asset_urls) && o.asset_urls[0] && o.asset_urls[0].url;
-            const pid = o.prodigi_order_id;
-            const pidCell = pid
-              ? (pid.indexOf('DRYRUN') === 0
-                  ? '<span class="muted">dry-run</span>'
-                  : '<span style="font-family:monospace;font-size:10.5px">' + escapeHtml(pid) + '</span>')
-              : '<span class="muted">—</span>';
-            const errMsg = (o.status === 'prodigi_failed') ? prodigiErr(o.prodigi_response) : '';
-            const retryable = ACTION_NEEDED.has(o.status) && !o.prodigi_order_id;
-            const actionCell = retryable
-              ? '<button class="retry-btn" data-id="' + o.id + '">Retry</button>' +
-                (errMsg ? '<div class="prints-err">' + escapeHtml(errMsg) + '</div>' : '')
-              : (asset ? '<a href="' + encodeURI(asset) + '" target="_blank" rel="noopener" style="font-size:11px;font-weight:700;color:#3b5bdb;text-decoration:none">Asset ↗</a>' : '');
-
-            return '<tr>' +
+            return '<tr class="print-row" data-oid="' + o.id + '">' +
+              '<td style="width:22px"><span class="pd-caret">▶</span></td>' +
               '<td class="muted" style="white-space:nowrap">' + formatDate(o.created_at) + '</td>' +
+              '<td style="font-weight:700">' + escapeHtml(o.project_name || '—') + '</td>' +
               '<td><div style="font-weight:600">' + escapeHtml(buyerName) + '</div>' +
                 (buyerEmail ? '<div class="muted" style="font-size:10.5px">' + escapeHtml(buyerEmail) + '</div>' : '') + '</td>' +
-              '<td>' + product + '</td>' +
-              '<td style="text-align:center">' + (o.copies || 1) + '</td>' +
+              '<td>' + product + ' <span class="muted" style="font-size:10px">× ' + (o.copies || 1) + '</span></td>' +
               '<td style="font-weight:700;white-space:nowrap">' + money(o.total_charged_minor, o.currency) + '</td>' +
               '<td><span class="ps ' + (PS_CLASS[o.status] || 'ps-gray') + '">' + (PS_LABEL[o.status] || o.status) + '</span></td>' +
-              '<td>' + pidCell + '</td>' +
-              '<td>' + actionCell + '</td>' +
-            '</tr>';
+            '</tr>' +
+            '<tr class="pd-row" id="pd-' + o.id + '" style="display:none"><td class="pd-detail-cell" colspan="7">' + buildPrintDetail(o) + '</td></tr>';
           }).join('');
 
           table =
             '<div class="table-wrap"><table>' +
-              '<thead><tr><th>Date</th><th>Buyer</th><th>Product</th><th style="text-align:center">Qty</th><th>Amount</th><th>Status</th><th>Prodigi ID</th><th>Action</th></tr></thead>' +
+              '<thead><tr><th></th><th>Date</th><th>Project</th><th>Buyer</th><th>Product</th><th>Amount</th><th>Status</th></tr></thead>' +
               '<tbody>' + rows + '</tbody>' +
             '</table></div>';
         }
 
         el.innerHTML =
           '<div class="section"><div class="section-title" style="margin-bottom:12px">Print Orders</div>' +
+          '<p class="muted" style="font-size:12px;margin:-4px 0 12px">Click an order to edit status, add a tracking link, resubmit, or preflight its assets.</p>' +
           cards + table + '</div>';
 
-        el.querySelectorAll('.retry-btn').forEach(btn => {
-          btn.addEventListener('click', () => retryPrintOrder(btn.dataset.id, btn));
+        el.querySelectorAll('tr.print-row').forEach(row => {
+          row.addEventListener('click', () => {
+            const oid = row.dataset.oid;
+            const detail = document.getElementById('pd-' + oid);
+            if (!detail) return;
+            const open = detail.style.display !== 'none';
+            detail.style.display = open ? 'none' : '';
+            row.classList.toggle('pd-open', !open);
+          });
         });
+        el.querySelectorAll('.pd-row').forEach(dr => {
+          const oid = dr.id.replace('pd-', '');
+          const saveB = dr.querySelector('.pd-save');
+          const pfB = dr.querySelector('.pd-preflight');
+          const rsB = dr.querySelector('.pd-resubmit');
+          if (saveB) saveB.addEventListener('click', () => savePrintOrder(oid, dr));
+          if (pfB) pfB.addEventListener('click', () => preflightPrintOrder(oid, dr));
+          if (rsB) rsB.addEventListener('click', () => retryPrintOrder(oid, rsB));
+        });
+      }
+
+      function escapeAttr(s) { return escapeHtml(String(s == null ? '' : s)).replace(/"/g, '&quot;'); }
+
+      function printStatusOptions(cur) {
+        return ['pending', 'paid', 'submitting', 'submitted', 'in_production', 'shipped', 'complete', 'prodigi_failed', 'payment_failed', 'cancelled']
+          .map(s => '<option value="' + s + '"' + (s === cur ? ' selected' : '') + '>' + (PS_LABEL[s] || s) + '</option>').join('');
+      }
+
+      function buildPrintDetail(o) {
+        const r = o.recipient || {};
+        const a = r.address || {};
+        const addr = [a.line1, a.line2, [a.townOrCity, a.stateOrCounty, a.postalOrZipCode].filter(Boolean).join(', '), a.countryCode]
+          .filter(Boolean).map(escapeHtml).join('<br>');
+        const asset = Array.isArray(o.asset_urls) && o.asset_urls[0] && o.asset_urls[0].url;
+        const retryable = ACTION_NEEDED.has(o.status) && !o.prodigi_order_id;
+        const errMsg = (o.status === 'prodigi_failed') ? prodigiErr(o.prodigi_response) : '';
+        const pid = o.prodigi_order_id ? escapeHtml(o.prodigi_order_id) : '—';
+        return '<div class="pd-grid">' +
+          '<div>' +
+            '<div class="pd-title">' + escapeHtml(o.project_name || o.sku || 'Order') + '</div>' +
+            '<div class="muted" style="font-size:12px;margin-bottom:14px">' + escapeHtml((o.product_type || '') + ' · ' + (o.sku || '')) + ' · Qty ' + (o.copies || 1) + '</div>' +
+            '<div class="pd-label">Ship to</div>' +
+            '<div style="font-size:12px;line-height:1.5;margin-bottom:12px">' + escapeHtml(r.name || '—') + '<br>' + (addr || '<span class="muted">no address</span>') +
+              ((r.email || o.buyer_email) ? '<br><span class="muted">' + escapeHtml(r.email || o.buyer_email) + '</span>' : '') + '</div>' +
+            '<div class="pd-label">Vendor order ID</div>' +
+            '<div style="font-family:monospace;font-size:12px;margin-bottom:12px">' + pid + '</div>' +
+            '<div class="pd-label">Amount</div>' +
+            '<div style="font-weight:700">' + money(o.total_charged_minor, o.currency) + '</div>' +
+            (errMsg ? '<div class="prints-err" style="margin-top:12px">' + escapeHtml(errMsg) + '</div>' : '') +
+          '</div>' +
+          '<div>' +
+            '<div class="pd-label">Status</div>' +
+            '<select class="pd-field pd-status">' + printStatusOptions(o.status) + '</select>' +
+            '<div class="pd-label" style="margin-top:12px">Tracking URL</div>' +
+            '<input class="pd-field pd-tracking" value="' + escapeAttr(o.tracking_url || '') + '" placeholder="https://…">' +
+            '<div class="pd-label" style="margin-top:12px">Notes</div>' +
+            '<textarea class="pd-field pd-notes" rows="3" placeholder="Internal notes">' + escapeHtml(o.admin_notes || '') + '</textarea>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">' +
+              '<button class="pd-btn pd-save">Save changes</button>' +
+              '<button class="pd-btn pd-preflight">Preflight</button>' +
+              (retryable ? '<button class="pd-btn pd-resubmit">Resubmit</button>' : '') +
+              (asset ? '<a class="pd-btn pd-preview" href="' + encodeURI(asset) + '" target="_blank" rel="noopener">Preview asset ↗</a>' : '') +
+            '</div>' +
+            '<div class="pd-msg"></div>' +
+          '</div>' +
+        '</div>';
+      }
+
+      async function savePrintOrder(oid, dr) {
+        const status = dr.querySelector('.pd-status').value;
+        const tracking_url = dr.querySelector('.pd-tracking').value;
+        const admin_notes = dr.querySelector('.pd-notes').value;
+        const btn = dr.querySelector('.pd-save');
+        const msg = dr.querySelector('.pd-msg');
+        btn.disabled = true; const t = btn.textContent; btn.textContent = 'Saving…';
+        try {
+          const { data: { session } } = await db.auth.getSession();
+          const token = session && session.access_token;
+          const resp = await fetch('/api/update-print-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ orderId: oid, status, tracking_url, admin_notes }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+          const o = (cachedPrints || []).find(x => x.id === oid);
+          if (o) { o.status = status; o.tracking_url = tracking_url; o.admin_notes = admin_notes; }
+          renderPrints();
+          const d = document.getElementById('pd-' + oid);
+          const row = document.querySelector('tr.print-row[data-oid="' + oid + '"]');
+          if (d) { d.style.display = ''; if (row) row.classList.add('pd-open'); const m = d.querySelector('.pd-msg'); if (m) { m.textContent = 'Saved.'; m.style.color = '#2b8a3e'; } }
+        } catch (e) {
+          msg.textContent = 'Save failed: ' + (e.message || e); msg.style.color = '#c92a2a';
+          btn.disabled = false; btn.textContent = t;
+        }
+      }
+
+      async function preflightPrintOrder(oid, dr) {
+        const btn = dr.querySelector('.pd-preflight');
+        const msg = dr.querySelector('.pd-msg');
+        btn.disabled = true; const t = btn.textContent; btn.textContent = 'Checking…';
+        try {
+          const { data: { session } } = await db.auth.getSession();
+          const token = session && session.access_token;
+          const resp = await fetch('/api/update-print-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ orderId: oid, action: 'preflight' }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+          const lines = (data.results || []).map(r =>
+            (r.ok ? '✓' : '✗') + ' ' + (r.contentLength ? Math.round(r.contentLength / 1024) + ' KB · ' : '') + (r.status || r.error || '')
+          ).join('<br>');
+          msg.innerHTML = '<span style="color:' + (data.ok ? '#2b8a3e' : '#c92a2a') + '">' + (data.ok ? 'All assets reachable' : 'Asset problem') + '</span>' +
+            (lines ? '<div class="muted" style="font-size:11px;margin-top:3px">' + lines + '</div>' : (data.message ? '<div class="muted">' + escapeHtml(data.message) + '</div>' : ''));
+        } catch (e) {
+          msg.textContent = 'Preflight failed: ' + (e.message || e); msg.style.color = '#c92a2a';
+        }
+        btn.disabled = false; btn.textContent = t;
       }
 
       async function retryPrintOrder(orderId, btn) {
