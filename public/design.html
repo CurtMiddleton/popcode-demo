@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <script src="https://browser.sentry-cdn.com/10.59.0/bundle.min.js" integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn" crossorigin="anonymous"></script>
+    <script src="/sentry-init.js"></script>
+    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <title>Popcode — Upload Photos</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { min-height: 100vh; background: #ffffff; font-family: 'Inter', sans-serif; color: #1a1a1a; padding-bottom: 96px; }
+
+      .flow-head { background: #f6f6f5; padding: 26px 40px 34px; }
+      .back-btn { background: none; border: none; cursor: pointer; padding: 6px; margin-bottom: 18px; color: #1a1a1a; }
+      .flow-head h1 { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 42px; letter-spacing: -0.02em; }
+      .flow-head .fh-sub { color: #6b6b6b; font-size: 17px; margin-top: 8px; }
+      @media (max-width: 620px) { .flow-head { padding: 20px 22px 26px; } .flow-head h1 { font-size: 30px; } }
+
+      .wrap { max-width: 1180px; margin: 0 auto; padding: 30px 40px; }
+      @media (max-width: 620px) { .wrap { padding: 22px; } }
+
+      /* Empty dropzone */
+      .dropzone {
+        border: 2px dashed #d7d7d4; border-radius: 16px; min-height: 560px;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+        padding: 40px; transition: border-color 0.15s, background 0.15s;
+      }
+      .dropzone.drag { border-color: #7657FC; background: #faf9ff; }
+      .dz-icon { font-size: 46px; margin-bottom: 22px; }
+      .dz-title { font-weight: 800; font-size: 30px; letter-spacing: -0.01em; }
+      .dz-or { color: #9a9a9a; margin: 14px 0; }
+      .dz-btn {
+        display: block; width: 360px; max-width: 80vw; margin: 10px auto 0; border: none; border-radius: 12px;
+        padding: 16px; font-size: 16px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif;
+      }
+      .dz-btn.primary { background: #1f1f1f; color: #fff; }
+      .dz-btn.secondary { background: #efefee; color: #1a1a1a; }
+      .dz-note { color: #8a8a8a; font-size: 14px; margin-top: 30px; line-height: 1.6; }
+
+      /* Selected photos grid */
+      .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+      .pg-cell { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: #eee center/cover; }
+      .pg-cell .chk {
+        position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 50%;
+        background: #2dc0c5; color: #fff; display: flex; align-items: center; justify-content: center;
+      }
+      .pg-cell .rm {
+        position: absolute; top: 8px; left: 8px; width: 26px; height: 26px; border-radius: 50%;
+        background: rgba(0,0,0,0.55); color: #fff; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1;
+      }
+      .pg-add {
+        aspect-ratio: 1; border: 2px dashed #d7d7d4; border-radius: 12px; background: #fafafa; cursor: pointer;
+        display: flex; align-items: center; justify-content: center; color: #b0b0b0;
+      }
+      .pg-add:hover { border-color: #7657FC; color: #7657FC; }
+
+      /* Sticky footer */
+      .flow-foot {
+        position: fixed; left: 0; right: 0; bottom: 0; background: #f6f6f5; border-top: 1px solid #e6e6e4;
+        padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; gap: 16px; z-index: 20;
+      }
+      .ff-status .ff-count { font-weight: 700; font-size: 15px; }
+      .ff-status .ff-note { color: #8a8a8a; font-size: 13px; }
+      .ff-actions { display: flex; gap: 12px; }
+      .ff-btn { border: none; border-radius: 12px; padding: 13px 22px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .ff-btn.ghost { background: #e7e7e5; color: #1a1a1a; }
+      .ff-btn.primary { background: #1f1f1f; color: #fff; }
+      .ff-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+      @media (max-width: 620px) { .flow-foot { padding: 12px 18px; } .ff-btn { padding: 12px 16px; font-size: 14px; } }
+
+      /* Overlays */
+      .ov { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 60; }
+      .ov.open { display: flex; }
+      /* Previous uploads picker */
+      .lib-sheet { background: #fff; width: 100%; max-width: 1000px; max-height: 88vh; border-radius: 18px; display: flex; flex-direction: column; overflow: hidden; }
+      .lib-top { display: flex; align-items: center; justify-content: space-between; padding: 20px 26px; border-bottom: 1px solid #eee; }
+      .lib-top .lib-count { font-weight: 700; font-size: 18px; }
+      .lib-x { background: none; border: none; font-size: 26px; cursor: pointer; color: #666; line-height: 1; }
+      .lib-done { background: #1f1f1f; color: #fff; border: none; border-radius: 12px; padding: 10px 20px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .lib-done:disabled { opacity: 0.45; cursor: not-allowed; }
+      .lib-body { padding: 22px 26px; overflow-y: auto; }
+      .lib-group { font-weight: 700; color: #444; margin: 6px 0 14px; }
+      .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+      .lib-cell { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #eee center/cover; cursor: pointer; }
+      .lib-cell .lchk { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 50%; background: rgba(255,255,255,0.85); border: 2px solid #fff; display: flex; align-items: center; justify-content: center; }
+      .lib-cell.sel .lchk { background: #2dc0c5; }
+      .lib-cell.sel::after { content: ''; position: absolute; inset: 0; box-shadow: inset 0 0 0 3px #2dc0c5; border-radius: 8px; }
+      .lib-empty { color: #8a857d; font-size: 15px; padding: 30px; text-align: center; }
+
+      /* Add title modal */
+      .title-sheet { background: #fff; width: 100%; max-width: 1000px; border-radius: 18px; padding: 26px 30px 22px; }
+      .title-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+      .title-top h2 { font-weight: 700; font-size: 22px; }
+      .title-input {
+        width: 100%; min-height: 220px; border: none; outline: none; resize: none;
+        font-family: 'Inter', sans-serif; font-size: 30px; font-weight: 600; text-align: center; color: #1a1a1a;
+        display: flex; align-items: center; padding: 40px 10px;
+      }
+      .title-input::placeholder { color: #cfcfcf; }
+      .title-bar { display: flex; align-items: center; justify-content: flex-end; gap: 18px; margin-top: 10px; }
+      .title-count { color: #9a9a9a; font-size: 14px; }
+      .title-save { background: #1f1f1f; color: #fff; border: none; border-radius: 12px; padding: 12px 26px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .title-save:disabled { opacity: 0.45; cursor: not-allowed; }
+
+      .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 12px 20px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 90; }
+      .toast.show { opacity: 1; }
+
+      .busy { position: fixed; inset: 0; background: rgba(255,255,255,0.9); display: none; align-items: center; justify-content: center; flex-direction: column; gap: 16px; z-index: 100; }
+      .busy.open { display: flex; }
+      .spinner { width: 40px; height: 40px; border: 4px solid #eee; border-top-color: #7657FC; border-radius: 50%; animation: spin 0.8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .busy-label { color: #555; font-size: 15px; }
+    </style>
+  </head>
+  <body>
+    <div class="flow-head">
+      <button class="back-btn" id="back-btn" aria-label="Back">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      </button>
+      <h1>Upload Photos</h1>
+      <div class="fh-sub" id="fh-sub">Add photos to get started</div>
+    </div>
+
+    <div class="wrap" id="wrap"></div>
+
+    <div class="flow-foot" id="flow-foot" style="display:none;">
+      <div class="ff-status">
+        <div class="ff-count" id="ff-count">0 photos selected</div>
+        <div class="ff-note" id="ff-note">Uploads ready</div>
+      </div>
+      <div class="ff-actions">
+        <button class="ff-btn ghost" id="add-more">Add More Photos</button>
+        <button class="ff-btn primary" id="next-btn" disabled>Next</button>
+      </div>
+    </div>
+
+    <!-- Previous uploads picker -->
+    <div class="ov" id="lib-ov">
+      <div class="lib-sheet">
+        <div class="lib-top">
+          <button class="lib-x" id="lib-x" aria-label="Close">&times;</button>
+          <span class="lib-count" id="lib-count">0 selected</span>
+          <button class="lib-done" id="lib-done" disabled>Done ✓</button>
+        </div>
+        <div class="lib-body" id="lib-body"><div class="lib-empty">Loading your photos…</div></div>
+      </div>
+    </div>
+
+    <!-- Add title -->
+    <div class="ov" id="title-ov">
+      <div class="title-sheet">
+        <div class="title-top">
+          <h2>Add Title</h2>
+          <button class="lib-x" id="title-x" aria-label="Close">&times;</button>
+        </div>
+        <textarea class="title-input" id="title-input" maxlength="36" rows="1" placeholder=""></textarea>
+        <div class="title-bar">
+          <span class="title-count" id="title-count">0 / 36</span>
+          <button class="title-save" id="title-save" disabled>Save</button>
+        </div>
+      </div>
+    </div>
+
+    <input type="file" id="file-input" accept="image/*" multiple style="display:none">
+    <div class="toast" id="toast"></div>
+    <div class="busy" id="busy"><div class="spinner"></div><div class="busy-label" id="busy-label">Creating your Popcode…</div></div>
+
+    <script>
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      const qs = new URLSearchParams(location.search);
+      const productType = qs.get('type') || 'print';
+      const PRODUCT_LABEL = { print: 'prints', tile: 'photo tiles', canvas: 'canvas', framed: 'framed prints', calendar: 'calendar' };
+      const PRODUCT_MIN = { tile: 3, calendar: 6 };
+      const minPhotos = PRODUCT_MIN[productType] || 1;
+      const productWord = PRODUCT_LABEL[productType] || 'prints';
+      const MAX_PHOTO_MB = 15;
+
+      let currentUser = null;
+      let items = [];         // { id, src, file?, name, libUrl? }
+      let libPhotos = [];     // { url, name }
+      let libSel = new Set();
+      let uid = 0;
+
+      document.getElementById('fh-sub').textContent = minPhotos > 1
+        ? `Add a minimum of ${minPhotos} photos to get started`
+        : 'Add photos to get started';
+
+      db.auth.getSession().then(({ data }) => {
+        if (!data.session) { location.href = '/auth.html?next=' + encodeURIComponent(location.pathname + location.search); return; }
+        currentUser = data.session.user;
+        render();
+      });
+
+      document.getElementById('back-btn').addEventListener('click', () => history.length > 1 ? history.back() : (location.href = '/shop.html'));
+
+      function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2200); }
+      function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])); }
+
+      // ---------- render ----------
+      function render() {
+        const wrap = document.getElementById('wrap');
+        const foot = document.getElementById('flow-foot');
+        if (!items.length) {
+          foot.style.display = 'none';
+          wrap.innerHTML = `
+            <div class="dropzone" id="dropzone">
+              <div class="dz-icon">🖥️</div>
+              <div class="dz-title">Drag and drop your photos here</div>
+              <div class="dz-or">or</div>
+              <button class="dz-btn primary" id="pick-folder">Select from folder</button>
+              <button class="dz-btn secondary" id="pick-previous">Select from previous uploads</button>
+              <div class="dz-note">We support JPG, PNG, HEIC, WEBP and GIF files.<br>Maximum ${MAX_PHOTO_MB} MB per photo</div>
+            </div>`;
+          wireDropzone();
+        } else {
+          foot.style.display = 'flex';
+          let cells = items.map(it => `
+            <div class="pg-cell" style="background-image:url('${it.src}')">
+              <button class="rm" data-id="${it.id}" title="Remove">&times;</button>
+              <div class="chk"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+            </div>`).join('');
+          cells += `<div class="pg-add" id="pg-add"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>`;
+          wrap.innerHTML = `<div class="photo-grid">${cells}</div>`;
+          wrap.querySelector('#pg-add').addEventListener('click', () => document.getElementById('file-input').click());
+          wrap.querySelectorAll('.rm').forEach(b => b.addEventListener('click', () => { items = items.filter(x => x.id !== b.dataset.id); render(); }));
+        }
+        updateFooter();
+      }
+
+      function updateFooter() {
+        document.getElementById('ff-count').textContent = items.length + ' photo' + (items.length === 1 ? '' : 's') + ' selected';
+        document.getElementById('ff-note').textContent = items.length >= minPhotos ? 'Uploads ready' : `Add ${minPhotos - items.length} more to continue`;
+        document.getElementById('next-btn').disabled = items.length < minPhotos;
+      }
+
+      function wireDropzone() {
+        const dz = document.getElementById('dropzone');
+        document.getElementById('pick-folder').addEventListener('click', () => document.getElementById('file-input').click());
+        document.getElementById('pick-previous').addEventListener('click', openLibrary);
+        ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('drag'); }));
+        ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('drag'); }));
+        dz.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+      }
+
+      // ---------- files ----------
+      document.getElementById('file-input').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+      document.getElementById('add-more').addEventListener('click', () => document.getElementById('file-input').click());
+
+      function addFiles(fileList) {
+        const files = [...(fileList || [])].filter(f => f.type.startsWith('image/'));
+        let skipped = 0;
+        files.forEach(f => {
+          if (f.size > MAX_PHOTO_MB * 1024 * 1024) { skipped++; return; }
+          items.push({ id: 'p' + (uid++), src: URL.createObjectURL(f), file: f, name: f.name });
+        });
+        if (skipped) toast(`${skipped} photo${skipped === 1 ? '' : 's'} over ${MAX_PHOTO_MB} MB skipped`);
+        render();
+      }
+
+      // ---------- previous uploads library ----------
+      async function openLibrary() {
+        document.getElementById('lib-ov').classList.add('open');
+        libSel = new Set();
+        updateLibCount();
+        if (!libPhotos.length) await loadLibrary();
+        renderLibrary();
+      }
+      async function loadLibrary() {
+        try {
+          const { data: cols } = await db.from('collections').select('id, name, kind').eq('user_id', currentUser.id).order('created_at', { ascending: false });
+          const src = (cols || []).filter(c => !['book', 'print', 'tile', 'canvas', 'calendar'].includes(c.kind));
+          if (!src.length) { libPhotos = []; return; }
+          const ids = src.map(c => c.id);
+          const { data: rows } = await db.from('collection_items').select('collection_id, photo_url, target_index').in('collection_id', ids).order('target_index');
+          const seen = new Set();
+          libPhotos = (rows || []).filter(r => r.photo_url && !seen.has(r.photo_url) && seen.add(r.photo_url)).map(r => ({ url: r.photo_url }));
+        } catch (e) { libPhotos = []; }
+      }
+      function renderLibrary() {
+        const body = document.getElementById('lib-body');
+        if (!libPhotos.length) { body.innerHTML = `<div class="lib-empty">No photos yet — <a href="/create.html">create a Popcode</a> first, then reuse its photos here.</div>`; return; }
+        body.innerHTML = `<div class="lib-group">Your photos</div><div class="lib-grid">` +
+          libPhotos.map((p, i) => `<div class="lib-cell" data-i="${i}" style="background-image:url('${p.url}')"><div class="lchk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div></div>`).join('') +
+          `</div>`;
+        body.querySelectorAll('.lib-cell').forEach(cell => cell.addEventListener('click', () => {
+          const i = +cell.dataset.i;
+          if (libSel.has(i)) { libSel.delete(i); cell.classList.remove('sel'); }
+          else { libSel.add(i); cell.classList.add('sel'); }
+          updateLibCount();
+        }));
+      }
+      function updateLibCount() {
+        document.getElementById('lib-count').textContent = libSel.size + ' selected';
+        document.getElementById('lib-done').disabled = libSel.size === 0;
+      }
+      document.getElementById('lib-x').addEventListener('click', () => document.getElementById('lib-ov').classList.remove('open'));
+      document.getElementById('lib-done').addEventListener('click', () => {
+        [...libSel].forEach(i => { const p = libPhotos[i]; items.push({ id: 'l' + (uid++), src: p.url, libUrl: p.url }); });
+        document.getElementById('lib-ov').classList.remove('open');
+        render();
+      });
+
+      // ---------- add title + create ----------
+      document.getElementById('next-btn').addEventListener('click', () => {
+        if (items.length < minPhotos) return;
+        document.getElementById('title-ov').classList.add('open');
+        const ti = document.getElementById('title-input');
+        ti.placeholder = `Enter a title that describes your ${productWord}`;
+        ti.focus();
+      });
+      const titleInput = document.getElementById('title-input');
+      titleInput.addEventListener('input', () => {
+        document.getElementById('title-count').textContent = titleInput.value.length + ' / 36';
+        document.getElementById('title-save').disabled = titleInput.value.trim().length === 0;
+      });
+      document.getElementById('title-x').addEventListener('click', () => document.getElementById('title-ov').classList.remove('open'));
+      document.getElementById('title-save').addEventListener('click', () => createPopcode(titleInput.value.trim()));
+
+      function randomSlug() { let s = ''; const a = 'abcdefghijklmnopqrstuvwxyz0123456789'; for (let i = 0; i < 8; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
+
+      async function createPopcode(name) {
+        document.getElementById('title-ov').classList.remove('open');
+        const busy = document.getElementById('busy');
+        busy.classList.add('open');
+        try {
+          const slug = randomSlug();
+          const rows = [];
+          for (let i = 0; i < items.length; i++) {
+            const it = items[i];
+            document.getElementById('busy-label').textContent = `Uploading photo ${i + 1} of ${items.length}…`;
+            let url = it.libUrl;
+            if (!url && it.file) {
+              const ext = (it.file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+              const path = `${slug}/photo_${i}.${ext}`;
+              const { error: upErr } = await db.storage.from('experiences').upload(path, it.file, { contentType: it.file.type || 'image/jpeg' });
+              if (upErr) throw upErr;
+              url = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+            }
+            rows.push({ target_index: i, photo_url: url });
+          }
+          document.getElementById('busy-label').textContent = 'Saving…';
+          const { data: col, error: colErr } = await db.from('collections')
+            .insert({ slug, name, user_id: currentUser.id, kind: 'standard' })
+            .select().single();
+          if (colErr) throw colErr;
+          const { error: itErr } = await db.from('collection_items').insert(rows.map(r => ({ ...r, collection_id: col.id })));
+          if (itErr) throw itErr;
+          // On to sizing / pricing / checkout for the chosen product + first photo.
+          location.href = '/order.html?id=' + encodeURIComponent(slug) + '&type=' + encodeURIComponent(productType) + '&photo=0';
+        } catch (e) {
+          busy.classList.remove('open');
+          if (window.Sentry) Sentry.captureException(e);
+          toast('Could not create — ' + (e.message || 'please try again'));
+        }
+      }
+    </script>
+    <script src="/beta-feedback.js"></script>
+  </body>
+</html>

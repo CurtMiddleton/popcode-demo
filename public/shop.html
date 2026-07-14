@@ -105,16 +105,19 @@
       .nav-divider { height: 1px; background: #ececec; margin: 8px 0; }
 
       /* Popcode picker overlay (for print products that need a photo) */
-      .pk-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: flex-end; justify-content: center; z-index: 300; }
+      .pk-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 300; }
       .pk-overlay.open { display: flex; }
-      .pk-sheet { background: #fff; width: 100%; max-width: 560px; border-radius: 18px 18px 0 0; padding: 22px; max-height: 82vh; overflow-y: auto; }
-      .pk-sheet h2 { font-family: 'CooperBT', serif; font-size: 24px; margin-bottom: 4px; }
-      .pk-sub { color: #8a857d; font-size: 14px; margin-bottom: 16px; }
-      .pk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px,1fr)); gap: 12px; }
-      .pk-item { border: none; background: none; cursor: pointer; padding: 0; text-align: center; font-family: inherit; }
-      .pk-thumb { width: 100%; aspect-ratio: 1; border-radius: 10px; background: #e8e4f0 center/cover; }
-      .pk-name { font-size: 12px; color: #444; margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .pk-close { float: right; border: none; background: none; font-size: 24px; cursor: pointer; color: #999; line-height: 1; }
+      .pk-sheet { position: relative; background: #fff; width: 100%; max-width: 860px; border-radius: 20px; padding: 32px 34px; max-height: 88vh; overflow-y: auto; }
+      .pk-sheet h2 { font-family: 'CooperBT', Georgia, serif; font-size: 28px; font-weight: 400; margin-bottom: 4px; }
+      .pk-sub { color: #8a857d; font-size: 15px; margin-bottom: 26px; }
+      .pk-back { background: none; border: none; color: #7657FC; font-weight: 600; font-size: 14px; cursor: pointer; padding: 0; margin-bottom: 16px; font-family: 'Inter', sans-serif; }
+      .pk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap: 22px; }
+      .pk-item { position: relative; border: none; background: none; cursor: pointer; padding: 0; text-align: center; font-family: inherit; }
+      .pk-thumb { position: relative; width: 100%; aspect-ratio: 1; border-radius: 12px; background: #e8e4f0 center/cover; box-shadow: 0 2px 10px rgba(0,0,0,0.08); transition: transform 0.12s, box-shadow 0.12s; }
+      .pk-item:hover .pk-thumb { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.14); }
+      .pk-count { position: absolute; top: 8px; right: 8px; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px; background: rgba(0,0,0,0.62); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; line-height: 1; }
+      .pk-name { font-size: 13px; color: #444; margin-top: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .pk-close { position: absolute; top: 26px; right: 30px; border: none; background: none; font-size: 26px; cursor: pointer; color: #999; line-height: 1; z-index: 2; }
       .pk-empty { color: #8a857d; font-size: 14px; padding: 10px 0 4px; }
     </style>
   </head>
@@ -242,7 +245,8 @@
 
       function chooseProduct(p) {
         if (p.kind === 'build') { window.location.href = '/book.html'; return; }
-        openPicker(p);
+        // Product-first flow: upload/select photos → name it → order (creates a Popcode).
+        window.location.href = '/design.html?type=' + encodeURIComponent(p.type);
       }
 
       async function loadPopcodes() {
@@ -254,12 +258,25 @@
           const ids = popcodes.map(c => c.id);
           const { data: items } = await db.from('collection_items')
             .select('collection_id, photo_url, target_index').in('collection_id', ids).order('target_index');
-          const thumb = {};
-          (items || []).forEach(it => { if (!thumb[it.collection_id] && it.photo_url) thumb[it.collection_id] = it.photo_url; });
-          popcodes.forEach(c => c.thumb = thumb[c.id] || null);
+          popcodes.forEach(c => { c.photos = []; });
+          (items || []).forEach(it => {
+            if (!it.photo_url) return;
+            const c = popcodes.find(x => x.id === it.collection_id);
+            if (!c || c.photos.some(ph => ph.ti === it.target_index)) return; // dedupe by target_index
+            c.photos.push({ url: it.photo_url, ti: it.target_index });
+          });
+          popcodes.forEach(c => { c.thumb = c.photos[0] ? c.photos[0].url : null; c.count = c.photos.length; });
         }
       }
 
+      function goToOrder(slug, p, ti) {
+        window.location.href = '/order.html?id=' + encodeURIComponent(slug)
+          + (p.type ? '&type=' + p.type : '')
+          + (ti != null ? '&photo=' + encodeURIComponent(ti) : '');
+      }
+
+      // Picker step 1: the user's Popcodes. Collections (multi-photo) show a count
+      // pill and drill into their photos; single-image Popcodes go straight to order.
       function openPicker(p) {
         document.getElementById('pk-title').textContent = 'Choose a photo to print';
         document.getElementById('pk-sub').textContent = `Pick one of your Popcodes to order ${p.name.toLowerCase()}.`;
@@ -271,16 +288,38 @@
           popcodes.forEach(c => {
             const b = document.createElement('button');
             b.className = 'pk-item';
-            b.innerHTML = `<div class="pk-thumb" style="${c.thumb ? `background-image:url('${c.thumb}')` : ''}"></div><div class="pk-name">${c.name || c.slug}</div>`;
+            const count = (c.count > 1) ? `<div class="pk-count">${c.count}</div>` : '';
+            b.innerHTML = `<div class="pk-thumb" style="${c.thumb ? `background-image:url('${c.thumb}')` : ''}">${count}</div><div class="pk-name">${escapeHtml(c.name || c.slug)}</div>`;
             b.addEventListener('click', () => {
-              const q = '/order.html?id=' + encodeURIComponent(c.slug) + (p.type ? '&type=' + p.type : '');
-              window.location.href = q;
+              if (c.count > 1) openCollection(c, p);
+              else goToOrder(c.slug, p, c.photos[0] ? c.photos[0].ti : null);
             });
             g.appendChild(b);
           });
         }
         document.getElementById('pk-overlay').classList.add('open');
       }
+
+      // Picker step 2: the photos inside one collection.
+      function openCollection(c, p) {
+        document.getElementById('pk-title').textContent = c.name || c.slug;
+        document.getElementById('pk-sub').textContent = `Pick a photo to order ${p.name.toLowerCase()}.`;
+        const g = document.getElementById('pk-grid');
+        g.innerHTML = `<button class="pk-back" id="pk-back">&larr; All Popcodes</button>`;
+        g.style.gridTemplateColumns = ''; // keep grid; back button spans via placement below
+        const back = g.querySelector('#pk-back');
+        back.style.gridColumn = '1 / -1';
+        c.photos.forEach((ph, i) => {
+          const b = document.createElement('button');
+          b.className = 'pk-item';
+          b.innerHTML = `<div class="pk-thumb" style="${ph.url ? `background-image:url('${ph.url}')` : ''}"></div><div class="pk-name">Photo ${i + 1}</div>`;
+          b.addEventListener('click', () => goToOrder(c.slug, p, ph.ti));
+          g.appendChild(b);
+        });
+        back.addEventListener('click', () => openPicker(p));
+      }
+
+      function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])); }
 
       document.getElementById('pk-close').addEventListener('click', () => document.getElementById('pk-overlay').classList.remove('open'));
       document.getElementById('pk-overlay').addEventListener('click', (e) => { if (e.target.id === 'pk-overlay') e.currentTarget.classList.remove('open'); });
