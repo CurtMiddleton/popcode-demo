@@ -15,7 +15,8 @@
   .site-header {
     position: sticky; top: 0; z-index: 50; width: 100vw;
     background: #ffffff;
-    padding: 0 28px; height: 100px; min-height: 0; display: flex; align-items: center; justify-content: flex-start; gap: 0;
+    /* Logo pinned a constant 80px from the left edge on every page + breakpoint. */
+    padding: 0 28px 0 80px; height: 100px; min-height: 0; display: flex; align-items: center; justify-content: flex-start; gap: 0;
     margin: 0; align-self: stretch;
   }
   /* Soft gray shelf that starts just below the 100px white nav and fades down +
@@ -26,8 +27,8 @@
     -webkit-mask-image: linear-gradient(to right, transparent 0%, transparent 9%, #000 18%, #000 82%, transparent 91%, transparent 100%);
     mask-image: linear-gradient(to right, transparent 0%, transparent 9%, #000 18%, #000 82%, transparent 91%, transparent 100%);
   }
-  .site-header .brand { display: flex; align-items: center; flex-shrink: 0; margin-left: 52px; }
-  .site-header .brand img { height: 32px; display: block; }
+  .site-header .brand { display: flex; align-items: center; flex-shrink: 0; margin-left: 0; }
+  .site-header .brand img { height: 35px; display: block; }
   .site-header .nav-inline { display: flex; align-items: center; gap: 6px; margin-left: 170px; }
   .site-header .nav-inline a {
     color: #8a8a8a; text-decoration: none; font-family: 'Inter', sans-serif;
@@ -47,10 +48,9 @@
   .site-header .hamburger { display: none; }
   @media (max-width: 1040px) { .site-header .nav-inline { margin-left: 40px; } }
   @media (max-width: 760px) {
-    /* Mobile: just the logo (pinned left) and the hamburger — cart + profile
+    /* Mobile: same 80px logo offset, just the logo + hamburger — cart + profile
        move into the full-screen drawer. */
-    .site-header { padding: 0 16px; gap: 0; }
-    .site-header .brand { margin-left: 0; }
+    .site-header { padding: 0 16px 0 80px; gap: 0; }
     .site-header .nav-inline { display: none; }
     .site-header .cart-btn, .site-header .profile-btn { display: none; }
     .site-header .hamburger { display: flex; margin-left: auto; }
@@ -71,20 +71,22 @@
     animation: navDrawerFade 0.16s ease;
   }
   @keyframes navDrawerFade { from { opacity: 0; } to { opacity: 1; } }
-  .nav-drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 22px 16px 10px; }
-  .nav-drawer-head .brand img { height: 30px; display: block; }
+  /* Logo + every nav item share the same 80px left edge as the closed header,
+     so the logo never shifts when the menu opens. */
+  .nav-drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 22px 20px 10px 80px; }
+  .nav-drawer-head .brand img { height: 35px; display: block; }
   .nav-drawer-close { background: none; border: none; cursor: pointer; padding: 8px; color: #1a1a1a; line-height: 0; border-radius: 8px; }
   .nav-drawer-close:hover { background: #f3f2ef; }
   #nav-overlay #nav-drawer .nav-link {
-    display: flex; align-items: center; gap: 16px; padding: 15px 22px;
-    font-size: 22px; font-weight: 600; color: #1a1a1a; text-decoration: none;
+    display: flex; align-items: center; gap: 14px; padding: 12px 20px 12px 80px;
+    font-size: 16px; font-weight: 600; color: #1a1a1a; text-decoration: none;
     font-family: 'Inter', sans-serif; background: none; border: none; width: 100%;
     text-align: left; cursor: pointer;
   }
   #nav-overlay #nav-drawer .nav-link:hover { background: #f6f6f6; }
-  #nav-overlay #nav-drawer .nav-link svg { flex-shrink: 0; color: #555; width: 22px; height: 22px; }
-  #nav-overlay #nav-drawer .nav-link.external { color: #666; font-size: 15px; }
-  #nav-overlay #nav-drawer .nav-divider { height: 1px; background: #ececec; margin: 10px 22px; }
+  #nav-overlay #nav-drawer .nav-link svg { flex-shrink: 0; color: #555; width: 20px; height: 20px; }
+  #nav-overlay #nav-drawer .nav-link.external { color: #666; font-size: 14px; }
+  #nav-overlay #nav-drawer .nav-divider { height: 1px; background: #ececec; margin: 10px 20px 10px 80px; }
   .nav-drawer-bottom { margin-top: auto; padding-bottom: 20px; }
   .nav-drawer-bottom .nav-cart-count {
     margin-left: auto; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
