@@ -55,7 +55,14 @@ policies on `storage.objects`. Those are included in
 - For local testing: `stripe listen --forward-to <preview>/api/stripe-webhook`.
 
 ### 5. Prodigi
-- Get a **sandbox** API key from the Prodigi dashboard.
+- Popcode uses its **own dedicated Prodigi account** (Popcode Inc., on a Popcode Inc.
+  card). This is **separate from Bashō / Curt Middleton Design, LLC**, which owns the
+  original shared account. Never point Popcode at the old shared account's key —
+  keep the two accounts, keys, and billing fully separate.
+- Get a **sandbox** API key from the Popcode Prodigi dashboard. Sandbox and
+  production are **different keys** and each only works against its matching base URL
+  (sandbox key `test_…` → `api.sandbox.prodigi.com`; live key → `api.prodigi.com`).
+  A key/URL mismatch returns `401 NotAuthenticated`.
 - Verify/extend the SKUs in `lib/print/catalog.mjs` against
   `GET https://api.sandbox.prodigi.com/v4.0/products/{sku}` — that endpoint is the
   authoritative source for valid SKUs/attributes/sizes.
@@ -63,13 +70,20 @@ policies on `storage.objects`. Those are included in
 ### 6. Vercel env vars (Production + Preview scope)
 | Var | Example | Notes |
 |---|---|---|
-| `PRODIGI_API_KEY` | `…` | sandbox key first |
-| `PRODIGI_BASE_URL` | `https://api.sandbox.prodigi.com` | prod: `https://api.prodigi.com` |
-| `STRIPE_SECRET_KEY` | `sk_test_…` | live `sk_live_…` at cutover |
+| `PRODIGI_API_KEY` | `test_…` (sandbox) / live key | **Popcode's own account only.** Must match `PRODIGI_BASE_URL`'s environment or Prodigi 401s. Trimmed at read time (a stray newline silently 401s). |
+| `PRODIGI_BASE_URL` | `https://api.sandbox.prodigi.com` | prod: `https://api.prodigi.com`. This URL **is** the sandbox↔production toggle. |
+| `PRODIGI_DRY_RUN` | `true` / *(unset)* | `true` = build the order body but never POST to Prodigi (safe against a live URL); unset/`false` = place real orders. |
+| `STRIPE_SECRET_KEY` | `sk_test_…` | live `sk_live_…`/`rk_live_…` at cutover |
 | `STRIPE_WEBHOOK_SECRET` | `whsec_…` | from the webhook endpoint |
 | `PRINT_MARKUP_MULTIPLIER` | `1.4` | charged = Prodigi cost × this |
 | `PUBLIC_BASE_URL` | `https://popcode.app` | optional; falls back to request host |
-| `SUPABASE_SERVICE_ROLE_KEY` | *(existing)* | already set |
+| `SUPABASE_SERVICE_ROLE_KEY` | *(existing)* | already set (needs Production **and** Preview scope) |
+
+All five Prodigi consumers read the same two vars — `PRODIGI_API_KEY` + `PRODIGI_BASE_URL`
+(both `.trim()`-ed) — so one env swap repoints the whole integration:
+`api/prodigi-quote.js`, `api/create-checkout.js`, `api/finalize-order.js`,
+`api/stripe-webhook.js`, `api/book-spine.js`. `PRODIGI_DRY_RUN` is read by
+`finalize-order.js` + `stripe-webhook.js`.
 
 No client publishable key is needed — the server returns the Checkout `url` and the
 client redirects to it.
@@ -95,9 +109,32 @@ client redirects to it.
 
 ## Production cutover
 
-Swap `PRODIGI_BASE_URL` and the Stripe keys to live, register the live webhook endpoint,
-re-run the migration in prod, create the `print-assets` bucket in prod, and place one
-low-cost real order before announcing.
+Swap `PRODIGI_API_KEY` to Popcode's **live** key, `PRODIGI_BASE_URL` to
+`https://api.prodigi.com`, unset `PRODIGI_DRY_RUN`, switch the Stripe keys to live,
+register the live webhook endpoint, re-run the migration in prod, create the
+`print-assets` bucket in prod, and place one low-cost real order before announcing.
+Verify the live sandbox path first (`test_…` key + `api.sandbox.prodigi.com`) before
+touching the production key — a mismatch between key and base URL is the most common
+failure and returns `401 NotAuthenticated`.
+
+### Repointing to a new/dedicated Prodigi account (env-only)
+
+The account key lives entirely in Vercel env vars — there is nothing hardcoded in the
+repo — so moving Popcode to a different Prodigi account is a pure env swap, no code
+change:
+
+1. **Sandbox first.** Set `PRODIGI_API_KEY` = the new account's sandbox key (`test_…`),
+   `PRODIGI_BASE_URL` = `https://api.sandbox.prodigi.com`, `PRODIGI_DRY_RUN` unset
+   (or `false`), on the **Preview** scope. Redeploy the preview (Vercel env changes
+   apply to the *next* build only).
+2. Place one sandbox order end-to-end and confirm Prodigi accepts it (correct SKU,
+   assets fetch, no auth/verification error). Sandbox orders are free and never print.
+3. **Then production.** Set `PRODIGI_API_KEY` = the new account's **live** key,
+   `PRODIGI_BASE_URL` = `https://api.prodigi.com` on the **Production** scope, and
+   place one low-cost real order.
+
+Do not reuse the previous shared account's key for Popcode — that account belongs to
+Bashō / Curt Middleton Design, LLC.
 
 ## Notes / gotchas
 
