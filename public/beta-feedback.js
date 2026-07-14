@@ -21,7 +21,7 @@
         var email = res && res.data && res.data.session && res.data.session.user && res.data.session.user.email;
         if (!email) return;
         if (email.toLowerCase() !== 'curtmid@gmail.com') return;
-        var nodes = document.querySelectorAll('.nav-link-admin');
+        var nodes = document.querySelectorAll('.nav-link-admin, .admin-only');
         for (var i = 0; i < nodes.length; i++) nodes[i].style.display = '';
       }).catch(function() {});
     } catch (e) { /* silent */ }

@@ -92,6 +92,8 @@
       .badge-video_play    { background: #e8f0fe; color: #3b5bdb; }
       .badge-video_complete{ background: #ede9fe; color: #7657FC; }
       .badge-video_error   { background: #ffe8e8; color: #c92a2a; }
+      .badge-audio_play    { background: #e0f7f4; color: #0f8b81; }
+      .badge-audio_complete{ background: #d6f0e4; color: #1f7a4d; }
 
       /* Print-order status pills + Retry action */
       .ps { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
@@ -362,7 +364,7 @@
         return `<span class="pill ${cls}">${d || 'Unknown'}</span>`;
       }
       function eventBadge(e) {
-        const labels = { scan_open: 'Opened', target_found: 'Photo Found', video_play: 'Video Played', video_complete: 'Completed', video_error: 'Error' };
+        const labels = { scan_open: 'Opened', target_found: 'Photo Found', video_play: 'Video Played', video_complete: 'Video Done', video_error: 'Error', audio_play: 'Audio Played', audio_complete: 'Audio Done' };
         return `<span class="badge badge-${e}">${labels[e] || e}</span>`;
       }
       function countryFlag(code) {
@@ -492,8 +494,8 @@
 
             var opens     = sess.events.filter(function(e) { return e.event_type === 'scan_open'; }).length;
             var found     = sess.events.filter(function(e) { return e.event_type === 'target_found'; }).length;
-            var played    = sess.events.filter(function(e) { return e.event_type === 'video_play'; }).length;
-            var completed = sess.events.filter(function(e) { return e.event_type === 'video_complete'; }).length;
+            var played    = sess.events.filter(function(e) { return e.event_type === 'video_play' || e.event_type === 'audio_play'; }).length;
+            var completed = sess.events.filter(function(e) { return e.event_type === 'video_complete' || e.event_type === 'audio_complete'; }).length;
 
             var detRate  = opens   > 0 ? Math.round(found / opens * 100) + '%'     : '—';
             var compRate = played  > 0 ? Math.round(completed / played * 100) + '%' : '—';
@@ -1131,9 +1133,14 @@
 
         // ── Summary ───────────────────────────────────────────────────────────
         const opens     = evts.filter(e => e.event_type === 'scan_open').length;
-        const plays     = evts.filter(e => e.event_type === 'video_play').length;
-        const completes = evts.filter(e => e.event_type === 'video_complete').length;
-        const errors    = evts.filter(e => e.event_type === 'video_error').length;
+        // Plays / completions cover BOTH video and audio popcodes.
+        const vPlays     = evts.filter(e => e.event_type === 'video_play').length;
+        const aPlays     = evts.filter(e => e.event_type === 'audio_play').length;
+        const plays      = vPlays + aPlays;
+        const vCompletes = evts.filter(e => e.event_type === 'video_complete').length;
+        const aCompletes = evts.filter(e => e.event_type === 'audio_complete').length;
+        const completes  = vCompletes + aCompletes;
+        const errors     = evts.filter(e => e.event_type === 'video_error').length;
         const uniqueIPs = new Set(evts.map(e => e.ip_address).filter(Boolean)).size;
 
         // Detection rate = sessions with at least one target_found / total opens
@@ -1159,11 +1166,13 @@
             browserCounts[b] = (browserCounts[b] || 0) + 1;
           }
           const s = e.slug;
-          if (!colStats[s]) colStats[s] = { opens:0, found:0, plays:0, completes:0 };
-          if (e.event_type === 'scan_open')      colStats[s].opens++;
-          if (e.event_type === 'target_found')   colStats[s].found++;
-          if (e.event_type === 'video_play')     colStats[s].plays++;
-          if (e.event_type === 'video_complete') colStats[s].completes++;
+          if (!colStats[s]) colStats[s] = { opens:0, found:0, plays:0, completes:0, aPlays:0, aCompletes:0 };
+          if (e.event_type === 'scan_open')       colStats[s].opens++;
+          if (e.event_type === 'target_found')    colStats[s].found++;
+          if (e.event_type === 'video_play')      colStats[s].plays++;
+          if (e.event_type === 'audio_play')    { colStats[s].plays++; colStats[s].aPlays++; }
+          if (e.event_type === 'video_complete')  colStats[s].completes++;
+          if (e.event_type === 'audio_complete'){ colStats[s].completes++; colStats[s].aCompletes++; }
         });
 
         const maxDevice  = Math.max(...Object.values(deviceCounts), 1);
@@ -1197,8 +1206,8 @@
             <div class="cards">
               <div class="card"><div class="card-value">${opens}</div><div class="card-label">Total Opens</div></div>
               <div class="card highlight" title="How often a photo was successfully detected after the scanner was opened."><div class="card-value">${pct(sessionsWithFound,sessionOpens)}</div><div class="card-label">Scan Rate</div></div>
-              <div class="card"><div class="card-value">${plays}</div><div class="card-label">Videos Played</div></div>
-              <div class="card highlight"><div class="card-value">${pct(completes,plays)}</div><div class="card-label">Completion Rate</div></div>
+              <div class="card"><div class="card-value">${plays}</div><div class="card-label">Plays${plays ? ` — ${vPlays} video · ${aPlays} audio` : ''}</div></div>
+              <div class="card highlight" title="Video + audio plays that ran to the end."><div class="card-value">${pct(completes,plays)}</div><div class="card-label">Completion Rate</div></div>
               <div class="card"><div class="card-value">${uniqueIPs}</div><div class="card-label">Unique Visitors</div></div>
               <div class="card"><div class="card-value">${errors}</div><div class="card-label">Errors</div></div>
             </div>
@@ -1231,7 +1240,7 @@
               <div class="table-wrap">
                 <table>
                   <thead><tr>
-                    <th>Project</th><th>Opens</th><th>Detected</th><th title="How often a photo was successfully detected after the scanner was opened.">Scan Rate</th><th>Videos</th><th>Completed</th><th>Comp. Rate</th>
+                    <th>Project</th><th>Opens</th><th>Detected</th><th title="How often a photo was successfully detected after the scanner was opened.">Scan Rate</th><th title="Video + audio plays">Plays</th><th>Completed</th><th>Comp. Rate</th>
                   </tr></thead>
                   <tbody>
                     ${Object.entries(colStats).sort((a,b)=>b[1].opens-a[1].opens).map(([slug,s])=>`
@@ -1240,7 +1249,7 @@
                         <td>${s.opens}</td>
                         <td>${s.found}</td>
                         <td style="color:#7657FC;font-weight:700">${pct(s.found,s.opens)}</td>
-                        <td>${s.plays}</td>
+                        <td>${s.plays}${s.aPlays?` <span class="muted" style="font-size:10px">(${s.aPlays} audio)</span>`:''}</td>
                         <td>${s.completes}</td>
                         <td style="color:#7657FC;font-weight:700">${pct(s.completes,s.plays)}</td>
                       </tr>`).join('')}
