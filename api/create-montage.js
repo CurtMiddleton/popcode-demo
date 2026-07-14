@@ -45,19 +45,31 @@ export default async function handler(req, res) {
       }
     }
 
+    // A soundtrack Shotstack can't fetch fails the WHOLE render. Verify the music
+    // URL first and drop it (render silent) rather than hard-failing — e.g. when a
+    // track's file hasn't been uploaded to /assets/music yet.
+    let finalMusic = typeof musicUrl === 'string' && musicUrl ? musicUrl : null;
+    let musicSkipped = false;
+    if (finalMusic) {
+      try {
+        const head = await fetch(finalMusic, { method: 'HEAD' });
+        if (!head.ok) { finalMusic = null; musicSkipped = true; }
+      } catch { finalMusic = null; musicSkipped = true; }
+    }
+
     const { buildShotstackEdit } = await import('../lib/montage/timeline.mjs');
     const { edit } = buildShotstackEdit({
       images,
       perImageSeconds,
       transition: transition === 'fade' ? 'fade' : 'kenburns',
-      musicUrl: typeof musicUrl === 'string' && musicUrl ? musicUrl : null,
+      musicUrl: finalMusic,
       aspect: ['portrait', 'landscape', 'square'].includes(aspect) ? aspect : 'portrait',
     });
 
     if (DRY_RUN) {
       // Mock render id — montage-status resolves it to a "preview" done state.
       const renderId = 'DRYRUN-' + Math.random().toString(36).slice(2, 12);
-      return res.status(200).json({ renderId, dryRun: true });
+      return res.status(200).json({ renderId, dryRun: true, musicSkipped });
     }
 
     const resp = await fetch(`${SHOTSTACK_BASE_URL}/render`, {
@@ -70,7 +82,7 @@ export default async function handler(req, res) {
       const msg = data?.message || `Shotstack render failed (${resp.status})`;
       return res.status(502).json({ error: msg });
     }
-    res.status(200).json({ renderId: data.response.id, dryRun: false });
+    res.status(200).json({ renderId: data.response.id, dryRun: false, musicSkipped });
   } catch (e) {
     console.error('create-montage error:', e);
     Sentry.captureException(e);
