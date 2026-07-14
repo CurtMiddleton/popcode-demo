@@ -629,10 +629,10 @@
       }
 
       async function handleFile(input, type, n) {
-        const file = input.files[0];
+        let file = input.files[0];
         if (!file) return;
 
-        const sizeMB = file.size / (1024 * 1024);
+        let sizeMB = file.size / (1024 * 1024);
         const limitMB = type === 'video' ? MAX_VIDEO_MB : MAX_PHOTO_MB;
 
         if (sizeMB > limitMB) {
@@ -687,8 +687,16 @@
               input.value = ''; return;
             }
           } else {
-            alert(`This photo is ${sizeMB.toFixed(1)} MB, which exceeds the ${limitMB} MB limit. Please choose a smaller photo.`);
-            input.value = ''; return;
+            // Photo over the limit — downscale it (like the book maker) instead
+            // of rejecting. Only alert if it's still too big after resizing.
+            const optimized = await optimizePhotoDim(file, 2560);
+            if (optimized && optimized.size / (1024 * 1024) <= limitMB) {
+              file = optimized;
+              sizeMB = file.size / (1024 * 1024);
+            } else {
+              alert(`This photo is ${sizeMB.toFixed(1)} MB and is still over the ${limitMB} MB limit after resizing. Please choose a smaller photo.`);
+              input.value = ''; return;
+            }
           }
         }
 
@@ -1070,6 +1078,36 @@
       const MTG_MAX_PHOTOS = 40;
       let montageState = null;
       let montageBusy = false;
+      let montageResult = null; // rendered montage File awaiting the user's confirm
+
+      // Preview the rendered montage before committing it to the page.
+      function mtgShowPreview(file) {
+        montageResult = file;
+        const vid = document.getElementById('mtg-preview-video');
+        vid.src = URL.createObjectURL(file);
+        document.getElementById('mtg-body-scroll').style.display = 'none';
+        document.getElementById('mtg-foot').style.display = 'none';
+        document.getElementById('mtg-preview').style.display = 'flex';
+        vid.play().catch(() => {}); // autoplay is best-effort; controls are shown regardless
+      }
+      function mtgHidePreview(discard) {
+        const vid = document.getElementById('mtg-preview-video');
+        try { vid.pause(); if (vid.src) URL.revokeObjectURL(vid.src); vid.removeAttribute('src'); vid.load(); } catch (e) {}
+        document.getElementById('mtg-preview').style.display = 'none';
+        document.getElementById('mtg-body-scroll').style.display = '';
+        document.getElementById('mtg-foot').style.display = '';
+        if (discard) montageResult = null;
+      }
+      function mtgUsePreview() {
+        if (!montageResult || !montageState) return;
+        mtgApplyToPage(montageState.page, montageResult);
+        mtgHidePreview(false);
+        closeMontage();
+      }
+      function mtgRedoPreview() {
+        mtgHidePreview(true);
+        mtgStatus('', null, '');
+      }
 
       function openMontage(n) {
         if (montageBusy) return;
@@ -1081,11 +1119,13 @@
         mtgRenderMusic();
         mtgRenderStrip();
         mtgStatus('');
+        mtgHidePreview(true); // reset to the builder view in case a preview was left open
         document.getElementById('mtg-overlay').classList.add('open');
         document.body.style.overflow = 'hidden';
       }
       function closeMontage() {
         if (montageBusy) return;
+        mtgHidePreview(true); // revoke the preview video + reset
         const ov = document.getElementById('mtg-overlay');
         ov.classList.remove('open');
         document.body.style.overflow = '';
@@ -1133,16 +1173,60 @@
         });
       }
 
-      function mtgAddPhotos(input) {
+      async function mtgAddPhotos(input) {
         const files = Array.from(input.files || []);
+        input.value = '';
+        let skipped = 0;
         for (const f of files) {
           if (montageState.photos.length >= MTG_MAX_PHOTOS) { mtgStatus(`Up to ${MTG_MAX_PHOTOS} photos.`, null, 'err'); break; }
-          if (!f.type.startsWith('image/')) continue;
-          if (f.size / (1024 * 1024) > MAX_PHOTO_MB) { mtgStatus(`"${f.name}" is over ${MAX_PHOTO_MB} MB — skipped.`, null, 'err'); continue; }
-          montageState.photos.push({ id: 'p' + Math.random().toString(36).slice(2, 8), file: f, url: URL.createObjectURL(f) });
+          const isImg = f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name);
+          if (!isImg) continue;
+          mtgStatus('Optimizing photos…', null, '');
+          // Downscale large photos instead of rejecting them (montage sources only
+          // need to match the video output size; keeps uploads + render fast).
+          const opt = await optimizePhotoDim(f, 1920);
+          if (!opt) { skipped++; continue; }
+          montageState.photos.push({ id: 'p' + Math.random().toString(36).slice(2, 8), file: opt, url: URL.createObjectURL(opt) });
         }
-        input.value = '';
+        mtgStatus(skipped ? `${skipped} photo(s) couldn't be read and were skipped.` : '', null, skipped ? 'err' : '');
         mtgRenderStrip();
+      }
+
+      // Shared photo optimizer (ported from book.html): decode → downscale to
+      // maxDim → re-encode JPEG. Returns a File (smaller when it helps), the
+      // original when already fine, or null if undecodable and very large.
+      const PHOTO_QUALITY = 0.85;
+      const PHOTO_HARD_MAX_MB = 25; // only give up on undecodable originals above this
+      async function loadDecodablePhoto(file) {
+        if (typeof createImageBitmap === 'function') {
+          try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+          catch (e) { /* fall through to <img> */ }
+        }
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('decode')); img.src = url; });
+        img._url = url;
+        return img;
+      }
+      async function optimizePhotoDim(file, maxDim) {
+        let src;
+        try { src = await loadDecodablePhoto(file); }
+        catch (e) { return file.size / (1024 * 1024) <= PHOTO_HARD_MAX_MB ? file : null; }
+        const w0 = src.width || src.naturalWidth, h0 = src.height || src.naturalHeight;
+        const scale = Math.min(1, maxDim / Math.max(w0, h0));
+        const oversized = scale < 1;
+        const heavy = file.size / (1024 * 1024) > 3;
+        const cleanup = () => { src.close?.(); if (src._url) URL.revokeObjectURL(src._url); };
+        if (!oversized && !heavy) { cleanup(); return file; }
+        const w = Math.max(1, Math.round(w0 * scale)), h = Math.max(1, Math.round(h0 * scale));
+        const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(src, 0, 0, w, h);
+        cleanup();
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', PHOTO_QUALITY));
+        if (!blob) return file;
+        const chosen = oversized ? blob : (blob.size < file.size ? blob : file);
+        const name = (file.name || 'photo').replace(/\.[^.]+$/, '') + (chosen === blob ? '.jpg' : '');
+        return new File([chosen], name, { type: chosen.type || 'image/jpeg' });
       }
 
       function mtgRenderStrip() {
@@ -1273,10 +1357,9 @@
             return r.blob();
           });
           const file = new File([blob], 'montage.mp4', { type: 'video/mp4' });
-          mtgApplyToPage(st.page, file);
-          mtgStatus('✓ Montage created and linked to this page!', 100, 'ok');
+          mtgStatus('', null, '');
           montageBusy = false; createBtn.disabled = false; closeBtn.disabled = false;
-          setTimeout(closeMontage, 1100);
+          mtgShowPreview(file); // let the user watch it before committing to the page
         } catch (e) {
           console.error('montage error:', e);
           mtgStatus('Something went wrong: ' + e.message, null, 'err');
@@ -1436,6 +1519,15 @@
       font-family: 'Inter', sans-serif;
     }
     .mtg-create:disabled { opacity: .5; cursor: default; }
+
+    .mtg-preview { display: none; flex-direction: column; flex: 1; min-height: 0; padding: 16px 18px; }
+    .mtg-preview-inner { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 0; }
+    .mtg-preview video { max-width: 100%; max-height: 56vh; border-radius: 12px; background: #000; }
+    .mtg-preview-note { font-size: 13px; color: #666; font-family: 'Inter', sans-serif; margin: 0; text-align: center; }
+    .mtg-preview-actions { display: flex; gap: 10px; padding-top: 14px; margin-top: 4px; border-top: 1px solid #eee; }
+    .mtg-preview-actions button { flex: 1; border: none; border-radius: 12px; font-weight: 800; font-size: 15px; padding: 12px; cursor: pointer; font-family: 'Inter', sans-serif; }
+    .mtg-redo { background: #f0eef7; color: #555; }
+    .mtg-use { background: linear-gradient(120deg, #7657FC, #2dc0f7); color: #fff; }
   </style>
 
   <div id="mtg-overlay" class="mtg-overlay" aria-hidden="true">
@@ -1444,7 +1536,7 @@
         <div class="mtg-title">✨ Make a Montage</div>
         <button type="button" class="mtg-close" id="mtg-close-btn" onclick="closeMontage()" title="Close">✕</button>
       </div>
-      <div class="mtg-body">
+      <div class="mtg-body" id="mtg-body-scroll">
         <p class="mtg-sub">Pick photos, set the order, add music. We'll turn them into a memory video and link it to this page's photo.</p>
 
         <div class="mtg-strip" id="mtg-strip"></div>
@@ -1483,9 +1575,19 @@
 
         <div class="mtg-status" id="mtg-status"></div>
       </div>
-      <div class="mtg-foot">
+      <div class="mtg-foot" id="mtg-foot">
         <div class="mtg-est" id="mtg-est">Add at least 2 photos</div>
         <button type="button" class="mtg-create" id="mtg-create" onclick="mtgCreate()">Create montage</button>
+      </div>
+      <div class="mtg-preview" id="mtg-preview">
+        <div class="mtg-preview-inner">
+          <video id="mtg-preview-video" playsinline controls muted loop></video>
+          <p class="mtg-preview-note">Here's your montage. Use it, or start over to change photos, order, or music.</p>
+        </div>
+        <div class="mtg-preview-actions">
+          <button type="button" class="mtg-redo" onclick="mtgRedoPreview()">↺ Start over</button>
+          <button type="button" class="mtg-use" onclick="mtgUsePreview()">✓ Use this montage</button>
+        </div>
       </div>
     </div>
   </div>
