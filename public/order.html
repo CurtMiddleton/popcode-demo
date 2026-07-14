@@ -66,7 +66,13 @@
       .detail { display:grid; grid-template-columns:1fr 1fr; gap:48px; margin-top:8px; }
       @media (max-width:680px){ .detail { grid-template-columns:1fr; gap:32px; } }
       .detail-preview { background:#fff; border-radius:22px; padding:36px; box-shadow:0 2px 12px rgba(0,0,0,0.05); display:flex; align-items:center; justify-content:center; min-height:380px; }
-      .detail-preview canvas { max-width:100%; max-height:400px; box-shadow:0 8px 26px rgba(0,0,0,0.16); border-radius:2px; }
+      .detail-preview canvas { max-width:100%; max-height:400px; border-radius:2px; }
+      .detail-left { display:flex; flex-direction:column; gap:14px; }
+      .view-row { display:flex; gap:10px; }
+      .view-thumb { flex:1; border:2px solid #eceae4; border-radius:10px; overflow:hidden; cursor:pointer; padding:0; background:#fff; line-height:0; transition:border-color .12s; }
+      .view-thumb:hover { border-color:#cfc9f5; }
+      .view-thumb.active { border-color:#7657FC; }
+      .view-thumb canvas { width:100%; height:auto; display:block; }
       .detail-preview.frame-framed canvas { border:14px solid #1a1a1a; background:#fff; padding:12px; box-shadow:0 6px 18px rgba(0,0,0,0.25); }
       .detail-preview.frame-tile canvas { border:8px solid #fff; box-shadow:0 6px 18px rgba(0,0,0,0.22); }
       .detail-preview.frame-canvas canvas { box-shadow:10px 10px 0 #d9d4ca, 0 6px 18px rgba(0,0,0,0.18); }
@@ -143,7 +149,10 @@
       <div id="step-detail" style="display:none;">
         <button class="linkback" id="to-category">&larr; All products</button>
         <div class="detail">
-          <div class="detail-preview" id="detail-preview"><canvas id="detail-canvas" width="400" height="400"></canvas></div>
+          <div class="detail-left">
+            <div class="detail-preview" id="detail-preview"><canvas id="detail-canvas" width="400" height="400"></canvas></div>
+            <div class="view-row" id="view-row"></div>
+          </div>
           <div class="detail-info">
             <h2 id="detail-name">Product</h2>
             <div class="tagline" id="detail-tagline"></div>
@@ -323,7 +332,7 @@
       let currentUser = null;
       let collection = null;
       let photos = [];
-      let state = { step: 'detail', productType: null, variantId: null, orientation: 'portrait', scale: 0.06, selectedPhoto: null };
+      let state = { step: 'detail', productType: null, variantId: null, orientation: 'portrait', scale: 0.06, selectedPhoto: null, scene: 'plain' };
 
       function variantOf(type, id) { return (PRODUCTS[type] || []).find(v => v.id === id) || null; }
       function baseAspect() { const v = variantOf(state.productType, state.variantId); return v ? v.aspect : null; }
@@ -701,17 +710,132 @@
         const a = baseAspect();
         document.getElementById('orient-row').style.display = (a && a !== 1) ? 'flex' : 'none';
       }
-      // Draw the product at the selected size's aspect: the chosen photo if one is
-      // picked, else a neutral placeholder. Square size → square thumbnail.
-      function renderDetailPreview() {
-        const cv = document.getElementById('detail-canvas');
-        if (state.selectedPhoto) {
-          compositeBadgedImage(state.selectedPhoto.url, { scale: state.scale, aspect: currentAspect(), previewCanvas: cv, returnDataUrl: false })
-            .catch(() => drawPlaceholder(cv, currentAspect()));
+      // ---- in-situ scene previews (Studio / Wall / Shelf / Styled) ----------------
+      // The artwork always renders at the selected size's true aspect; the scene is
+      // just a backdrop we draw. Swappable later for real photo backdrops (add an
+      // image + art-rectangle per scene instead of the drawn backdrop).
+      const SCENES = [
+        { id: 'plain', label: 'Studio' },
+        { id: 'wall',  label: 'Wall' },
+        { id: 'shelf', label: 'Shelf' },
+        { id: 'tone',  label: 'Styled' },
+      ];
+
+      // Badged photo (at aspect) as an <img>, or null → placeholder.
+      async function getArtImage(aspect) {
+        if (!state.selectedPhoto) return null;
+        try {
+          const url = await compositeBadgedImage(state.selectedPhoto.url, { scale: state.scale, aspect });
+          const img = new Image();
+          await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+          return img;
+        } catch (_) { return null; }
+      }
+
+      function sceneBackdrop(ctx, W, H, id) {
+        if (id === 'wall') {
+          const g = ctx.createLinearGradient(0, 0, 0, H);
+          g.addColorStop(0, '#f1eee9'); g.addColorStop(1, '#e8e3da');
+          ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+          const fg = ctx.createLinearGradient(0, H * 0.8, 0, H);
+          fg.addColorStop(0, 'rgba(0,0,0,0)'); fg.addColorStop(1, 'rgba(0,0,0,0.07)');
+          ctx.fillStyle = fg; ctx.fillRect(0, H * 0.8, W, H * 0.2);
+        } else if (id === 'shelf') {
+          ctx.fillStyle = '#efece7'; ctx.fillRect(0, 0, W, H);
+          const sy = H * 0.72;
+          const wg = ctx.createLinearGradient(0, sy, 0, H);
+          wg.addColorStop(0, '#dcc7a6'); wg.addColorStop(1, '#c6ac82');
+          ctx.fillStyle = wg; ctx.fillRect(0, sy, W, H - sy);
+          const ws = ctx.createLinearGradient(0, sy - H * 0.06, 0, sy);
+          ws.addColorStop(0, 'rgba(0,0,0,0)'); ws.addColorStop(1, 'rgba(0,0,0,0.06)');
+          ctx.fillStyle = ws; ctx.fillRect(0, sy - H * 0.06, W, H * 0.06);
+          ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fillRect(0, sy, W, Math.max(2, H * 0.006));
+        } else if (id === 'tone') {
+          const g = ctx.createLinearGradient(0, 0, W, H);
+          g.addColorStop(0, '#eef1f3'); g.addColorStop(1, '#dde5ea');
+          ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
         } else {
-          drawPlaceholder(cv, currentAspect());
+          const g = ctx.createRadialGradient(W / 2, H * 0.42, W * 0.08, W / 2, H * 0.52, W * 0.78);
+          g.addColorStop(0, '#f8f8f9'); g.addColorStop(1, '#eaeaec');
+          ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
         }
+      }
+
+      // Draw the product (art or gray placeholder) with its frame treatment + a soft
+      // shadow inside box {x,y,w,h}. `frame` = frame border width (0 = borderless).
+      function placeProduct(ctx, art, box, id, product, frame) {
+        const { x, y, w, h } = box;
+        const contact = (id === 'shelf');
+        const tile = product === 'tile';
+        // Shelf: pool a soft contact shadow under the base so it reads as resting on
+        // the shelf (not floating). Everything else: a soft cast drop shadow.
+        if (contact) {
+          const cxb = x + w / 2, cyb = y + h + frame;
+          ctx.save();
+          const rg = ctx.createRadialGradient(cxb, cyb, w * 0.04, cxb, cyb, w * 0.6);
+          rg.addColorStop(0, 'rgba(0,0,0,0.30)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = rg; ctx.translate(cxb, cyb); ctx.scale(1, 0.15);
+          ctx.beginPath(); ctx.arc(0, 0, w * 0.6, 0, 2 * Math.PI); ctx.fill();
+          ctx.restore();
+        }
+        ctx.save();
+        ctx.shadowColor = contact ? 'rgba(0,0,0,0.16)' : 'rgba(0,0,0,0.22)';
+        ctx.shadowBlur = w * (contact ? 0.028 : 0.055);
+        ctx.shadowOffsetX = w * (contact ? 0.004 : 0.016);
+        ctx.shadowOffsetY = h * (contact ? 0.006 : 0.04);
+        ctx.fillStyle = (product === 'framed') ? '#141414' : '#ffffff';
+        if (tile) { roundRectPath(ctx, x - frame, y - frame, w + 2 * frame, h + 2 * frame, w * 0.04); ctx.fill(); }
+        else { ctx.fillRect(x - frame, y - frame, w + 2 * frame, h + 2 * frame); }
+        ctx.restore();
+        ctx.save();
+        if (tile) { roundRectPath(ctx, x, y, w, h, w * 0.02); ctx.clip(); }
+        if (art) ctx.drawImage(art, x, y, w, h);
+        else { ctx.fillStyle = '#ededed'; ctx.fillRect(x, y, w, h); drawImageIcon(ctx, x + w / 2, y + h / 2, Math.min(w, h) * 0.2); }
+        ctx.restore();
+        if (product === 'canvas') { // gallery-wrap depth edge
+          ctx.fillStyle = 'rgba(0,0,0,0.10)'; ctx.fillRect(x + w - w * 0.014, y, w * 0.014, h);
+          ctx.fillStyle = 'rgba(0,0,0,0.06)'; ctx.fillRect(x, y + h - h * 0.011, w, h * 0.011);
+        }
+        if (product === 'framed') { ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = Math.max(1, w * 0.004); ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1); }
+      }
+
+      function renderScene(cv, id, art, aspect, thumb) {
+        const W = thumb ? 300 : 1040, H = thumb ? 336 : 1180;
+        cv.width = W; cv.height = H;
+        const ctx = cv.getContext('2d');
+        sceneBackdrop(ctx, W, H, id);
+        const maxW = W * (thumb ? 0.6 : 0.5), maxH = H * (thumb ? 0.54 : 0.46);
+        let w = maxW, h = w / aspect;
+        if (h > maxH) { h = maxH; w = h * aspect; }
+        const frame = (state.productType === 'framed') ? w * 0.055 : (state.productType === 'tile' ? w * 0.05 : 0);
+        const x = W / 2 - w / 2;
+        let y;
+        if (id === 'shelf') y = H * 0.72 - frame - h;
+        else if (id === 'wall') y = H * 0.40 - h / 2;
+        else y = H * 0.5 - h / 2;
+        placeProduct(ctx, art, { x, y, w, h }, id, state.productType, frame);
+      }
+
+      async function renderDetailPreview() {
+        const aspect = currentAspect();
+        const art = await getArtImage(aspect);
+        paintScenes(art, aspect);
         updateDetailCta();
+      }
+      // Repaint main preview + the 4 view thumbnails from an already-loaded art image
+      // (scene switching reuses this — no re-compositing).
+      function paintScenes(art, aspect) {
+        renderScene(document.getElementById('detail-canvas'), state.scene, art, aspect, false);
+        const row = document.getElementById('view-row');
+        row.innerHTML = '';
+        SCENES.forEach(s => {
+          const btn = document.createElement('button');
+          btn.type = 'button'; btn.className = 'view-thumb' + (s.id === state.scene ? ' active' : ''); btn.title = s.label;
+          const c = document.createElement('canvas'); btn.appendChild(c);
+          row.appendChild(btn);
+          renderScene(c, s.id, art, aspect, true);
+          btn.onclick = () => { state.scene = s.id; paintScenes(art, aspect); };
+        });
       }
       function updateDetailCta() {
         document.getElementById('create-btn').textContent = state.selectedPhoto ? 'Continue' : 'Choose a photo';
