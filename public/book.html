@@ -11,11 +11,11 @@
     <script src="/sentry-init.js"></script>
     <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
-    <meta property="og:title" content="Popcode — Make a Book">
+    <meta property="og:title" content="Popcode — Design a Book">
     <meta property="og:description" content="Design a photo book where any page can come to life with video.">
     <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=2">
     <meta property="og:type" content="website">
-    <title>Popcode — Make a Book</title>
+    <title>Popcode — Design a Book</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <!-- book.html only needs MINDAR.IMAGE.Compiler (to compile popcoded photos
@@ -80,6 +80,24 @@
       h1 { font-size: 44px; font-weight: 400; font-family: 'CooperBT', serif; letter-spacing: 0; line-height: 1.05; margin-bottom: 6px; }
       @media (max-width: 680px) { h1 { font-size: 36px; } }
       .subtitle { font-size: 16px; color: #656565; line-height: 1.5; margin-bottom: 26px; }
+
+      /* Interim product-details screen (shown before the builder, like the other
+         Shop products). "Design a Book" reveals the builder. */
+      #book-intro { width: 100%; max-width: 1040px; margin: 0 auto; padding: 80px 28px 0; }
+      @media (max-width: 680px) { #book-intro { padding: 48px 22px 0; } }
+      .bi-back { display: inline-block; color: #7657FC; font-weight: 600; font-size: 14px; text-decoration: none; margin-bottom: 22px; font-family: 'Inter', sans-serif; }
+      .bi-detail { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+      @media (max-width: 680px) { .bi-detail { grid-template-columns: 1fr; gap: 28px; } }
+      .bi-preview { background: #f2f2f2; border-radius: 22px; padding: 26px; display: flex; align-items: center; justify-content: center; }
+      .bi-preview img { max-width: 100%; max-height: 440px; border-radius: 6px; display: block; box-shadow: 0 6px 20px rgba(0,0,0,0.14); }
+      .bi-info h1 { margin-bottom: 6px; }
+      .bi-tagline { color: #8a857d; font-size: 15px; margin-bottom: 18px; font-family: 'Inter', sans-serif; }
+      .bi-desc { color: #555; font-size: 16px; line-height: 1.6; margin-bottom: 24px; }
+      .bi-specs { list-style: none; padding: 0; margin: 0 0 30px; }
+      .bi-specs li { position: relative; padding-left: 20px; margin-bottom: 11px; color: #333; font-size: 15px; }
+      .bi-specs li::before { content: ''; position: absolute; left: 0; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: #7657FC; }
+      .bi-cta { width: 100%; max-width: 340px; padding: 16px; border: none; border-radius: 16px; font-size: 16px; font-weight: 700; color: #fff; font-family: 'Inter', sans-serif; cursor: pointer; background: linear-gradient(135deg,#7657FC 0%,#589AF9 100%); }
+      .bi-cta:hover { opacity: 0.94; }
 
       .field-label { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
       input.text-input {
@@ -637,8 +655,27 @@
       </div>
     </div>
 
+    <!-- Interim details screen (like the other Shop products) -->
+    <div id="book-intro" style="display:none;">
+      <a class="bi-back" href="/shop.html">&larr; All products</a>
+      <div class="bi-detail">
+        <div class="bi-preview"><img src="/assets/mockups/book.jpg" alt="Photo Book"/></div>
+        <div class="bi-info">
+          <h1>Photo Book</h1>
+          <div class="bi-tagline">Lay-flat hardcover photo book</div>
+          <p class="bi-desc">Design a photo book from your favourite photos, then bring any page to life — link a photo to a video and it plays when someone scans the printed page.</p>
+          <ul class="bi-specs">
+            <li>Lay-flat hardcover binding</li>
+            <li>Premium matte pages</li>
+            <li>Scannable pages come to life with video</li>
+          </ul>
+          <button class="bi-cta" id="start-book-btn">Design a Book</button>
+        </div>
+      </div>
+    </div>
+
     <div class="wrap">
-      <h1>Make a Book</h1>
+      <h1>Design a Book</h1>
       <p class="subtitle">Design a photo book, then bring any page to life — link a photo to a video and it plays when someone scans the printed page.</p>
 
       <div class="field-label">Book title</div>
@@ -752,7 +789,26 @@
         const uName = data.session.user?.user_metadata?.full_name?.split(' ')[0] || data.session.user?.email?.split('@')[0] || '';
         if (uName) document.getElementById('user-greeting').textContent = 'Hi, ' + uName + '!';
         const editId = new URLSearchParams(location.search).get('id');
-        if (editId) loadBookForEdit(editId);
+        // New book → show the interim details screen first; editing skips it.
+        const introEl = document.getElementById('book-intro');
+        const builderEl = document.querySelector('.wrap');
+        // Builder chrome that lives outside .wrap (fixed bottom bar + floating dock).
+        const chrome = ['.create-bar', '#dock'].map(s => document.querySelector(s)).filter(Boolean);
+        const setChrome = show => chrome.forEach(el => { el.style.display = show ? '' : 'none'; });
+        if (editId) {
+          loadBookForEdit(editId);
+        } else if (introEl && builderEl) {
+          introEl.style.display = 'block';
+          builderEl.style.display = 'none';
+          setChrome(false);
+          const startBtn = document.getElementById('start-book-btn');
+          if (startBtn) startBtn.addEventListener('click', () => {
+            introEl.style.display = 'none';
+            builderEl.style.display = '';
+            setChrome(true);
+            window.scrollTo({ top: 0 });
+          });
+        }
       });
 
       // ── Load an existing book into the builder (edit mode) ──────
@@ -835,7 +891,7 @@
           };
 
           document.getElementById('title-input').value = col.name || '';
-          document.querySelector('h1').textContent = 'Edit Book';
+          document.querySelector('.wrap h1').textContent = 'Edit Book';
           document.getElementById('create-btn').textContent = 'Save Changes';
           render();
           // "Shop" deep-link from My Designs opens straight into the order flow.
@@ -2057,7 +2113,7 @@
         editingCollection = null; // so the next Create saves a brand-new book
         const inp = document.getElementById('title-input');
         inp.value = ((inp.value || cover.title || 'Untitled').trim()) + ' (copy)';
-        document.querySelector('h1').textContent = 'Make a Book';
+        document.querySelector('.wrap h1').textContent = 'Design a Book';
         document.getElementById('create-btn').textContent = 'Create Book';
         closeSheet(); updateSummary();
         showToast('Duplicated — tap Create Book to save the copy.');
