@@ -133,7 +133,6 @@
     </div>
 
     <div class="wrap">
-      <a class="back" href="/manage.html">&larr; My Popcodes</a>
       <h1>Shop</h1>
       <div class="sub" id="project-name">Pick a size, choose a photo, and we’ll print it with a scannable Popcode badge.</div>
 
@@ -873,10 +872,36 @@
         placeProduct(ctx, art, { x, y, w, h }, id, state.productType, frame);
       }
 
+      // Draw the clean Prodigi product shot as-is (shown before a photo is chosen).
+      async function showMockupTemplate(cv, mk) {
+        const tpl = new Image(); tpl.crossOrigin = 'anonymous';
+        await new Promise((res, rej) => { tpl.onload = res; tpl.onerror = rej; tpl.src = mk.template; });
+        const maxDim = 900;
+        const s = Math.min(1, maxDim / Math.max(tpl.naturalWidth, tpl.naturalHeight));
+        cv.width = Math.round(tpl.naturalWidth * s);
+        cv.height = Math.round(tpl.naturalHeight * s);
+        cv.getContext('2d').drawImage(tpl, 0, 0, cv.width, cv.height);
+      }
+      // The detail preview is the real Prodigi product photo. Before a photo is picked
+      // it shows the product shot as-is; once picked, the badged photo composites into
+      // the product's art opening (renderProductMockup). The old drawn room "scenes"
+      // are retired — real product photography reads better and matches Prodigi's gallery.
       async function renderDetailPreview() {
         const aspect = currentAspect();
-        const art = await getArtImage(aspect);
-        paintScenes(art, aspect);
+        const cv = document.getElementById('detail-canvas');
+        document.getElementById('view-row').innerHTML = '';
+        const mk = MOCKUPS[state.productType];
+        try {
+          if (mk && state.selectedPhoto) {
+            await renderProductMockup(cv, state.selectedPhoto.url, { scale: state.scale, aspect, mockup: mk });
+          } else if (mk) {
+            await showMockupTemplate(cv, mk);
+          } else {
+            paintScenes(await getArtImage(aspect), aspect); // fallback for a product with no mockup template
+          }
+        } catch (_) {
+          if (mk) { try { await showMockupTemplate(cv, mk); } catch (__) { /* leave prior frame */ } }
+        }
         updateDetailCta();
       }
       // Repaint main preview + the 4 view thumbnails from an already-loaded art image
