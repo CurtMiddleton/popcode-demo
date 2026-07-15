@@ -104,39 +104,52 @@
       @media (min-width: 960px) {
         .pages { max-width: 640px; }
         .page { margin-bottom: 48px; }
-        .page-header { width: 430px; }
+        .page-header { width: 450px; }
         .page-label { width: 36px; height: 36px; font-size: 15px; }
         .remove-page-btn { width: 40px; height: 40px; }
         .media-select { padding: 8px 32px 8px 18px; font-size: 13px; }
         .upload-row { gap: 30px; }
-        .upload-btn { width: 200px; height: 165px; }
-        .upload-btn img.icon { width: 65px; height: 65px; }
-        .upload-btn .btn-label { font-size: 13px; }
-        .audio-tile { width: 200px; height: 165px; gap: 10px; }
+        .media-card { width: 210px; height: 210px; }
+        .upload-btn img.icon { width: 62px; height: 62px; }
+        .audio-tile { gap: 10px; }
         .audio-play-btn { width: 64px; height: 64px; }
         .audio-play-btn svg { width: 26px; height: 26px; }
         .audio-duration { font-size: 13px; }
         .audio-rerecord { font-size: 12px; padding: 5px 16px; }
       }
       .page { margin-bottom: 48px; position: relative; display: flex; flex-direction: column; align-items: center; }
-      .page-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; width: 290px; }
+      .page-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; width: 404px; max-width: 100%; }
       .page-label { background: #1a1a1a; color: white; border-radius: 50%; width: 28px; height: 28px; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
       .remove-page-btn { background: #1a1a1a; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
       .remove-page-btn:hover { background: #333; }
       .upload-row { display: flex; gap: 24px; justify-content: flex-start; }
 
+      /* Square media cards: label on top, upload area in the middle, and (for the
+         "Plays when scanned" card) the media dropdown pinned at the bottom. */
+      .media-card {
+        display: flex; flex-direction: column; align-items: center;
+        width: 190px; height: 190px; box-sizing: border-box;
+        background: #fff; border: 1px solid #e8e8e8; border-radius: 16px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        padding: 16px 12px 14px; position: relative; overflow: hidden;
+      }
+      .media-card-label { font-size: 13px; font-weight: 700; color: #1a1a1a; text-align: center; line-height: 1.2; flex-shrink: 0; }
+      .media-card > .upload-btn { flex: 1 1 auto; }
+      .media-card .video-slot, .media-card .audio-slot { width: 100%; flex: 1 1 auto; display: flex; align-items: center; justify-content: center; min-height: 0; }
+      .media-card .audio-tile { width: 100%; height: 100%; }
+      .media-card .media-select { flex-shrink: 0; margin-top: 8px; }
+
       .upload-btn {
-        display: flex; flex-direction: column; align-items: center; gap: 10px;
-        background: white; border-radius: 10px; width: 130px; height: 110px;
-        justify-content: center; cursor: pointer; border: 1px solid #e8e8e8;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: transform 0.15s;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+        background: transparent; border: none; border-radius: 12px; width: 100%; height: 100%;
+        cursor: pointer; box-shadow: none; transition: transform 0.15s;
         position: relative; overflow: hidden;
       }
       .upload-btn:active { transform: scale(0.95); }
       .upload-btn input[type="file"] { position: absolute; top: 0; right: 0; bottom: 0; left: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
       .upload-btn img.icon { width: 50px; height: 50px; }
       .upload-btn .btn-label { font-size: 11px; color: #888; font-weight: 600; text-align: center; padding: 0 8px; }
-      .upload-btn.selected { background: #f5f5f5; border-color: #dcdcdc; }
+      .upload-btn.selected { background: transparent; }
       .upload-btn.selected img.icon { display: none; }
       .upload-btn.selected .btn-label { display: none; }
       .upload-btn .preview-img { display: none; position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -314,7 +327,7 @@
     <p class="subtitle">Each photo you add becomes a Popcode — scan it to play its video or audio. Add as many as you like, then generate them all.</p>
 
     <div class="form-col">
-      <div class="field-label">Project Name</div>
+      <div class="field-label">Popcode Name</div>
       <input type="text" id="name-input" placeholder="" />
 
       <div class="field-label">Custom code <span style="font-weight:500;color:#888;">(optional)</span></div>
@@ -382,45 +395,49 @@
         page.innerHTML = `
           <div class="page-header">
             <div class="page-label">${n}</div>
-            <select class="media-select" data-page="${n}" aria-label="What plays on scan">
-              <option value="video" selected>Video</option>
-              <option value="montage">Montage</option>
-              <option value="audio">Audio</option>
-            </select>
             <button class="remove-page-btn" onclick="removePage(${n})" title="Remove page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
           </div>
           <div class="upload-row">
             <div class="upload-wrapper">
-              <label class="upload-btn" id="photo-btn-${n}">
-                <input type="file" accept="image/*" onchange="handleFile(this,'photo',${n}).catch(e=>console.error(e))"/>
-                <img class="icon" src="/assets/photo.png" alt="Photo"/>
-                <img class="preview-img" id="photo-preview-${n}"/>
-                <span class="btn-label">Photo to scan</span>
-              </label>
+              <div class="media-card">
+                <div class="media-card-label">Image to scan</div>
+                <label class="upload-btn" id="photo-btn-${n}">
+                  <input type="file" accept="image/*" onchange="handleFile(this,'photo',${n}).catch(e=>console.error(e))"/>
+                  <img class="icon" src="/assets/photo.png" alt="Photo"/>
+                  <img class="preview-img" id="photo-preview-${n}"/>
+                </label>
+              </div>
               <div class="file-name" id="photo-name-${n}"></div>
               <div class="file-size" id="photo-size-${n}"></div>
             </div>
             <div class="upload-wrapper" id="media-wrapper-${n}">
-              <div class="video-slot" id="video-slot-${n}">
-                <label class="upload-btn" id="video-btn-${n}">
-                  <input type="file" accept="video/*" onchange="handleFile(this,'video',${n}).catch(e=>console.error(e))"/>
-                  <img class="icon" src="/assets/video.png" alt="Video"/>
-                  <img class="preview-img" id="video-preview-${n}"/>
-                  <span class="play-overlay"></span>
-                  <span class="btn-label">Plays on scan</span>
-                </label>
-                <div class="file-name" id="video-name-${n}"></div>
-                <div class="file-size" id="video-size-${n}"></div>
-                <div class="video-msg" id="video-msg-${n}"></div>
-              </div>
-              <div class="audio-slot" id="audio-slot-${n}" style="display:none;">
-                <div class="audio-tile" id="audio-tile-${n}">
-                  <div class="audio-tile-empty">
-                    <button type="button" class="audio-rec-btn" data-page="${n}" data-action="start">● Record</button>
+              <div class="media-card">
+                <div class="media-card-label">Plays when scanned</div>
+                <div class="video-slot" id="video-slot-${n}">
+                  <label class="upload-btn" id="video-btn-${n}">
+                    <input type="file" accept="video/*" onchange="handleFile(this,'video',${n}).catch(e=>console.error(e))"/>
+                    <img class="icon" src="/assets/video.png" alt="Video"/>
+                    <img class="preview-img" id="video-preview-${n}"/>
+                    <span class="play-overlay"></span>
+                  </label>
+                </div>
+                <div class="audio-slot" id="audio-slot-${n}" style="display:none;">
+                  <div class="audio-tile" id="audio-tile-${n}">
+                    <div class="audio-tile-empty">
+                      <button type="button" class="audio-rec-btn" data-page="${n}" data-action="start">● Record</button>
+                    </div>
                   </div>
                 </div>
-                <div class="file-size" id="audio-size-${n}" style="margin-top:6px;"></div>
+                <select class="media-select" data-page="${n}" aria-label="What plays when scanned">
+                  <option value="video" selected>Video</option>
+                  <option value="montage">Montage</option>
+                  <option value="audio">Audio</option>
+                </select>
               </div>
+              <div class="file-name" id="video-name-${n}"></div>
+              <div class="file-size" id="video-size-${n}"></div>
+              <div class="video-msg" id="video-msg-${n}"></div>
+              <div class="file-size" id="audio-size-${n}" style="margin-top:6px;"></div>
             </div>
           </div>
         `;
