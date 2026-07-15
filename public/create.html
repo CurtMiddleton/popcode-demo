@@ -1413,16 +1413,28 @@
           // 1. Upload source photos to a temp folder in the experiences bucket so
           //    the renderer can fetch them by public URL.
           const sessionId = (crypto.randomUUID ? crypto.randomUUID() : 'm' + Date.now() + Math.random().toString(36).slice(2));
-          const urls = [];
-          for (let i = 0; i < st.photos.length; i++) {
-            mtgStatus(`Uploading photo ${i + 1} of ${st.photos.length}…`, Math.round((i / st.photos.length) * 50), '');
+          // Upload the source photos in parallel (capped concurrency) so the
+          // pre-render wait is the slowest few uploads, not the sum of every one.
+          // Order is preserved by writing into urls[i] by index.
+          const urls = new Array(st.photos.length);
+          let uploaded = 0;
+          mtgStatus(`Uploading photos… (0 of ${st.photos.length})`, 0, '');
+          const uploadOne = async (i) => {
             const f = st.photos[i].file;
             const ext = ((f.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '')) || 'jpg';
             const path = `montage-src/${sessionId}/img_${i}.${ext}`;
             const { error } = await db.storage.from('experiences').upload(path, f, { contentType: f.type || 'image/jpeg', upsert: true });
             if (error) throw new Error('Upload failed: ' + error.message);
-            urls.push(db.storage.from('experiences').getPublicUrl(path).data.publicUrl);
-          }
+            urls[i] = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+            uploaded++;
+            mtgStatus(`Uploading photos… (${uploaded} of ${st.photos.length})`, Math.round((uploaded / st.photos.length) * 50), '');
+          };
+          let nextUpload = 0;
+          await Promise.all(
+            Array.from({ length: Math.min(6, st.photos.length) }, async () => {
+              while (nextUpload < st.photos.length) { const i = nextUpload++; await uploadOne(i); }
+            })
+          );
 
           // 2. Kick off the render.
           mtgStatus('Starting render…', 55, '');

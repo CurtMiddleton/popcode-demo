@@ -80,6 +80,10 @@ export default async function handler(req, res) {
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data?.response?.id) {
       const msg = data?.message || `Shotstack render failed (${resp.status})`;
+      // Alert the team — this is where an out-of-credits / rejected render surfaces
+      // (Shotstack refuses the render request). Best-effort; never blocks the reply.
+      Sentry.captureException(new Error('Shotstack render rejected: ' + msg));
+      await Sentry.flush(2000);
       return res.status(502).json({ error: msg });
     }
     res.status(200).json({ renderId: data.response.id, dryRun: false, musicSkipped });

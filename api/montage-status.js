@@ -47,6 +47,13 @@ export default async function handler(req, res) {
       return res.status(502).json({ error: data?.message || `Status check failed (${resp.status})` });
     }
     const status = mapStatus(data.response.status);
+    if (status === 'failed') {
+      // A render that started but errored out (bad asset, out-of-credits mid-render,
+      // etc.). Alert the team so a silent failure doesn't go unnoticed once montage
+      // is open to all users. Best-effort.
+      Sentry.captureException(new Error(`Shotstack render failed (id ${id}): ${data.response.error || data.response.status || 'unknown'}`));
+      await Sentry.flush(2000);
+    }
     res.status(200).json({ status, url: status === 'done' ? (data.response.url || null) : null, dryRun: false });
   } catch (e) {
     console.error('montage-status error:', e);
