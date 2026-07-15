@@ -107,7 +107,7 @@
         .page-header { width: 430px; }
         .page-label { width: 36px; height: 36px; font-size: 15px; }
         .remove-page-btn { width: 40px; height: 40px; }
-        .media-toggle button { padding: 8px 18px; font-size: 13px; }
+        .media-select { padding: 8px 32px 8px 18px; font-size: 13px; }
         .upload-row { gap: 30px; }
         .upload-btn { width: 200px; height: 165px; }
         .upload-btn img.icon { width: 65px; height: 65px; }
@@ -163,10 +163,17 @@
       .video-msg-banner a { color: #1a1a1a; font-weight: 700; text-decoration: underline; }
       .compressed-badge { font-size: 10px; color: #16a34a; font-weight: 700; }
 
-      /* Media-type toggle (Video | Audio) */
-      .media-toggle { display: inline-flex; background: #ececec; border-radius: 999px; padding: 3px; }
-      .media-toggle button { background: transparent; border: none; padding: 6px 14px; font-size: 12px; font-weight: 700; color: #666; border-radius: 999px; cursor: pointer; font-family: 'Inter', sans-serif; }
-      .media-toggle button.active { background: white; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+      /* Media-type dropdown (Video / Audio / Make a montage) */
+      .media-select {
+        appearance: none; -webkit-appearance: none;
+        background-color: #ececec;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 12px center; background-size: 11px;
+        border: none; border-radius: 999px; padding: 7px 32px 7px 16px;
+        font-size: 12px; font-weight: 700; color: #1a1a1a; font-family: 'Inter', sans-serif;
+        cursor: pointer; line-height: 1.2;
+      }
+      .media-select:focus { outline: 2px solid #d7d5cf; outline-offset: 1px; }
 
       /* Audio recorder tile (replaces the video tile when Audio mode is selected) */
       .audio-tile {
@@ -346,7 +353,11 @@
           currentUser = data.session.user;
           // Admin-only montage button until Shotstack is wired live in prod.
           const email = (currentUser?.email || '').toLowerCase();
-          if (['curtmid@gmail.com', 'curt@theworkshop.works'].includes(email)) document.body.classList.add('mtg-admin');
+          if (['curtmid@gmail.com', 'curt@theworkshop.works'].includes(email)) {
+            document.body.classList.add('mtg-admin');
+            // Reveal the montage option on pages already rendered before auth resolved.
+            document.querySelectorAll('.media-select .mtg-opt').forEach(o => { o.hidden = false; o.disabled = false; });
+          }
           const uName = data.session.user?.user_metadata?.full_name?.split(' ')[0] || data.session.user?.email?.split('@')[0] || '';
           if (uName) { const g = document.getElementById('user-greeting'); if (g) g.textContent = 'Hi, ' + uName + '!'; }
         }
@@ -378,10 +389,11 @@
         page.innerHTML = `
           <div class="page-header">
             <div class="page-label">${n}</div>
-            <div class="media-toggle" data-page="${n}">
-              <button type="button" class="media-tab active" data-mode="video">Video</button>
-              <button type="button" class="media-tab" data-mode="audio">Audio</button>
-            </div>
+            <select class="media-select" data-page="${n}" aria-label="What plays on scan">
+              <option value="video" selected>Video</option>
+              <option value="audio">Audio</option>
+              <option value="montage" class="mtg-opt"${document.body.classList.contains('mtg-admin') ? '' : ' hidden disabled'}>Make a montage</option>
+            </select>
             <button class="remove-page-btn" onclick="removePage(${n})" title="Remove page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
           </div>
           <div class="upload-row">
@@ -421,12 +433,22 @@
         `;
         document.getElementById('pages').appendChild(page);
 
-        page.querySelectorAll('.media-tab').forEach(tab => {
-          tab.addEventListener('click', () => switchMediaType(n, tab.dataset.mode));
-        });
+        page.querySelector('.media-select').addEventListener('change', (e) => onMediaSelect(n, e.target));
         page.querySelector('.audio-rec-btn[data-action="start"]').addEventListener('click', () => startRecording(n));
 
         renumberPages();
+      }
+
+      // Media dropdown change. Montage isn't a persistent media type — it's a
+      // builder whose output fills the video slot — so selecting it opens the
+      // builder and snaps the dropdown back to the current media type.
+      function onMediaSelect(n, sel) {
+        if (sel.value === 'montage') {
+          sel.value = pairs[n] ? pairs[n].mediaType : 'video';
+          openMontage(n);
+          return;
+        }
+        switchMediaType(n, sel.value);
       }
 
       function switchMediaType(n, mode) {
@@ -434,9 +456,8 @@
         if (!pair) return;
         pair.mediaType = mode;
         const page = document.getElementById(`page-${n}`);
-        page.querySelectorAll('.media-tab').forEach(tab => {
-          tab.classList.toggle('active', tab.dataset.mode === mode);
-        });
+        const sel = page.querySelector('.media-select');
+        if (sel && sel.value !== mode) sel.value = mode;
         page.querySelector(`#video-slot-${n}`).style.display = mode === 'video' ? '' : 'none';
         page.querySelector(`#audio-slot-${n}`).style.display = mode === 'audio' ? '' : 'none';
         checkReady();
@@ -1474,25 +1495,8 @@
     </script>
   <style>
     /* ── Montage maker (book-maker look: black / white / warm-gray, line icons) ── */
-    /* Hidden by default — shown only for admins until Shotstack is wired live in
-       prod (regular users would otherwise hit the dry-run "preview mode" path). */
-    /* "Make a montage" is a peer video CHOICE, styled like the upload tile and
-       stacked under it (shown for admins). Hidden once a video/montage is chosen. */
-    .mtg-open-btn {
-      display: none; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-      margin-top: 14px; width: 130px; height: 110px; border: 1px solid #e8e8e8; background: #fff;
-      color: #1a1a1a; font-weight: 600; font-size: 11px; border-radius: 14px; cursor: pointer;
-      font-family: 'Inter', sans-serif; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-      transition: background .15s, border-color .15s;
-    }
-    body.mtg-admin .mtg-open-btn { display: flex; }
-    .video-slot .upload-btn.selected ~ .mtg-open-btn { display: none !important; }
-    .mtg-open-btn:hover { background: #f7f6f3; border-color: #dcdcdc; }
-    .mtg-open-btn svg { width: 34px; height: 34px; stroke-width: 1.6; }
-    @media (min-width: 960px) {
-      .mtg-open-btn { width: 200px; height: 165px; font-size: 13px; }
-      .mtg-open-btn svg { width: 52px; height: 52px; }
-    }
+    /* Opened from the per-Popcode media dropdown (Video / Audio / Make a montage).
+       The montage choice is admin-only until Shotstack is wired live in prod. */
 
     .mtg-overlay {
       position: fixed; inset: 0; z-index: 9500; display: none;
