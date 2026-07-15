@@ -1116,9 +1116,14 @@
         const content = pages.filter(p => p.layout !== 'blank');
         if (!content.length) return; // nothing placed yet
         pages.length = 0;
-        pages.push(blankPage()); // inside front cover — always
+        // The final spread must always be [last content page | blank inside-back
+        // cover], both full-size pages — so the total page count has to be even.
+        // Add the inside-front blank only when the content count is even (which
+        // keeps the total even). Odd content simply opens on page 1 (no front
+        // blank) rather than orphaning the back blank into an [empty | blank].
+        if (content.length % 2 === 0) pages.push(blankPage()); // inside front cover
         pages.push(...content);
-        pages.push(blankPage()); // inside back cover — always
+        pages.push(blankPage()); // inside back cover — always, on the right of the last spread
       }
 
       function renderTray() {
