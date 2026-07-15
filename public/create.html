@@ -176,6 +176,32 @@
         filter: drop-shadow(0 1px 4px rgba(0,0,0,0.5));
       }
       .upload-btn.selected .play-overlay { display: block; }
+      /* Filled tile: once a photo/video is chosen the thumbnail fills the whole
+         card, the label + dropdown hide, and eye (preview) / pencil (replace)
+         controls appear — matching the Edit screen. */
+      .media-card.filled .media-card-label,
+      .media-card.filled > .media-select { display: none; }
+      .media-card.filled > .upload-btn,
+      .media-card.filled > .video-slot { position: absolute; inset: 0; height: auto; padding: 0; }
+      .media-card.filled .upload-btn { padding: 0; }
+      .upload-btn.selected::after {
+        content: '✎'; position: absolute; bottom: 8px; right: 8px; z-index: 3;
+        background: rgba(0,0,0,0.5); color: #fff; border-radius: 50%;
+        width: 30px; height: 30px; font-size: 15px;
+        display: flex; align-items: center; justify-content: center; pointer-events: none;
+      }
+      .tile-eye {
+        position: absolute; bottom: 8px; left: 8px; z-index: 4;
+        width: 30px; height: 30px; border: none; border-radius: 50%;
+        background: rgba(0,0,0,0.5); color: #fff; cursor: pointer;
+        display: none; align-items: center; justify-content: center; padding: 0;
+      }
+      .media-card.filled .tile-eye { display: flex; }
+      .tile-eye:hover { background: rgba(0,0,0,0.72); }
+      #media-preview { display: none; position: fixed; inset: 0; z-index: 10000; background: rgba(0,0,0,0.85); align-items: center; justify-content: center; padding: 24px; }
+      #media-preview.open { display: flex; }
+      #media-preview img, #media-preview video { max-width: 100%; max-height: 90vh; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+      #media-preview .mp-close { position: absolute; top: 18px; right: 20px; width: 42px; height: 42px; border-radius: 50%; border: none; background: rgba(255,255,255,0.15); color: #fff; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
       .file-name { font-size: 11px; color: #555; font-weight: 600; text-align: center; margin-top: 8px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .file-size { font-size: 10px; color: #888; font-weight: 500; text-align: center; max-width: 120px; }
       .file-size.warn { color: #d97706; font-weight: 700; }
@@ -427,6 +453,7 @@
                   <img class="icon" src="/assets/photo.png" alt="Photo"/>
                   <img class="preview-img" id="photo-preview-${n}"/>
                 </label>
+                <button type="button" class="tile-eye" id="photo-eye-${n}" title="Preview" data-preview-kind="photo"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></button>
               </div>
               <div class="file-name" id="photo-name-${n}"></div>
               <div class="file-size" id="photo-size-${n}"></div>
@@ -454,6 +481,7 @@
                   <option value="montage">Montage</option>
                   <option value="audio">Audio</option>
                 </select>
+                <button type="button" class="tile-eye" id="video-eye-${n}" title="Preview" data-preview-kind="video"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></button>
               </div>
               <div class="file-name" id="video-name-${n}"></div>
               <div class="file-size" id="video-size-${n}"></div>
@@ -757,6 +785,11 @@
         pairs[n][type] = file;
         const btn = document.getElementById(`${type}-btn-${n}`);
         btn.classList.add('selected');
+        // Fill the whole card with the thumbnail and reveal the eye/pencil controls.
+        const card = btn.closest('.media-card');
+        if (card) card.classList.add('filled');
+        const eyeBtn = document.getElementById(`${type}-eye-${n}`);
+        if (eyeBtn) { try { eyeBtn.dataset.previewUrl = URL.createObjectURL(file); } catch (e) {} }
         const shortName = file.name.length > 18 ? file.name.substring(0,18)+'…' : file.name;
         document.getElementById(`${type}-name-${n}`).textContent = shortName;
         const sizeEl = document.getElementById(`${type}-size-${n}`);
@@ -783,6 +816,29 @@
         }
         checkReady();
       }
+
+      // Eye button on a filled tile → preview the photo full-size / play the video.
+      function openMediaPreview(kind, url) {
+        if (!url) return;
+        let m = document.getElementById('media-preview');
+        if (!m) {
+          m = document.createElement('div'); m.id = 'media-preview';
+          m.innerHTML = '<button class="mp-close" aria-label="Close">&times;</button><img style="display:none"><video controls playsinline style="display:none"></video>';
+          document.body.appendChild(m);
+          const close = () => { m.classList.remove('open'); const v = m.querySelector('video'); v.pause(); v.removeAttribute('src'); v.load(); m.querySelector('img').src = ''; };
+          m.addEventListener('click', (e) => { if (e.target === m || e.target.classList.contains('mp-close')) close(); });
+        }
+        const img = m.querySelector('img'), vid = m.querySelector('video');
+        if (kind === 'video') { img.style.display = 'none'; vid.style.display = 'block'; vid.src = url; vid.currentTime = 0; vid.play().catch(() => {}); }
+        else { vid.style.display = 'none'; vid.pause(); vid.removeAttribute('src'); img.style.display = 'block'; img.src = url; }
+        m.classList.add('open');
+      }
+      document.addEventListener('click', (e) => {
+        const eye = e.target.closest && e.target.closest('.tile-eye');
+        if (!eye) return;
+        e.preventDefault(); e.stopPropagation();
+        openMediaPreview(eye.dataset.previewKind, eye.dataset.previewUrl);
+      });
 
       function pageHasMedia(p) {
         return p && p.photo && (p.mediaType === 'audio' ? !!p.audio : !!p.video);
@@ -1572,6 +1628,10 @@
         switchMediaType(n, 'video');
         const btn = document.getElementById(`video-btn-${n}`);
         if (btn) btn.classList.add('selected');
+        const card = btn && btn.closest('.media-card');
+        if (card) card.classList.add('filled');
+        const eyeBtn = document.getElementById(`video-eye-${n}`);
+        if (eyeBtn) { try { eyeBtn.dataset.previewUrl = URL.createObjectURL(file); } catch (e) {} }
         document.getElementById(`video-name-${n}`).textContent = 'Montage';
         const sizeEl = document.getElementById(`video-size-${n}`);
         sizeEl.textContent = formatFileSize(file.size);
