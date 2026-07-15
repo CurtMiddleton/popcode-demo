@@ -407,7 +407,6 @@
                 <div class="file-name" id="video-name-${n}"></div>
                 <div class="file-size" id="video-size-${n}"></div>
                 <div class="video-msg" id="video-msg-${n}"></div>
-                <button type="button" class="mtg-open-btn" onclick="openMontage(${n})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Make a montage</button>
               </div>
               <div class="audio-slot" id="audio-slot-${n}" style="display:none;">
                 <div class="audio-tile" id="audio-tile-${n}">
@@ -1696,6 +1695,76 @@
     </div>
   </div>
 
+  <!-- Admin-only video-source menu: makes "Make a montage" a choice alongside upload.
+       (iOS owns the Photo Library / Take Video / Choose File sub-menu, which opens
+       when "Upload a video" is chosen.) -->
+  <style>
+    #vsm-overlay { position: fixed; inset: 0; z-index: 9450; display: none; }
+    #vsm-overlay.open { display: block; }
+    .vsm {
+      position: fixed; min-width: 224px; background: #fff; border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(0,0,0,.22); padding: 6px; z-index: 9451;
+      animation: vsmIn .12s ease;
+    }
+    @keyframes vsmIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+    .vsm-item {
+      display: flex; align-items: center; gap: 12px; width: 100%; border: none; background: none;
+      padding: 13px 14px; border-radius: 10px; cursor: pointer; font-family: 'Inter', sans-serif;
+      font-size: 15px; font-weight: 600; color: #1a1a1a; text-align: left;
+    }
+    .vsm-item:hover { background: #f3f2ef; }
+    .vsm-item svg { width: 20px; height: 20px; color: #555; flex-shrink: 0; }
+  </style>
+  <div id="vsm-overlay">
+    <div class="vsm" id="video-src-menu">
+      <button type="button" class="vsm-item" data-act="upload">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Upload a video
+      </button>
+      <button type="button" class="vsm-item" data-act="montage">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+        Make a montage
+      </button>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var menuPage = null, menuInput = null;
+      var overlay = document.getElementById('vsm-overlay');
+      var menu = document.getElementById('video-src-menu');
+      function hide() { overlay.classList.remove('open'); menuPage = null; menuInput = null; }
+      function show(n, inp, anchor) {
+        menuPage = n; menuInput = inp;
+        overlay.classList.add('open');
+        menu.style.visibility = 'hidden'; menu.style.left = '0px'; menu.style.top = '0px';
+        var r = anchor.getBoundingClientRect(), mw = menu.offsetWidth, mh = menu.offsetHeight;
+        var left = Math.min(Math.max(8, r.left), window.innerWidth - mw - 8);
+        var top = r.bottom + 6;
+        if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
+        menu.style.left = left + 'px'; menu.style.top = top + 'px'; menu.style.visibility = '';
+      }
+      // Intercept taps on an empty video tile for admins → show the choice menu.
+      document.addEventListener('click', function (e) {
+        if (!document.body.classList.contains('mtg-admin')) return;
+        var inp = e.target;
+        if (!(inp && inp.matches && inp.matches('.video-slot .upload-btn input[type=file]'))) return;
+        if (inp.dataset.vsmBypass) { delete inp.dataset.vsmBypass; return; } // programmatic upload click
+        var slot = inp.closest('.video-slot'); if (!slot) return;
+        var n = parseInt(slot.id.replace('video-slot-', ''), 10); if (isNaN(n)) return;
+        e.preventDefault(); e.stopPropagation();
+        show(n, inp, slot.querySelector('.upload-btn'));
+      }, true);
+      menu.addEventListener('click', function (e) {
+        var btn = e.target.closest('.vsm-item'); if (!btn) return;
+        var act = btn.dataset.act, n = menuPage, inp = menuInput;
+        hide();
+        if (act === 'upload' && inp) { inp.dataset.vsmBypass = '1'; inp.click(); }
+        else if (act === 'montage' && n != null && typeof openMontage === 'function') { openMontage(n); }
+      });
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) hide(); });
+      window.addEventListener('resize', hide);
+    })();
+  </script>
   <script src="/beta-feedback.js"></script>
       <footer style="margin: 60px auto 16px; padding: 16px 16px 24px; text-align: center; font-size: 12px; color: #888; font-family: 'Inter', sans-serif;">
       <a href="/terms.html" style="color:#888; text-decoration:underline; margin: 0 8px;">Terms</a>
