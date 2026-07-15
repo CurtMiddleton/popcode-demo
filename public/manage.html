@@ -138,7 +138,8 @@
         display: flex; align-items: center; justify-content: center;
         aspect-ratio: 3 / 2; overflow: hidden; cursor: pointer;
       }
-      .design-mat .book-canvas { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .design-mat.book-mat { background: #ffffff; padding: 10px; }
+      .design-mat .book-canvas { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; }
       .design-mat .design-photo { max-width: 100%; max-height: 100%; border-radius: 2px; box-shadow: 0 2px 8px rgba(0,0,0,0.16); }
       .design-date { font-size: 13px; color: #a09a90; margin-top: 20px; font-family: 'Inter', sans-serif; }
 
@@ -759,7 +760,9 @@
         const viewUrl = `https://popcode.app/${col.slug}`;
         const editHref = (isBook ? '/book.html' : '/edit.html') + '?id=' + encodeURIComponent(col.slug);
         const orderHref = isBook ? ('/book.html?id=' + encodeURIComponent(col.slug) + '&order=1') : ('/order.html?id=' + encodeURIComponent(col.slug));
-        const coverPhoto = (isBook && col.book_layout && col.book_layout.cover && col.book_layout.cover.photo_url) || thumbUrl || '';
+        const bookCover = (isBook && col.book_layout && col.book_layout.cover) || {};
+        const coverPhoto = (bookCover.photo_url) || thumbUrl || '';
+        const coverText = { eyebrow: bookCover.eyebrow || '', title: bookCover.title || title, subtitle: bookCover.subtitle || '' };
         const mat = isBook
           ? `<canvas class="book-canvas"></canvas>`
           : `<img class="design-photo" src="${thumbUrl ? escapeHtml(thumbUrl) : ''}" alt="">`;
@@ -774,7 +777,7 @@
               <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
             </button>
           </div>
-          <div class="design-mat">${mat}</div>
+          <div class="design-mat${isBook ? ' book-mat' : ''}">${mat}</div>
           <div class="design-date">${escapeHtml(relTime(col.created_at))}</div>
           <div class="design-menu">
             <a class="dmenu-item" href="${orderHref}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>Order This ${escapeHtml(noun)}</a>
@@ -802,7 +805,7 @@
 
         if (isBook) {
           const cv = card.querySelector('.book-canvas');
-          if (cv) renderBookMockup(cv, coverPhoto).catch(() => {});
+          if (cv) renderBookMockup(cv, coverPhoto, coverText).catch(() => {});
         }
         return card;
       }
@@ -816,48 +819,51 @@
 
       // Composite a book's cover photo into the real Prodigi layflat-book mockup
       // (front cover is axis-aligned; rect measured as fractions of the template).
-      const BOOK_MOCK = { template: '/assets/mockups/book-white.jpg', rect: { x: 0.141, y: 0.264, w: 0.732, h: 0.519 } };
-      async function renderBookMockup(canvas, coverUrl) {
+      // Layflat-book mockup, cropped to the book itself (so it fills the card, not the
+      // template's white margins), with the cover photo + the book's title composited on
+      // — a true thumbnail of the printed cover.
+      const BOOK_MOCK = { template: '/assets/mockups/book-white.jpg', rect: { x: 0.141, y: 0.264, w: 0.732, h: 0.519 }, crop: { x: 0.07, y: 0.20, w: 0.86, h: 0.65 } };
+      function coverTitleCqw(t) { const n = (t || '').trim().length; if (n <= 11) return 9.5; if (n <= 16) return 7.4; if (n <= 24) return 5.7; if (n <= 36) return 4.5; return 3.6; }
+      async function renderBookMockup(canvas, coverUrl, cover) {
+        cover = cover || {};
         const tpl = new Image(); tpl.crossOrigin = 'anonymous';
         await new Promise((res, rej) => { tpl.onload = res; tpl.onerror = rej; tpl.src = BOOK_MOCK.template; });
         const tw = tpl.naturalWidth, th = tpl.naturalHeight;
-        canvas.width = tw; canvas.height = th;
+        const cr = { x: BOOK_MOCK.crop.x * tw, y: BOOK_MOCK.crop.y * th, w: BOOK_MOCK.crop.w * tw, h: BOOK_MOCK.crop.h * th };
+        canvas.width = Math.round(cr.w); canvas.height = Math.round(cr.h);
         const ctx = canvas.getContext('2d');
+        ctx.translate(-cr.x, -cr.y);
         ctx.drawImage(tpl, 0, 0, tw, th);
-        if (!coverUrl) return;
         const r = { x: BOOK_MOCK.rect.x * tw, y: BOOK_MOCK.rect.y * th, w: BOOK_MOCK.rect.w * tw, h: BOOK_MOCK.rect.h * th };
-        let art;
-        try {
-          art = new Image(); art.crossOrigin = 'anonymous';
-          await new Promise((res, rej) => { art.onload = res; art.onerror = rej; art.src = coverUrl; });
-        } catch (_) { return; }
-        // cover-crop the photo to the cover rect's aspect
-        const ar = r.w / r.h, sw = art.naturalWidth, sh = art.naturalHeight;
-        let cw = sw, ch = sh, sx = 0, sy = 0;
-        if (sw / sh > ar) { ch = sh; cw = Math.round(sh * ar); sx = Math.round((sw - cw) / 2); }
-        else { cw = sw; ch = Math.round(sw / ar); sy = Math.round((sh - ch) / 2); }
-        ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
-        ctx.drawImage(art, sx, sy, cw, ch, r.x, r.y, r.w, r.h);
-        // subtle glossy sheen so the photo reads as the printed cover, not a paste
-        const g = ctx.createLinearGradient(r.x, r.y, r.x + r.w, r.y + r.h);
-        g.addColorStop(0, 'rgba(255,255,255,0.16)');
-        g.addColorStop(0.25, 'rgba(255,255,255,0.03)');
-        g.addColorStop(1, 'rgba(0,0,0,0.06)');
-        ctx.fillStyle = g; ctx.fillRect(r.x, r.y, r.w, r.h);
-        // lay-flat spine groove near the left edge, so the fold reads through
-        // the custom photo (highlight ridge + dark indent + falloff shadow).
-        const spineX = r.x + r.w * 0.039;
-        const band = (xc, halfW, color, aPeak) => {
-          const gg = ctx.createLinearGradient(xc - halfW, 0, xc + halfW, 0);
-          gg.addColorStop(0, `rgba(${color},0)`);
-          gg.addColorStop(0.5, `rgba(${color},${aPeak})`);
-          gg.addColorStop(1, `rgba(${color},0)`);
-          ctx.fillStyle = gg; ctx.fillRect(xc - halfW, r.y, halfW * 2, r.h);
-        };
-        band(spineX - r.w * 0.014, r.w * 0.020, '255,255,255', 0.34); // raised highlight
-        band(spineX,               r.w * 0.018, '0,0,0',       0.62); // indent groove
-        band(spineX + r.w * 0.045, r.w * 0.050, '0,0,0',       0.16); // falloff shadow
-        ctx.restore();
+        if (coverUrl) {
+          let art;
+          try {
+            art = new Image(); art.crossOrigin = 'anonymous';
+            await new Promise((res, rej) => { art.onload = res; art.onerror = rej; art.src = coverUrl; });
+          } catch (_) { return; }
+          // cover-crop the photo to the cover rect's aspect
+          const ar = r.w / r.h, sw = art.naturalWidth, sh = art.naturalHeight;
+          let cw = sw, ch = sh, sx = 0, sy = 0;
+          if (sw / sh > ar) { ch = sh; cw = Math.round(sh * ar); sx = Math.round((sw - cw) / 2); }
+          else { cw = sw; ch = Math.round(sw / ar); sy = Math.round((sh - ch) / 2); }
+          ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+          ctx.drawImage(art, sx, sy, cw, ch, r.x, r.y, r.w, r.h);
+          // bottom scrim so the title reads over any photo
+          const g = ctx.createLinearGradient(0, r.y + r.h * 0.4, 0, r.y + r.h);
+          g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.5)');
+          ctx.fillStyle = g; ctx.fillRect(r.x, r.y, r.w, r.h);
+          // cover title (eyebrow italic / title serif / date caps), bottom-left, white —
+          // mirrors book.html's cover overlay so the thumbnail matches the printed cover.
+          try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (_) {}
+          const L = r.x + 0.085 * r.w, bottom = r.y + r.h - 0.085 * r.h;
+          ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+          const eyeF = Math.round(0.030 * r.w), titF = Math.round(coverTitleCqw(cover.title) / 100 * r.w), subF = Math.round(0.024 * r.w);
+          let y = bottom;
+          if (cover.subtitle) { ctx.font = '600 ' + subF + 'px Inter, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.fillText(String(cover.subtitle).toUpperCase(), L, y); y -= subF * 1.7; }
+          if (cover.title) { ctx.font = "400 " + titF + "px 'CooperBT', Georgia, serif"; ctx.fillStyle = '#fff'; const lines = String(cover.title).split('\n'); for (let i = lines.length - 1; i >= 0; i--) { ctx.fillText(lines[i], L, y); y -= titF; } }
+          if (cover.eyebrow) { ctx.font = "italic 400 " + eyeF + "px 'CooperBT', Georgia, serif"; ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.fillText(cover.eyebrow, L, y + titF * 0.05); }
+          ctx.restore();
+        }
       }
 
       // Download-modal state (shared so the badge-size toggle can re-render).

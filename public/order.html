@@ -29,11 +29,11 @@
       .nav-link svg { flex-shrink:0; color:#555; }
       .nav-link.external { color:#666; font-size:14px; }
       .nav-divider { height:1px; background:#ececec; margin:8px 0; }
-      .wrap { width:100%; max-width: 1040px; margin: 0 auto; padding: 22px 28px 140px; }
+      .wrap { width:100%; max-width: 1040px; margin: 0 auto; padding: 44px 28px 140px; }
       a.back, .linkback { display:inline-flex; align-items:center; gap:6px; color:#7657FC; background:none; border:none; text-decoration:none; font-weight:600; font-size:14px; margin-bottom:22px; cursor:pointer; font-family:'Inter',sans-serif; }
-      h1 { font-family:'CooperBT', Georgia, serif; font-size: 54px; font-weight:400; margin-bottom: 10px; letter-spacing:-0.01em; }
-      @media (max-width: 680px) { h1 { font-size: 36px; } }
-      .sub { color:#666; font-size:16px; margin-bottom:48px; }
+      h1 { font-family:'CooperBT', Georgia, serif; font-size: 44px; font-weight:400; margin-bottom: 16px; letter-spacing:-0.01em; }
+      @media (max-width: 680px) { h1 { font-size: 36px; } .wrap { padding-top: 28px; } }
+      .sub { color:#666; font-size:16px; line-height:1.5; margin-bottom:32px; max-width:560px; }
       .card { background:#fff; border-radius:22px; padding:30px; margin-bottom:26px; box-shadow:0 2px 12px rgba(0,0,0,0.05); }
       .card h2 { font-size:17px; font-weight:600; margin-bottom:20px; }
       label { display:block; font-size:13px; font-weight:500; margin:18px 0 8px; color:#333; }
@@ -941,6 +941,24 @@
       // shows the product shot as-is; once picked, the badged photo composites into the
       // product's art opening. Multiple shots become a swipeable gallery. The old drawn
       // room "scenes" are retired — real product photography reads better.
+      // Scale the preview to the chosen size so a 24×36" reads bigger than an 8×10".
+      // Maps the variant's longest edge across the product's size range onto a display
+      // scale (smallest → 0.6, largest → 1.0).
+      function sizeScaleFor(type, variantId) {
+        const arr = PRODUCTS[type] || [];
+        const longEdge = s => Math.max(...String(s).replace(/[^0-9×x.]/g, '').split(/[×x]/).map(n => parseFloat(n) || 0));
+        const cur = arr.find(v => v.id === variantId);
+        if (!cur || arr.length < 2) return 1;
+        const dims = arr.map(v => longEdge(v.size));
+        const lo = Math.min(...dims), hi = Math.max(...dims);
+        if (hi === lo) return 1;
+        return 0.6 + 0.4 * ((longEdge(cur.size) - lo) / (hi - lo));
+      }
+      function applySizeScale(cv) {
+        const sc = sizeScaleFor(state.productType, state.variantId);
+        cv.style.maxHeight = Math.round(400 * sc) + 'px';
+        cv.style.maxWidth = Math.round(100 * sc) + '%';
+      }
       async function renderDetailPreview() {
         const aspect = currentAspect();
         const cv = document.getElementById('detail-canvas');
@@ -948,6 +966,7 @@
         if (!views.length) { paintScenes(await getArtImage(aspect), aspect); updateDetailCta(); return; }
         if (state.galleryIndex >= views.length) state.galleryIndex = 0;
         try { await renderGalleryView(cv, views[state.galleryIndex], aspect); } catch (_) {}
+        applySizeScale(cv);
         buildGalleryStrip(views, aspect);
         updateDetailCta();
       }
