@@ -125,7 +125,7 @@
         .audio-duration { font-size: 13px; }
         .audio-rerecord { font-size: 12px; padding: 5px 16px; }
       }
-      .page { margin-bottom: 48px; position: relative; display: flex; flex-direction: column; align-items: center; }
+      .page { margin-bottom: 48px; position: relative; display: flex; flex-direction: column; align-items: flex-start; }
       .page-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; width: 404px; max-width: 100%; }
       .page-label { background: #1a1a1a; color: white; border-radius: 50%; width: 28px; height: 28px; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
       .remove-page-btn { background: #1a1a1a; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -1200,6 +1200,24 @@
         mtgStatus('', null, '');
       }
 
+      // Save the rendered montage MP4 to the device. On iOS/Android the native
+      // share sheet offers "Save Video" (to Photos); otherwise fall back to a
+      // plain download. Must run in the click gesture for navigator.share(files).
+      async function mtgSaveVideo() {
+        if (!montageResult) return;
+        try {
+          if (navigator.canShare && navigator.canShare({ files: [montageResult] })) {
+            await navigator.share({ files: [montageResult], title: 'Popcode montage' });
+            return;
+          }
+        } catch (e) { /* user cancelled or share unavailable — fall through to download */ }
+        const url = URL.createObjectURL(montageResult);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'popcode-montage.mp4';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 15000);
+      }
+
       function openMontage(n) {
         if (montageBusy) return;
         montageState = { page: n, photos: [], perSec: 3, transition: 'kenburns', aspect: 'portrait', musicId: 'none' };
@@ -1704,6 +1722,8 @@
     .mtg-preview-inner { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 0; }
     .mtg-preview video { max-width: 100%; max-height: 56vh; border-radius: 14px; background: #000; }
     .mtg-preview-note { font-size: 14px; color: #8a8a8a; font-family: 'Inter', sans-serif; margin: 0; text-align: center; }
+    .mtg-save-link { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; color: #2563eb; font-weight: 700; font-size: 13px; cursor: pointer; font-family: 'Inter', sans-serif; padding: 4px; }
+    .mtg-save-link:hover { text-decoration: underline; }
     .mtg-preview-actions { display: flex; gap: 12px; padding-top: 16px; border-top: 1px solid #eee; }
     .mtg-preview-actions button { flex: 1; border: none; border-radius: 999px; font-weight: 700; font-size: 15px; padding: 14px; cursor: pointer; font-family: 'Inter', sans-serif; }
     .mtg-redo { background: #fff; color: #1a1a1a; border: 1px solid #e4e2dc !important; }
@@ -1767,6 +1787,7 @@
         <div class="mtg-preview-inner">
           <video id="mtg-preview-video" playsinline controls muted loop></video>
           <p class="mtg-preview-note">Here's your montage. Use it, or start over to change photos, order, or music.</p>
+          <button type="button" class="mtg-save-link" onclick="mtgSaveVideo()"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Save video to your photos</button>
         </div>
         <div class="mtg-preview-actions">
           <button type="button" class="mtg-redo" onclick="mtgRedoPreview()">Start over</button>
