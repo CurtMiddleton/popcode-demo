@@ -68,11 +68,16 @@
       .detail-preview { background:#fff; border-radius:22px; padding:36px; box-shadow:0 2px 12px rgba(0,0,0,0.05); display:flex; align-items:center; justify-content:center; min-height:380px; }
       .detail-preview canvas { max-width:100%; max-height:400px; border-radius:2px; }
       .detail-left { display:flex; flex-direction:column; gap:14px; }
-      .view-row { display:flex; gap:10px; }
-      .view-thumb { flex:1; border:2px solid #eceae4; border-radius:10px; overflow:hidden; cursor:pointer; padding:0; background:#fff; line-height:0; transition:border-color .12s; }
+      .view-row { display:flex; gap:10px; align-items:center; }
+      .gal-thumbs { display:flex; gap:10px; overflow-x:auto; flex:1; scrollbar-width:none; }
+      .gal-thumbs::-webkit-scrollbar { display:none; }
+      .gal-arrow { flex:0 0 auto; width:32px; height:52px; border:1px solid #eceae4; border-radius:9px; background:#fff; color:#555; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center; transition:border-color .12s, opacity .12s; }
+      .gal-arrow:hover:not(:disabled) { border-color:#cfc9f5; color:#7657FC; }
+      .gal-arrow:disabled { opacity:.3; cursor:default; }
+      .view-thumb { flex:0 0 64px; border:2px solid #eceae4; border-radius:10px; overflow:hidden; cursor:pointer; padding:0; background:#fff; line-height:0; transition:border-color .12s; display:flex; align-items:center; justify-content:center; height:64px; }
       .view-thumb:hover { border-color:#cfc9f5; }
       .view-thumb.active { border-color:#7657FC; }
-      .view-thumb canvas { width:100%; height:auto; display:block; }
+      .view-thumb canvas { max-width:100%; max-height:100%; width:auto; height:auto; display:block; }
       .detail-preview.frame-framed canvas { border:14px solid #1a1a1a; background:#fff; padding:12px; box-shadow:0 6px 18px rgba(0,0,0,0.25); }
       .detail-preview.frame-tile canvas { border:8px solid #fff; box-shadow:0 6px 18px rgba(0,0,0,0.22); }
       .detail-preview.frame-canvas canvas { box-shadow:10px 10px 0 #d9d4ca, 0 6px 18px rgba(0,0,0,0.18); }
@@ -133,7 +138,6 @@
     </div>
 
     <div class="wrap">
-      <a class="back" href="/manage.html">&larr; My Popcodes</a>
       <h1>Shop</h1>
       <div class="sub" id="project-name">Pick a size and a photo — we’ll print it with a small Popcode badge so people know they can scan the photo to bring it to life.</div>
 
@@ -329,10 +333,25 @@
         print:  { template: '/assets/mockups/print.jpg',  rect: { x: 0.190,  y: 0.113, w: 0.626, h: 0.782 }, shadow: true },
       };
 
+      // Per-product product-photo GALLERY (like Prodigi's own product-page galleries).
+      // Each entry is a product shot. If it has a `rect` (art opening, fractions of the
+      // image), the chosen photo composites into it; without a `rect` it's a context
+      // shot shown as-is (e.g. a corner/detail angle). The first entry is the hero.
+      // Add more angles per product by dropping the image in /assets/mockups/ and listing
+      // it here (with a measured `rect` if the photo should composite into it). The
+      // thumbnail strip appears automatically once a product has 2+ shots.
+      const GALLERY = {
+        framed: [ MOCKUPS.framed ],
+        print:  [ MOCKUPS.print ],
+        canvas: [ MOCKUPS.canvas ],
+        tile:   [ MOCKUPS.tile ],
+      };
+      const galleryFor = p => (GALLERY[p] || []).filter(Boolean);
+
       let currentUser = null;
       let collection = null;
       let photos = [];
-      let state = { step: 'detail', productType: null, variantId: null, orientation: 'portrait', scale: 0.06, selectedPhoto: null, scene: 'plain' };
+      let state = { step: 'detail', productType: null, variantId: null, orientation: 'portrait', scale: 0.06, selectedPhoto: null, scene: 'plain', galleryIndex: 0 };
 
       function variantOf(type, id) { return (PRODUCTS[type] || []).find(v => v.id === id) || null; }
       function baseAspect() { const v = variantOf(state.productType, state.variantId); return v ? v.aspect : null; }
@@ -678,7 +697,7 @@
         state.productType = type;
         state.variantId = PRODUCTS[type][0].id;
         state.orientation = 'portrait';
-        state.scene = 'plain'; // reset the active view so a framed-only scene doesn't linger on other products
+        state.galleryIndex = 0; // reset to the hero product shot when switching products
         const meta = CATEGORY_META[type];
         document.getElementById('detail-name').textContent = meta.name;
         document.getElementById('detail-tagline').textContent = meta.tagline;
@@ -873,10 +892,63 @@
         placeProduct(ctx, art, { x, y, w, h }, id, state.productType, frame);
       }
 
+      // Draw the clean Prodigi product shot as-is (shown before a photo is chosen).
+      async function showMockupTemplate(cv, mk) {
+        const tpl = new Image(); tpl.crossOrigin = 'anonymous';
+        await new Promise((res, rej) => { tpl.onload = res; tpl.onerror = rej; tpl.src = mk.template; });
+        const maxDim = 900;
+        const s = Math.min(1, maxDim / Math.max(tpl.naturalWidth, tpl.naturalHeight));
+        cv.width = Math.round(tpl.naturalWidth * s);
+        cv.height = Math.round(tpl.naturalHeight * s);
+        cv.getContext('2d').drawImage(tpl, 0, 0, cv.width, cv.height);
+      }
+      // Render one gallery view (product shot) into a canvas. With a chosen photo and an
+      // art `rect`, composite it in; otherwise show the clean product shot as-is.
+      async function renderGalleryView(cv, view, aspect) {
+        if (view.rect && state.selectedPhoto) {
+          try { await renderProductMockup(cv, state.selectedPhoto.url, { scale: state.scale, aspect, mockup: view }); return; }
+          catch (_) { /* fall through to plain product shot */ }
+        }
+        await showMockupTemplate(cv, view);
+      }
+      // Build the thumbnail strip (with ‹ › arrows), like Prodigi's product-page gallery.
+      // Hidden when a product has a single shot — nothing to switch between.
+      function buildGalleryStrip(views, aspect) {
+        const row = document.getElementById('view-row');
+        row.innerHTML = '';
+        if (views.length < 2) return;
+        const mkArrow = (dir, disabled) => {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'gal-arrow'; b.disabled = disabled;
+          b.innerHTML = dir < 0 ? '&lsaquo;' : '&rsaquo;';
+          b.onclick = () => { state.galleryIndex = Math.max(0, Math.min(views.length - 1, state.galleryIndex + dir)); renderDetailPreview(); };
+          return b;
+        };
+        row.appendChild(mkArrow(-1, state.galleryIndex === 0));
+        const strip = document.createElement('div'); strip.className = 'gal-thumbs';
+        views.forEach((v, i) => {
+          const btn = document.createElement('button');
+          btn.type = 'button'; btn.className = 'view-thumb' + (i === state.galleryIndex ? ' active' : '');
+          const c = document.createElement('canvas'); btn.appendChild(c);
+          strip.appendChild(btn);
+          renderGalleryView(c, v, aspect);
+          btn.onclick = () => { state.galleryIndex = i; renderDetailPreview(); };
+        });
+        row.appendChild(strip);
+        row.appendChild(mkArrow(1, state.galleryIndex === views.length - 1));
+      }
+      // The detail preview is the real Prodigi product photo. Before a photo is picked it
+      // shows the product shot as-is; once picked, the badged photo composites into the
+      // product's art opening. Multiple shots become a swipeable gallery. The old drawn
+      // room "scenes" are retired — real product photography reads better.
       async function renderDetailPreview() {
         const aspect = currentAspect();
-        const art = await getArtImage(aspect);
-        paintScenes(art, aspect);
+        const cv = document.getElementById('detail-canvas');
+        const views = galleryFor(state.productType);
+        if (!views.length) { paintScenes(await getArtImage(aspect), aspect); updateDetailCta(); return; }
+        if (state.galleryIndex >= views.length) state.galleryIndex = 0;
+        try { await renderGalleryView(cv, views[state.galleryIndex], aspect); } catch (_) {}
+        buildGalleryStrip(views, aspect);
         updateDetailCta();
       }
       // Repaint main preview + the 4 view thumbnails from an already-loaded art image
