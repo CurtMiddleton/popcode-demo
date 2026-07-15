@@ -16,7 +16,7 @@
     <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=2">
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
-    <title>Popcode — Edit Project</title>
+    <title>Popcode — Edit Popcode</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
@@ -203,6 +203,18 @@
         display: flex; align-items: center; justify-content: center;
         pointer-events: none;
       }
+      /* Eye = preview the photo / play the video (opposite corner to the ✎ replace). */
+      .tile-eye {
+        position: absolute; bottom: 6px; left: 6px; z-index: 3;
+        width: 28px; height: 28px; border: none; border-radius: 50%;
+        background: rgba(0,0,0,0.5); color: #fff; cursor: pointer;
+        display: flex; align-items: center; justify-content: center; padding: 0;
+      }
+      .tile-eye:hover { background: rgba(0,0,0,0.72); }
+      #media-preview { display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.85); align-items: center; justify-content: center; padding: 24px; }
+      #media-preview.open { display: flex; }
+      #media-preview img, #media-preview video { max-width: 100%; max-height: 90vh; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+      #media-preview .mp-close { position: absolute; top: 18px; right: 20px; width: 42px; height: 42px; border-radius: 50%; border: none; background: rgba(255,255,255,0.15); color: #fff; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
       .file-name { font-size: 11px; color: #555; font-weight: 600; text-align: center; margin-top: 8px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .file-size { font-size: 10px; color: #888; font-weight: 500; text-align: center; max-width: 120px; }
       .file-size.warn { color: #d97706; font-weight: 700; }
@@ -446,7 +458,7 @@
     </div>
 
     <div class="page-top-bar">
-      <h1>Edit Project</h1>
+      <h1>Edit Popcode</h1>
       <a href="/manage.html" style="font-size:13px;font-weight:700;color:#7657FC;text-decoration:none;white-space:nowrap;">&#8249; My Popcodes</a>
     </div>
     <p class="subtitle" id="edit-subtitle">Tap any photo or video to replace it. Add or remove pages.</p>
@@ -670,6 +682,30 @@
 
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      const IC_EYE = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+      // Preview modal: eye button on a tile opens the photo full-size / plays the video.
+      function openMediaPreview(kind, url) {
+        if (!url) return;
+        let m = document.getElementById('media-preview');
+        if (!m) {
+          m = document.createElement('div'); m.id = 'media-preview';
+          m.innerHTML = '<button class="mp-close" aria-label="Close">&times;</button><img style="display:none"><video controls playsinline style="display:none"></video>';
+          document.body.appendChild(m);
+          const close = () => { m.classList.remove('open'); const v = m.querySelector('video'); v.pause(); v.removeAttribute('src'); v.load(); m.querySelector('img').src = ''; };
+          m.addEventListener('click', (e) => { if (e.target === m || e.target.classList.contains('mp-close')) close(); });
+        }
+        const img = m.querySelector('img'), vid = m.querySelector('video');
+        if (kind === 'video') { img.style.display = 'none'; vid.style.display = 'block'; vid.src = url; vid.currentTime = 0; vid.play().catch(() => {}); }
+        else { vid.style.display = 'none'; vid.pause(); vid.removeAttribute('src'); img.style.display = 'block'; img.src = url; }
+        m.classList.add('open');
+      }
+      document.addEventListener('click', (e) => {
+        const eye = e.target.closest && e.target.closest('.tile-eye');
+        if (!eye) return;
+        e.preventDefault(); e.stopPropagation();
+        openMediaPreview(eye.dataset.previewKind, eye.dataset.previewUrl);
+      });
 
       const MAX_VIDEO_MB = 200;
       const MAX_PHOTO_MB = 10;
@@ -1254,6 +1290,7 @@
               <label class="upload-btn selected replaceable" id="photo-btn-${key}" title="Tap to replace photo">
                 <input type="file" accept="image/*" style="position:absolute;top:0;right:0;bottom:0;left:0;opacity:0;cursor:pointer;width:100%;height:100%;"/>
                 <img class="preview-img" id="photo-preview-${key}" src="${escapeHtml(photoThumb)}" style="display:block;"/>
+                ${photoThumb ? `<button type="button" class="tile-eye" data-preview-kind="photo" data-preview-url="${escapeHtml(photoThumb)}" title="Preview photo">${IC_EYE}</button>` : ''}
               </label>
               <div class="existing-badge" id="photo-badge-${key}">Tap to replace</div>
             </div>
@@ -1263,6 +1300,7 @@
                   <input type="file" accept="video/*" style="position:absolute;top:0;right:0;bottom:0;left:0;opacity:0;cursor:pointer;width:100%;height:100%;"/>
                   <img class="preview-img" id="video-preview-${key}" style="display:block;"/>
                   <span class="play-overlay" style="display:block;"></span>
+                  ${videoThumb ? `<button type="button" class="tile-eye" data-preview-kind="video" data-preview-url="${escapeHtml(videoThumb)}" title="Play video">${IC_EYE}</button>` : ''}
                 </label>
                 <div class="existing-badge" id="video-badge-${key}">Tap to replace</div>
               </div>
