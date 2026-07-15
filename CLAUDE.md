@@ -1129,3 +1129,57 @@ Task was "add Sentry like we just did for Bashō (a Next.js 14 app)." **Popcode 
 - Physical **print book** → Prodigi (book SKU + 300 DPI server-side render/cover-wrap/bleed).
 - **Calendars** (same page engine, different product).
 - Optional: auto-balance odd-content books to even so the inside-back blank always faces the last photo.
+
+### 2026-07-15 — Montage maker (Apple-Photos-style memory video) shipped end-to-end + a pile of create/manage/book polish
+
+**Branch `claude/popcode-memory-video-maker-7ybxh7`. Everything merged to `main` incrementally (no single PR) — ~18 commits. All live in prod.** Long, iterative session driven by the user watching it on a real iPhone and firing rapid feedback. The headline is the **montage maker**; the rest is polish that piled up alongside.
+
+#### THE MONTAGE MAKER (the big feature) — DONE + validated on a real phone with real music
+Apple-Photos-style memory video maker built into the Create flow. On a page's video slot, a creator picks photos, orders them, chooses motion + shape + music, we render an MP4 via **Shotstack**, they preview it, and it links to the page's photo exactly like an uploaded video. **Nothing downstream changed** — output is a normal `{slug}/video_N.mp4` in `experiences`, so view/scan/AR are untouched. No DB migration.
+
+**Architecture (files):**
+- `lib/montage/timeline.mjs` — montage description → Shotstack "edit" JSON. Crossfade via 0.5s clip overlap + fade-in; Ken Burns via `zoomInSlow`/`zoomOutSlow` (see gotcha); soundtrack `fadeInFadeOut`; output sizes portrait/landscape/square. Dynamic-`import()`ed by the api fn (ERR_REQUIRE_ESM if static-imported).
+- `api/create-montage.js` — POST, starts a render (2–40 https image URLs). **HEAD-checks the music URL and drops it (renders silent) if unreachable** rather than letting Shotstack fail the whole render; returns `musicSkipped`. Dry-run when `SHOTSTACK_API_KEY` unset (mirrors PRODIGI_DRY_RUN).
+- `api/montage-status.js` — GET poll; maps Shotstack lifecycle → `queued|rendering|done|failed`. Terminal status is **`done`** (not "completed" — the doc summarizer lied).
+- `api/montage-file.js` — same-origin CORS proxy to pull the finished MP4 into the browser (Shotstack S3 output has no CORS), SSRF-guarded to shotstack hosts. Lets the client blob it → re-host durably in Supabase on save.
+- `public/montage-music.js` — curated track manifest (5 moods). Files live in `public/assets/music/*.mp3`.
+- `public/create.html` — the builder overlay + orchestration (all `mtg*` / `.mtg-*`) + the video-source dropdown.
+
+**Env (Vercel, all envs as needed):** `SHOTSTACK_API_KEY`, `SHOTSTACK_BASE_URL` (sandbox `https://api.shotstack.io/edit/stage`, prod `.../edit/v1`), `MONTAGE_DRY_RUN`. **Currently set to SANDBOX** (watermarked output). User created a Shotstack account; key is in Vercel. Endpoint verified: `POST {base}/render`, header `x-api-key`, `response.id` / `response.status` / `response.url`.
+
+**The iterative journey (each shipped):** initial build (admin-gated, dry-run) → **fit `cover`→`crop`** (cover STRETCHES/distorts; crop preserves aspect — this was the "squooshed images") → **photo compression** (ported book maker's `optimizePhoto` into create.html: the montage picker downscales to 1920px, and the main "Photo to scan" picker now downscales oversized photos to 2560px instead of the old size-limit rejection) → **preview-before-commit** (render plays in the overlay with Use / Start over; **closing with a rendered montage KEEPS it** — applies to the page — so a missed "Use" doesn't lose it; only Start over discards) → **book-maker redesign** (black/white/warm-gray, no purple, CooperBT 32px title, generous spacing, clean line icons) → **seconds slider → number stepper (− value +)** → **photo-tray grid** (wrap, all thumbnails visible, arrows removed, **drag-to-reorder mouse+touch** via ghost + hover-reorder + re-render; touch works because grid has `touch-action:none`, no scroll conflict) → **calmer Ken Burns** (slow zooms only) → **real CC0 music** → **video-source dropdown** (see below).
+
+**Music:** the sandbox blocks Pixabay/FMA (403) and archive.org (503); only GitHub raw is reachable, and no license-verifiable CC0 music set was findable there; the bundled ffmpeg is stripped (no lavfi/mp3, can't synthesize). So **I could NOT auto-source CC0 audio.** The **user downloaded 5 tracks themselves** (uplifting/sentimental/cinematic/playful/calm.mp3, ~3–4 MB each) and pushed them to `public/assets/music/` from their MBP. Verified live (all 200 `audio/mpeg`) and a **real prod render WITH music succeeded** (`musicSkipped:false`, output MP4 has an `mp4a` audio track — confirmed via atom scan since bundled ffmpeg can't demux).
+
+**Video-source dropdown (the "montage as a choice, not a button" fix):** the montage was a tile/button under "Plays on scan"; user wanted it as a choice in the video dropdown. **iOS owns the Photo Library / Take Video / Choose File native picker — you cannot add a 4th item to Apple's menu.** So: tapping the video tile (admin only) opens a small **Popcode** menu (`#video-src-menu`) — "Upload a video" (→ triggers the native input, which shows Apple's 3 options) and "Make a montage" (→ builder). Implemented as a **capture-phase click interceptor** on `.video-slot .upload-btn input[type=file]` with a `vsmBypass` dataset flag so the programmatic upload click passes through. Non-admins are unaffected (tile → native picker directly), so it's ready for all users the moment the gate drops.
+
+**Admin gate:** the "Make a montage" affordance is gated to `curtmid@gmail.com` / `curt@theworkshop.works` via `body.mtg-admin` (set in the auth callback). **Still gated — drop it (remove the gate) once the user's happy after real-phone testing** so all users get the montage maker.
+
+**Dry-run:** with no key (or `MONTAGE_DRY_RUN=true`) the whole builder runs but stops at a "Preview mode" banner instead of a real MP4.
+
+#### Other create.html polish (all shipped to prod)
+- **Form centering:** `.form-col` → `align-items:center`. Everything (fields, labels, tile block, both buttons) centers on the page; the h1 "New Popcode" + subtitle stay left (they live in `.page-top-bar`/`.subtitle`, outside `.form-col`). User asked for exactly this.
+- Earlier the tile block was centered on the page too (via `.pages{align-self:center}`) — the montage button was NOT the cause of the off-center (verified with/without).
+
+#### manage.html
+- **"+ New Popcode" button** now sits beside the "My Popcodes" heading (one `.top-bar-head` flex row: title left, button right; subtitle below). Was a flex sibling of the whole text block with `flex-wrap:wrap`, so it wrapped under the subtitle on narrow screens.
+
+#### book.html
+- **Last spread is always `[numbered page | blank]`, same size.** `ensureBookEndpapers` was always adding the inside-front blank → odd content made the total odd → the inside-back blank was orphaned as a mis-sized `[empty | blank]`. Fix: add the inside-front blank **only when content count is even** (keeps total even). Trade-off: odd-content books open directly on Page 1 (no blank inside-front cover). Verified odd (Page 3) + even (Page 4) both end `[Page N | Blank Page]`, both halves 491px.
+
+#### order.html
+- **Badge wording fix:** "…print it with a scannable Popcode badge" → "…print it with a small Popcode badge so people know they can scan the photo to bring it to life." (The badge only *indicates* scannability; you scan the photo, not the badge.)
+
+#### QUEUED / NOT DONE (next session)
+- **Book-editor Popsa-style redesign (3 parts, user speced, NOT started):** (1) Header = book title + pencil-edit + "Hardcover Photo Book · last edited {date}" subtext, replacing "Make a Book" + the Book-title input (keep `#title-input` hidden — ~10 refs read it). (2) Cover editing via the existing **"Edit title" popup** (eyebrow/title/date), remove the on-cover contenteditable. (3) **Front + back covers get the interior-page layout picker** (1/2/3/4-photo layouts) with the title overlay on top — the big one; turns covers into layout-driven pages (touches cover renderer, proof/print output, save shape). Do on a preview.
+- **edit.html eye-preview** (still queued from the book sessions): eye icon on each media tile (opposite the pencil) to preview the photo / play the video. Audio already has a play button, so it's really photo + video.
+- **Drop the montage admin gate** after real-phone sign-off.
+- **Shotstack → production** key + `.../edit/v1` (currently sandbox = watermarked).
+
+#### Gotchas / lessons (don't relearn)
+- **Shotstack `fit`:** `crop` (default) preserves aspect + crops to fill; **`cover` STRETCHES/distorts**; `contain` letterboxes. (The docs auto-summarizer had crop/cover backwards — trust the user's observed behavior.) Motion effects support `Slow`/`Fast` suffixes; base `zoomIn` etc. are the calmer ones.
+- **iOS owns the native file-picker menu** (Photo Library/Take Video/Choose File) — can't inject items. Wrap it in your own menu if you need more choices.
+- **Sandbox network:** Pixabay/FMA/jsdelivr = 403, archive.org = 503; **GitHub raw + npm registry = reachable.** Bundled ffmpeg at `/opt/pw-browsers/ffmpeg-1011/ffmpeg-linux` is **stripped** (no lavfi, no libmp3lame — can't synthesize or encode audio).
+- **zsh interactive doesn't treat `#` as a comment** — pasting command blocks with inline `#` comments breaks on any apostrophe ("sandbox's" → "missing end of string"). Give the user comment-free command blocks.
+- **Headless testing create/book.html:** `playwright-core` in scratchpad, chromium `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, stub `window.supabase` + abort sentry via `page.route`, serve `public/` at `python3 -m http.server 8099` **(cd into public/ FIRST — a repo-root server 404s /create.html)**. Elements with `touch-action:none/pan-x` need dispatched `PointerEvent`s, not `page.mouse`. Test scripts live in scratchpad (`test-montage2/3`, `test-vsm`, `test-center2`, `test-book`, etc.).
+- **Vercel env changes apply to the NEXT build only** (recurring). Parallel-Macs: the user pushes from their MBP too — `git pull` before push; I `git fetch origin main && git checkout -B main origin/main && merge --no-ff && push` each time, and re-sync the feature branch after.
