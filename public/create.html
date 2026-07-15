@@ -99,6 +99,14 @@
       }
       #code-input { text-transform: lowercase; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
       #code-input::placeholder { font-size: 13px; text-transform: none; letter-spacing: 0; color: #aaa; }
+      /* URL row: popcode.app/{slug} · Edit (replaces the confusing "code" field) */
+      .url-row { display: flex; align-items: center; gap: 14px; width: 100%; max-width: 420px; margin-bottom: 40px; flex-wrap: wrap; }
+      .url-display { font-size: 16px; }
+      .url-base { color: #888; }
+      .url-slug { color: #1a1a1a; font-weight: 700; }
+      .url-row #code-input { display: none; margin: 0; flex: 1 1 200px; max-width: 240px; }
+      .url-edit-btn { background: none; border: none; color: #2563eb; font-size: 13px; font-weight: 700; cursor: pointer; padding: 0; font-family: 'Inter', sans-serif; }
+      .url-edit-btn:hover { text-decoration: underline; }
       .pages { width: 100%; max-width: 420px; align-self: flex-start; }
 
       @media (min-width: 960px) {
@@ -232,9 +240,9 @@
       @keyframes rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 
-      .add-page-btn { width: 100%; max-width: 420px; padding: 16px; border-radius: 30px; border: 1px solid #d8d8d8; background: white; color: #1a1a1a; font-size: 16px; font-weight: 500; cursor: pointer; margin-bottom: 16px; transition: background 0.2s, border-color 0.2s; font-family: 'Inter', sans-serif; }
-      .add-page-btn:hover { background: #f5f5f5; border-color: #c8c8c8; }
-      .create-btn { width: 100%; max-width: 420px; padding: 16px; border-radius: 30px; border: none; background: #1a1a1a; color: white; font-size: 16px; font-weight: 500; cursor: pointer; transition: opacity 0.3s, box-shadow 0.3s; font-family: 'Inter', sans-serif; opacity: 0.6; }
+      .add-page-btn { width: 100%; max-width: 420px; padding: 16px; border-radius: 30px; border: none; background: #eeeeee; color: #333333; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 16px; transition: background 0.2s; font-family: 'Inter', sans-serif; }
+      .add-page-btn:hover { background: #e0e0e0; }
+      .create-btn { width: 100%; max-width: 420px; padding: 16px; border-radius: 30px; border: none; background: #1a1a1a; color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: opacity 0.3s, box-shadow 0.3s; font-family: 'Inter', sans-serif; opacity: 0.6; }
       .create-btn:hover { background: #000000; opacity: 1; }
       .create-btn:disabled { opacity: 0.4; cursor: not-allowed; }
       .create-btn.ready { opacity: 1; box-shadow: 0 0 0 0 rgba(0,0,0,0.4); animation: pulse-ring 1.8s ease-out infinite; }
@@ -330,9 +338,14 @@
       <div class="field-label">Popcode Name</div>
       <input type="text" id="name-input" placeholder="" />
 
-      <div class="field-label">Custom code <span style="font-weight:500;color:#888;">(optional)</span></div>
-      <input type="text" id="code-input" placeholder="e.g. ge2025 or leave blank" maxlength="10" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"/>
-      <div class="field-hint" id="code-hint">6&ndash;10 letters or numbers. Leave blank for an auto-generated code.</div>
+      <div class="field-label">URL</div>
+      <div class="url-row">
+        <span class="url-display" id="url-display"><span class="url-base">popcode.app/</span><span class="url-slug" id="url-slug"></span></span>
+        <input type="text" id="code-input" maxlength="10" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="display:none;"/>
+        <button type="button" class="url-edit-btn" id="url-edit-btn">Edit</button>
+        <button type="button" class="url-edit-btn" id="url-done-btn" style="display:none;">Done</button>
+      </div>
+      <div class="field-hint" id="code-hint">Your shareable link — auto&#8209;generated. Tap Edit to customize it.</div>
 
       <div class="pages" id="pages"></div>
 
@@ -894,6 +907,34 @@
         const token = ++codeCheckToken;
         codeCheckTimer = setTimeout(() => checkCodeAvailable(code, token), 350);
       });
+
+      // URL row: seed an auto-generated slug and toggle the inline editor. The
+      // hidden #code-input still drives submit, so this is purely presentational
+      // over the existing code logic. WYSIWYG: what's shown is what gets used.
+      (function initUrlRow() {
+        const urlSlug = document.getElementById('url-slug');
+        const urlDisplay = document.getElementById('url-display');
+        const editBtn = document.getElementById('url-edit-btn');
+        const doneBtn = document.getElementById('url-done-btn');
+        const seeded = randomSlug();
+        codeInput.value = seeded;
+        urlSlug.textContent = seeded;
+        function toggle(on) {
+          codeInput.style.display = on ? 'inline-block' : 'none';
+          urlDisplay.style.display = on ? 'none' : '';
+          editBtn.style.display = on ? 'none' : '';
+          doneBtn.style.display = on ? '' : 'none';
+          if (on) { codeInput.focus(); codeInput.select(); }
+          else {
+            const v = normalizeCode(codeInput.value);
+            if (!v) codeInput.value = seeded;              // never leave it blank
+            urlSlug.textContent = normalizeCode(codeInput.value) || seeded;
+          }
+        }
+        editBtn.addEventListener('click', () => toggle(true));
+        doneBtn.addEventListener('click', () => toggle(false));
+        codeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); toggle(false); } });
+      })();
 
       document.getElementById('create-btn').addEventListener('click', async () => {
         const readyPairs = Object.values(pairs).filter(pageHasMedia);
