@@ -497,7 +497,7 @@
 
       // Designs = physical products bought from us; everything else is a Popcode
       // (a standalone AR experience — museum exhibit, grandma's album, etc.).
-      const PRODUCT_KINDS = ['book', 'print', 'tile', 'canvas', 'calendar'];
+      const PRODUCT_KINDS = ['book', 'print', 'tile', 'canvas', 'framed', 'calendar'];
       const isDesignKind = (k) => PRODUCT_KINDS.includes(k);
       let allCollections = [], countMap = {}, photoMap = {};
       let activeTab = (new URLSearchParams(location.search).get('tab') === 'designs') ? 'designs' : 'popcodes';
@@ -731,8 +731,8 @@
       }
 
       // Product naming for the Popsa-style menu / label.
-      const PRODUCT_NOUN = { book: 'Book', tile: 'Box of Tiles', print: 'Print', canvas: 'Canvas', calendar: 'Calendar' };
-      const PRODUCT_LABEL = { book: 'Photo Book', tile: 'Photo Tiles', print: 'Prints', canvas: 'Canvas', calendar: 'Calendar' };
+      const PRODUCT_NOUN = { book: 'Book', tile: 'Tile', print: 'Print', canvas: 'Canvas', framed: 'Framed Print', calendar: 'Calendar' };
+      const PRODUCT_LABEL = { book: 'Photo Book', tile: 'Photo Tiles', print: 'Prints', canvas: 'Canvas', framed: 'Framed Prints', calendar: 'Calendar' };
       function relTime(iso) {
         if (!iso) return '';
         const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -765,8 +765,9 @@
         const noun = PRODUCT_NOUN[col.kind] || 'Design';
         const kindLabel = PRODUCT_LABEL[col.kind] || 'Design';
         const viewUrl = `https://popcode.app/${col.slug}`;
-        const editHref = (isBook ? '/book.html' : '/edit.html') + '?id=' + encodeURIComponent(col.slug);
-        const orderHref = isBook ? ('/book.html?id=' + encodeURIComponent(col.slug) + '&order=1') : ('/order.html?id=' + encodeURIComponent(col.slug));
+        // Books edit in the book builder; print designs reopen their saved config in order.html.
+        const editHref = isBook ? ('/book.html?id=' + encodeURIComponent(col.slug)) : ('/order.html?design=' + encodeURIComponent(col.slug));
+        const orderHref = isBook ? ('/book.html?id=' + encodeURIComponent(col.slug) + '&order=1') : ('/order.html?design=' + encodeURIComponent(col.slug));
         const bookCover = (isBook && col.book_layout && col.book_layout.cover) || {};
         const coverPhoto = (bookCover.photo_url) || thumbUrl || '';
         const coverText = { eyebrow: bookCover.eyebrow || '', title: bookCover.title || title, subtitle: bookCover.subtitle || '' };

@@ -100,6 +100,13 @@
       .primary-btn:disabled { opacity:.5; cursor:not-allowed; }
       /* Detail-page Create: fixed 378px wide, black, larger + lighter type. */
       #create-btn { width:378px; max-width:100%; font-size:18px; font-weight:500; background:#1a1a1a; }
+      /* Review step: primary Order (black) + secondary Save */
+      #step-review .primary-btn { background:#1a1a1a; }
+      .secondary-btn { width:100%; margin-top:12px; padding:16px; border:1.5px solid #d8d5cd; border-radius:16px; font-size:16px; font-weight:600; color:#1a1a1a; font-family:'Inter',sans-serif; cursor:pointer; background:#fff; }
+      .secondary-btn:hover { background:#faf9f5; }
+      .secondary-btn:disabled { opacity:.55; cursor:default; }
+      .save-msg { font-size:13px; margin-top:12px; min-height:16px; color:#2b8a3e; }
+      .save-msg.err { color:#c92a2a; }
 
       /* Step 3 — create / checkout */
       .summary-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -188,8 +195,28 @@
       </div>
 
       <!-- Step: checkout -->
+      <!-- Step: review your design (see it in the product), then Save or Order -->
+      <div id="step-review" style="display:none;">
+        <button class="linkback" id="review-back">&larr; Back to product</button>
+        <div class="detail">
+          <div class="detail-left">
+            <div class="detail-preview"><canvas id="review-canvas" width="400" height="400"></canvas></div>
+          </div>
+          <div class="detail-info">
+            <h2 id="review-name">Product</h2>
+            <div class="tagline" id="review-sub"></div>
+            <div class="detail-price" id="review-price">—</div>
+            <div class="detail-price-note">per print, incl. shipping &amp; handling</div>
+            <ul class="specs" id="review-specs"></ul>
+            <button class="primary-btn" id="order-btn">Order</button>
+            <button class="secondary-btn" id="save-btn">Save to My Designs</button>
+            <div class="save-msg" id="save-msg"></div>
+          </div>
+        </div>
+      </div>
+
       <div id="step-create" style="display:none;">
-        <button class="linkback" id="to-detail">&larr; Back to product</button>
+        <button class="linkback" id="to-detail">&larr; Back to review</button>
         <div class="card">
           <div class="summary-bar">
             <div>
@@ -587,6 +614,9 @@
         const uName = currentUser?.user_metadata?.full_name?.split(' ')[0] || currentUser?.email?.split('@')[0] || '';
         if (uName) document.getElementById('user-greeting').textContent = 'Hi, ' + uName + '!';
         await loadUserPhotos();
+        // Reopen a saved design (My Designs → Order/Edit) → restore its config + review.
+        const designSlug = qs.get('design');
+        if (designSlug && await loadSavedDesign(designSlug)) return;
         // Preselect a photo when arriving with ?id&photo (e.g. from a project link).
         const wantSlug = qs.get('id'), wantPhoto = qs.get('photo');
         if (wantSlug) {
@@ -596,6 +626,27 @@
         const wantType = qs.get('type');
         openCategory(CATEGORIES.includes(wantType) ? wantType : 'print');
       });
+
+      // Load a saved print design (collections.book_layout.print) and jump to review.
+      async function loadSavedDesign(slug) {
+        try {
+          const { data: col } = await db.from('collections')
+            .select('id, user_id, kind, book_layout').eq('slug', slug).single();
+          const pc = col && col.book_layout && col.book_layout.print;
+          if (!pc || (col.user_id && col.user_id !== currentUser.id)) return false;
+          if (!CATEGORIES.includes(pc.productType) || !variantOf(pc.productType, pc.variantId)) return false;
+          // Order against the saved design's own collection (owned by the user).
+          state.selectedPhoto = { url: pc.photoUrl, slug, collectionId: col.id, target_index: 0, name: '' };
+          openCategory(pc.productType);
+          state.variantId = pc.variantId;
+          state.orientation = pc.orientation || 'portrait';
+          state.scale = pc.scale || 0.06;
+          renderSizeChips(); updateOrientationVisibility();
+          document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b.dataset.orientation === state.orientation));
+          await goReview();
+          return true;
+        } catch (e) { return false; }
+      }
 
       document.getElementById('logout-btn').addEventListener('click', async () => { await db.auth.signOut(); window.location.href = '/auth.html'; });
       document.getElementById('nav-btn').addEventListener('click', () => document.getElementById('nav-overlay').classList.add('open'));
@@ -608,7 +659,7 @@
           const { data: cols } = await db.from('collections')
             .select('id, slug, name, kind').eq('user_id', currentUser.id)
             .order('created_at', { ascending: false });
-          const src = (cols || []).filter(c => !['book', 'print', 'tile', 'canvas', 'calendar'].includes(c.kind));
+          const src = (cols || []).filter(c => !['book', 'print', 'tile', 'canvas', 'framed', 'calendar'].includes(c.kind));
           photos = [];
           if (src.length) {
             const ids = src.map(c => c.id);
@@ -633,6 +684,7 @@
         document.getElementById('step-category').style.display = step === 'category' ? 'block' : 'none';
         document.getElementById('step-detail').style.display   = step === 'detail'   ? 'block' : 'none';
         document.getElementById('step-photo').style.display    = step === 'photo'    ? 'block' : 'none';
+        document.getElementById('step-review').style.display   = step === 'review'   ? 'block' : 'none';
         document.getElementById('step-create').style.display   = step === 'create'   ? 'block' : 'none';
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
@@ -961,13 +1013,10 @@
       }
       async function renderDetailPreview() {
         const aspect = currentAspect();
-        const cv = document.getElementById('detail-canvas');
-        const views = galleryFor(state.productType);
-        if (!views.length) { paintScenes(await getArtImage(aspect), aspect); updateDetailCta(); return; }
-        if (state.galleryIndex >= views.length) state.galleryIndex = 0;
-        try { await renderGalleryView(cv, views[state.galleryIndex], aspect); } catch (_) {}
-        applySizeScale(cv);
-        buildGalleryStrip(views, aspect);
+        // Aspect-true preview: the product reshapes to the selected size (8×8 → square,
+        // 5×7 → portrait). Photoreal room shots are secondary scene thumbnails.
+        paintScenes(await getArtImage(aspect), aspect);
+        applySizeScale(document.getElementById('detail-canvas'));
         updateDetailCta();
       }
       // Repaint main preview + the 4 view thumbnails from an already-loaded art image
@@ -1007,7 +1056,7 @@
       // "All products" goes back to the Shop; the funnel now starts on detail.
       document.getElementById('to-category').addEventListener('click', () => { window.location.href = '/shop.html'; });
       document.getElementById('create-btn').addEventListener('click', () => {
-        if (state.selectedPhoto) goPay(); else openPhotoStep();
+        if (state.selectedPhoto) goReview(); else openPhotoStep();
       });
 
       // ---- choose a photo (tray of the user's Popcode photos) ----
@@ -1039,6 +1088,65 @@
       }
       document.getElementById('photo-back').addEventListener('click', () => showStep('detail'));
 
+      // ---- review (see it in the product) → Save to My Designs or Order ----
+      function randomSlug() { let s = ''; const a = 'abcdefghijklmnopqrstuvwxyz0123456789'; for (let i = 0; i < 8; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
+      async function goReview() {
+        const v = variantOf(state.productType, state.variantId);
+        const meta = CATEGORY_META[state.productType];
+        document.getElementById('review-name').textContent = meta.name;
+        document.getElementById('review-sub').textContent = v.size + ' · ' + (baseAspect() !== 1 ? (state.orientation === 'landscape' ? 'Landscape' : 'Portrait') : 'Square');
+        document.getElementById('review-specs').innerHTML = meta.specs.map(s => '<li>' + s + '</li>').join('');
+        const sm = document.getElementById('save-msg'); sm.textContent = ''; sm.classList.remove('err');
+        const sb = document.getElementById('save-btn'); sb.disabled = false; sb.textContent = 'Save to My Designs';
+        showStep('review');
+        // aspect-true product with the chosen photo composited in
+        const aspect = currentAspect();
+        const art = await getArtImage(aspect);
+        const cv = document.getElementById('review-canvas');
+        renderScene(cv, 'plain', art, aspect, false);
+        applySizeScale(cv);
+        // price
+        const pe = document.getElementById('review-price');
+        pe.textContent = '…';
+        try { const d = await quoteFor(state.productType, state.variantId); pe.textContent = formatMoney(d.total_minor, d.currency); }
+        catch (e) { pe.textContent = '—'; }
+      }
+      document.getElementById('review-back').addEventListener('click', () => showStep('detail'));
+      document.getElementById('order-btn').addEventListener('click', () => goPay());
+      document.getElementById('save-btn').addEventListener('click', saveDesign);
+
+      // Persist this print design (product + size + photo) to My Designs so it can be
+      // reopened/ordered later (order.html?design=slug).
+      async function saveDesign() {
+        const btn = document.getElementById('save-btn');
+        const msg = document.getElementById('save-msg');
+        msg.classList.remove('err'); msg.textContent = '';
+        if (!state.selectedPhoto) { msg.textContent = 'Pick a photo first.'; msg.classList.add('err'); return; }
+        btn.disabled = true; btn.textContent = 'Saving…';
+        try {
+          const v = variantOf(state.productType, state.variantId);
+          const meta = CATEGORY_META[state.productType];
+          const slug = randomSlug();
+          const name = meta.name + ' · ' + v.size + (state.selectedPhoto.name ? ' — ' + state.selectedPhoto.name : '');
+          const printConfig = {
+            productType: state.productType, variantId: state.variantId, orientation: state.orientation,
+            scale: state.scale, photoUrl: state.selectedPhoto.url,
+            sourceSlug: state.selectedPhoto.slug, sourceTargetIndex: state.selectedPhoto.target_index,
+          };
+          const { data: col, error } = await db.from('collections')
+            .insert({ slug, name, user_id: currentUser.id, kind: state.productType, book_layout: { print: printConfig } })
+            .select().single();
+          if (error) throw error;
+          await db.from('collection_items').insert({ collection_id: col.id, target_index: 0, photo_url: state.selectedPhoto.url });
+          btn.textContent = 'Saved ✓';
+          msg.textContent = 'Saved to My Designs.';
+        } catch (e) {
+          btn.disabled = false; btn.textContent = 'Save to My Designs';
+          msg.textContent = 'Could not save — ' + (e.message || 'try again'); msg.classList.add('err');
+          if (window.Sentry) Sentry.captureException(e);
+        }
+      }
+
       // ---- checkout ----
       function goPay() {
         const v = variantOf(state.productType, state.variantId);
@@ -1048,7 +1156,7 @@
         showStep('create');
         requestQuote();
       }
-      document.getElementById('to-detail').addEventListener('click', () => showStep('detail'));
+      document.getElementById('to-detail').addEventListener('click', () => showStep('review'));
       document.getElementById('change-product').addEventListener('click', () => showStep('detail'));
       document.getElementById('change-photo').addEventListener('click', () => openPhotoStep());
       function renderChosenThumb() {
