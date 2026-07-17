@@ -206,7 +206,7 @@
         <button class="linkback" id="review-back">&larr; Back to product</button>
         <div class="detail">
           <div class="detail-left">
-            <div class="detail-preview"><canvas id="review-canvas" width="400" height="400"></canvas></div>
+            <div class="detail-preview"><div class="detail-stage"><canvas id="review-canvas" width="400" height="400"></canvas></div></div>
           </div>
           <div class="detail-info">
             <h2 id="review-name">Product</h2>
@@ -1132,8 +1132,7 @@
         const aspect = currentAspect();
         const art = await getArtImage(aspect);
         const cv = document.getElementById('review-canvas');
-        renderScene(cv, 'plain', art, aspect, false);
-        applySizeScale(cv);
+        renderProductOnly(cv, art, aspect);
         // price
         const pe = document.getElementById('review-price');
         pe.textContent = '…';
@@ -1163,7 +1162,9 @@
             sourceSlug: state.selectedPhoto.slug, sourceTargetIndex: state.selectedPhoto.target_index,
           };
           const { data: col, error } = await db.from('collections')
-            .insert({ slug, name, user_id: currentUser.id, kind: state.productType, book_layout: { print: printConfig } })
+            // mind_file_url is NOT NULL in the schema; a saved print design isn't
+            // scannable, so store an empty string to satisfy the constraint.
+            .insert({ slug, name, user_id: currentUser.id, kind: state.productType, mind_file_url: '', book_layout: { print: printConfig } })
             .select().single();
           if (error) throw error;
           await db.from('collection_items').insert({ collection_id: col.id, target_index: 0, photo_url: state.selectedPhoto.url });
