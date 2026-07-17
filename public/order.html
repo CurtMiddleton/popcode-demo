@@ -622,7 +622,7 @@
         await loadUserPhotos();
         // Reopen a saved design (My Designs → Order/Edit) → restore its config + review.
         const designSlug = qs.get('design');
-        if (designSlug && await loadSavedDesign(designSlug)) return;
+        if (designSlug && await loadSavedDesign(designSlug, qs.get('edit') === '1')) return;
         // Preselect a photo when arriving with ?id&photo (e.g. from a project link).
         const wantSlug = qs.get('id'), wantPhoto = qs.get('photo');
         if (wantSlug) {
@@ -633,8 +633,12 @@
         openCategory(CATEGORIES.includes(wantType) ? wantType : 'print');
       });
 
-      // Load a saved print design (collections.book_layout.print) and jump to review.
-      async function loadSavedDesign(slug) {
+      // The saved design currently being edited — set so Save updates it in place
+      // instead of creating a duplicate.
+      let editingDesign = null;
+      // Load a saved print design (collections.book_layout.print). With `edit`, land on
+      // the editable product screen (size / orientation / photo); otherwise jump to review.
+      async function loadSavedDesign(slug, edit) {
         try {
           const { data: col } = await db.from('collections')
             .select('id, user_id, kind, book_layout').eq('slug', slug).single();
@@ -649,7 +653,8 @@
           state.scale = pc.scale || 0.06;
           renderSizeChips(); updateOrientationVisibility();
           document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b.dataset.orientation === state.orientation));
-          await goReview();
+          if (edit) { editingDesign = { id: col.id, slug }; renderDetailPreview(); refreshDetailPrice(); }
+          else { await goReview(); }
           return true;
         } catch (e) { return false; }
       }
@@ -1161,15 +1166,28 @@
             scale: state.scale, photoUrl: state.selectedPhoto.url,
             sourceSlug: state.selectedPhoto.slug, sourceTargetIndex: state.selectedPhoto.target_index,
           };
-          const { data: col, error } = await db.from('collections')
-            // mind_file_url is NOT NULL in the schema; a saved print design isn't
-            // scannable, so store an empty string to satisfy the constraint.
-            .insert({ slug, name, user_id: currentUser.id, kind: state.productType, mind_file_url: '', book_layout: { print: printConfig } })
-            .select().single();
-          if (error) throw error;
-          await db.from('collection_items').insert({ collection_id: col.id, target_index: 0, photo_url: state.selectedPhoto.url });
-          btn.textContent = 'Saved ✓';
-          msg.textContent = 'Saved to My Designs.';
+          if (editingDesign) {
+            // Editing an existing design → update it in place (no duplicate).
+            const { data: upd, error } = await db.from('collections')
+              .update({ name, kind: state.productType, book_layout: { print: printConfig } })
+              .eq('id', editingDesign.id).select();
+            if (error) throw error;
+            if (!upd || !upd.length) throw new Error('could not update this design');
+            await db.from('collection_items').update({ photo_url: state.selectedPhoto.url })
+              .eq('collection_id', editingDesign.id).eq('target_index', 0);
+            btn.textContent = 'Saved ✓';
+            msg.textContent = 'Design updated.';
+          } else {
+            const { data: col, error } = await db.from('collections')
+              // mind_file_url is NOT NULL in the schema; a saved print design isn't
+              // scannable, so store an empty string to satisfy the constraint.
+              .insert({ slug, name, user_id: currentUser.id, kind: state.productType, mind_file_url: '', book_layout: { print: printConfig } })
+              .select().single();
+            if (error) throw error;
+            await db.from('collection_items').insert({ collection_id: col.id, target_index: 0, photo_url: state.selectedPhoto.url });
+            btn.textContent = 'Saved ✓';
+            msg.textContent = 'Saved to My Designs.';
+          }
         } catch (e) {
           btn.disabled = false; btn.textContent = 'Save to My Designs';
           msg.textContent = 'Could not save — ' + (e.message || 'try again'); msg.classList.add('err');
