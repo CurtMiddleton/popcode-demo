@@ -130,7 +130,7 @@
       .design-card:hover { box-shadow: 0 6px 22px rgba(0,0,0,0.10); }
       .design-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
       .design-kind { font-size: 13px; color: #8a857d; font-weight: 500; font-family: 'Inter', sans-serif; }
-      .design-title { font-family: 'CooperBT', Georgia, serif; font-weight: 400; font-size: 27px; line-height: 1.12; letter-spacing: -0.01em; color: #1a1a1a; margin-top: 4px; }
+      .design-title { font-family: 'CooperBT', Georgia, serif; font-weight: 400; font-size: 27px; line-height: 1.12; letter-spacing: -0.01em; color: #1a1a1a; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .dots-btn { background: none; border: none; cursor: pointer; color: #8a857d; padding: 4px 6px; border-radius: 8px; line-height: 0; flex-shrink: 0; }
       .dots-btn:hover { background: rgba(0,0,0,0.06); color: #1a1a1a; }
       .design-mat {
@@ -760,10 +760,17 @@
         card.className = 'design-card';
         card.dataset.id = col.id;
         const coverTitle = col.cover_config && col.cover_config.enabled && col.cover_config.title;
-        const title = coverTitle || col.name || 'Untitled';
         const isBook = col.kind === 'book';
         const noun = PRODUCT_NOUN[col.kind] || 'Design';
-        const kindLabel = PRODUCT_LABEL[col.kind] || 'Design';
+        let kindLabel = PRODUCT_LABEL[col.kind] || 'Design';
+        let title = coverTitle || col.name || 'Untitled';
+        // Print designs are saved as "Prints · 10×10" — Addie Chapter One": show the
+        // product + size as the small gray label and the source name as the Cooper title.
+        if (!isBook && !coverTitle && typeof col.name === 'string' && col.name.includes(' — ')) {
+          const i = col.name.indexOf(' — ');
+          kindLabel = col.name.slice(0, i);
+          title = col.name.slice(i + 3);
+        }
         const viewUrl = `https://popcode.app/${col.slug}`;
         // Books edit in the book builder; print designs reopen their saved config in order.html.
         const editHref = isBook ? ('/book.html?id=' + encodeURIComponent(col.slug)) : ('/order.html?design=' + encodeURIComponent(col.slug));
