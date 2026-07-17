@@ -22,6 +22,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/montage-music.js"></script>
     <!-- edit.html only needs MINDAR.IMAGE.Compiler, not AR rendering. The
          compiler ships in the image-aframe build, which exports MINDAR before
          it registers its A-Frame components — so we stub AFRAME with no-op
@@ -156,6 +157,10 @@
         .edit-main .upload-btn img.icon { width: 62px; height: 62px; }
         .edit-main .upload-btn .btn-label { font-size: 13px; }
         .edit-main .audio-tile { width: 210px; height: 210px; gap: 10px; }
+        /* Add-a-page media cards grow to match; their inner upload area stays small. */
+        .edit-main .media-card { width: 210px; height: 210px; }
+        .edit-main .media-card .upload-btn { width: 100%; height: auto; }
+        .edit-main .media-card .audio-tile { width: 100%; height: auto; }
         .edit-main .audio-play-btn { width: 64px; height: 64px; }
         .edit-main .audio-play-btn svg { width: 26px; height: 26px; }
         .edit-main .audio-duration { font-size: 13px; }
@@ -243,7 +248,53 @@
       .compressed-badge { font-size: 10px; color: #16a34a; font-weight: 700; }
       .existing-badge { display: none; }
 
-      /* Media-type toggle (Video | Audio) */
+      /* ── Square media cards for add-a-page tiles (matches New Popcode) ──
+         Label on top, upload area centered, media dropdown pinned at bottom.
+         Existing (already-saved) pages keep the tap-to-replace .upload-btn look. */
+      .media-card {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        width: 190px; height: 190px; box-sizing: border-box;
+        background: #fff; border: 1px solid #e8e8e8; border-radius: 16px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        padding: 18px 12px 14px; position: relative; overflow: hidden;
+      }
+      .media-card-label { font-size: 13px; font-weight: 700; color: #1a1a1a; text-align: center; line-height: 1.2; flex-shrink: 0; margin-bottom: 12px; }
+      .media-card > .upload-btn { flex: 0 0 auto; }
+      .media-card .video-slot, .media-card .audio-slot { width: 100%; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
+      /* Inside a card the upload area is small + borderless (the card is the frame). */
+      .media-card .upload-btn { width: 100%; height: auto; padding: 10px 0; background: transparent; border: none; box-shadow: none; }
+      .media-card .audio-tile { width: 100%; height: auto; background: transparent; border: none; box-shadow: none; }
+      .media-card .media-select { position: absolute; left: 12px; right: 12px; bottom: 12px; margin: 0; }
+      /* Eye is hidden until the tile is filled (existing pages keep theirs visible). */
+      .media-card .tile-eye { display: none; }
+      .media-card.filled .tile-eye { display: flex; }
+      /* Filled: thumbnail fills the card; label + dropdown hide; eye + pencil show. */
+      .media-card.filled .media-card-label,
+      .media-card.filled > .media-select { display: none; }
+      .media-card.filled > .upload-btn,
+      .media-card.filled > .video-slot { position: absolute; inset: 0; height: auto; padding: 0; }
+      .media-card.filled > .video-slot > .upload-btn { position: absolute; inset: 0; height: auto; }
+      .media-card.filled .upload-btn { padding: 0; }
+      .media-card .upload-btn.selected::after {
+        content: '✎'; position: absolute; bottom: 8px; right: 8px; z-index: 3;
+        background: rgba(0,0,0,0.5); color: #fff; border-radius: 50%;
+        width: 30px; height: 30px; font-size: 15px;
+        display: flex; align-items: center; justify-content: center; pointer-events: none;
+      }
+
+      /* Media-type dropdown (Video / Montage / Audio) — matches New Popcode. */
+      .media-select {
+        appearance: none; -webkit-appearance: none;
+        background-color: #ececec;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 12px center; background-size: 11px;
+        border: none; border-radius: 999px; padding: 7px 32px 7px 16px;
+        font-size: 12px; font-weight: 700; color: #1a1a1a; font-family: 'Inter', sans-serif;
+        cursor: pointer; line-height: 1.2;
+      }
+      .media-select:focus { outline: 2px solid #d7d5cf; outline-offset: 1px; }
+
+      /* Media-type toggle (Video | Audio) — existing pages only */
       .media-toggle { display: inline-flex; background: #ececec; border-radius: 999px; padding: 3px; }
       .media-toggle button { background: transparent; border: none; padding: 6px 14px; font-size: 12px; font-weight: 700; color: #666; border-radius: 999px; cursor: pointer; font-family: 'Inter', sans-serif; }
       .media-toggle button.active { background: white; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
@@ -1709,40 +1760,47 @@
         page.innerHTML = `
           <div class="page-header">
             <div class="page-label">${n}</div>
-            <div class="media-toggle">
-              <button type="button" class="media-tab active" data-mode="video">Video</button>
-              <button type="button" class="media-tab" data-mode="audio">Audio</button>
-            </div>
             <button class="remove-page-btn" title="Remove page"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
           </div>
           <div class="upload-row">
             <div class="upload-wrapper">
-              <label class="upload-btn" id="photo-btn-new-${n}">
-                <input type="file" accept="image/*" onchange="handleFile(this,'photo',${n}).catch(e=>console.error(e))"/>
-                <img class="icon" src="/assets/photo.png" alt="Photo"/>
-                <img class="preview-img" id="photo-preview-new-${n}"/>
-                <span class="btn-label">Photo to scan</span>
-              </label>
+              <div class="media-card">
+                <div class="media-card-label">Image to scan</div>
+                <label class="upload-btn" id="photo-btn-new-${n}">
+                  <input type="file" accept="image/*" onchange="handleFile(this,'photo',${n}).catch(e=>console.error(e))"/>
+                  <img class="icon" src="/assets/photo.png" alt="Photo"/>
+                  <img class="preview-img" id="photo-preview-new-${n}"/>
+                </label>
+                <button type="button" class="tile-eye" id="photo-eye-new-${n}" title="Preview" data-preview-kind="photo">${IC_EYE}</button>
+              </div>
               <div class="file-name" id="photo-name-new-${n}"></div>
               <div class="file-size" id="photo-size-new-${n}"></div>
             </div>
             <div class="upload-wrapper" id="media-wrapper-new-${n}">
-              <div class="video-slot" id="video-slot-new-${n}">
-                <label class="upload-btn" id="video-btn-new-${n}">
-                  <input type="file" accept="video/*" onchange="handleFile(this,'video',${n}).catch(e=>console.error(e))"/>
-                  <img class="icon" src="/assets/video.png" alt="Video"/>
-                  <img class="preview-img" id="video-preview-new-${n}"/>
-                  <span class="play-overlay"></span>
-                  <span class="btn-label">Plays on scan</span>
-                </label>
-                <div class="file-name" id="video-name-new-${n}"></div>
-                <div class="file-size" id="video-size-new-${n}"></div>
-                <div class="video-msg" id="video-msg-new-${n}"></div>
+              <div class="media-card">
+                <div class="media-card-label">Plays when scanned</div>
+                <div class="video-slot" id="video-slot-new-${n}">
+                  <label class="upload-btn" id="video-btn-new-${n}">
+                    <input type="file" accept="video/*" onchange="handleFile(this,'video',${n}).catch(e=>console.error(e))"/>
+                    <img class="icon" src="/assets/video.png" alt="Video"/>
+                    <img class="preview-img" id="video-preview-new-${n}"/>
+                    <span class="play-overlay"></span>
+                  </label>
+                </div>
+                <div class="audio-slot" id="audio-slot-new-${n}" style="display:none;">
+                  <div class="audio-tile" id="audio-tile-new-${n}"></div>
+                </div>
+                <select class="media-select" data-page="${n}" aria-label="What plays when scanned">
+                  <option value="video" selected>Video</option>
+                  <option value="montage">Montage</option>
+                  <option value="audio">Audio</option>
+                </select>
+                <button type="button" class="tile-eye" id="video-eye-new-${n}" title="Preview" data-preview-kind="video">${IC_EYE}</button>
               </div>
-              <div class="audio-slot" id="audio-slot-new-${n}" style="display:none;">
-                <div class="audio-tile" id="audio-tile-new-${n}"></div>
-                <div class="file-size" id="audio-size-new-${n}" style="margin-top:6px;"></div>
-              </div>
+              <div class="file-name" id="video-name-new-${n}"></div>
+              <div class="file-size" id="video-size-new-${n}"></div>
+              <div class="video-msg" id="video-msg-new-${n}"></div>
+              <div class="file-size" id="audio-size-new-${n}" style="margin-top:6px;"></div>
             </div>
           </div>
         `;
@@ -1755,17 +1813,36 @@
           });
         });
         document.getElementById('pages').appendChild(page);
-        page.querySelectorAll('.media-tab').forEach(tab => {
-          tab.addEventListener('click', () => {
-            const mode = tab.dataset.mode;
-            newPairs[n].mediaType = mode;
-            page.querySelectorAll('.media-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
-            document.getElementById(`video-slot-new-${n}`).style.display = mode === 'video' ? '' : 'none';
-            document.getElementById(`audio-slot-new-${n}`).style.display = mode === 'audio' ? '' : 'none';
-          });
-        });
+        page.querySelector('.media-select').addEventListener('change', (e) => onNewMediaSelect(n, e.target));
         renderNewAudioTile(n);
         renumberPages();
+      }
+
+      // Media dropdown change on a new page. Montage isn't a persistent media
+      // type — it's a builder whose output fills the video slot — so selecting
+      // it opens the builder and snaps the dropdown back to the current type.
+      function onNewMediaSelect(n, sel) {
+        if (sel.value === 'montage') {
+          sel.value = newPairs[n] ? newPairs[n].mediaType : 'video';
+          openMontage(n);
+          return;
+        }
+        mtgSwitchNewMedia(n, sel.value);
+      }
+
+      function mtgSwitchNewMedia(n, mode) {
+        const pair = newPairs[n];
+        if (!pair) return;
+        pair.mediaType = mode;
+        const page = document.getElementById(`page-new-${n}`);
+        if (!page) return;
+        const sel = page.querySelector('.media-select');
+        if (sel && sel.value !== mode) sel.value = mode;
+        const vs = document.getElementById(`video-slot-new-${n}`);
+        const as = document.getElementById(`audio-slot-new-${n}`);
+        if (vs) vs.style.display = mode === 'video' ? '' : 'none';
+        if (as) as.style.display = mode === 'audio' ? '' : 'none';
+        document.getElementById('unsaved-banner').style.display = 'block';
       }
 
       function confirmDeletePage(msg, onConfirm) {
@@ -1879,6 +1956,9 @@
                 input.value = '';
                 newPairs[n][type] = compressedFile;
                 btn.classList.add('selected');
+                const cCard = btn.closest('.media-card'); if (cCard) cCard.classList.add('filled');
+                const cEye = document.getElementById(`video-eye-new-${n}`);
+                if (cEye) { cEye.dataset.previewKind = 'video'; try { cEye.dataset.previewUrl = URL.createObjectURL(compressedFile); } catch(e){} }
                 document.getElementById(`video-name-new-${n}`).textContent = compressedFile.name.length > 18 ? compressedFile.name.substring(0,18)+'…' : compressedFile.name;
                 const sizeEl = document.getElementById(`video-size-new-${n}`);
                 sizeEl.textContent = formatFileSize(compressedFile.size);
@@ -1915,6 +1995,9 @@
         newPairs[n][type] = file;
         const btn = document.getElementById(`${type}-btn-new-${n}`);
         btn.classList.add('selected');
+        const filledCard = btn.closest('.media-card'); if (filledCard) filledCard.classList.add('filled');
+        const eyeBtn = document.getElementById(`${type}-eye-new-${n}`);
+        if (eyeBtn) { eyeBtn.dataset.previewKind = type; try { eyeBtn.dataset.previewUrl = URL.createObjectURL(newPairs[n][type]); } catch(e){} }
         const shortName = file.name.length > 18 ? file.name.substring(0,18)+'…' : file.name;
         document.getElementById(`${type}-name-new-${n}`).textContent = shortName;
         const sizeEl = document.getElementById(`${type}-size-new-${n}`);
@@ -2346,7 +2429,656 @@
           document.getElementById('nav-overlay').classList.remove('open');
         }
       });
+
+      // ═══════════════════════ Montage maker (ported from create.html) ═══════════════════════
+      // ── Montage maker ───────────────────────────────────────────────────────
+      // Builds an Apple-Photos-style memory video from a set of photos, renders
+      // it via /api/create-montage (Shotstack), and links the resulting MP4 to
+      // this page's photo — flowing through the normal save path unchanged.
+      const MTG_MAX_PHOTOS = 40;
+      let montageState = null;
+      let montageBusy = false;
+      let montageResult = null; // rendered montage File awaiting the user's confirm
+      let mtgDragId = null;     // id of the thumbnail being dragged (mouse reorder)
+
+      // Preview the rendered montage before committing it to the page.
+      function mtgShowPreview(file, musicSkipped) {
+        montageResult = file;
+        const note = document.querySelector('.mtg-preview-note');
+        if (note) note.textContent = musicSkipped
+          ? "Here's your montage — the chosen music isn't available yet, so it's silent for now. Use it, or start over."
+          : "Here's your montage. Use it, or start over to change photos, order, or music.";
+        const vid = document.getElementById('mtg-preview-video');
+        vid.src = URL.createObjectURL(file);
+        document.getElementById('mtg-body-scroll').style.display = 'none';
+        document.getElementById('mtg-foot').style.display = 'none';
+        document.getElementById('mtg-preview').style.display = 'flex';
+        vid.play().catch(() => {}); // autoplay is best-effort; controls are shown regardless
+      }
+      function mtgHidePreview(discard) {
+        const vid = document.getElementById('mtg-preview-video');
+        try { vid.pause(); if (vid.src) URL.revokeObjectURL(vid.src); vid.removeAttribute('src'); vid.load(); } catch (e) {}
+        document.getElementById('mtg-preview').style.display = 'none';
+        document.getElementById('mtg-body-scroll').style.display = '';
+        document.getElementById('mtg-foot').style.display = '';
+        if (discard) montageResult = null;
+      }
+      function mtgUsePreview() {
+        if (!montageResult || !montageState) return;
+        mtgApplyToPage(montageState.page, montageResult);
+        montageResult = null; // consumed — don't re-apply on close
+        mtgHidePreview(false);
+        closeMontage();
+      }
+      function mtgRedoPreview() {
+        mtgHidePreview(true);
+        mtgStatus('', null, '');
+      }
+
+      // Save the rendered montage MP4 to the device. On iOS/Android the native
+      // share sheet offers "Save Video" (to Photos); otherwise fall back to a
+      // plain download. Must run in the click gesture for navigator.share(files).
+      async function mtgSaveVideo() {
+        if (!montageResult) return;
+        try {
+          if (navigator.canShare && navigator.canShare({ files: [montageResult] })) {
+            await navigator.share({ files: [montageResult], title: 'Popcode montage' });
+            return;
+          }
+        } catch (e) { /* user cancelled or share unavailable — fall through to download */ }
+        const url = URL.createObjectURL(montageResult);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'popcode-montage.mp4';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 15000);
+      }
+
+      function openMontage(n) {
+        if (montageBusy) return;
+        montageState = { page: n, photos: [], perSec: 3, transition: 'kenburns', aspect: 'portrait', musicId: 'none' };
+        mtgSecRender();
+        mtgSetSeg('mtg-transition', 'kenburns');
+        mtgSetSeg('mtg-aspect', 'portrait');
+        mtgRenderMusic();
+        mtgRenderStrip();
+        mtgStatus('');
+        mtgHidePreview(true); // reset to the builder view in case a preview was left open
+        document.getElementById('mtg-overlay').classList.add('open');
+        document.body.style.overflow = 'hidden';
+      }
+      function closeMontage() {
+        if (montageBusy) return;
+        // Don't lose a rendered montage the user didn't explicitly "Use": if a
+        // preview is still showing on close, keep it by applying it to the page.
+        if (montageResult && montageState) mtgApplyToPage(montageState.page, montageResult);
+        mtgHidePreview(true); // revoke the preview video + reset
+        const ov = document.getElementById('mtg-overlay');
+        ov.classList.remove('open');
+        document.body.style.overflow = '';
+        // Release preview object URLs
+        if (montageState) montageState.photos.forEach(p => { try { URL.revokeObjectURL(p.url); } catch (e) {} });
+        montageState = null;
+      }
+
+      function mtgSecStep(delta) {
+        if (!montageState) return;
+        montageState.perSec = Math.min(5, Math.max(1.5, +(montageState.perSec + delta).toFixed(1)));
+        mtgSecRender();
+      }
+      function mtgSecRender() {
+        const v = montageState ? montageState.perSec : 3;
+        document.getElementById('mtg-sec-val').textContent = v.toFixed(1) + 's';
+        document.getElementById('mtg-sec-dec').disabled = v <= 1.5;
+        document.getElementById('mtg-sec-inc').disabled = v >= 5;
+        mtgUpdateEstimate();
+      }
+
+      function mtgSetSeg(groupId, val) {
+        const group = document.getElementById(groupId);
+        group.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === val));
+        if (montageState) {
+          if (groupId === 'mtg-transition') montageState.transition = val;
+          if (groupId === 'mtg-aspect') montageState.aspect = val;
+        }
+      }
+      // Segmented-control clicks. Delegated on document because the overlay
+      // markup is parsed AFTER this script, so the .mtg-seg elements don't exist
+      // yet at this point — a direct listener would never attach.
+      document.addEventListener('click', e => {
+        const btn = e.target.closest('.mtg-seg button');
+        if (btn && btn.parentElement) mtgSetSeg(btn.parentElement.id, btn.dataset.v);
+      });
+
+      function mtgRenderMusic() {
+        const wrap = document.getElementById('mtg-music');
+        const tracks = window.MONTAGE_MUSIC || [];
+        wrap.innerHTML = tracks.map(t => `
+          <button type="button" class="mtg-track${t.id === montageState.musicId ? ' active' : ''}" data-id="${t.id}">
+            <span class="mtg-track-name">${t.name}</span>
+            ${t.mood ? `<span class="mtg-track-mood">${t.mood}</span>` : ''}
+          </button>`).join('');
+        wrap.querySelectorAll('.mtg-track').forEach(b => {
+          b.addEventListener('click', () => {
+            montageState.musicId = b.dataset.id;
+            wrap.querySelectorAll('.mtg-track').forEach(x => x.classList.toggle('active', x === b));
+          });
+        });
+      }
+
+      async function mtgAddPhotos(input) {
+        const files = Array.from(input.files || []);
+        input.value = '';
+        let skipped = 0;
+        for (const f of files) {
+          if (montageState.photos.length >= MTG_MAX_PHOTOS) { mtgStatus(`Up to ${MTG_MAX_PHOTOS} photos.`, null, 'err'); break; }
+          const isImg = f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name);
+          if (!isImg) continue;
+          mtgStatus('Optimizing photos…', null, '');
+          // Downscale large photos instead of rejecting them (montage sources only
+          // need to match the video output size; keeps uploads + render fast).
+          const opt = await optimizePhotoDim(f, 1920);
+          if (!opt) { skipped++; continue; }
+          montageState.photos.push({ id: 'p' + Math.random().toString(36).slice(2, 8), file: opt, url: URL.createObjectURL(opt) });
+        }
+        mtgStatus(skipped ? `${skipped} photo(s) couldn't be read and were skipped.` : '', null, skipped ? 'err' : '');
+        mtgRenderStrip();
+      }
+
+      // Shared photo optimizer (ported from book.html): decode → downscale to
+      // maxDim → re-encode JPEG. Returns a File (smaller when it helps), the
+      // original when already fine, or null if undecodable and very large.
+      const PHOTO_QUALITY = 0.85;
+      const PHOTO_HARD_MAX_MB = 25; // only give up on undecodable originals above this
+      async function loadDecodablePhoto(file) {
+        if (typeof createImageBitmap === 'function') {
+          try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+          catch (e) { /* fall through to <img> */ }
+        }
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('decode')); img.src = url; });
+        img._url = url;
+        return img;
+      }
+      async function optimizePhotoDim(file, maxDim) {
+        let src;
+        try { src = await loadDecodablePhoto(file); }
+        catch (e) { return file.size / (1024 * 1024) <= PHOTO_HARD_MAX_MB ? file : null; }
+        const w0 = src.width || src.naturalWidth, h0 = src.height || src.naturalHeight;
+        const scale = Math.min(1, maxDim / Math.max(w0, h0));
+        const oversized = scale < 1;
+        const heavy = file.size / (1024 * 1024) > 3;
+        const cleanup = () => { src.close?.(); if (src._url) URL.revokeObjectURL(src._url); };
+        if (!oversized && !heavy) { cleanup(); return file; }
+        const w = Math.max(1, Math.round(w0 * scale)), h = Math.max(1, Math.round(h0 * scale));
+        const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(src, 0, 0, w, h);
+        cleanup();
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', PHOTO_QUALITY));
+        if (!blob) return file;
+        const chosen = oversized ? blob : (blob.size < file.size ? blob : file);
+        const name = (file.name || 'photo').replace(/\.[^.]+$/, '') + (chosen === blob ? '.jpg' : '');
+        return new File([chosen], name, { type: chosen.type || 'image/jpeg' });
+      }
+
+      function mtgRenderStrip() {
+        const strip = document.getElementById('mtg-strip');
+        const photos = montageState.photos;
+        if (!photos.length) {
+          strip.innerHTML = `<div class="mtg-empty">No photos yet. Add photos to build your montage.</div>`;
+        } else {
+          const X_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+          strip.innerHTML = photos.map((p, i) => `
+            <div class="mtg-thumb${mtgDragId === p.id ? ' dragging' : ''}" data-id="${p.id}">
+              <img src="${p.url}" alt="" draggable="false"/>
+              <span class="mtg-order">${i + 1}</span>
+              <button type="button" class="mtg-del" title="Remove" onclick="mtgRemove(${i})">${X_ICON}</button>
+            </div>`).join('');
+          photos.forEach(p => {
+            const el = strip.querySelector(`.mtg-thumb[data-id="${p.id}"]`);
+            if (el) mtgEnableDrag(el, p.id);
+          });
+        }
+        const hint = document.getElementById('mtg-reorder-hint');
+        if (hint) hint.style.display = photos.length > 1 ? 'block' : 'none';
+        mtgUpdateEstimate();
+      }
+
+      // Drag-to-reorder for the thumbnail grid (mouse + touch). The grid wraps
+      // (no horizontal scroll) and thumbs are touch-action:none, so a touch drag
+      // reorders instead of scrolling.
+      function mtgMakeGhost(url, x, y) {
+        const g = document.createElement('div');
+        g.style.cssText = 'position:fixed;width:88px;height:88px;border-radius:14px;transform:translate(-50%,-50%);pointer-events:none;z-index:9700;box-shadow:0 10px 26px rgba(0,0,0,.35);opacity:.92;background-size:cover;background-position:center;';
+        g.style.left = x + 'px'; g.style.top = y + 'px';
+        g.style.backgroundImage = 'url("' + url + '")';
+        document.body.appendChild(g);
+        return g;
+      }
+      function mtgEnableDrag(el, photoId) {
+        el.addEventListener('pointerdown', (e) => {
+          if (e.target.closest('.mtg-del')) return;              // the remove button owns its taps
+          const photo = montageState && montageState.photos.find(p => p.id === photoId);
+          if (!photo) return;
+          const startX = e.clientX, startY = e.clientY;
+          let dragging = false, ghost = null, holdTimer = null;
+          const startDrag = (x, y) => {
+            if (dragging) return;
+            clearTimeout(holdTimer); dragging = true; mtgDragId = photoId;
+            ghost = mtgMakeGhost(photo.url, x, y);
+            document.body.style.userSelect = 'none';
+            const c = document.querySelector(`.mtg-thumb[data-id="${photoId}"]`);
+            if (c) c.classList.add('dragging');
+          };
+          holdTimer = setTimeout(() => startDrag(startX, startY), 160);
+          const move = (ev) => {
+            if (!dragging) {
+              if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 8) return;
+              startDrag(ev.clientX, ev.clientY);
+            }
+            ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
+            const over = document.elementFromPoint(ev.clientX, ev.clientY);
+            const overThumb = over && over.closest('.mtg-thumb');
+            if (overThumb && overThumb.dataset.id && overThumb.dataset.id !== mtgDragId) {
+              const from = montageState.photos.findIndex(p => p.id === mtgDragId);
+              const to = montageState.photos.findIndex(p => p.id === overThumb.dataset.id);
+              if (from !== -1 && to !== -1) {
+                const [it] = montageState.photos.splice(from, 1);
+                montageState.photos.splice(to, 0, it);
+                mtgRenderStrip();
+              }
+            }
+          };
+          const endDrag = () => {
+            clearTimeout(holdTimer);
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', endDrag);
+            document.removeEventListener('pointercancel', endDrag);
+            if (ghost) ghost.remove();
+            document.body.style.userSelect = '';
+            const wasDragging = dragging;
+            mtgDragId = null;
+            if (wasDragging) mtgRenderStrip();
+          };
+          document.addEventListener('pointermove', move);
+          document.addEventListener('pointerup', endDrag);
+          document.addEventListener('pointercancel', endDrag);
+        });
+      }
+
+      function mtgMove(i, dir) {
+        const arr = montageState.photos;
+        const j = i + dir;
+        if (j < 0 || j >= arr.length) return;
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+        mtgRenderStrip();
+      }
+      function mtgRemove(i) {
+        try { URL.revokeObjectURL(montageState.photos[i].url); } catch (e) {}
+        montageState.photos.splice(i, 1);
+        mtgRenderStrip();
+      }
+
+      function mtgUpdateEstimate() {
+        const el = document.getElementById('mtg-est');
+        if (!montageState) return;
+        const n = montageState.photos.length;
+        if (n < 2) { el.textContent = 'Add at least 2 photos'; return; }
+        // Matches the crossfade overlap in lib/montage/timeline.mjs (0.5s).
+        const total = (n - 1) * (montageState.perSec - 0.5) + montageState.perSec;
+        el.textContent = `${n} photos · ~${total.toFixed(0)}s video`;
+      }
+
+      function mtgStatus(msg, pct, kind) {
+        const el = document.getElementById('mtg-status');
+        if (!msg) { el.innerHTML = ''; el.className = 'mtg-status'; return; }
+        el.className = 'mtg-status show' + (kind ? ' ' + kind : '');
+        el.innerHTML = `<div class="mtg-status-msg">${msg}</div>` +
+          (typeof pct === 'number' ? `<div class="mtg-bar-wrap"><div class="mtg-bar" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>` : '');
+      }
+
+      function mtgMusicUrl(id) {
+        const t = (window.MONTAGE_MUSIC || []).find(x => x.id === id);
+        return t && t.src ? window.location.origin + t.src : null;
+      }
+
+      async function mtgPoll(renderId) {
+        const start = Date.now();
+        const TIMEOUT_MS = 4 * 60 * 1000;
+        while (Date.now() - start < TIMEOUT_MS) {
+          const r = await fetch('/api/montage-status?id=' + encodeURIComponent(renderId)).then(x => x.json());
+          if (r.error) throw new Error(r.error);
+          if (r.status === 'done') return r;
+          if (r.status === 'failed') throw new Error('The render failed. Try fewer photos or a different track.');
+          const secs = Math.round((Date.now() - start) / 1000);
+          mtgStatus(`Rendering your video… (${secs}s)`, 60 + Math.min(30, secs), '');
+          await new Promise(res => setTimeout(res, 3000));
+        }
+        throw new Error('Render timed out. Please try again.');
+      }
+
+      async function mtgCreate() {
+        if (montageBusy || !montageState) return;
+        const st = montageState;
+        if (st.photos.length < 2) { mtgStatus('Add at least 2 photos.', null, 'err'); return; }
+
+        montageBusy = true;
+        const createBtn = document.getElementById('mtg-create');
+        const closeBtn = document.getElementById('mtg-close-btn');
+        createBtn.disabled = true; closeBtn.disabled = true;
+
+        try {
+          // 1. Upload source photos to a temp folder in the experiences bucket so
+          //    the renderer can fetch them by public URL.
+          const sessionId = (crypto.randomUUID ? crypto.randomUUID() : 'm' + Date.now() + Math.random().toString(36).slice(2));
+          // Upload the source photos in parallel (capped concurrency) so the
+          // pre-render wait is the slowest few uploads, not the sum of every one.
+          // Order is preserved by writing into urls[i] by index.
+          const urls = new Array(st.photos.length);
+          let uploaded = 0;
+          mtgStatus(`Uploading photos… (0 of ${st.photos.length})`, 0, '');
+          const uploadOne = async (i) => {
+            const f = st.photos[i].file;
+            const ext = ((f.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '')) || 'jpg';
+            const path = `montage-src/${sessionId}/img_${i}.${ext}`;
+            const { error } = await db.storage.from('experiences').upload(path, f, { contentType: f.type || 'image/jpeg', upsert: true });
+            if (error) throw new Error('Upload failed: ' + error.message);
+            urls[i] = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+            uploaded++;
+            mtgStatus(`Uploading photos… (${uploaded} of ${st.photos.length})`, Math.round((uploaded / st.photos.length) * 50), '');
+          };
+          let nextUpload = 0;
+          await Promise.all(
+            Array.from({ length: Math.min(6, st.photos.length) }, async () => {
+              while (nextUpload < st.photos.length) { const i = nextUpload++; await uploadOne(i); }
+            })
+          );
+
+          // 2. Kick off the render.
+          mtgStatus('Starting render…', 55, '');
+          const startRes = await fetch('/api/create-montage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              images: urls.map(u => ({ url: u })),
+              perImageSeconds: st.perSec,
+              transition: st.transition,
+              musicUrl: mtgMusicUrl(st.musicId),
+              aspect: st.aspect,
+            }),
+          }).then(r => r.json());
+          if (startRes.error) throw new Error(startRes.error);
+
+          // 3. Poll for completion.
+          const done = await mtgPoll(startRes.renderId);
+
+          if (startRes.dryRun || done.dryRun) {
+            mtgStatus('✓ Preview mode — the builder works end to end. Connect Shotstack (add SHOTSTACK_API_KEY) to generate the real video.', 100, 'ok');
+            montageBusy = false; createBtn.disabled = false; closeBtn.disabled = false;
+            return;
+          }
+
+          // 4. Pull the finished MP4 into the page (proxy adds CORS), then hand it
+          //    to this page's video slot so it saves like any uploaded video.
+          mtgStatus('Downloading your video…', 96, '');
+          const blob = await fetch('/api/montage-file?url=' + encodeURIComponent(done.url)).then(r => {
+            if (!r.ok) throw new Error('Could not download the finished video.');
+            return r.blob();
+          });
+          const file = new File([blob], 'montage.mp4', { type: 'video/mp4' });
+          mtgStatus('', null, '');
+          montageBusy = false; createBtn.disabled = false; closeBtn.disabled = false;
+          mtgShowPreview(file, !!startRes.musicSkipped); // let the user watch it before committing
+        } catch (e) {
+          console.error('montage error:', e);
+          mtgStatus('Something went wrong: ' + e.message, null, 'err');
+          montageBusy = false; createBtn.disabled = false; closeBtn.disabled = false;
+        }
+      }
+
+      // Drop a finished montage MP4 into a page's video slot, mirroring the DOM
+      // updates the normal upload path makes.
+      // Drop a finished montage MP4 into a NEW page's video slot, mirroring the
+      // DOM updates the normal upload path makes.
+      function mtgApplyToPage(n, file) {
+        const pair = newPairs[n];
+        if (!pair) return;
+        pair.video = file;
+        pair.audio = null;
+        pair.mediaType = 'video';
+        mtgSwitchNewMedia(n, 'video');
+        const btn = document.getElementById(`video-btn-new-${n}`);
+        if (btn) btn.classList.add('selected');
+        const card = btn && btn.closest('.media-card');
+        if (card) card.classList.add('filled');
+        const eyeBtn = document.getElementById(`video-eye-new-${n}`);
+        if (eyeBtn) { eyeBtn.dataset.previewKind = 'video'; try { eyeBtn.dataset.previewUrl = URL.createObjectURL(file); } catch (e) {} }
+        const nameEl = document.getElementById(`video-name-new-${n}`);
+        if (nameEl) nameEl.textContent = 'Montage';
+        const sizeEl = document.getElementById(`video-size-new-${n}`);
+        if (sizeEl) { sizeEl.textContent = formatFileSize(file.size); sizeEl.className = 'file-size'; }
+        const videoEl = document.createElement('video');
+        videoEl.src = URL.createObjectURL(file);
+        videoEl.muted = true; videoEl.playsInline = true; videoEl.currentTime = 0.5;
+        videoEl.addEventListener('seeked', () => {
+          const c = document.createElement('canvas'); c.width = 130; c.height = 110;
+          drawVideoCover(c.getContext('2d'), videoEl, 130, 110);
+          const prev = document.getElementById(`video-preview-new-${n}`);
+          if (prev) prev.src = c.toDataURL('image/jpeg');
+        });
+        videoEl.load();
+        document.getElementById('unsaved-banner').style.display = 'block';
+      }
     </script>
+  <style>
+    /* ── Montage maker (book-maker look: black / white / warm-gray, line icons) ── */
+    /* Opened from the per-Popcode media dropdown (Video / Audio / Make a montage).
+       The montage choice is admin-only until Shotstack is wired live in prod. */
+
+    .mtg-overlay {
+      position: fixed; inset: 0; z-index: 9500; display: none;
+      align-items: flex-end; justify-content: center;
+      background: rgba(0, 0, 0, .5); backdrop-filter: blur(2px);
+    }
+    .mtg-overlay.open { display: flex; }
+    .mtg-sheet {
+      background: #fff; width: 100%; max-width: 640px; max-height: 92vh;
+      border-radius: 22px 22px 0 0; display: flex; flex-direction: column;
+      overflow: hidden; box-shadow: 0 -10px 44px rgba(0,0,0,.22);
+      animation: mtgUp .22s ease;
+    }
+    @keyframes mtgUp { from { transform: translateY(30px); opacity: .6; } to { transform: none; opacity: 1; } }
+    @media (min-width: 680px) { .mtg-overlay { align-items: center; } .mtg-sheet { border-radius: 22px; } }
+
+    .mtg-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 30px 24px 14px; color: #1a1a1a;
+    }
+    .mtg-title { font-size: 32px; font-weight: 400; color: #1a1a1a; letter-spacing: 0; font-family: 'CooperBT', Georgia, serif; }
+    .mtg-close {
+      background: #f3f2ef; border: none; color: #1a1a1a; width: 36px; height: 36px;
+      border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .mtg-close:hover { background: #ecebe5; }
+    .mtg-close:disabled { opacity: .4; cursor: default; }
+    .mtg-close svg { width: 18px; height: 18px; }
+
+    .mtg-body { padding: 8px 24px 20px; overflow-y: auto; }
+    .mtg-sub { font-size: 14px; color: #8a8a8a; margin: 0 0 20px; line-height: 1.5; font-family: 'Inter', sans-serif; }
+
+    .mtg-strip {
+      display: flex; flex-wrap: wrap; gap: 10px; padding: 4px 2px 12px;
+    }
+    .mtg-empty {
+      color: #aaa; font-size: 13px; padding: 26px 12px; text-align: center; width: 100%;
+      border: 1px dashed #e0ded6; border-radius: 14px; font-family: 'Inter', sans-serif;
+    }
+    .mtg-thumb {
+      position: relative; flex: 0 0 auto; width: 104px; height: 104px; border-radius: 14px;
+      overflow: hidden; background: #ededed; touch-action: none; cursor: grab; user-select: none;
+    }
+    .mtg-thumb.dragging { opacity: .35; }
+    .mtg-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; }
+    .mtg-reorder-hint { font-size: 12px; color: #aaa; margin: -4px 0 18px; font-family: 'Inter', sans-serif; }
+    .mtg-order {
+      position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,.62); color: #fff;
+      font-size: 11px; font-weight: 700; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .mtg-del {
+      position: absolute; top: 5px; right: 5px; width: 22px; height: 22px; border-radius: 50%;
+      background: #1a1a1a; color: #fff; border: 2px solid #fff; cursor: pointer; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .mtg-del svg { width: 10px; height: 10px; }
+
+    .mtg-add {
+      display: inline-flex; align-items: center; gap: 7px; margin: 6px 0 26px;
+      background: #1a1a1a; color: #fff; border: 1px solid #1a1a1a; font-weight: 700;
+      font-size: 13px; padding: 11px 18px; border-radius: 999px; cursor: pointer;
+      font-family: 'Inter', sans-serif;
+    }
+    .mtg-add:hover { background: #000; }
+    .mtg-add svg { width: 15px; height: 15px; }
+    .mtg-add input { display: none; }
+
+    .mtg-field { margin-bottom: 24px; }
+    .mtg-field > label {
+      display: block; font-size: 12px; font-weight: 700; color: #1a1a1a;
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px;
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* Seconds stepper (− value +) */
+    .mtg-stepper { display: inline-flex; align-items: center; border: 1px solid #e4e2dc; border-radius: 999px; overflow: hidden; }
+    .mtg-step {
+      border: none; background: #fff; color: #1a1a1a; width: 42px; height: 42px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .mtg-step:hover { background: #f3f2ef; }
+    .mtg-step:disabled { opacity: .3; cursor: default; }
+    .mtg-step svg { width: 16px; height: 16px; }
+    #mtg-sec-val { min-width: 64px; text-align: center; font-weight: 700; color: #1a1a1a; font-size: 15px; font-family: 'Inter', sans-serif; }
+
+    .mtg-seg { display: inline-flex; background: #f3f2ef; border-radius: 999px; padding: 4px; gap: 4px; flex-wrap: wrap; }
+    .mtg-seg button {
+      border: none; background: transparent; color: #8a8a8a; font-weight: 700; font-size: 13px;
+      padding: 9px 18px; border-radius: 999px; cursor: pointer; font-family: 'Inter', sans-serif;
+    }
+    .mtg-seg button.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+
+    .mtg-music { display: flex; flex-wrap: wrap; gap: 8px; }
+    .mtg-track {
+      border: 1px solid #e4e2dc; background: #fff; border-radius: 12px; padding: 10px 14px;
+      cursor: pointer; text-align: left; min-width: 100px; font-family: 'Inter', sans-serif; transition: border-color .12s;
+    }
+    .mtg-track:hover { border-color: #d8d5cd; }
+    .mtg-track.active { border-color: #1a1a1a; background: #1a1a1a; }
+    .mtg-track.active .mtg-track-name { color: #fff; }
+    .mtg-track.active .mtg-track-mood { color: rgba(255,255,255,.7); }
+    .mtg-track-name { display: block; font-weight: 700; font-size: 13px; color: #1a1a1a; }
+    .mtg-track-mood { display: block; font-size: 11px; color: #999; margin-top: 2px; }
+
+    .mtg-status { display: none; margin-top: 8px; }
+    .mtg-status.show { display: block; }
+    .mtg-status-msg { font-size: 13px; color: #555; font-weight: 600; font-family: 'Inter', sans-serif; }
+    .mtg-status.ok .mtg-status-msg { color: #1a1a1a; }
+    .mtg-status.err .mtg-status-msg { color: #c92a2a; }
+    .mtg-bar-wrap { height: 6px; background: #eee; border-radius: 4px; overflow: hidden; margin-top: 10px; }
+    .mtg-bar { height: 100%; background: #1a1a1a; transition: width .3s; }
+
+    .mtg-foot {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 16px 24px; border-top: 1px solid #eee; background: #fff;
+    }
+    .mtg-est { font-size: 13px; color: #8a8a8a; font-weight: 600; font-family: 'Inter', sans-serif; }
+    .mtg-create {
+      background: #1a1a1a; color: #fff; border: none;
+      font-weight: 700; font-size: 15px; padding: 14px 28px; border-radius: 999px; cursor: pointer;
+      font-family: 'Inter', sans-serif;
+    }
+    .mtg-create:hover { background: #000; }
+    .mtg-create:disabled { opacity: .4; cursor: default; }
+
+    .mtg-preview { display: none; flex-direction: column; flex: 1; min-height: 0; padding: 20px 24px; }
+    .mtg-preview-inner { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 0; }
+    .mtg-preview video { max-width: 100%; max-height: 56vh; border-radius: 14px; background: #000; }
+    .mtg-preview-note { font-size: 14px; color: #8a8a8a; font-family: 'Inter', sans-serif; margin: 0; text-align: center; }
+    .mtg-save-link { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; color: #2563eb; font-weight: 700; font-size: 13px; cursor: pointer; font-family: 'Inter', sans-serif; padding: 4px; }
+    .mtg-save-link:hover { text-decoration: underline; }
+    .mtg-preview-actions { display: flex; gap: 12px; padding-top: 16px; border-top: 1px solid #eee; }
+    .mtg-preview-actions button { flex: 1; border: none; border-radius: 999px; font-weight: 700; font-size: 15px; padding: 14px; cursor: pointer; font-family: 'Inter', sans-serif; }
+    .mtg-redo { background: #fff; color: #1a1a1a; border: 1px solid #e4e2dc !important; }
+    .mtg-use { background: #1a1a1a; color: #fff; }
+  </style>
+
+  <div id="mtg-overlay" class="mtg-overlay" aria-hidden="true">
+    <div class="mtg-sheet" role="dialog" aria-modal="true" aria-label="Make a montage">
+      <div class="mtg-head">
+        <div class="mtg-title">Make a montage</div>
+        <button type="button" class="mtg-close" id="mtg-close-btn" onclick="closeMontage()" title="Close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="mtg-body" id="mtg-body-scroll">
+        <p class="mtg-sub">Pick photos, set the order, add music. We'll turn them into a memory video and link it to this page's photo.</p>
+
+        <div class="mtg-strip" id="mtg-strip"></div>
+        <div class="mtg-reorder-hint" id="mtg-reorder-hint" style="display:none;">Drag the photos to reorder them.</div>
+        <label class="mtg-add">
+          <input type="file" accept="image/*" multiple onchange="mtgAddPhotos(this)"/>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add photos
+        </label>
+
+        <div class="mtg-field">
+          <label>Seconds per photo</label>
+          <div class="mtg-stepper">
+            <button type="button" class="mtg-step" id="mtg-sec-dec" onclick="mtgSecStep(-0.5)" aria-label="Fewer seconds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <span id="mtg-sec-val">3.0s</span>
+            <button type="button" class="mtg-step" id="mtg-sec-inc" onclick="mtgSecStep(0.5)" aria-label="More seconds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
+        </div>
+
+        <div class="mtg-field">
+          <label>Motion</label>
+          <div class="mtg-seg" id="mtg-transition">
+            <button type="button" data-v="kenburns" class="active">Ken Burns</button>
+            <button type="button" data-v="fade">Crossfade</button>
+          </div>
+        </div>
+
+        <div class="mtg-field">
+          <label>Shape</label>
+          <div class="mtg-seg" id="mtg-aspect">
+            <button type="button" data-v="portrait" class="active">Portrait</button>
+            <button type="button" data-v="square">Square</button>
+            <button type="button" data-v="landscape">Landscape</button>
+          </div>
+        </div>
+
+        <div class="mtg-field">
+          <label>Music</label>
+          <div class="mtg-music" id="mtg-music"></div>
+        </div>
+
+        <div class="mtg-status" id="mtg-status"></div>
+      </div>
+      <div class="mtg-foot" id="mtg-foot">
+        <div class="mtg-est" id="mtg-est">Add at least 2 photos</div>
+        <button type="button" class="mtg-create" id="mtg-create" onclick="mtgCreate()">Create montage</button>
+      </div>
+      <div class="mtg-preview" id="mtg-preview">
+        <div class="mtg-preview-inner">
+          <video id="mtg-preview-video" playsinline controls muted loop></video>
+          <p class="mtg-preview-note">Here's your montage. Use it, or start over to change photos, order, or music.</p>
+          <button type="button" class="mtg-save-link" onclick="mtgSaveVideo()"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Save video to your photos</button>
+        </div>
+        <div class="mtg-preview-actions">
+          <button type="button" class="mtg-redo" onclick="mtgRedoPreview()">Start over</button>
+          <button type="button" class="mtg-use" onclick="mtgUsePreview()">Use this montage</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="/beta-feedback.js"></script>
       <footer style="margin: 60px auto 16px; padding: 16px 16px 24px; text-align: center; font-size: 12px; color: #888; font-family: 'Inter', sans-serif;">
       <a href="/terms.html" style="color:#888; text-decoration:underline; margin: 0 8px;">Terms</a>
