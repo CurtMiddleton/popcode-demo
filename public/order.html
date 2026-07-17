@@ -1013,10 +1013,15 @@
       }
       async function renderDetailPreview() {
         const aspect = currentAspect();
-        // Aspect-true preview: the product reshapes to the selected size (8×8 → square,
-        // 5×7 → portrait). Photoreal room shots are secondary scene thumbnails.
-        paintScenes(await getArtImage(aspect), aspect);
-        applySizeScale(document.getElementById('detail-canvas'));
+        const cv = document.getElementById('detail-canvas');
+        // One real product shot only — no thumbnail strip, no in-situ/lifestyle scenes.
+        // Before a photo is picked this shows the clean product photo; once picked, the
+        // badged photo composites into the product's art opening.
+        document.getElementById('view-row').innerHTML = '';
+        const view = galleryFor(state.productType)[0];
+        if (view) { try { await renderGalleryView(cv, view, aspect); } catch (_) {} }
+        else { drawPlaceholder(cv, aspect || 1); }
+        applySizeScale(cv);
         updateDetailCta();
       }
       // Repaint main preview + the 4 view thumbnails from an already-loaded art image
