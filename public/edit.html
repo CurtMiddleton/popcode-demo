@@ -330,6 +330,14 @@
       .modal-primary-btn:hover { opacity: 0.92; }
       .modal-secondary-btn { display: block; width: 100%; padding: 15px; border-radius: 30px; border: 1px solid #e0e0e0; background: transparent; color: #1a1a1a; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 16px; font-family: 'Inter', sans-serif; box-sizing: border-box; }
       .modal-secondary-btn:hover { background: #f7f6f3; }
+      .result-share-wrap { position: relative; width: 100%; margin-bottom: 16px; }
+      .result-share-wrap .modal-secondary-btn { margin-bottom: 0; }
+      .share-popup { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 8px); background: white; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.18); padding: 8px 0; z-index: 600; text-align: left; }
+      .share-popup.visible { display: block; }
+      .share-popup-title { font-size: 11px; font-weight: 700; color: #aaa; text-transform: uppercase; letter-spacing: 0.06em; padding: 8px 18px 6px; }
+      .share-option { display: flex; align-items: center; gap: 12px; padding: 11px 18px; cursor: pointer; font-size: 15px; font-weight: 700; color: #1a1a1a; font-family: 'Inter', sans-serif; border: none; background: none; width: 100%; text-align: left; }
+      .share-option:hover { background: #f5f4f0; }
+      .share-option-icon { width: 34px; height: 34px; border-radius: 50%; background: #f0eeea; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
       .modal-back-link { color: #8a8a8a; font-size: 14px; text-decoration: none; padding: 8px; }
       .modal-back-link:hover { color: #1a1a1a; }
 
@@ -692,9 +700,16 @@
           </div>
           <h3 class="success-title">Popcode updated!</h3>
           <p class="success-sub">Your Popcode is live and ready to scan.</p>
-          <div id="result-url"></div>
           <a class="modal-primary-btn" id="view-btn" target="_blank" rel="noopener" href="#">View Popcode</a>
-          <button type="button" class="modal-secondary-btn" id="copy-btn">Copy Link</button>
+          <div class="result-share-wrap">
+            <button type="button" class="modal-secondary-btn" id="share-btn">Share</button>
+            <div class="share-popup" id="result-share-popup">
+              <div class="share-popup-title">Share options</div>
+              <button class="share-option" id="rs-copy"><span class="share-option-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span><span id="rs-copy-label">Copy link</span></button>
+              <button class="share-option" id="rs-email"><span class="share-option-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>Email</button>
+              <button class="share-option" id="rs-message"><span class="share-option-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>Message</button>
+            </div>
+          </div>
           <a href="/manage.html" class="modal-back-link">&larr; Back to My Popcodes</a>
         </div>
 
@@ -2248,15 +2263,30 @@
 
         // ── Done ──────────────────────────────────────────────────────────────
         setProgress('Done!', 100);
-        const shortUrl = `popcode.app/${slug}`;
         const viewUrl = `https://popcode.app/${slug}`;
-        document.getElementById('result-url').innerHTML = `<a href="${viewUrl}" target="_blank" rel="noopener">${shortUrl}</a>`;
         document.getElementById('view-btn').href = viewUrl;
-        const copyBtn = document.getElementById('copy-btn');
-        copyBtn.textContent = 'Copy Link';
-        copyBtn.onclick = () => {
+
+        // Share button → Copy link / Email / Message popup (matches New Popcode).
+        const shareTitle = (document.getElementById('name-input').value.trim() || 'My Popcode');
+        const sharePopup = document.getElementById('result-share-popup');
+        const shareBtn = document.getElementById('share-btn');
+        shareBtn.onclick = (e) => { e.stopPropagation(); sharePopup.classList.toggle('visible'); };
+        sharePopup.onclick = (e) => e.stopPropagation();
+        document.addEventListener('click', () => sharePopup.classList.remove('visible'));
+        document.getElementById('rs-copy').onclick = () => {
           navigator.clipboard.writeText(viewUrl);
-          copyBtn.textContent = 'Copied!';
+          const lbl = document.getElementById('rs-copy-label');
+          lbl.textContent = 'Copied!';
+          setTimeout(() => { lbl.textContent = 'Copy link'; sharePopup.classList.remove('visible'); }, 900);
+        };
+        document.getElementById('rs-email').onclick = () => {
+          const msg = `"${shareTitle}" is ready to scan with Popcode!`;
+          window.location.href = 'mailto:?subject=' + encodeURIComponent(msg) + '&body=' + encodeURIComponent(msg + '\n\n' + viewUrl);
+          sharePopup.classList.remove('visible');
+        };
+        document.getElementById('rs-message').onclick = () => {
+          window.location.href = 'sms:?&body=' + encodeURIComponent(`"${shareTitle}" is ready to scan with Popcode! ` + viewUrl);
+          sharePopup.classList.remove('visible');
         };
         showSaveState('success');
 
