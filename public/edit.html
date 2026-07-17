@@ -264,13 +264,13 @@
       /* Inside a card the upload area is small + borderless (the card is the frame). */
       .media-card .upload-btn { width: 100%; height: auto; padding: 10px 0; background: transparent; border: none; box-shadow: none; }
       .media-card .audio-tile { width: 100%; height: auto; background: transparent; border: none; box-shadow: none; }
-      .media-card .media-select { position: absolute; left: 12px; right: 12px; bottom: 12px; margin: 0; }
+      .media-card .media-select { position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px; margin: 0; max-width: calc(100% - 84px); z-index: 3; }
       /* Eye is hidden until the tile is filled (existing pages keep theirs visible). */
       .media-card .tile-eye { display: none; }
       .media-card.filled .tile-eye { display: flex; }
-      /* Filled: thumbnail fills the card; label + dropdown hide; eye + pencil show. */
-      .media-card.filled .media-card-label,
-      .media-card.filled > .media-select { display: none; }
+      /* Filled: thumbnail fills the card; label hides; eye + pencil + the media
+         dropdown stay so the type (Video / Montage / Audio) can still be changed. */
+      .media-card.filled .media-card-label { display: none; }
       .media-card.filled > .upload-btn,
       .media-card.filled > .video-slot { position: absolute; inset: 0; height: auto; padding: 0; }
       .media-card.filled > .video-slot > .upload-btn { position: absolute; inset: 0; height: auto; }
@@ -1398,36 +1398,43 @@
         page.innerHTML = `
           <div class="page-header">
             <div class="page-label">${item.target_index + 1}</div>
-            <div class="media-toggle" data-key="${key}">
-              <button type="button" class="media-tab ${startMode === 'video' ? 'active' : ''}" data-mode="video">Video</button>
-              <button type="button" class="media-tab ${startMode === 'audio' ? 'active' : ''}" data-mode="audio">Audio</button>
-            </div>
             <button class="remove-page-btn" title="Remove page"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
           </div>
           <div class="asset-stats" id="stats-existing-${item.id}"></div>
           <div class="upload-row">
             <div class="upload-wrapper">
-              <label class="upload-btn selected replaceable" id="photo-btn-${key}" title="Tap to replace photo">
-                <input type="file" accept="image/*" style="position:absolute;top:0;right:0;bottom:0;left:0;opacity:0;cursor:pointer;width:100%;height:100%;"/>
-                <img class="preview-img" id="photo-preview-${key}" src="${escapeHtml(photoThumb)}" style="display:block;"/>
-                ${photoThumb ? `<button type="button" class="tile-eye" data-preview-kind="photo" data-preview-url="${escapeHtml(photoThumb)}" title="Preview photo">${IC_EYE}</button>` : ''}
-              </label>
-              <div class="existing-badge" id="photo-badge-${key}">Tap to replace</div>
+              <div class="media-card filled">
+                <div class="media-card-label">Image to scan</div>
+                <label class="upload-btn selected replaceable" id="photo-btn-${key}" title="Tap to replace photo">
+                  <input type="file" accept="image/*" style="position:absolute;top:0;right:0;bottom:0;left:0;opacity:0;cursor:pointer;width:100%;height:100%;"/>
+                  <img class="preview-img" id="photo-preview-${key}" src="${escapeHtml(photoThumb)}" style="display:block;"/>
+                  ${photoThumb ? `<button type="button" class="tile-eye" data-preview-kind="photo" data-preview-url="${escapeHtml(photoThumb)}" title="Preview photo">${IC_EYE}</button>` : ''}
+                </label>
+                <div class="existing-badge" id="photo-badge-${key}">Tap to replace</div>
+              </div>
             </div>
             <div class="upload-wrapper" id="media-wrapper-${key}">
-              <div class="video-slot" id="video-slot-${key}" style="display:${startMode === 'video' ? '' : 'none'};">
-                <label class="upload-btn selected replaceable" id="video-btn-${key}" title="Tap to replace video">
-                  <input type="file" accept="video/*" style="position:absolute;top:0;right:0;bottom:0;left:0;opacity:0;cursor:pointer;width:100%;height:100%;"/>
-                  <img class="preview-img" id="video-preview-${key}" style="display:block;"/>
-                  <span class="play-overlay" style="display:block;"></span>
-                  ${videoThumb ? `<button type="button" class="tile-eye" data-preview-kind="video" data-preview-url="${escapeHtml(videoThumb)}" title="Play video">${IC_EYE}</button>` : ''}
-                </label>
-                <div class="existing-badge" id="video-badge-${key}">Tap to replace</div>
+              <div class="media-card filled">
+                <div class="media-card-label">Plays when scanned</div>
+                <div class="video-slot" id="video-slot-${key}" style="display:${startMode === 'video' ? '' : 'none'};">
+                  <label class="upload-btn selected replaceable" id="video-btn-${key}" title="Tap to replace video">
+                    <input type="file" accept="video/*" style="position:absolute;top:0;right:0;bottom:0;left:0;opacity:0;cursor:pointer;width:100%;height:100%;"/>
+                    <img class="preview-img" id="video-preview-${key}" style="display:block;"/>
+                    <span class="play-overlay" style="display:block;"></span>
+                    ${videoThumb ? `<button type="button" class="tile-eye" data-preview-kind="video" data-preview-url="${escapeHtml(videoThumb)}" title="Play video">${IC_EYE}</button>` : ''}
+                  </label>
+                  <div class="existing-badge" id="video-badge-${key}">Tap to replace</div>
+                </div>
+                <div class="audio-slot" id="audio-slot-${key}" style="display:${startMode === 'audio' ? '' : 'none'};">
+                  <div class="audio-tile" id="audio-tile-${key}"></div>
+                </div>
+                <select class="media-select" data-key="${key}" aria-label="What plays when scanned">
+                  <option value="video" ${startMode === 'video' ? 'selected' : ''}>Video</option>
+                  <option value="montage">Montage</option>
+                  <option value="audio" ${startMode === 'audio' ? 'selected' : ''}>Audio</option>
+                </select>
               </div>
-              <div class="audio-slot" id="audio-slot-${key}" style="display:${startMode === 'audio' ? '' : 'none'};">
-                <div class="audio-tile" id="audio-tile-${key}"></div>
-                <div class="file-size" id="audio-size-${key}" style="margin-top:6px;"></div>
-              </div>
+              <div class="file-size" id="audio-size-${key}" style="margin-top:6px;"></div>
             </div>
           </div>
         `;
@@ -1464,20 +1471,8 @@
         // Render the audio tile based on current state
         renderExistingAudioTile(item, key, audioUrl);
 
-        // Media-type toggle (lets user switch this page from video → audio or vice versa)
-        page.querySelectorAll('.media-tab').forEach(tab => {
-          tab.addEventListener('click', () => {
-            const mode = tab.dataset.mode;
-            if (!replacements[item.id]) replacements[item.id] = {};
-            replacements[item.id].mediaType = mode;
-            page.querySelectorAll('.media-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
-            document.getElementById(`video-slot-${key}`).style.display = mode === 'video' ? '' : 'none';
-            document.getElementById(`audio-slot-${key}`).style.display = mode === 'audio' ? '' : 'none';
-            document.getElementById('unsaved-banner').style.display = 'block';
-            // If user just switched TO audio and item didn't have audio originally, show empty recorder
-            if (mode === 'audio') renderExistingAudioTile(item, key, item.audio_url || '');
-          });
-        });
+        // Media-type dropdown (Video / Montage / Audio) — same control as New Popcode.
+        page.querySelector('.media-select').addEventListener('change', (e) => onExistingMediaSelect(item, key, e.target));
 
         // Photo replacement
         page.querySelector('#photo-btn-' + key + ' input').addEventListener('change', function() {
@@ -1538,6 +1533,29 @@
             document.getElementById('unsaved-banner').style.display = 'block';
           });
         });
+      }
+
+      // Existing-page media dropdown. Montage opens the builder (its output
+      // replaces the video); Video/Audio switch the slot like the old toggle did.
+      function onExistingMediaSelect(item, key, sel) {
+        if (sel.value === 'montage') {
+          const cur = (replacements[item.id] && replacements[item.id].mediaType) || getExistingMediaType(item);
+          sel.value = cur;
+          openMontage({ kind: 'existing', itemId: item.id, key });
+          return;
+        }
+        switchExistingMedia(item, key, sel.value);
+      }
+      function switchExistingMedia(item, key, mode) {
+        if (!replacements[item.id]) replacements[item.id] = {};
+        replacements[item.id].mediaType = mode;
+        const vs = document.getElementById(`video-slot-${key}`);
+        const as = document.getElementById(`audio-slot-${key}`);
+        if (vs) vs.style.display = mode === 'video' ? '' : 'none';
+        if (as) as.style.display = mode === 'audio' ? '' : 'none';
+        document.getElementById('unsaved-banner').style.display = 'block';
+        // Switching TO audio when the item had none originally shows the empty recorder.
+        if (mode === 'audio') renderExistingAudioTile(item, key, item.audio_url || '');
       }
 
       function wireAudioPlayer(tile) {
@@ -2838,9 +2856,34 @@
 
       // Drop a finished montage MP4 into a page's video slot, mirroring the DOM
       // updates the normal upload path makes.
+      // A montage can be applied to a brand-new page (newPairs) or to an existing
+      // page's video slot (replacements). montageState.page carries which one.
+      function mtgApplyToPage(ref, file) {
+        if (ref && typeof ref === 'object' && ref.kind === 'existing') return mtgApplyToExisting(ref, file);
+        return mtgApplyToNew(ref, file);
+      }
+
+      // Replace an EXISTING page's video with the finished montage.
+      function mtgApplyToExisting(ref, file) {
+        const { itemId, key } = ref;
+        if (!replacements[itemId]) replacements[itemId] = {};
+        replacements[itemId].video = file;
+        replacements[itemId].mediaType = 'video';
+        const vs = document.getElementById(`video-slot-${key}`);
+        const as = document.getElementById(`audio-slot-${key}`);
+        if (vs) vs.style.display = '';
+        if (as) as.style.display = 'none';
+        const sel = document.querySelector(`#page-${key} .media-select`);
+        if (sel) sel.value = 'video';
+        setVideoPreview(`video-preview-${key}`, file);
+        const badge = document.getElementById(`video-badge-${key}`);
+        if (badge) badge.textContent = '✓ Replaced';
+        document.getElementById('unsaved-banner').style.display = 'block';
+      }
+
       // Drop a finished montage MP4 into a NEW page's video slot, mirroring the
       // DOM updates the normal upload path makes.
-      function mtgApplyToPage(n, file) {
+      function mtgApplyToNew(n, file) {
         const pair = newPairs[n];
         if (!pair) return;
         pair.video = file;
