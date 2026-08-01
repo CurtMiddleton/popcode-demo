@@ -1,13 +1,16 @@
-// Curated Unsplash sample photos for shop previews (random per page load),
+// Curt's hand-picked sample photos for shop previews (random per page load),
 // plus a small product-mockup compositor so storefront cards can show those
 // photos inside the real Prodigi product templates.
 //
-// Photos are hotlinked from images.unsplash.com — the account has Unsplash Pro,
-// and the CDN serves Access-Control-Allow-Origin: * so canvas compositing works
-// (loaders must still set img.crossOrigin = 'anonymous').
+// The 50 photos were selected by Curt (Drive folder, 2026-08-01) and are
+// hotlinked from the Unsplash CDN — regular photos from images.unsplash.com,
+// Unsplash+ premium ones from plus.unsplash.com (the account has Unsplash
+// Pro; premium URLs need the shared photo-page ixid appended, which url()
+// does). Both hosts serve Access-Control-Allow-Origin: * so canvas
+// compositing works (loaders must still set img.crossOrigin = 'anonymous').
 //
-// Pool is travel / people (families, couples, kids) / pets — every ID verified
-// to return 200. Consumers should keep a local fallback (e.g.
+// Pool is travel / people (families, couples, kids) / pets — every URL
+// verified to return 200. Consumers should keep a local fallback (e.g.
 // /assets/sample-leopard.jpg) for offline/blocked cases.
 //
 // API:
@@ -20,42 +23,65 @@
 (function () {
   const POOL = {
     travel: [
-      'photo-1503220317375-aaad61436b1b', // backpacker at a mountain lake
-      'photo-1527631746610-bca00a040d60', // traveler in an old-town alley
-      'photo-1539635278303-d4002c07eae3', // friends hiking in the mountains
-      'photo-1507525428034-b723cf961d3e', // beach
-      'photo-1476514525535-07fb3b4ae5f1', // canoe on a lake
-      'photo-1519098901909-b1553a1190af', // coastal cliffs
-      'photo-1506905925346-21bda4d32df4', // mountain peak at dusk
-      'photo-1501785888041-af3ef285b470', // lake + mountains
+      'https://images.unsplash.com/photo-1532347922424-c652d9b7208e', // poolside straw hat
+      'https://images.unsplash.com/photo-1501555088652-021faa106b9b', // hiker, yellow backpack valley
+      'https://plus.unsplash.com/premium_photo-1677002240252-af3f88114efc', // hikers in the mountains
+      'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9', // Venice, Rialto bridge
+      'https://images.unsplash.com/photo-1549144511-f099e773c147', // Paris, Eiffel Tower
+      'https://plus.unsplash.com/premium_photo-1683141028915-523be058033f', // Rome fountain
+      'https://images.unsplash.com/photo-1682686581264-c47e25e61d95', // desert dune walk
+      'https://images.unsplash.com/photo-1527142879-95b61a0b8226', // resort pool + palms
+      'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e', // Kyoto street
+      'https://images.unsplash.com/photo-1554357475-accb8a88a330', // Petra
+      'https://images.unsplash.com/photo-1483729558449-99ef09a8c325', // Rio de Janeiro
+      'https://images.unsplash.com/photo-1489493585363-d69421e0edd3', // Manarola cliff town
+      'https://images.unsplash.com/photo-1507608869274-d3177c8bb4c7', // hot-air balloons
+      'https://plus.unsplash.com/premium_photo-1683121768172-67dfdfa69da5', // road trip, red jacket
+      'https://plus.unsplash.com/premium_photo-1700316993862-69fed06023d0', // Half Dome hiker
+      'https://plus.unsplash.com/premium_photo-1683141079772-acf46d5e2ebb', // Florence duomo
+      'https://images.unsplash.com/photo-1539920951450-2b2d59cff66d', // camel caravan dunes
+      'https://images.unsplash.com/photo-1501785888041-af3ef285b470', // alpine lake
+      'https://images.unsplash.com/photo-1551918120-9739cb430c6d', // infinity pool
+      'https://images.unsplash.com/photo-1527824404775-dce343118ebc', // Monument Valley
+      'https://plus.unsplash.com/premium_photo-1668703335982-a2d335b5cf82', // Antelope Canyon
     ],
     people: [
-      'photo-1476703993599-0035a21b17a9', // mom + kids on the couch
-      'photo-1503454537195-1dcabb73ffb9', // little girl, painted face
-      'photo-1544005313-94ddf0286df2',    // portrait
-      'photo-1523301343968-6a6ebf63c672', // backyard pool party
-      'photo-1516589178581-6cd7833ae3b2', // couple, heart hands at sunset
-      'photo-1542037104857-ffbb0b9155fb', // family walking in a field
-      'photo-1609220136736-443140cffec6', // dad with kids
-      'photo-1511632765486-a01980e01a18', // friends at sunset
-      'photo-1502086223501-7ea6ecd79368', // kids jumping in the forest
-      'photo-1478061653917-455ba7f4a541', // family hug
-      'photo-1543342384-1f1350e27861',    // parents with newborn
-      'photo-1511895426328-dc8714191300', // family
-      'photo-1517841905240-472988babdf9', // portrait
-      'photo-1529626455594-4ff0802cfb7e', // portrait
+      'https://images.unsplash.com/photo-1738898178964-88696087d43b', // couple, beach piggyback
+      'https://images.unsplash.com/photo-1581579186913-45ac3e6efe93', // family with dog on the lawn
+      'https://images.unsplash.com/photo-1559054109-82d938dac629', // friends at the overlook
+      'https://images.unsplash.com/photo-1611024847487-e26177381a3f', // family group
+      'https://images.unsplash.com/photo-1624272864537-8ecc72b67958', // father + child
+      'https://images.unsplash.com/photo-1561524891-8e08ab8569f3', // family on the boardwalk
+      'https://images.unsplash.com/photo-1531984929664-2fb2be468d3e', // toddler hug
+      'https://images.unsplash.com/photo-1555689070-2d15336749b6', // couple piggyback in a field
+      'https://images.unsplash.com/photo-1561525140-c2a4cc68e4bd', // family at sunset
+      'https://images.unsplash.com/photo-1518658761661-a3c568ee7b64', // friends jumping on the beach
+      'https://images.unsplash.com/photo-1446160657592-4782fb76fb99', // friends at the Golden Gate
+      'https://images.unsplash.com/photo-1539635278303-d4002c07eae3', // forest sunrays walk
+      'https://images.unsplash.com/photo-1605713288610-00c1c630ca1e', // kids hugging
+      'https://images.unsplash.com/photo-1531983412531-1f49a365ffed', // mother + child
+      'https://images.unsplash.com/photo-1506456331400-7088248a8db1', // beach sunset, parent + kid
+      'https://images.unsplash.com/photo-1560328055-e938bb2ed50a', // dad with baby on shoulders
+      'https://images.unsplash.com/photo-1517554558809-9b4971b38f39', // family walking a field
     ],
     pets: [
-      'photo-1537151625747-768eb6cf92b2', // corgi puppy
-      'photo-1596492784531-6e6eb5ea9993', // samoyed
-      'photo-1450778869180-41d0601e046e', // dog lying in the grass
-      'photo-1518791841217-8f162f1e1131', // cat
-      'photo-1583511655857-d19b40a7a54e', // puppy
-      'photo-1548199973-03cce0bbc87b',    // dogs running
+      'https://plus.unsplash.com/premium_photo-1676389281733-aaefab0e7907', // dog on blue background
+      'https://plus.unsplash.com/premium_photo-1661676172038-377ab3d82a18', // dog + cat cuddle
+      'https://plus.unsplash.com/premium_photo-1722859221349-26353eae4744', // bulldog
+      'https://images.unsplash.com/photo-1530281700549-e82e7bf110d6', // golden retriever on the beach
+      'https://plus.unsplash.com/premium_photo-1668606717900-0ecf91e55655', // dog close-up
+      'https://images.unsplash.com/photo-1504826260979-242151ee45b7', // puppy on the beach
+      'https://images.unsplash.com/photo-1503256207526-0d5d80fa2f47', // border collie
+      'https://images.unsplash.com/photo-1557495235-340eb888a9fb', // woman with black lab
+      'https://images.unsplash.com/photo-1504595403659-9088ce801e29', // two happy dogs
+      'https://images.unsplash.com/photo-1559190394-df5a28aab5c5', // spaniel out the car window
+      'https://images.unsplash.com/photo-1510771463146-e89e6e86560e', // golden with a flower
+      'https://plus.unsplash.com/premium_photo-1661892088256-0a17130b3d0d', // jack russell puppy
     ],
   };
   const CATS = Object.keys(POOL);
-  const url = (id, w) => 'https://images.unsplash.com/' + id + '?auto=format&fit=crop&w=' + (w || 1600) + '&q=80';
+  const IX = 'ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&ixlib=rb-4.1.0';
+  const url = (base, w) => base + '?' + IX + '&auto=format&fit=crop&w=' + (w || 1600) + '&q=80';
   const shuffled = (arr) => {
     const a = arr.slice();
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
