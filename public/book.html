@@ -18,6 +18,7 @@
     <title>Popcode — Design a Book</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/unsplash-samples.js"></script>
     <!-- book.html only needs MINDAR.IMAGE.Compiler (to compile popcoded photos
          into a .mind target), not AR rendering. Stub AFRAME so the compiler
          bundle loads without booting a real WebGL renderer — same trick as
@@ -822,6 +823,18 @@
           introEl.style.display = 'block';
           builderEl.style.display = 'none';
           setChrome(false);
+          // Intro preview: composite a random Unsplash sample onto the book
+          // mockup (replacing the static leopard shot). If the photo can't load,
+          // the static image simply stays.
+          if (window.drawProductCardMockup && window.unsplashSample) {
+            const stage = document.querySelector('#book-intro .bi-stage');
+            const cv = document.createElement('canvas');
+            window.drawProductCardMockup(cv, 'book', window.unsplashSample(1100)).then(() => {
+              cv.style.cssText = 'max-width:100%;max-height:340px;display:block;';
+              stage.innerHTML = '';
+              stage.appendChild(cv);
+            }).catch(() => {});
+          }
           // Size chips on the intro — applies immediately (builder re-renders on start).
           document.querySelectorAll('#bi-sizes .bi-size').forEach(chip => chip.addEventListener('click', () => {
             document.querySelectorAll('#bi-sizes .bi-size').forEach(x => x.classList.toggle('active', x === chip));
