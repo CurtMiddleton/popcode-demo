@@ -14,6 +14,7 @@
     <title>Popcode — Shop</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/unsplash-samples.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -81,11 +82,30 @@
       .cat-card { background:#fff; border-radius:24px; padding:30px; box-shadow:0 2px 14px rgba(0,0,0,0.06); cursor:pointer; border:1px solid #eee; transition:transform .12s, box-shadow .15s, border-color .15s; text-align:left; }
       .cat-card:hover { transform:translateY(-3px); box-shadow:0 12px 32px rgba(0,0,0,0.12); border-color:#e3dffb; }
       .cat-thumb { width:100%; height:400px; border-radius:16px; background:#f2f2f2; display:flex; align-items:center; justify-content:center; overflow:hidden; margin-bottom:28px; }
+      /* The two stacked A4-landscape pages must fit the 400px stage:
+         2 × (240 × 83/117) + wire ≈ 355px. */
+      .cat-thumb .calmock { width: 240px; }
       .cat-thumb img { max-width:98%; max-height:98%; object-fit:contain; display:block; }
       .cat-name { font-family:'CooperBT', Georgia, serif; font-size:31px; font-weight:400; letter-spacing:-0.01em; }
       .cat-badge { display:inline-block; font-size:11px; font-weight:700; color:#fff; background:linear-gradient(135deg,#7657FC,#589AF9); border-radius:999px; padding:2px 9px; margin-left:10px; vertical-align:middle; position:relative; top:-4px; font-family:'Inter',sans-serif; }
       .cat-desc { color:#777; font-size:15px; margin:10px 0 22px; line-height:1.55; }
       .cat-from { font-size:16px; font-weight:600; color:#1a1a1a; }
+
+      /* Live calendar mockup (Wall Calendar card): photo page hung above a mini
+         month grid, matching calendar.html's page design. */
+      .calmock { width: 74%; max-width: 300px; display: flex; flex-direction: column; gap: 4px; filter: drop-shadow(0 12px 20px rgba(0,0,0,0.18)); }
+      .cm-page { position: relative; width: 100%; aspect-ratio: 117 / 83; background: #fff; border-radius: 2px; }
+      .cm-photo { background-size: cover; background-position: center; background-color: #ddd; }
+      .cm-wire { display: flex; justify-content: center; gap: 9px; }
+      .cm-wire u { width: 5px; height: 5px; border-radius: 50%; background: #cfcabd; }
+      .cm-grid { overflow: hidden; }
+      .cm-month { position: absolute; left: 7%; top: 7%; font-family: 'Inter', sans-serif; font-weight: 800; font-size: 20px; color: #141414; letter-spacing: -0.03em; line-height: 1; }
+      .cm-cols { position: absolute; left: 44%; right: 5.5%; top: 13%; bottom: 15%; display: flex; }
+      .cm-cols span { position: relative; flex: 1 1 0; border-left: 1px solid #ddd; }
+      .cm-cols span:first-child { border-left: none; }
+      .cm-cols i { position: absolute; top: 0; right: 4px; font-style: normal; font-size: 6px; font-weight: 600; color: #8a8a8a; }
+      .cm-cols b { position: absolute; right: 4px; font-size: 9px; font-weight: 600; color: #141414; font-variant-numeric: tabular-nums; }
+      .cm-num { position: absolute; left: 7%; bottom: 7%; font-size: 19px; font-weight: 600; color: #c2c2c2; border-left: 1.5px solid #cfcfcf; padding-left: 7px; line-height: 1; }
 
       /* Nav drawer (mobile) */
       #nav-overlay { display: none; position: fixed; inset: 0; z-index: 200; }
@@ -189,12 +209,47 @@
       // Popcodes → order.html with the chosen category pre-selected. Photo-product
       // thumbnails are the real Prodigi product mockups shown as-is.
       const PRODUCTS = [
-        { id: 'book',   name: 'Photo Book',    desc: 'Lay-flat hardcover photo book — scannable pages come to life.', kind: 'build', mockup: '/assets/mockups/book.jpg' },
-        { id: 'print',  name: 'Prints',        desc: 'Museum-quality enhanced matte fine-art prints.',                kind: 'photo', type: 'print',  mockup: '/assets/mockups/print.jpg' },
-        { id: 'tile',   name: 'Photo Tiles',   desc: 'Framed, ready-to-hang tiles — great on their own or clustered.', kind: 'photo', type: 'tile',   mockup: '/assets/mockups/tile.jpg' },
-        { id: 'canvas', name: 'Canvas',        desc: 'Gallery-style stretched canvas with mirror-wrapped edges.',      kind: 'photo', type: 'canvas', mockup: '/assets/mockups/canvas.jpg' },
-        { id: 'framed', name: 'Framed Prints', desc: 'Fine-art print in a classic black frame behind perspex glaze.',  kind: 'photo', type: 'framed', mockup: '/assets/mockups/framed.jpg' },
+        { id: 'book',     name: 'Photo Book',    desc: 'Lay-flat hardcover photo book — scannable pages come to life. A4 landscape or 8×8" square.', kind: 'build', href: '/book.html', mockup: '/assets/mockups/book.jpg' },
+        { id: 'calendar', name: 'Wall Calendar', desc: 'A4 month-to-view wall calendar — 12 months of your photos with US holidays.', kind: 'build', href: '/calendar.html', badge: 'New', domMockup: 'calendar' },
+        { id: 'print',    name: 'Prints',        desc: 'Museum-quality enhanced matte fine-art prints.',                kind: 'photo', type: 'print',  mockup: '/assets/mockups/print.jpg' },
+        { id: 'tile',     name: 'Photo Tiles',   desc: 'Framed, ready-to-hang tiles — great on their own or clustered.', kind: 'photo', type: 'tile',   mockup: '/assets/mockups/tile.jpg' },
+        { id: 'canvas',   name: 'Canvas',        desc: 'Gallery-style stretched canvas with mirror-wrapped edges.',      kind: 'photo', type: 'canvas', mockup: '/assets/mockups/canvas.jpg' },
+        { id: 'framed',   name: 'Framed Prints', desc: 'Fine-art print in a classic black frame behind perspex glaze.',  kind: 'photo', type: 'framed', mockup: '/assets/mockups/framed.jpg' },
       ];
+
+      // Live DOM mockup for the calendar card: a hung A4-landscape pair (photo
+      // page over a mini month grid) with a random Unsplash sample photo — the
+      // same design calendar.html produces, so the card always matches the
+      // product. Falls back to a plain gray page if Unsplash is unreachable.
+      function calendarCardMockup() {
+        const wrapEl = document.createElement('div');
+        wrapEl.className = 'calmock';
+        const sample = (window.unsplashSample && window.unsplashSample(700)) || '';
+        const year = new Date().getFullYear() + 1;
+        const firstDow = new Date(year, 0, 1).getDay();
+        const days = 31;
+        let cols = '';
+        for (let c = 0; c < 7; c++) {
+          let cells = `<i>${'SMTWTFS'[c]}</i>`;
+          for (let row = 0; row < 6; row++) {
+            const d = row * 7 + c - firstDow + 1;
+            if (d >= 1 && d <= days) cells += `<b style="top:${26 + row * 15}px">${d}</b>`;
+          }
+          cols += `<span>${cells}</span>`;
+        }
+        wrapEl.innerHTML =
+          `<div class="cm-page cm-photo"></div>` +
+          `<div class="cm-wire">${'<u></u>'.repeat(9)}</div>` +
+          `<div class="cm-page cm-grid"><div class="cm-month">January</div><div class="cm-cols">${cols}</div><div class="cm-num">01</div></div>`;
+        // Unsplash photo with the bundled sample as an offline/blocked fallback.
+        const photoDiv = wrapEl.querySelector('.cm-photo');
+        const FALLBACK = '/assets/sample-leopard.jpg';
+        const im = new Image();
+        im.onload = () => { photoDiv.style.backgroundImage = `url('${im.src}')`; };
+        im.onerror = () => { if (im.src !== location.origin + FALLBACK) im.src = FALLBACK; };
+        im.src = sample || FALLBACK;
+        return wrapEl;
+      }
 
       db.auth.getSession().then(async ({ data }) => {
         if (!data.session) { window.location.href = '/auth.html'; return; }
@@ -213,19 +268,20 @@
           const card = document.createElement('div');
           card.className = 'cat-card';
           const badge = p.badge ? `<span class="cat-badge">${p.badge}</span>` : '';
-          const cta = p.id === 'book' ? 'See more details' : 'See more details and pricing';
+          const cta = p.kind === 'build' ? 'See more details' : 'See more details and pricing';
           card.innerHTML =
-            `<div class="cat-thumb"><img src="${p.mockup}" alt="${p.name}" loading="lazy"></div>` +
+            `<div class="cat-thumb">${p.mockup ? `<img src="${p.mockup}" alt="${p.name}" loading="lazy">` : ''}</div>` +
             `<div class="cat-name">${p.name}${badge}</div>` +
             `<div class="cat-desc">${p.desc}</div>` +
             `<div class="cat-from">${cta} &rarr;</div>`;
+          if (p.domMockup === 'calendar') card.querySelector('.cat-thumb').appendChild(calendarCardMockup());
           card.addEventListener('click', () => chooseProduct(p));
           grid.appendChild(card);
         });
       }
 
       function chooseProduct(p) {
-        if (p.kind === 'build') { window.location.href = '/book.html'; return; }
+        if (p.kind === 'build') { window.location.href = p.href || '/book.html'; return; }
         // Product-first funnel: go straight to the details screen; the photo is
         // chosen there (order.html) after picking a size.
         window.location.href = '/order.html?type=' + encodeURIComponent(p.type);

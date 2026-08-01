@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+    <!-- Sentry error monitoring (errors-only; init in /sentry-init.js) -->
+    <script
+      src="https://browser.sentry-cdn.com/10.59.0/bundle.min.js"
+      integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
+      crossorigin="anonymous"></script>
+    <script src="/sentry-init.js"></script>
+    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
+    <meta property="og:title" content="Popcode — Design a Calendar">
+    <meta property="og:description" content="Design a 12-month wall calendar from your photos.">
+    <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=2">
+    <meta property="og:type" content="website">
+    <title>Popcode — Design a Calendar</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <script src="/unsplash-samples.js"></script>
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <style>
+      @font-face { font-family: 'FilsonPro'; src: url('/assets/fonts/FilsonProMedium/font.woff2') format('woff2'), url('/assets/fonts/FilsonProMedium/font.woff') format('woff'); font-weight: 400 500; font-display: swap; }
+      @font-face { font-family: 'FilsonPro'; src: url('/assets/fonts/FilsonProBold/font.woff2') format('woff2'), url('/assets/fonts/FilsonProBold/font.woff') format('woff'); font-weight: 600 700; font-display: swap; }
+    </style>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+      html, body { overscroll-behavior: none; }
+      body {
+        min-height: 100vh; background: #f9f9f9; font-family: 'Inter', sans-serif;
+        font-weight: 400; color: #1a1a1a; display: flex; flex-direction: column;
+        align-items: center; padding: 0 0 210px; overflow-x: hidden;
+      }
+
+      /* ── Header: shared white nav injected by /nav.js + mobile drawer ── */
+      #nav-overlay { display:none; position:fixed; inset:0; z-index:200; }
+      #nav-overlay.open { display:block; }
+      #nav-drawer-bg { position:absolute; inset:0; background:rgba(0,0,0,0.18); }
+      #nav-drawer {
+        position:absolute; top:14px; left:14px; width:264px;
+        background:#ffffff; border-radius:18px;
+        box-shadow:0 12px 48px rgba(0,0,0,0.18);
+        padding:8px 0; opacity:0;
+        transform:translateY(-8px) scale(0.97); transform-origin:top left;
+        transition:opacity 0.18s ease, transform 0.18s ease;
+      }
+      #nav-overlay.open #nav-drawer { opacity:1; transform:translateY(0) scale(1); }
+      .nav-link { display:flex; align-items:center; gap:14px; padding:11px 20px; font-size:15px; font-weight:500; color:#1a1a1a; text-decoration:none; font-family:'Inter',sans-serif; }
+      .nav-link:hover { background:#f5f4f0; }
+      .nav-link svg { flex-shrink:0; color:#555; }
+      .nav-link.external { color:#666; font-size:14px; }
+      .nav-divider { height:1px; background:#ececec; margin:8px 0; }
+
+      .wrap { width: 100%; max-width: 640px; padding: 80px 20px 0; margin: 0 auto; }
+      @media (min-width: 1080px) { .wrap { max-width: 760px; } }
+
+      h1 { font-size: 44px; font-weight: 400; font-family: 'CooperBT', serif; letter-spacing: 0; line-height: 1.05; margin-bottom: 6px; }
+      @media (max-width: 680px) { h1 { font-size: 36px; } }
+      .subtitle { font-size: 16px; color: #656565; line-height: 1.5; margin-bottom: 26px; }
+
+      /* ── Interim product-details screen (like the other Shop products) ── */
+      #cal-intro { width: 100%; max-width: 1040px; margin: 0 auto; padding: 80px 28px 0; }
+      @media (max-width: 680px) { #cal-intro { padding: 48px 22px 0; } }
+      .bi-back { display: inline-block; color: #7657FC; font-weight: 600; font-size: 14px; text-decoration: none; margin-bottom: 22px; font-family: 'Inter', sans-serif; }
+      .bi-detail { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+      @media (max-width: 680px) { .bi-detail { grid-template-columns: 1fr; gap: 28px; } }
+      .bi-preview { background: #fff; border: 1px solid #eee; border-radius: 24px; padding: 30px; box-shadow: 0 2px 14px rgba(0,0,0,0.06); }
+      .bi-stage { background: #f2f2f2; border-radius: 16px; padding: 30px; display: flex; align-items: center; justify-content: center; min-height: 360px; }
+      /* Live mini-calendar mockup: photo page hung above the month-grid page. */
+      .cal-mock { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 6px; filter: drop-shadow(0 14px 24px rgba(0,0,0,0.20)); }
+      .bi-info h1 { margin-bottom: 6px; }
+      .bi-tagline { color: #8a857d; font-size: 15px; margin-bottom: 18px; font-family: 'Inter', sans-serif; }
+      .bi-desc { color: #555; font-size: 16px; line-height: 1.6; margin-bottom: 24px; }
+      .bi-specs { list-style: none; padding: 0; margin: 0 0 30px; }
+      .bi-specs li { position: relative; padding-left: 20px; margin-bottom: 11px; color: #333; font-size: 15px; }
+      .bi-specs li::before { content: ''; position: absolute; left: 0; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: #7657FC; }
+      .bi-year-label { font-size: 13px; font-weight: 700; color: #1a1a1a; margin: 2px 0 10px; font-family: 'Inter', sans-serif; }
+      .bi-years { display: flex; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
+      .bi-year { border: 2px solid #e4e2dc; background: #fff; border-radius: 14px; padding: 11px 20px; cursor: pointer; font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 700; color: #1a1a1a; }
+      .bi-year.active { border-color: #1a1a1a; }
+      .bi-cta { width: 100%; max-width: 340px; padding: 16px; border: none; border-radius: 16px; font-size: 16px; font-weight: 700; color: #fff; font-family: 'Inter', sans-serif; cursor: pointer; background: #1a1a1a; }
+      .bi-cta:hover { opacity: 0.94; }
+
+      .field-label { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
+      input.text-input {
+        width: 100%; padding: 13px 15px; border-radius: 12px;
+        border: 1px solid #e4e2dc; font-size: 16px; color: #1a1a1a; outline: none;
+        background: white; font-family: 'Inter', sans-serif; margin-bottom: 24px;
+      }
+      input.text-input:focus { border-color: #7657FC; }
+
+      /* ── Photo tray (same design as the book maker) ────────────── */
+      .tray-card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 22px; }
+      .tray-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; }
+      .tray-title { font-size: 14px; font-weight: 700; }
+      .tray-title span { color: #999; font-weight: 500; }
+      .tray-actions { display: flex; gap: 8px; }
+      .mini-btn { border: 1px solid #e0ded8; background: white; color: #1a1a1a; border-radius: 999px; padding: 7px 13px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; display: inline-flex; align-items: center; gap: 5px; }
+      .mini-btn:hover { background: #f6f5f1; }
+      .mini-btn.solid { background: #1a1a1a; color: white; border-color: #1a1a1a; }
+      .mini-btn.solid:hover { background: #000; }
+      .mini-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      .tray { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 8px; scroll-behavior: smooth; }
+      .tray:empty::after { content: 'Add photos to get started — one for the cover and one for each month.'; color: #aaa; font-size: 13px; line-height: 1.5; padding: 18px 4px; }
+      .tray-thumb {
+        position: relative; width: 76px; height: 76px; min-width: 76px; border-radius: 10px;
+        background-size: cover; background-position: center; background-color: #eee;
+        cursor: pointer; border: 2px solid transparent; transition: transform 0.12s, border-color 0.12s;
+      }
+      .tray-thumb.selected { border-color: #7657FC; transform: translateY(-3px); }
+      .tray-thumb.placed::after { content: '✓'; position: absolute; bottom: 3px; right: 5px; color: #fff; font-size: 12px; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+      .tray-thumb .tray-x {
+        position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%;
+        background: #1a1a1a; color: white; border: 2px solid white; display: flex; align-items: center; justify-content: center;
+        font-size: 13px; cursor: pointer; line-height: 1;
+      }
+      .tray-hint { font-size: 11px; color: #999; margin-top: 4px; min-height: 14px; }
+
+      /* ── Month cards ───────────────────────────────────────────── */
+      .months { display: flex; flex-direction: column; gap: 40px; }
+      .month-card { display: flex; flex-direction: column; gap: 8px; }
+      .month-label { font-size: 14px; font-weight: 700; color: #6b6558; padding: 0 2px; display: flex; align-items: center; justify-content: space-between; }
+      .month-label .ml-sub { font-size: 12px; font-weight: 500; color: #b3ac9d; }
+
+      /* A page — fixed 1400×993 internal canvas scaled to fit its frame, so the
+         editor preview and the print render are pixel-identical (and html2canvas
+         never sees aspect-ratio/cqw units it can't handle). */
+      .page-frame {
+        position: relative; width: 100%; aspect-ratio: 117 / 83; background: #fff;
+        overflow: hidden; border-radius: 3px; box-shadow: 0 3px 14px rgba(0,0,0,0.10);
+      }
+      .page-inner { position: absolute; left: 0; top: 0; width: 1400px; height: 993px; transform-origin: 0 0; background: #fff; }
+      .photo-frame { cursor: pointer; }
+      .photo-frame .pf-photo { position: absolute; inset: 0; background-size: cover; background-position: center; }
+      .photo-frame.empty .page-inner { background: #ededed; }
+      .pf-add {
+        position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 10px; color: #b8b8b8; font-size: 15px; font-weight: 600; z-index: 2;
+      }
+      .pf-add svg { width: 44px; height: 44px; }
+      .photo-frame.place-target { outline: 3px solid #7657FC; outline-offset: -3px; }
+
+      /* ── The month-grid page (Popsa design) ───────────────────────
+         All sizes are px within the fixed 1400×993 inner canvas. */
+      .gp-month { position: absolute; left: 90px; top: 64px; font-family: 'FilsonPro', 'Inter', sans-serif; font-weight: 700; font-size: 148px; letter-spacing: -0.02em; color: #141414; line-height: 1; }
+      .gp-holidays { position: absolute; left: 92px; top: 300px; width: 420px; }
+      .gp-hrow { display: flex; gap: 20px; margin-bottom: 13px; font-family: 'Inter', sans-serif; font-size: 21px; color: #333; line-height: 1.3; }
+      .gp-hday { width: 34px; text-align: right; color: #8a8a8a; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+      .gp-hname { flex: 1; }
+      .gp-grid { position: absolute; left: 610px; top: 128px; right: 82px; bottom: 140px; display: flex; }
+      .gp-col { position: relative; flex: 1 1 0; border-left: 1.5px solid #d9d9d9; }
+      .gp-col:first-child { border-left: none; }
+      .gp-dow { position: absolute; top: 0; right: 16px; font-family: 'Inter', sans-serif; font-size: 19px; font-weight: 600; color: #8a8a8a; }
+      .gp-day { position: absolute; right: 14px; font-family: 'FilsonPro', 'Inter', sans-serif; font-weight: 500; font-size: 46px; color: #141414; line-height: 1; font-variant-numeric: tabular-nums; }
+      .gp-day .gp-dot { position: absolute; left: 50%; transform: translateX(-50%); bottom: -16px; width: 9px; height: 9px; border-radius: 50%; background: #141414; }
+      .gp-num { position: absolute; left: 90px; bottom: 66px; display: flex; align-items: flex-start; gap: 18px; }
+      .gp-num .gp-num-rule { width: 2px; height: 96px; background: #cfcfcf; }
+      .gp-num .gp-num-text { font-family: 'FilsonPro', 'Inter', sans-serif; font-weight: 500; font-size: 88px; color: #c2c2c2; line-height: 0.95; }
+
+      /* ── Cover page ────────────────────────────────────────────── */
+      .cover-frame .cf-photo { position: absolute; inset: 0; background-size: cover; background-position: center; }
+      .cover-frame.empty .page-inner { background: #ededed; }
+      .cf-tint { position: absolute; left: 0; right: 0; bottom: 0; height: 46%; background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.45)); }
+      .cf-text { position: absolute; left: 90px; bottom: 70px; color: #fff; z-index: 2; }
+      .cf-year { font-family: 'FilsonPro', 'Inter', sans-serif; font-weight: 700; font-size: 150px; line-height: 1; letter-spacing: -0.01em; text-shadow: 0 2px 14px rgba(0,0,0,0.25); }
+      .cf-title { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 40px; margin-top: 14px; opacity: 0.95; text-shadow: 0 1px 8px rgba(0,0,0,0.3); }
+      .cf-title.ph { opacity: 0.55; }
+
+      /* ── Back cover ────────────────────────────────────────────── */
+      .back-frame .page-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px; }
+      .back-frame .bk-logo { height: 64px; width: auto; display: block; }
+      .back-frame .bk-url { font-family: 'Inter', sans-serif; font-size: 26px; letter-spacing: 0.06em; color: #8a857c; }
+      .back-frame .bk-sub { font-family: 'Inter', sans-serif; font-size: 22px; color: #b3ada3; }
+
+      /* Wire-O binding hint between the photo page and grid page. */
+      .wire { display: flex; justify-content: center; gap: 14px; padding: 1px 0; }
+      .wire span { width: 7px; height: 7px; border-radius: 50%; background: #cfcabd; }
+
+      /* ── Sticky create bar ─────────────────────────────────────── */
+      .create-bar {
+        position: fixed; bottom: 0; left: 0; right: 0; z-index: 90;
+        background: rgba(247,246,242,0.92); backdrop-filter: blur(10px);
+        border-top: 1px solid #e4e2dc; padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
+        display: flex; justify-content: center;
+      }
+      .create-bar-inner { width: 100%; max-width: 640px; display: flex; align-items: center; gap: 14px; }
+      .create-summary { display: none; font-size: 12px; color: #888; flex: 1; line-height: 1.35; padding-left: 4px; }
+      @media (min-width: 620px) { .create-summary { display: block; } }
+      .create-summary strong { color: #1a1a1a; }
+      .create-btn {
+        border: none; background: #1a1a1a; color: white; border-radius: 30px; padding: 15px 30px;
+        font-size: 16px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; white-space: nowrap;
+        transition: opacity 0.2s; margin-left: auto;
+      }
+      .create-btn:hover { background: #000; }
+      .create-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+      /* ── Floating dock (Photos / Events / Options) ─────────────── */
+      .dock {
+        position: fixed; left: 50%; transform: translateX(-50%);
+        bottom: calc(94px + env(safe-area-inset-bottom)); z-index: 95;
+        display: flex; gap: 2px; background: #fff; border-radius: 20px; padding: 6px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.16), 0 1px 3px rgba(0,0,0,0.08);
+        border: 1px solid rgba(0,0,0,0.04);
+      }
+      .dock-btn {
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+        min-width: 72px; padding: 8px 10px 7px; border-radius: 14px; border: none;
+        background: transparent; cursor: pointer; color: #1a1a1a;
+        font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600;
+        transition: background 0.12s;
+      }
+      .dock-btn:hover { background: #f2f0ea; }
+      .dock-btn svg { width: 24px; height: 24px; }
+
+      /* ── Modal sheet (shared) ──────────────────────────────────── */
+      .overlay { display: none; position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,0.5); align-items: flex-end; justify-content: center; padding: 0; }
+      .overlay.visible { display: flex; }
+      @media (min-width: 620px) { .overlay { align-items: center; padding: 24px; } }
+      .sheet {
+        background: white; width: 100%; max-width: 520px; border-radius: 22px 22px 0 0;
+        padding: 8px 22px calc(26px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 40px rgba(0,0,0,0.2);
+        max-height: 92vh; overflow-y: auto;
+      }
+      @media (min-width: 620px) { .sheet { border-radius: 22px; } }
+      .sheet h2 { font-size: 19px; font-weight: 700; margin-bottom: 4px; }
+      .sheet p.sheet-sub { font-size: 13px; color: #888; margin-bottom: 18px; line-height: 1.5; }
+      .ep-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+      .ep-head h2 { font-size: 20px; font-weight: 700; }
+      .ep-x { border: none; background: transparent; cursor: pointer; color: #444; padding: 4px; display: flex; }
+      .menu-row { display: flex; align-items: center; gap: 14px; padding: 15px 6px; cursor: pointer; border-bottom: 1px solid #f2f0ea; font-size: 16px; font-weight: 600; color: #1a1a1a; }
+      .menu-row:last-child { border-bottom: none; }
+      .menu-row:hover { background: #faf9f5; }
+      .menu-row .menu-ic { width: 40px; height: 40px; border-radius: 50%; background: #f2f0ea; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #555; }
+      .menu-row.destructive { color: #d33; }
+      .menu-row.destructive .menu-ic { background: #fdecec; color: #d33; }
+      .menu-sub { font-size: 12px; font-weight: 500; color: #999; margin-top: 2px; }
+      .photos-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 6px; }
+      @media (min-width: 620px) { .photos-grid { grid-template-columns: repeat(6, 1fr); } }
+      .pg-thumb {
+        aspect-ratio: 1; border-radius: 10px; background-size: cover; background-position: center;
+        background-color: #eee; cursor: pointer; position: relative; transition: transform 0.1s, box-shadow 0.1s;
+      }
+      .pg-thumb:hover { transform: scale(1.03); box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
+      /* Year stepper + toggle (Events sheet) */
+      .ev-row { display: flex; align-items: center; justify-content: space-between; padding: 15px 6px; border-bottom: 1px solid #f2f0ea; font-size: 16px; font-weight: 600; }
+      .ev-row:last-child { border-bottom: none; }
+      .stepper { display: inline-flex; align-items: center; gap: 4px; }
+      .stepper button { width: 36px; height: 36px; border-radius: 50%; border: 1px solid #e0ded8; background: #fff; font-size: 18px; font-weight: 700; cursor: pointer; color: #1a1a1a; }
+      .stepper .stp-val { min-width: 64px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .switch { position: relative; width: 50px; height: 30px; border-radius: 999px; background: #ddd; border: none; cursor: pointer; transition: background 0.15s; }
+      .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25); transition: left 0.15s; }
+      .switch.on { background: #1a1a1a; }
+      .switch.on::after { left: 23px; }
+
+      /* Address form (order sheet) */
+      .bo-form { display:flex; flex-direction:column; gap:9px; margin:6px 0 14px; }
+      .bo-form input { width:100%; border:1px solid #d9d5cf; border-radius:11px; padding:12px 13px; font-size:15px; font-family:'Inter',sans-serif; background:#fff; }
+      .bo-form input:focus { outline:none; border-color:#7657FC; }
+      .bo-row { display:flex; gap:9px; } .bo-row input { flex:1; min-width:0; }
+      .bo-pay { width:100%; border:none; border-radius:14px; background:#1a1a1a; color:#fff; font-family:'Inter',sans-serif; font-weight:600; font-size:16px; padding:15px; cursor:pointer; }
+      .bo-pay:disabled { opacity:.5; cursor:default; }
+      .bo-note { text-align:center; color:#8a857d; font-size:12px; margin-top:9px; }
+
+      /* ── Progress + result + toast ─────────────────────────────── */
+      #progress {
+        display: none; position: fixed; inset: 0; z-index: 500; background: rgba(249,249,249,0.97);
+        flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 30px; text-align: center;
+      }
+      #progress.visible { display: flex; }
+      .p-emoji { font-size: 44px; }
+      #progress-label { font-size: 16px; font-weight: 600; color: #1a1a1a; }
+      .progress-bar-wrap { width: 100%; max-width: 320px; background: #e8e8e8; border-radius: 99px; height: 6px; overflow: hidden; }
+      #progress-bar { height: 100%; background: #1a1a1a; border-radius: 99px; width: 0%; transition: width 0.3s; }
+      #try-again-btn { display: none; margin-top: 8px; border: none; background: #1a1a1a; color: #fff; border-radius: 999px; padding: 12px 28px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; }
+      #result {
+        display: none; position: fixed; inset: 0; z-index: 500; background: rgba(249,249,249,0.98);
+        align-items: center; justify-content: center; padding: 24px;
+      }
+      #result.visible { display: flex; }
+      .result-card { background: #fff; border-radius: 22px; box-shadow: 0 10px 40px rgba(0,0,0,0.12); padding: 36px 30px; max-width: 420px; width: 100%; text-align: center; }
+      .r-emoji { font-size: 44px; margin-bottom: 10px; }
+      .result-card h3 { font-family: 'CooperBT', serif; font-weight: 400; font-size: 27px; margin-bottom: 8px; }
+      .result-card p { color: #656565; font-size: 15px; line-height: 1.5; margin-bottom: 22px; }
+      .result-actions { display: flex; flex-direction: column; gap: 9px; }
+      .r-primary { display: block; background: #1a1a1a; color: #fff; border: none; border-radius: 14px; padding: 14px; font-size: 15px; font-weight: 700; cursor: pointer; text-decoration: none; font-family: 'Inter', sans-serif; }
+      .r-secondary { display: block; background: #eee; color: #1a1a1a; border: none; border-radius: 14px; padding: 14px; font-size: 15px; font-weight: 700; cursor: pointer; text-decoration: none; font-family: 'Inter', sans-serif; }
+      .toast {
+        position: fixed; bottom: calc(160px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%) translateY(8px);
+        background: #1a1a1a; color: #fff; border-radius: 999px; padding: 11px 22px; font-size: 14px; font-weight: 600;
+        opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s; z-index: 600; white-space: nowrap;
+      }
+      .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+      /* Print render target (populated on demand, captured to PDF). */
+      #proof { position: fixed; left: -20000px; top: 0; background: #fff; z-index: -1; pointer-events: none; }
+      #proof .page-frame { width: 1400px; height: 993px; aspect-ratio: auto; border-radius: 0; box-shadow: none; }
+      #proof .pf-add, #proof .wire { display: none; }
+    </style>
+  </head>
+  <body>
+    <script src="/nav.js"></script>
+
+    <div id="nav-overlay">
+      <div id="nav-drawer-bg"></div>
+      <div id="nav-drawer">
+        <a class="nav-link" href="/manage.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          My Popcodes
+        </a>
+        <a class="nav-link" href="/manage.html?tab=designs">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          My Designs
+        </a>
+        <a class="nav-link" href="/shop.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          Shop
+        </a>
+        <a class="nav-link" href="/create.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          New Popcode
+        </a>
+        <a class="nav-link" href="/views.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Past Views
+        </a>
+        <a class="nav-link" href="/account.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          My Account
+        </a>
+        <a class="nav-link" href="/howto.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          How It Works
+        </a>
+        <div class="nav-divider"></div>
+        <a class="nav-link external" href="https://popcodeapp.com" target="_blank">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          popcodeapp.com
+        </a>
+      </div>
+    </div>
+
+    <!-- Interim details screen (like the other Shop products) -->
+    <div id="cal-intro" style="display:none;">
+      <a class="bi-back" href="/shop.html">&larr; All products</a>
+      <div class="bi-detail">
+        <div class="bi-preview"><div class="bi-stage"><div class="cal-mock" id="cal-mock"></div></div></div>
+        <div class="bi-info">
+          <h1>Wall Calendar</h1>
+          <div class="bi-tagline">A4 landscape · Wire-O bound · 12 months</div>
+          <p class="bi-desc">A month-to-view wall calendar from your favourite photos — one photo above a clean month grid, with US holidays marked. Designed by you, printed and shipped by us.</p>
+          <ul class="bi-specs">
+            <li>A4 landscape (11.7 × 8.3"), silk-coated paper</li>
+            <li>Wire-O binding — hangs flat on the wall</li>
+            <li>12 unique photo pages + month grids with holidays</li>
+          </ul>
+          <div class="bi-year-label">Calendar year</div>
+          <div class="bi-years" id="bi-years"></div>
+          <button class="bi-cta" id="start-cal-btn">Design a Calendar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <h1>Design a Calendar</h1>
+      <p class="subtitle">Pick a photo for the cover and one for each month. The month grids — with US holidays — are laid out for you.</p>
+
+      <div class="field-label">Calendar title <span style="color:#999;font-weight:500">(shown on the cover)</span></div>
+      <input class="text-input" id="title-input" type="text" placeholder="e.g. Our Family 2027" autocomplete="off"/>
+
+      <!-- Photo tray -->
+      <div class="tray-card">
+        <div class="tray-head">
+          <div class="tray-title">Your photos <span id="tray-count"></span></div>
+          <div class="tray-actions">
+            <button class="mini-btn" id="autofill-btn" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h16M4 19h10"/></svg>
+              Auto-fill
+            </button>
+            <label class="mini-btn solid">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add photos
+              <input type="file" id="photo-input" accept="image/*" multiple style="display:none"/>
+            </label>
+          </div>
+        </div>
+        <div class="tray" id="tray"></div>
+        <div class="tray-hint" id="tray-hint"></div>
+      </div>
+
+      <!-- Cover + 12 months + back cover -->
+      <div class="months" id="months"></div>
+    </div>
+
+    <!-- Floating quick-action dock -->
+    <div class="dock" id="dock">
+      <button class="dock-btn" id="dock-photos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        Photos
+      </button>
+      <button class="dock-btn" id="dock-events">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Events
+      </button>
+      <button class="dock-btn" id="dock-options">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+        Options
+      </button>
+    </div>
+
+    <!-- Sticky create bar -->
+    <div class="create-bar">
+      <div class="create-bar-inner">
+        <div class="create-summary" id="create-summary">Add photos to begin.</div>
+        <button class="create-btn" id="create-btn" disabled>Create Calendar</button>
+      </div>
+    </div>
+
+    <!-- Overlays -->
+    <div class="overlay" id="overlay"><div class="sheet" id="sheet"></div></div>
+
+    <div id="progress">
+      <div class="p-emoji">📅</div>
+      <div id="progress-label">Starting…</div>
+      <div class="progress-bar-wrap"><div id="progress-bar"></div></div>
+      <button id="try-again-btn">Try Again</button>
+    </div>
+
+    <div id="result">
+      <div class="result-card">
+        <div class="r-emoji">🎉</div>
+        <h3 id="result-title">Your calendar is ready!</h3>
+        <p>Your design is saved to My Designs. Order a printed copy whenever you like.</p>
+        <div class="result-actions">
+          <button class="r-primary" id="result-order">Order a printed copy</button>
+          <button class="r-secondary" id="result-keep">Keep editing</button>
+          <a class="r-secondary" href="/manage.html?tab=designs">Back to My Designs</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <!-- Print render target (populated on demand, captured to PDF). -->
+    <div id="proof"></div>
+
+    <script>
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      const IC_X = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const DOW = ['S','M','T','W','T','F','S'];
+      const PROOF_ADMINS = ['curtmid@gmail.com', 'curt@theworkshop.works'];
+      const isProofAdmin = () => currentUser && PROOF_ADMINS.includes((currentUser.email || '').toLowerCase());
+
+      // Print geometry — Prodigi CALENDAR-A4-L-UNDATED: 26 A4-landscape pages
+      // (297 × 210 mm), front cover, then [photo page + month grid page] × 12,
+      // back cover. Essential content stays ≥10 mm from the edges (safe zone) —
+      // the layout's 82–90px insets on the 1400px canvas are ~17–19 mm.
+      const PRINT = { wIn: 11.6929, hIn: 8.2677, dpi: 300, PXW: 1400, PXH: 993 };
+      const CAL_VARIANT_ID = 'cal-a4-undated';
+
+      // ── State ───────────────────────────────────────────────────
+      const photos = new Map();          // id → { id, file, url, existingUrl }
+      let months = Array.from({ length: 12 }, () => ({ photoId: null }));
+      let cover = { photoId: null };
+      let calYear = new Date().getFullYear() + 1;
+      let holidaysOn = true;
+      let selectedTrayId = null;
+      let currentUser = null;
+      let editingCollection = null;      // set when opened with ?id=slug
+      let idSeq = 0;
+      const uid = (p) => `${p}_${(idSeq++).toString(36)}${Math.floor(performance.now()).toString(36)}`;
+
+      // ── Helpers ─────────────────────────────────────────────────
+      function escapeHtml(str) { const d = document.createElement('div'); d.appendChild(document.createTextNode(str == null ? '' : String(str))); return d.innerHTML; }
+      function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2200); }
+      function placedIds() { const s = new Set(); months.forEach(m => { if (m.photoId) s.add(m.photoId); }); if (cover.photoId) s.add(cover.photoId); return s; }
+      function unplacedPhotos() { const placed = placedIds(); return [...photos.values()].filter(p => !placed.has(p.id)); }
+      function openSheet(html) { document.getElementById('sheet').innerHTML = html; document.getElementById('overlay').classList.add('visible'); }
+      function closeSheet() { document.getElementById('overlay').classList.remove('visible'); }
+      document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') closeSheet(); });
+
+      // ── US holidays ─────────────────────────────────────────────
+      function nthWeekdayOfMonth(y, m, weekday, n) {
+        const first = new Date(y, m, 1).getDay();
+        return 1 + ((weekday - first + 7) % 7) + (n - 1) * 7;
+      }
+      function lastWeekdayOfMonth(y, m, weekday) {
+        const last = new Date(y, m + 1, 0);
+        return last.getDate() - ((last.getDay() - weekday + 7) % 7);
+      }
+      // Easter Sunday (Anonymous Gregorian algorithm) → { m: 0-based month, d }.
+      function easterSunday(y) {
+        const a = y % 19, b = Math.floor(y / 100), c = y % 100;
+        const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+        const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+        const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+        const m = Math.floor((a + 11 * h + 22 * l) / 451);
+        return { m: Math.floor((h + l - 7 * m + 114) / 31) - 1, d: ((h + l - 7 * m + 114) % 31) + 1 };
+      }
+      function monthHolidays(y, m) {
+        if (!holidaysOn) return [];
+        const H = [];
+        const add = (d, name) => H.push({ d, name });
+        if (m === 0) { add(1, 'New Year’s Day'); add(nthWeekdayOfMonth(y, 0, 1, 3), 'Martin Luther King Jr. Day'); }
+        if (m === 1) { add(14, 'Valentine’s Day'); add(nthWeekdayOfMonth(y, 1, 1, 3), 'Presidents’ Day'); }
+        const e = easterSunday(y); if (m === e.m) add(e.d, 'Easter Sunday');
+        if (m === 4) { add(nthWeekdayOfMonth(y, 4, 0, 2), 'Mother’s Day'); add(lastWeekdayOfMonth(y, 4, 1), 'Memorial Day'); }
+        if (m === 5) { add(nthWeekdayOfMonth(y, 5, 0, 3), 'Father’s Day'); add(19, 'Juneteenth'); }
+        if (m === 6) add(4, 'Independence Day');
+        if (m === 8) add(nthWeekdayOfMonth(y, 8, 1, 1), 'Labor Day');
+        if (m === 9) { add(nthWeekdayOfMonth(y, 9, 1, 2), 'Indigenous Peoples’ Day'); add(31, 'Halloween'); }
+        if (m === 10) { add(11, 'Veterans Day'); add(nthWeekdayOfMonth(y, 10, 4, 4), 'Thanksgiving'); }
+        if (m === 11) { add(24, 'Christmas Eve'); add(25, 'Christmas Day'); add(31, 'New Year’s Eve'); }
+        return H.sort((a, b) => a.d - b.d);
+      }
+
+      // ── Page renderers ──────────────────────────────────────────
+      // Every page is a fixed 1400×993 canvas (.page-inner) scaled to fit its
+      // frame, so editor previews and the print PDF share one renderer.
+      const frameObserver = new ResizeObserver(entries => {
+        entries.forEach(en => {
+          const inner = en.target.querySelector('.page-inner');
+          if (inner) inner.style.transform = `scale(${en.contentRect.width / PRINT.PXW})`;
+        });
+      });
+      function mkFrame(cls) {
+        const f = document.createElement('div');
+        f.className = 'page-frame ' + cls;
+        const inner = document.createElement('div');
+        inner.className = 'page-inner';
+        f.appendChild(inner);
+        frameObserver.observe(f);
+        return { frame: f, inner };
+      }
+
+      // The month grid page — Popsa-style: big month name, holiday list on the
+      // left, a columnar week grid with vertical rules on the right, and the
+      // month number bottom-left.
+      function buildGridInner(inner, y, m) {
+        const holidays = monthHolidays(y, m);
+        const holidaySet = new Set(holidays.map(h => h.d));
+        const daysInMonth = new Date(y, m + 1, 0).getDate();
+        const firstDow = new Date(y, m, 1).getDay();
+
+        // Grid metrics inside .gp-grid (px within the 1400×993 canvas).
+        const gridTop = 128, gridBottom = 140, gridH = PRINT.PXH - gridTop - gridBottom; // 725
+        const weekRows = Math.ceil((firstDow + daysInMonth) / 7);
+        const rowTop = 78;                                   // first number row (below the S M T W T F S row)
+        const rowStep = Math.floor((gridH - rowTop - 40) / Math.max(5, weekRows));
+
+        let cols = '';
+        for (let c = 0; c < 7; c++) {
+          let cells = `<div class="gp-dow">${DOW[c]}</div>`;
+          for (let row = 0; row < weekRows; row++) {
+            const day = row * 7 + c - firstDow + 1;
+            if (day < 1 || day > daysInMonth) continue;
+            const dot = holidaySet.has(day) ? '<span class="gp-dot"></span>' : '';
+            cells += `<div class="gp-day" style="top:${rowTop + row * rowStep}px">${day}${dot}</div>`;
+          }
+          cols += `<div class="gp-col">${cells}</div>`;
+        }
+        const hrows = holidays.map(h =>
+          `<div class="gp-hrow"><div class="gp-hday">${h.d}</div><div class="gp-hname">${escapeHtml(h.name)}</div></div>`).join('');
+
+        inner.innerHTML =
+          `<div class="gp-month">${MONTH_NAMES[m]}</div>` +
+          `<div class="gp-holidays">${hrows}</div>` +
+          `<div class="gp-grid">${cols}</div>` +
+          `<div class="gp-num"><div class="gp-num-rule"></div><div class="gp-num-text">${String(m + 1).padStart(2, '0')}</div></div>`;
+      }
+
+      function photoUrlFor(photoId) {
+        const p = photoId && photos.get(photoId);
+        return p ? p.url : null;
+      }
+
+      function buildPhotoInner(inner, photoId, isCover) {
+        const url = photoUrlFor(photoId);
+        let html = '';
+        if (url) html += `<div class="${isCover ? 'cf-photo' : 'pf-photo'}" style="background-image:url('${url}')"></div>`;
+        if (isCover) {
+          const title = (document.getElementById('title-input').value || '').trim();
+          if (url) html += '<div class="cf-tint"></div>';
+          html += `<div class="cf-text" style="${url ? '' : 'color:#9a9a9a;text-shadow:none'}">`
+            + `<div class="cf-year">${calYear}</div>`
+            + `<div class="cf-title${title ? '' : ' ph'}">${escapeHtml(title || 'Your calendar title')}</div>`
+            + `</div>`;
+        }
+        inner.innerHTML = html;
+        if (!url) {
+          const add = document.createElement('div');
+          add.className = 'pf-add';
+          add.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>'
+            + (isCover ? 'Tap to add a cover photo' : 'Tap to add this month’s photo');
+          inner.appendChild(add);
+        }
+      }
+
+      function buildBackInner(inner) {
+        const title = (document.getElementById('title-input').value || '').trim();
+        inner.innerHTML =
+          '<img class="bk-logo" src="/assets/Popcode_logo.png" alt="Popcode"/>' +
+          '<div class="bk-url">popcode.app</div>' +
+          `<div class="bk-sub">${escapeHtml(title ? title + ' · ' : '')}${calYear}</div>`;
+      }
+
+      // ── Rendering ───────────────────────────────────────────────
+      function render() { renderTray(); renderMonths(); updateSummary(); }
+
+      function renderTray() {
+        const tray = document.getElementById('tray');
+        tray.innerHTML = '';
+        const placed = placedIds();
+        photos.forEach(p => {
+          const t = document.createElement('div');
+          t.className = 'tray-thumb' + (selectedTrayId === p.id ? ' selected' : '') + (placed.has(p.id) ? ' placed' : '');
+          t.style.backgroundImage = `url('${p.url}')`;
+          t.addEventListener('click', () => {
+            selectedTrayId = selectedTrayId === p.id ? null : p.id;
+            renderTray();
+            document.getElementById('tray-hint').textContent = selectedTrayId ? 'Now tap the cover or a month to place it.' : '';
+          });
+          const x = document.createElement('div');
+          x.className = 'tray-x';
+          x.textContent = '×';
+          x.addEventListener('click', (e) => {
+            e.stopPropagation();
+            months.forEach(mm => { if (mm.photoId === p.id) mm.photoId = null; });
+            if (cover.photoId === p.id) cover.photoId = null;
+            if (selectedTrayId === p.id) selectedTrayId = null;
+            if (p.file && p.url) URL.revokeObjectURL(p.url);
+            photos.delete(p.id);
+            render();
+          });
+          t.appendChild(x);
+          tray.appendChild(t);
+        });
+        document.getElementById('tray-count').textContent = photos.size ? `(${photos.size})` : '';
+        document.getElementById('autofill-btn').disabled = !unplacedPhotos().length;
+      }
+
+      function renderMonths() {
+        const host = document.getElementById('months');
+        host.innerHTML = '';
+
+        // Cover card
+        const coverCard = document.createElement('div');
+        coverCard.className = 'month-card';
+        coverCard.innerHTML = `<div class="month-label"><span>Front Cover</span><span class="ml-sub">${calYear}</span></div>`;
+        const cf = mkFrame('photo-frame cover-frame' + (cover.photoId ? '' : ' empty'));
+        buildPhotoInner(cf.inner, cover.photoId, true);
+        cf.frame.classList.toggle('place-target', !!selectedTrayId);
+        cf.frame.addEventListener('click', () => onPhotoTap('cover'));
+        coverCard.appendChild(cf.frame);
+        host.appendChild(coverCard);
+
+        // 12 month cards: photo page + wire + grid page
+        for (let m = 0; m < 12; m++) {
+          const card = document.createElement('div');
+          card.className = 'month-card';
+          card.innerHTML = `<div class="month-label"><span>${MONTH_NAMES[m]} ${calYear}</span><span class="ml-sub">${months[m].photoId ? '' : 'No photo yet'}</span></div>`;
+          const pf = mkFrame('photo-frame' + (months[m].photoId ? '' : ' empty'));
+          buildPhotoInner(pf.inner, months[m].photoId, false);
+          pf.frame.classList.toggle('place-target', !!selectedTrayId);
+          pf.frame.addEventListener('click', () => onPhotoTap(m));
+          card.appendChild(pf.frame);
+          const wire = document.createElement('div');
+          wire.className = 'wire';
+          wire.innerHTML = '<span></span>'.repeat(9);
+          card.appendChild(wire);
+          const gf = mkFrame('grid-frame');
+          buildGridInner(gf.inner, calYear, m);
+          card.appendChild(gf.frame);
+          host.appendChild(card);
+        }
+
+        // Back cover card
+        const backCard = document.createElement('div');
+        backCard.className = 'month-card';
+        backCard.innerHTML = `<div class="month-label"><span>Back Cover</span></div>`;
+        const bf = mkFrame('back-frame');
+        buildBackInner(bf.inner);
+        backCard.appendChild(bf.frame);
+        host.appendChild(backCard);
+      }
+
+      function updateSummary() {
+        const filled = months.filter(m => m.photoId).length;
+        const summary = document.getElementById('create-summary');
+        const btn = document.getElementById('create-btn');
+        if (!photos.size) summary.textContent = 'Add photos to begin.';
+        else summary.innerHTML = `<strong>${filled}</strong> of <strong>12</strong> months filled${cover.photoId ? ' · cover set' : ' · no cover yet'}`;
+        btn.disabled = !(filled > 0 || cover.photoId);
+        btn.textContent = editingCollection ? 'Save Changes' : 'Create Calendar';
+      }
+
+      // ── Placing photos ──────────────────────────────────────────
+      // target: 'cover' | 0-11
+      function setPhotoAt(target, photoId) {
+        if (target === 'cover') cover.photoId = photoId;
+        else months[target].photoId = photoId;
+      }
+      function photoAt(target) { return target === 'cover' ? cover.photoId : months[target].photoId; }
+
+      function onPhotoTap(target) {
+        if (selectedTrayId) {
+          setPhotoAt(target, selectedTrayId);
+          selectedTrayId = null;
+          document.getElementById('tray-hint').textContent = '';
+          render();
+          return;
+        }
+        if (photoAt(target)) openFilledMenu(target);
+        else openPhotoPicker(target);
+      }
+
+      function labelFor(target) { return target === 'cover' ? 'the cover' : MONTH_NAMES[target]; }
+
+      // Sheet: pick from unplaced photos or upload new, for one target.
+      function openPhotoPicker(target) {
+        const pool = unplacedPhotos();
+        const thumbs = pool.map(p => `<div class="pg-thumb" data-id="${p.id}" style="background-image:url('${p.url}')"></div>`).join('');
+        openSheet(`
+          <div class="ep-head"><h2>Photo for ${escapeHtml(labelFor(target))}</h2><button class="ep-x" id="pk-x" aria-label="Close">${IC_X}</button></div>
+          <div class="menu-row" id="pk-upload">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+            <div><div>Upload a new photo</div><div class="menu-sub">It’ll be placed here right away</div></div>
+          </div>
+          ${pool.length ? `<p class="sheet-sub" style="margin:14px 0 0">Or pick one you’ve already added:</p><div class="photos-grid">${thumbs}</div>` : ''}
+        `);
+        document.getElementById('pk-x').addEventListener('click', closeSheet);
+        document.getElementById('pk-upload').addEventListener('click', () => {
+          closeSheet();
+          pendingPlaceTarget = target;
+          document.getElementById('photo-input').click();
+        });
+        document.querySelectorAll('#sheet .pg-thumb').forEach(t => t.addEventListener('click', () => {
+          setPhotoAt(target, t.dataset.id);
+          closeSheet();
+          render();
+        }));
+      }
+
+      function openFilledMenu(target) {
+        openSheet(`
+          <div class="ep-head"><h2>${escapeHtml(target === 'cover' ? 'Front Cover' : MONTH_NAMES[target])}</h2><button class="ep-x" id="fm-x" aria-label="Close">${IC_X}</button></div>
+          <div class="menu-row" id="fm-replace">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>
+            <div><div>Choose a different photo</div></div>
+          </div>
+          <div class="menu-row destructive" id="fm-remove">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></div>
+            <div><div>Remove photo</div><div class="menu-sub">It stays in your tray</div></div>
+          </div>
+        `);
+        document.getElementById('fm-x').addEventListener('click', closeSheet);
+        document.getElementById('fm-replace').addEventListener('click', () => openPhotoPicker(target));
+        document.getElementById('fm-remove').addEventListener('click', () => { setPhotoAt(target, null); closeSheet(); render(); });
+      }
+
+      // ── Add photos (downscale like the book maker) ──────────────
+      const MAX_PHOTO_DIM = 2560;
+      const PHOTO_QUALITY = 0.85;
+      const HARD_MAX_MB = 40;
+      let pendingPlaceTarget = null;   // when the picker was opened for one target
+
+      async function loadDecodable(file) {
+        if (typeof createImageBitmap === 'function') {
+          try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+          catch (e) { /* fall through to <img> */ }
+        }
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('decode')); img.src = url; });
+        img._url = url;
+        return img;
+      }
+
+      async function optimizePhoto(file) {
+        let src;
+        try { src = await loadDecodable(file); }
+        catch (e) { return file.size / (1024 * 1024) <= HARD_MAX_MB ? file : null; }
+        const w0 = src.width || src.naturalWidth, h0 = src.height || src.naturalHeight;
+        const scale = Math.min(1, MAX_PHOTO_DIM / Math.max(w0, h0));
+        const oversized = scale < 1;
+        const heavy = file.size / (1024 * 1024) > 4;
+        if (!oversized && !heavy) { src.close?.(); if (src._url) URL.revokeObjectURL(src._url); return file; }
+        const w = Math.max(1, Math.round(w0 * scale)), h = Math.max(1, Math.round(h0 * scale));
+        const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(src, 0, 0, w, h);
+        src.close?.(); if (src._url) URL.revokeObjectURL(src._url);
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', PHOTO_QUALITY));
+        if (!blob) return file;
+        const chosen = oversized ? blob : (blob.size < file.size ? blob : file);
+        const name = (file.name || 'photo').replace(/\.[^.]+$/, '') + (chosen === blob ? '.jpg' : '');
+        return new File([chosen], name, { type: chosen.type || 'image/jpeg' });
+      }
+
+      document.getElementById('photo-input').addEventListener('change', async (e) => {
+        const files = [...e.target.files];
+        e.target.value = '';
+        const target = pendingPlaceTarget; pendingPlaceTarget = null;
+        const images = files.filter(f => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
+        const hint = document.getElementById('tray-hint');
+        let failed = 0, firstNewId = null;
+        for (let i = 0; i < images.length; i++) {
+          if (hint) hint.textContent = `Optimizing photos… ${i + 1}/${images.length}`;
+          const out = await optimizePhoto(images[i]);
+          if (!out) { failed++; continue; }
+          const id = uid('ph');
+          photos.set(id, { id, file: out, url: URL.createObjectURL(out) });
+          if (!firstNewId) firstNewId = id;
+          render();
+          await new Promise(r => setTimeout(r, 0));
+        }
+        if (hint) hint.textContent = '';
+        // If the picker was opened from a specific month/cover, place the first
+        // new photo there directly.
+        if (target != null && firstNewId) setPhotoAt(target, firstNewId);
+        if (failed) showToast(`${failed} photo${failed > 1 ? 's' : ''} couldn’t be read`);
+        render();
+      });
+
+      document.getElementById('autofill-btn').addEventListener('click', () => {
+        let pool = unplacedPhotos();
+        if (!pool.length) { showToast('All photos are already placed.'); return; }
+        if (!cover.photoId && pool.length) cover.photoId = pool.shift().id;
+        for (let m = 0; m < 12 && pool.length; m++) {
+          if (!months[m].photoId) months[m].photoId = pool.shift().id;
+        }
+        render();
+      });
+
+      document.getElementById('title-input').addEventListener('input', () => { renderMonths(); updateSummary(); });
+
+      // ── Dock sheets ─────────────────────────────────────────────
+      document.getElementById('dock-photos').addEventListener('click', () => {
+        openSheet(`
+          <div class="ep-head"><h2>Photos</h2><button class="ep-x" id="dp-x" aria-label="Close">${IC_X}</button></div>
+          <div class="menu-row" id="dp-add">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+            <div><div>Add photos</div><div class="menu-sub">They’ll appear in your tray</div></div>
+          </div>
+          <div class="menu-row" id="dp-fill">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h16M4 19h10"/></svg></div>
+            <div><div>Auto-fill months</div><div class="menu-sub">Place unused photos into empty months</div></div>
+          </div>
+        `);
+        document.getElementById('dp-x').addEventListener('click', closeSheet);
+        document.getElementById('dp-add').addEventListener('click', () => { closeSheet(); document.getElementById('photo-input').click(); });
+        document.getElementById('dp-fill').addEventListener('click', () => { closeSheet(); document.getElementById('autofill-btn').click(); });
+      });
+
+      document.getElementById('dock-events').addEventListener('click', openEventsSheet);
+      function openEventsSheet() {
+        openSheet(`
+          <div class="ep-head"><h2>Events</h2><button class="ep-x" id="ev-x" aria-label="Close">${IC_X}</button></div>
+          <p class="sheet-sub">The month grids update instantly.</p>
+          <div class="ev-row">
+            <span>Calendar year</span>
+            <span class="stepper">
+              <button id="ev-yminus" aria-label="Previous year">−</button>
+              <span class="stp-val" id="ev-year">${calYear}</span>
+              <button id="ev-yplus" aria-label="Next year">+</button>
+            </span>
+          </div>
+          <div class="ev-row">
+            <span>US holidays</span>
+            <button class="switch${holidaysOn ? ' on' : ''}" id="ev-hol" aria-label="Toggle US holidays"></button>
+          </div>
+        `);
+        document.getElementById('ev-x').addEventListener('click', closeSheet);
+        document.getElementById('ev-yminus').addEventListener('click', () => { calYear--; document.getElementById('ev-year').textContent = calYear; renderMonths(); });
+        document.getElementById('ev-yplus').addEventListener('click', () => { calYear++; document.getElementById('ev-year').textContent = calYear; renderMonths(); });
+        document.getElementById('ev-hol').addEventListener('click', (e) => { holidaysOn = !holidaysOn; e.currentTarget.classList.toggle('on', holidaysOn); renderMonths(); });
+      }
+
+      document.getElementById('dock-options').addEventListener('click', () => {
+        openSheet(`
+          <h2>Options</h2>
+          <p class="sheet-sub">Your calendar’s title, year and printing.</p>
+          <div class="menu-row" data-act="order" style="background:#f0eefe">
+            <div class="menu-ic" style="background:#1a1a1a;color:#fff"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>
+            <div><div>Order a printed calendar</div><div class="menu-sub">A4 landscape · Wire-O · printed &amp; shipped</div></div>
+          </div>
+          <div class="menu-row" data-act="title">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></div>
+            <div><div>Edit calendar title</div><div class="menu-sub">${escapeHtml((document.getElementById('title-input').value || '').trim()) || 'Untitled calendar'}</div></div>
+          </div>
+          <div class="menu-row" data-act="events">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+            <div><div>Year &amp; holidays</div><div class="menu-sub">${calYear} · US holidays ${holidaysOn ? 'on' : 'off'}</div></div>
+          </div>
+          ${isProofAdmin() ? `
+          <div class="menu-row" data-act="proof">
+            <div class="menu-ic" style="background:#f3f0ff;color:#5b3fd6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/></svg></div>
+            <div><div>Proof: download print PDF</div><div class="menu-sub">Admin · the exact 26-page file sent to print</div></div>
+          </div>` : ''}
+        `);
+        document.querySelector('#sheet [data-act="order"]').addEventListener('click', orderPrintedCalendar);
+        document.querySelector('#sheet [data-act="title"]').addEventListener('click', () => {
+          closeSheet();
+          const inp = document.getElementById('title-input');
+          inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(() => inp.focus(), 350);
+        });
+        document.querySelector('#sheet [data-act="events"]').addEventListener('click', openEventsSheet);
+        const pr = document.querySelector('#sheet [data-act="proof"]');
+        if (pr) pr.addEventListener('click', async () => {
+          closeSheet();
+          try {
+            showToast('Building the print PDF…');
+            const { blob } = await buildCalendarPrintPdf();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `calendar-${calYear}-proof.pdf`;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+          } catch (err) {
+            console.error(err);
+            if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+            showToast('Could not build the PDF — please try again.');
+          }
+        });
+      });
+
+      // ── Save (create or update the design) ──────────────────────
+      function randomSlug() { return Math.random().toString(36).substring(2, 10); }
+      function setProgress(label, pct) {
+        document.getElementById('progress').classList.add('visible');
+        document.getElementById('progress-label').textContent = label;
+        document.getElementById('progress-bar').style.width = (pct || 0) + '%';
+      }
+      function showBuildError(msg) {
+        setProgress(msg, 100);
+        document.getElementById('try-again-btn').style.display = 'inline-block';
+      }
+      document.getElementById('try-again-btn').addEventListener('click', () => {
+        document.getElementById('progress').classList.remove('visible');
+        document.getElementById('try-again-btn').style.display = 'none';
+      });
+
+      document.getElementById('create-btn').addEventListener('click', saveCalendar);
+
+      async function saveCalendar() {
+        const editing = !!editingCollection;
+        const slug = editing ? editingCollection.slug : randomSlug();
+        const bucket = 'experiences';
+        const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+        const title = (document.getElementById('title-input').value || '').trim() || `${calYear} Calendar`;
+        try {
+          setProgress(editing ? 'Saving changes…' : 'Saving your calendar…', 5);
+
+          // 1. Upload every referenced photo that has a fresh File.
+          const referenced = new Set();
+          months.forEach(m => { if (m.photoId) referenced.add(m.photoId); });
+          if (cover.photoId) referenced.add(cover.photoId);
+          const urlById = {};
+          let done = 0;
+          for (const id of referenced) {
+            const p = photos.get(id);
+            if (!p) continue;
+            if (p.file) {
+              const path = `${slug}/calendar/${id}.jpg`;
+              const { error } = await db.storage.from(bucket).upload(path, p.file, { contentType: p.file.type || 'image/jpeg', upsert: true });
+              if (error) throw new Error('Photo upload failed: ' + error.message);
+              urlById[id] = pub(path) + `?v=${Date.now()}`;
+            } else {
+              urlById[id] = p.existingUrl || p.url;
+            }
+            done++;
+            setProgress(`Uploading photos… ${done}/${referenced.size}`, 5 + (done / Math.max(1, referenced.size)) * 70);
+          }
+
+          // 2. Build the calendar layout jsonb.
+          const calendarLayout = {
+            calendar: {
+              version: 1,
+              size: 'a4-landscape',
+              year: calYear,
+              holidays: holidaysOn ? 'us' : 'none',
+              cover: { title, photo_url: cover.photoId ? urlById[cover.photoId] || null : null },
+              months: months.map(m => ({ photo_url: m.photoId ? urlById[m.photoId] || null : null })),
+            },
+          };
+
+          // 3. Insert or update the collection row (kind='calendar', no AR assets).
+          setProgress('Saving your design…', 85);
+          if (editing) {
+            const { data: col, error } = await db.from('collections')
+              .update({ name: title, book_layout: calendarLayout })
+              .eq('id', editingCollection.id).eq('user_id', currentUser.id)
+              .select().single();
+            if (error) throw new Error('Could not save changes: ' + error.message);
+            if (!col) throw new Error('Save was blocked — you may not own this calendar.');
+          } else {
+            const { data: col, error } = await db.from('collections')
+              .insert({ slug, name: title, mind_file_url: '', user_id: currentUser.id, kind: 'calendar', book_layout: calendarLayout })
+              .select().single();
+            if (error) throw new Error('Could not save the calendar: ' + error.message);
+            editingCollection = col;
+          }
+
+          // Refresh in-memory photos to their uploaded URLs so an immediate
+          // order/re-save doesn't re-upload.
+          for (const [id, url] of Object.entries(urlById)) {
+            const p = photos.get(id);
+            if (p && p.file) { p.file = null; p.existingUrl = url; p.url = url; }
+          }
+
+          setProgress('Done!', 100);
+          document.getElementById('progress').classList.remove('visible');
+          document.getElementById('result-title').textContent = editing ? 'Your calendar is updated!' : 'Your calendar is ready!';
+          document.getElementById('result').classList.add('visible');
+          updateSummary();
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showBuildError(err.message || 'Something went wrong. Please try again.');
+        }
+      }
+
+      document.getElementById('result-keep').addEventListener('click', () => {
+        document.getElementById('result').classList.remove('visible');
+      });
+      document.getElementById('result-order').addEventListener('click', () => {
+        document.getElementById('result').classList.remove('visible');
+        orderPrintedCalendar();
+      });
+
+      // ── Print-ready PDF (26 pages, A4 landscape, 300 DPI) ───────
+      // Page order matches Prodigi's undated-calendar template: front cover,
+      // then [photo page, month grid page] × 12, back cover = 26 pages.
+      function loadProofLibs() {
+        if (window._proofLibs) return window._proofLibs;
+        const load = (src) => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(s); });
+        window._proofLibs = Promise.all([
+          load('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'),
+          load('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'),
+        ]);
+        return window._proofLibs;
+      }
+
+      async function buildCalendarPrintPdf() {
+        await loadProofLibs();
+        const proof = document.getElementById('proof');
+        proof.innerHTML = '';
+
+        const units = [];
+        const addUnit = (build) => {
+          const f = document.createElement('div');
+          f.className = 'page-frame';
+          const inner = document.createElement('div');
+          inner.className = 'page-inner';
+          f.appendChild(inner);
+          build(inner, f);
+          proof.appendChild(f);
+          units.push(f);
+        };
+
+        // Photos render as background-size:cover divs and text is plain DOM —
+        // both paths html2canvas 1.4.1 handles faithfully (no transformed <img>,
+        // no aspect-ratio, no vertical text).
+        addUnit((inner, f) => { f.classList.add('cover-frame'); buildPhotoInner(inner, cover.photoId, true); });
+        for (let m = 0; m < 12; m++) {
+          addUnit((inner, f) => { f.classList.add('photo-frame'); buildPhotoInner(inner, months[m].photoId, false); });
+          addUnit((inner) => buildGridInner(inner, calYear, m));
+        }
+        addUnit((inner) => buildBackInner(inner));
+
+        // Wait for images + fonts before capture.
+        const imgs = [...proof.querySelectorAll('img')];
+        await Promise.all(imgs.map(im => (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(r => { im.onload = im.onerror = r; })));
+        if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
+        await new Promise(r => setTimeout(r, 120));
+
+        const { jsPDF } = window.jspdf;
+        const fmt = [PRINT.wIn, PRINT.hIn];
+        const doc = new jsPDF({ unit: 'in', format: fmt, orientation: 'landscape', compress: true });
+        const scale = (PRINT.wIn * PRINT.dpi) / PRINT.PXW; // → 300 DPI
+        for (let i = 0; i < units.length; i++) {
+          showToast(`Rendering print file… ${i + 1}/${units.length}`);
+          const canvas = await html2canvas(units[i], { useCORS: true, backgroundColor: '#ffffff', scale, logging: false, width: PRINT.PXW, height: PRINT.PXH });
+          const data = canvas.toDataURL('image/jpeg', 0.92);
+          if (i > 0) doc.addPage(fmt, 'landscape');
+          doc.addImage(data, 'JPEG', 0, 0, fmt[0], fmt[1]);
+        }
+        proof.innerHTML = '';
+        return { blob: doc.output('blob'), pageCount: units.length };
+      }
+
+      // ── Order a printed calendar (Prodigi via Stripe) ───────────
+      async function orderPrintedCalendar() {
+        closeSheet();
+        if (!editingCollection || !editingCollection.id || !editingCollection.slug) {
+          showToast('Save your calendar first, then order a printed copy.');
+          return;
+        }
+        const missing = [];
+        if (!cover.photoId) missing.push('the cover');
+        months.forEach((m, i) => { if (!m.photoId) missing.push(MONTH_NAMES[i]); });
+        if (missing.length) {
+          showToast(`Add photos first — missing: ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? ` +${missing.length - 3} more` : ''}`);
+          return;
+        }
+        // Photos placed but not yet saved (fresh Files) must be uploaded first so
+        // the print PDF uses durable URLs.
+        const unsaved = [...placedIds()].some(id => { const p = photos.get(id); return p && p.file; });
+        if (unsaved) { showToast('Save your changes first, then order.'); return; }
+
+        let pdfUrl;
+        try {
+          showToast('Building your print file…');
+          const out = await buildCalendarPrintPdf();
+          const path = `${editingCollection.slug}/print/calendar_${Date.now()}.pdf`;
+          const { error } = await db.storage.from('experiences').upload(path, out.blob, { contentType: 'application/pdf', upsert: true });
+          if (error) throw new Error('Upload failed: ' + error.message);
+          pdfUrl = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast('Could not build the print file: ' + (err.message || 'error'));
+          return;
+        }
+        openCalAddressSheet(pdfUrl);
+      }
+
+      function openCalAddressSheet(pdfUrl) {
+        const email = (currentUser && currentUser.email) || '';
+        const name = (currentUser && currentUser.user_metadata && currentUser.user_metadata.full_name) || '';
+        openSheet(`
+          <div class="ep-head"><h2>Ship your calendar</h2><button class="ep-x" id="bo-close" aria-label="Close">${IC_X}</button></div>
+          <p class="sheet-sub">Wall calendar · A4 landscape · ${calYear} · 12 months. We’ll print it and ship it to you.</p>
+          <div class="bo-form">
+            <input id="bo-name" placeholder="Full name" value="${escapeHtml(name)}" autocomplete="name"/>
+            <input id="bo-email" type="email" placeholder="Email" value="${escapeHtml(email)}" autocomplete="email"/>
+            <input id="bo-line1" placeholder="Address line 1" autocomplete="address-line1"/>
+            <input id="bo-line2" placeholder="Address line 2 (optional)" autocomplete="address-line2"/>
+            <input id="bo-city" placeholder="City" autocomplete="address-level2"/>
+            <div class="bo-row"><input id="bo-state" placeholder="State / County" autocomplete="address-level1"/><input id="bo-zip" placeholder="ZIP / Postcode" autocomplete="postal-code"/></div>
+            <div class="bo-row"><input id="bo-country" placeholder="Country code" value="US" maxlength="2" style="text-transform:uppercase"/><input id="bo-copies" type="number" min="1" value="1" placeholder="Copies"/></div>
+          </div>
+          <button class="bo-pay" id="bo-pay">Continue to payment</button>
+          <p class="bo-note">You’ll see the price and pay securely on the next screen.</p>
+        `);
+        document.getElementById('bo-close').addEventListener('click', closeSheet);
+        document.getElementById('bo-pay').addEventListener('click', () => submitCalOrder(pdfUrl));
+      }
+
+      async function submitCalOrder(pdfUrl) {
+        const val = (id) => (document.getElementById(id).value || '').trim();
+        const recipient = {
+          name: val('bo-name'), email: val('bo-email'),
+          address: {
+            line1: val('bo-line1'), line2: val('bo-line2'),
+            townOrCity: val('bo-city'), stateOrCounty: val('bo-state'),
+            postalOrZipCode: val('bo-zip'), countryCode: val('bo-country').toUpperCase(),
+          },
+        };
+        const copies = Math.max(1, parseInt(val('bo-copies'), 10) || 1);
+        if (!recipient.name || !recipient.email || !recipient.address.line1 ||
+            !recipient.address.townOrCity || !recipient.address.postalOrZipCode || !recipient.address.countryCode) {
+          showToast('Please fill in name, email and full address.'); return;
+        }
+        const btn = document.getElementById('bo-pay');
+        btn.disabled = true; btn.textContent = 'Preparing checkout…';
+        try {
+          const { data: { session } } = await db.auth.getSession();
+          const token = session && session.access_token;
+          if (!token) throw new Error('Please sign in again.');
+          const resp = await fetch('/api/create-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({
+              collectionId: editingCollection.id,
+              productType: 'calendar',
+              variantId: CAL_VARIANT_ID,
+              copies,
+              shippingMethod: 'Standard',
+              recipient,
+              assetUrls: [{ url: pdfUrl, print_area: 'default' }],
+            }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok || !data.url) throw new Error(data.error || 'Checkout failed');
+          window.location.href = data.url;
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast(err.message || 'Could not start checkout.');
+          btn.disabled = false; btn.textContent = 'Continue to payment';
+        }
+      }
+
+      // ── Load an existing calendar (edit mode) ───────────────────
+      async function loadCalendarForEdit(slug) {
+        try {
+          const { data: col, error } = await db.from('collections')
+            .select('id, slug, name, kind, book_layout, user_id')
+            .eq('slug', slug).eq('user_id', currentUser.id).maybeSingle();
+          if (error) throw error;
+          if (!col) { showToast('Calendar not found.'); return; }
+          const cal = col.kind === 'calendar' && col.book_layout && col.book_layout.calendar;
+          if (!cal) {
+            alert('This design is not a calendar, so it can’t be opened in the calendar maker.');
+            window.location.href = '/manage.html?tab=designs'; return;
+          }
+          editingCollection = col;
+          calYear = parseInt(cal.year, 10) || calYear;
+          holidaysOn = cal.holidays !== 'none';
+          const idByUrl = {};
+          const getPhotoId = (url) => {
+            if (!url) return null;
+            if (idByUrl[url]) return idByUrl[url];
+            const id = uid('ph');
+            photos.set(id, { id, file: null, url, existingUrl: url });
+            idByUrl[url] = id;
+            return id;
+          };
+          months = (cal.months || []).slice(0, 12).map(m => ({ photoId: getPhotoId(m && m.photo_url) }));
+          while (months.length < 12) months.push({ photoId: null });
+          cover = { photoId: getPhotoId(cal.cover && cal.cover.photo_url) };
+          document.getElementById('title-input').value = (cal.cover && cal.cover.title) || col.name || '';
+          document.querySelector('.wrap h1').textContent = 'Edit Calendar';
+          render();
+          if (new URLSearchParams(location.search).get('order') === '1') orderPrintedCalendar();
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast('Could not load this calendar: ' + (err.message || 'error'));
+        }
+      }
+
+      // ── Intro screen (live mini-mockup with Unsplash sample) ────
+      function buildIntroMock() {
+        const host = document.getElementById('cal-mock');
+        host.innerHTML = '';
+        const FALLBACK = '/assets/sample-leopard.jpg';
+        const sample = (window.unsplashSample && window.unsplashSample(800)) || FALLBACK;
+        const pf = mkFrame('photo-frame');
+        pf.inner.innerHTML = `<div class="pf-photo"></div>`;
+        // Unsplash sample with the bundled photo as an offline/blocked fallback.
+        const photoDiv = pf.inner.querySelector('.pf-photo');
+        const im = new Image();
+        im.onload = () => { photoDiv.style.backgroundImage = `url('${im.src}')`; };
+        im.onerror = () => { if (im.src !== location.origin + FALLBACK) im.src = FALLBACK; };
+        im.src = sample;
+        host.appendChild(pf.frame);
+        const wire = document.createElement('div');
+        wire.className = 'wire';
+        wire.innerHTML = '<span></span>'.repeat(9);
+        host.appendChild(wire);
+        const gf = mkFrame('grid-frame');
+        buildGridInner(gf.inner, calYear, 0);
+        host.appendChild(gf.frame);
+      }
+
+      function renderIntroYears() {
+        const host = document.getElementById('bi-years');
+        host.innerHTML = '';
+        const thisYear = new Date().getFullYear();
+        [thisYear, thisYear + 1, thisYear + 2].forEach(y => {
+          const b = document.createElement('button');
+          b.className = 'bi-year' + (y === calYear ? ' active' : '');
+          b.textContent = y;
+          b.addEventListener('click', () => { calYear = y; renderIntroYears(); buildIntroMock(); });
+          host.appendChild(b);
+        });
+      }
+
+      // ── Boot ────────────────────────────────────────────────────
+      db.auth.getSession().then(({ data }) => {
+        if (!data.session) { window.location.href = '/auth.html'; return; }
+        currentUser = data.session.user;
+        const uName = currentUser?.user_metadata?.full_name?.split(' ')[0] || currentUser?.email?.split('@')[0] || '';
+        const greet = document.getElementById('user-greeting');
+        if (uName && greet) greet.textContent = 'Hi, ' + uName + '!';
+
+        const editId = new URLSearchParams(location.search).get('id');
+        const introEl = document.getElementById('cal-intro');
+        const builderEl = document.querySelector('.wrap');
+        const chrome = ['.create-bar', '#dock'].map(s => document.querySelector(s)).filter(Boolean);
+        const setChrome = show => chrome.forEach(el => { el.style.display = show ? '' : 'none'; });
+        if (editId) {
+          loadCalendarForEdit(editId);
+        } else {
+          introEl.style.display = 'block';
+          builderEl.style.display = 'none';
+          setChrome(false);
+          renderIntroYears();
+          buildIntroMock();
+          document.getElementById('start-cal-btn').addEventListener('click', () => {
+            introEl.style.display = 'none';
+            builderEl.style.display = '';
+            setChrome(true);
+            window.scrollTo({ top: 0 });
+            render();
+          });
+        }
+      });
+      const logoutBtn = document.getElementById('logout-btn');
+      if (logoutBtn) logoutBtn.addEventListener('click', async () => {
+        await db.auth.signOut(); window.location.href = '/auth.html';
+      });
+      const navBtn = document.getElementById('nav-btn');
+      if (navBtn) navBtn.addEventListener('click', () => document.getElementById('nav-overlay').classList.add('open'));
+      document.getElementById('nav-overlay').addEventListener('click', (e) => { if (e.target.id === 'nav-drawer-bg') document.getElementById('nav-overlay').classList.remove('open'); });
+
+      render();
+    </script>
+    <script src="/beta-feedback.js"></script>
+  </body>
+</html>
