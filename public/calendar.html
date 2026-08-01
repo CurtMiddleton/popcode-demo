@@ -19,7 +19,24 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <script src="/unsplash-samples.js"></script>
+    <!-- calendar.html only needs MINDAR.IMAGE.Compiler (to compile popcoded
+         photos into a .mind target), not AR rendering. Stub AFRAME so the
+         compiler bundle loads without booting a real WebGL renderer — same
+         trick as create.html / book.html. -->
+    <script>
+      window.AFRAME = window.AFRAME || {
+        registerSystem(){}, registerComponent(){}, registerShader(){},
+        registerGeometry(){}, registerPrimitive(){}, registerElement(){}
+      };
+    </script>
+    <script src="/vendor/mindar/1.2.2/mindar-image-aframe.prod.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
+    <!-- Display-font choices (Change font) — same set as the book maker:
+         CooperBT + Inter from fonts.css, FilsonPro local, the rest from
+         Google Fonts. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@400;500;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     <style>
       @font-face { font-family: 'FilsonPro'; src: url('/assets/fonts/FilsonProMedium/font.woff2') format('woff2'), url('/assets/fonts/FilsonProMedium/font.woff') format('woff'); font-weight: 400 500; font-display: swap; }
       @font-face { font-family: 'FilsonPro'; src: url('/assets/fonts/FilsonProBold/font.woff2') format('woff2'), url('/assets/fonts/FilsonProBold/font.woff') format('woff'); font-weight: 600 700; font-display: swap; }
@@ -146,12 +163,26 @@
       }
       .pf-add svg { width: 44px; height: 44px; }
       .photo-frame.place-target { outline: 3px solid #7657FC; outline-offset: -3px; }
+      /* Popcode tag on a linked photo page — bottom-right, where the printed
+         scan badge lands (same as the book maker's slot tag). */
+      .pf-tag {
+        position: absolute; bottom: 8px; right: 8px; padding: 3px 9px; border-radius: 999px;
+        font-size: 10px; font-weight: 700; color: white; display: flex; align-items: center; gap: 4px;
+        background: linear-gradient(135deg,#7657FC,#589AF9); box-shadow: 0 1px 4px rgba(0,0,0,0.25); z-index: 2;
+      }
+      .pf-tag img { width: 11px; height: 11px; }
+      .tray-thumb .pop-dot {
+        position: absolute; bottom: 4px; left: 4px; width: 16px; height: 16px; border-radius: 50%;
+        background: linear-gradient(135deg,#7657FC,#589AF9); display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      }
+      .tray-thumb .pop-dot img { width: 9px; height: 9px; }
 
       /* ── The month-grid page (Popsa design) ───────────────────────
          All sizes are px within the fixed 1400×993 inner canvas. The month name
          stays top-left; the dates block + holiday list sit LOW on the page, near
          the photo that hangs directly below. */
-      .gp-month { position: absolute; left: 90px; top: 64px; font-family: 'FilsonPro', 'Inter', sans-serif; font-weight: 700; font-size: 148px; letter-spacing: -0.02em; color: #141414; line-height: 1; }
+      .gp-month { position: absolute; left: 90px; top: 64px; font-family: var(--cal-font, 'FilsonPro', 'Inter', sans-serif); font-weight: 700; font-size: 148px; letter-spacing: -0.02em; color: #141414; line-height: 1; }
       .gp-holidays { position: absolute; left: 92px; top: 476px; width: 420px; }
       .gp-hrow { display: flex; gap: 20px; margin-bottom: 13px; font-family: 'Inter', sans-serif; font-size: 21px; color: #333; line-height: 1.3; }
       .gp-hday { width: 34px; text-align: right; color: #8a8a8a; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
@@ -164,15 +195,15 @@
       .gp-day .gp-dot { position: absolute; left: 50%; transform: translateX(-50%); bottom: -13px; width: 8px; height: 8px; border-radius: 50%; background: #141414; }
       .gp-num { position: absolute; left: 90px; bottom: 66px; display: flex; align-items: flex-start; gap: 18px; }
       .gp-num .gp-num-rule { width: 2px; height: 96px; background: #cfcfcf; }
-      .gp-num .gp-num-text { font-family: 'FilsonPro', 'Inter', sans-serif; font-weight: 500; font-size: 88px; color: #c2c2c2; line-height: 0.95; }
+      .gp-num .gp-num-text { font-family: var(--cal-font, 'FilsonPro', 'Inter', sans-serif); font-weight: 500; font-size: 88px; color: #c2c2c2; line-height: 0.95; }
 
       /* ── Cover page ────────────────────────────────────────────── */
       .cover-frame .cf-photo { position: absolute; inset: 0; background-size: cover; background-position: center; }
       .cover-frame.empty .page-inner { background: #ededed; }
       .cf-tint { position: absolute; left: 0; right: 0; bottom: 0; height: 46%; background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.45)); }
       .cf-text { position: absolute; left: 90px; bottom: 70px; color: #fff; z-index: 2; }
-      .cf-year { font-family: 'FilsonPro', 'Inter', sans-serif; font-weight: 700; font-size: 150px; line-height: 1; letter-spacing: -0.01em; text-shadow: 0 2px 14px rgba(0,0,0,0.25); }
-      .cf-title { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 40px; margin-top: 14px; opacity: 0.95; text-shadow: 0 1px 8px rgba(0,0,0,0.3); }
+      .cf-year { font-family: var(--cal-font, 'FilsonPro', 'Inter', sans-serif); font-weight: 700; font-size: 150px; line-height: 1; letter-spacing: -0.01em; text-shadow: 0 2px 14px rgba(0,0,0,0.25); }
+      .cf-title { font-family: var(--cal-font, 'Inter', sans-serif); font-weight: 600; font-size: 40px; margin-top: 14px; opacity: 0.95; text-shadow: 0 1px 8px rgba(0,0,0,0.3); }
       .cf-title.ph { opacity: 0.55; }
 
       /* ── Back cover ────────────────────────────────────────────── */
@@ -247,6 +278,52 @@
         background-color: #eee; cursor: pointer; position: relative; transition: transform 0.1s, box-shadow 0.1s;
       }
       .pg-thumb:hover { transform: scale(1.03); box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
+      /* Popcode editor (video upload + audio record) — ported from book.html */
+      .sheet-actions { display: flex; gap: 12px; margin-top: 22px; }
+      .sheet-actions button { flex: 1; padding: 14px; border-radius: 14px; font-size: 15px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; border: none; }
+      .btn-secondary { background: #f0eeea; color: #1a1a1a; }
+      .btn-primary { background: #1a1a1a; color: white; }
+      .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+      .btn-danger-ghost { background: white; color: #d33; border: 1px solid #f0cccc !important; }
+      .pop-media-toggle { display: inline-flex; background: #ececec; border-radius: 999px; padding: 3px; margin-bottom: 16px; }
+      .pop-media-toggle button { background: transparent; border: none; padding: 8px 20px; font-size: 13px; font-weight: 700; color: #666; border-radius: 999px; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .pop-media-toggle button.active { background: white; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+      .drop-zone {
+        border: 2px dashed #d6d2c8; border-radius: 14px; padding: 26px 16px; text-align: center; cursor: pointer;
+        position: relative; background: #faf9f5; transition: border-color 0.12s, background 0.12s;
+      }
+      .drop-zone:hover { border-color: #7657FC; background: #f6f3ff; }
+      .drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+      .drop-zone .dz-icon { width: 46px; height: 46px; margin: 0 auto 10px; }
+      .drop-zone .dz-title { font-size: 14px; font-weight: 700; color: #1a1a1a; }
+      .drop-zone .dz-sub { font-size: 12px; color: #999; margin-top: 3px; }
+      .media-preview { display: none; margin-top: 4px; }
+      .media-preview.show { display: block; }
+      .media-preview video { width: 100%; border-radius: 12px; max-height: 260px; background: #000; }
+      .compress-status { font-size: 12px; color: #555; font-weight: 600; margin-top: 10px; }
+      .compress-bar-wrap { background: #e8e8e8; border-radius: 99px; height: 5px; margin-top: 6px; overflow: hidden; }
+      .compress-bar { height: 100%; background: #1a1a1a; border-radius: 99px; width: 0%; transition: width 0.2s; }
+      .warn-banner { background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:10px 12px; font-size:12px; color:#555; line-height:1.5; margin-top:10px; }
+      .warn-banner a { color:#1a1a1a; font-weight:700; }
+      .audio-panel { text-align: center; padding: 10px 0 4px; }
+      .audio-rec-btn { background:#1a1a1a; color:white; border:none; border-radius:999px; padding:13px 26px; font-size:15px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; }
+      .audio-rec-btn.stop { background:#dc2626; }
+      .audio-time { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; margin:14px 0; color:#1a1a1a; }
+      .rec-dot { display:inline-block; width:10px; height:10px; border-radius:50%; background:#dc2626; margin-right:8px; vertical-align:middle; animation:rec-pulse 1s infinite; }
+      @keyframes rec-pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+      .audio-player-row { display:flex; align-items:center; justify-content:center; gap:14px; margin:12px 0; }
+      .audio-play-btn { width:56px; height:56px; border-radius:50%; background:#1a1a1a; border:none; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+
+      /* Font picker (Change font) — same cards as the book maker */
+      .font-list { display: flex; flex-direction: column; gap: 12px; }
+      .font-card { border: 2px solid #eceae4; border-radius: 14px; padding: 16px 16px 18px; cursor: pointer; background: #fff; transition: border-color 0.12s, background 0.12s; }
+      .font-card:hover { background: #faf9f5; }
+      .font-card.active { border-color: #7657FC; background: #f4f1ff; }
+      .font-card-name { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 700; color: #666; text-align: center; margin-bottom: 12px; }
+      .font-card.active .font-card-name { color: #5b3fd6; }
+      .font-card-prev { text-align: center; color: #2a2a2a; line-height: 1.55; font-size: 19px; }
+      .font-card-prev div { word-spacing: 2px; }
+
       /* Year stepper + toggle (Events sheet) */
       .ev-row { display: flex; align-items: center; justify-content: space-between; padding: 15px 6px; border-bottom: 1px solid #f2f0ea; font-size: 16px; font-weight: 600; }
       .ev-row:last-child { border-bottom: none; }
@@ -287,6 +364,7 @@
       .r-emoji { font-size: 44px; margin-bottom: 10px; }
       .result-card h3 { font-family: 'CooperBT', serif; font-weight: 400; font-size: 27px; margin-bottom: 8px; }
       .result-card p { color: #656565; font-size: 15px; line-height: 1.5; margin-bottom: 22px; }
+      .result-url { background: #f4f2ee; border-radius: 10px; padding: 11px 14px; font-size: 15px; font-weight: 700; color: #1a1a1a; margin-bottom: 18px; cursor: pointer; }
       .result-actions { display: flex; flex-direction: column; gap: 9px; }
       .r-primary { display: block; background: #1a1a1a; color: #fff; border: none; border-radius: 14px; padding: 14px; font-size: 15px; font-weight: 700; cursor: pointer; text-decoration: none; font-family: 'Inter', sans-serif; }
       .r-secondary { display: block; background: #eee; color: #1a1a1a; border: none; border-radius: 14px; padding: 14px; font-size: 15px; font-weight: 700; cursor: pointer; text-decoration: none; font-family: 'Inter', sans-serif; }
@@ -435,7 +513,8 @@
       <div class="result-card">
         <div class="r-emoji">🎉</div>
         <h3 id="result-title">Your calendar is ready!</h3>
-        <p>Your design is saved to My Designs. Order a printed copy whenever you like.</p>
+        <p>Your design is saved to My Designs. Popcoded photos play their media when the printed calendar is scanned.</p>
+        <div class="result-url" id="result-url" style="display:none" title="Tap to copy"></div>
         <div class="result-actions">
           <button class="r-primary" id="result-order">Order a printed copy</button>
           <button class="r-secondary" id="result-keep">Keep editing</button>
@@ -466,7 +545,10 @@
       const CAL_VARIANT_ID = 'cal-a4-undated';
 
       // ── State ───────────────────────────────────────────────────
-      const photos = new Map();          // id → { id, file, url, existingUrl }
+      // photos: id → { id, file, url, existingUrl, popcode|null }
+      //   popcode: { mediaType:'video'|'audio', video:File|null, audio:File|null,
+      //              existingVideoUrl, existingAudioUrl } — same shape as book.html.
+      const photos = new Map();
       let months = Array.from({ length: 12 }, () => ({ photoId: null }));
       let cover = { photoId: null };
       let calYear = new Date().getFullYear() + 1;
@@ -476,12 +558,47 @@
       let editingCollection = null;      // set when opened with ?id=slug
       let idSeq = 0;
       const uid = (p) => `${p}_${(idSeq++).toString(36)}${Math.floor(performance.now()).toString(36)}`;
+      const MAX_VIDEO_MB = 200;
+      const MAX_COMPILE_DIM = 640;
+
+      // Display-font choices — the SAME set as the book maker's cover fonts.
+      // Filson Rounded is the calendar's default (it's the base grid design).
+      const CAL_FONTS = [
+        { id: 'filson',    name: 'Filson Rounded',     stack: "'FilsonPro', 'Nunito', sans-serif" },
+        { id: 'cooper',    name: 'Cooper',             stack: "'CooperBT', Georgia, serif" },
+        { id: 'dmsans',    name: 'DM Sans',            stack: "'DM Sans', sans-serif" },
+        { id: 'inter',     name: 'Inter',              stack: "'Inter', sans-serif" },
+        { id: 'cormorant', name: 'Cormorant Garamond', stack: "'Cormorant Garamond', Georgia, serif" },
+        { id: 'libre',     name: 'Libre Baskerville',  stack: "'Libre Baskerville', Georgia, serif" },
+      ];
+      let calFont = 'filson';
+      const calFontStack = () => (CAL_FONTS.find(f => f.id === calFont) || CAL_FONTS[0]).stack;
+      function applyCalFont(id) {
+        calFont = CAL_FONTS.some(f => f.id === id) ? id : 'filson';
+        document.documentElement.style.setProperty('--cal-font', calFontStack());
+      }
 
       // ── Helpers ─────────────────────────────────────────────────
       function escapeHtml(str) { const d = document.createElement('div'); d.appendChild(document.createTextNode(str == null ? '' : String(str))); return d.innerHTML; }
       function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2200); }
       function placedIds() { const s = new Set(); months.forEach(m => { if (m.photoId) s.add(m.photoId); }); if (cover.photoId) s.add(cover.photoId); return s; }
       function unplacedPhotos() { const placed = placedIds(); return [...photos.values()].filter(p => !placed.has(p.id)); }
+      function formatMB(bytes) { return (bytes / (1024 * 1024)).toFixed(1) + ' MB'; }
+      // A photo is "popcoded" if it has linked media — a freshly picked File OR
+      // an existing URL carried over from an edited calendar.
+      function photoHasMedia(p) {
+        if (!p || !p.popcode) return false;
+        const pc = p.popcode;
+        return !!(pc.video || pc.audio || pc.existingVideoUrl || pc.existingAudioUrl);
+      }
+      // Popcoded photos in a stable order: cover first, then months 0–11. These
+      // become the AR targets (target_index order) + collection_items.
+      function popcodedIdsInOrder() {
+        const ordered = [];
+        if (cover.photoId && !ordered.includes(cover.photoId)) ordered.push(cover.photoId);
+        months.forEach(m => { if (m.photoId && !ordered.includes(m.photoId)) ordered.push(m.photoId); });
+        return ordered.filter(id => photoHasMedia(photos.get(id)));
+      }
       function openSheet(html) { document.getElementById('sheet').innerHTML = html; document.getElementById('overlay').classList.add('visible'); }
       function closeSheet() { document.getElementById('overlay').classList.remove('visible'); }
       document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') closeSheet(); });
@@ -596,6 +713,14 @@
             + `</div>`;
         }
         inner.innerHTML = html;
+        // Popcode tag (builder-only; the print pass replaces it with the badge).
+        const p = photoId && photos.get(photoId);
+        if (url && photoHasMedia(p)) {
+          const tag = document.createElement('div');
+          tag.className = 'pf-tag';
+          tag.innerHTML = `<img src="/assets/popcode_icon.svg" alt=""/>${p.popcode.mediaType === 'audio' ? 'Audio' : 'Video'}`;
+          inner.appendChild(tag);
+        }
         if (!url) {
           const add = document.createElement('div');
           add.className = 'pf-add';
@@ -624,6 +749,12 @@
           const t = document.createElement('div');
           t.className = 'tray-thumb' + (selectedTrayId === p.id ? ' selected' : '') + (placed.has(p.id) ? ' placed' : '');
           t.style.backgroundImage = `url('${p.url}')`;
+          if (photoHasMedia(p)) {
+            const dot = document.createElement('div');
+            dot.className = 'pop-dot';
+            dot.innerHTML = '<img src="/assets/popcode_icon.svg" alt=""/>';
+            t.appendChild(dot);
+          }
           t.addEventListener('click', () => {
             selectedTrayId = selectedTrayId === p.id ? null : p.id;
             renderTray();
@@ -695,10 +826,11 @@
 
       function updateSummary() {
         const filled = months.filter(m => m.photoId).length;
+        const popcoded = popcodedIdsInOrder().length;
         const summary = document.getElementById('create-summary');
         const btn = document.getElementById('create-btn');
         if (!photos.size) summary.textContent = 'Add photos to begin.';
-        else summary.innerHTML = `<strong>${filled}</strong> of <strong>12</strong> months filled${cover.photoId ? ' · cover set' : ' · no cover yet'}`;
+        else summary.innerHTML = `<strong>${filled}</strong> of <strong>12</strong> months filled${cover.photoId ? ' · cover set' : ' · no cover yet'}${popcoded ? ` · <strong>${popcoded}</strong> popcoded` : ''}`;
         btn.disabled = !(filled > 0 || cover.photoId);
         btn.textContent = editingCollection ? 'Save Changes' : 'Create Calendar';
       }
@@ -751,8 +883,15 @@
       }
 
       function openFilledMenu(target) {
+        const photo = photos.get(photoAt(target));
+        const hasPop = photoHasMedia(photo);
         openSheet(`
           <div class="ep-head"><h2>${escapeHtml(target === 'cover' ? 'Front Cover' : MONTH_NAMES[target])}</h2><button class="ep-x" id="fm-x" aria-label="Close">${IC_X}</button></div>
+          <p class="sheet-sub">${hasPop ? 'This photo is a Popcode — it plays its ' + (photo.popcode.mediaType === 'audio' ? 'audio' : 'video') + ' when scanned.' : 'Link a video or audio and this photo will come to life when the printed calendar is scanned.'}</p>
+          <div class="menu-row" id="fm-popcode">
+            <div class="menu-ic"><img src="/assets/popcode_icon.svg" style="width:20px;height:20px"/></div>
+            <div><div>${hasPop ? 'Edit Popcode' : 'Add a Popcode'}</div><div class="menu-sub">${hasPop ? 'Change or remove the linked media' : 'Link a video or audio recording'}</div></div>
+          </div>
           <div class="menu-row" id="fm-replace">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>
             <div><div>Choose a different photo</div></div>
@@ -763,8 +902,299 @@
           </div>
         `);
         document.getElementById('fm-x').addEventListener('click', closeSheet);
+        document.getElementById('fm-popcode').addEventListener('click', () => { closeSheet(); openPopcodeSheet(photo); });
         document.getElementById('fm-replace').addEventListener('click', () => openPhotoPicker(target));
         document.getElementById('fm-remove').addEventListener('click', () => { setPhotoAt(target, null); closeSheet(); render(); });
+      }
+
+      // ── Popcode editor (video upload OR audio record) ───────────
+      // Ported from book.html — same UX, same media shapes.
+      let popEditState = null; // { photo, mediaType, video, audio }
+
+      function openPopcodeSheet(photo) {
+        popEditState = {
+          photo,
+          mediaType: photo.popcode?.mediaType || 'video',
+          video: photo.popcode?.video || null,
+          audio: photo.popcode?.audio || null,
+          existingVideoUrl: photo.popcode?.existingVideoUrl || null,
+          existingAudioUrl: photo.popcode?.existingAudioUrl || null,
+        };
+        renderPopcodeSheet();
+      }
+
+      function popEditHasMedia(s) {
+        return s.mediaType === 'video' ? !!(s.video || s.existingVideoUrl) : !!(s.audio || s.existingAudioUrl);
+      }
+
+      function renderPopcodeSheet() {
+        const s = popEditState;
+        const hasMedia = popEditHasMedia(s);
+        openSheet(`
+          <h2>${s.photo.popcode ? 'Edit' : 'Add a'} Popcode</h2>
+          <p class="sheet-sub">Link a video or audio clip. When someone scans this photo on the printed calendar, it plays automatically.</p>
+          <div class="pop-media-toggle">
+            <button data-mode="video" class="${s.mediaType === 'video' ? 'active' : ''}">Video</button>
+            <button data-mode="audio" class="${s.mediaType === 'audio' ? 'active' : ''}">Audio</button>
+          </div>
+          <div id="pop-body"></div>
+          <div class="sheet-actions">
+            ${s.photo.popcode ? '<button class="btn-danger-ghost" id="pop-unlink">Remove Popcode</button>' : '<button class="btn-secondary" id="pop-cancel">Cancel</button>'}
+            <button class="btn-primary" id="pop-save" ${hasMedia ? '' : 'disabled'}>Save Popcode</button>
+          </div>
+        `);
+        document.querySelectorAll('#sheet .pop-media-toggle button').forEach(b => {
+          b.addEventListener('click', () => { s.mediaType = b.dataset.mode; renderPopcodeSheet(); });
+        });
+        document.getElementById('pop-save').addEventListener('click', savePopcode);
+        const unlink = document.getElementById('pop-unlink');
+        if (unlink) unlink.addEventListener('click', () => { s.photo.popcode = null; closeSheet(); render(); showToast('Popcode removed'); });
+        const cancel = document.getElementById('pop-cancel');
+        if (cancel) cancel.addEventListener('click', closeSheet);
+        renderPopBody();
+      }
+
+      function renderPopBody() {
+        const s = popEditState;
+        const body = document.getElementById('pop-body');
+        if (s.mediaType === 'video') {
+          if (s.video || s.existingVideoUrl) {
+            const src = s.video ? URL.createObjectURL(s.video) : s.existingVideoUrl;
+            const caption = s.video ? `${escapeHtml(s.video.name || 'video')} · ${formatMB(s.video.size)}` : 'Current video';
+            body.innerHTML = `
+              <div class="media-preview show">
+                <video src="${src}" controls playsinline muted></video>
+                <div class="compress-status">${caption}</div>
+                <button class="mini-btn" id="pop-video-change" style="margin-top:10px">Choose a different video</button>
+              </div>`;
+            document.getElementById('pop-video-change').addEventListener('click', () => { s.video = null; s.existingVideoUrl = null; renderPopBody(); syncPopSave(); });
+          } else {
+            body.innerHTML = `
+              <div class="drop-zone">
+                <input type="file" accept="video/*" id="pop-video-input"/>
+                <img class="dz-icon" src="/assets/video.png" alt=""/>
+                <div class="dz-title">Choose a video</div>
+                <div class="dz-sub">Up to ${MAX_VIDEO_MB} MB · large files can be compressed</div>
+              </div>
+              <div id="pop-video-msg"></div>`;
+            document.getElementById('pop-video-input').addEventListener('change', (e) => handleVideoPick(e.target));
+          }
+        } else {
+          if (s.audio || s.existingAudioUrl) {
+            const src = s.audio ? URL.createObjectURL(s.audio) : s.existingAudioUrl;
+            body.innerHTML = `
+              <div class="audio-panel">
+                <div class="audio-player-row">
+                  <button class="audio-play-btn" id="pop-audio-play"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+                  <div class="audio-time" id="pop-audio-dur" style="margin:0">0:00</div>
+                </div>
+                <audio id="pop-audio-el" src="${src}" preload="metadata"></audio>
+                <button class="mini-btn" id="pop-audio-rerec">${s.audio ? 'Re-record' : 'Record a new clip'}</button>
+                ${s.audio ? `<div class="compress-status">${formatMB(s.audio.size)}</div>` : '<div class="compress-status">Current audio</div>'}
+              </div>`;
+            wireAudioPreview();
+            document.getElementById('pop-audio-rerec').addEventListener('click', () => { s.audio = null; s.existingAudioUrl = null; renderPopBody(); syncPopSave(); });
+          } else {
+            body.innerHTML = `
+              <div class="audio-panel">
+                <div class="audio-time" id="pop-audio-elapsed">0:00</div>
+                <button class="audio-rec-btn" id="pop-audio-rec">● Record</button>
+                <div class="dz-sub" style="margin-top:12px">Tap record and speak. Tap again to stop.</div>
+              </div>`;
+            document.getElementById('pop-audio-rec').addEventListener('click', toggleRecord);
+          }
+        }
+        syncPopSave();
+      }
+
+      function syncPopSave() {
+        const btn = document.getElementById('pop-save');
+        if (btn) btn.disabled = !popEditHasMedia(popEditState);
+      }
+
+      function savePopcode() {
+        const s = popEditState;
+        if (!popEditHasMedia(s)) return;
+        const isVideo = s.mediaType === 'video';
+        s.photo.popcode = {
+          mediaType: s.mediaType,
+          video: isVideo ? s.video : null,
+          audio: isVideo ? null : s.audio,
+          existingVideoUrl: isVideo && !s.video ? s.existingVideoUrl : null,
+          existingAudioUrl: !isVideo && !s.audio ? s.existingAudioUrl : null,
+        };
+        closeSheet(); render(); showToast('Popcode saved');
+      }
+
+      // Video pick + compress (ported from create.html via book.html) ----------
+      function canCompressVideo() {
+        try {
+          const canvas = document.createElement('canvas');
+          if (typeof canvas.captureStream !== 'function') return false;
+          if (typeof MediaRecorder === 'undefined') return false;
+          return ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].some(t => MediaRecorder.isTypeSupported(t));
+        } catch (e) { return false; }
+      }
+      function compressVideo(file, onProgress) {
+        const types = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+        const mimeType = types.find(t => MediaRecorder.isTypeSupported(t));
+        return new Promise((resolve, reject) => {
+          const video = document.createElement('video');
+          const srcUrl = URL.createObjectURL(file);
+          video.src = srcUrl; video.muted = true; video.playsInline = true;
+          video.onloadedmetadata = () => {
+            const MAX_DIM = 1280;
+            const scale = Math.min(1, MAX_DIM / Math.max(video.videoWidth || 1, video.videoHeight || 1));
+            const w = Math.max(2, Math.round(video.videoWidth * scale / 2) * 2);
+            const h = Math.max(2, Math.round(video.videoHeight * scale / 2) * 2);
+            const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            const stream = canvas.captureStream(30);
+            const rec = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2500000 });
+            const chunks = [];
+            rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+            rec.onstop = () => { URL.revokeObjectURL(srcUrl); resolve(new Blob(chunks, { type: mimeType.split(';')[0] })); };
+            rec.onerror = e => { URL.revokeObjectURL(srcUrl); reject(e.error || new Error('Compression error')); };
+            let animId;
+            const draw = () => { if (!video.ended && !video.paused) { ctx.drawImage(video, 0, 0, w, h); onProgress && onProgress(video.currentTime / (video.duration || 1)); animId = requestAnimationFrame(draw); } };
+            video.onended = () => { cancelAnimationFrame(animId); rec.stop(); };
+            rec.start(200);
+            video.play().then(draw).catch(reject);
+          };
+          video.onerror = () => reject(new Error('Could not load video for compression'));
+          video.load();
+        });
+      }
+      async function handleVideoPick(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const sizeMB = file.size / (1024 * 1024);
+        const msg = document.getElementById('pop-video-msg');
+        if (sizeMB > MAX_VIDEO_MB) {
+          if (canCompressVideo()) {
+            if (!confirm(`This video is ${sizeMB.toFixed(1)} MB — over the ${MAX_VIDEO_MB} MB limit.\n\nCompress it now? This can take a minute.`)) { input.value = ''; return; }
+            msg.innerHTML = `<div class="compress-status">Compressing… 0%</div><div class="compress-bar-wrap"><div class="compress-bar" id="cbar"></div></div>`;
+            let compressed;
+            try {
+              compressed = await compressVideo(file, p => {
+                document.getElementById('cbar').style.width = Math.round(p * 100) + '%';
+                msg.querySelector('.compress-status').textContent = `Compressing… ${Math.round(p * 100)}%`;
+              });
+            } catch (e) { compressed = null; }
+            const cMB = compressed ? compressed.size / (1024 * 1024) : Infinity;
+            if (compressed && cMB <= MAX_VIDEO_MB) {
+              popEditState.video = new File([compressed], (file.name || 'video').replace(/\.[^.]+$/, '.webm'), { type: compressed.type });
+              renderPopBody(); syncPopSave();
+            } else {
+              msg.innerHTML = `<div class="warn-banner">Still too large${cMB < Infinity ? ' (' + cMB.toFixed(0) + ' MB)' : ''}. Compress further at <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a>, then choose it again.</div>`;
+              input.value = '';
+            }
+          } else {
+            msg.innerHTML = `<div class="warn-banner">${sizeMB.toFixed(1)} MB — over the ${MAX_VIDEO_MB} MB limit. Compress free at <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a>, then choose it again.</div>`;
+            input.value = '';
+          }
+          return;
+        }
+        popEditState.video = file;
+        renderPopBody(); syncPopSave();
+      }
+
+      // Audio record (ported from create.html via book.html) -------------------
+      let recorder = null; // { mediaRecorder, chunks, stream, ext, timerId, startTs }
+      function pickAudioMime() {
+        const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/ogg;codecs=opus'];
+        if (typeof MediaRecorder === 'undefined') return null;
+        for (const c of candidates) if (MediaRecorder.isTypeSupported(c)) {
+          const ext = c.startsWith('audio/webm') ? 'webm' : c.startsWith('audio/mp4') ? 'm4a' : c.startsWith('audio/ogg') ? 'ogg' : 'webm';
+          return { mime: c, ext };
+        }
+        return { mime: '', ext: 'webm' };
+      }
+      async function toggleRecord() {
+        if (recorder) { // stop
+          if (recorder.timerId) clearInterval(recorder.timerId);
+          try { recorder.mediaRecorder.stop(); } catch (e) {}
+          return;
+        }
+        const pick = pickAudioMime();
+        if (!pick) { alert('Audio recording is not supported in this browser.'); return; }
+        let stream;
+        try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+        catch (e) { alert('Microphone access was denied. Enable it in your browser settings and try again.'); return; }
+        const mr = new MediaRecorder(stream, pick.mime ? { mimeType: pick.mime } : {});
+        const chunks = [];
+        mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+        mr.onstop = () => {
+          const blob = new Blob(chunks, { type: pick.mime || mr.mimeType || 'audio/webm' });
+          stream.getTracks().forEach(t => t.stop());
+          recorder = null;
+          popEditState.audio = new File([blob], `audio.${pick.ext}`, { type: blob.type });
+          renderPopBody(); syncPopSave();
+        };
+        mr.start();
+        recorder = { mediaRecorder: mr, chunks, stream, ext: pick.ext, startTs: Date.now(), timerId: null };
+        const recBtn = document.getElementById('pop-audio-rec');
+        if (recBtn) { recBtn.textContent = '■ Stop'; recBtn.classList.add('stop'); }
+        recorder.timerId = setInterval(() => {
+          const s = Math.floor((Date.now() - recorder.startTs) / 1000);
+          const el = document.getElementById('pop-audio-elapsed');
+          if (el) el.innerHTML = `<span class="rec-dot"></span>${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+        }, 250);
+      }
+      function wireAudioPreview() {
+        const audio = document.getElementById('pop-audio-el');
+        const btn = document.getElementById('pop-audio-play');
+        const dur = document.getElementById('pop-audio-dur');
+        if (!audio || !btn) return;
+        const play = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+        const pause = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+        const fmt = s => (s && isFinite(s)) ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00';
+        audio.addEventListener('loadedmetadata', () => dur.textContent = fmt(audio.duration));
+        audio.addEventListener('play', () => btn.innerHTML = pause);
+        audio.addEventListener('pause', () => btn.innerHTML = play);
+        audio.addEventListener('timeupdate', () => { if (!audio.paused) dur.textContent = fmt(audio.currentTime); });
+        audio.addEventListener('ended', () => { dur.textContent = fmt(audio.duration); btn.innerHTML = play; });
+        btn.addEventListener('click', () => { if (audio.paused) audio.play(); else audio.pause(); });
+      }
+
+      // ── Compile helpers (ported from book.html) ─────────────────
+      function yieldToPaint() { return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); }
+      // Load a photo's pixels for compiling — from its File (new photo) or from
+      // its stored URL (existing photo in an edited calendar). Remote fetch uses
+      // crossOrigin so the canvas isn't tainted (Supabase public URLs allow CORS).
+      async function loadCompileImage(photo) {
+        const img = new Image();
+        if (photo.file) { img.src = URL.createObjectURL(photo.file); }
+        else { img.crossOrigin = 'anonymous'; img.src = photo.url; }
+        await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('Could not load a photo for compiling.')); });
+        return resizeForCompile(img);
+      }
+      async function resizeForCompile(img) {
+        if (img.naturalWidth > MAX_COMPILE_DIM || img.naturalHeight > MAX_COMPILE_DIM) {
+          const scale = Math.min(MAX_COMPILE_DIM / img.naturalWidth, MAX_COMPILE_DIM / img.naturalHeight);
+          const c = document.createElement('canvas');
+          c.width = Math.round(img.naturalWidth * scale);
+          c.height = Math.round(img.naturalHeight * scale);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          const r = new Image();
+          r.src = c.toDataURL('image/jpeg', 0.9);
+          await new Promise(res => { r.onload = res; });
+          return r;
+        }
+        return img;
+      }
+
+      // Rasterize the Popcode badge SVG to a PNG data-URL so html2canvas renders
+      // it in the print PDF (it drops external SVG <img>s).
+      async function rasterizeBadge() {
+        let svg = await (await fetch('/assets/popcode_icon.svg')).text();
+        if (!/<svg[^>]*\bwidth=/.test(svg)) svg = svg.replace('<svg ', '<svg width="302" height="302" ');
+        const img = new Image();
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        await (img.decode ? img.decode().catch(() => {}) : new Promise(r => { img.onload = img.onerror = r; }));
+        const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+        c.getContext('2d').drawImage(img, 0, 0, 256, 256);
+        return c.toDataURL('image/png');
       }
 
       // ── Add photos (downscale like the book maker) ──────────────
@@ -896,6 +1326,10 @@
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></div>
             <div><div>Edit calendar title</div><div class="menu-sub">${escapeHtml((document.getElementById('title-input').value || '').trim()) || 'Untitled calendar'}</div></div>
           </div>
+          <div class="menu-row" data-act="font">
+            <div class="menu-ic" style="font-family:var(--cal-font,'FilsonPro',sans-serif);font-size:19px;font-weight:700">Aa</div>
+            <div><div>Change font</div><div class="menu-sub">${escapeHtml((CAL_FONTS.find(f => f.id === calFont) || CAL_FONTS[0]).name)}</div></div>
+          </div>
           <div class="menu-row" data-act="events">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
             <div><div>Year &amp; holidays</div><div class="menu-sub">${calYear} · US holidays ${holidaysOn ? 'on' : 'off'}</div></div>
@@ -913,6 +1347,7 @@
           inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
           setTimeout(() => inp.focus(), 350);
         });
+        document.querySelector('#sheet [data-act="font"]').addEventListener('click', openCalFontSheet);
         document.querySelector('#sheet [data-act="events"]').addEventListener('click', openEventsSheet);
         const pr = document.querySelector('#sheet [data-act="proof"]');
         if (pr) pr.addEventListener('click', async () => {
@@ -932,6 +1367,31 @@
           }
         });
       });
+
+      // Font picker — same cards + choices as the book maker. Applies to the
+      // display type: month names, the "01" month number, and the cover.
+      function openCalFontSheet() {
+        const cards = CAL_FONTS.map(f => `
+          <div class="font-card${calFont === f.id ? ' active' : ''}" data-font="${f.id}">
+            <div class="font-card-name">${escapeHtml(f.name)}</div>
+            <div class="font-card-prev" style="font-family:${f.stack}">
+              <div>ABCDEFGHIJKLM NOPQRSTUVWXYZ</div>
+              <div>abcdefghijklm nopqrstuvwxyz</div>
+              <div>1234567890</div>
+            </div>
+          </div>`).join('');
+        openSheet(`
+          <div class="ep-head"><h2>Fonts</h2><button class="ep-x" id="font-close" aria-label="Close">${IC_X}</button></div>
+          <p class="sheet-sub">Styles the month names, the big month number and your cover title.</p>
+          <div class="font-list">${cards}</div>
+        `);
+        document.getElementById('font-close').addEventListener('click', closeSheet);
+        document.querySelectorAll('#sheet .font-card').forEach(c => c.addEventListener('click', () => {
+          applyCalFont(c.dataset.font);
+          document.querySelectorAll('#sheet .font-card').forEach(x => x.classList.toggle('active', x.dataset.font === calFont));
+          renderMonths();
+        }));
+      }
 
       // ── Save (create or update the design) ──────────────────────
       function randomSlug() { return Math.random().toString(36).substring(2, 10); }
@@ -957,6 +1417,10 @@
         const bucket = 'experiences';
         const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
         const title = (document.getElementById('title-input').value || '').trim() || `${calYear} Calendar`;
+        const popcodedIds = popcodedIdsInOrder();
+        if (popcodedIds.length && (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler)) {
+          alert('The compiler is still loading — please wait a moment and try again.'); return;
+        }
         try {
           setProgress(editing ? 'Saving changes…' : 'Saving your calendar…', 5);
 
@@ -978,48 +1442,140 @@
               urlById[id] = p.existingUrl || p.url;
             }
             done++;
-            setProgress(`Uploading photos… ${done}/${referenced.size}`, 5 + (done / Math.max(1, referenced.size)) * 70);
+            setProgress(`Uploading photos… ${done}/${referenced.size}`, 5 + (done / Math.max(1, referenced.size)) * 30);
           }
 
-          // 2. Build the calendar layout jsonb.
+          // 2. Compile popcoded photos into a .mind target — only when the
+          //    ordered target set actually changed (compiling is the slow part;
+          //    same reuse rule as book.html).
+          let mindUrl = '';
+          if (popcodedIds.length) {
+            const targetUrlsNow = popcodedIds.map(id => photos.get(id).existingUrl || null);
+            const anyNewTargetImage = popcodedIds.some(id => !!photos.get(id).file);
+            const baseTargetUrls = editing ? editingCollection._mindTargetUrls : null;
+            const targetsUnchanged = editing && baseTargetUrls && !anyNewTargetImage
+              && targetUrlsNow.length === baseTargetUrls.length
+              && targetUrlsNow.every((u, i) => u && u === baseTargetUrls[i]);
+            if (editing && editingCollection.mind_file_url && targetsUnchanged) {
+              setProgress('Scan targets unchanged — reusing…', 60);
+              mindUrl = editingCollection.mind_file_url;
+            } else {
+              setProgress('Preparing scan targets…', 38);
+              const imgs = [];
+              for (const id of popcodedIds) imgs.push(await loadCompileImage(photos.get(id)));
+              setProgress('Compiling scan targets… (this can take a minute)', 42);
+              await yieldToPaint();
+              const compiler = new MINDAR.IMAGE.Compiler();
+              await compiler.compileImageTargets(imgs, (prog) => setProgress(`Compiling scan targets… ${Math.round(prog)}%`, 42 + prog * 0.16));
+              const buffer = await compiler.exportData();
+              setProgress('Uploading scan targets…', 60);
+              const { error: mErr } = await db.storage.from(bucket).upload(`${slug}/target.mind`, new Blob([buffer]), { contentType: 'application/octet-stream', upsert: true });
+              if (mErr) throw new Error('Target upload failed: ' + mErr.message);
+              mindUrl = pub(`${slug}/target.mind`) + `?v=${Date.now()}`;
+            }
+          }
+
+          // 3. Upload each popcode's media (new Files only) + build item rows.
+          const itemRows = [];
+          for (let i = 0; i < popcodedIds.length; i++) {
+            const p = photos.get(popcodedIds[i]);
+            const pc = p.popcode;
+            const row = { target_index: i, photo_url: urlById[p.id], media_type: pc.mediaType, video_url: null, audio_url: null };
+            if (pc.mediaType === 'video') {
+              if (pc.video) {
+                const ext = (pc.video.name && pc.video.name.split('.').pop()) || 'mp4';
+                const vpath = `${slug}/video_${i}.${ext}`;
+                const { error } = await db.storage.from(bucket).upload(vpath, pc.video, { contentType: pc.video.type || 'video/mp4', upsert: true });
+                if (error) throw new Error(`Video ${i + 1} upload failed: ${error.message}`);
+                row.video_url = pub(vpath) + `?v=${Date.now()}`;
+              } else {
+                row.video_url = pc.existingVideoUrl;
+              }
+            } else {
+              if (pc.audio) {
+                const aext = (pc.audio.name && pc.audio.name.split('.').pop()) || 'webm';
+                const apath = `${slug}/audio_${i}.${aext}`;
+                const { error } = await db.storage.from(bucket).upload(apath, pc.audio, { contentType: pc.audio.type || 'audio/webm', upsert: true });
+                if (error) throw new Error(`Audio ${i + 1} upload failed: ${error.message}`);
+                row.audio_url = pub(apath) + `?v=${Date.now()}`;
+              } else {
+                row.audio_url = pc.existingAudioUrl;
+              }
+            }
+            itemRows.push(row);
+            setProgress(`Uploading media… ${i + 1}/${popcodedIds.length}`, 62 + ((i + 1) / Math.max(1, popcodedIds.length)) * 18);
+          }
+
+          // 4. Build the calendar layout jsonb.
           const calendarLayout = {
             calendar: {
               version: 1,
               size: 'a4-landscape',
               year: calYear,
               holidays: holidaysOn ? 'us' : 'none',
+              font: calFont,
               cover: { title, photo_url: cover.photoId ? urlById[cover.photoId] || null : null },
               months: months.map(m => ({ photo_url: m.photoId ? urlById[m.photoId] || null : null })),
             },
           };
 
-          // 3. Insert or update the collection row (kind='calendar', no AR assets).
+          // 5. Insert or update the collection row. mind_file_url is set when at
+          //    least one photo is popcoded (the calendar is then scannable at
+          //    popcode.app/{slug}); '' otherwise (print-only design).
           setProgress('Saving your design…', 85);
+          let collectionId;
           if (editing) {
             const { data: col, error } = await db.from('collections')
-              .update({ name: title, book_layout: calendarLayout })
+              .update({ name: title, mind_file_url: mindUrl, book_layout: calendarLayout })
               .eq('id', editingCollection.id).eq('user_id', currentUser.id)
               .select().single();
             if (error) throw new Error('Could not save changes: ' + error.message);
             if (!col) throw new Error('Save was blocked — you may not own this calendar.');
+            collectionId = col.id;
+            // Replace the item set so removed/reordered popcodes are reflected.
+            const { error: delErr } = await db.from('collection_items').delete().eq('collection_id', collectionId);
+            if (delErr) throw new Error('Could not update linked media: ' + delErr.message);
           } else {
             const { data: col, error } = await db.from('collections')
-              .insert({ slug, name: title, mind_file_url: '', user_id: currentUser.id, kind: 'calendar', book_layout: calendarLayout })
+              .insert({ slug, name: title, mind_file_url: mindUrl, user_id: currentUser.id, kind: 'calendar', book_layout: calendarLayout })
               .select().single();
             if (error) throw new Error('Could not save the calendar: ' + error.message);
             editingCollection = col;
+            collectionId = col.id;
           }
 
-          // Refresh in-memory photos to their uploaded URLs so an immediate
-          // order/re-save doesn't re-upload.
+          // 6. Insert popcoded collection_items.
+          if (itemRows.length) {
+            const rows = itemRows.map(r => ({ ...r, collection_id: collectionId }));
+            const { error: iErr } = await db.from('collection_items').insert(rows);
+            if (iErr) throw new Error('Calendar saved, but linking media failed: ' + iErr.message);
+          }
+
+          // Refresh in-memory state so an immediate order/re-save doesn't
+          // re-upload or re-compile.
           for (const [id, url] of Object.entries(urlById)) {
             const p = photos.get(id);
             if (p && p.file) { p.file = null; p.existingUrl = url; p.url = url; }
           }
+          popcodedIds.forEach(id => {
+            const pc = photos.get(id)?.popcode;
+            if (!pc) return;
+            const row = itemRows[popcodedIds.indexOf(id)];
+            if (pc.video) { pc.existingVideoUrl = row.video_url; pc.video = null; }
+            if (pc.audio) { pc.existingAudioUrl = row.audio_url; pc.audio = null; }
+          });
+          editingCollection.mind_file_url = mindUrl;
+          editingCollection._mindTargetUrls = popcodedIds.map(id => photos.get(id).existingUrl || null);
 
           setProgress('Done!', 100);
           document.getElementById('progress').classList.remove('visible');
           document.getElementById('result-title').textContent = editing ? 'Your calendar is updated!' : 'Your calendar is ready!';
+          // Popcoded calendars are scannable — show the share link.
+          const linkEl = document.getElementById('result-url');
+          if (linkEl) {
+            linkEl.style.display = popcodedIds.length ? '' : 'none';
+            linkEl.textContent = popcodedIds.length ? `popcode.app/${slug}` : '';
+          }
           document.getElementById('result').classList.add('visible');
           updateSummary();
         } catch (err) {
@@ -1031,6 +1587,10 @@
 
       document.getElementById('result-keep').addEventListener('click', () => {
         document.getElementById('result').classList.remove('visible');
+      });
+      document.getElementById('result-url').addEventListener('click', () => {
+        const url = 'https://' + document.getElementById('result-url').textContent;
+        navigator.clipboard.writeText(url).then(() => showToast('Link copied!')).catch(() => prompt('Copy this link:', url));
       });
       document.getElementById('result-order').addEventListener('click', () => {
         document.getElementById('result').classList.remove('visible');
@@ -1081,6 +1641,24 @@
           addUnit((inner, f) => { f.classList.add('photo-frame'); buildPhotoInner(inner, months[m].photoId, false); });
         }
         addUnit((inner) => buildBackInner(inner));
+
+        // Bake the scan badge onto popcoded photo pages (bottom-right, replacing
+        // the builder-only .pf-tag pill — html2canvas needs the PNG data-URL).
+        const hasPopcodes = popcodedIdsInOrder().length > 0;
+        const badgePng = hasPopcodes ? await rasterizeBadge() : null;
+        units.forEach(unit => {
+          const tag = unit.querySelector('.pf-tag');
+          if (!tag) return;
+          tag.remove();
+          if (!badgePng) return;
+          const size = Math.round(PRINT.PXH * 0.09);
+          const pad = Math.round(size * 0.5);
+          const b = document.createElement('div');
+          b.style.cssText = 'position:absolute;z-index:3;right:' + pad + 'px;bottom:' + pad + 'px;'
+            + 'width:' + size + 'px;height:' + size + 'px;pointer-events:none;'
+            + 'background-image:url("' + badgePng + '");background-size:contain;background-repeat:no-repeat;background-position:center;';
+          unit.querySelector('.page-inner').appendChild(b);
+        });
 
         // Wait for images + fonts before capture.
         const imgs = [...proof.querySelectorAll('img')];
@@ -1222,12 +1800,36 @@
           editingCollection = col;
           calYear = parseInt(cal.year, 10) || calYear;
           holidaysOn = cal.holidays !== 'none';
+          applyCalFont(cal.font || 'filson');
+
+          // Popcoded media, keyed by the photo URL the item was linked to.
+          const { data: items } = await db.from('collection_items')
+            .select('target_index, media_type, video_url, audio_url, photo_url')
+            .eq('collection_id', col.id);
+          const itemByPhotoUrl = {};
+          (items || []).forEach(it => { if (it.photo_url) itemByPhotoUrl[it.photo_url] = it; });
+          // Baseline signature of what the current .mind was compiled from (see
+          // saveCalendar step 2 — recompile only when this ordered set changes).
+          editingCollection._mindTargetUrls = (items || [])
+            .filter(it => it.photo_url != null && it.target_index != null)
+            .slice().sort((a, b) => a.target_index - b.target_index)
+            .map(it => it.photo_url);
+
           const idByUrl = {};
           const getPhotoId = (url) => {
             if (!url) return null;
             if (idByUrl[url]) return idByUrl[url];
             const id = uid('ph');
-            photos.set(id, { id, file: null, url, existingUrl: url });
+            const it = itemByPhotoUrl[url];
+            photos.set(id, {
+              id, file: null, url, existingUrl: url,
+              popcode: it ? {
+                mediaType: it.media_type || 'video',
+                video: null, audio: null,
+                existingVideoUrl: it.video_url || null,
+                existingAudioUrl: it.audio_url || null,
+              } : null,
+            });
             idByUrl[url] = id;
             return id;
           };
