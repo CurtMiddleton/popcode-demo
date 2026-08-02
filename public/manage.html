@@ -772,9 +772,23 @@
           title = col.name.slice(i + 3);
         }
         const viewUrl = `https://popcode.app/${col.slug}`;
-        // Books edit in the book builder; print designs reopen their saved config in order.html.
-        const editHref = isBook ? ('/book.html?id=' + encodeURIComponent(col.slug)) : ('/order.html?design=' + encodeURIComponent(col.slug) + '&edit=1');
-        const orderHref = isBook ? ('/book.html?id=' + encodeURIComponent(col.slug) + '&order=1') : ('/order.html?design=' + encodeURIComponent(col.slug));
+        // Books edit in the book builder, calendars in the calendar maker; print
+        // designs reopen their saved config in order.html.
+        const isCalendar = col.kind === 'calendar';
+        // Calendars have no collection_items, so their thumb comes from the saved
+        // cover photo in book_layout.calendar.
+        if (isCalendar) {
+          const cal = col.book_layout && col.book_layout.calendar;
+          thumbUrl = (cal && cal.cover && cal.cover.photo_url)
+            || (cal && cal.months && (cal.months.find(m => m && m.photo_url) || {}).photo_url)
+            || thumbUrl;
+        }
+        const editHref = isBook ? ('/book.html?id=' + encodeURIComponent(col.slug))
+          : isCalendar ? ('/calendar.html?id=' + encodeURIComponent(col.slug))
+          : ('/order.html?design=' + encodeURIComponent(col.slug) + '&edit=1');
+        const orderHref = isBook ? ('/book.html?id=' + encodeURIComponent(col.slug) + '&order=1')
+          : isCalendar ? ('/calendar.html?id=' + encodeURIComponent(col.slug) + '&order=1')
+          : ('/order.html?design=' + encodeURIComponent(col.slug));
         const bookCover = (isBook && col.book_layout && col.book_layout.cover) || {};
         const coverPhoto = (bookCover.photo_url) || thumbUrl || '';
         const coverText = { eyebrow: bookCover.eyebrow || '', title: bookCover.title || title, subtitle: bookCover.subtitle || '' };

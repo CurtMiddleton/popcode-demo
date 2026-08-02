@@ -1,0 +1,179 @@
+// Curt's hand-picked sample photos for shop previews (random per page load),
+// plus a small product-mockup compositor so storefront cards can show those
+// photos inside the real Prodigi product templates.
+//
+// The 50 photos were selected by Curt (Drive folder, 2026-08-01) and are
+// hotlinked from the Unsplash CDN — regular photos from images.unsplash.com,
+// Unsplash+ premium ones from plus.unsplash.com (the account has Unsplash
+// Pro; premium URLs need the shared photo-page ixid appended, which url()
+// does). Both hosts serve Access-Control-Allow-Origin: * so canvas
+// compositing works (loaders must still set img.crossOrigin = 'anonymous').
+//
+// Pool is travel / people (families, couples, kids) / pets — every URL
+// verified to return 200. Consumers should keep a local fallback (e.g.
+// /assets/sample-leopard.jpg) for offline/blocked cases.
+//
+// API:
+//   unsplashSample(w)          → one random URL sized to width w (default 1600)
+//   unsplashSamples(n, w)      → n distinct random URLs, interleaved across
+//                                categories so any small pick spans the mix
+//   unsplashSampleCat(cat, w)  → one random URL from 'travel'|'people'|'pets'
+//   drawProductCardMockup(canvas, productId, photoUrl) → Promise; draws the
+//     product template with the photo composited into its art opening.
+(function () {
+  const POOL = {
+    travel: [
+      'https://images.unsplash.com/photo-1532347922424-c652d9b7208e', // poolside straw hat
+      'https://images.unsplash.com/photo-1501555088652-021faa106b9b', // hiker, yellow backpack valley
+      'https://plus.unsplash.com/premium_photo-1677002240252-af3f88114efc', // hikers in the mountains
+      'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9', // Venice, Rialto bridge
+      'https://images.unsplash.com/photo-1549144511-f099e773c147', // Paris, Eiffel Tower
+      'https://plus.unsplash.com/premium_photo-1683141028915-523be058033f', // Rome fountain
+      'https://images.unsplash.com/photo-1682686581264-c47e25e61d95', // desert dune walk
+      'https://images.unsplash.com/photo-1527142879-95b61a0b8226', // resort pool + palms
+      'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e', // Kyoto street
+      'https://images.unsplash.com/photo-1554357475-accb8a88a330', // Petra
+      'https://images.unsplash.com/photo-1483729558449-99ef09a8c325', // Rio de Janeiro
+      'https://images.unsplash.com/photo-1489493585363-d69421e0edd3', // Manarola cliff town
+      'https://images.unsplash.com/photo-1507608869274-d3177c8bb4c7', // hot-air balloons
+      'https://plus.unsplash.com/premium_photo-1683121768172-67dfdfa69da5', // road trip, red jacket
+      'https://plus.unsplash.com/premium_photo-1700316993862-69fed06023d0', // Half Dome hiker
+      'https://plus.unsplash.com/premium_photo-1683141079772-acf46d5e2ebb', // Florence duomo
+      'https://images.unsplash.com/photo-1539920951450-2b2d59cff66d', // camel caravan dunes
+      'https://images.unsplash.com/photo-1501785888041-af3ef285b470', // alpine lake
+      'https://images.unsplash.com/photo-1551918120-9739cb430c6d', // infinity pool
+      'https://images.unsplash.com/photo-1527824404775-dce343118ebc', // Monument Valley
+      'https://plus.unsplash.com/premium_photo-1668703335982-a2d335b5cf82', // Antelope Canyon
+    ],
+    people: [
+      'https://images.unsplash.com/photo-1738898178964-88696087d43b', // couple, beach piggyback
+      'https://images.unsplash.com/photo-1581579186913-45ac3e6efe93', // family with dog on the lawn
+      'https://images.unsplash.com/photo-1559054109-82d938dac629', // friends at the overlook
+      'https://images.unsplash.com/photo-1611024847487-e26177381a3f', // family group
+      'https://images.unsplash.com/photo-1624272864537-8ecc72b67958', // father + child
+      'https://images.unsplash.com/photo-1561524891-8e08ab8569f3', // family on the boardwalk
+      'https://images.unsplash.com/photo-1531984929664-2fb2be468d3e', // toddler hug
+      'https://images.unsplash.com/photo-1555689070-2d15336749b6', // couple piggyback in a field
+      'https://images.unsplash.com/photo-1561525140-c2a4cc68e4bd', // family at sunset
+      'https://images.unsplash.com/photo-1518658761661-a3c568ee7b64', // friends jumping on the beach
+      'https://images.unsplash.com/photo-1446160657592-4782fb76fb99', // friends at the Golden Gate
+      'https://images.unsplash.com/photo-1539635278303-d4002c07eae3', // forest sunrays walk
+      'https://images.unsplash.com/photo-1605713288610-00c1c630ca1e', // kids hugging
+      'https://images.unsplash.com/photo-1531983412531-1f49a365ffed', // mother + child
+      'https://images.unsplash.com/photo-1506456331400-7088248a8db1', // beach sunset, parent + kid
+      'https://images.unsplash.com/photo-1560328055-e938bb2ed50a', // dad with baby on shoulders
+      'https://images.unsplash.com/photo-1517554558809-9b4971b38f39', // family walking a field
+    ],
+    pets: [
+      'https://plus.unsplash.com/premium_photo-1676389281733-aaefab0e7907', // dog on blue background
+      'https://plus.unsplash.com/premium_photo-1661676172038-377ab3d82a18', // dog + cat cuddle
+      'https://plus.unsplash.com/premium_photo-1722859221349-26353eae4744', // bulldog
+      'https://images.unsplash.com/photo-1530281700549-e82e7bf110d6', // golden retriever on the beach
+      'https://plus.unsplash.com/premium_photo-1668606717900-0ecf91e55655', // dog close-up
+      'https://images.unsplash.com/photo-1504826260979-242151ee45b7', // puppy on the beach
+      'https://images.unsplash.com/photo-1503256207526-0d5d80fa2f47', // border collie
+      'https://images.unsplash.com/photo-1557495235-340eb888a9fb', // woman with black lab
+      'https://images.unsplash.com/photo-1504595403659-9088ce801e29', // two happy dogs
+      'https://images.unsplash.com/photo-1559190394-df5a28aab5c5', // spaniel out the car window
+      'https://images.unsplash.com/photo-1510771463146-e89e6e86560e', // golden with a flower
+      'https://plus.unsplash.com/premium_photo-1661892088256-0a17130b3d0d', // jack russell puppy
+    ],
+  };
+  const CATS = Object.keys(POOL);
+  const IX = 'ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&ixlib=rb-4.1.0';
+  const url = (base, w) => base + '?' + IX + '&auto=format&fit=crop&w=' + (w || 1600) + '&q=80';
+  const shuffled = (arr) => {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  };
+
+  window.unsplashSampleCat = function (cat, w) {
+    const ids = POOL[cat] || POOL.people;
+    return url(ids[Math.floor(Math.random() * ids.length)], w);
+  };
+  window.unsplashSample = function (w) {
+    return window.unsplashSampleCat(CATS[Math.floor(Math.random() * CATS.length)], w);
+  };
+  // Interleave categories (travel, people, pets, travel, …) so even a pick of
+  // 3–5 spans the mix instead of coming out all-landscapes or all-dogs.
+  window.unsplashSamples = function (n, w) {
+    const lists = shuffled(CATS).map(c => shuffled(POOL[c]));
+    const out = [];
+    let i = 0;
+    while (out.length < n) {
+      const list = lists[i % lists.length];
+      if (list.length) out.push(url(list.shift(), w));
+      else if (lists.every(l => !l.length)) lists.forEach((l, k) => l.push(...shuffled(POOL[CATS[k]]))); // refill if n > pool
+      i++;
+    }
+    return out;
+  };
+
+  // ── Product-card mockup compositor ──────────────────────────────
+  // Draws a Prodigi product template and cover-crops a photo into its art
+  // opening. rect = art opening as FRACTIONS of the template image (keep in
+  // sync with order.html's MOCKUPS where products overlap). The book template
+  // gets its cover title re-drawn (the baked text sits on the baked photo).
+  const CARD_MOCKUPS = {
+    print:  { template: '/assets/mockups/print.jpg',  rect: { x: 0.190, y: 0.113, w: 0.626, h: 0.782 } },
+    tile:   { template: '/assets/mockups/tile.jpg',   rect: { x: 0.280, y: 0.206, w: 0.427, h: 0.598 } },
+    canvas: { template: '/assets/mockups/canvas.jpg', rect: { x: 0.190, y: 0.112, w: 0.670, h: 0.804 } },
+    framed: { template: '/assets/mockups/framed.jpg', rect: { x: 0.208, y: 0.111, w: 0.582, h: 0.778 } },
+    book:   { template: '/assets/mockups/book.jpg',   rect: { x: 0.143, y: 0.253, w: 0.735, h: 0.537 }, bookText: true },
+  };
+  const _cache = {};
+  function loadImg(src, cors) {
+    const key = (cors ? 'c:' : '') + src;
+    if (_cache[key]) return _cache[key];
+    _cache[key] = new Promise((res, rej) => {
+      const i = new Image();
+      if (cors) i.crossOrigin = 'anonymous';
+      i.onload = () => res(i); i.onerror = () => rej(new Error('img ' + src));
+      i.src = src;
+    });
+    return _cache[key];
+  }
+
+  // Draws template + photo into `cv`. Resolves once the template is drawn; if
+  // the photo can't load, the template's own baked photo stays visible.
+  window.drawProductCardMockup = async function (cv, productId, photoUrl) {
+    const mk = CARD_MOCKUPS[productId];
+    if (!mk) throw new Error('No card mockup for ' + productId);
+    const tpl = await loadImg(mk.template, true);
+    const s = Math.min(1, 900 / Math.max(tpl.naturalWidth, tpl.naturalHeight));
+    cv.width = Math.round(tpl.naturalWidth * s);
+    cv.height = Math.round(tpl.naturalHeight * s);
+    const ctx = cv.getContext('2d');
+    ctx.drawImage(tpl, 0, 0, cv.width, cv.height);
+    if (!photoUrl) return;
+    let photo;
+    try { photo = await loadImg(photoUrl, true); }
+    catch (_) { return; } // offline/blocked → keep the template as-is
+    const r = { x: mk.rect.x * cv.width, y: mk.rect.y * cv.height, w: mk.rect.w * cv.width, h: mk.rect.h * cv.height };
+    ctx.save();
+    ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+    const pa = photo.naturalWidth / photo.naturalHeight, ra = r.w / r.h;
+    let dw, dh;
+    if (pa > ra) { dh = r.h; dw = dh * pa; } else { dw = r.w; dh = dw / pa; }
+    ctx.drawImage(photo, r.x + (r.w - dw) / 2, r.y + (r.h - dh) / 2, dw, dh);
+    if (mk.bookText) {
+      // Legibility gradient + the sample cover title (mirrors the book maker's
+      // Overlay cover style).
+      const g = ctx.createLinearGradient(0, r.y + r.h * 0.55, 0, r.y + r.h);
+      g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.55)');
+      ctx.fillStyle = g; ctx.fillRect(r.x, r.y + r.h * 0.55, r.w, r.h * 0.45);
+      const lx = r.x + r.w * 0.075;
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'italic ' + Math.round(r.h * 0.055) + 'px "CooperBT", Georgia, serif';
+      ctx.fillText('A Book of Memories', lx, r.y + r.h * 0.72);
+      ctx.font = Math.round(r.h * 0.125) + 'px "CooperBT", Georgia, serif';
+      ctx.fillText('Our Story', lx, r.y + r.h * 0.845);
+      ctx.globalAlpha = 0.85;
+      ctx.font = Math.round(r.h * 0.045) + 'px Inter, sans-serif';
+      ctx.fillText(String(new Date().getFullYear() + 1), lx, r.y + r.h * 0.93);
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  };
+})();

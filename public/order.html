@@ -13,6 +13,7 @@
     <title>Popcode — Shop</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/unsplash-samples.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -815,17 +816,29 @@
       const scenesFor = p => (p === 'framed' ? SCENES_FRAMED : SCENES);
 
       // Sample photo shown in the preview before the user picks one of their own.
-      const SAMPLE_PHOTO = '/assets/sample-leopard.jpg';
+      // A random Unsplash shot per page load (see /unsplash-samples.js), with the
+      // bundled leopard as the offline/blocked fallback.
+      const FALLBACK_SAMPLE = '/assets/sample-leopard.jpg';
+      const SAMPLE_PHOTO = (window.unsplashSample && window.unsplashSample(1600)) || FALLBACK_SAMPLE;
       // Badged photo (at aspect) as an <img>. Falls back to the sample photo so the
       // preview always shows a real product shot (cropped to the selected aspect).
       async function getArtImage(aspect) {
         const src = state.selectedPhoto ? state.selectedPhoto.url : SAMPLE_PHOTO;
         try {
-          const url = await compositeBadgedImage(src, { scale: state.scale, aspect });
-          const img = new Image();
-          await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
-          return img;
-        } catch (_) { return null; }
+          return await badgedImg(src, aspect);
+        } catch (_) {
+          // Unsplash unreachable → retry once with the local sample.
+          if (!state.selectedPhoto && src !== FALLBACK_SAMPLE) {
+            try { return await badgedImg(FALLBACK_SAMPLE, aspect); } catch (_) {}
+          }
+          return null;
+        }
+      }
+      async function badgedImg(src, aspect) {
+        const url = await compositeBadgedImage(src, { scale: state.scale, aspect });
+        const img = new Image();
+        await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+        return img;
       }
 
       function sceneBackdrop(ctx, W, H, id) {

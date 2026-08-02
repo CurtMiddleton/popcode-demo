@@ -18,6 +18,7 @@
     <title>Popcode — Design a Book</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/unsplash-samples.js"></script>
     <!-- book.html only needs MINDAR.IMAGE.Compiler (to compile popcoded photos
          into a .mind target), not AR rendering. Stub AFRAME so the compiler
          bundle loads without booting a real WebGL renderer — same trick as
@@ -102,6 +103,17 @@
       .bi-specs li { position: relative; padding-left: 20px; margin-bottom: 11px; color: #333; font-size: 15px; }
       .bi-specs li::before { content: ''; position: absolute; left: 0; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: #7657FC; }
       .bi-cta { width: 100%; max-width: 340px; padding: 16px; border: none; border-radius: 16px; font-size: 16px; font-weight: 700; color: #fff; font-family: 'Inter', sans-serif; cursor: pointer; background: #1a1a1a; }
+      /* Size choice on the intro screen (A4 landscape vs 8×8 square) */
+      .bi-size-label { font-size: 13px; font-weight: 700; color: #1a1a1a; margin: 2px 0 10px; font-family: 'Inter', sans-serif; }
+      .bi-sizes { display: flex; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
+      .bi-size { display: flex; align-items: center; gap: 11px; border: 2px solid #e4e2dc; background: #fff; border-radius: 14px; padding: 11px 15px; cursor: pointer; font-family: 'Inter', sans-serif; text-align: left; }
+      .bi-size.active { border-color: #1a1a1a; }
+      .bi-size .bs-shape { display: block; background: #d9d5cf; border-radius: 3px; flex-shrink: 0; }
+      .bi-size.active .bs-shape { background: #1a1a1a; }
+      .bi-size .bs-shape.landscape { width: 30px; height: 21px; }
+      .bi-size .bs-shape.square { width: 24px; height: 24px; }
+      .bi-size strong { display: block; font-size: 14px; font-weight: 700; color: #1a1a1a; }
+      .bi-size em { display: block; font-style: normal; font-size: 12px; color: #8a857d; margin-top: 1px; }
       .bi-cta:hover { opacity: 0.94; }
 
       .field-label { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
@@ -196,7 +208,7 @@
          grid (inset), which can never push the canvas taller (the old
          aspect-ratio + %-padding combo clipped the bottom). */
       .page-canvas {
-        position: relative; width: 100%; aspect-ratio: 117 / 83; background: #ffffff;
+        position: relative; width: 100%; aspect-ratio: var(--book-ar, 117 / 83); background: #ffffff;
         overflow: hidden; border-radius: 3px; box-shadow: 0 3px 14px rgba(0,0,0,0.10);
       }
       .page-grid { position: absolute; box-sizing: border-box; }
@@ -337,10 +349,10 @@
       .bc-seg-btn.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 
       /* Cover editor sheet */
-      .cover-preview { position: relative; width: 100%; aspect-ratio: 117 / 83; border-radius: 8px; overflow: hidden; container-type: inline-size; box-shadow: 0 2px 14px rgba(0,0,0,0.18); margin-bottom: 16px; background: #605d58; }
+      .cover-preview { position: relative; width: 100%; aspect-ratio: var(--book-ar, 117 / 83); border-radius: 8px; overflow: hidden; container-type: inline-size; box-shadow: 0 2px 14px rgba(0,0,0,0.18); margin-bottom: 16px; background: #605d58; }
       .cvtpl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
       .cvtpl { cursor: pointer; }
-      .cvtpl-mini { position: relative; width: 100%; aspect-ratio: 117 / 83; container-type: inline-size; border-radius: 6px; overflow: hidden; border: 2px solid #eceae4; }
+      .cvtpl-mini { position: relative; width: 100%; aspect-ratio: var(--book-ar, 117 / 83); container-type: inline-size; border-radius: 6px; overflow: hidden; border: 2px solid #eceae4; }
       .cvtpl.active .cvtpl-mini { border-color: #7657FC; }
       .cvtpl-name { font-size: 11px; font-weight: 700; text-align: center; color: #666; margin-top: 5px; }
       .cover-photo-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -548,7 +560,7 @@
       .layout-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
       .layout-opt { border: 2px solid #eceae4; border-radius: 12px; padding: 7px; cursor: pointer; background: white; transition: border-color 0.12s; }
       .layout-opt.active { border-color: #7657FC; }
-      .layout-preview { position: relative; width: 100%; aspect-ratio: 117 / 83; background: #eceae3; border-radius: 5px; overflow: hidden; }
+      .layout-preview { position: relative; width: 100%; aspect-ratio: var(--book-ar, 117 / 83); background: #eceae3; border-radius: 5px; overflow: hidden; }
       .layout-preview .lp-grid { position: absolute; }
       .layout-preview .lp-cell { background: #fff; border-radius: 2px; }
       .layout-opt.active .layout-preview .lp-cell { background: #c9bcf9; }
@@ -674,6 +686,11 @@
             <li>Premium matte pages</li>
             <li>Scannable pages come to life with video</li>
           </ul>
+          <div class="bi-size-label">Size</div>
+          <div class="bi-sizes" id="bi-sizes">
+            <button class="bi-size active" data-size="a4-landscape"><span class="bs-shape landscape"></span><span><strong>A4 Landscape</strong><em>11.7 × 8.3"</em></span></button>
+            <button class="bi-size" data-size="square-8x8"><span class="bs-shape square"></span><span><strong>8×8" Square</strong><em>8.3 × 8.3"</em></span></button>
+          </div>
           <button class="bi-cta" id="start-book-btn">Design a Book</button>
         </div>
       </div>
@@ -806,6 +823,23 @@
           introEl.style.display = 'block';
           builderEl.style.display = 'none';
           setChrome(false);
+          // Intro preview: composite a random Unsplash sample onto the book
+          // mockup (replacing the static leopard shot). If the photo can't load,
+          // the static image simply stays.
+          if (window.drawProductCardMockup && window.unsplashSample) {
+            const stage = document.querySelector('#book-intro .bi-stage');
+            const cv = document.createElement('canvas');
+            window.drawProductCardMockup(cv, 'book', window.unsplashSample(1100)).then(() => {
+              cv.style.cssText = 'max-width:100%;max-height:340px;display:block;';
+              stage.innerHTML = '';
+              stage.appendChild(cv);
+            }).catch(() => {});
+          }
+          // Size chips on the intro — applies immediately (builder re-renders on start).
+          document.querySelectorAll('#bi-sizes .bi-size').forEach(chip => chip.addEventListener('click', () => {
+            document.querySelectorAll('#bi-sizes .bi-size').forEach(x => x.classList.toggle('active', x === chip));
+            applyBookSize(chip.dataset.size);
+          }));
           const startBtn = document.getElementById('start-book-btn');
           if (startBtn) startBtn.addEventListener('click', () => {
             introEl.style.display = 'none';
@@ -829,6 +863,7 @@
             window.location.href = '/manage.html'; return;
           }
           editingCollection = col;
+          applyBookSize(col.book_layout.size === 'square-8x8' ? 'square-8x8' : 'a4-landscape', false);
 
           // Popcoded media, keyed by the photo URL the item was linked to.
           const { data: items } = await db.from('collection_items')
@@ -1024,6 +1059,20 @@
       // Back-cover config: full-bleed or inset (landscape/portrait/square), with
       // the Popcode logo + popcode.app centered underneath (Bashō style).
       let backCover = { mode: 'inset', shape: 'landscape', photo: null };
+      // Book size. Every page/cover box uses --book-ar, and the print PDF + order
+      // variant follow the selected size. Persisted in book_layout.size.
+      const BOOK_SIZES = {
+        'a4-landscape': { id: 'a4-landscape', variantId: 'book-a4l-layflat',  label: 'A4 Landscape', dims: '11.7 × 8.3"', wIn: 11.6929, hIn: 8.2677, ar: '117 / 83' },
+        'square-8x8':   { id: 'square-8x8',   variantId: 'book-21sq-layflat', label: '8×8" Square',  dims: '8.3 × 8.3"',  wIn: 8.2677,  hIn: 8.2677, ar: '1 / 1' },
+      };
+      let bookSize = 'a4-landscape';
+      const currentBookSize = () => BOOK_SIZES[bookSize] || BOOK_SIZES['a4-landscape'];
+      const bookAr = () => currentBookSize().ar;
+      function applyBookSize(id, rerender) {
+        bookSize = BOOK_SIZES[id] ? id : 'a4-landscape';
+        document.documentElement.style.setProperty('--book-ar', currentBookSize().ar);
+        if (rerender !== false) render();
+      }
       let selectedTrayId = null;     // photo selected in tray, waiting to place
       let swapSource = null;         // {pageId, slotIdx} first tap of a swap
       let justDragged = false;       // suppresses the click that trails a photo drag
@@ -1622,7 +1671,7 @@
       function openBackCoverPhotoEdit() {
         if (!backCover.photo) return;
         backCover.photo.adjust = backCover.photo.adjust || DEFAULT_ADJUST();
-        startEditPhoto(backCover.photo, '117 / 83', {
+        startEditPhoto(backCover.photo, bookAr(), {
           back: () => openBackCoverMenu(),
           save: (adj) => { backCover.photo.adjust = normalizeAdjust(adj); render(); openBackCoverMenu(); showToast('Back cover photo updated'); },
           remove: () => { if (backCover.photo.file) URL.revokeObjectURL(backCover.photo.url); backCover.photo = null; render(); openBackCoverMenu(); },
@@ -2036,7 +2085,11 @@
           <p class="sheet-sub">Edit your book’s title, cover, fonts and more.</p>
           <div class="menu-row" data-act="order" style="background:#f0eefe">
             <div class="menu-ic" style="background:#1a1a1a;color:#fff"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>
-            <div><div>Order a printed book</div><div class="menu-sub">Layflat · A4 landscape · printed &amp; shipped</div></div>
+            <div><div>Order a printed book</div><div class="menu-sub">Layflat · ${escapeHtml(currentBookSize().label)} · printed &amp; shipped</div></div>
+          </div>
+          <div class="menu-row" data-act="size">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3 9 15"/><path d="M21 8V3h-5"/><rect x="3" y="12" width="9" height="9" rx="1"/></svg></div>
+            <div><div>Book size</div><div class="menu-sub">${escapeHtml(currentBookSize().label)} · ${escapeHtml(currentBookSize().dims)}</div></div>
           </div>
           <div class="menu-row" data-act="title">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></div>
@@ -2079,6 +2132,7 @@
           inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
           setTimeout(() => inp.focus(), 350);
         });
+        document.querySelector('#sheet [data-act="size"]').addEventListener('click', () => openBookSizeSheet());
         document.querySelector('#sheet [data-act="cover"]').addEventListener('click', () => { closeSheet(); openCoverMenu(); });
         document.querySelector('#sheet [data-act="font"]').addEventListener('click', () => openFontSheet());
         document.querySelector('#sheet [data-act="addpages"]').addEventListener('click', () => { closeSheet(); document.getElementById('add-page-btn').click(); });
@@ -2088,6 +2142,27 @@
         if (ps) ps.addEventListener('click', () => { closeSheet(); buildProof('spreads'); });
         const pp = document.querySelector('#sheet [data-act="proof-pages"]');
         if (pp) pp.addEventListener('click', () => { closeSheet(); buildProof('pages'); });
+      }
+
+      // Book size picker — photos keep their crops; pages just re-flow to the
+      // new aspect ratio, so switching mid-design is safe.
+      function openBookSizeSheet() {
+        const rows = Object.values(BOOK_SIZES).map(s => `
+          <div class="menu-row" data-size="${s.id}"${s.id === bookSize ? ' style="background:#f0eefe"' : ''}>
+            <div class="menu-ic"><span style="display:block;background:#1a1a1a;border-radius:2px;width:${s.wIn > s.hIn ? 22 : 17}px;height:${s.wIn > s.hIn ? 15.6 : 17}px"></span></div>
+            <div><div>${escapeHtml(s.label)}</div><div class="menu-sub">${escapeHtml(s.dims)} · layflat hardcover</div></div>
+          </div>`).join('');
+        openSheet(`
+          <div class="ep-head"><h2>Book size</h2><button class="ep-x" id="size-close" aria-label="Close">${IC_X}</button></div>
+          <p class="sheet-sub">Your photos and layouts carry over — pages simply re-flow to the new shape.</p>
+          ${rows}
+        `);
+        document.getElementById('size-close').addEventListener('click', openOptionsSheet);
+        document.querySelectorAll('#sheet [data-size]').forEach(r => r.addEventListener('click', () => {
+          applyBookSize(r.dataset.size);
+          closeSheet();
+          showToast('Book size: ' + currentBookSize().label);
+        }));
       }
 
       // Popsa-style font picker — choose a font group for the cover typography.
@@ -2249,14 +2324,16 @@
         }
       }
 
-      // ── Print-ready PDF for Prodigi (layflat A4 landscape) ──────
-      // Prodigi layflat A4-landscape books take a SINGLE PDF, one book page per
-      // PDF page, cover FIRST + back cover LAST, at 300 DPI, RGB, with an EVEN
-      // page count (18–122 for layflat). There is no spine asset for layflat.
-      // Popcoded pages get the Popcode scan badge baked into the bottom-right of
-      // each linked slot (same asset/corner as order.html) so a printed page
-      // signals it's scannable. Returns { blob, pageCount } — never downloads.
-      const PRINT_A4L = { wIn: 11.6929, hIn: 8.2677, dpi: 300, minPages: 24, maxPages: 122, badgeScale: 0.09 };
+      // ── Print-ready PDF for Prodigi (layflat) ───────────────────
+      // Prodigi layflat books take a SINGLE PDF, one book page per PDF page,
+      // cover FIRST + back cover LAST, at 300 DPI, RGB, with an EVEN page count
+      // (18–122 for layflat). There is no spine asset for layflat. Page
+      // dimensions follow the selected book size (A4 landscape or 8×8" square —
+      // see BOOK_SIZES / currentBookSize()). Popcoded pages get the Popcode scan
+      // badge baked into the bottom-right of each linked slot (same asset/corner
+      // as order.html) so a printed page signals it's scannable.
+      // Returns { blob, pageCount } — never downloads.
+      const PRINT_A4L = { dpi: 300, minPages: 24, maxPages: 122, badgeScale: 0.09 };
 
       // Rasterize the Popcode badge SVG (viewBox-only, no intrinsic size) to a
       // PNG data-URL so html2canvas renders it (it drops external SVG <img>s).
@@ -2297,9 +2374,10 @@
         interior.forEach(pg => addUnit(pg.layout === 'blank' ? blankCanvas() : pageCanvas(pg)));
         addUnit(backCanvas());
 
-        // Force every unit to an exact A4-landscape box so the PDF pages are true
-        // A4 (content is %-sized, so it scales proportionally).
-        const PXW = 1400, PXH = Math.round(PXW * PRINT_A4L.hIn / PRINT_A4L.wIn);
+        // Force every unit to an exact page box for the selected book size so the
+        // PDF pages are true size (content is %-sized, so it scales proportionally).
+        const size = currentBookSize();
+        const PXW = 1400, PXH = Math.round(PXW * size.hIn / size.wIn);
         units.forEach(u => { u.style.width = PXW + 'px'; u.style.height = PXH + 'px'; u.style.aspectRatio = 'auto'; });
 
         // Wait for images to decode + fonts to settle before capture.
@@ -2346,14 +2424,15 @@
         await new Promise(r => setTimeout(r, 30));
 
         const { jsPDF } = window.jspdf;
-        const fmt = [PRINT_A4L.wIn, PRINT_A4L.hIn]; // inches, A4 landscape
-        const doc = new jsPDF({ unit: 'in', format: fmt, orientation: 'landscape', compress: true });
-        const scale = (PRINT_A4L.wIn * PRINT_A4L.dpi) / PXW; // → ~3508px wide (300 DPI)
+        const fmt = [size.wIn, size.hIn]; // inches
+        const orient = size.wIn > size.hIn ? 'landscape' : 'portrait';
+        const doc = new jsPDF({ unit: 'in', format: fmt, orientation: orient, compress: true });
+        const scale = (size.wIn * PRINT_A4L.dpi) / PXW; // → 300 DPI across the width
         for (let i = 0; i < units.length; i++) {
           showToast(`Rendering print file… ${i + 1}/${units.length}`);
           const canvas = await html2canvas(units[i], { useCORS: true, backgroundColor: '#ffffff', scale, logging: false, width: PXW, height: PXH });
           const data = canvas.toDataURL('image/jpeg', 0.92);
-          if (i > 0) doc.addPage(fmt, 'landscape');
+          if (i > 0) doc.addPage(fmt, orient);
           doc.addImage(data, 'JPEG', 0, 0, fmt[0], fmt[1]);
         }
         proof.innerHTML = ''; proof.className = '';
@@ -2424,7 +2503,8 @@
       // collects a shipping address, then hands off to /api/create-checkout (which
       // re-quotes Prodigi server-side and opens Stripe Checkout). The .mind-linked
       // pages carry the baked scan badge, so a printed page stays scannable.
-      const BOOK_VARIANT_ID = 'book-a4l-layflat';
+      // Catalog variant follows the selected size (see BOOK_SIZES).
+      const bookVariantId = () => currentBookSize().variantId;
 
       // Confirm before padding a short book up to the layflat minimum, so the
       // extra blank pages aren't a surprise. Resolves true = continue.
@@ -2493,7 +2573,7 @@
             .bo-note { text-align:center; color:#8a857d; font-size:12px; margin-top:9px; }
           </style>
           <div class="ep-head"><h2>Ship your book</h2><button class="ep-x" id="bo-close" aria-label="Close">${IC_X}</button></div>
-          <p class="sheet-sub">Layflat photo book · A4 landscape · ${pageCount} pages. We’ll print it and ship it to you.</p>
+          <p class="sheet-sub">Layflat photo book · ${escapeHtml(currentBookSize().label)} · ${pageCount} pages. We’ll print it and ship it to you.</p>
           <div class="bo-form">
             <input id="bo-name" placeholder="Full name" value="${escapeHtml(name)}" autocomplete="name"/>
             <input id="bo-email" type="email" placeholder="Email" value="${escapeHtml(email)}" autocomplete="email"/>
@@ -2542,7 +2622,7 @@
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
               body: JSON.stringify({
-                productType: 'book', variantId: BOOK_VARIANT_ID,
+                productType: 'book', variantId: bookVariantId(),
                 numberOfPages: pageCount,
                 destinationCountryCode: recipient.address.countryCode,
                 state: recipient.address.stateOrCounty || undefined,
@@ -2563,7 +2643,7 @@
             body: JSON.stringify({
               collectionId: editingCollection.id,
               productType: 'book',
-              variantId: BOOK_VARIANT_ID,
+              variantId: bookVariantId(),
               copies,
               shippingMethod: 'Standard',
               recipient,
@@ -2755,7 +2835,7 @@
       function openCoverPhotoEdit() {
         if (!cover.photo) return;
         cover.photo.adjust = cover.photo.adjust || DEFAULT_ADJUST();
-        startEditPhoto(cover.photo, '117 / 83', {
+        startEditPhoto(cover.photo, bookAr(), {
           back: () => openCoverMenu(),   // Cancel/close returns to the cover menu
           save: (a) => { cover.photo.adjust = normalizeAdjust(a); render(); openCoverMenu(); showToast('Cover photo updated'); },
           remove: () => {
@@ -3557,7 +3637,7 @@
           const targetIndexByPhoto = {};
           popcodedIds.forEach((id, i) => { targetIndexByPhoto[id] = i; });
           const bookLayout = {
-            size: 'a4-landscape', // Prodigi 11.7 × 8.3" landscape
+            size: bookSize, // 'a4-landscape' (11.7 × 8.3") or 'square-8x8' (8.3 × 8.3")
             cover: {
               style: cover.style,
               font: cover.font,
