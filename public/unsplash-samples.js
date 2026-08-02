@@ -198,9 +198,45 @@
     }
   }
 
+  // Square layflat book — drawn (there's no photoreal square template): a
+  // full-bleed square cover with the same hinge highlight, legibility
+  // gradient and sample title as the landscape composite.
+  async function drawSquareBookCard(cv, photoUrl, fallbackUrl) {
+    const photo = await loadCardPhoto(photoUrl, fallbackUrl);
+    if (!photo) throw new Error('No sample photo available');
+    const S = 780, M = 56;
+    cv.width = S + 2 * M; cv.height = S + 2 * M;
+    const ctx = cv.getContext('2d');
+    const x = M, y = M;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.26)'; ctx.shadowBlur = 30; ctx.shadowOffsetX = 12; ctx.shadowOffsetY = 22;
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(x, y, S, S);
+    ctx.restore();
+    coverDraw(ctx, photo, x, y, S, S);
+    const hw = S * 0.03;
+    const hg = ctx.createLinearGradient(x, 0, x + hw, 0);
+    hg.addColorStop(0, 'rgba(255,255,255,0.55)'); hg.addColorStop(0.45, 'rgba(255,255,255,0.10)');
+    hg.addColorStop(0.75, 'rgba(0,0,0,0.12)'); hg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = hg; ctx.fillRect(x, y, hw, S);
+    const tg = ctx.createLinearGradient(0, y + S * 0.55, 0, y + S);
+    tg.addColorStop(0, 'rgba(0,0,0,0)'); tg.addColorStop(1, 'rgba(0,0,0,0.55)');
+    ctx.fillStyle = tg; ctx.fillRect(x, y + S * 0.55, S, S * 0.45);
+    const lx = x + S * 0.075;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'italic ' + Math.round(S * 0.042) + 'px "CooperBT", Georgia, serif';
+    ctx.fillText('A Book of Memories', lx, y + S * 0.80);
+    ctx.font = Math.round(S * 0.095) + 'px "CooperBT", Georgia, serif';
+    ctx.fillText('Our Story', lx, y + S * 0.885);
+    ctx.globalAlpha = 0.85;
+    ctx.font = Math.round(S * 0.034) + 'px Inter, sans-serif';
+    ctx.fillText(String(new Date().getFullYear() + 1), lx, y + S * 0.945);
+    ctx.globalAlpha = 1;
+  }
+
   // Draws template + photo into `cv`. Resolves once the template is drawn; if
   // the photo can't load, the template's own baked photo stays visible.
   window.drawProductCardMockup = async function (cv, productId, photoUrl, fallbackUrl) {
+    if (productId === 'book-square') return drawSquareBookCard(cv, photoUrl, fallbackUrl);
     if (DRAWN_CARDS[productId]) return drawSimpleCard(cv, DRAWN_CARDS[productId].kind, photoUrl, fallbackUrl);
     const mk = CARD_MOCKUPS[productId];
     if (!mk) throw new Error('No card mockup for ' + productId);
