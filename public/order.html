@@ -93,6 +93,7 @@
       .size-chips { display:flex; flex-wrap:wrap; gap:10px; margin:10px 0 6px; }
       .size-chip { border:1.5px solid #e3e1db; background:#fff; border-radius:14px; padding:11px 18px; font-size:14px; font-weight:500; cursor:pointer; font-family:'Inter',sans-serif; color:#333; }
       .size-chip.active { border-color:#7657FC; background:#f3f0ff; color:#7657FC; font-weight:600; }
+      .size-chip .swatch { display:inline-block; width:14px; height:14px; border-radius:50%; margin-right:7px; vertical-align:-2px; border:1px solid rgba(0,0,0,0.18); }
       .orient-row { margin-top:24px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
       .toggle { display:inline-flex; background:#eee; border-radius:16px; padding:3px; gap:2px; }
       .toggle button { border:none; background:none; border-radius:14px; padding:8px 16px; font-size:13px; font-weight:500; color:#666; cursor:pointer; font-family:'Inter',sans-serif; }
@@ -176,6 +177,10 @@
             <div class="tagline" id="detail-tagline"></div>
             <label>Size</label>
             <div class="size-chips" id="size-chips"></div>
+            <div id="frame-row" style="display:none;">
+              <label>Frame</label>
+              <div class="size-chips" id="frame-chips"></div>
+            </div>
             <div class="orient-row" id="orient-row">
               <span style="font-size:13px;font-weight:700;">Orientation</span>
               <div class="toggle" id="orientation-toggle">
@@ -345,9 +350,9 @@
       const CATEGORIES = ['print', 'tile', 'canvas', 'framed'];
       const CATEGORY_META = {
         print:  { name: 'Prints',        tagline: 'Classic fine-art prints',  desc: 'Museum-quality enhanced matte giclée prints — perfect for any photo.', specs: ['Enhanced matte art paper, 200gsm', 'Giclée print', 'Ships worldwide'] },
-        tile:   { name: 'Photo Tiles',   tagline: 'Framed photo tiles',       desc: 'Ready-to-hang framed tiles — great on their own or in a cluster.',     specs: ['Framed photo tile', 'Ready to hang', 'Ships worldwide'] },
+        tile:   { name: 'Photo Tiles',   tagline: 'Framed photo tiles',       desc: 'Ready-to-hang framed tiles — great on their own or in a cluster.',     specs: ['Black or white frame', 'Ready to hang', 'Ships worldwide'] },
         canvas: { name: 'Canvas',        tagline: 'Stretched canvas',         desc: 'Gallery-style stretched canvas with mirror-wrapped edges.',           specs: ['Stretched canvas', 'Mirror-wrapped edges', 'Ships worldwide'] },
-        framed: { name: 'Framed Prints', tagline: 'Classic framed prints',    desc: 'Fine-art print in a classic black frame behind perspex glaze.',       specs: ['Fine-art paper + perspex glaze', 'Black classic frame', 'Ships worldwide'] },
+        framed: { name: 'Framed Prints', tagline: 'Classic framed prints',    desc: 'Fine-art print in a classic frame behind perspex glaze — black, white or natural wood.', specs: ['Fine-art paper + perspex glaze', 'Black, white or natural frame', 'Ships worldwide'] },
       };
 
       // Photorealistic mockups (Route B): a face-on product photo + the rectangle
@@ -385,7 +390,33 @@
       let currentUser = null;
       let collection = null;
       let photos = [];
-      let state = { step: 'detail', productType: null, variantId: null, orientation: 'portrait', scale: 0.06, selectedPhoto: null, scene: 'plain', galleryIndex: 0 };
+      let state = { step: 'detail', productType: null, variantId: null, frameColor: 'black', orientation: 'portrait', scale: 0.06, selectedPhoto: null, scene: 'plain', galleryIndex: 0 };
+
+      // Frame colours per product (mirrors the server catalog: one variant per
+      // size × colour, where black keeps the bare size id).
+      const FRAME_COLORS = {
+        framed: [
+          { id: 'black',   name: 'Black',   hex: '#141414' },
+          { id: 'white',   name: 'White',   hex: '#f7f6f3' },
+          { id: 'natural', name: 'Natural', hex: '#c9a97e' },
+        ],
+        tile: [
+          { id: 'black', name: 'Black', hex: '#141414' },
+          { id: 'white', name: 'White', hex: '#f7f6f3' },
+        ],
+      };
+      const frameColorsFor = (t) => FRAME_COLORS[t] || null;
+      function frameColorHex() {
+        const list = frameColorsFor(state.productType);
+        const c = list && list.find(x => x.id === state.frameColor);
+        return c ? c.hex : '#141414';
+      }
+      const isLightFrame = () => state.frameColor !== 'black' && !!frameColorsFor(state.productType);
+      // The variant id actually sent to quote/checkout/saved designs — colour
+      // suffix for non-black frames ('cfp-8x10-white'), bare id for black.
+      const orderVariantId = () => (frameColorsFor(state.productType) && state.frameColor !== 'black')
+        ? state.variantId + '-' + state.frameColor
+        : state.variantId;
 
       function variantOf(type, id) { return (PRODUCTS[type] || []).find(v => v.id === id) || null; }
       function baseAspect() { const v = variantOf(state.productType, state.variantId); return v ? v.aspect : null; }
@@ -645,14 +676,20 @@
             .select('id, user_id, kind, book_layout').eq('slug', slug).single();
           const pc = col && col.book_layout && col.book_layout.print;
           if (!pc || (col.user_id && col.user_id !== currentUser.id)) return false;
-          if (!CATEGORIES.includes(pc.productType) || !variantOf(pc.productType, pc.variantId)) return false;
+          // Saved variant ids may carry a frame-colour suffix ('cfp-8x10-white');
+          // the client list holds the bare size ids, colour lives in state.
+          let savedVid = pc.variantId, savedColor = 'black';
+          const cm = /^(.+)-(white|natural)$/.exec(savedVid || '');
+          if (cm && variantOf(pc.productType, cm[1])) { savedVid = cm[1]; savedColor = cm[2]; }
+          if (!CATEGORIES.includes(pc.productType) || !variantOf(pc.productType, savedVid)) return false;
           // Order against the saved design's own collection (owned by the user).
           state.selectedPhoto = { url: pc.photoUrl, slug, collectionId: col.id, target_index: 0, name: '' };
           openCategory(pc.productType);
-          state.variantId = pc.variantId;
+          state.variantId = savedVid;
+          state.frameColor = savedColor;
           state.orientation = pc.orientation || 'portrait';
           state.scale = pc.scale || 0.06;
-          renderSizeChips(); updateOrientationVisibility();
+          renderSizeChips(); renderFrameChips(); updateOrientationVisibility();
           document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b.dataset.orientation === state.orientation));
           if (edit) { editingDesign = { id: col.id, slug }; renderDetailPreview(); refreshDetailPrice(); }
           else { await goReview(); }
@@ -760,6 +797,7 @@
       function openCategory(type) {
         state.productType = type;
         state.variantId = PRODUCTS[type][0].id;
+        state.frameColor = 'black';
         state.orientation = 'portrait';
         state.galleryIndex = 0; // reset to the hero product shot when switching products
         const meta = CATEGORY_META[type];
@@ -770,10 +808,33 @@
         // reset orientation toggle UI
         document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b.dataset.orientation === 'portrait'));
         renderSizeChips();
+        renderFrameChips();
         updateOrientationVisibility();
         renderDetailPreview();
         refreshDetailPrice();
         showStep('detail');
+      }
+
+      // Frame colour picker — shown only for products with frame options
+      // (framed prints: black/white/natural, tiles: black/white).
+      function renderFrameChips() {
+        const row = document.getElementById('frame-row');
+        const wrap = document.getElementById('frame-chips');
+        const colors = frameColorsFor(state.productType);
+        row.style.display = colors ? '' : 'none';
+        wrap.innerHTML = '';
+        if (!colors) return;
+        colors.forEach(c => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'size-chip' + (c.id === state.frameColor ? ' active' : '');
+          b.innerHTML = `<span class="swatch" style="background:${c.hex}"></span>${c.name}`;
+          b.onclick = () => {
+            state.frameColor = c.id;
+            renderFrameChips(); renderDetailPreview(); refreshDetailPrice();
+          };
+          wrap.appendChild(b);
+        });
       }
       function renderSizeChips() {
         const wrap = document.getElementById('size-chips');
@@ -892,9 +953,18 @@
         ctx.shadowBlur = w * (contact ? 0.028 : 0.055);
         ctx.shadowOffsetX = w * (contact ? 0.004 : 0.016);
         ctx.shadowOffsetY = h * (contact ? 0.006 : 0.04);
-        ctx.fillStyle = (product === 'framed' || product === 'tile') ? '#141414' : '#ffffff';
+        ctx.fillStyle = (product === 'framed' || product === 'tile') ? frameColorHex() : '#ffffff';
         if (tile) { roundRectPath(ctx, x - frame, y - frame, w + 2 * frame, h + 2 * frame, w * 0.04); ctx.fill(); }
         else { ctx.fillRect(x - frame, y - frame, w + 2 * frame, h + 2 * frame); }
+        // Light frames (white/natural) need a hairline edge to read against the
+        // pale stage background.
+        if ((product === 'framed' || product === 'tile') && isLightFrame()) {
+          ctx.shadowColor = 'transparent';
+          ctx.strokeStyle = 'rgba(0,0,0,0.14)';
+          ctx.lineWidth = Math.max(1, w * 0.003);
+          if (tile) { roundRectPath(ctx, x - frame, y - frame, w + 2 * frame, h + 2 * frame, w * 0.04); ctx.stroke(); }
+          else ctx.strokeRect(x - frame, y - frame, w + 2 * frame, h + 2 * frame);
+        }
         ctx.restore();
         ctx.save();
         if (tile) { roundRectPath(ctx, x, y, w, h, w * 0.02); ctx.clip(); }
@@ -905,7 +975,7 @@
           ctx.fillStyle = 'rgba(0,0,0,0.10)'; ctx.fillRect(x + w - w * 0.014, y, w * 0.014, h);
           ctx.fillStyle = 'rgba(0,0,0,0.06)'; ctx.fillRect(x, y + h - h * 0.011, w, h * 0.011);
         }
-        if (product === 'framed') { ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = Math.max(1, w * 0.004); ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1); }
+        if (product === 'framed') { ctx.strokeStyle = isLightFrame() ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.10)'; ctx.lineWidth = Math.max(1, w * 0.004); ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1); }
       }
 
       // ── Photoreal backdrops (Path B) ──────────────────────────────────────────
@@ -1090,7 +1160,7 @@
         const note = document.getElementById('detail-price-note');
         el.textContent = 'From …'; note.textContent = 'per print, incl. shipping & handling';
         try {
-          const d = await quoteFor(state.productType, state.variantId);
+          const d = await quoteFor(state.productType, orderVariantId());
           el.textContent = 'From ' + formatMoney(d.total_minor, d.currency);
           note.textContent = 'per print, incl. shipping & handling';
         } catch (e) { el.textContent = '—'; note.textContent = 'Pricing unavailable: ' + e.message; }
@@ -1156,7 +1226,7 @@
         // price
         const pe = document.getElementById('review-price');
         pe.textContent = '…';
-        try { const d = await quoteFor(state.productType, state.variantId); pe.textContent = formatMoney(d.total_minor, d.currency); }
+        try { const d = await quoteFor(state.productType, orderVariantId()); pe.textContent = formatMoney(d.total_minor, d.currency); }
         catch (e) { pe.textContent = '—'; }
       }
       document.getElementById('review-back').addEventListener('click', () => showStep('detail'));
@@ -1175,9 +1245,11 @@
           const v = variantOf(state.productType, state.variantId);
           const meta = CATEGORY_META[state.productType];
           const slug = randomSlug();
-          const name = meta.name + ' · ' + v.size + (state.selectedPhoto.name ? ' — ' + state.selectedPhoto.name : '');
+          const fcl = frameColorsFor(state.productType);
+          const fcn = fcl ? fcl.find(c => c.id === state.frameColor) : null;
+          const name = meta.name + ' · ' + v.size + (fcn && fcn.id !== 'black' ? ' ' + fcn.name : '') + (state.selectedPhoto.name ? ' — ' + state.selectedPhoto.name : '');
           const printConfig = {
-            productType: state.productType, variantId: state.variantId, orientation: state.orientation,
+            productType: state.productType, variantId: orderVariantId(), orientation: state.orientation,
             scale: state.scale, photoUrl: state.selectedPhoto.url,
             sourceSlug: state.selectedPhoto.slug, sourceTargetIndex: state.selectedPhoto.target_index,
           };
@@ -1213,7 +1285,9 @@
       // ---- checkout ----
       function goPay() {
         const v = variantOf(state.productType, state.variantId);
-        document.getElementById('summary-title').textContent = CATEGORY_META[state.productType].name + ' · ' + v.size;
+        const fcList = frameColorsFor(state.productType);
+        const fc = fcList ? fcList.find(c => c.id === state.frameColor) : null;
+        document.getElementById('summary-title').textContent = CATEGORY_META[state.productType].name + ' · ' + v.size + (fc ? ' · ' + fc.name + ' frame' : '');
         document.getElementById('summary-sub').textContent = (baseAspect() !== 1 ? (state.orientation === 'landscape' ? 'Landscape' : 'Portrait') : 'Square');
         renderChosenThumb();
         showStep('create');
@@ -1305,7 +1379,7 @@
             body: JSON.stringify({
               collectionId: photo.collectionId,
               productType: state.productType,
-              variantId: state.variantId,
+              variantId: orderVariantId(),
               copies: Math.max(1, parseInt(document.getElementById('copies').value, 10) || 1),
               shippingMethod: document.getElementById('shipping').value,
               recipient,
