@@ -124,6 +124,14 @@
       }
       input.text-input:focus { border-color: #7657FC; }
 
+      /* Popcode link (custom slug) — popcode.app/ prefix + editable tail */
+      .slug-row { display: flex; align-items: stretch; }
+      .slug-prefix { display: flex; align-items: center; background: #eceae4; border: 1px solid #e4e2dc; border-right: none; border-radius: 12px 0 0 12px; padding: 0 10px 0 14px; font-size: 16px; color: #6b6558; font-weight: 600; white-space: nowrap; }
+      .slug-row .text-input { border-radius: 0 12px 12px 0; margin-bottom: 0; }
+      .slug-row .text-input:disabled { background: #f4f2ee; color: #6b6558; }
+      .slug-note { font-size: 12px; color: #999; margin: 6px 2px 24px; line-height: 1.4; }
+      .slug-note.bad { color: #d33; }
+
       /* ── Photo tray ─────────────────────────────────────────── */
       .tray-card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 22px; }
       .tray-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; }
@@ -614,7 +622,6 @@
       /* ── Progress + result ──────────────────────────────────── */
       #progress { display: none; position: fixed; inset: 0; z-index: 500; background: rgba(247,246,242,0.97); flex-direction: column; align-items: center; justify-content: center; padding: 30px; text-align: center; }
       #progress.visible { display: flex; }
-      #progress .p-emoji { font-size: 40px; margin-bottom: 14px; }
       #progress-label { font-size: 18px; font-weight: 700; max-width: 420px; line-height: 1.4; }
       #progress-label.error { color: #cc3333; }
       .progress-bar-wrap { width: 100%; max-width: 320px; background: #e4e2dc; border-radius: 99px; height: 12px; margin: 20px 0; overflow: hidden; }
@@ -624,7 +631,6 @@
       #result { display:none; position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.5); align-items:center; justify-content:center; padding:24px; }
       #result.visible { display:flex; }
       .result-card { background:white; border-radius:22px; padding:30px 26px; max-width:400px; width:100%; text-align:center; box-shadow:0 12px 48px rgba(0,0,0,0.25); }
-      .result-card .r-emoji { font-size:44px; margin-bottom:10px; }
       .result-card h3 { font-size:22px; font-weight:700; margin-bottom:8px; font-family:'CooperBT',serif; font-weight:400; }
       .result-card p { font-size:14px; color:#777; margin-bottom:18px; line-height:1.5; }
       .result-url { background:#f2f0eb; border-radius:12px; padding:12px 14px; font-size:14px; font-weight:700; word-break:break-all; margin-bottom:16px; }
@@ -703,6 +709,13 @@
       <div class="field-label">Book title</div>
       <input class="text-input" id="title-input" type="text" placeholder="e.g. Our 2026 Year" autocomplete="off"/>
 
+      <div class="field-label">Popcode link <span style="color:#999;font-weight:500">(where scans open)</span></div>
+      <div class="slug-row">
+        <span class="slug-prefix">popcode.app/</span>
+        <input class="text-input" id="slug-input" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="yourlink"/>
+      </div>
+      <div class="slug-note" id="slug-note">6–10 lowercase letters or numbers. The link is locked once your book is created, so printed pages keep working.</div>
+
       <!-- Photo tray -->
       <div class="tray-card">
         <div class="tray-head">
@@ -775,7 +788,6 @@
     <div class="overlay" id="overlay"><div class="sheet" id="sheet"></div></div>
 
     <div id="progress">
-      <div class="p-emoji" id="p-emoji">📖</div>
       <div id="progress-label">Starting…</div>
       <div class="progress-bar-wrap"><div id="progress-bar"></div></div>
       <button id="try-again-btn">Try Again</button>
@@ -783,7 +795,6 @@
 
     <div id="result">
       <div class="result-card">
-        <div class="r-emoji">🎉</div>
         <h3>Your book is ready!</h3>
         <p>Popcoded pages will play their video when scanned. Share the link or view your book.</p>
         <div class="result-url" id="result-url"></div>
@@ -931,6 +942,7 @@
           };
 
           document.getElementById('title-input').value = col.name || '';
+          lockSlug(col.slug);
           document.querySelector('.wrap h1').textContent = 'Edit Book';
           document.getElementById('create-btn').textContent = 'Save Changes';
           render();
@@ -1226,6 +1238,28 @@
       });
 
       document.getElementById('title-input').addEventListener('input', updateSummary);
+
+      // ── Popcode link (custom slug) ──────────────────────────────
+      // Editable until the book is first created; locked afterwards so the
+      // link on printed badged pages never breaks. Must match the site's slug
+      // routing pattern: 6–10 lowercase letters/digits.
+      const slugInput = document.getElementById('slug-input');
+      slugInput.value = randomSlug();
+      slugInput.addEventListener('input', () => {
+        const clean = slugInput.value.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10);
+        if (clean !== slugInput.value) slugInput.value = clean;
+        syncSlugNote();
+      });
+      const chosenSlug = () => (slugInput.value || '').trim();
+      const slugValid = () => /^[a-z0-9]{6,10}$/.test(chosenSlug());
+      function syncSlugNote() {
+        const n = document.getElementById('slug-note');
+        if (slugInput.disabled) { n.textContent = 'This book’s link — locked so printed pages keep working.'; n.classList.remove('bad'); return; }
+        const ok = slugValid();
+        n.textContent = ok ? `Scans will open popcode.app/${chosenSlug()}` : '6–10 lowercase letters or numbers.';
+        n.classList.toggle('bad', !ok && chosenSlug().length > 0);
+      }
+      function lockSlug(slug) { slugInput.value = slug; slugInput.disabled = true; syncSlugNote(); }
 
       // ── Rendering ───────────────────────────────────────────────
       function render() { ensureBookEndpapers(); renderTray(); renderPages(); updateSummary(); }
@@ -2191,6 +2225,10 @@
 
       function duplicateBook() {
         editingCollection = null; // so the next Create saves a brand-new book
+        // A copy gets its own (editable) Popcode link.
+        slugInput.disabled = false;
+        slugInput.value = randomSlug();
+        syncSlugNote();
         const inp = document.getElementById('title-input');
         inp.value = ((inp.value || cover.title || 'Untitled').trim()) + ' (copy)';
         document.querySelector('.wrap h1').textContent = 'Design a Book';
@@ -3463,7 +3501,6 @@
       }
       function showBuildError(msg) {
         setProgress(msg, 0, true);
-        document.getElementById('p-emoji').textContent = '⚠️';
         document.getElementById('try-again-btn').style.display = 'inline-block';
       }
       document.getElementById('try-again-btn').addEventListener('click', () => {
@@ -3519,17 +3556,27 @@
         }
 
         const editing = !!editingCollection;
+        if (!editing && !slugValid()) {
+          showToast('Pick your Popcode link first — 6–10 lowercase letters or numbers.');
+          slugInput.focus();
+          return;
+        }
         document.getElementById('create-btn').disabled = true;
         document.getElementById('progress').classList.add('visible');
-        document.getElementById('p-emoji').textContent = '📖';
         document.getElementById('try-again-btn').style.display = 'none';
 
-        const slug = editing ? editingCollection.slug : randomSlug();
+        const slug = editing ? editingCollection.slug : chosenSlug();
         const title = document.getElementById('title-input').value.trim() || null;
         const bucket = 'experiences';
         const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 
         try {
+          // 0. New books: make sure the chosen link isn't already taken.
+          if (!editing) {
+            const { data: taken } = await db.from('collections').select('id').eq('slug', slug).maybeSingle();
+            if (taken) throw new Error(`popcode.app/${slug} is already taken — pick a different link.`);
+          }
+
           // 1. Upload placed photos that are new/replaced (have a File). Existing
           //    photos keep their stored URL — no re-upload.
           setProgress('Uploading photos…', 4);
@@ -3583,18 +3630,18 @@
             && targetUrlsNow.every((u, i) => u && u === baseTargetUrls[i]);
 
           if (editing && editingCollection.mind_file_url && targetsUnchanged) {
-            setProgress('Scan targets unchanged — reusing…', 62);
+            setProgress('Photos unchanged — skipping ahead…', 62);
             mindUrl = editingCollection.mind_file_url;
           } else {
-            setProgress('Preparing scan targets…', 32);
+            setProgress('Getting your photos ready…', 32);
             const imgs = [];
             for (const id of popcodedIds) imgs.push(await loadCompileImage(photos.get(id)));
-            setProgress('Compiling scan targets… (this can take a minute)', 36);
+            setProgress('Making your photos scannable… (this can take a minute)', 36);
             await yieldToPaint();
             const compiler = new MINDAR.IMAGE.Compiler();
-            await compiler.compileImageTargets(imgs, (prog) => setProgress(`Compiling scan targets… ${Math.round(prog)}%`, 36 + prog * 0.24));
+            await compiler.compileImageTargets(imgs, (prog) => setProgress(`Making your photos scannable… ${Math.round(prog)}%`, 36 + prog * 0.24));
             const buffer = await compiler.exportData();
-            setProgress('Uploading scan targets…', 62);
+            setProgress('Almost done — saving…', 62);
             const { error: mErr } = await db.storage.from(bucket).upload(`${slug}/target.mind`, new Blob([buffer]), { contentType: 'application/octet-stream', upsert: true });
             if (mErr) throw new Error('Target upload failed: ' + mErr.message);
             mindUrl = pub(`${slug}/target.mind`) + `?v=${Date.now()}`;
@@ -3689,6 +3736,7 @@
           if (iErr) throw new Error('Book saved, but linking videos failed: ' + iErr.message);
 
           setProgress('Done!', 100);
+          lockSlug(slug); // the link is fixed from the first save onwards
           showResult(slug, editing);
         } catch (err) {
           console.error(err);

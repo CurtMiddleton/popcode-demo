@@ -109,6 +109,14 @@
       }
       input.text-input:focus { border-color: #7657FC; }
 
+      /* Popcode link (custom slug) — popcode.app/ prefix + editable tail */
+      .slug-row { display: flex; align-items: stretch; }
+      .slug-prefix { display: flex; align-items: center; background: #eceae4; border: 1px solid #e4e2dc; border-right: none; border-radius: 12px 0 0 12px; padding: 0 10px 0 14px; font-size: 16px; color: #6b6558; font-weight: 600; white-space: nowrap; }
+      .slug-row .text-input { border-radius: 0 12px 12px 0; margin-bottom: 0; }
+      .slug-row .text-input:disabled { background: #f4f2ee; color: #6b6558; }
+      .slug-note { font-size: 12px; color: #999; margin: 6px 2px 24px; line-height: 1.4; }
+      .slug-note.bad { color: #d33; }
+
       /* ── Photo tray (same design as the book maker) ────────────── */
       .tray-card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 22px; }
       .tray-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; }
@@ -350,7 +358,6 @@
         flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 30px; text-align: center;
       }
       #progress.visible { display: flex; }
-      .p-emoji { font-size: 44px; }
       #progress-label { font-size: 16px; font-weight: 600; color: #1a1a1a; }
       .progress-bar-wrap { width: 100%; max-width: 320px; background: #e8e8e8; border-radius: 99px; height: 6px; overflow: hidden; }
       #progress-bar { height: 100%; background: #1a1a1a; border-radius: 99px; width: 0%; transition: width 0.3s; }
@@ -361,7 +368,6 @@
       }
       #result.visible { display: flex; }
       .result-card { background: #fff; border-radius: 22px; box-shadow: 0 10px 40px rgba(0,0,0,0.12); padding: 36px 30px; max-width: 420px; width: 100%; text-align: center; }
-      .r-emoji { font-size: 44px; margin-bottom: 10px; }
       .result-card h3 { font-family: 'CooperBT', serif; font-weight: 400; font-size: 27px; margin-bottom: 8px; }
       .result-card p { color: #656565; font-size: 15px; line-height: 1.5; margin-bottom: 22px; }
       .result-url { background: #f4f2ee; border-radius: 10px; padding: 11px 14px; font-size: 15px; font-weight: 700; color: #1a1a1a; margin-bottom: 18px; cursor: pointer; }
@@ -451,6 +457,13 @@
       <div class="field-label">Calendar title <span style="color:#999;font-weight:500">(shown on the cover)</span></div>
       <input class="text-input" id="title-input" type="text" placeholder="e.g. Our Family 2027" autocomplete="off"/>
 
+      <div class="field-label">Popcode link <span style="color:#999;font-weight:500">(where scans open)</span></div>
+      <div class="slug-row">
+        <span class="slug-prefix">popcode.app/</span>
+        <input class="text-input" id="slug-input" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="yourlink"/>
+      </div>
+      <div class="slug-note" id="slug-note">6–10 lowercase letters or numbers. The link is locked once your calendar is created, so printed pages keep working.</div>
+
       <!-- Photo tray -->
       <div class="tray-card">
         <div class="tray-head">
@@ -503,7 +516,6 @@
     <div class="overlay" id="overlay"><div class="sheet" id="sheet"></div></div>
 
     <div id="progress">
-      <div class="p-emoji">📅</div>
       <div id="progress-label">Starting…</div>
       <div class="progress-bar-wrap"><div id="progress-bar"></div></div>
       <button id="try-again-btn">Try Again</button>
@@ -511,7 +523,6 @@
 
     <div id="result">
       <div class="result-card">
-        <div class="r-emoji">🎉</div>
         <h3 id="result-title">Your calendar is ready!</h3>
         <p>Your design is saved to My Designs. Popcoded photos play their media when the printed calendar is scanned.</p>
         <div class="result-url" id="result-url" style="display:none" title="Tap to copy"></div>
@@ -1272,6 +1283,28 @@
 
       document.getElementById('title-input').addEventListener('input', () => { renderMonths(); updateSummary(); });
 
+      // ── Popcode link (custom slug) ──────────────────────────────
+      // Editable until the design is first created; locked afterwards so the
+      // link printed on badged pages never breaks. Must match the site's slug
+      // routing pattern: 6–10 lowercase letters/digits.
+      const slugInput = document.getElementById('slug-input');
+      slugInput.value = randomSlug();
+      slugInput.addEventListener('input', () => {
+        const clean = slugInput.value.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10);
+        if (clean !== slugInput.value) slugInput.value = clean;
+        syncSlugNote();
+      });
+      const chosenSlug = () => (slugInput.value || '').trim();
+      const slugValid = () => /^[a-z0-9]{6,10}$/.test(chosenSlug());
+      function syncSlugNote() {
+        const n = document.getElementById('slug-note');
+        if (slugInput.disabled) { n.textContent = 'This calendar’s link — locked so printed pages keep working.'; n.classList.remove('bad'); return; }
+        const ok = slugValid();
+        n.textContent = ok ? `Scans will open popcode.app/${chosenSlug()}` : '6–10 lowercase letters or numbers.';
+        n.classList.toggle('bad', !ok && chosenSlug().length > 0);
+      }
+      function lockSlug(slug) { slugInput.value = slug; slugInput.disabled = true; syncSlugNote(); }
+
       // ── Dock sheets ─────────────────────────────────────────────
       document.getElementById('dock-photos').addEventListener('click', () => {
         openSheet(`
@@ -1413,7 +1446,12 @@
 
       async function saveCalendar() {
         const editing = !!editingCollection;
-        const slug = editing ? editingCollection.slug : randomSlug();
+        if (!editing && !slugValid()) {
+          showToast('Pick your Popcode link first — 6–10 lowercase letters or numbers.');
+          slugInput.focus();
+          return;
+        }
+        const slug = editing ? editingCollection.slug : chosenSlug();
         const bucket = 'experiences';
         const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
         const title = (document.getElementById('title-input').value || '').trim() || `${calYear} Calendar`;
@@ -1423,6 +1461,12 @@
         }
         try {
           setProgress(editing ? 'Saving changes…' : 'Saving your calendar…', 5);
+
+          // 0. New designs: make sure the chosen link isn't already taken.
+          if (!editing) {
+            const { data: taken } = await db.from('collections').select('id').eq('slug', slug).maybeSingle();
+            if (taken) throw new Error(`popcode.app/${slug} is already taken — pick a different link.`);
+          }
 
           // 1. Upload every referenced photo that has a fresh File.
           const referenced = new Set();
@@ -1457,18 +1501,18 @@
               && targetUrlsNow.length === baseTargetUrls.length
               && targetUrlsNow.every((u, i) => u && u === baseTargetUrls[i]);
             if (editing && editingCollection.mind_file_url && targetsUnchanged) {
-              setProgress('Scan targets unchanged — reusing…', 60);
+              setProgress('Photos unchanged — skipping ahead…', 60);
               mindUrl = editingCollection.mind_file_url;
             } else {
-              setProgress('Preparing scan targets…', 38);
+              setProgress('Getting your photos ready…', 38);
               const imgs = [];
               for (const id of popcodedIds) imgs.push(await loadCompileImage(photos.get(id)));
-              setProgress('Compiling scan targets… (this can take a minute)', 42);
+              setProgress('Making your photos scannable… (this can take a minute)', 42);
               await yieldToPaint();
               const compiler = new MINDAR.IMAGE.Compiler();
-              await compiler.compileImageTargets(imgs, (prog) => setProgress(`Compiling scan targets… ${Math.round(prog)}%`, 42 + prog * 0.16));
+              await compiler.compileImageTargets(imgs, (prog) => setProgress(`Making your photos scannable… ${Math.round(prog)}%`, 42 + prog * 0.16));
               const buffer = await compiler.exportData();
-              setProgress('Uploading scan targets…', 60);
+              setProgress('Almost done — saving…', 60);
               const { error: mErr } = await db.storage.from(bucket).upload(`${slug}/target.mind`, new Blob([buffer]), { contentType: 'application/octet-stream', upsert: true });
               if (mErr) throw new Error('Target upload failed: ' + mErr.message);
               mindUrl = pub(`${slug}/target.mind`) + `?v=${Date.now()}`;
@@ -1566,6 +1610,7 @@
           });
           editingCollection.mind_file_url = mindUrl;
           editingCollection._mindTargetUrls = popcodedIds.map(id => photos.get(id).existingUrl || null);
+          lockSlug(slug); // the link is fixed from the first save onwards
 
           setProgress('Done!', 100);
           document.getElementById('progress').classList.remove('visible');
@@ -1837,6 +1882,7 @@
           while (months.length < 12) months.push({ photoId: null });
           cover = { photoId: getPhotoId(cal.cover && cal.cover.photo_url) };
           document.getElementById('title-input').value = (cal.cover && cal.cover.title) || col.name || '';
+          lockSlug(col.slug);
           document.querySelector('.wrap h1').textContent = 'Edit Calendar';
           render();
           if (new URLSearchParams(location.search).get('order') === '1') orderPrintedCalendar();
