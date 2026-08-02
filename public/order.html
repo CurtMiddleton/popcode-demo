@@ -181,6 +181,10 @@
               <label>Frame</label>
               <div class="size-chips" id="frame-chips"></div>
             </div>
+            <div id="mount-row" style="display:none;">
+              <label>Mount</label>
+              <div class="size-chips" id="mount-chips"></div>
+            </div>
             <div class="orient-row" id="orient-row">
               <span style="font-size:13px;font-weight:700;">Orientation</span>
               <div class="toggle" id="orientation-toggle">
@@ -345,14 +349,33 @@
           { id: 'cfp-11x14', size: '11×14"', aspect: 11 / 14 },
           { id: 'cfp-12x16', size: '12×16"', aspect: 12 / 16 },
           { id: 'cfp-16x24', size: '16×24"', aspect: 16 / 24 },
+          // Mounted (GLOBAL-CFPM): frame size shown, photo crops to the IMAGE
+          // space inside the mount (that's the aspect here).
+          { id: 'cfpm-12x16', size: '12×16"', imgSize: '8×12" image', aspect: 8 / 12,  mounted: true },
+          { id: 'cfpm-16x20', size: '16×20"', imgSize: '12×16" image', aspect: 12 / 16, mounted: true },
+          { id: 'cfpm-20x28', size: '20×28"', imgSize: '16×24" image', aspect: 16 / 24, mounted: true },
+        ],
+        framedcanvas: [
+          { id: 'fcan-12x16', size: '12×16"', aspect: 12 / 16 },
+          { id: 'fcan-16x20', size: '16×20"', aspect: 16 / 20 },
+          { id: 'fcan-16x24', size: '16×24"', aspect: 16 / 24 },
+          { id: 'fcan-20x28', size: '20×28"', aspect: 20 / 28 },
+        ],
+        acrylic: [
+          { id: 'acry-8x8',   size: '8×8"',   aspect: 1 },
+          { id: 'acry-8x12',  size: '8×12"',  aspect: 8 / 12 },
+          { id: 'acry-12x16', size: '12×16"', aspect: 12 / 16 },
+          { id: 'acry-16x24', size: '16×24"', aspect: 16 / 24 },
         ],
       };
-      const CATEGORIES = ['print', 'tile', 'canvas', 'framed'];
+      const CATEGORIES = ['print', 'tile', 'canvas', 'framed', 'framedcanvas', 'acrylic'];
       const CATEGORY_META = {
         print:  { name: 'Prints',        tagline: 'Classic fine-art prints',  desc: 'Museum-quality enhanced matte giclée prints — perfect for any photo.', specs: ['Enhanced matte art paper, 200gsm', 'Giclée print', 'Ships worldwide'] },
         tile:   { name: 'Photo Tiles',   tagline: 'Framed photo tiles',       desc: 'Ready-to-hang framed tiles — great on their own or in a cluster.',     specs: ['Black or white frame', 'Ready to hang', 'Ships worldwide'] },
         canvas: { name: 'Canvas',        tagline: 'Stretched canvas',         desc: 'Gallery-style stretched canvas with mirror-wrapped edges.',           specs: ['Stretched canvas', 'Mirror-wrapped edges', 'Ships worldwide'] },
-        framed: { name: 'Framed Prints', tagline: 'Classic framed prints',    desc: 'Fine-art print in a classic frame behind perspex glaze — black, white or natural wood.', specs: ['Fine-art paper + perspex glaze', 'Black, white or natural frame', 'Ships worldwide'] },
+        framed: { name: 'Framed Prints', tagline: 'Classic framed prints',    desc: 'Fine-art print in a classic frame behind perspex glaze — black, white or natural wood, with an optional conservation mount.', specs: ['Fine-art paper + perspex glaze', 'Black, white or natural frame', 'Optional conservation mount', 'Ships worldwide'] },
+        framedcanvas: { name: 'Framed Canvas', tagline: 'Canvas in a classic frame', desc: '38mm stretched cotton canvas set inside the classic frame — gallery presentation, ready to hang.', specs: ['400gsm artist-grade canvas', 'Black, white or natural frame', 'Ships worldwide'] },
+        acrylic: { name: 'Acrylic Prints', tagline: 'High-gloss acrylic panels', desc: 'Your photo hand-mounted behind 10mm high-gloss acrylic with diamond-polished edges — floats off the wall.', specs: ['10mm acrylic, polished edges', 'Invisible floating subframe', 'Ships worldwide'] },
       };
 
       // Photorealistic mockups (Route B): a face-on product photo + the rectangle
@@ -390,7 +413,7 @@
       let currentUser = null;
       let collection = null;
       let photos = [];
-      let state = { step: 'detail', productType: null, variantId: null, frameColor: 'black', orientation: 'portrait', scale: 0.06, selectedPhoto: null, scene: 'plain', galleryIndex: 0 };
+      let state = { step: 'detail', productType: null, variantId: null, frameColor: 'black', mounted: false, orientation: 'portrait', scale: 0.06, selectedPhoto: null, scene: 'plain', galleryIndex: 0 };
 
       // Frame colours per product (mirrors the server catalog: one variant per
       // size × colour, where black keeps the bare size id).
@@ -403,6 +426,11 @@
         tile: [
           { id: 'black', name: 'Black', hex: '#141414' },
           { id: 'white', name: 'White', hex: '#f7f6f3' },
+        ],
+        framedcanvas: [
+          { id: 'black',   name: 'Black',   hex: '#141414' },
+          { id: 'white',   name: 'White',   hex: '#f7f6f3' },
+          { id: 'natural', name: 'Natural', hex: '#c9a97e' },
         ],
       };
       const frameColorsFor = (t) => FRAME_COLORS[t] || null;
@@ -687,9 +715,10 @@
           openCategory(pc.productType);
           state.variantId = savedVid;
           state.frameColor = savedColor;
+          state.mounted = /^cfpm-/.test(savedVid);
           state.orientation = pc.orientation || 'portrait';
           state.scale = pc.scale || 0.06;
-          renderSizeChips(); renderFrameChips(); updateOrientationVisibility();
+          renderSizeChips(); renderFrameChips(); renderMountChips(); updateOrientationVisibility();
           document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b.dataset.orientation === state.orientation));
           if (edit) { editingDesign = { id: col.id, slug }; renderDetailPreview(); refreshDetailPrice(); }
           else { await goReview(); }
@@ -708,7 +737,7 @@
           const { data: cols } = await db.from('collections')
             .select('id, slug, name, kind').eq('user_id', currentUser.id)
             .order('created_at', { ascending: false });
-          const src = (cols || []).filter(c => !['book', 'print', 'tile', 'canvas', 'framed', 'calendar'].includes(c.kind));
+          const src = (cols || []).filter(c => !['book', 'print', 'tile', 'canvas', 'framed', 'framedcanvas', 'acrylic', 'calendar'].includes(c.kind));
           photos = [];
           if (src.length) {
             const ids = src.map(c => c.id);
@@ -798,6 +827,7 @@
         state.productType = type;
         state.variantId = PRODUCTS[type][0].id;
         state.frameColor = 'black';
+        state.mounted = false;
         state.orientation = 'portrait';
         state.galleryIndex = 0; // reset to the hero product shot when switching products
         const meta = CATEGORY_META[type];
@@ -809,6 +839,7 @@
         document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b.dataset.orientation === 'portrait'));
         renderSizeChips();
         renderFrameChips();
+        renderMountChips();
         updateOrientationVisibility();
         renderDetailPreview();
         refreshDetailPrice();
@@ -836,17 +867,47 @@
           wrap.appendChild(b);
         });
       }
+      // Sizes for the current selection — framed prints show either the plain
+      // (CFP) or mounted (CFPM) size list depending on the Mount toggle.
+      function activeSizeList() {
+        const all = PRODUCTS[state.productType] || [];
+        if (state.productType !== 'framed') return all;
+        return all.filter(v => !!v.mounted === !!state.mounted);
+      }
       function renderSizeChips() {
         const wrap = document.getElementById('size-chips');
         wrap.innerHTML = '';
-        PRODUCTS[state.productType].forEach(v => {
+        activeSizeList().forEach(v => {
           const b = document.createElement('button');
           b.type = 'button';
           b.className = 'size-chip' + (v.id === state.variantId ? ' active' : '');
-          b.textContent = v.size;
+          b.textContent = v.size + (v.imgSize ? ' · ' + v.imgSize : '');
           b.onclick = () => {
             state.variantId = v.id;
             renderSizeChips(); updateOrientationVisibility(); renderDetailPreview(); refreshDetailPrice();
+          };
+          wrap.appendChild(b);
+        });
+      }
+      // Mount toggle (framed prints only): switching swaps the size list, since
+      // mounted frames come in their own size/image pairings.
+      function renderMountChips() {
+        const row = document.getElementById('mount-row');
+        const wrap = document.getElementById('mount-chips');
+        const show = state.productType === 'framed';
+        row.style.display = show ? '' : 'none';
+        wrap.innerHTML = '';
+        if (!show) return;
+        [{ v: false, name: 'No mount' }, { v: true, name: 'White mount' }].forEach(opt => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'size-chip' + (opt.v === !!state.mounted ? ' active' : '');
+          b.textContent = opt.name;
+          b.onclick = () => {
+            if (!!state.mounted === opt.v) return;
+            state.mounted = opt.v;
+            state.variantId = activeSizeList()[0].id;
+            renderMountChips(); renderSizeChips(); updateOrientationVisibility(); renderDetailPreview(); refreshDetailPrice();
           };
           wrap.appendChild(b);
         });
@@ -953,12 +1014,13 @@
         ctx.shadowBlur = w * (contact ? 0.028 : 0.055);
         ctx.shadowOffsetX = w * (contact ? 0.004 : 0.016);
         ctx.shadowOffsetY = h * (contact ? 0.006 : 0.04);
-        ctx.fillStyle = (product === 'framed' || product === 'tile') ? frameColorHex() : '#ffffff';
+        const hasFrame = (product === 'framed' || product === 'tile' || product === 'framedcanvas');
+        ctx.fillStyle = hasFrame ? frameColorHex() : '#ffffff';
         if (tile) { roundRectPath(ctx, x - frame, y - frame, w + 2 * frame, h + 2 * frame, w * 0.04); ctx.fill(); }
         else { ctx.fillRect(x - frame, y - frame, w + 2 * frame, h + 2 * frame); }
         // Light frames (white/natural) need a hairline edge to read against the
         // pale stage background.
-        if ((product === 'framed' || product === 'tile') && isLightFrame()) {
+        if (hasFrame && isLightFrame()) {
           ctx.shadowColor = 'transparent';
           ctx.strokeStyle = 'rgba(0,0,0,0.14)';
           ctx.lineWidth = Math.max(1, w * 0.003);
@@ -968,8 +1030,37 @@
         ctx.restore();
         ctx.save();
         if (tile) { roundRectPath(ctx, x, y, w, h, w * 0.02); ctx.clip(); }
-        if (art) ctx.drawImage(art, x, y, w, h);
-        else { ctx.fillStyle = '#ededed'; ctx.fillRect(x, y, w, h); drawImageIcon(ctx, x + w / 2, y + h / 2, Math.min(w, h) * 0.2); }
+        // Mounted framed print: the conservation mount sits between frame and
+        // image — fill the opening with mount white, inset the art.
+        let ax = x, ay = y, aw = w, ah = h;
+        if (product === 'framed' && state.mounted) {
+          ctx.fillStyle = '#faf9f6'; ctx.fillRect(x, y, w, h);
+          const m = w * 0.13;
+          ax = x + m; ay = y + m; aw = w - 2 * m; ah = h - 2 * m;
+          ctx.save();
+          ctx.strokeStyle = 'rgba(0,0,0,0.16)'; ctx.lineWidth = Math.max(1, w * 0.0035);
+          ctx.strokeRect(ax, ay, aw, ah); // mount bevel line
+          ctx.restore();
+        }
+        // Framed canvas: a small shadowed gap between frame and canvas face.
+        if (product === 'framedcanvas') {
+          ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(x, y, w, h);
+          const g = w * 0.022;
+          ax = x + g; ay = y + g; aw = w - 2 * g; ah = h - 2 * g;
+        }
+        if (art) ctx.drawImage(art, ax, ay, aw, ah);
+        else { ctx.fillStyle = '#ededed'; ctx.fillRect(ax, ay, aw, ah); drawImageIcon(ctx, ax + aw / 2, ay + ah / 2, Math.min(aw, ah) * 0.2); }
+        // Acrylic: glossy diagonal sheen + a bright polished edge.
+        if (product === 'acrylic') {
+          const sheen = ctx.createLinearGradient(x, y, x + w, y + h);
+          sheen.addColorStop(0, 'rgba(255,255,255,0.16)');
+          sheen.addColorStop(0.35, 'rgba(255,255,255,0.02)');
+          sheen.addColorStop(0.55, 'rgba(255,255,255,0.10)');
+          sheen.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.fillStyle = sheen; ctx.fillRect(x, y, w, h);
+          ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = Math.max(1.5, w * 0.005);
+          ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+        }
         ctx.restore();
         if (product === 'canvas') { // gallery-wrap depth edge
           ctx.fillStyle = 'rgba(0,0,0,0.10)'; ctx.fillRect(x + w - w * 0.014, y, w * 0.014, h);
@@ -1032,7 +1123,7 @@
         const maxW = W * (thumb ? 0.6 : 0.5), maxH = H * (thumb ? 0.54 : 0.46);
         let w = maxW, h = w / aspect;
         if (h > maxH) { h = maxH; w = h * aspect; }
-        const frame = (state.productType === 'framed') ? w * 0.055 : (state.productType === 'tile' ? w * 0.05 : 0);
+        const frame = (state.productType === 'framed' || state.productType === 'framedcanvas') ? w * 0.055 : (state.productType === 'tile' ? w * 0.05 : 0);
         const x = W / 2 - w / 2;
         let y;
         if (id === 'shelf') y = H * 0.72 - frame - h;
@@ -1121,7 +1212,7 @@
         const maxW = S * 0.84, maxH = S * 0.84;
         let w = maxW, h = w / aspect;
         if (h > maxH) { h = maxH; w = h * aspect; }
-        const frame = (state.productType === 'framed') ? w * 0.055 : (state.productType === 'tile' ? w * 0.05 : 0);
+        const frame = (state.productType === 'framed' || state.productType === 'framedcanvas') ? w * 0.055 : (state.productType === 'tile' ? w * 0.05 : 0);
         const x = S / 2 - w / 2, y = S / 2 - h / 2;
         placeProduct(ctx, art, { x, y, w, h }, 'plain', state.productType, frame);
       }
