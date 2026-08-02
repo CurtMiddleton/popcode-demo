@@ -115,15 +115,20 @@
   // opening. rect = art opening as FRACTIONS of the template image (keep in
   // sync with order.html's MOCKUPS where products overlap). The book template
   // gets its cover title re-drawn (the baked text sits on the baked photo).
+  // rect = art opening; crop = the PRODUCT's bounding box (incl. its baked
+  // shadow) within the template. The finished canvas is cropped to `crop`, so
+  // the product — not the empty template around it — is what CSS sizes. That
+  // keeps products the same visual size on the storefront cards and the
+  // detail pages.
   const CARD_MOCKUPS = {
-    print:  { template: '/assets/mockups/print.jpg',  rect: { x: 0.190, y: 0.113, w: 0.626, h: 0.782 } },
-    tile:   { template: '/assets/mockups/tile.jpg',   rect: { x: 0.280, y: 0.206, w: 0.427, h: 0.598 } },
-    canvas: { template: '/assets/mockups/canvas.jpg', rect: { x: 0.190, y: 0.112, w: 0.670, h: 0.804 } },
-    framed: { template: '/assets/mockups/framed.jpg', rect: { x: 0.208, y: 0.111, w: 0.582, h: 0.778 } },
+    print:  { template: '/assets/mockups/print.jpg',  rect: { x: 0.190, y: 0.113, w: 0.626, h: 0.782 }, crop: { x: 0.168, y: 0.089, w: 0.667, h: 0.823 } },
+    tile:   { template: '/assets/mockups/tile.jpg',   rect: { x: 0.280, y: 0.206, w: 0.427, h: 0.598 }, crop: { x: 0.242, y: 0.167, w: 0.521, h: 0.696 } },
+    canvas: { template: '/assets/mockups/canvas.jpg', rect: { x: 0.190, y: 0.112, w: 0.670, h: 0.804 }, crop: { x: 0.168, y: 0.094, w: 0.709, h: 0.869 } },
+    framed: { template: '/assets/mockups/framed.jpg', rect: { x: 0.208, y: 0.111, w: 0.582, h: 0.778 }, crop: { x: 0.116, y: 0.019, w: 0.800, h: 0.980 } },
     // Book rect spans the FULL cover incl. the hinge strip so no baked template
     // photo can peek out at the left edge; the hinge highlight is redrawn on
     // top (see `hinge`).
-    book:   { template: '/assets/mockups/book.jpg',   rect: { x: 0.133, y: 0.253, w: 0.745, h: 0.537 }, bookText: true, hinge: true },
+    book:   { template: '/assets/mockups/book.jpg',   rect: { x: 0.133, y: 0.253, w: 0.745, h: 0.537 }, bookText: true, hinge: true, crop: { x: 0.113, y: 0.233, w: 0.781, h: 0.573 } },
   };
   const _cache = {};
   function loadImg(src, cors) {
@@ -195,5 +200,15 @@
       ctx.globalAlpha = 1;
     }
     ctx.restore();
+    // Trim the canvas to the product's bounding box so CSS sizes the product
+    // itself, not the empty template padding around it.
+    if (mk.crop) {
+      const c = { x: Math.round(mk.crop.x * cv.width), y: Math.round(mk.crop.y * cv.height), w: Math.round(mk.crop.w * cv.width), h: Math.round(mk.crop.h * cv.height) };
+      const tmp = document.createElement('canvas');
+      tmp.width = c.w; tmp.height = c.h;
+      tmp.getContext('2d').drawImage(cv, c.x, c.y, c.w, c.h, 0, 0, c.w, c.h);
+      cv.width = c.w; cv.height = c.h;
+      cv.getContext('2d').drawImage(tmp, 0, 0);
+    }
   };
 })();
