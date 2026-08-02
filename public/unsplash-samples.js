@@ -10,8 +10,8 @@
 // compositing works (loaders must still set img.crossOrigin = 'anonymous').
 //
 // Pool is travel / people (families, couples, kids) / pets — every URL
-// verified to return 200. Consumers should keep a local fallback (e.g.
-// /assets/sample-leopard.jpg) for offline/blocked cases.
+// verified to return 200. The bundled /assets/sample-photo.jpg (one of the
+// same 50, hosted locally) is the offline/blocked fallback.
 //
 // API:
 //   unsplashSample(w)          → one random URL sized to width w (default 1600)
@@ -120,7 +120,10 @@
     tile:   { template: '/assets/mockups/tile.jpg',   rect: { x: 0.280, y: 0.206, w: 0.427, h: 0.598 } },
     canvas: { template: '/assets/mockups/canvas.jpg', rect: { x: 0.190, y: 0.112, w: 0.670, h: 0.804 } },
     framed: { template: '/assets/mockups/framed.jpg', rect: { x: 0.208, y: 0.111, w: 0.582, h: 0.778 } },
-    book:   { template: '/assets/mockups/book.jpg',   rect: { x: 0.143, y: 0.253, w: 0.735, h: 0.537 }, bookText: true },
+    // Book rect spans the FULL cover incl. the hinge strip so no baked template
+    // photo can peek out at the left edge; the hinge highlight is redrawn on
+    // top (see `hinge`).
+    book:   { template: '/assets/mockups/book.jpg',   rect: { x: 0.133, y: 0.253, w: 0.745, h: 0.537 }, bookText: true, hinge: true },
   };
   const _cache = {};
   function loadImg(src, cors) {
@@ -137,19 +140,23 @@
 
   // Draws template + photo into `cv`. Resolves once the template is drawn; if
   // the photo can't load, the template's own baked photo stays visible.
-  window.drawProductCardMockup = async function (cv, productId, photoUrl) {
+  window.drawProductCardMockup = async function (cv, productId, photoUrl, fallbackUrl) {
     const mk = CARD_MOCKUPS[productId];
     if (!mk) throw new Error('No card mockup for ' + productId);
+    // Resolve BOTH images before drawing anything, and never show the
+    // template's baked sample photo on its own: if the sample can't load,
+    // try the local fallback; with neither, reject so the caller shows
+    // nothing instead of the template-only shot.
     const tpl = await loadImg(mk.template, true);
+    let photo = null;
+    try { photo = await loadImg(photoUrl, true); }
+    catch (_) { if (fallbackUrl) { try { photo = await loadImg(fallbackUrl, true); } catch (_) {} } }
+    if (!photo) throw new Error('No sample photo available');
     const s = Math.min(1, 900 / Math.max(tpl.naturalWidth, tpl.naturalHeight));
     cv.width = Math.round(tpl.naturalWidth * s);
     cv.height = Math.round(tpl.naturalHeight * s);
     const ctx = cv.getContext('2d');
     ctx.drawImage(tpl, 0, 0, cv.width, cv.height);
-    if (!photoUrl) return;
-    let photo;
-    try { photo = await loadImg(photoUrl, true); }
-    catch (_) { return; } // offline/blocked → keep the template as-is
     const r = { x: mk.rect.x * cv.width, y: mk.rect.y * cv.height, w: mk.rect.w * cv.width, h: mk.rect.h * cv.height };
     ctx.save();
     ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
@@ -157,6 +164,19 @@
     let dw, dh;
     if (pa > ra) { dh = r.h; dw = dh * pa; } else { dw = r.w; dh = dw / pa; }
     ctx.drawImage(photo, r.x + (r.w - dw) / 2, r.y + (r.h - dh) / 2, dw, dh);
+    if (mk.hinge) {
+      // Redraw the cover hinge over the photo's left edge: a soft highlight
+      // strip fading into a faint crease shadow (mimics the template's own
+      // hinge, which the full-width photo just covered).
+      const hw = r.w * 0.030;
+      const g = ctx.createLinearGradient(r.x, 0, r.x + hw, 0);
+      g.addColorStop(0, 'rgba(255,255,255,0.55)');
+      g.addColorStop(0.45, 'rgba(255,255,255,0.10)');
+      g.addColorStop(0.75, 'rgba(0,0,0,0.12)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(r.x, r.y, hw, r.h);
+    }
     if (mk.bookText) {
       // Legibility gradient + the sample cover title (mirrors the book maker's
       // Overlay cover style).
