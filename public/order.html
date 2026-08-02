@@ -997,7 +997,7 @@
       function placeProduct(ctx, art, box, id, product, frame) {
         const { x, y, w, h } = box;
         const contact = (id === 'shelf');
-        const tile = product === 'tile';
+
         // Shelf: pool a soft contact shadow under the base so it reads as resting on
         // the shelf (not floating). Everything else: a soft cast drop shadow.
         if (contact) {
@@ -1016,20 +1016,18 @@
         ctx.shadowOffsetY = h * (contact ? 0.006 : 0.04);
         const hasFrame = (product === 'framed' || product === 'tile' || product === 'framedcanvas');
         ctx.fillStyle = hasFrame ? frameColorHex() : '#ffffff';
-        if (tile) { roundRectPath(ctx, x - frame, y - frame, w + 2 * frame, h + 2 * frame, w * 0.04); ctx.fill(); }
-        else { ctx.fillRect(x - frame, y - frame, w + 2 * frame, h + 2 * frame); }
+        // Tiles have SQUARE corners (like the real product) — no rounding.
+        ctx.fillRect(x - frame, y - frame, w + 2 * frame, h + 2 * frame);
         // Light frames (white/natural) need a hairline edge to read against the
         // pale stage background.
         if (hasFrame && isLightFrame()) {
           ctx.shadowColor = 'transparent';
           ctx.strokeStyle = 'rgba(0,0,0,0.14)';
           ctx.lineWidth = Math.max(1, w * 0.003);
-          if (tile) { roundRectPath(ctx, x - frame, y - frame, w + 2 * frame, h + 2 * frame, w * 0.04); ctx.stroke(); }
-          else ctx.strokeRect(x - frame, y - frame, w + 2 * frame, h + 2 * frame);
+          ctx.strokeRect(x - frame, y - frame, w + 2 * frame, h + 2 * frame);
         }
         ctx.restore();
         ctx.save();
-        if (tile) { roundRectPath(ctx, x, y, w, h, w * 0.02); ctx.clip(); }
         // Mounted framed print: the conservation mount sits between frame and
         // image — fill the opening with mount white, inset the art.
         let ax = x, ay = y, aw = w, ah = h;
