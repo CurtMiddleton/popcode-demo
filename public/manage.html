@@ -507,7 +507,7 @@
         try {
           const { data: collections, error } = await db
             .from('collections')
-            .select('id, slug, name, created_at, kind, book_layout')
+            .select('id, slug, name, created_at, kind, book_layout, mind_file_url')
             .eq('user_id', currentUser.id)
             .order('created_at', { ascending: false });
 
@@ -577,7 +577,11 @@
         document.title = isDesigns ? 'Popcode — My Designs' : 'Popcode — My Popcodes';
         // Designs get a distinct product-mockup grid; Popcodes keep the list.
         content.className = isDesigns ? 'designs-grid' : 'collections-list';
-        const list = allCollections.filter(c => isDesigns ? isDesignKind(c.kind) : !isDesignKind(c.kind));
+        // Designs tab = every physical product. Popcodes tab = standalone AR
+        // collections PLUS any product that's actually scannable (a popcoded
+        // book/calendar has a compiled .mind, so it IS a Popcode too).
+        const isScannable = (c) => !!(c.mind_file_url && c.mind_file_url !== '');
+        const list = allCollections.filter(c => isDesigns ? isDesignKind(c.kind) : (!isDesignKind(c.kind) || isScannable(c)));
         if (!list.length) { content.className = 'collections-list'; content.appendChild(buildEmptyState(activeTab)); return; }
         if (isDesigns) list.forEach(col => content.appendChild(buildDesignCard(col, photoMap[col.id] || null)));
         else list.forEach(col => content.appendChild(buildCard(col, countMap[col.id] || 0, photoMap[col.id] || null)));
@@ -587,7 +591,7 @@
         const div = document.createElement('div');
         div.className = 'empty-state';
         div.innerHTML = tab === 'designs'
-          ? `<p>No designs yet — books, prints and more you order from us.</p><a href="/shop.html">🛍️ Shop products</a>`
+          ? `<p>No designs yet — books, prints and more you order from us.</p><a href="/shop.html">Shop products</a>`
           : `<p>No Popcodes yet.</p><a href="/create.html">+ New Popcode</a>`;
         return div;
       }
@@ -600,7 +604,11 @@
         const coverTitle = col.cover_config && col.cover_config.enabled && col.cover_config.title;
         const title = coverTitle || col.name || 'Untitled';
         const isBook = col.kind === 'book';
-        const isCollection = !isBook && pageCount > 1;
+        const isCalendar = col.kind === 'calendar';
+        const isProduct = isDesignKind(col.kind);   // scannable product shown in this tab
+        const kindPill = isProduct ? (PRODUCT_NOUN[col.kind] || 'Design') : null;
+        const editHref = isBook ? '/book.html' : isCalendar ? '/calendar.html' : '/edit.html';
+        const isCollection = !isProduct && pageCount > 1;
         const viewUrl = `https://popcode.app/${col.slug}`;
         const shortUrl = `popcode.app/${col.slug}`;
 
@@ -609,8 +617,8 @@
             ${thumbUrl ? `<div class="card-thumb" style="background-image:url('${escapeHtml(thumbUrl)}')"></div>` : '<div class="card-thumb"></div>'}
             <div class="card-info">
               ${isCollection ? '<div class="pop-pill">Collection</div>' : ''}
-              <div class="card-title">${escapeHtml(title)}${isBook ? ' <span class="kind-pill">Book</span>' : ''}</div>
-              <div class="card-meta">Created ${formatDate(col.created_at)} &nbsp;/&nbsp; ${isBook ? 'photo book' : pageCount + ' image' + (pageCount !== 1 ? 's' : '')}</div>
+              <div class="card-title">${escapeHtml(title)}${kindPill ? ` <span class="kind-pill">${escapeHtml(kindPill)}</span>` : ''}</div>
+              <div class="card-meta">Created ${formatDate(col.created_at)} &nbsp;/&nbsp; ${isBook ? 'photo book' : isCalendar ? 'photo calendar' : isProduct ? PRODUCT_LABEL[col.kind].toLowerCase() : pageCount + ' image' + (pageCount !== 1 ? 's' : '')}</div>
               <div class="card-id" style="position:relative;">ID: <strong>${escapeHtml(col.slug)}</strong>
               <div class="share-popup" id="share-popup-${escapeHtml(col.slug)}">
                 <div class="share-popup-title">Share options</div>
@@ -632,11 +640,11 @@
           </div>
           <div class="card-actions">
             <a class="icon-btn" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></a>
-            <a class="icon-btn" href="${isBook ? '/book.html' : '/edit.html'}?id=${escapeHtml(col.slug)}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></a>
+            <a class="icon-btn" href="${editHref}?id=${escapeHtml(col.slug)}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></a>
             <button class="icon-btn btn-share-id" data-slug="${escapeHtml(col.slug)}" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
-            ${isBook ? '' : `<button class="icon-btn btn-download" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>`}
-            ${isBook
-              ? `<a class="shop-btn" href="/book.html?id=${escapeHtml(col.slug)}&order=1" title="Order a printed book"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`
+            ${isProduct ? '' : `<button class="icon-btn btn-download" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>`}
+            ${isProduct
+              ? `<a class="shop-btn" href="${editHref}?id=${escapeHtml(col.slug)}&order=1" title="Order a printed copy"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`
               : `<a class="shop-btn" href="/order.html?id=${escapeHtml(col.slug)}" title="Order prints"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`}
             <button class="btn btn-delete" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
           </div>
