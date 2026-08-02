@@ -2,12 +2,14 @@
 // plus a small product-mockup compositor so storefront cards can show those
 // photos inside the real Prodigi product templates.
 //
-// The 50 photos were selected by Curt (Drive folder, 2026-08-01) and are
-// hotlinked from the Unsplash CDN — regular photos from images.unsplash.com,
-// Unsplash+ premium ones from plus.unsplash.com (the account has Unsplash
-// Pro; premium URLs need the shared photo-page ixid appended, which url()
-// does). Both hosts serve Access-Control-Allow-Origin: * so canvas
-// compositing works (loaders must still set img.crossOrigin = 'anonymous').
+// The photos were selected by Curt (Drive folder, 2026-08-01) and are
+// hotlinked from images.unsplash.com. NOTE: the 12 Unsplash+ premium picks
+// (plus.unsplash.com) were REMOVED from the pool — hotlinked premium files
+// render with tiled "Unsplash+" watermarks at preview sizes (they only serve
+// clean via an entitled download). To restore them, download the originals
+// from the Unsplash+ account and self-host under /assets/samples/. The CDN
+// serves Access-Control-Allow-Origin: * so canvas compositing works (loaders
+// must still set img.crossOrigin = 'anonymous').
 //
 // Pool is travel / people (families, couples, kids) / pets — every URL
 // verified to return 200. The bundled /assets/sample-photo.jpg (one of the
@@ -25,10 +27,8 @@
     travel: [
       'https://images.unsplash.com/photo-1532347922424-c652d9b7208e', // poolside straw hat
       'https://images.unsplash.com/photo-1501555088652-021faa106b9b', // hiker, yellow backpack valley
-      'https://plus.unsplash.com/premium_photo-1677002240252-af3f88114efc', // hikers in the mountains
       'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9', // Venice, Rialto bridge
       'https://images.unsplash.com/photo-1549144511-f099e773c147', // Paris, Eiffel Tower
-      'https://plus.unsplash.com/premium_photo-1683141028915-523be058033f', // Rome fountain
       'https://images.unsplash.com/photo-1682686581264-c47e25e61d95', // desert dune walk
       'https://images.unsplash.com/photo-1527142879-95b61a0b8226', // resort pool + palms
       'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e', // Kyoto street
@@ -36,14 +36,10 @@
       'https://images.unsplash.com/photo-1483729558449-99ef09a8c325', // Rio de Janeiro
       'https://images.unsplash.com/photo-1489493585363-d69421e0edd3', // Manarola cliff town
       'https://images.unsplash.com/photo-1507608869274-d3177c8bb4c7', // hot-air balloons
-      'https://plus.unsplash.com/premium_photo-1683121768172-67dfdfa69da5', // road trip, red jacket
-      'https://plus.unsplash.com/premium_photo-1700316993862-69fed06023d0', // Half Dome hiker
-      'https://plus.unsplash.com/premium_photo-1683141079772-acf46d5e2ebb', // Florence duomo
       'https://images.unsplash.com/photo-1539920951450-2b2d59cff66d', // camel caravan dunes
       'https://images.unsplash.com/photo-1501785888041-af3ef285b470', // alpine lake
       'https://images.unsplash.com/photo-1551918120-9739cb430c6d', // infinity pool
       'https://images.unsplash.com/photo-1527824404775-dce343118ebc', // Monument Valley
-      'https://plus.unsplash.com/premium_photo-1668703335982-a2d335b5cf82', // Antelope Canyon
     ],
     people: [
       'https://images.unsplash.com/photo-1738898178964-88696087d43b', // couple, beach piggyback
@@ -65,18 +61,13 @@
       'https://images.unsplash.com/photo-1517554558809-9b4971b38f39', // family walking a field
     ],
     pets: [
-      'https://plus.unsplash.com/premium_photo-1676389281733-aaefab0e7907', // dog on blue background
-      'https://plus.unsplash.com/premium_photo-1661676172038-377ab3d82a18', // dog + cat cuddle
-      'https://plus.unsplash.com/premium_photo-1722859221349-26353eae4744', // bulldog
       'https://images.unsplash.com/photo-1530281700549-e82e7bf110d6', // golden retriever on the beach
-      'https://plus.unsplash.com/premium_photo-1668606717900-0ecf91e55655', // dog close-up
       'https://images.unsplash.com/photo-1504826260979-242151ee45b7', // puppy on the beach
       'https://images.unsplash.com/photo-1503256207526-0d5d80fa2f47', // border collie
       'https://images.unsplash.com/photo-1557495235-340eb888a9fb', // woman with black lab
       'https://images.unsplash.com/photo-1504595403659-9088ce801e29', // two happy dogs
       'https://images.unsplash.com/photo-1559190394-df5a28aab5c5', // spaniel out the car window
       'https://images.unsplash.com/photo-1510771463146-e89e6e86560e', // golden with a flower
-      'https://plus.unsplash.com/premium_photo-1661892088256-0a17130b3d0d', // jack russell puppy
     ],
   };
   const CATS = Object.keys(POOL);
