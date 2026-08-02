@@ -143,9 +143,65 @@
     return _cache[key];
   }
 
+  // Products without a photoreal template are drawn programmatically
+  // (frame + photo + shadow on a transparent canvas, cropped tight like the
+  // template composites so the sizing system treats them the same).
+  const DRAWN_CARDS = {
+    framedcanvas: { kind: 'framedcanvas' },
+    acrylic: { kind: 'acrylic' },
+  };
+  async function loadCardPhoto(photoUrl, fallbackUrl) {
+    try { return await loadImg(photoUrl, true); }
+    catch (_) { if (fallbackUrl) { try { return await loadImg(fallbackUrl, true); } catch (_) {} } }
+    return null;
+  }
+  function coverDraw(ctx, photo, x, y, w, h) {
+    const pa = photo.naturalWidth / photo.naturalHeight, ra = w / h;
+    let dw, dh;
+    if (pa > ra) { dh = h; dw = dh * pa; } else { dw = w; dh = dw / pa; }
+    ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    ctx.drawImage(photo, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+    ctx.restore();
+  }
+  async function drawSimpleCard(cv, kind, photoUrl, fallbackUrl) {
+    const photo = await loadCardPhoto(photoUrl, fallbackUrl);
+    if (!photo) throw new Error('No sample photo available');
+    const artW = 660, artH = 880;                    // 3:4 portrait product
+    const frame = kind === 'framedcanvas' ? 36 : 0;  // classic-frame face
+    const gap = kind === 'framedcanvas' ? 14 : 0;    // shadowed frame→canvas gap
+    const M = 52;                                    // margin for the cast shadow
+    const pw = artW + 2 * (frame + gap), ph = artH + 2 * (frame + gap);
+    cv.width = pw + 2 * M; cv.height = ph + 2 * M;
+    const ctx = cv.getContext('2d');
+    const x = M, y = M;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.24)';
+    ctx.shadowBlur = 34; ctx.shadowOffsetX = 10; ctx.shadowOffsetY = 24;
+    ctx.fillStyle = kind === 'framedcanvas' ? '#141414' : '#ffffff';
+    ctx.fillRect(x, y, pw, ph);
+    ctx.restore();
+    if (kind === 'framedcanvas') {
+      ctx.fillStyle = 'rgba(0,0,0,0.30)';
+      ctx.fillRect(x + frame, y + frame, pw - 2 * frame, ph - 2 * frame);
+      coverDraw(ctx, photo, x + frame + gap, y + frame + gap, artW, artH);
+    } else {
+      coverDraw(ctx, photo, x, y, pw, ph);
+      // acrylic gloss: diagonal sheen + bright polished edge
+      const sheen = ctx.createLinearGradient(x, y, x + pw, y + ph);
+      sheen.addColorStop(0, 'rgba(255,255,255,0.18)');
+      sheen.addColorStop(0.35, 'rgba(255,255,255,0.02)');
+      sheen.addColorStop(0.55, 'rgba(255,255,255,0.10)');
+      sheen.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = sheen; ctx.fillRect(x, y, pw, ph);
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 4;
+      ctx.strokeRect(x + 2, y + 2, pw - 4, ph - 4);
+    }
+  }
+
   // Draws template + photo into `cv`. Resolves once the template is drawn; if
   // the photo can't load, the template's own baked photo stays visible.
   window.drawProductCardMockup = async function (cv, productId, photoUrl, fallbackUrl) {
+    if (DRAWN_CARDS[productId]) return drawSimpleCard(cv, DRAWN_CARDS[productId].kind, photoUrl, fallbackUrl);
     const mk = CARD_MOCKUPS[productId];
     if (!mk) throw new Error('No card mockup for ' + productId);
     // Resolve BOTH images before drawing anything, and never show the
