@@ -224,7 +224,18 @@
         font-size: 13px; font-weight: 600;
         color: rgba(255,255,255,0.85);
       }
-      /* Scroll-driven hero variant (?hero=scroll) */
+      .scroll-cue {
+        display: none; margin: 10px auto 0; width: 22px;
+        opacity: 0.8; transition: opacity 0.4s;
+        animation: cuebounce 1.7s ease-in-out infinite;
+      }
+      body.hero-scroll .scroll-cue { display: block; }
+      @keyframes cuebounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(7px); }
+      }
+      @media (prefers-reduced-motion: reduce) { .scroll-cue { animation: none; } }
+      /* Scroll-driven hero (default). ?hero=drag switches to the draggable version. */
       body.hero-scroll .hero-sticky-wrap { height: 210vh; }
       body.hero-scroll .hero { position: sticky; top: 0; min-height: 100vh; justify-content: center; }
       body.hero-scroll .demo-phone { cursor: default; }
@@ -445,7 +456,8 @@
             </div>
           </div>
         </div>
-        <div class="demo-caption">Try it &mdash; tap Scan, then drag the phone over the picture.</div>
+        <div class="demo-caption" id="demo-caption">Scroll &mdash; watch the picture come to life.</div>
+        <div class="scroll-cue" id="scroll-cue"><svg width="22" height="12" viewBox="0 0 22 12" fill="none"><path d="M2 2l9 8 9-8" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
       </div>
 
       <div class="hero-ctas">
@@ -736,8 +748,8 @@
           raf = requestAnimationFrame(step);
         }
 
-        var scrollMode = false;
-        try { scrollMode = new URLSearchParams(location.search).get('hero') === 'scroll'; } catch (e) {}
+        var scrollMode = true;
+        try { scrollMode = new URLSearchParams(location.search).get('hero') !== 'drag'; } catch (e) {}
 
         function targetPos() {
           var r = sceneRect();
@@ -758,11 +770,18 @@
           var max = wrap.offsetHeight - window.innerHeight;
           if (max <= 0) return;
           var k = Math.max(0, Math.min(1, window.scrollY / max));
-          if (k > 0.1) startScanning();
-          k = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+          if (k > 0.06) startScanning();
+          else if (k <= 0.02 && scanning) {
+            scanning = false;
+            scene.classList.remove('scanning');
+          }
+          var cue = document.getElementById('scroll-cue');
+          if (cue) cue.style.opacity = k > 0.15 ? '0' : '';
+          var m = Math.min(1, k / 0.72);
+          m = m < 0.5 ? 2 * m * m : 1 - Math.pow(-2 * m + 2, 2) / 2;
           var sp = startPos(), tp = targetPos();
-          px = sp.x + (tp.x - sp.x) * k;
-          py = sp.y + (tp.y - sp.y) * k;
+          px = sp.x + (tp.x - sp.x) * m;
+          py = sp.y + (tp.y - sp.y) * m;
           render();
         }
 
@@ -772,11 +791,11 @@
           render();
           if (scrollMode) {
             document.body.classList.add('hero-scroll');
-            var cap = document.querySelector('.demo-caption');
-            if (cap) cap.textContent = 'Scroll \u2014 watch the picture come to life.';
             window.addEventListener('scroll', onScroll, { passive: true });
             onScroll();
           } else if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            var cap = document.getElementById('demo-caption');
+            if (cap) cap.innerHTML = 'Try it &mdash; tap Scan, then drag the phone over the picture.';
             autoTimer = setTimeout(autoDemo, 1400);
           }
         }
