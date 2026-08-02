@@ -241,7 +241,7 @@
           `<div class="cm-page cm-photo"></div>`;
         // Unsplash photo with the bundled sample as an offline/blocked fallback.
         const photoDiv = wrapEl.querySelector('.cm-photo');
-        const FALLBACK = '/assets/sample-leopard.jpg';
+        const FALLBACK = '/assets/sample-photo.jpg';
         const im = new Image();
         im.onload = () => { photoDiv.style.backgroundImage = `url('${im.src}')`; };
         im.onerror = () => { if (im.src !== location.origin + FALLBACK) im.src = FALLBACK; };
@@ -271,7 +271,7 @@
           const badge = p.badge ? `<span class="cat-badge">${p.badge}</span>` : '';
           const cta = p.kind === 'build' ? 'See more details' : 'See more details and pricing';
           card.innerHTML =
-            `<div class="cat-thumb">${p.mockup ? `<img src="${p.mockup}" alt="${p.name}" loading="lazy">` : ''}</div>` +
+            `<div class="cat-thumb"></div>` +
             `<div class="cat-name">${p.name}${badge}</div>` +
             `<div class="cat-desc">${p.desc}</div>` +
             `<div class="cat-from">${cta} &rarr;</div>`;
@@ -280,11 +280,10 @@
             thumb.appendChild(calendarCardMockup(samples[i]));
           } else if (window.drawProductCardMockup) {
             // Composite the sample photo into the real Prodigi product template.
-            // The template <img> stays until the canvas is ready; if the photo
-            // can't load (offline), the canvas still shows the plain template.
+            // The stage stays empty (plain gray) until the finished canvas is
+            // ready — never a flash of the template's own baked sample shot.
             const cv = document.createElement('canvas');
-            window.drawProductCardMockup(cv, p.id, samples[i]).then(() => {
-              thumb.innerHTML = '';
+            window.drawProductCardMockup(cv, p.id, samples[i], '/assets/sample-photo.jpg').then(() => {
               thumb.appendChild(cv);
             }).catch(() => {});
           }
