@@ -836,23 +836,28 @@
           builderEl.style.display = 'none';
           setChrome(false);
           // Intro preview: composite a random sample photo onto the book
-          // mockup. The stage stays plain gray until it's ready — and if even
-          // the bundled fallback photo fails, it just stays gray.
-          if (window.drawProductCardMockup && window.unsplashSample) {
-            const stage = document.querySelector('#book-intro .bi-stage');
+          // mockup, re-rendered for the selected size (landscape template vs
+          // drawn square book). The stage stays plain gray until it's ready.
+          // The square displays at ~71% of the landscape width so both read at
+          // the same physical scale (8.3" tall either way).
+          const introStage = document.querySelector('#book-intro .bi-stage');
+          const introSample = window.unsplashSample ? window.unsplashSample(1100) : null;
+          function renderIntroBook() {
+            if (!window.drawProductCardMockup || !introSample || !introStage) return;
             const cv = document.createElement('canvas');
-            window.drawProductCardMockup(cv, 'book', window.unsplashSample(1100), '/assets/sample-photo.jpg').then(() => {
-              // The canvas is cropped to the book itself — size it to match the
-              // storefront card's product size (~350px tall).
-              cv.style.cssText = 'max-width:100%;max-height:350px;display:block;';
-              stage.innerHTML = '';
-              stage.appendChild(cv);
+            const square = bookSize === 'square-8x8';
+            window.drawProductCardMockup(cv, square ? 'book-square' : 'book', introSample, '/assets/sample-photo.jpg').then(() => {
+              cv.style.cssText = (square ? 'max-width:71%;' : 'max-width:100%;') + 'max-height:350px;display:block;';
+              introStage.innerHTML = '';
+              introStage.appendChild(cv);
             }).catch(() => {});
           }
+          renderIntroBook();
           // Size chips on the intro — applies immediately (builder re-renders on start).
           document.querySelectorAll('#bi-sizes .bi-size').forEach(chip => chip.addEventListener('click', () => {
             document.querySelectorAll('#bi-sizes .bi-size').forEach(x => x.classList.toggle('active', x === chip));
             applyBookSize(chip.dataset.size);
+            renderIntroBook();
           }));
           const startBtn = document.getElementById('start-book-btn');
           if (startBtn) startBtn.addEventListener('click', () => {
