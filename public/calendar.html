@@ -173,14 +173,11 @@
       }
       .pf-add svg { width: 44px; height: 44px; }
       .photo-frame.place-target { outline: 3px solid #7657FC; outline-offset: -3px; }
-      /* Popcode tag on a linked photo page — bottom-right, where the printed
-         scan badge lands (same as the book maker's slot tag). */
-      .pf-tag {
-        position: absolute; bottom: 8px; right: 8px; padding: 3px 9px; border-radius: 999px;
-        font-size: 10px; font-weight: 700; color: white; display: flex; align-items: center; gap: 4px;
-        background: linear-gradient(135deg,#7657FC,#589AF9); box-shadow: 0 1px 4px rgba(0,0,0,0.25); z-index: 2;
-      }
-      .pf-tag img { width: 11px; height: 11px; }
+      /* Popcode scan badge on a linked photo page — the REAL badge at exactly
+         the size/position the print PDF bakes it (the page is a fixed 1400×993
+         canvas, so the geometry matches the print 1:1). */
+      .pf-badge { position: absolute; z-index: 2; pointer-events: none; }
+      .pf-badge img { width: 100%; height: 100%; display: block; }
       .tray-thumb .pop-dot {
         position: absolute; bottom: 4px; left: 4px; width: 16px; height: 16px; border-radius: 50%;
         background: linear-gradient(135deg,#7657FC,#589AF9); display: flex; align-items: center; justify-content: center;
@@ -729,10 +726,13 @@
         // Popcode tag (builder-only; the print pass replaces it with the badge).
         const p = photoId && photos.get(photoId);
         if (url && photoHasMedia(p)) {
-          const tag = document.createElement('div');
-          tag.className = 'pf-tag';
-          tag.innerHTML = `<img src="/assets/popcode_icon.svg" alt=""/>${p.popcode.mediaType === 'audio' ? 'Audio' : 'Video'}`;
-          inner.appendChild(tag);
+          const size = Math.round(PRINT.PXH * 0.09), pad = Math.round(size * 0.5);
+          const badge = document.createElement('div');
+          badge.className = 'pf-badge';
+          badge.title = p.popcode.mediaType === 'audio' ? 'Popcode — plays audio when scanned' : 'Popcode — plays video when scanned';
+          badge.style.cssText = `right:${pad}px;bottom:${pad}px;width:${size}px;height:${size}px;`;
+          badge.innerHTML = '<img src="/assets/popcode_icon.svg" alt=""/>';
+          inner.appendChild(badge);
         }
         if (!url) {
           const add = document.createElement('div');
@@ -1690,13 +1690,13 @@
         addUnit((inner) => buildBackInner(inner));
 
         // Bake the scan badge onto popcoded photo pages (bottom-right, replacing
-        // the builder-only .pf-tag pill — html2canvas needs the PNG data-URL).
+        // the on-screen SVG badge — html2canvas needs the PNG data-URL).
         const hasPopcodes = popcodedIdsInOrder().length > 0;
         const badgePng = hasPopcodes ? await rasterizeBadge() : null;
         units.forEach(unit => {
-          const tag = unit.querySelector('.pf-tag');
+          const tag = unit.querySelector('.pf-badge');
           if (!tag) return;
-          tag.remove();
+          tag.remove(); // swap the SVG badge for a PNG (html2canvas drops external SVGs)
           if (!badgePng) return;
           const size = Math.round(PRINT.PXH * 0.09);
           const pad = Math.round(size * 0.5);
