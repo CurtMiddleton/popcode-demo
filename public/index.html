@@ -74,7 +74,7 @@
       .demo-wrap { margin-bottom: 44px; }
       .demo-scene {
         position: relative;
-        width: 410px; height: 440px;
+        width: 490px; height: 450px;
         margin: 0 auto;
       }
       .demo-frame {
@@ -134,10 +134,47 @@
         from { transform: scale(1.02); }
         to   { transform: scale(1.18) translate(2%, -2%); }
       }
+      .demo-home {
+        position: absolute; inset: 0; z-index: 4;
+        background: linear-gradient(160deg, #5bc8f5 0%, #7c3aed 100%);
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 10px; padding: 14px;
+        opacity: 1; transition: opacity 0.35s;
+      }
+      .demo-scene.scanning .demo-home { opacity: 0; pointer-events: none; }
+      .demo-home img { width: 62%; display: block; }
+      .demo-home-tag {
+        font-family: 'CooperBT', serif; font-weight: 300;
+        font-size: 11px; line-height: 1.2; color: #fff; text-align: center;
+        opacity: 0.92;
+      }
+      .demo-scan-btn {
+        margin-top: 6px;
+        border: none; border-radius: 999px;
+        background: #fff; color: #6a30e8;
+        font-family: 'Inter', sans-serif;
+        font-size: 10px; font-weight: 700;
+        padding: 8px 16px; cursor: pointer;
+        transition: transform 0.15s;
+      }
+      .demo-scan-btn.pressed, .demo-scan-btn:active { transform: scale(0.92); }
+      .demo-scanhint {
+        position: absolute; left: 50%; bottom: 12px; z-index: 3;
+        transform: translateX(-50%);
+        background: rgba(20, 16, 30, 0.7);
+        color: rgba(255,255,255,0.95);
+        font-size: 9px; font-weight: 600;
+        padding: 6px 11px; border-radius: 999px;
+        white-space: nowrap;
+        opacity: 0; transition: opacity 0.3s;
+        pointer-events: none;
+      }
+      .demo-scene.scanning .demo-scanhint { opacity: 1; }
+      .demo-scene.found .demo-scanhint, .demo-scene.playing .demo-scanhint { opacity: 0; }
       .demo-notch {
         position: absolute; top: 9px; left: 50%; transform: translateX(-50%);
         width: 52px; height: 13px; border-radius: 999px;
-        background: #16121f; z-index: 5;
+        background: #16121f; z-index: 6;
       }
       .demo-play {
         position: absolute; inset: 0; z-index: 3;
@@ -355,7 +392,7 @@
       }
       @media (max-width: 520px) {
         .uc-grid { grid-template-columns: 1fr; }
-        .demo-scene { width: 320px; height: 356px; }
+        .demo-scene { width: 348px; height: 366px; }
         .demo-frame { width: 205px; padding: 9px 9px 11px; }
         .demo-badge { width: 24px; height: 24px; right: 16px; bottom: 18px; }
         .demo-phone { width: 132px; height: 266px; border-radius: 26px; padding: 7px; }
@@ -384,8 +421,14 @@
               <div class="demo-view">
                 <img class="demo-view-img" id="demo-view-img" src="https://images.unsplash.com/photo-1561525140-c2a4cc68e4bd?auto=format&fit=crop&w=500&q=80" alt=""/>
               </div>
+              <div class="demo-scanhint">Point at a picture</div>
               <div class="demo-live" id="demo-live">
                 <img src="https://images.unsplash.com/photo-1561525140-c2a4cc68e4bd?auto=format&fit=crop&w=500&q=80" alt=""/>
+              </div>
+              <div class="demo-home" id="demo-home">
+                <img src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
+                <div class="demo-home-tag">Your Stories.<br>Brought to Life.</div>
+                <button class="demo-scan-btn" id="demo-scan-btn" type="button">Tap to Scan</button>
               </div>
               <div class="demo-notch"></div>
               <div class="demo-play">
@@ -402,7 +445,7 @@
             </div>
           </div>
         </div>
-        <div class="demo-caption">Try it &mdash; drag the phone over the picture.</div>
+        <div class="demo-caption">Try it &mdash; tap Scan, then drag the phone over the picture.</div>
       </div>
 
       <div class="hero-ctas">
@@ -563,7 +606,9 @@
           liveEl.appendChild(video);
         }
 
+        var scanBtn = document.getElementById('demo-scan-btn');
         var px = 0, py = 0, rot = 4;
+        var scanning = false;
         var dragging = false, found = false, interacted = false;
         var dragOffX = 0, dragOffY = 0;
         var autoTimer = null, raf = null, playTimer = null;
@@ -588,7 +633,14 @@
           viewImg.style.transform = 'translate(' + tx + 'px,' + ty + 'px)';
         }
 
+        function startScanning() {
+          if (scanning) return;
+          scanning = true;
+          scene.classList.add('scanning');
+        }
+
         function checkFound() {
+          if (!scanning) return;
           var sr = screenEl.getBoundingClientRect();
           var fr = photoEl.getBoundingClientRect();
           var ix = Math.max(0, Math.min(sr.right, fr.right) - Math.max(sr.left, fr.left));
@@ -618,9 +670,16 @@
           }
         }
 
+        scanBtn.addEventListener('click', function () {
+          interacted = true;
+          clearTimeout(autoTimer);
+          startScanning();
+        });
+
         phone.addEventListener('pointerdown', function (e) {
           if (scrollMode) return;
           interacted = true;
+          startScanning();
           clearTimeout(autoTimer);
           if (raf) cancelAnimationFrame(raf);
           dragging = true;
@@ -649,11 +708,21 @@
         // visitors see the magic even if they never touch it.
         function autoDemo() {
           if (interacted) return;
+          scanBtn.classList.add('pressed');
+          setTimeout(function () {
+            scanBtn.classList.remove('pressed');
+            if (interacted) return;
+            startScanning();
+            setTimeout(function () { if (!interacted) glide(); }, 420);
+          }, 320);
+        }
+
+        function glide() {
           var r = sceneRect();
           var fr = photoEl.getBoundingClientRect();
           var targetX = fr.left - r.left + fr.width / 2 - phone.offsetWidth / 2 + 26;
           var targetY = fr.top - r.top + fr.height / 2 - phone.offsetHeight / 2 + 18;
-          var sx = px, sy = py, dur = 1800, t0 = null;
+          var sx = px, sy = py, dur = 2400, t0 = null;
           function step(t) {
             if (interacted) return;
             if (t0 === null) t0 = t;
@@ -681,7 +750,7 @@
 
         function startPos() {
           var r = sceneRect();
-          return { x: r.width - phone.offsetWidth - 6, y: r.height - phone.offsetHeight };
+          return { x: r.width - phone.offsetWidth, y: r.height - phone.offsetHeight - 6 };
         }
 
         function onScroll() {
@@ -689,6 +758,7 @@
           var max = wrap.offsetHeight - window.innerHeight;
           if (max <= 0) return;
           var k = Math.max(0, Math.min(1, window.scrollY / max));
+          if (k > 0.1) startScanning();
           k = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
           var sp = startPos(), tp = targetPos();
           px = sp.x + (tp.x - sp.x) * k;
