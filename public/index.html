@@ -70,7 +70,7 @@
         margin-bottom: 40px;
       }
 
-      /* Hero demo: a phone scanning a framed print */
+      /* Hero demo: drag the phone over the print and it plays */
       .demo-wrap { margin-bottom: 44px; }
       .demo-scene {
         position: relative;
@@ -94,31 +94,59 @@
         width: 30px; height: 30px;
       }
       .demo-phone {
-        position: absolute; right: 6px; bottom: 0;
+        position: absolute; left: 0; top: 0;
         width: 164px; height: 330px;
         background: #16121f;
         border-radius: 32px;
         padding: 9px;
         box-shadow: 0 34px 70px rgba(10, 5, 40, 0.5);
-        transform: rotate(4deg);
         z-index: 2;
+        cursor: grab;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        will-change: transform;
       }
+      .demo-phone.grabbing { cursor: grabbing; }
       .demo-phone-screen {
         position: relative; width: 100%; height: 100%;
-        border-radius: 24px; overflow: hidden; background: #000;
+        border-radius: 24px; overflow: hidden;
+        background: linear-gradient(160deg, #4a3f8f 0%, #2c2350 100%);
       }
-      .demo-phone-screen img {
+      .demo-view { position: absolute; inset: 0; overflow: hidden; }
+      .demo-view-img {
+        position: absolute; left: 0; top: 0;
+        transform-origin: top left;
+        will-change: transform;
+        pointer-events: none;
+      }
+      .demo-live {
+        position: absolute; inset: 0; z-index: 2;
+        opacity: 0; transition: opacity 0.4s;
+        pointer-events: none;
+      }
+      .demo-live img, .demo-live video {
         width: 100%; height: 100%; object-fit: cover; display: block;
+      }
+      .demo-scene.playing .demo-live { opacity: 1; }
+      .demo-scene.playing .demo-live img { animation: kenburns 7s ease-in-out infinite alternate; }
+      @keyframes kenburns {
+        from { transform: scale(1.02); }
+        to   { transform: scale(1.18) translate(2%, -2%); }
       }
       .demo-notch {
         position: absolute; top: 9px; left: 50%; transform: translateX(-50%);
         width: 52px; height: 13px; border-radius: 999px;
-        background: #16121f; z-index: 4;
+        background: #16121f; z-index: 5;
       }
       .demo-play {
         position: absolute; inset: 0; z-index: 3;
         display: flex; align-items: center; justify-content: center;
+        opacity: 0; transition: opacity 0.25s;
+        pointer-events: none;
       }
+      .demo-scene.found .demo-play { opacity: 1; }
+      .demo-scene.playing .demo-play { opacity: 0; }
       .demo-play-btn {
         position: relative;
         width: 54px; height: 54px; border-radius: 50%;
@@ -133,33 +161,39 @@
         border-radius: 50%;
         border: 2px solid rgba(255,255,255,0.9);
         pointer-events: none;
-        animation: ringpulse 2.6s ease-out infinite;
+        animation: ringpulse 1.6s ease-out infinite;
       }
-      .demo-ring.r2 { animation-delay: 1.3s; }
+      .demo-ring.r2 { animation-delay: 0.8s; }
       @keyframes ringpulse {
         0%   { transform: scale(0.9); opacity: 0.9; }
         100% { transform: scale(2.4); opacity: 0; }
       }
       .demo-chip {
         position: absolute; left: 50%; bottom: 12px; z-index: 4;
-        transform: translateX(-50%);
+        transform: translate(-50%, 6px);
         background: rgba(20, 16, 30, 0.85);
         color: #fff;
         font-size: 9px; font-weight: 600;
         padding: 6px 10px; border-radius: 999px; max-width: 92%;
         white-space: nowrap;
         display: flex; align-items: center; gap: 6px;
-        animation: chipin 5.2s ease-in-out infinite;
+        opacity: 0; transition: opacity 0.35s, transform 0.35s;
+        pointer-events: none;
       }
+      .demo-scene.playing .demo-chip { opacity: 1; transform: translate(-50%, 0); }
       .demo-chip svg { flex-shrink: 0; width: 8px; height: 9px; }
-      @keyframes chipin {
-        0%, 8%   { opacity: 0; transform: translate(-50%, 6px); }
-        18%, 88% { opacity: 1; transform: translate(-50%, 0); }
-        96%, 100%{ opacity: 0; transform: translate(-50%, 6px); }
+      .demo-caption {
+        margin-top: 16px;
+        font-size: 13px; font-weight: 600;
+        color: rgba(255,255,255,0.85);
       }
+      /* Scroll-driven hero variant (?hero=scroll) */
+      body.hero-scroll .hero-sticky-wrap { height: 210vh; }
+      body.hero-scroll .hero { position: sticky; top: 0; min-height: 100vh; justify-content: center; }
+      body.hero-scroll .demo-phone { cursor: default; }
       @media (prefers-reduced-motion: reduce) {
-        .demo-ring, .demo-chip { animation: none; }
-        .demo-chip { opacity: 1; }
+        .demo-ring { animation: none; }
+        .demo-scene.playing .demo-live img { animation: none; }
       }
 
       .hero-ctas { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-bottom: 44px; }
@@ -332,6 +366,7 @@
   <body>
 
     <!-- ============ HERO ============ -->
+    <div class="hero-sticky-wrap">
     <header class="hero">
       <img src="/assets/Popcode_logo.rev.svg" alt="Popcode" class="logo"/>
 
@@ -339,14 +374,19 @@
       <p class="hero-sub">A photo on the fridge. A painting on a gallery wall. A page in grandma&rsquo;s album. Point your phone at any of them and the story plays &mdash; her voice, that day, the moment itself. Nothing to download.</p>
 
       <div class="demo-wrap">
-        <div class="demo-scene">
-          <div class="demo-frame">
-            <img class="demo-photo" src="https://images.unsplash.com/photo-1561525140-c2a4cc68e4bd?auto=format&fit=crop&w=700&q=80" alt="A framed family photo"/>
+        <div class="demo-scene" id="demo-scene">
+          <div class="demo-frame" id="demo-frame">
+            <img class="demo-photo" id="demo-photo" src="https://images.unsplash.com/photo-1561525140-c2a4cc68e4bd?auto=format&fit=crop&w=700&q=80" alt="A framed family photo"/>
             <img class="demo-badge" src="/assets/popcode_icon.svg" alt=""/>
           </div>
-          <div class="demo-phone">
+          <div class="demo-phone" id="demo-phone">
             <div class="demo-phone-screen">
-              <img src="https://images.unsplash.com/photo-1561525140-c2a4cc68e4bd?auto=format&fit=crop&w=500&q=80" alt="The same photo playing on a phone screen"/>
+              <div class="demo-view">
+                <img class="demo-view-img" id="demo-view-img" src="https://images.unsplash.com/photo-1561525140-c2a4cc68e4bd?auto=format&fit=crop&w=500&q=80" alt=""/>
+              </div>
+              <div class="demo-live" id="demo-live">
+                <img src="https://images.unsplash.com/photo-1561525140-c2a4cc68e4bd?auto=format&fit=crop&w=500&q=80" alt=""/>
+              </div>
               <div class="demo-notch"></div>
               <div class="demo-play">
                 <div class="demo-play-btn">
@@ -362,6 +402,7 @@
             </div>
           </div>
         </div>
+        <div class="demo-caption">Try it &mdash; drag the phone over the picture.</div>
       </div>
 
       <div class="hero-ctas">
@@ -379,6 +420,7 @@
 
       <a href="/manage.html" class="signin-link">Already have an account? <span>Sign in</span></a>
     </header>
+    </div>
 
     <!-- ============ HOW IT WORKS ============ -->
     <section class="band cream">
@@ -501,6 +543,176 @@
       document.getElementById('code-input').addEventListener('keydown', e => {
         if (e.key === 'Enter') goToCode();
       });
+
+      // ---- Interactive hero demo: drag the phone over the print ----
+      (function () {
+        var DEMO_VIDEO_URL = ''; // set to an mp4 URL to play a real clip on recognition
+        var scene = document.getElementById('demo-scene');
+        if (!scene) return;
+        var phone = document.getElementById('demo-phone');
+        var screenEl = phone.querySelector('.demo-phone-screen');
+        var photoEl = document.getElementById('demo-photo');
+        var viewImg = document.getElementById('demo-view-img');
+        var liveEl = document.getElementById('demo-live');
+        var video = null;
+        if (DEMO_VIDEO_URL) {
+          liveEl.innerHTML = '';
+          video = document.createElement('video');
+          video.muted = true; video.loop = true; video.playsInline = true;
+          video.setAttribute('playsinline', ''); video.preload = 'none';
+          liveEl.appendChild(video);
+        }
+
+        var px = 0, py = 0, rot = 4;
+        var dragging = false, found = false, interacted = false;
+        var dragOffX = 0, dragOffY = 0;
+        var autoTimer = null, raf = null, playTimer = null;
+
+        function sceneRect() { return scene.getBoundingClientRect(); }
+
+        function render() {
+          phone.style.transform = 'translate(' + px + 'px,' + py + 'px) rotate(' + rot + 'deg)';
+          updateCamera();
+          checkFound();
+        }
+
+        function updateCamera() {
+          var sr = screenEl.getBoundingClientRect();
+          var fr = photoEl.getBoundingClientRect();
+          var z = 1.15;
+          var cx = sr.left + sr.width / 2, cy = sr.top + sr.height / 2;
+          var tx = (fr.left - cx) * z + sr.width / 2;
+          var ty = (fr.top - cy) * z + sr.height / 2;
+          viewImg.style.width = (fr.width * z) + 'px';
+          viewImg.style.height = (fr.height * z) + 'px';
+          viewImg.style.transform = 'translate(' + tx + 'px,' + ty + 'px)';
+        }
+
+        function checkFound() {
+          var sr = screenEl.getBoundingClientRect();
+          var fr = photoEl.getBoundingClientRect();
+          var ix = Math.max(0, Math.min(sr.right, fr.right) - Math.max(sr.left, fr.left));
+          var iy = Math.max(0, Math.min(sr.bottom, fr.bottom) - Math.max(sr.top, fr.top));
+          var cover = (ix * iy) / (sr.width * sr.height);
+          var nowFound = cover > 0.55;
+          if (nowFound && !found) {
+            found = true;
+            scene.classList.add('found');
+            playTimer = setTimeout(startPlaying, 700);
+          } else if (!nowFound && found) {
+            found = false;
+            clearTimeout(playTimer);
+            scene.classList.remove('found');
+            scene.classList.remove('playing');
+            if (video) video.pause();
+          }
+        }
+
+        function startPlaying() {
+          if (!found) return;
+          scene.classList.add('playing');
+          if (video) {
+            if (!video.src) video.src = DEMO_VIDEO_URL;
+            try { video.currentTime = 0; } catch (e) {}
+            video.play().catch(function () {});
+          }
+        }
+
+        phone.addEventListener('pointerdown', function (e) {
+          if (scrollMode) return;
+          interacted = true;
+          clearTimeout(autoTimer);
+          if (raf) cancelAnimationFrame(raf);
+          dragging = true;
+          try { phone.setPointerCapture(e.pointerId); } catch (err) {}
+          var r = sceneRect();
+          dragOffX = e.clientX - r.left - px;
+          dragOffY = e.clientY - r.top - py;
+          phone.classList.add('grabbing');
+          e.preventDefault();
+        });
+        phone.addEventListener('pointermove', function (e) {
+          if (!dragging) return;
+          var r = sceneRect();
+          var x = e.clientX - r.left - dragOffX;
+          var y = e.clientY - r.top - dragOffY;
+          x = Math.max(-30, Math.min(r.width - phone.offsetWidth + 30, x));
+          y = Math.max(-20, Math.min(r.height - phone.offsetHeight + 20, y));
+          px = x; py = y;
+          render();
+        });
+        function endDrag() { dragging = false; phone.classList.remove('grabbing'); }
+        phone.addEventListener('pointerup', endDrag);
+        phone.addEventListener('pointercancel', endDrag);
+
+        // Auto-demo: after a beat, glide the phone onto the picture so
+        // visitors see the magic even if they never touch it.
+        function autoDemo() {
+          if (interacted) return;
+          var r = sceneRect();
+          var fr = photoEl.getBoundingClientRect();
+          var targetX = fr.left - r.left + fr.width / 2 - phone.offsetWidth / 2 + 26;
+          var targetY = fr.top - r.top + fr.height / 2 - phone.offsetHeight / 2 + 18;
+          var sx = px, sy = py, dur = 1800, t0 = null;
+          function step(t) {
+            if (interacted) return;
+            if (t0 === null) t0 = t;
+            var k = Math.min(1, (t - t0) / dur);
+            k = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+            px = sx + (targetX - sx) * k;
+            py = sy + (targetY - sy) * k;
+            render();
+            if (k < 1) raf = requestAnimationFrame(step);
+          }
+          raf = requestAnimationFrame(step);
+        }
+
+        var scrollMode = false;
+        try { scrollMode = new URLSearchParams(location.search).get('hero') === 'scroll'; } catch (e) {}
+
+        function targetPos() {
+          var r = sceneRect();
+          var fr = photoEl.getBoundingClientRect();
+          return {
+            x: fr.left - r.left + fr.width / 2 - phone.offsetWidth / 2 + 26,
+            y: fr.top - r.top + fr.height / 2 - phone.offsetHeight / 2 + 18
+          };
+        }
+
+        function startPos() {
+          var r = sceneRect();
+          return { x: r.width - phone.offsetWidth - 6, y: r.height - phone.offsetHeight };
+        }
+
+        function onScroll() {
+          var wrap = document.querySelector('.hero-sticky-wrap');
+          var max = wrap.offsetHeight - window.innerHeight;
+          if (max <= 0) return;
+          var k = Math.max(0, Math.min(1, window.scrollY / max));
+          k = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+          var sp = startPos(), tp = targetPos();
+          px = sp.x + (tp.x - sp.x) * k;
+          py = sp.y + (tp.y - sp.y) * k;
+          render();
+        }
+
+        function init() {
+          var sp = startPos();
+          px = sp.x; py = sp.y;
+          render();
+          if (scrollMode) {
+            document.body.classList.add('hero-scroll');
+            var cap = document.querySelector('.demo-caption');
+            if (cap) cap.textContent = 'Scroll \u2014 watch the picture come to life.';
+            window.addEventListener('scroll', onScroll, { passive: true });
+            onScroll();
+          } else if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            autoTimer = setTimeout(autoDemo, 1400);
+          }
+        }
+        window.addEventListener('resize', render);
+        init();
+      })();
 
       // Logged-in touch: if a Supabase session exists, greet instead of asking to sign in.
       try {
