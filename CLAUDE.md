@@ -1215,6 +1215,8 @@ Apple-Photos-style memory video maker built into the Create flow. On a page's vi
 
 **Queued follow-ups:** per-product sample shots; delete the dead scene code in order.html in a cleanup pass; confirm the one-off "black bars on a canvas review preview" (old render path) is gone with `renderProductOnly` (if it recurs it's a crop-vs-letterbox thing in `compositeBadgedImage`).
 
+**UPDATE — superseded by later same-day parallel sessions:** the `sample-leopard.jpg` / `SAMPLE_PHOTO` mechanism described above was retired shortly after — parallel sessions swapped to a curated Unsplash sample pool (commits `e0f2b0e`, `11f9da0`, `3f1f1f1`) and evolved the shop further (new products: mounted framed prints / framed canvas / acrylic; frame-colour options; square tiles; calendars). Trust the current `public/order.html` / `public/shop.html` over the leopard-sample details in this entry.
+
 ### 2026-08-18 — Analytics "Library" tab: actually view customer projects + videos (shipped to prod)
 
 **Branch `claude/customer-projects-visibility-hbmfe7` (commit `dfed14f`), merged to `main` as `a52a94e` and pushed — live in prod. One file: `public/analytics.html`.** No PR (user said "push to prod"). No schema, RLS, or env change.
