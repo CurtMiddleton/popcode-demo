@@ -1214,3 +1214,42 @@ Apple-Photos-style memory video maker built into the Create flow. On a page's vi
 **Testing reality:** order.html / book.html / manage.html are auth-gated and load supabase-js + Sentry from CDNs that are 403 in this sandbox, so I could NOT drive the live pages here. Verified via `node --check` on the extracted inline scripts (guards against the parse-error white-screen failure mode) + PIL image inspection of the crops. The USER did all live verification on the Vercel preview for the branch and iterated. When touching these files, keep syntax-checking the inline `<script>` — a single stray syntax error white-screens the whole page (see 2026-04-12 note).
 
 **Queued follow-ups:** per-product sample shots; delete the dead scene code in order.html in a cleanup pass; confirm the one-off "black bars on a canvas review preview" (old render path) is gone with `renderProductOnly` (if it recurs it's a crop-vs-letterbox thing in `compositeBadgedImage`).
+
+### 2026-08-18 — Analytics "Library" tab: actually view customer projects + videos (shipped to prod)
+
+**Branch `claude/customer-projects-visibility-hbmfe7` (commit `dfed14f`), merged to `main` as `a52a94e` and pushed — live in prod. One file: `public/analytics.html`.** No PR (user said "push to prod"). No schema, RLS, or env change.
+
+**The question that started it:** *"How can I view projects/videos of customers? I only see tiny thumbnails in the projects tab of the dashboard."* Answer at the time: **you couldn't.** Two separate limits, worth remembering because they're easy to mistake for a bug:
+1. The **Projects tab is scan analytics, not a browser.** Its "By Photo" cards come from the `get_target_scan_counts` RPC, so a project only appears if it was **scanned inside the selected date range** — a customer's project with zero scans is invisible there, by design.
+2. The 40px `.bv-thumb` was a dead end: hovering played a *muted* preview, clicking just toggled that preview. No way to reach the real photo or the video a viewer gets.
+
+**What shipped — new admin-only "Library" tab** (tab bar order: Activity Log / Overview / Projects / **Library** / Accounts / Prints / Feedback / Cost):
+- Lists **every** row in `collections`, scanned or not, newest first: cover photo, owner email, created date, photo count, video/audio breakdown, purple **Book** badge for `kind==='book'`, and a search box filtering on project name / owner email / slug.
+- Its markup (`#library-section`) is **static, outside `#main-content`** — same trick as `#cost-section` / `#prints-section` — so the range-button rebuild of `main-content` doesn't blow it away and its listeners survive. It is NOT in `RANGE_TABS`, so the date-range bar hides on it (the Library is not range-scoped; that's the whole point).
+- Loads lazily: `showTab()` calls `loadLibrary()` when `name === 'library'`.
+
+**New lightbox (`#lb`, z-index 9500)** — click a project card to page through its photos full-size with the linked **video or audio playing with sound**:
+- Video item → `<video controls autoplay playsinline>` with the photo as `poster`. Audio item → photo + `<audio controls autoplay>`. Neither → the photo alone. Nothing → a "Nothing stored for this photo" line.
+- Filmstrip of every photo along the bottom (click to jump, current one outlined), `‹ ›` buttons, **←/→ arrow keys, Esc to close**, click-the-backdrop to close, counter reading `{label} · {video|audio|photo only} · N of M`, and an **"Open viewer ↗"** link to the public `/{slug}`.
+- `lbStopMedia()` pauses + `removeAttribute('src')` + `load()`s on every navigate/close, so audio can't keep playing behind a closed overlay. `document.body.style.overflow` is locked while open.
+- **z-index 9500 is deliberate** — the Beta Feedback FAB is 9000 (see the 2026-07-06 note). Anything full-screen has to clear it.
+- The **tiny By Photo thumbnails now open this same lightbox on click** (hover still previews muted video) — the click-to-toggle-preview handler was replaced with a `.bv-thumb-wrap` click that skips `.bv-audio-btn`. `.bv-thumb-wrap` now carries `data-slug` / `data-ti`.
+
+**Two pre-existing bugs fixed in `loadThumbs()` while in there (both silent, both would have grown teeth):**
+1. **PostgREST `max-rows` truncation.** It did a plain `db.from('collections').select(...)` / `collection_items` with no paging. Supabase caps a single select at the project's `max-rows` (**default 1000**) and returns the truncated set with **no error** — so past ~1000 items the caches would quietly go incomplete (wrong thumbnails, missing projects) with nothing to notice. Added `fetchAllRows(table, cols)` that loops `.range(from, from+999)` until a short page comes back. **Use this helper for any future all-rows read.**
+2. **Cache-guard race.** The old guard flipped `cachedThumbs` from `null` to `{}` *synchronously* before the awaits, so a second caller during the in-flight fetch (Library tab clicked while `loadByVideo()`'s fetch was still running) returned instantly against **empty** caches and rendered an empty grid with no retry. Now `loadThumbs()` returns a **shared in-flight promise** (`thumbsPromise`), and clears it on error so a later click retries. `ensureUsers()` got the same treatment (`usersPromise`).
+
+`loadThumbs` also now caches `cachedCols` (the full `id, slug, name, user_id, created_at, kind` rows), not just `cachedSlugId`. Owner emails come from the existing admin `get_all_users` RPC at `max_rows: 1000` (the Accounts section still asks for 35 separately); if that RPC is missing the library degrades to showing a user-id prefix rather than breaking.
+
+**Testing — headless Chromium with a stubbed Supabase (this pattern works, reuse it):**
+`playwright-core` installed **in the scratchpad only** (never in the repo — `node_modules` is tracked here), chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, `cd public && python3 -m http.server 8099`. Then `page.route` to: abort `browser.sentry-cdn.com`, stub `/sentry-init.js` + `/beta-feedback.js` as empty, and **fulfill `**/@supabase/supabase-js@2` with a fake `window.supabase.createClient`** returning `{auth.getSession → admin session, from() → chainable thenable stub, rpc(), storage.from().list()}`. The chainable stub is the trick: every builder method (`select/order/gte/limit/eq/range`) returns the same object and `then` resolves `{data, error}`. Verified all 4 stub projects listed (incl. a never-scanned one and a book), search, video/audio/photo-only rendering, media teardown on navigate, By Photo → lightbox, empty-project guard, keyboard nav — **0 page errors**.
+
+**GOTCHA that cost a few minutes and WILL recur: the sandbox's Chromium has no H.264 decoder.** `video.canPlayType('video/mp4; codecs="avc1.42E01E"')` returns `""` and the element reports `error.code === 4` (SRC_NOT_SUPPORTED), `readyState 0`. So an mp4 will **never** play in headless testing here — that is not a code bug. Check `canPlayType` before concluding anything about playback. The only unverified thing in this feature is therefore actual video playback; told the user to eyeball it on prod.
+
+Also worth knowing: the two console errors that always show in these headless runs are `browser.sentry-cdn.com` (aborted by my own route) and `fonts.googleapis.com` (blocked in-sandbox) — both harmless, not from page code. And `/assets/photo.png` is a 512×512 *photo-placeholder icon*, not a photograph — it renders looking like a broken image in a thumbnail strip. Don't chase it.
+
+**Known limits / follow-ups:**
+- **`analytics.html` is still gated to `curtmid@gmail.com` only** (`ADMIN_EMAIL`, ~line 328) — signing in as `curt@theworkshop.works` bounces to manage.html. Offered to widen it to both admin emails (the way `edit.html` does with a 2-entry list); user hasn't said yet.
+- Library reads `collection_items`, so for **book** projects it only shows the **popcoded** photos (plain book photos live in `book_layout` jsonb + Storage and never become items — see 2026-07-06). Fine for "what does a viewer get", incomplete as a book preview.
+- Autoplay-with-sound can be refused in Safari because `openLightbox` awaits the data fetch before rendering, which breaks the user-gesture chain. `controls` are always present so it's one tap; only worth fixing if it annoys in practice.
+- The lightbox is desktop-first; it works on a phone but the filmstrip + side arrows are tight.
