@@ -14,6 +14,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <script src="/unsplash-samples.js"></script>
+    <script src="/countries.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -269,16 +270,7 @@
             </div>
             <div>
               <label for="country">Ship to (country)</label>
-              <select id="country">
-                <option value="US">United States</option>
-                <option value="CA">Canada</option>
-                <option value="GB">United Kingdom</option>
-                <option value="AU">Australia</option>
-                <option value="DE">Germany</option>
-                <option value="FR">France</option>
-                <option value="IE">Ireland</option>
-                <option value="NZ">New Zealand</option>
-              </select>
+              <select id="country"></select>
             </div>
             <div>
               <label for="shipping">Shipping</label>
@@ -293,6 +285,8 @@
           <input id="r-name" type="text" autocomplete="name"/>
           <label for="r-email">Email</label>
           <input id="r-email" type="email" autocomplete="email"/>
+          <label for="r-phone">Phone <span class="muted">(recommended — couriers and customs may need it)</span></label>
+          <input id="r-phone" type="tel" autocomplete="tel"/>
           <label for="r-line1">Address line 1</label>
           <input id="r-line1" type="text" autocomplete="address-line1"/>
           <label for="r-line2">Address line 2 (optional)</label>
@@ -303,6 +297,12 @@
             <div><label for="r-postal">Postal / ZIP</label><input id="r-postal" type="text" autocomplete="postal-code"/></div>
           </div>
         </div>
+
+        <p class="muted" id="intl-note" style="display:none;margin:-4px 0 14px;font-size:13px;line-height:1.5">
+          We print at the lab closest to your address wherever we can. If your order
+          has to cross a border, import duties or VAT may be charged on delivery and
+          are not included in the price below.
+        </p>
 
         <div class="card">
           <div class="price-row">
@@ -663,7 +663,13 @@
           }),
         });
         const data = await resp.json();
-        if (!resp.ok) throw new Error(data.error || 'Could not price this');
+        if (!resp.ok) {
+          const err = new Error(data.error || 'Could not price this');
+          // 502 = Prodigi priced nothing for this SKU/destination/method combo,
+          // which in practice means "we don't ship that there".
+          err.unservable = data.unservable === true || resp.status === 502;
+          throw err;
+        }
         return data;
       }
       function formatMoney(minor, currency) {
@@ -1397,6 +1403,8 @@
         renderChosenThumb();
       });
       document.getElementById('copies').addEventListener('input', requestQuoteDebounced);
+      if (window.popcodeFillCountrySelect) window.popcodeFillCountrySelect(document.getElementById('country'), 'US');
+      updateIntlNote(document.getElementById('country').value);
       document.getElementById('country').addEventListener('change', requestQuote);
       document.getElementById('shipping').addEventListener('change', requestQuote);
       document.getElementById('pay-btn').addEventListener('click', pay);
@@ -1408,22 +1416,41 @@
         const noteEl = document.getElementById('price-note');
         const payBtn = document.getElementById('pay-btn');
         priceEl.textContent = '…'; noteEl.textContent = 'Getting price…'; payBtn.disabled = true;
+        const country = document.getElementById('country').value;
+        updateIntlNote(country);
         try {
           const d = await quoteFor(state.productType, state.variantId, {
             copies: Math.max(1, parseInt(document.getElementById('copies').value, 10) || 1),
-            country: document.getElementById('country').value,
+            country,
             shipping: document.getElementById('shipping').value,
           });
           priceEl.textContent = formatMoney(d.total_minor, d.currency);
           noteEl.textContent = 'Incl. product, shipping & handling';
           payBtn.disabled = false;
-        } catch (e) { priceEl.textContent = '—'; noteEl.textContent = e.message; payBtn.disabled = true; }
+        } catch (e) {
+          priceEl.textContent = '—';
+          noteEl.textContent = e.unservable
+            ? `We can't ship this size to ${countryName(country)}. Try another size, or a different shipping speed.`
+            : e.message;
+          payBtn.disabled = true;
+        }
+      }
+
+      function countryName(code) {
+        return (window.popcodeCountryName ? window.popcodeCountryName(code) : code) || code;
+      }
+
+      // Duties only apply when the order may leave the country we print in.
+      function updateIntlNote(country) {
+        const note = document.getElementById('intl-note');
+        if (note) note.style.display = country && country !== 'US' ? 'block' : 'none';
       }
 
       function recipientFromForm() {
         return {
           name: document.getElementById('r-name').value.trim(),
           email: document.getElementById('r-email').value.trim(),
+          phoneNumber: document.getElementById('r-phone').value.trim(),
           address: {
             line1: document.getElementById('r-line1').value.trim(),
             line2: document.getElementById('r-line2').value.trim(),

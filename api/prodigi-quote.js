@@ -43,9 +43,13 @@ export default async function handler(req, res) {
       try {
         const quote = await prodigiQuote({ shippingMethod, destinationCountryCode, items });
         summed = sumQuoteMinor(quote);
-      } catch (err) { if (attempt === 2) throw err; }
+      } catch (err) {
+        // Unservable routes are a normal answer, not a failure — don't retry.
+        if (err.unservable) return res.status(502).json({ error: 'Could not price this product/destination', unservable: true });
+        if (attempt === 2) throw err;
+      }
     }
-    if (!summed) return res.status(502).json({ error: 'Could not price this product/destination' });
+    if (!summed) return res.status(502).json({ error: 'Could not price this product/destination', unservable: true });
 
     const total_minor = priceFromQuote(summed.totalMinor, MARKUP);
     res.status(200).json({
@@ -75,7 +79,13 @@ export async function prodigiQuote({ shippingMethod, destinationCountryCode, ite
   });
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
-    throw new Error(`Prodigi quote failed (${resp.status}): ${text.slice(0, 300)}`);
+    const err = new Error(`Prodigi quote failed (${resp.status}): ${text.slice(0, 300)}`);
+    // A 4xx is Prodigi telling us this SKU / destination / shipping-method
+    // combination isn't servable. It's deterministic, so retrying is pointless
+    // and it isn't an outage — callers surface it as an unservable route.
+    err.prodigiStatus = resp.status;
+    err.unservable = resp.status >= 400 && resp.status < 500;
+    throw err;
   }
   return resp.json();
 }
