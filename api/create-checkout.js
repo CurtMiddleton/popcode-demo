@@ -99,11 +99,22 @@ export default async function handler(req, res) {
     const items = buildProdigiItems({ variant, copies, forQuote: true, pageCount: bookPageCount });
     // Retry transient empty quotes so a Prodigi blip can't fail a paid checkout.
     let summed = null;
+    let unservable = false;
     for (let attempt = 0; attempt < 3 && !summed; attempt++) {
       try {
         const quote = await prodigiQuote({ shippingMethod, destinationCountryCode: recipient.address.countryCode, items });
         summed = sumQuoteMinor(quote);
-      } catch (err) { if (attempt === 2) throw err; }
+      } catch (err) {
+        // Deterministic "we don't ship that there" — stop retrying and say so.
+        if (err.unservable) { unservable = true; break; }
+        if (attempt === 2) throw err;
+      }
+    }
+    if (unservable) {
+      return res.status(502).json({
+        error: "We can't ship this item to that country. Try a different size or shipping speed.",
+        unservable: true,
+      });
     }
     if (!summed) return res.status(502).json({ error: 'Could not price this order' });
     const totalMinor = priceFromQuote(summed.totalMinor, MARKUP);
@@ -186,7 +197,13 @@ async function prodigiQuote({ shippingMethod, destinationCountryCode, items }) {
   });
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
-    throw new Error(`Prodigi quote failed (${resp.status}): ${text.slice(0, 300)}`);
+    const err = new Error(`Prodigi quote failed (${resp.status}): ${text.slice(0, 300)}`);
+    // A 4xx is Prodigi telling us this SKU / destination / shipping-method
+    // combination isn't servable. It's deterministic, so retrying is pointless
+    // and it isn't an outage — callers surface it as an unservable route.
+    err.prodigiStatus = resp.status;
+    err.unservable = resp.status >= 400 && resp.status < 500;
+    throw err;
   }
   return resp.json();
 }

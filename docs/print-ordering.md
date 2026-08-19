@@ -136,6 +136,52 @@ change:
 Do not reuse the previous shared account's key for Popcode — that account belongs to
 Bashō / Curt Middleton Design, LLC.
 
+## International orders
+
+Ordering is open to 231 destinations. The full list lives in `public/countries.js`
+(generated from ISO 3166-1 plus XK/Kosovo, alphabetical) and is shared by
+`order.html`, `book.html` and `calendar.html` via `popcodeFillCountrySelect()`.
+
+Excluded: uninhabited territories, and destinations under a comprehensive embargo
+or with no working payment/carrier route (CU, IR, KP, SY, RU, BY). *Targeted*
+sanctions are deliberately not grounds for exclusion — they restrict named
+individuals and entities, not ordinary retail shipping, so excluding whole
+countries over them just turns away legitimate customers.
+
+- **Coverage is offered, not guaranteed.** Prodigi decides per-SKU coverage at
+  quote time. A country appearing in the list can still fail to quote — that
+  comes back as a `502 { unservable: true }` and the customer sees "We can't ship
+  this size to {Country}" *before* payment, not a raw Prodigi error.
+- **Phone number** is collected (optional) on all three surfaces. Prodigi's docs
+  recommend it for international orders; couriers and customs brokers use it.
+  `cleanRecipient()` drops it when blank — Prodigi rejects present-but-empty
+  string fields with `MustNotBeEmptyOrWhitespace`.
+- **Currency** is your Prodigi *merchant account* currency (USD), not the
+  destination's, so international customers are charged in USD. Prodigi's quote
+  API accepts a `currencyCode` override if you ever want local presentment; note
+  `priceFromQuote()` rounds to whole units of 100 minor, which is wrong for
+  zero-decimal currencies (JPY).
+- **Duties/VAT** are the recipient's. Prodigi prints at the nearest lab so most
+  orders clear domestically, but not every SKU is produced in every region. A
+  disclosure note shows on all three surfaces for non-US destinations.
+
+### Known limitation
+
+A postcode is still **required** on every address (client and server). That
+blocks the handful of countries with no postal system (Hong Kong, UAE, parts of
+Ireland). It's deliberate: the quote endpoint only takes a country code, so a
+postcode Prodigi rejects would surface *after* payment as `prodigi_failed`.
+Relaxing it safely means validating the full address before charging.
+
+### Not yet handled
+
+- Shipping methods are hardcoded (`Budget`/`Standard`/`Express` in order.html,
+  `Standard` for books and calendars). Prodigi also has `StandardPlus` and
+  `Overnight`, and availability varies by destination — an unavailable method
+  now fails gracefully rather than being filtered out up front.
+- Prodigi variants carry a `shipsTo` array that `lib/print/catalog.mjs` doesn't
+  model, so unservable size/country pairs are discovered at quote time.
+
 ## Notes / gotchas
 
 - **Raw-body webhook**: `api/stripe-webhook.js` sets `export const config = { api:{ bodyParser:false } }`
