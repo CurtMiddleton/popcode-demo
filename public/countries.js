@@ -1,20 +1,10 @@
-// ISO 3166-1 alpha-2 destinations offered for print orders.
+// ISO 3166-1 alpha-2 destinations offered for print orders, alphabetical.
 // Generated from iso-codes 3166-1; uninhabited territories and comprehensively
 // sanctioned countries are excluded. Prodigi decides actual per-SKU coverage at
 // quote time, so a country listed here is offered, not guaranteed — an
 // unservable pair fails the quote with a friendly message well before payment.
 (function () {
-  var POPULAR = [
-    { code: "US", name: "United States" },
-    { code: "CA", name: "Canada" },
-    { code: "GB", name: "United Kingdom" },
-    { code: "AU", name: "Australia" },
-    { code: "NZ", name: "New Zealand" },
-    { code: "IE", name: "Ireland" },
-    { code: "DE", name: "Germany" },
-    { code: "FR", name: "France" },
-  ];
-  var REST = [
+  var COUNTRIES = [
     { code: "AL", name: "Albania" },
     { code: "DZ", name: "Algeria" },
     { code: "AS", name: "American Samoa" },
@@ -25,6 +15,7 @@
     { code: "AR", name: "Argentina" },
     { code: "AM", name: "Armenia" },
     { code: "AW", name: "Aruba" },
+    { code: "AU", name: "Australia" },
     { code: "AT", name: "Austria" },
     { code: "AZ", name: "Azerbaijan" },
     { code: "BS", name: "Bahamas" },
@@ -47,6 +38,7 @@
     { code: "CV", name: "Cabo Verde" },
     { code: "KH", name: "Cambodia" },
     { code: "CM", name: "Cameroon" },
+    { code: "CA", name: "Canada" },
     { code: "BQ", name: "Caribbean Netherlands" },
     { code: "KY", name: "Cayman Islands" },
     { code: "TD", name: "Chad" },
@@ -77,11 +69,13 @@
     { code: "FO", name: "Faroe Islands" },
     { code: "FJ", name: "Fiji" },
     { code: "FI", name: "Finland" },
+    { code: "FR", name: "France" },
     { code: "GF", name: "French Guiana" },
     { code: "PF", name: "French Polynesia" },
     { code: "GA", name: "Gabon" },
     { code: "GM", name: "Gambia" },
     { code: "GE", name: "Georgia" },
+    { code: "DE", name: "Germany" },
     { code: "GH", name: "Ghana" },
     { code: "GI", name: "Gibraltar" },
     { code: "GR", name: "Greece" },
@@ -100,6 +94,7 @@
     { code: "IS", name: "Iceland" },
     { code: "IN", name: "India" },
     { code: "ID", name: "Indonesia" },
+    { code: "IE", name: "Ireland" },
     { code: "IM", name: "Isle of Man" },
     { code: "IL", name: "Israel" },
     { code: "IT", name: "Italy" },
@@ -144,6 +139,7 @@
     { code: "NP", name: "Nepal" },
     { code: "NL", name: "Netherlands" },
     { code: "NC", name: "New Caledonia" },
+    { code: "NZ", name: "New Zealand" },
     { code: "NE", name: "Niger" },
     { code: "NG", name: "Nigeria" },
     { code: "NU", name: "Niue" },
@@ -211,6 +207,8 @@
     { code: "UG", name: "Uganda" },
     { code: "UA", name: "Ukraine" },
     { code: "AE", name: "United Arab Emirates" },
+    { code: "GB", name: "United Kingdom" },
+    { code: "US", name: "United States" },
     { code: "UY", name: "Uruguay" },
     { code: "UZ", name: "Uzbekistan" },
     { code: "VU", name: "Vanuatu" },
@@ -221,37 +219,26 @@
     { code: "AX", name: "\u00c5land Islands" },
   ];
 
-  // Popular destinations float to the top behind a divider; the rest stay
-  // alphabetical so a customer can scan for their own country.
-  var ALL = POPULAR.concat(REST);
-
-  window.POPCODE_COUNTRIES = ALL;
+  window.POPCODE_COUNTRIES = COUNTRIES;
 
   window.popcodeCountryName = function (code) {
     var c = String(code || "").toUpperCase();
-    for (var i = 0; i < ALL.length; i++) if (ALL[i].code === c) return ALL[i].name;
+    for (var i = 0; i < COUNTRIES.length; i++) if (COUNTRIES[i].code === c) return COUNTRIES[i].name;
     return c;
   };
 
-  // Fill a <select> with the full destination list. `selected` defaults to US
-  // so the common case still takes zero clicks.
+  // Fill a <select> with the destination list. `selected` defaults to US so the
+  // common case still takes zero clicks.
   window.popcodeFillCountrySelect = function (el, selected) {
     if (!el) return;
     var want = String(selected || "US").toUpperCase();
     el.innerHTML = "";
-    function add(list, label) {
-      var g = document.createElement("optgroup");
-      g.label = label;
-      list.forEach(function (c) {
-        var o = document.createElement("option");
-        o.value = c.code;
-        o.textContent = c.name;
-        if (c.code === want) o.selected = true;
-        g.appendChild(o);
-      });
-      el.appendChild(g);
-    }
-    add(POPULAR, "Common destinations");
-    add(REST, "All countries");
+    COUNTRIES.forEach(function (c) {
+      var o = document.createElement("option");
+      o.value = c.code;
+      o.textContent = c.name;
+      if (c.code === want) o.selected = true;
+      el.appendChild(o);
+    });
   };
 })();
