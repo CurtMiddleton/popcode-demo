@@ -138,10 +138,15 @@ Bashō / Curt Middleton Design, LLC.
 
 ## International orders
 
-Ordering is open to 212 destinations. The full list lives in `public/countries.js`
-(generated from ISO 3166-1, alphabetical) and is shared by `order.html`,
-`book.html` and `calendar.html` via `popcodeFillCountrySelect()`. Uninhabited
-territories and comprehensively sanctioned countries are excluded.
+Ordering is open to 231 destinations. The full list lives in `public/countries.js`
+(generated from ISO 3166-1 plus XK/Kosovo, alphabetical) and is shared by
+`order.html`, `book.html` and `calendar.html` via `popcodeFillCountrySelect()`.
+
+Excluded: uninhabited territories, and destinations under a comprehensive embargo
+or with no working payment/carrier route (CU, IR, KP, SY, RU, BY). *Targeted*
+sanctions are deliberately not grounds for exclusion — they restrict named
+individuals and entities, not ordinary retail shipping, so excluding whole
+countries over them just turns away legitimate customers.
 
 - **Coverage is offered, not guaranteed.** Prodigi decides per-SKU coverage at
   quote time. A country appearing in the list can still fail to quote — that
