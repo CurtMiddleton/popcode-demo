@@ -2584,6 +2584,43 @@
         });
       }
 
+      // ── Uploading a print PDF ───────────────────────────────────
+      // A print file is 8–26 MB and goes up as one long fetch, so a brief drop on
+      // a phone connection surfaces as an opaque network error ("Load failed" on
+      // Safari, "Failed to fetch" elsewhere) and used to discard a PDF that took
+      // minutes to render on-device. The blob is already in memory and the path
+      // is fixed, so retry the upload rather than making the creator rebuild.
+      function isNetworkError(err) {
+        const m = String((err && err.message) || '').toLowerCase();
+        return m.includes('load failed') || m.includes('failed to fetch') ||
+               m.includes('network') || m.includes('connection') || m.includes('timed out');
+      }
+
+      async function uploadPrintPdf(path, blob) {
+        const ATTEMPTS = 3;
+        for (let attempt = 1; ; attempt++) {
+          showToast(attempt === 1
+            ? `Uploading your print file (${formatMB(blob.size)})…`
+            : `Upload interrupted — retrying (${attempt} of ${ATTEMPTS})…`);
+          let error = null;
+          try {
+            ({ error } = await db.storage.from('experiences')
+              .upload(path, blob, { contentType: 'application/pdf', upsert: true }));
+          } catch (e) { error = e; }
+          if (!error) return db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+          if (attempt >= ATTEMPTS || !isNetworkError(error)) {
+            const fatal = new Error('Upload failed: ' + (error.message || 'error'));
+            fatal.userMessage = isNetworkError(error)
+              ? `Upload keeps dropping — reconnect and try again (Wi-Fi is best for a ${formatMB(blob.size)} print file).`
+              : 'Could not upload the print file: ' + (error.message || 'error');
+            fatal.pdfBytes = blob.size;
+            fatal.attempts = attempt;
+            throw fatal;
+          }
+          await new Promise(r => setTimeout(r, 1500 * attempt)); // 1.5s, 3s
+        }
+      }
+
       async function orderPrintedBook() {
         if (!editingCollection || !editingCollection.id || !editingCollection.slug) {
           closeSheet();
@@ -2607,13 +2644,13 @@
           const out = await buildBookPrintPdf();
           pageCount = out.pageCount;
           const path = `${editingCollection.slug}/print/book_${Date.now()}.pdf`;
-          const { error } = await db.storage.from('experiences').upload(path, out.blob, { contentType: 'application/pdf', upsert: true });
-          if (error) throw new Error('Upload failed: ' + error.message);
-          pdfUrl = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+          pdfUrl = await uploadPrintPdf(path, out.blob);
         } catch (err) {
           console.error(err);
-          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
-          showToast('Could not build the print file: ' + (err.message || 'error'));
+          if (window.Sentry) try {
+            Sentry.captureException(err, { extra: { slug: editingCollection.slug, pdfBytes: err.pdfBytes, attempts: err.attempts } });
+          } catch (e) {}
+          showToast(err.userMessage || ('Could not build the print file: ' + (err.message || 'error')));
           return;
         }
         openBookAddressSheet(pdfUrl, pageCount);
