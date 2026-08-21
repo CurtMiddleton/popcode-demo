@@ -26,7 +26,6 @@ const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const PRODIGI_API_KEY = (process.env.PRODIGI_API_KEY || '').trim();
 const MARKUP = Number(process.env.PRINT_MARKUP_MULTIPLIER || 1.4);
 
 // Composited print images are uploaded to the existing public `experiences`
@@ -40,7 +39,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).end();
 
-  if (!SUPABASE_SERVICE_KEY || !STRIPE_SECRET_KEY || !PRODIGI_API_KEY) {
+  if (!SUPABASE_SERVICE_KEY || !STRIPE_SECRET_KEY) {
     return res.status(500).json({ error: 'Checkout backend not configured' });
   }
 
@@ -97,12 +96,13 @@ export default async function handler(req, res) {
     // 4. Authoritative re-quote (never trust the client's displayed price).
     const { getProvider } = await import('../lib/print/providers/index.mjs');
     const provider = getProvider(providerFor(productType));
+    if (!provider.isConfigured()) return res.status(500).json({ error: 'Print provider not configured' });
     // Retry transient empty quotes so a print-provider blip can't fail a paid checkout.
     let summed = null;
     let unservable = false;
     for (let attempt = 0; attempt < 3 && !summed; attempt++) {
       try {
-        summed = await provider.quote({ variant, copies, pageCount: bookPageCount, destinationCountryCode: recipient.address.countryCode, shippingMethod });
+        summed = await provider.quote({ variant, copies, pageCount: bookPageCount, destinationCountryCode: recipient.address.countryCode, address: recipient.address, shippingMethod });
       } catch (err) {
         // Deterministic "we don't ship that there" — stop retrying and say so.
         if (err.unservable) { unservable = true; break; }
@@ -133,6 +133,8 @@ export default async function handler(req, res) {
         collection_id: collection.id,
         status: 'pending',
         product_type: productType,
+        provider: providerFor(productType),
+        provider_meta: variant.printify || null,
         sku: variant.sku,
         copies: copiesInt,
         sizing: variant.sizing || 'fillPrintArea',

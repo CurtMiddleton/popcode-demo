@@ -12,7 +12,6 @@
 
 import { Sentry } from './_sentry.js';
 
-const PRODIGI_API_KEY = (process.env.PRODIGI_API_KEY || '').trim();
 const MARKUP = Number(process.env.PRINT_MARKUP_MULTIPLIER || 1.4);
 
 export default async function handler(req, res) {
@@ -21,8 +20,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).end();
-
-  if (!PRODIGI_API_KEY) return res.status(500).json({ error: 'Prodigi not configured' });
 
   try {
     const { productType, variantId, copies, destinationCountryCode, shippingMethod } = req.body || {};
@@ -36,6 +33,7 @@ export default async function handler(req, res) {
 
     const { getProvider } = await import('../lib/print/providers/index.mjs');
     const provider = getProvider(providerFor(productType));
+    if (!provider.isConfigured()) return res.status(500).json({ error: 'Print provider not configured' });
     // Retry a couple of times — the print provider occasionally returns an empty
     // quote transiently; a customer shouldn't see a price fail over a blip.
     let summed = null;
