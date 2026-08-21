@@ -12,7 +12,6 @@
 
 import { Sentry } from './_sentry.js';
 
-const PRODIGI_BASE_URL = (process.env.PRODIGI_BASE_URL || 'https://api.sandbox.prodigi.com').trim().replace(/\/+$/, '');
 const PRODIGI_API_KEY = (process.env.PRODIGI_API_KEY || '').trim();
 const MARKUP = Number(process.env.PRINT_MARKUP_MULTIPLIER || 1.4);
 
@@ -31,18 +30,18 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing productType, variantId or destinationCountryCode' });
     }
 
-    const { findVariant, buildProdigiItems, priceFromQuote, sumQuoteMinor } = await import('../lib/print/catalog.mjs');
+    const { findVariant, priceFromQuote, providerFor } = await import('../lib/print/catalog.mjs');
     const variant = findVariant(productType, variantId);
     if (!variant) return res.status(400).json({ error: 'Unknown product' });
 
-    const items = buildProdigiItems({ variant, copies, forQuote: true });
-    // Retry a couple of times — Prodigi sandbox occasionally returns an empty
+    const { getProvider } = await import('../lib/print/providers/index.mjs');
+    const provider = getProvider(providerFor(productType));
+    // Retry a couple of times — the print provider occasionally returns an empty
     // quote transiently; a customer shouldn't see a price fail over a blip.
     let summed = null;
     for (let attempt = 0; attempt < 3 && !summed; attempt++) {
       try {
-        const quote = await prodigiQuote({ shippingMethod, destinationCountryCode, items });
-        summed = sumQuoteMinor(quote);
+        summed = await provider.quote({ variant, copies, destinationCountryCode, shippingMethod });
       } catch (err) {
         // Unservable routes are a normal answer, not a failure — don't retry.
         if (err.unservable) return res.status(502).json({ error: 'Could not price this product/destination', unservable: true });
@@ -65,27 +64,4 @@ export default async function handler(req, res) {
     await Sentry.flush(2000);
     res.status(500).json({ error: e.message });
   }
-}
-
-export async function prodigiQuote({ shippingMethod, destinationCountryCode, items }) {
-  const resp = await fetch(`${PRODIGI_BASE_URL}/v4.0/quotes`, {
-    method: 'POST',
-    headers: { 'X-API-Key': PRODIGI_API_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      shippingMethod: shippingMethod || 'Standard',
-      destinationCountryCode,
-      items,
-    }),
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    const err = new Error(`Prodigi quote failed (${resp.status}): ${text.slice(0, 300)}`);
-    // A 4xx is Prodigi telling us this SKU / destination / shipping-method
-    // combination isn't servable. It's deterministic, so retrying is pointless
-    // and it isn't an outage — callers surface it as an unservable route.
-    err.prodigiStatus = resp.status;
-    err.unservable = resp.status >= 400 && resp.status < 500;
-    throw err;
-  }
-  return resp.json();
 }

@@ -26,7 +26,6 @@ const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const PRODIGI_BASE_URL = (process.env.PRODIGI_BASE_URL || 'https://api.sandbox.prodigi.com').trim().replace(/\/+$/, '');
 const PRODIGI_API_KEY = (process.env.PRODIGI_API_KEY || '').trim();
 const MARKUP = Number(process.env.PRINT_MARKUP_MULTIPLIER || 1.4);
 
@@ -55,7 +54,7 @@ export default async function handler(req, res) {
 
     // 2. Validate the request shape against the catalog.
     const { collectionId, productType, variantId, copies, shippingMethod, recipient, assetUrls, pageCount } = req.body || {};
-    const { findVariant, buildProdigiItems, priceFromQuote, sumQuoteMinor } = await import('../lib/print/catalog.mjs');
+    const { findVariant, priceFromQuote, providerFor } = await import('../lib/print/catalog.mjs');
     const variant = findVariant(productType, variantId);
     if (!variant) return res.status(400).json({ error: 'Unknown product' });
 
@@ -96,14 +95,14 @@ export default async function handler(req, res) {
     if (collection.user_id !== user.id) return res.status(403).json({ error: 'Not your project' });
 
     // 4. Authoritative re-quote (never trust the client's displayed price).
-    const items = buildProdigiItems({ variant, copies, forQuote: true, pageCount: bookPageCount });
-    // Retry transient empty quotes so a Prodigi blip can't fail a paid checkout.
+    const { getProvider } = await import('../lib/print/providers/index.mjs');
+    const provider = getProvider(providerFor(productType));
+    // Retry transient empty quotes so a print-provider blip can't fail a paid checkout.
     let summed = null;
     let unservable = false;
     for (let attempt = 0; attempt < 3 && !summed; attempt++) {
       try {
-        const quote = await prodigiQuote({ shippingMethod, destinationCountryCode: recipient.address.countryCode, items });
-        summed = sumQuoteMinor(quote);
+        summed = await provider.quote({ variant, copies, pageCount: bookPageCount, destinationCountryCode: recipient.address.countryCode, shippingMethod });
       } catch (err) {
         // Deterministic "we don't ship that there" — stop retrying and say so.
         if (err.unservable) { unservable = true; break; }
@@ -187,23 +186,4 @@ export default async function handler(req, res) {
     await Sentry.flush(2000);
     res.status(500).json({ error: e.message });
   }
-}
-
-async function prodigiQuote({ shippingMethod, destinationCountryCode, items }) {
-  const resp = await fetch(`${PRODIGI_BASE_URL}/v4.0/quotes`, {
-    method: 'POST',
-    headers: { 'X-API-Key': PRODIGI_API_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ shippingMethod: shippingMethod || 'Standard', destinationCountryCode, items }),
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    const err = new Error(`Prodigi quote failed (${resp.status}): ${text.slice(0, 300)}`);
-    // A 4xx is Prodigi telling us this SKU / destination / shipping-method
-    // combination isn't servable. It's deterministic, so retrying is pointless
-    // and it isn't an outage — callers surface it as an unservable route.
-    err.prodigiStatus = resp.status;
-    err.unservable = resp.status >= 400 && resp.status < 500;
-    throw err;
-  }
-  return resp.json();
 }

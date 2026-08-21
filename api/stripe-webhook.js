@@ -23,9 +23,6 @@ const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-const PRODIGI_BASE_URL = (process.env.PRODIGI_BASE_URL || 'https://api.sandbox.prodigi.com').trim().replace(/\/+$/, '');
-const PRODIGI_API_KEY = (process.env.PRODIGI_API_KEY || '').trim();
-const PRODIGI_DRY_RUN = (process.env.PRODIGI_DRY_RUN || '').trim().toLowerCase() === 'true';
 
 // Terminal/in-flight statuses we must not re-submit on a webhook retry.
 const ALREADY_HANDLED = new Set(['submitted', 'in_production', 'shipped', 'complete', 'prodigi_failed']);
@@ -96,72 +93,35 @@ export default async function handler(req, res) {
       return res.status(200).json({ received: true, idempotent: true });
     }
 
-    // Submit to Prodigi. merchantReference = our order id makes a manual retry
-    // idempotent on Prodigi's side too.
-    const { buildProdigiItems, cleanRecipient } = await import('../lib/print/catalog.mjs');
-    const variant = {
-      sku: order.sku,
-      sizing: order.sizing || 'fillPrintArea',
-      attributes: order.attributes || {},
-      printArea: 'default',
-    };
-    const items = buildProdigiItems({ variant, copies: order.copies, assetUrls: order.asset_urls || [] });
-    const orderBody = {
-      merchantReference: order.id,
-      shippingMethod: order.shipping_method || 'Standard',
-      recipient: cleanRecipient(order.recipient),
-      items,
-    };
+    // Submit via the order's fulfillment provider (defaults to Prodigi for rows
+    // written before the provider column). merchantReference = our order id makes a
+    // manual retry idempotent on the vendor side too. The adapter builds the vendor
+    // payload + honors its own dry-run; DB writes stay here.
+    const { getProvider } = await import('../lib/print/providers/index.mjs');
+    const provider = getProvider(order.provider || 'prodigi');
+    const result = await provider.submitOrder({ order });
 
-    // Dry-run: prove the Stripe -> webhook -> "would submit" chain without placing
-    // a real (live) Prodigi order. Records the exact body that would have been sent.
-    if (PRODIGI_DRY_RUN) {
+    if (result.dryRun) {
       await admin.from('print_orders')
-        .update({
-          status: 'submitted',
-          prodigi_order_id: `DRYRUN-${order.id}`,
-          prodigi_response: { dryRun: true, wouldSend: orderBody },
-          updated_at: new Date().toISOString(),
-        })
+        .update({ status: 'submitted', prodigi_order_id: result.providerOrderId, prodigi_response: result.response, updated_at: new Date().toISOString() })
         .eq('id', order.id);
       return res.status(200).json({ received: true, dryRun: true });
     }
 
-    let prodigiResp, prodigiData;
-    try {
-      prodigiResp = await fetch(`${PRODIGI_BASE_URL}/v4.0/orders`, {
-        method: 'POST',
-        headers: { 'X-API-Key': PRODIGI_API_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderBody),
-      });
-      prodigiData = await prodigiResp.json().catch(() => ({}));
-    } catch (netErr) {
-      await markProdigiFailed(admin, order.id, { error: netErr.message });
-      Sentry.captureException(netErr);
-      await Sentry.flush(2000);
-      return res.status(200).json({ received: true, prodigi: 'network_error' });
-    }
-
-    if (!prodigiResp.ok) {
-      await markProdigiFailed(admin, order.id, prodigiData);
-      const err = new Error(`Prodigi order failed (${prodigiResp.status}) for ${order.id}`);
-      console.error(err.message, JSON.stringify(prodigiData).slice(0, 500));
+    if (!result.ok) {
+      await markProdigiFailed(admin, order.id, result.response);
+      const err = new Error(result.error || `Order submission failed for ${order.id}`);
+      console.error(err.message, JSON.stringify(result.response).slice(0, 500));
       Sentry.captureException(err);
       await Sentry.flush(2000);
-      return res.status(200).json({ received: true, prodigi: 'rejected' });
+      return res.status(200).json({ received: true, prodigi: result.networkError ? 'network_error' : 'rejected' });
     }
 
-    const prodigiOrderId = prodigiData?.order?.id || prodigiData?.id || null;
     await admin.from('print_orders')
-      .update({
-        status: 'submitted',
-        prodigi_order_id: prodigiOrderId,
-        prodigi_response: prodigiData,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ status: 'submitted', prodigi_order_id: result.providerOrderId, prodigi_response: result.response, updated_at: new Date().toISOString() })
       .eq('id', order.id);
 
-    return res.status(200).json({ received: true, prodigi_order_id: prodigiOrderId });
+    return res.status(200).json({ received: true, prodigi_order_id: result.providerOrderId });
   } catch (e) {
     console.error('stripe-webhook handler error:', e);
     Sentry.captureException(e);

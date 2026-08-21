@@ -22,9 +22,6 @@ const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const PRODIGI_BASE_URL = (process.env.PRODIGI_BASE_URL || 'https://api.sandbox.prodigi.com').trim().replace(/\/+$/, '');
-const PRODIGI_API_KEY = (process.env.PRODIGI_API_KEY || '').trim();
-const PRODIGI_DRY_RUN = (process.env.PRODIGI_DRY_RUN || '').trim().toLowerCase() === 'true';
 
 const ALREADY_HANDLED = new Set(['submitted', 'in_production', 'shipped', 'complete', 'prodigi_failed']);
 
@@ -85,58 +82,27 @@ export default async function handler(req, res) {
       return res.status(200).json({ status: cur?.status, prodigi_order_id: cur?.prodigi_order_id, idempotent: true });
     }
 
-    const { buildProdigiItems, cleanRecipient } = await import('../lib/print/catalog.mjs');
-    const variant = { sku: order.sku, sizing: order.sizing || 'fillPrintArea', attributes: order.attributes || {}, printArea: 'default' };
-    const items = buildProdigiItems({ variant, copies: order.copies, assetUrls: order.asset_urls || [] });
-    const orderBody = {
-      merchantReference: order.id,
-      shippingMethod: order.shipping_method || 'Standard',
-      recipient: cleanRecipient(order.recipient),
-      items,
-    };
+    // Dispatch to the order's fulfillment provider (defaults to Prodigi for rows
+    // written before the provider column existed). The adapter builds the vendor
+    // payload, honors its own dry-run, and returns a normalized result; DB writes
+    // stay here. See docs/board-book-printify-plan.md.
+    const { getProvider } = await import('../lib/print/providers/index.mjs');
+    const provider = getProvider(order.provider || 'prodigi');
+    const result = await provider.submitOrder({ order });
 
-    // Dry-run: prove the chain without placing a real (live) Prodigi order.
-    if (PRODIGI_DRY_RUN) {
-      await admin.from('print_orders')
-        .update({
-          status: 'submitted',
-          prodigi_order_id: `DRYRUN-${order.id}`,
-          prodigi_response: { dryRun: true, wouldSend: orderBody },
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', order.id);
-      return res.status(200).json({ status: 'submitted', prodigi_order_id: `DRYRUN-${order.id}`, dryRun: true });
-    }
-
-    let prodigiResp, prodigiData;
-    try {
-      prodigiResp = await fetch(`${PRODIGI_BASE_URL}/v4.0/orders`, {
-        method: 'POST',
-        headers: { 'X-API-Key': PRODIGI_API_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderBody),
-      });
-      prodigiData = await prodigiResp.json().catch(() => ({}));
-    } catch (netErr) {
-      await admin.from('print_orders').update({ status: 'prodigi_failed', prodigi_response: { error: netErr.message }, updated_at: new Date().toISOString() }).eq('id', order.id);
-      Sentry.captureException(netErr);
+    if (!result.ok) {
+      await admin.from('print_orders').update({ status: 'prodigi_failed', prodigi_response: result.response, updated_at: new Date().toISOString() }).eq('id', order.id);
+      console.error(`Order submission failed for ${order.id}:`, JSON.stringify(result.response).slice(0, 500));
+      Sentry.captureException(new Error(result.error || `Order submission failed for ${order.id}`));
       await Sentry.flush(2000);
       return res.status(200).json({ status: 'prodigi_failed' });
     }
 
-    if (!prodigiResp.ok) {
-      await admin.from('print_orders').update({ status: 'prodigi_failed', prodigi_response: prodigiData, updated_at: new Date().toISOString() }).eq('id', order.id);
-      console.error(`Prodigi order failed (${prodigiResp.status}) for ${order.id}`, JSON.stringify(prodigiData).slice(0, 500));
-      Sentry.captureException(new Error(`Prodigi order failed (${prodigiResp.status}) for ${order.id}`));
-      await Sentry.flush(2000);
-      return res.status(200).json({ status: 'prodigi_failed' });
-    }
-
-    const prodigiOrderId = prodigiData?.order?.id || prodigiData?.id || null;
     await admin.from('print_orders')
-      .update({ status: 'submitted', prodigi_order_id: prodigiOrderId, prodigi_response: prodigiData, updated_at: new Date().toISOString() })
+      .update({ status: 'submitted', prodigi_order_id: result.providerOrderId, prodigi_response: result.response, updated_at: new Date().toISOString() })
       .eq('id', order.id);
 
-    return res.status(200).json({ status: 'submitted', prodigi_order_id: prodigiOrderId });
+    return res.status(200).json({ status: 'submitted', prodigi_order_id: result.providerOrderId, ...(result.dryRun ? { dryRun: true } : {}) });
   } catch (e) {
     console.error('finalize-order error:', e);
     Sentry.captureException(e);
