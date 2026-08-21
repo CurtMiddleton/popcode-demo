@@ -1,5 +1,32 @@
 # Printify board book + multi-provider fulfillment — design sketch
 
+## Phase 0 spike — RESULTS (captured 2026-08-21 from a live read-only probe)
+
+The board book is real, API-accessible, and a genuine chipboard product. IDs to wire:
+
+- **Shop:** `28663478` ("My new store", sales_channel `disconnected` = API/manual — correct).
+- **Blueprint:** `2727` ("Board Book", Generic brand).
+- **Print provider:** `28` ("District Photo", digital-printing — a US lab).
+- **Variant (the only one):** `148738` = **6″ × 6″ / With Laminate / Chipboard** — an
+  actual rigid laminated chipboard board book. Exactly the target product.
+- **Structure = fixed cover + 10 spreads** (11 print positions), each a landscape image:
+  - `cover` — 3863 × 1875 px
+  - `spread_1` … `spread_10` — 3675 × 1875 px each
+  - ≈ 312 DPI; each spread ≈ a two-page open leaf (two 6″ pages side by side).
+- **Artwork spec:** supply 11 flat images at those exact px sizes (full-bleed).
+
+Still to confirm in Phase 2 (needs a write, done as a `send_to_production:false` test
+order): the exact **base cost** (Printify variant cost isn't in the catalog read) and
+that the **order-with-`print_areas` upload path** works without a permanent product
+(high confidence — the variant exposes fixed `placeholders`/positions that map directly
+onto an order line item's `print_areas`, which is Printify's upload-based order shape).
+
+**Builder implication:** unlike the single-page photo book, the board book is a FIXED
+cover + 10 landscape spreads. The builder produces 11 flat images at the sizes above;
+each spread can carry a Popcode (its photo plays a video when scanned) — the AR keepsake.
+
+---
+
 Status: **design sketch, not built.** Goal: add the Printify **6×6 baby board book**
 (and set up for other Printify merch) alongside the existing Prodigi prints/canvas/
 framed, without turning the checkout into spaghetti.
