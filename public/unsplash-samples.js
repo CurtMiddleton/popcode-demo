@@ -103,6 +103,32 @@
     for (let i = 0; i < n; i++) out.push(url(a[i % a.length], w));
     return out;
   };
+  // Shared board-book product mockup: a square chipboard book showing a photo cover
+  // with a serif title (like the photo book), no scan badge. Used by the Shop card
+  // and the board-book detail page. `mount` is emptied and the mockup appended.
+  window.boardbookMockup = function (mount, photoUrl, opts) {
+    opts = opts || {};
+    const title = opts.title != null ? opts.title : "Baby's First Book";
+    const subtitle = opts.subtitle || '';
+    const esc = (s) => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
+    const FALLBACK = '/assets/sample-photo.jpg';
+    const w = document.createElement('div');
+    w.style.cssText = 'width:74%;max-width:300px;aspect-ratio:1/1;position:relative;border-radius:10px;overflow:hidden;container-type:inline-size;background:#ededed;box-shadow:9px 11px 0 #ded9cf, 0 6px 18px rgba(0,0,0,0.2);';
+    w.innerHTML =
+      '<div class="bbm-photo" style="position:absolute;inset:0;background-size:cover;background-position:center;"></div>' +
+      (title || subtitle ? '<div style="position:absolute;left:0;right:0;bottom:0;height:52%;background:linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.55));"></div>' +
+        '<div style="position:absolute;left:8%;right:8%;bottom:8%;color:#fff;font-family:\'CooperBT\',Georgia,serif;text-shadow:0 2px 10px rgba(0,0,0,0.45);">' +
+          (title ? '<div style="font-size:9cqw;line-height:1.08;">' + esc(title) + '</div>' : '') +
+          (subtitle ? '<div style="font-size:5cqw;opacity:0.9;margin-top:2cqw;">' + esc(subtitle) + '</div>' : '') +
+        '</div>' : '');
+    const photo = w.querySelector('.bbm-photo');
+    const im = new Image();
+    im.onload = () => { photo.style.backgroundImage = `url('${im.src}')`; };
+    im.onerror = () => { if (im.src !== location.origin + FALLBACK) im.src = FALLBACK; };
+    im.src = photoUrl || FALLBACK;
+    mount.innerHTML = ''; mount.appendChild(w);
+    return w;
+  };
   // Interleave categories (travel, people, pets, travel, …) so even a pick of
   // 3–5 spans the mix instead of coming out all-landscapes or all-dogs.
   window.unsplashSamples = function (n, w) {

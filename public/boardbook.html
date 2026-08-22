@@ -183,10 +183,10 @@
         <div class="bi-info">
           <h1>Board Book</h1>
           <div class="bi-tagline">6×6″ laminated chipboard baby board book</div>
-          <p class="bi-desc">A real 6×6″ board book — a front cover plus 20 square pages. Add a photo to each page and link a video to any page; it comes to life when someone scans the printed page with the Popcode app.</p>
+          <p class="bi-desc">A real 6×6″ board book — a front cover plus 18 square pages. Add a photo to each page and link a video to any page; it comes to life when someone scans the printed page with the Popcode app.</p>
           <ul class="bi-specs">
             <li>Durable, baby-proof laminated chipboard pages</li>
-            <li>Front cover + 20 square pages</li>
+            <li>Front cover + 18 square pages</li>
             <li>Add a video to any page — a keepsake that plays</li>
           </ul>
           <div class="bi-size-label">Size</div>
@@ -345,24 +345,12 @@
         currentUser = data.session.user;
         isAdmin = ADMIN_EMAILS.includes((currentUser.email || '').toLowerCase());
       });
-      // Square board-book product visual on the intro (the "product page").
+      // Product visual on the intro (the "product page") — the same photo-cover +
+      // title mockup as the Shop card, with a different sample photo (not the blank).
       (function introMock() {
         const stage = document.getElementById('intro-mock');
-        if (!stage) return;
-        // Prefer a photoreal product image if one has been added; otherwise render a
-        // stylized square board book. (Drop /assets/mockups/boardbook.png to upgrade.)
-        const probe = new Image();
-        probe.onload = () => { stage.innerHTML = ''; const im = new Image(); im.src = probe.src; stage.appendChild(im); };
-        probe.onerror = () => {
-          const m = document.createElement('div');
-          m.style.cssText = 'width:270px;max-width:100%;aspect-ratio:1/1;position:relative;border-radius:12px;overflow:hidden;box-shadow:10px 12px 0 #ded9cf, 0 6px 18px rgba(0,0,0,0.2);background:linear-gradient(135deg,#7657FC,#2dc0f7);';
-          // A baby photo as the board-book cover (falls back to the gradient if blocked).
-          const baby = (window.unsplashBaby && window.unsplashBaby(700)) || '';
-          m.innerHTML = (baby ? `<img src="${baby}" crossorigin="anonymous" onerror="this.style.display='none'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;"/>` : '')
-            + '<img src="/assets/popcode_icon.svg" style="position:absolute;bottom:7%;right:7%;width:15%;"/>';
-          stage.appendChild(m);
-        };
-        probe.src = '/assets/mockups/boardbook.png';
+        if (!stage || !window.boardbookMockup) return;
+        window.boardbookMockup(stage, window.unsplashBaby ? window.unsplashBaby(800) : '', { title: "Baby's First Book" });
       })();
 
       document.getElementById('start-btn').addEventListener('click', () => {

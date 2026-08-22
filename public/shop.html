@@ -254,22 +254,6 @@
         return wrapEl;
       }
 
-      // Board-book card mockup: a thick chipboard-look landscape page with a sample
-      // photo + the scan badge (no asset file needed — same DOM-mockup approach as
-      // the calendar). The offset box-shadow reads as stacked chipboard pages.
-      function boardbookCardMockup(sample) {
-        const w = document.createElement('div');
-        // Square 6×6 board book — the offset shadow reads as thick chipboard pages.
-        w.style.cssText = 'width:62%;max-width:240px;aspect-ratio:1/1;position:relative;border-radius:8px;overflow:hidden;box-shadow:9px 11px 0 #ded9cf, 0 5px 16px rgba(0,0,0,0.2);';
-        w.innerHTML = '<div class="bbm-photo" style="position:absolute;inset:0;background:#ededed;background-size:cover;background-position:center;"></div><img src="/assets/popcode_icon.svg" style="position:absolute;bottom:6%;right:6%;width:15%;"/>';
-        const photo = w.querySelector('.bbm-photo');
-        const FALLBACK = '/assets/sample-photo.jpg';
-        const im = new Image();
-        im.onload = () => { photo.style.backgroundImage = `url('${im.src}')`; };
-        im.onerror = () => { if (im.src !== location.origin + FALLBACK) im.src = FALLBACK; };
-        im.src = sample || FALLBACK;
-        return w;
-      }
 
       db.auth.getSession().then(async ({ data }) => {
         if (!data.session) { window.location.href = '/auth.html'; return; }
@@ -301,7 +285,7 @@
           if (p.domMockup === 'calendar') {
             thumb.appendChild(calendarCardMockup(samples[i]));
           } else if (p.domMockup === 'boardbook') {
-            thumb.appendChild(boardbookCardMockup(window.unsplashBaby ? window.unsplashBaby(1100) : samples[i]));
+            window.boardbookMockup(thumb, window.unsplashBaby ? window.unsplashBaby(1100) : samples[i], { title: "Baby's First Book" });
           } else if (window.drawProductCardMockup) {
             // Composite the sample photo into the real Prodigi product template.
             // The stage stays empty (plain gray) until the finished canvas is
