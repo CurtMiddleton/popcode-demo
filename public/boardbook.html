@@ -120,7 +120,8 @@
       .slot .cover-title .cover-sub { display: block; font-size: 5cqw; font-weight: 400; opacity: 0.92; margin-top: 2cqw; }
       .slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
       .slot .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #b7b2a8; font-size: 13px; text-align: center; padding: 8px; }
-      .slot .tag { position: absolute; bottom: 6px; right: 6px; background: linear-gradient(135deg, #7657FC, #2dc0f7); color: #fff; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
+      /* Scan badge on a popcoded page (the real Popcode mark, like the printed page). */
+      .slot .pc-badge { position: absolute; bottom: 6%; right: 6%; width: 13%; min-width: 20px; max-width: 34px; height: auto; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.35)); }
 
       /* Sticky create bar */
       .create-bar { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #eee; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; z-index: 30; }
@@ -143,6 +144,34 @@
       .drop { border: 2px dashed #c9c4ba; border-radius: 12px; padding: 24px; text-align: center; color: #777; cursor: pointer; }
       .drop.has { border-style: solid; border-color: #2dc0c5; color: #1a1a1a; }
       .sheet-actions { display: flex; gap: 10px; margin-top: 18px; }
+      /* Popcode sheet (video + audio) — ported from book.html */
+      .mini-btn { border: 1px solid #e0ded8; background: #fff; color: #1a1a1a; border-radius: 999px; padding: 7px 13px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .btn-danger-ghost { background: #fff; color: #d33; border: 1px solid #f0cccc; border-radius: 999px; padding: 13px 26px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .pop-media-toggle { display: inline-flex; background: #ececec; border-radius: 999px; padding: 3px; margin-bottom: 16px; }
+      .pop-media-toggle button { background: transparent; border: none; padding: 8px 20px; font-size: 13px; font-weight: 700; color: #666; border-radius: 999px; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .pop-media-toggle button.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+      .drop-zone { position: relative; border: 2px dashed #c9c4ba; border-radius: 12px; padding: 26px; text-align: center; cursor: pointer; }
+      .drop-zone:hover { border-color: #7657FC; background: #f6f3ff; }
+      .drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+      .drop-zone .dz-icon { width: 40px; height: 40px; margin: 0 auto 10px; display: block; }
+      .drop-zone .dz-title { font-size: 14px; font-weight: 700; color: #1a1a1a; }
+      .dz-sub { font-size: 12px; color: #999; margin-top: 3px; }
+      .media-preview { display: none; margin-top: 4px; }
+      .media-preview.show { display: block; }
+      .media-preview video { width: 100%; border-radius: 12px; max-height: 260px; background: #000; }
+      .compress-status { font-size: 12px; color: #555; font-weight: 600; margin-top: 10px; }
+      .compress-bar-wrap { background: #e8e8e8; border-radius: 99px; height: 5px; margin-top: 6px; overflow: hidden; }
+      .compress-bar { height: 100%; background: #1a1a1a; border-radius: 99px; width: 0%; transition: width 0.2s; }
+      .warn-banner { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 12px; font-size: 12px; color: #555; line-height: 1.5; margin-top: 10px; }
+      .warn-banner a { color: #1a1a1a; font-weight: 700; }
+      .audio-panel { text-align: center; padding: 10px 0 4px; }
+      .audio-rec-btn { background: #1a1a1a; color: #fff; border: none; border-radius: 999px; padding: 13px 26px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .audio-rec-btn.stop { background: #dc2626; }
+      .audio-time { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; margin: 14px 0; color: #1a1a1a; }
+      .rec-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #dc2626; margin-right: 8px; vertical-align: middle; animation: rec-pulse 1s infinite; }
+      @keyframes rec-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+      .audio-player-row { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 12px 0; }
+      .audio-play-btn { width: 56px; height: 56px; border-radius: 50%; background: #1a1a1a; border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
       /* Progress + result */
       #progress { display: none; position: fixed; inset: 0; background: rgba(255,255,255,0.96); z-index: 200; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; }
@@ -231,12 +260,13 @@
 
     <!-- Result -->
     <div id="result">
-      <div class="hero" style="font-family:'CooperBT',Georgia,serif;font-size:28px;">Your board book is ready! 🎉</div>
-      <p style="color:#555;">It's saved and scannable. Point the Popcode app at any linked page to see it play.</p>
+      <div class="hero" style="font-family:'CooperBT',Georgia,serif;font-size:28px;">Your board book is ready!</div>
+      <p style="color:#555;">Popcoded pages will play their video or audio when scanned. Share the link or view your book.</p>
       <div class="link" id="result-link"></div>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:10px 0 26px;">
-        <a class="btn-secondary" id="result-view" href="#">Open viewer</a>
-        <a class="btn-secondary" href="/manage.html">My Popcodes</a>
+        <a class="btn-primary" id="result-view" href="#">View book</a>
+        <button class="btn-secondary" id="result-copy">Copy link</button>
+        <a class="btn-secondary" href="/manage.html">Back to My Designs</a>
       </div>
 
       <!-- Order the printed board book (admin-gated until the live chain is validated) -->
@@ -379,7 +409,9 @@
       slugInput.addEventListener('input', () => { slugInput.value = slugInput.value.toLowerCase().replace(/[^a-z0-9]/g, ''); syncSlugNote(); updateSummary(); });
       document.getElementById('title-input').addEventListener('input', (e) => { cover.title = e.target.value; renderSlots(); });   // live cover title
 
-      function photoHasMedia(p) { return !!(p && p.popcode && p.popcode.video); }
+      function photoHasMedia(p) { return !!(p && p.popcode && (p.popcode.video || p.popcode.audio)); }
+      function formatMB(b) { return (b / (1024 * 1024)).toFixed(1) + ' MB'; }
+      const MAX_VIDEO_MB = 200;
       function placedIds() { const s = new Set(); Object.values(slots).forEach(id => { if (id) s.add(id); }); return s; }
 
       // ── Photo optimize (downscale for storage) ─────────────────────
@@ -520,7 +552,7 @@
           <div class="slot square" data-pos="${pos}">
             ${p ? `<img src="${p.url}"/>` : `<div class="ph">${isCover ? 'Tap to add a cover' : 'Tap a photo above, then tap here'}</div>`}
             ${overlay}
-            ${photoHasMedia(p) ? '<div class="tag">▶ Video</div>' : ''}
+            ${photoHasMedia(p) ? `<img class="pc-badge" src="/assets/popcode_icon.svg" title="Popcode — plays ${p.popcode.mediaType === 'audio' ? 'audio' : 'video'} when scanned"/>` : ''}
           </div></div>`;
       }
       function renderSlots() {
@@ -555,10 +587,10 @@
         openSheet(`
           <h2>Front cover</h2>
           <p class="sheet-sub">Add a cover photo and a title — like the photo book.</p>
-          <div class="menu-row" data-act="text">✎ Edit cover text &amp; font</div>
-          <div class="menu-row" data-act="photo">🖼️ ${has ? 'Change the cover photo' : 'Add a cover photo'}</div>
-          ${has && photoHasMedia(photos.get(slots['cover'])) ? '<div class="menu-row" data-act="popcode">🎬 Change the cover video</div>'
-            : has ? '<div class="menu-row" data-act="popcode">🎬 Add a video to the cover</div>' : ''}
+          <div class="menu-row" data-act="text">Edit cover text &amp; font</div>
+          <div class="menu-row" data-act="photo">${has ? 'Change the cover photo' : 'Add a cover photo'}</div>
+          ${has && photoHasMedia(photos.get(slots['cover'])) ? '<div class="menu-row" data-act="popcode">Edit the cover Popcode</div>'
+            : has ? '<div class="menu-row" data-act="popcode">Add a Popcode to the cover</div>' : ''}
           ${has ? '<div class="menu-row danger" data-act="remove">Remove the cover photo</div>' : ''}
         `);
         sheet.querySelectorAll('.menu-row').forEach(row => row.addEventListener('click', () => {
@@ -604,65 +636,171 @@
         const has = photoHasMedia(p);
         openSheet(`
           <h2>${positionLabel(pos)}</h2>
-          <p class="sheet-sub">${has ? 'This page plays its video when scanned.' : 'Link a video and this page comes to life when scanned.'}</p>
-          <div class="menu-row" data-act="popcode">🎬 ${has ? 'Change the video' : 'Add a video (Popcode)'}</div>
-          ${has ? '<div class="menu-row danger" data-act="unlink">Remove the video</div>' : ''}
+          <p class="sheet-sub">${has ? 'This page plays its Popcode when scanned.' : 'Add a Popcode and this page comes to life when scanned.'}</p>
+          <div class="menu-row" data-act="popcode">${has ? 'Edit the Popcode' : 'Add a Popcode (video or audio)'}</div>
+          ${has ? '<div class="menu-row danger" data-act="unlink">Remove the Popcode</div>' : ''}
           <div class="menu-row danger" data-act="remove">Remove photo from this page</div>
         `);
         sheet.querySelectorAll('.menu-row').forEach(row => row.addEventListener('click', () => {
           const act = row.dataset.act;
           if (act === 'popcode') { closeSheet(); openPopcodeSheet(pos); }
-          else if (act === 'unlink') { p.popcode = null; closeSheet(); render(); showToast('Video removed'); }
+          else if (act === 'unlink') { p.popcode = null; closeSheet(); render(); showToast('Popcode removed'); }
           else if (act === 'remove') { slots[pos] = null; closeSheet(); render(); }
         }));
       }
 
-      // ── Popcode (video) editor ─────────────────────────────────────
-      let popState = null;  // { pos, video }
+      // ── Popcode editor (video + audio; upload or record) — mirrors book.html ──
+      let popState = null;  // { pos, photo, mediaType, video, audio }
+      let recorder = null;
       function openPopcodeSheet(pos) {
-        const p = photos.get(slots[pos]);
-        popState = { pos, video: p.popcode ? p.popcode.video : null };
+        const photo = photos.get(slots[pos]);
+        popState = { pos, photo, mediaType: (photo.popcode && photo.popcode.mediaType) || 'video', video: (photo.popcode && photo.popcode.video) || null, audio: (photo.popcode && photo.popcode.audio) || null };
         renderPopcodeSheet();
       }
+      function popEditHasMedia(s) { return s.mediaType === 'video' ? !!s.video : !!s.audio; }
       function renderPopcodeSheet() {
-        const s = popState; const has = !!s.video;
+        const s = popState; const hasMedia = popEditHasMedia(s);
         openSheet(`
-          <h2>Add a video</h2>
-          <p class="sheet-sub">It plays when this page is scanned with the Popcode app.</p>
-          <div class="drop ${has ? 'has' : ''}" id="vid-drop">${has ? '✓ ' + escapeHtml(s.video.name || 'Video selected') : 'Tap to choose a video'}</div>
-          <input type="file" id="vid-input" accept="video/*" class="hidden"/>
+          <h2>${s.photo.popcode ? 'Edit' : 'Add a'} Popcode</h2>
+          <p class="sheet-sub">Link a video or audio clip. When someone scans this printed page, it plays automatically.</p>
+          <div class="pop-media-toggle">
+            <button data-mode="video" class="${s.mediaType === 'video' ? 'active' : ''}">Video</button>
+            <button data-mode="audio" class="${s.mediaType === 'audio' ? 'active' : ''}">Audio</button>
+          </div>
+          <div id="pop-body"></div>
           <div class="sheet-actions">
-            <button class="btn-primary" id="vid-save" ${has ? '' : 'disabled'}>Save</button>
-            <button class="btn-secondary" id="vid-cancel">Cancel</button>
+            ${s.photo.popcode ? '<button class="btn-danger-ghost" id="pop-unlink">Remove Popcode</button>' : '<button class="btn-secondary" id="pop-cancel">Cancel</button>'}
+            <button class="btn-primary" id="pop-save" ${hasMedia ? '' : 'disabled'}>Save Popcode</button>
           </div>
         `);
-        const input = document.getElementById('vid-input');
-        document.getElementById('vid-drop').addEventListener('click', () => input.click());
-        input.addEventListener('change', () => { if (input.files[0]) { s.video = input.files[0]; renderPopcodeSheet(); } });
-        document.getElementById('vid-save').addEventListener('click', () => {
-          const p = photos.get(slots[s.pos]);
-          p.popcode = { mediaType: 'video', video: s.video };
-          closeSheet(); render(); showToast('Video linked');
+        sheet.querySelectorAll('.pop-media-toggle button').forEach(b => b.addEventListener('click', () => { s.mediaType = b.dataset.mode; renderPopcodeSheet(); }));
+        document.getElementById('pop-save').addEventListener('click', savePopcode);
+        const unlink = document.getElementById('pop-unlink');
+        if (unlink) unlink.addEventListener('click', () => { s.photo.popcode = null; closeSheet(); render(); showToast('Popcode removed'); });
+        const cancel = document.getElementById('pop-cancel');
+        if (cancel) cancel.addEventListener('click', closeSheet);
+        renderPopBody();
+      }
+      function renderPopBody() {
+        const s = popState; const body = document.getElementById('pop-body');
+        if (s.mediaType === 'video') {
+          if (s.video) {
+            body.innerHTML = `<div class="media-preview show"><video src="${URL.createObjectURL(s.video)}" controls playsinline muted></video><div class="compress-status">${escapeHtml(s.video.name || 'video')} · ${formatMB(s.video.size)}</div><button class="mini-btn" id="pop-video-change" style="margin-top:10px">Choose a different video</button></div>`;
+            document.getElementById('pop-video-change').addEventListener('click', () => { s.video = null; renderPopBody(); syncPopSave(); });
+          } else {
+            body.innerHTML = `<div class="drop-zone"><input type="file" accept="video/*" id="pop-video-input"/><svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="#7657FC" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg><div class="dz-title">Choose a video</div><div class="dz-sub">Up to ${MAX_VIDEO_MB} MB · large files can be compressed</div></div><div id="pop-video-msg"></div>`;
+            document.getElementById('pop-video-input').addEventListener('change', (e) => handleVideoPick(e.target));
+          }
+        } else {
+          if (s.audio) {
+            body.innerHTML = `<div class="audio-panel"><div class="audio-player-row"><button class="audio-play-btn" id="pop-audio-play"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button><div class="audio-time" id="pop-audio-dur" style="margin:0">0:00</div></div><audio id="pop-audio-el" src="${URL.createObjectURL(s.audio)}" preload="metadata"></audio><button class="mini-btn" id="pop-audio-rerec">Re-record</button><div class="compress-status">${formatMB(s.audio.size)}</div></div>`;
+            wireAudioPreview();
+            document.getElementById('pop-audio-rerec').addEventListener('click', () => { s.audio = null; renderPopBody(); syncPopSave(); });
+          } else {
+            body.innerHTML = `<div class="audio-panel"><div class="audio-time" id="pop-audio-elapsed">0:00</div><button class="audio-rec-btn" id="pop-audio-rec">● Record</button><div class="dz-sub" style="margin-top:12px">Tap record and speak. Tap again to stop.</div><label class="mini-btn" style="margin-top:14px;display:inline-flex;cursor:pointer">Or upload audio<input type="file" accept="audio/*" id="pop-audio-input" style="display:none"/></label></div>`;
+            document.getElementById('pop-audio-rec').addEventListener('click', toggleRecord);
+            document.getElementById('pop-audio-input').addEventListener('change', (e) => { if (e.target.files[0]) { s.audio = e.target.files[0]; renderPopBody(); syncPopSave(); } });
+          }
+        }
+        syncPopSave();
+      }
+      function syncPopSave() { const b = document.getElementById('pop-save'); if (b) b.disabled = !popEditHasMedia(popState); }
+      function savePopcode() {
+        const s = popState; if (!popEditHasMedia(s)) return;
+        s.photo.popcode = { mediaType: s.mediaType, video: s.mediaType === 'video' ? s.video : null, audio: s.mediaType === 'audio' ? s.audio : null };
+        closeSheet(); render(); showToast('Popcode saved');
+      }
+      // Video pick + compress (ported from book.html) --------------------------------
+      function canCompressVideo() {
+        try { const c = document.createElement('canvas'); if (typeof c.captureStream !== 'function' || typeof MediaRecorder === 'undefined') return false;
+          return ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].some(t => MediaRecorder.isTypeSupported(t)); } catch (e) { return false; }
+      }
+      function compressVideo(file, onProgress) {
+        const types = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+        const mimeType = types.find(t => MediaRecorder.isTypeSupported(t));
+        return new Promise((resolve, reject) => {
+          const video = document.createElement('video'); const srcUrl = URL.createObjectURL(file);
+          video.src = srcUrl; video.muted = true; video.playsInline = true;
+          video.onloadedmetadata = () => {
+            const MAX_DIM = 1280; const scale = Math.min(1, MAX_DIM / Math.max(video.videoWidth || 1, video.videoHeight || 1));
+            const w = Math.max(2, Math.round(video.videoWidth * scale / 2) * 2), h = Math.max(2, Math.round(video.videoHeight * scale / 2) * 2);
+            const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d'); const stream = canvas.captureStream(30);
+            const rec = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2500000 }); const chunks = [];
+            rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+            rec.onstop = () => { URL.revokeObjectURL(srcUrl); resolve(new Blob(chunks, { type: mimeType.split(';')[0] })); };
+            rec.onerror = e => { URL.revokeObjectURL(srcUrl); reject(e.error || new Error('Compression error')); };
+            let animId; const draw = () => { if (!video.ended && !video.paused) { ctx.drawImage(video, 0, 0, w, h); onProgress && onProgress(video.currentTime / (video.duration || 1)); animId = requestAnimationFrame(draw); } };
+            video.onended = () => { cancelAnimationFrame(animId); rec.stop(); };
+            rec.start(200); video.play().then(draw).catch(reject);
+          };
+          video.onerror = () => reject(new Error('Could not load video for compression'));
+          video.load();
         });
-        document.getElementById('vid-cancel').addEventListener('click', closeSheet);
+      }
+      async function handleVideoPick(input) {
+        const file = input.files[0]; if (!file) return;
+        const sizeMB = file.size / (1024 * 1024); const msg = document.getElementById('pop-video-msg');
+        if (sizeMB > MAX_VIDEO_MB) {
+          if (canCompressVideo()) {
+            if (!confirm(`This video is ${sizeMB.toFixed(1)} MB — over the ${MAX_VIDEO_MB} MB limit.\n\nCompress it now? This can take a minute.`)) { input.value = ''; return; }
+            msg.innerHTML = `<div class="compress-status">Compressing… 0%</div><div class="compress-bar-wrap"><div class="compress-bar" id="cbar"></div></div>`;
+            let compressed; try { compressed = await compressVideo(file, p => { document.getElementById('cbar').style.width = Math.round(p * 100) + '%'; msg.querySelector('.compress-status').textContent = `Compressing… ${Math.round(p * 100)}%`; }); } catch (e) { compressed = null; }
+            const cMB = compressed ? compressed.size / (1024 * 1024) : Infinity;
+            if (compressed && cMB <= MAX_VIDEO_MB) { popState.video = new File([compressed], (file.name || 'video').replace(/\.[^.]+$/, '.webm'), { type: compressed.type }); renderPopBody(); syncPopSave(); }
+            else { msg.innerHTML = `<div class="warn-banner">Still too large${cMB < Infinity ? ' (' + cMB.toFixed(0) + ' MB)' : ''}. Compress further at <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a>, then choose it again.</div>`; input.value = ''; }
+          } else { msg.innerHTML = `<div class="warn-banner">${sizeMB.toFixed(1)} MB — over the ${MAX_VIDEO_MB} MB limit. Compress free at <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a>, then choose it again.</div>`; input.value = ''; }
+          return;
+        }
+        popState.video = file; renderPopBody(); syncPopSave();
+      }
+      // Audio record (ported from book.html) -----------------------------------------
+      function pickAudioMime() {
+        const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/ogg;codecs=opus'];
+        if (typeof MediaRecorder === 'undefined') return null;
+        for (const c of candidates) if (MediaRecorder.isTypeSupported(c)) { const ext = c.startsWith('audio/webm') ? 'webm' : c.startsWith('audio/mp4') ? 'm4a' : c.startsWith('audio/ogg') ? 'ogg' : 'webm'; return { mime: c, ext }; }
+        return { mime: '', ext: 'webm' };
+      }
+      async function toggleRecord() {
+        if (recorder) { if (recorder.timerId) clearInterval(recorder.timerId); try { recorder.mediaRecorder.stop(); } catch (e) {} return; }
+        const pick = pickAudioMime(); if (!pick) { alert('Audio recording is not supported in this browser.'); return; }
+        let stream; try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { alert('Microphone access was denied. Enable it in your browser settings and try again.'); return; }
+        const mr = new MediaRecorder(stream, pick.mime ? { mimeType: pick.mime } : {}); const chunks = [];
+        mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+        mr.onstop = () => { const blob = new Blob(chunks, { type: pick.mime || mr.mimeType || 'audio/webm' }); stream.getTracks().forEach(t => t.stop()); recorder = null; popState.audio = new File([blob], `audio.${pick.ext}`, { type: blob.type }); renderPopBody(); syncPopSave(); };
+        mr.start(); recorder = { mediaRecorder: mr, chunks, stream, ext: pick.ext, startTs: Date.now(), timerId: null };
+        const recBtn = document.getElementById('pop-audio-rec'); if (recBtn) { recBtn.textContent = '■ Stop'; recBtn.classList.add('stop'); }
+        recorder.timerId = setInterval(() => { const sec = Math.floor((Date.now() - recorder.startTs) / 1000); const el = document.getElementById('pop-audio-elapsed'); if (el) el.innerHTML = `<span class="rec-dot"></span>${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }, 250);
+      }
+      function wireAudioPreview() {
+        const audio = document.getElementById('pop-audio-el'), btn = document.getElementById('pop-audio-play'), dur = document.getElementById('pop-audio-dur');
+        if (!audio || !btn) return;
+        const play = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+        const pause = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+        const fmt = x => (x && isFinite(x)) ? `${Math.floor(x / 60)}:${String(Math.floor(x % 60)).padStart(2, '0')}` : '0:00';
+        audio.addEventListener('loadedmetadata', () => dur.textContent = fmt(audio.duration));
+        audio.addEventListener('play', () => btn.innerHTML = pause);
+        audio.addEventListener('pause', () => btn.innerHTML = play);
+        audio.addEventListener('timeupdate', () => { if (!audio.paused) dur.textContent = fmt(audio.currentTime); });
+        audio.addEventListener('ended', () => { dur.textContent = fmt(audio.duration); btn.innerHTML = play; });
+        btn.addEventListener('click', () => { if (audio.paused) audio.play(); else audio.pause(); });
       }
 
       // ── Summary + create readiness ─────────────────────────────────
       function updateSummary() {
         const placed = placedIds().size;
         let popcoded = 0; POSITIONS.forEach(pos => { if (photoHasMedia(photos.get(slots[pos]))) popcoded++; });
-        const ready = placed > 0 && popcoded > 0 && slugValid();
-        // When it can't be created yet, say exactly what's missing (the video
-        // requirement especially isn't obvious).
-        let msg;
-        if (!placed) msg = 'Add photos to begin.';
-        else if (!popcoded) msg = '⚠︎ Link a video to at least one page — that\'s what comes to life when scanned.';
-        else if (!slugValid()) msg = '⚠︎ Pick your Popcode link above (6–10 letters or numbers).';
-        else msg = `<strong>${placed}</strong>/${POSITIONS.length} pages · <strong>${popcoded}</strong> with video`;
+        // Mirror the photo book: enabled once photos are placed (a valid link is
+        // auto-generated). The video requirement is enforced at save with a clear
+        // prompt, matching book.html — no scary inline warnings here.
+        const ready = placed > 0 && slugValid();
         const sumEl = document.getElementById('summary');
-        sumEl.innerHTML = msg;
-        sumEl.classList.toggle('warn', !ready && placed > 0);
-        document.getElementById('create-btn').disabled = !ready;
+        if (!placed) sumEl.textContent = 'Add photos to begin.';
+        else sumEl.innerHTML = `<strong>${PAGE_COUNT}</strong> pages · <strong>${placed}</strong> placed · <strong>${popcoded}</strong> popcoded`;
+        sumEl.classList.remove('warn');
+        const btn = document.getElementById('create-btn');
+        btn.disabled = !ready;
+        btn.classList.toggle('ready', ready);
       }
 
       // ── Save (compile .mind + collection + items) ──────────────────
@@ -682,7 +820,7 @@
         }
         // Popcoded pages (in board order) → AR targets + collection_items.
         const popcodedPos = POSITIONS.filter(pos => photoHasMedia(photos.get(slots[pos])));
-        if (!popcodedPos.length) { alert('Link a video to at least one page so it comes to life when scanned.'); return; }
+        if (!popcodedPos.length) { alert('Add a Popcode (video or audio) to at least one page so it comes to life when scanned.'); return; }
         if (!slugValid()) { showToast('Pick your Popcode link — 6–10 lowercase letters or numbers.'); slugInput.focus(); return; }
 
         const slug = chosenSlug();
@@ -725,17 +863,25 @@
           if (mErr) throw new Error('Target upload failed: ' + mErr.message);
           const mindUrl = pub(`${slug}/target.mind`) + `?v=${Date.now()}`;
 
-          // 3. Upload each popcode video → collection_items rows.
-          setProgress('Uploading videos…', 64);
+          // 3. Upload each popcode's media (video or audio) → collection_items rows.
+          setProgress('Uploading media…', 64);
           const itemRows = [];
           for (let i = 0; i < popcodedPos.length; i++) {
             const pos = popcodedPos[i];
             const pc = photos.get(slots[pos]).popcode;
-            const vpath = `${slug}/video_${i}.mp4`;
-            const { error } = await db.storage.from(bucket).upload(vpath, pc.video, { contentType: pc.video.type || 'video/mp4', upsert: true });
-            if (error) throw new Error(`Video ${i + 1} upload failed: ${error.message}`);
-            itemRows.push({ target_index: i, media_type: 'video', video_url: pub(vpath) + `?v=${Date.now()}`, audio_url: null, photo_url: photoUrlByPos[pos] });
-            setProgress(`Uploading videos… ${i + 1}/${popcodedPos.length}`, 64 + ((i + 1) / popcodedPos.length) * 22);
+            if (pc.mediaType === 'audio' && pc.audio) {
+              const ext = (pc.audio.name && pc.audio.name.split('.').pop()) || 'webm';
+              const apath = `${slug}/audio_${i}.${ext}`;
+              const { error } = await db.storage.from(bucket).upload(apath, pc.audio, { contentType: pc.audio.type || 'audio/webm', upsert: true });
+              if (error) throw new Error(`Audio ${i + 1} upload failed: ${error.message}`);
+              itemRows.push({ target_index: i, media_type: 'audio', video_url: null, audio_url: pub(apath) + `?v=${Date.now()}`, photo_url: photoUrlByPos[pos] });
+            } else {
+              const vpath = `${slug}/video_${i}.mp4`;
+              const { error } = await db.storage.from(bucket).upload(vpath, pc.video, { contentType: pc.video.type || 'video/mp4', upsert: true });
+              if (error) throw new Error(`Video ${i + 1} upload failed: ${error.message}`);
+              itemRows.push({ target_index: i, media_type: 'video', video_url: pub(vpath) + `?v=${Date.now()}`, audio_url: null, photo_url: photoUrlByPos[pos] });
+            }
+            setProgress(`Uploading media… ${i + 1}/${popcodedPos.length}`, 64 + ((i + 1) / popcodedPos.length) * 22);
           }
 
           // 4. book_layout jsonb — board-book structure (position → photo + target_index).
@@ -784,6 +930,11 @@
         r.classList.add('visible');
         document.getElementById('result-link').textContent = 'popcode.app/' + slug;
         document.getElementById('result-view').href = '/' + slug;
+        const copyBtn = document.getElementById('result-copy');
+        if (copyBtn) copyBtn.onclick = () => {
+          const url = 'https://popcode.app/' + slug;
+          (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => showToast('Link copied')).catch(() => showToast(url));
+        };
         // Ordering is admin-only until validated; everyone else sees a "coming soon" note.
         document.getElementById('order-box').classList.toggle('hidden', !isAdmin);
         document.getElementById('order-soon').classList.toggle('hidden', isAdmin);
