@@ -212,6 +212,7 @@
       const PRODUCTS = [
         { id: 'book',     name: 'Photo Book',    desc: 'Lay-flat hardcover photo book — scannable pages come to life. A4 landscape or 8×8" square.', kind: 'build', href: '/book.html', mockup: '/assets/mockups/book.jpg' },
         { id: 'calendar', name: 'Wall Calendar', desc: 'A4 month-to-view wall calendar — 12 months of your photos with US holidays.', kind: 'build', href: '/calendar.html', badge: 'New', domMockup: 'calendar' },
+        { id: 'boardbook', name: 'Board Book', desc: 'Real 6×6" laminated chipboard baby board book — every page comes to life with video when scanned.', kind: 'build', href: '/boardbook.html', badge: 'New', domMockup: 'boardbook' },
         { id: 'framed',   name: 'Framed Prints', desc: 'Fine-art print in a classic frame behind perspex glaze — black, white or natural wood.', kind: 'photo', type: 'framed', mockup: '/assets/mockups/framed.jpg' },
         { id: 'tile',     name: 'Photo Tiles',   desc: 'Ready-to-hang framed tiles in black or white — great on their own or clustered.', kind: 'photo', type: 'tile',   mockup: '/assets/mockups/tile.jpg' },
         { id: 'canvas',   name: 'Canvas',        desc: 'Gallery-style stretched canvas with mirror-wrapped edges.',      kind: 'photo', type: 'canvas', mockup: '/assets/mockups/canvas.jpg' },
@@ -253,6 +254,22 @@
         return wrapEl;
       }
 
+      // Board-book card mockup: a thick chipboard-look landscape page with a sample
+      // photo + the scan badge (no asset file needed — same DOM-mockup approach as
+      // the calendar). The offset box-shadow reads as stacked chipboard pages.
+      function boardbookCardMockup(sample) {
+        const w = document.createElement('div');
+        w.style.cssText = 'width:78%;aspect-ratio:3675/1875;position:relative;border-radius:6px;overflow:hidden;box-shadow:7px 9px 0 #ded9cf, 0 4px 14px rgba(0,0,0,0.18);';
+        w.innerHTML = '<div class="bbm-photo" style="position:absolute;inset:0;background:#ededed;background-size:cover;background-position:center;"></div><img src="/assets/popcode_icon.svg" style="position:absolute;bottom:7%;right:5%;width:13%;"/>';
+        const photo = w.querySelector('.bbm-photo');
+        const FALLBACK = '/assets/sample-photo.jpg';
+        const im = new Image();
+        im.onload = () => { photo.style.backgroundImage = `url('${im.src}')`; };
+        im.onerror = () => { if (im.src !== location.origin + FALLBACK) im.src = FALLBACK; };
+        im.src = sample || FALLBACK;
+        return w;
+      }
+
       db.auth.getSession().then(async ({ data }) => {
         if (!data.session) { window.location.href = '/auth.html'; return; }
         currentUser = data.session.user;
@@ -282,6 +299,8 @@
           const thumb = card.querySelector('.cat-thumb');
           if (p.domMockup === 'calendar') {
             thumb.appendChild(calendarCardMockup(samples[i]));
+          } else if (p.domMockup === 'boardbook') {
+            thumb.appendChild(boardbookCardMockup(samples[i]));
           } else if (window.drawProductCardMockup) {
             // Composite the sample photo into the real Prodigi product template.
             // The stage stays empty (plain gray) until the finished canvas is
@@ -307,7 +326,7 @@
         const { data } = await db.from('collections')
           .select('id, slug, name, kind').eq('user_id', currentUser.id)
           .order('created_at', { ascending: false });
-        popcodes = (data || []).filter(c => !['book','print','tile','canvas','framed','framedcanvas','acrylic','calendar'].includes(c.kind));
+        popcodes = (data || []).filter(c => !['book','print','tile','canvas','framed','framedcanvas','acrylic','calendar','boardbook'].includes(c.kind));
         if (popcodes.length) {
           const ids = popcodes.map(c => c.id);
           const { data: items } = await db.from('collection_items')

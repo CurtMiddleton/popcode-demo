@@ -171,8 +171,9 @@
         <a class="btn-secondary" href="/manage.html">My Popcodes</a>
       </div>
 
-      <!-- Order the printed board book -->
-      <div style="max-width:460px;margin:0 auto;text-align:left;background:#fff;border-radius:16px;padding:22px 20px;box-shadow:0 1px 6px rgba(0,0,0,0.06);">
+      <!-- Order the printed board book (admin-gated until the live chain is validated) -->
+      <div id="order-soon" class="hidden" style="max-width:460px;margin:0 auto;color:#666;font-size:14px;background:#fff;border-radius:16px;padding:20px;box-shadow:0 1px 6px rgba(0,0,0,0.06);">Ordering the printed 6×6″ board book is coming soon — your design is saved to <strong>My Popcodes</strong> and is already scannable.</div>
+      <div id="order-box" class="hidden" style="max-width:460px;margin:0 auto;text-align:left;background:#fff;border-radius:16px;padding:22px 20px;box-shadow:0 1px 6px rgba(0,0,0,0.06);">
         <h2 style="font-family:'CooperBT',Georgia,serif;font-size:22px;margin:0 0 4px;text-align:center;">Order your printed board book</h2>
         <p style="color:#666;font-size:14px;text-align:center;margin:0 0 4px;">Real 6×6″ laminated chipboard.</p>
         <div id="order-price" style="text-align:center;font-weight:700;font-size:18px;margin:0 0 18px;color:#1a1a1a;">Enter your address to see the total</div>
@@ -212,6 +213,11 @@
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       let currentUser = null;
+      // Ordering the printed board book is gated to admins until the live
+      // Stripe→Printify chain is validated with one real order; everyone can still
+      // design + scan. Flip by removing this gate (see showResult).
+      const ADMIN_EMAILS = ['curtmid@gmail.com', 'curt@theworkshop.works'];
+      let isAdmin = false;
 
       // Board book = fixed cover + 10 spreads (Printify blueprint 2727 / variant
       // 148738). These position keys match the print_areas the printify adapter maps.
@@ -231,6 +237,7 @@
       db.auth.getSession().then(({ data }) => {
         if (!data.session) { window.location.href = '/auth.html'; return; }
         currentUser = data.session.user;
+        isAdmin = ADMIN_EMAILS.includes((currentUser.email || '').toLowerCase());
       });
       document.getElementById('start-btn').addEventListener('click', () => {
         document.getElementById('intro').classList.add('hidden');
@@ -535,6 +542,9 @@
         r.classList.add('visible');
         document.getElementById('result-link').textContent = 'popcode.app/' + slug;
         document.getElementById('result-view').href = '/' + slug;
+        // Ordering is admin-only until validated; everyone else sees a "coming soon" note.
+        document.getElementById('order-box').classList.toggle('hidden', !isAdmin);
+        document.getElementById('order-soon').classList.toggle('hidden', isAdmin);
         window.scrollTo({ top: 0 });
       }
 
