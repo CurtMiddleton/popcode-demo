@@ -75,8 +75,7 @@
       .slot-card { background: #fff; border-radius: 12px; padding: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
       .slot-label { font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
       .slot { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #ededed; cursor: pointer; }
-      .slot.cover { aspect-ratio: 3863 / 1875; }
-      .slot.spread { aspect-ratio: 3675 / 1875; }
+      .slot.square { aspect-ratio: 1 / 1; }
       .slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
       .slot .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #b7b2a8; font-size: 13px; text-align: center; padding: 8px; }
       .slot .tag { position: absolute; bottom: 6px; right: 6px; background: linear-gradient(135deg, #7657FC, #2dc0f7); color: #fff; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
@@ -122,15 +121,16 @@
       <a class="back" href="/manage.html">My Popcodes</a>
     </div>
 
-    <!-- Intro -->
+    <!-- Intro (product page) -->
     <div id="intro">
+      <div id="intro-mock" style="width:200px;height:200px;margin:0 auto 22px;"></div>
       <div class="hero">Design a Board Book</div>
-      <p>A real 6×6″ laminated chipboard baby board book — cover plus 10 pages.</p>
+      <p>A real 6×6″ laminated chipboard baby board book — a front cover plus 20 square pages.</p>
       <p>Scan any page with the Popcode app and it comes to life with your video.</p>
       <ul>
         <li>Durable, baby-proof chipboard pages</li>
-        <li>Up to 10 videos — one per page</li>
-        <li>A keepsake that plays, not just shows</li>
+        <li>Add a video to any page — a keepsake that plays</li>
+        <li>Printed &amp; shipped as a real 6×6″ book</li>
       </ul>
       <button class="btn-primary" id="start-btn">Start designing</button>
     </div>
@@ -219,10 +219,19 @@
       const ADMIN_EMAILS = ['curtmid@gmail.com', 'curt@theworkshop.works'];
       let isAdmin = false;
 
-      // Board book = fixed cover + 10 spreads (Printify blueprint 2727 / variant
-      // 148738). These position keys match the print_areas the printify adapter maps.
-      const POSITIONS = ['cover', 'spread_1', 'spread_2', 'spread_3', 'spread_4', 'spread_5', 'spread_6', 'spread_7', 'spread_8', 'spread_9', 'spread_10'];
-      const positionLabel = (pos) => pos === 'cover' ? 'Cover' : 'Page ' + pos.split('_')[1];
+      // The 6×6 board book (Printify blueprint 2727 / variant 148738) is a wraparound
+      // cover + 10 two-page openings = 20 square pages. The UI shows SQUARE pages
+      // (front cover + Page 1..20); at print time we pair pages into the 10 landscape
+      // "spread" images Printify ingests (spread_N = page 2N-1 | page 2N), plus the
+      // cover wrap. So POSITIONS here are UI page slots, not Printify print positions.
+      const PAGE_COUNT = 20;
+      const POSITIONS = ['cover', ...Array.from({ length: PAGE_COUNT }, (_, i) => 'page_' + (i + 1))];
+      const positionLabel = (pos) => pos === 'cover' ? 'Front Cover' : 'Page ' + pos.split('_')[1];
+      // Printify print positions: cover wrap + 10 spreads, each spread = two pages.
+      const PRINT_SPREADS = Array.from({ length: 10 }, (_, i) => ({ pos: 'spread_' + (i + 1), left: 'page_' + (i * 2 + 1), right: 'page_' + (i * 2 + 2) }));
+      // Print pixels (from the Printify variant placeholders).
+      const PX_COVER = [3863, 1875];      // wraparound: back | spine | front
+      const PX_SPREAD = [3675, 1875];     // two facing 6×6 pages
 
       // photos: id -> { id, file, url, popcode|null }
       //   popcode: { mediaType:'video', video:File }
@@ -239,6 +248,16 @@
         currentUser = data.session.user;
         isAdmin = ADMIN_EMAILS.includes((currentUser.email || '').toLowerCase());
       });
+      // Square board-book product visual on the intro (the "product page").
+      (function introMock() {
+        const el = document.getElementById('intro-mock');
+        if (!el) return;
+        el.style.cssText = 'width:200px;height:200px;margin:0 auto 22px;position:relative;border-radius:10px;overflow:hidden;box-shadow:9px 11px 0 #ded9cf, 0 6px 18px rgba(0,0,0,0.18);';
+        el.innerHTML = '<div style="position:absolute;inset:0;background:linear-gradient(135deg,#7657FC,#2dc0f7);"></div>'
+          + '<img src="/assets/Popcode_logo.rev.png" onerror="this.style.display=\'none\'" style="position:absolute;top:46%;left:50%;transform:translate(-50%,-50%);width:62%;"/>'
+          + '<img src="/assets/popcode_icon.svg" style="position:absolute;bottom:8%;right:7%;width:16%;filter:brightness(0) invert(1);opacity:0.9;"/>';
+      })();
+
       document.getElementById('start-btn').addEventListener('click', () => {
         document.getElementById('intro').classList.add('hidden');
         document.getElementById('builder').classList.remove('hidden');
@@ -287,12 +306,34 @@
         }
         return img;
       }
-      async function loadCompileImage(photo) {
+      // Load a photo (File or URL) as an <img>.
+      async function loadPhotoImg(photo) {
         const img = new Image();
         if (photo.file) img.src = URL.createObjectURL(photo.file);
         else { img.crossOrigin = 'anonymous'; img.src = photo.url; }
-        await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('Could not load a photo for compiling.')); });
-        return resizeForCompile(img);
+        await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('Could not load a photo.')); });
+        return img;
+      }
+      // Cover-fit a photo into a square canvas of `size` px (what each 6×6 page prints
+      // as). Optional scan badge bottom-right. Used for print + AR compile so the
+      // compiled target matches the printed square page.
+      async function squareCanvas(photo, size, withBadge) {
+        const img = await loadPhotoImg(photo);
+        const c = document.createElement('canvas'); c.width = size; c.height = size;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size);
+        const s = Math.max(size / img.naturalWidth, size / img.naturalHeight);
+        const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+        ctx.drawImage(img, (size - dw) / 2, (size - dh) / 2, dw, dh);
+        if (withBadge) { try { const b = await loadImg('/assets/popcode_icon.svg'); const bs = Math.round(size * 0.13), pad = Math.round(size * 0.05); ctx.drawImage(b, size - bs - pad, size - bs - pad, bs, bs); } catch (_) {} }
+        return c;
+      }
+      // AR compile target = the square-cropped page (no badge; matches what's printed).
+      async function loadCompileImage(photo) {
+        const c = await squareCanvas(photo, MAX_COMPILE_DIM, false);
+        const r = new Image();
+        await new Promise((res, rej) => { r.onload = res; r.onerror = rej; r.src = c.toDataURL('image/jpeg', 0.92); });
+        return r;
       }
 
       // ── Add photos ─────────────────────────────────────────────────
@@ -339,7 +380,7 @@
           const pid = slots[pos];
           const p = pid ? photos.get(pid) : null;
           card.innerHTML = `<div class="slot-label">${positionLabel(pos)}</div>
-            <div class="slot ${pos === 'cover' ? 'cover' : 'spread'}">
+            <div class="slot square">
               ${p ? `<img src="${p.url}"/>` : `<div class="ph">Tap a photo above, then tap here</div>`}
               ${photoHasMedia(p) ? `<div class="tag">▶ Video</div>` : ''}
             </div>`;
@@ -420,7 +461,7 @@
         const placed = placedIds().size;
         let popcoded = 0; POSITIONS.forEach(pos => { if (photoHasMedia(photos.get(slots[pos]))) popcoded++; });
         document.getElementById('summary').innerHTML = placed
-          ? `<strong>${placed}</strong>/11 pages · <strong>${popcoded}</strong> with video`
+          ? `<strong>${placed}</strong>/${POSITIONS.length} pages · <strong>${popcoded}</strong> with video`
           : 'Add photos to begin.';
         const ready = placed > 0 && popcoded > 0 && slugValid();
         document.getElementById('create-btn').disabled = !ready;
@@ -457,15 +498,17 @@
           const { data: taken } = await db.from('collections').select('id').eq('slug', slug).maybeSingle();
           if (taken) throw new Error(`popcode.app/${slug} is already taken — pick a different link.`);
 
-          // 1. Upload each placed photo → {slug}/board/{position}.jpg
+          // 1. Upload each placed photo, square-cropped to how the 6×6 page prints
+          //    (so the stored photo + AR target match the printed page).
           setProgress('Uploading photos…', 6);
           const photoUrlByPos = {};
           const filledPos = POSITIONS.filter(pos => slots[pos]);
           let done = 0;
           for (const pos of filledPos) {
-            const p = photos.get(slots[pos]);
+            const sqCanvas = await squareCanvas(photos.get(slots[pos]), 1400, false);
+            const blob = await new Promise(r => sqCanvas.toBlob(r, 'image/jpeg', 0.9));
             const path = `${slug}/board/${pos}.jpg`;
-            const { error } = await db.storage.from(bucket).upload(path, p.file, { contentType: 'image/jpeg', upsert: true });
+            const { error } = await db.storage.from(bucket).upload(path, blob, { contentType: 'image/jpeg', upsert: true });
             if (error) throw new Error('Photo upload failed: ' + error.message);
             photoUrlByPos[pos] = pub(path);
             done++;
@@ -549,10 +592,9 @@
       }
 
       // ── Print order (Printify) ─────────────────────────────────────
-      // Printify board-book print positions (exact px). We composite each page to
-      // these, with the scan badge on popcoded pages, upload to the public bucket,
-      // then hand them to /api/create-checkout (productType 'boardbook').
-      const POSITION_PX = { cover: [3863, 1875], spread: [3675, 1875] };
+      // At order time we build the 11 Printify print images from the square pages:
+      // the cover wrap + 10 two-page spreads (each = two square pages side by side),
+      // upload them, then hand them to /api/create-checkout (productType 'boardbook').
       const COUNTRY_OPTIONS = [['US', 'United States'], ['CA', 'Canada'], ['GB', 'United Kingdom'], ['AU', 'Australia'], ['IE', 'Ireland'], ['NZ', 'New Zealand'], ['DE', 'Germany'], ['FR', 'France']];
       (function fillCountries() {
         const sel = document.getElementById('o-country');
@@ -562,27 +604,38 @@
       function loadImg(src) {
         return new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
       }
-      // Composite one page at its exact print px: white ground, cover-fit photo,
-      // scan badge bottom-right on popcoded pages. Returns a JPEG blob.
-      async function compositePrintImage(pos, photo, hasBadge) {
-        const [W, H] = pos === 'cover' ? POSITION_PX.cover : POSITION_PX.spread;
+      // Draw a page's photo cover-fit into rect (x,0,w,h) of ctx, clipped, with the
+      // scan badge bottom-right if the page is popcoded. Blank (white) if empty.
+      async function drawPageInto(ctx, pos, x, w, h) {
+        const pid = slots[pos]; if (!pid) return;
+        const photo = photos.get(pid);
+        const img = await loadPhotoImg(photo);
+        const s = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+        const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+        ctx.save(); ctx.beginPath(); ctx.rect(x, 0, w, h); ctx.clip();
+        ctx.drawImage(img, x + (w - dw) / 2, (h - dh) / 2, dw, dh);
+        if (photoHasMedia(photo)) {
+          try { const b = await loadImg('/assets/popcode_icon.svg'); const bs = Math.round(Math.min(w, h) * 0.11), pad = Math.round(Math.min(w, h) * 0.05); ctx.drawImage(b, x + w - bs - pad, h - bs - pad, bs, bs); } catch (_) {}
+        }
+        ctx.restore();
+      }
+      // A two-page spread = left page | right page (each ~square). White where empty.
+      async function compositeSpread(sp) {
+        const [W, H] = PX_SPREAD; const half = W / 2;
         const c = document.createElement('canvas'); c.width = W; c.height = H;
-        const ctx = c.getContext('2d');
-        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
-        if (photo) {
-          const img = await loadImg(photo.url);
-          const iw = img.naturalWidth, ih = img.naturalHeight;
-          const s = Math.max(W / iw, H / ih);            // cover-fit
-          const dw = iw * s, dh = ih * s;
-          ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
-        }
-        if (hasBadge) {
-          try {
-            const badge = await loadImg('/assets/popcode_icon.svg');
-            const bs = Math.round(Math.min(W, H) * 0.09), pad = Math.round(Math.min(W, H) * 0.03);
-            ctx.drawImage(badge, W - bs - pad, H - bs - pad, bs, bs);
-          } catch (_) {}
-        }
+        const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+        await drawPageInto(ctx, sp.left, 0, half, H);
+        await drawPageInto(ctx, sp.right, half, half, H);
+        return new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
+      }
+      // Cover wrap (back | spine | front). The front-cover photo goes on the RIGHT
+      // square (front). NOTE: which half prints as the front should be confirmed with
+      // one test order; if it's mirrored, swap the x origin below.
+      async function compositeCoverWrap() {
+        const [W, H] = PX_COVER;
+        const c = document.createElement('canvas'); c.width = W; c.height = H;
+        const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+        await drawPageInto(ctx, 'cover', W - H, H, H);   // right square = front
         return new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
       }
 
@@ -647,13 +700,15 @@
           const bucket = 'experiences';
           const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
           const assetUrls = [];
-          for (const pos of POSITIONS) {
-            const pid = slots[pos]; const photo = pid ? photos.get(pid) : null;
-            const blob = await compositePrintImage(pos, photo, photoHasMedia(photo));
-            const path = `${savedSlug}/board/print_${pos}.jpg`;
+          // Build the 11 Printify print images: cover wrap + 10 spreads (page pairs).
+          const jobs = [{ pos: 'cover', make: compositeCoverWrap }].concat(
+            PRINT_SPREADS.map(sp => ({ pos: sp.pos, make: () => compositeSpread(sp) })));
+          for (const job of jobs) {
+            const blob = await job.make();
+            const path = `${savedSlug}/board/print_${job.pos}.jpg`;
             const { error } = await db.storage.from(bucket).upload(path, blob, { contentType: 'image/jpeg', upsert: true });
             if (error) throw new Error('Could not prepare a page: ' + error.message);
-            assetUrls.push({ url: pub(path), print_area: pos });
+            assetUrls.push({ url: pub(path), print_area: job.pos });
           }
           btn.textContent = 'Going to checkout…';
           const { data: { session } } = await db.auth.getSession();
