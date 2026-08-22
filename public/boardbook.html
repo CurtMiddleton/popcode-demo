@@ -83,7 +83,9 @@
       .note.bad { color: #d33; }
 
       /* Tray */
-      .tray-head { display: flex; align-items: center; justify-content: space-between; margin: 24px 0 10px; gap: 10px; flex-wrap: wrap; }
+      .photos-panel { background: #fff; border-radius: 16px; box-shadow: 0 1px 8px rgba(0,0,0,0.06); padding: 20px; margin: 24px 0 6px; }
+      .tray-empty { color: #999; font-size: 15px; padding: 22px 2px; }
+      .tray-head { display: flex; align-items: center; justify-content: space-between; margin: 0 0 12px; gap: 10px; flex-wrap: wrap; }
       .tray-head h2 { font-size: 17px; margin: 0; }
       .chip-btn { border: 1.5px solid #e3e1db; background: #fff; color: #1a1a1a; border-radius: 999px; padding: 9px 16px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; white-space: nowrap; }
       .chip-btn.dark { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
@@ -100,9 +102,13 @@
       .slots { margin-top: 14px; display: flex; flex-direction: column; gap: 16px; }
       .spread-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; background: #fff; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,0.07); overflow: hidden; }
       .spread-row .half { padding: 12px; }
-      .spread-row .half + .half { border-left: 1px dashed #e6e3dc; }   /* center fold */
-      .spread-blank { display: flex; align-items: center; justify-content: center; color: #c4bfb5; font-size: 12px; }
+      /* Center fold only between two real facing pages (not next to a blank half). */
+      .spread-row.pair .half + .half { border-left: 1px dashed #e6e3dc; }
+      .half.blank { background: transparent; }   /* blank inside-cover half — no label */
       .slot-card { background: transparent; }
+      /* Faint "Your Title" placeholder on an untitled cover. */
+      .slot .cover-title.placeholder { color: rgba(255,255,255,0.85); font-style: italic; opacity: 0.9; }
+      .slot .cover-title.placeholder.on-empty { color: #b7b2a8; text-shadow: none; }
       .slot-label { font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
       .slot { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #ededed; cursor: pointer; container-type: inline-size; }
       .slot.square { aspect-ratio: 1 / 1; }
@@ -205,14 +211,17 @@
         <input id="title-input" class="text-input" type="text" placeholder="e.g. Baby's First Year"/>
       </div>
 
-      <div class="tray-head">
-        <h2>Your photos <span id="photo-counts" style="color:#999;font-weight:400;font-size:14px;"></span></h2>
-        <div style="display:flex;gap:8px;">
-          <button class="chip-btn" id="autofill-btn" type="button">↳ Auto-fill</button>
-          <button class="chip-btn dark" id="addphotos-btn" type="button">+ Add photos</button>
+      <div class="photos-panel">
+        <div class="tray-head">
+          <h2>Your photos <span id="photo-counts" style="color:#999;font-weight:400;font-size:14px;"></span></h2>
+          <div style="display:flex;gap:8px;">
+            <button class="chip-btn" id="autofill-btn" type="button">↳ Auto-fill</button>
+            <button class="chip-btn dark" id="addphotos-btn" type="button">+ Add photos</button>
+          </div>
         </div>
+        <div class="tray-empty" id="tray-empty">Add photos to get started — they'll appear here to place into your book.</div>
+        <div class="tray" id="tray"></div>
       </div>
-      <div class="tray" id="tray"></div>
 
       <div class="slots" id="slots"></div>
     </div>
@@ -477,6 +486,9 @@
 
       function renderTray() {
         const tray = document.getElementById('tray');
+        const empty = document.getElementById('tray-empty');
+        if (empty) empty.style.display = photos.size ? 'none' : '';
+        tray.style.display = photos.size ? '' : 'none';
         tray.innerHTML = '';
         const placed = placedIds();
         photos.forEach(p => {
@@ -493,14 +505,21 @@
         tray.appendChild(add);
       }
 
-      // One book opening (row) = two facing pages; null → a blank inside-cover half.
+      // One book opening (row) = two facing pages; null → a blank inside-cover half
+      // (prints white, like a layflat endpaper) rendered with no label.
       function slotHalfHTML(pos) {
-        if (!pos) return '<div class="half spread-blank">inside cover</div>';
+        if (!pos) return '<div class="half blank"></div>';
         const pid = slots[pos]; const p = pid ? photos.get(pid) : null;
         const isCover = pos === 'cover';
-        const overlay = (isCover && (cover.title || cover.subtitle))
-          ? `<div class="cover-scrim"></div><div class="cover-title" style="font-family:${coverFontStack(cover.font)}">${escapeHtml(cover.title || '')}${cover.subtitle ? `<span class="cover-sub">${escapeHtml(cover.subtitle)}</span>` : ''}</div>`
-          : '';
+        let overlay = '';
+        if (isCover) {
+          if (cover.title || cover.subtitle) {
+            overlay = `<div class="cover-scrim"></div><div class="cover-title" style="font-family:${coverFontStack(cover.font)}">${escapeHtml(cover.title || '')}${cover.subtitle ? `<span class="cover-sub">${escapeHtml(cover.subtitle)}</span>` : ''}</div>`;
+          } else {
+            // Faint "Your Title" placeholder (over a photo, or on the empty cover).
+            overlay = `${p ? '<div class="cover-scrim"></div>' : ''}<div class="cover-title placeholder${p ? '' : ' on-empty'}" style="font-family:${coverFontStack(cover.font)}">Your Title</div>`;
+          }
+        }
         return `<div class="half"><div class="slot-label">${positionLabel(pos)}</div>
           <div class="slot square" data-pos="${pos}">
             ${p ? `<img src="${p.url}"/>` : `<div class="ph">${isCover ? 'Tap to add a cover' : 'Tap a photo above, then tap here'}</div>`}
@@ -513,7 +532,7 @@
         grid.innerHTML = '';
         SPREAD_ROWS.forEach(([l, r]) => {
           const row = document.createElement('div');
-          row.className = 'spread-row';
+          row.className = 'spread-row' + (l && r ? ' pair' : '');   // fold only between two real pages
           row.innerHTML = slotHalfHTML(l) + slotHalfHTML(r);
           grid.appendChild(row);
         });
