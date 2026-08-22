@@ -16,6 +16,7 @@
     <title>Popcode — Design a Board Book</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/unsplash-samples.js"></script>
     <!-- Board book only needs MINDAR.IMAGE.Compiler (compile popcoded photos into a
          .mind), not AR rendering. Stub AFRAME so the compiler bundle loads without a
          WebGL renderer — same trick as create.html / book.html. -->
@@ -295,10 +296,11 @@
         probe.onload = () => { stage.innerHTML = ''; const im = new Image(); im.src = probe.src; stage.appendChild(im); };
         probe.onerror = () => {
           const m = document.createElement('div');
-          m.style.cssText = 'width:270px;max-width:100%;aspect-ratio:1/1;position:relative;border-radius:12px;overflow:hidden;box-shadow:10px 12px 0 #ded9cf, 0 6px 18px rgba(0,0,0,0.2);';
-          m.innerHTML = '<div style="position:absolute;inset:0;background:linear-gradient(135deg,#7657FC,#2dc0f7);"></div>'
-            + '<img src="/assets/Popcode_logo.rev.png" onerror="this.style.display=\'none\'" style="position:absolute;top:46%;left:50%;transform:translate(-50%,-50%);width:60%;"/>'
-            + '<img src="/assets/popcode_icon.svg" style="position:absolute;bottom:8%;right:7%;width:15%;filter:brightness(0) invert(1);opacity:0.92;"/>';
+          m.style.cssText = 'width:270px;max-width:100%;aspect-ratio:1/1;position:relative;border-radius:12px;overflow:hidden;box-shadow:10px 12px 0 #ded9cf, 0 6px 18px rgba(0,0,0,0.2);background:linear-gradient(135deg,#7657FC,#2dc0f7);';
+          // A baby photo as the board-book cover (falls back to the gradient if blocked).
+          const baby = (window.unsplashBaby && window.unsplashBaby(700)) || '';
+          m.innerHTML = (baby ? `<img src="${baby}" crossorigin="anonymous" onerror="this.style.display='none'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;"/>` : '')
+            + '<img src="/assets/popcode_icon.svg" style="position:absolute;bottom:7%;right:7%;width:15%;"/>';
           stage.appendChild(m);
         };
         probe.src = '/assets/mockups/boardbook.png';

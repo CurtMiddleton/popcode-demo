@@ -86,6 +86,23 @@
   window.unsplashSample = function (w) {
     return window.unsplashSampleCat(CATS[Math.floor(Math.random() * CATS.length)], w);
   };
+  // Baby / family subset (from the verified people pool) for the board-book product
+  // mockups. Swap for self-hosted real baby photos under /assets/samples/ if desired.
+  const BABY = [
+    'https://images.unsplash.com/photo-1560328055-e938bb2ed50a', // dad with baby on shoulders
+    'https://images.unsplash.com/photo-1531984929664-2fb2be468d3e', // toddler hug
+    'https://images.unsplash.com/photo-1531983412531-1f49a365ffed', // mother + child
+    'https://images.unsplash.com/photo-1624272864537-8ecc72b67958', // father + child
+    'https://images.unsplash.com/photo-1506456331400-7088248a8db1', // beach, parent + kid
+    'https://images.unsplash.com/photo-1605713288610-00c1c630ca1e', // kids hugging
+    'https://images.unsplash.com/photo-1581579186913-45ac3e6efe93', // family with dog
+  ];
+  window.unsplashBaby = function (w) { return url(BABY[Math.floor(Math.random() * BABY.length)], w); };
+  window.unsplashBabies = function (n, w) {
+    const a = shuffled(BABY); const out = [];
+    for (let i = 0; i < n; i++) out.push(url(a[i % a.length], w));
+    return out;
+  };
   // Interleave categories (travel, people, pets, travel, …) so even a pick of
   // 3–5 spans the mix instead of coming out all-landscapes or all-dogs.
   window.unsplashSamples = function (n, w) {
