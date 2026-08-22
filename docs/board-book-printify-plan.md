@@ -33,6 +33,24 @@ Findings:
 cover + 10 landscape spreads. The builder produces 11 flat images at the sizes above;
 each spread can carry a Popcode (its photo plays a video when scanned) — the AR keepsake.
 
+**Phase 3 stage 1 — BUILT (`public/boardbook.html`, branch only, headless-tested):** a
+purpose-built builder (derived in spirit from book.html, kept as a separate file so the
+live photo-book flow can't break). Intro → 11 fixed slots (cover + page 1–10, correct
+aspect) → tap-to-place from a photo tray → per-page video Popcode → **AR save**: uploads
+photos to `{slug}/board/{position}.jpg`, compiles the popcoded photos into `{slug}/target.mind`,
+inserts a `collections` row `kind:'boardbook'` + `book_layout {product:'boardbook',
+variantId:'bb-6x6', slots:[{position, photo_url, target_index}]}` + `collection_items`.
+So a board book is scannable at popcode.app/{slug} exactly like a photo book. Verified
+end-to-end headlessly (real MINDAR compile, 0 page errors). NOT yet linked from nav
+(reachable at /boardbook.html) — deliberately, until ordering is wired.
+
+**Phase 3 stage 2 — TODO (the print order):** composite each of the 11 pages to Printify's
+exact px (cover 3863×1875, spreads 3675×1875) with the scan badge on popcoded pages →
+"Order board book" → create-checkout(productType 'boardbook') → the printify adapter (done).
+Needs the `print_orders.provider`/`provider_meta` migration run first, then a preview
+dry-run order. Also: audio popcodes (stage 1 is video-only), photo crop/adjust, drag-reorder,
+and a nav entry once ordering works.
+
 ---
 
 Status: **design sketch, not built.** Goal: add the Printify **6×6 baby board book**

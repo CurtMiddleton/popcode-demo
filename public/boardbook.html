@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+    <script
+      src="https://browser.sentry-cdn.com/10.59.0/bundle.min.js"
+      integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
+      crossorigin="anonymous"></script>
+    <script src="/sentry-init.js"></script>
+    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
+    <meta property="og:title" content="Popcode — Design a Board Book">
+    <meta property="og:description" content="Design a baby board book where every page comes to life with video when scanned.">
+    <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=2">
+    <title>Popcode — Design a Board Book</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <!-- Board book only needs MINDAR.IMAGE.Compiler (compile popcoded photos into a
+         .mind), not AR rendering. Stub AFRAME so the compiler bundle loads without a
+         WebGL renderer — same trick as create.html / book.html. -->
+    <script>
+      window.AFRAME = window.AFRAME || {
+        registerSystem(){}, registerComponent(){}, registerShader(){},
+        registerGeometry(){}, registerPrimitive(){}, registerElement(){}
+      };
+    </script>
+    <script src="/vendor/mindar/1.2.2/mindar-image-aframe.prod.js"></script>
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <style>
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      body { margin: 0; font-family: 'Inter', system-ui, sans-serif; color: #1a1a1a; background: #f7f6f2; }
+      a { color: inherit; }
+      .topbar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: #fff; border-bottom: 1px solid #eee; position: sticky; top: 0; z-index: 20; }
+      .topbar .logo { height: 26px; }
+      .topbar a.back { font-size: 14px; color: #7657FC; text-decoration: none; font-weight: 600; }
+      .wrap { max-width: 1000px; margin: 0 auto; padding: 20px 16px 140px; }
+      h1 { font-family: 'CooperBT', Georgia, serif; font-size: 30px; margin: 8px 0 4px; }
+      .sub { color: #666; font-size: 15px; margin: 0 0 20px; }
+
+      /* Intro */
+      #intro { text-align: center; padding: 48px 16px 80px; }
+      #intro .hero { font-family: 'CooperBT', Georgia, serif; font-size: 34px; margin: 0 0 8px; }
+      #intro p { color: #555; max-width: 460px; margin: 0 auto 8px; line-height: 1.5; }
+      #intro ul { list-style: none; padding: 0; max-width: 420px; margin: 20px auto; text-align: left; }
+      #intro li { padding: 8px 0 8px 30px; position: relative; color: #333; }
+      #intro li::before { content: '✓'; position: absolute; left: 0; color: #2dc0c5; font-weight: 700; }
+      .btn-primary { background: #1a1a1a; color: #fff; border: none; border-radius: 999px; padding: 15px 30px; font-size: 16px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+      .btn-secondary { background: #fff; color: #1a1a1a; border: 1.5px solid #ddd; border-radius: 999px; padding: 13px 26px; font-size: 15px; font-weight: 600; cursor: pointer; }
+
+      /* Link + title fields */
+      .field { margin-bottom: 18px; }
+      .field label { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+      .slug-row { display: flex; align-items: center; background: #fff; border: 1.5px solid #e3e1db; border-radius: 12px; overflow: hidden; max-width: 420px; }
+      .slug-row .prefix { padding: 12px 4px 12px 14px; color: #999; font-size: 15px; }
+      .slug-row input { border: none; outline: none; padding: 12px 12px 12px 0; font-size: 15px; flex: 1; font-family: 'Inter', sans-serif; }
+      .text-input { width: 100%; max-width: 420px; border: 1.5px solid #e3e1db; border-radius: 12px; padding: 12px 14px; font-size: 15px; font-family: 'Inter', sans-serif; outline: none; }
+      .note { font-size: 13px; color: #888; margin-top: 6px; }
+      .note.bad { color: #d33; }
+
+      /* Tray */
+      .tray-head { display: flex; align-items: center; justify-content: space-between; margin: 24px 0 10px; }
+      .tray-head h2 { font-size: 17px; margin: 0; }
+      .tray { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 10px; touch-action: pan-x; }
+      .tray-thumb { flex: 0 0 auto; width: 74px; height: 74px; border-radius: 10px; background-size: cover; background-position: center; cursor: pointer; position: relative; border: 3px solid transparent; }
+      .tray-thumb.selected { border-color: #2dc0c5; }
+      .tray-thumb.placed::after { content: '✓'; position: absolute; top: 3px; right: 5px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.6); font-weight: 700; font-size: 13px; }
+      .tray-thumb .pop { position: absolute; bottom: 3px; right: 3px; width: 18px; height: 18px; }
+      .tray-add { flex: 0 0 auto; width: 74px; height: 74px; border-radius: 10px; border: 2px dashed #c9c4ba; background: #fff; color: #7657FC; font-size: 26px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+      /* Slots grid */
+      .slots { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+      @media (max-width: 620px) { .slots { grid-template-columns: 1fr; } }
+      .slot-card { background: #fff; border-radius: 12px; padding: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+      .slot-label { font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+      .slot { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #ededed; cursor: pointer; }
+      .slot.cover { aspect-ratio: 3863 / 1875; }
+      .slot.spread { aspect-ratio: 3675 / 1875; }
+      .slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .slot .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #b7b2a8; font-size: 13px; text-align: center; padding: 8px; }
+      .slot .tag { position: absolute; bottom: 6px; right: 6px; background: linear-gradient(135deg, #7657FC, #2dc0f7); color: #fff; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
+
+      /* Sticky create bar */
+      .create-bar { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #eee; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; z-index: 30; }
+      .create-bar .summary { font-size: 13px; color: #666; }
+      .create-btn { margin-left: auto; }
+
+      /* Modal / sheet */
+      .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: flex-end; justify-content: center; z-index: 100; }
+      .sheet-bg.open { display: flex; }
+      .sheet { background: #fff; width: 100%; max-width: 520px; border-radius: 18px 18px 0 0; padding: 22px 20px calc(22px + env(safe-area-inset-bottom)); }
+      @media (min-width: 560px) { .sheet-bg { align-items: center; } .sheet { border-radius: 18px; } }
+      .sheet h2 { margin: 0 0 4px; font-size: 20px; }
+      .sheet-sub { color: #666; font-size: 14px; margin: 0 0 16px; }
+      .menu-row { display: flex; align-items: center; gap: 12px; padding: 14px 6px; border-top: 1px solid #f0f0f0; cursor: pointer; font-size: 15px; }
+      .menu-row.danger { color: #d33; }
+      .seg { display: inline-flex; background: #f0efec; border-radius: 999px; padding: 3px; gap: 2px; margin-bottom: 14px; }
+      .seg button { background: transparent; border: none; padding: 8px 18px; border-radius: 999px; font-weight: 700; color: #666; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .seg button.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+      .drop { border: 2px dashed #c9c4ba; border-radius: 12px; padding: 24px; text-align: center; color: #777; cursor: pointer; }
+      .drop.has { border-style: solid; border-color: #2dc0c5; color: #1a1a1a; }
+      .sheet-actions { display: flex; gap: 10px; margin-top: 18px; }
+
+      /* Progress + result */
+      #progress { display: none; position: fixed; inset: 0; background: rgba(255,255,255,0.96); z-index: 200; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+      #progress.visible { display: flex; }
+      .bar { width: 260px; max-width: 80%; height: 8px; background: #eee; border-radius: 999px; overflow: hidden; margin: 16px 0; }
+      .bar > div { height: 100%; width: 0; background: linear-gradient(90deg, #7657FC, #2dc0f7); transition: width 0.3s; }
+      #progress .label { font-size: 15px; color: #333; }
+      #result { display: none; text-align: center; padding: 60px 16px; }
+      #result.visible { display: block; }
+      #result .link { font-size: 20px; font-weight: 700; color: #7657FC; margin: 12px 0; word-break: break-all; }
+      .toast { position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 300; }
+      .toast.show { opacity: 1; }
+      .hidden { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <img class="logo" src="/assets/Popcode_logo.png" alt="Popcode"/>
+      <a class="back" href="/manage.html">My Popcodes</a>
+    </div>
+
+    <!-- Intro -->
+    <div id="intro">
+      <div class="hero">Design a Board Book</div>
+      <p>A real 6×6″ laminated chipboard baby board book — cover plus 10 pages.</p>
+      <p>Scan any page with the Popcode app and it comes to life with your video.</p>
+      <ul>
+        <li>Durable, baby-proof chipboard pages</li>
+        <li>Up to 10 videos — one per page</li>
+        <li>A keepsake that plays, not just shows</li>
+      </ul>
+      <button class="btn-primary" id="start-btn">Start designing</button>
+    </div>
+
+    <!-- Builder -->
+    <div class="wrap hidden" id="builder">
+      <h1>Design a Board Book</h1>
+      <p class="sub">Add a photo to each page, then link a video to the pages you want to come alive.</p>
+
+      <div class="field">
+        <label for="slug-input">Your Popcode link</label>
+        <div class="slug-row">
+          <span class="prefix">popcode.app/</span>
+          <input id="slug-input" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="yourlink"/>
+        </div>
+        <div class="note" id="slug-note">6–10 lowercase letters or numbers.</div>
+      </div>
+      <div class="field">
+        <label for="title-input">Title <span style="color:#aaa;font-weight:400">(optional)</span></label>
+        <input id="title-input" class="text-input" type="text" placeholder="e.g. Baby's First Year"/>
+      </div>
+
+      <div class="tray-head">
+        <h2>Your photos</h2>
+      </div>
+      <div class="tray" id="tray"></div>
+
+      <div class="slots" id="slots"></div>
+    </div>
+
+    <!-- Result -->
+    <div id="result">
+      <div class="hero" style="font-family:'CooperBT',Georgia,serif;font-size:28px;">Your board book is ready! 🎉</div>
+      <p style="color:#555;">It's saved and scannable. Point the Popcode app at any linked page to see it play.</p>
+      <div class="link" id="result-link"></div>
+      <p style="color:#888;font-size:14px;max-width:460px;margin:14px auto;">Ordering the printed board book is coming next — your design is saved to <strong>My Designs</strong>.</p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px;">
+        <a class="btn-primary" id="result-view" href="#">Open viewer</a>
+        <a class="btn-secondary" href="/manage.html">My Popcodes</a>
+      </div>
+    </div>
+
+    <!-- Create bar -->
+    <div class="create-bar hidden" id="create-bar">
+      <span class="summary" id="summary">Add photos to begin.</span>
+      <button class="btn-primary create-btn" id="create-btn" disabled>Create Board Book</button>
+    </div>
+
+    <!-- Progress -->
+    <div id="progress">
+      <div class="label" id="progress-label">Working…</div>
+      <div class="bar"><div id="progress-fill"></div></div>
+      <button class="btn-secondary hidden" id="try-again-btn">Try again</button>
+    </div>
+
+    <div class="sheet-bg" id="sheet-bg"><div class="sheet" id="sheet"></div></div>
+    <div class="toast" id="toast"></div>
+
+    <input type="file" id="photo-input" accept="image/*" multiple class="hidden"/>
+
+    <script>
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      let currentUser = null;
+
+      // Board book = fixed cover + 10 spreads (Printify blueprint 2727 / variant
+      // 148738). These position keys match the print_areas the printify adapter maps.
+      const POSITIONS = ['cover', 'spread_1', 'spread_2', 'spread_3', 'spread_4', 'spread_5', 'spread_6', 'spread_7', 'spread_8', 'spread_9', 'spread_10'];
+      const positionLabel = (pos) => pos === 'cover' ? 'Cover' : 'Page ' + pos.split('_')[1];
+
+      // photos: id -> { id, file, url, popcode|null }
+      //   popcode: { mediaType:'video', video:File }
+      const photos = new Map();
+      const slots = {};                 // position -> photoId | null
+      POSITIONS.forEach(p => { slots[p] = null; });
+      let selectedTrayId = null;        // tray photo awaiting placement
+      let idSeq = 0;
+      const uid = () => 'p' + (idSeq++) + Date.now().toString(36);
+
+      // ── Auth gate + intro ──────────────────────────────────────────
+      db.auth.getSession().then(({ data }) => {
+        if (!data.session) { window.location.href = '/auth.html'; return; }
+        currentUser = data.session.user;
+      });
+      document.getElementById('start-btn').addEventListener('click', () => {
+        document.getElementById('intro').classList.add('hidden');
+        document.getElementById('builder').classList.remove('hidden');
+        document.getElementById('create-bar').classList.remove('hidden');
+        render();
+      });
+
+      // ── Helpers ────────────────────────────────────────────────────
+      function escapeHtml(s) { const d = document.createElement('div'); d.appendChild(document.createTextNode(s == null ? '' : String(s))); return d.innerHTML; }
+      function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2200); }
+      const slugInput = document.getElementById('slug-input');
+      const chosenSlug = () => (slugInput.value || '').trim().toLowerCase();
+      const slugValid = () => /^[a-z0-9]{6,10}$/.test(chosenSlug());
+      function syncSlugNote() {
+        const n = document.getElementById('slug-note'); const ok = slugValid();
+        n.textContent = ok ? `Scans will open popcode.app/${chosenSlug()}` : '6–10 lowercase letters or numbers.';
+        n.classList.toggle('bad', !ok && chosenSlug().length > 0);
+      }
+      slugInput.addEventListener('input', () => { slugInput.value = slugInput.value.toLowerCase().replace(/[^a-z0-9]/g, ''); syncSlugNote(); updateSummary(); });
+
+      function photoHasMedia(p) { return !!(p && p.popcode && p.popcode.video); }
+      function placedIds() { const s = new Set(); Object.values(slots).forEach(id => { if (id) s.add(id); }); return s; }
+
+      // ── Photo optimize (downscale for storage) ─────────────────────
+      const MAX_PHOTO_DIM = 2560, PHOTO_QUALITY = 0.85, MAX_COMPILE_DIM = 1024;
+      async function optimizePhoto(file) {
+        let src;
+        try { src = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+        catch (_) { src = new Image(); src.src = URL.createObjectURL(file); await new Promise((r, j) => { src.onload = r; src.onerror = j; }); }
+        const w0 = src.width || src.naturalWidth, h0 = src.height || src.naturalHeight;
+        const scale = Math.min(1, MAX_PHOTO_DIM / Math.max(w0, h0));
+        const w = Math.round(w0 * scale), h = Math.round(h0 * scale);
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(src, 0, 0, w, h);
+        const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', PHOTO_QUALITY));
+        return new File([blob], (file.name || 'photo').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+      }
+      async function resizeForCompile(img) {
+        if (img.naturalWidth > MAX_COMPILE_DIM || img.naturalHeight > MAX_COMPILE_DIM) {
+          const scale = Math.min(MAX_COMPILE_DIM / img.naturalWidth, MAX_COMPILE_DIM / img.naturalHeight);
+          const c = document.createElement('canvas');
+          c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          const r = new Image(); await new Promise((res, rej) => { r.onload = res; r.onerror = rej; r.src = c.toDataURL('image/jpeg', 0.92); });
+          return r;
+        }
+        return img;
+      }
+      async function loadCompileImage(photo) {
+        const img = new Image();
+        if (photo.file) img.src = URL.createObjectURL(photo.file);
+        else { img.crossOrigin = 'anonymous'; img.src = photo.url; }
+        await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('Could not load a photo for compiling.')); });
+        return resizeForCompile(img);
+      }
+
+      // ── Add photos ─────────────────────────────────────────────────
+      const photoInput = document.getElementById('photo-input');
+      photoInput.addEventListener('change', async () => {
+        const files = [...photoInput.files]; photoInput.value = '';
+        for (const f of files) {
+          try {
+            const out = await optimizePhoto(f);
+            const id = uid();
+            photos.set(id, { id, file: out, url: URL.createObjectURL(out), popcode: null });
+          } catch (_) { showToast('Could not read a photo.'); }
+        }
+        render();
+      });
+
+      // ── Render ─────────────────────────────────────────────────────
+      function render() { renderTray(); renderSlots(); updateSummary(); }
+
+      function renderTray() {
+        const tray = document.getElementById('tray');
+        tray.innerHTML = '';
+        const placed = placedIds();
+        photos.forEach(p => {
+          const t = document.createElement('div');
+          t.className = 'tray-thumb' + (selectedTrayId === p.id ? ' selected' : '') + (placed.has(p.id) ? ' placed' : '');
+          t.style.backgroundImage = `url('${p.url}')`;
+          if (photoHasMedia(p)) { const d = document.createElement('img'); d.className = 'pop'; d.src = '/assets/popcode_icon.svg'; t.appendChild(d); }
+          t.addEventListener('click', () => { selectedTrayId = selectedTrayId === p.id ? null : p.id; renderTray(); });
+          tray.appendChild(t);
+        });
+        const add = document.createElement('div');
+        add.className = 'tray-add'; add.textContent = '+';
+        add.addEventListener('click', () => photoInput.click());
+        tray.appendChild(add);
+      }
+
+      function renderSlots() {
+        const grid = document.getElementById('slots');
+        grid.innerHTML = '';
+        POSITIONS.forEach(pos => {
+          const card = document.createElement('div');
+          card.className = 'slot-card';
+          const pid = slots[pos];
+          const p = pid ? photos.get(pid) : null;
+          card.innerHTML = `<div class="slot-label">${positionLabel(pos)}</div>
+            <div class="slot ${pos === 'cover' ? 'cover' : 'spread'}">
+              ${p ? `<img src="${p.url}"/>` : `<div class="ph">Tap a photo above, then tap here</div>`}
+              ${photoHasMedia(p) ? `<div class="tag">▶ Video</div>` : ''}
+            </div>`;
+          card.querySelector('.slot').addEventListener('click', () => onSlotTap(pos));
+          grid.appendChild(card);
+        });
+      }
+
+      function onSlotTap(pos) {
+        if (selectedTrayId) {
+          // Place the selected tray photo here (if it's already elsewhere, move it).
+          for (const k of POSITIONS) if (slots[k] === selectedTrayId) slots[k] = null;
+          slots[pos] = selectedTrayId;
+          selectedTrayId = null;
+          render();
+          return;
+        }
+        if (slots[pos]) openSlotMenu(pos);
+        else showToast('Tap a photo above first, then tap a page.');
+      }
+
+      // ── Slot menu ──────────────────────────────────────────────────
+      const sheetBg = document.getElementById('sheet-bg'), sheet = document.getElementById('sheet');
+      function openSheet(html) { sheet.innerHTML = html; sheetBg.classList.add('open'); }
+      function closeSheet() { sheetBg.classList.remove('open'); sheet.innerHTML = ''; }
+      sheetBg.addEventListener('click', e => { if (e.target === sheetBg) closeSheet(); });
+
+      function openSlotMenu(pos) {
+        const p = photos.get(slots[pos]);
+        const has = photoHasMedia(p);
+        openSheet(`
+          <h2>${positionLabel(pos)}</h2>
+          <p class="sheet-sub">${has ? 'This page plays its video when scanned.' : 'Link a video and this page comes to life when scanned.'}</p>
+          <div class="menu-row" data-act="popcode">🎬 ${has ? 'Change the video' : 'Add a video (Popcode)'}</div>
+          ${has ? '<div class="menu-row danger" data-act="unlink">Remove the video</div>' : ''}
+          <div class="menu-row danger" data-act="remove">Remove photo from this page</div>
+        `);
+        sheet.querySelectorAll('.menu-row').forEach(row => row.addEventListener('click', () => {
+          const act = row.dataset.act;
+          if (act === 'popcode') { closeSheet(); openPopcodeSheet(pos); }
+          else if (act === 'unlink') { p.popcode = null; closeSheet(); render(); showToast('Video removed'); }
+          else if (act === 'remove') { slots[pos] = null; closeSheet(); render(); }
+        }));
+      }
+
+      // ── Popcode (video) editor ─────────────────────────────────────
+      let popState = null;  // { pos, video }
+      function openPopcodeSheet(pos) {
+        const p = photos.get(slots[pos]);
+        popState = { pos, video: p.popcode ? p.popcode.video : null };
+        renderPopcodeSheet();
+      }
+      function renderPopcodeSheet() {
+        const s = popState; const has = !!s.video;
+        openSheet(`
+          <h2>Add a video</h2>
+          <p class="sheet-sub">It plays when this page is scanned with the Popcode app.</p>
+          <div class="drop ${has ? 'has' : ''}" id="vid-drop">${has ? '✓ ' + escapeHtml(s.video.name || 'Video selected') : 'Tap to choose a video'}</div>
+          <input type="file" id="vid-input" accept="video/*" class="hidden"/>
+          <div class="sheet-actions">
+            <button class="btn-primary" id="vid-save" ${has ? '' : 'disabled'}>Save</button>
+            <button class="btn-secondary" id="vid-cancel">Cancel</button>
+          </div>
+        `);
+        const input = document.getElementById('vid-input');
+        document.getElementById('vid-drop').addEventListener('click', () => input.click());
+        input.addEventListener('change', () => { if (input.files[0]) { s.video = input.files[0]; renderPopcodeSheet(); } });
+        document.getElementById('vid-save').addEventListener('click', () => {
+          const p = photos.get(slots[s.pos]);
+          p.popcode = { mediaType: 'video', video: s.video };
+          closeSheet(); render(); showToast('Video linked');
+        });
+        document.getElementById('vid-cancel').addEventListener('click', closeSheet);
+      }
+
+      // ── Summary + create readiness ─────────────────────────────────
+      function updateSummary() {
+        const placed = placedIds().size;
+        let popcoded = 0; POSITIONS.forEach(pos => { if (photoHasMedia(photos.get(slots[pos]))) popcoded++; });
+        document.getElementById('summary').innerHTML = placed
+          ? `<strong>${placed}</strong>/11 pages · <strong>${popcoded}</strong> with video`
+          : 'Add photos to begin.';
+        const ready = placed > 0 && popcoded > 0 && slugValid();
+        document.getElementById('create-btn').disabled = !ready;
+      }
+
+      // ── Save (compile .mind + collection + items) ──────────────────
+      function setProgress(label, pct) {
+        document.getElementById('progress').classList.add('visible');
+        document.getElementById('progress-label').textContent = label;
+        document.getElementById('progress-fill').style.width = Math.max(0, Math.min(100, pct)) + '%';
+      }
+      function yieldToPaint() { return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); }
+
+      document.getElementById('create-btn').addEventListener('click', saveBoardBook);
+      async function saveBoardBook() {
+        const placed = placedIds();
+        if (!placed.size) { showToast('Place at least one photo first.'); return; }
+        if (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler) {
+          alert('The compiler is still loading — please wait a moment and try again.'); return;
+        }
+        // Popcoded pages (in board order) → AR targets + collection_items.
+        const popcodedPos = POSITIONS.filter(pos => photoHasMedia(photos.get(slots[pos])));
+        if (!popcodedPos.length) { alert('Link a video to at least one page so it comes to life when scanned.'); return; }
+        if (!slugValid()) { showToast('Pick your Popcode link — 6–10 lowercase letters or numbers.'); slugInput.focus(); return; }
+
+        const slug = chosenSlug();
+        const title = document.getElementById('title-input').value.trim() || null;
+        const bucket = 'experiences';
+        const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+        document.getElementById('create-btn').disabled = true;
+
+        try {
+          setProgress('Checking your link…', 3);
+          const { data: taken } = await db.from('collections').select('id').eq('slug', slug).maybeSingle();
+          if (taken) throw new Error(`popcode.app/${slug} is already taken — pick a different link.`);
+
+          // 1. Upload each placed photo → {slug}/board/{position}.jpg
+          setProgress('Uploading photos…', 6);
+          const photoUrlByPos = {};
+          const filledPos = POSITIONS.filter(pos => slots[pos]);
+          let done = 0;
+          for (const pos of filledPos) {
+            const p = photos.get(slots[pos]);
+            const path = `${slug}/board/${pos}.jpg`;
+            const { error } = await db.storage.from(bucket).upload(path, p.file, { contentType: 'image/jpeg', upsert: true });
+            if (error) throw new Error('Photo upload failed: ' + error.message);
+            photoUrlByPos[pos] = pub(path);
+            done++;
+            setProgress(`Uploading photos… ${done}/${filledPos.length}`, 6 + (done / filledPos.length) * 24);
+          }
+
+          // 2. Compile popcoded photos into a .mind target (in board order).
+          setProgress('Making your pages scannable… (this can take a minute)', 34);
+          await yieldToPaint();
+          const imgs = [];
+          for (const pos of popcodedPos) imgs.push(await loadCompileImage(photos.get(slots[pos])));
+          const compiler = new MINDAR.IMAGE.Compiler();
+          await compiler.compileImageTargets(imgs, (prog) => setProgress(`Making your pages scannable… ${Math.round(prog)}%`, 34 + prog * 0.26));
+          const buffer = await compiler.exportData();
+          const { error: mErr } = await db.storage.from(bucket).upload(`${slug}/target.mind`, new Blob([buffer]), { contentType: 'application/octet-stream', upsert: true });
+          if (mErr) throw new Error('Target upload failed: ' + mErr.message);
+          const mindUrl = pub(`${slug}/target.mind`) + `?v=${Date.now()}`;
+
+          // 3. Upload each popcode video → collection_items rows.
+          setProgress('Uploading videos…', 64);
+          const itemRows = [];
+          for (let i = 0; i < popcodedPos.length; i++) {
+            const pos = popcodedPos[i];
+            const pc = photos.get(slots[pos]).popcode;
+            const vpath = `${slug}/video_${i}.mp4`;
+            const { error } = await db.storage.from(bucket).upload(vpath, pc.video, { contentType: pc.video.type || 'video/mp4', upsert: true });
+            if (error) throw new Error(`Video ${i + 1} upload failed: ${error.message}`);
+            itemRows.push({ target_index: i, media_type: 'video', video_url: pub(vpath) + `?v=${Date.now()}`, audio_url: null, photo_url: photoUrlByPos[pos] });
+            setProgress(`Uploading videos… ${i + 1}/${popcodedPos.length}`, 64 + ((i + 1) / popcodedPos.length) * 22);
+          }
+
+          // 4. book_layout jsonb — board-book structure (position → photo + target_index).
+          const targetIndexByPos = {};
+          popcodedPos.forEach((pos, i) => { targetIndexByPos[pos] = i; });
+          const bookLayout = {
+            product: 'boardbook',
+            variantId: 'bb-6x6',
+            title,
+            slots: POSITIONS.map(pos => ({
+              position: pos,
+              photo_url: photoUrlByPos[pos] || null,
+              target_index: pos in targetIndexByPos ? targetIndexByPos[pos] : null,
+            })),
+          };
+
+          // 5. Insert the collection (kind:'boardbook') + popcoded items.
+          setProgress('Saving your board book…', 90);
+          const { data: col, error: colErr } = await db.from('collections')
+            .insert({ slug, name: title, mind_file_url: mindUrl, user_id: currentUser.id, kind: 'boardbook', book_layout: bookLayout })
+            .select().single();
+          if (colErr) throw new Error('Could not save: ' + colErr.message);
+          const rows = itemRows.map(r => ({ ...r, collection_id: col.id }));
+          const { error: iErr } = await db.from('collection_items').insert(rows);
+          if (iErr) throw new Error('Saved, but linking videos failed: ' + iErr.message);
+
+          setProgress('Done!', 100);
+          showResult(slug);
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          setProgress(err.message || 'Something went wrong.', 100);
+          document.getElementById('try-again-btn').classList.remove('hidden');
+          document.getElementById('try-again-btn').onclick = () => { document.getElementById('progress').classList.remove('visible'); document.getElementById('try-again-btn').classList.add('hidden'); document.getElementById('create-btn').disabled = false; };
+        }
+      }
+
+      function showResult(slug) {
+        document.getElementById('progress').classList.remove('visible');
+        document.getElementById('builder').classList.add('hidden');
+        document.getElementById('create-bar').classList.add('hidden');
+        const r = document.getElementById('result');
+        r.classList.add('visible');
+        document.getElementById('result-link').textContent = 'popcode.app/' + slug;
+        document.getElementById('result-view').href = '/' + slug;
+      }
+    </script>
+  </body>
+</html>
