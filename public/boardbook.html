@@ -100,8 +100,10 @@
       /* Slots grid */
       /* Spread rows — one book opening per row (two facing pages), like the book maker. */
       .slots { margin-top: 14px; display: flex; flex-direction: column; gap: 16px; }
-      .spread-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; background: #fff; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,0.07); overflow: hidden; }
-      .spread-row .half { padding: 12px; }
+      /* Pages sit directly on the cream page background (no white card behind them),
+         like the photo-book spread view. */
+      .spread-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+      .spread-row .half { padding: 10px 12px; }
       /* Center fold only between two real facing pages (not next to a blank half). */
       .spread-row.pair .half + .half { border-left: 1px dashed #e6e3dc; }
       .half.blank { background: transparent; }   /* blank inside-cover half — no label */
@@ -123,6 +125,7 @@
       /* Sticky create bar */
       .create-bar { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #eee; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; z-index: 30; }
       .create-bar .summary { font-size: 13px; color: #666; }
+      .create-bar .summary.warn { color: #b26b00; font-weight: 600; }
       .create-btn { margin-left: auto; }
 
       /* Modal / sheet */
@@ -199,16 +202,16 @@
       <p class="sub">Add a photo to each page, then link a video to the pages you want to come alive.</p>
 
       <div class="field">
-        <label for="slug-input">Your Popcode link</label>
+        <label for="title-input">Book title <span style="color:#aaa;font-weight:400">(optional)</span></label>
+        <input id="title-input" class="text-input" type="text" placeholder="e.g. Baby's First Year"/>
+      </div>
+      <div class="field">
+        <label for="slug-input">Popcode link <span style="color:#999;font-weight:500">(where scans open)</span></label>
         <div class="slug-row">
           <span class="prefix">popcode.app/</span>
           <input id="slug-input" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="yourlink"/>
         </div>
         <div class="note" id="slug-note">6–10 lowercase letters or numbers.</div>
-      </div>
-      <div class="field">
-        <label for="title-input">Book title <span style="color:#aaa;font-weight:400">(optional)</span></label>
-        <input id="title-input" class="text-input" type="text" placeholder="e.g. Baby's First Year"/>
       </div>
 
       <div class="photos-panel">
@@ -655,10 +658,17 @@
       function updateSummary() {
         const placed = placedIds().size;
         let popcoded = 0; POSITIONS.forEach(pos => { if (photoHasMedia(photos.get(slots[pos]))) popcoded++; });
-        document.getElementById('summary').innerHTML = placed
-          ? `<strong>${placed}</strong>/${POSITIONS.length} pages · <strong>${popcoded}</strong> with video`
-          : 'Add photos to begin.';
         const ready = placed > 0 && popcoded > 0 && slugValid();
+        // When it can't be created yet, say exactly what's missing (the video
+        // requirement especially isn't obvious).
+        let msg;
+        if (!placed) msg = 'Add photos to begin.';
+        else if (!popcoded) msg = '⚠︎ Link a video to at least one page — that\'s what comes to life when scanned.';
+        else if (!slugValid()) msg = '⚠︎ Pick your Popcode link above (6–10 letters or numbers).';
+        else msg = `<strong>${placed}</strong>/${POSITIONS.length} pages · <strong>${popcoded}</strong> with video`;
+        const sumEl = document.getElementById('summary');
+        sumEl.innerHTML = msg;
+        sumEl.classList.toggle('warn', !ready && placed > 0);
         document.getElementById('create-btn').disabled = !ready;
       }
 
