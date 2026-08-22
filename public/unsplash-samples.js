@@ -108,18 +108,19 @@
   // and the board-book detail page. `mount` is emptied and the mockup appended.
   window.boardbookMockup = function (mount, photoUrl, opts) {
     opts = opts || {};
-    const title = opts.title != null ? opts.title : "Baby's First Book";
+    const title = opts.title != null ? opts.title : 'Baby’s First Book';
     const subtitle = opts.subtitle || '';
     const esc = (s) => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
     const FALLBACK = '/assets/sample-photo.jpg';
     const w = document.createElement('div');
-    w.style.cssText = 'width:74%;max-width:300px;aspect-ratio:1/1;position:relative;border-radius:10px;overflow:hidden;container-type:inline-size;background:#ededed;box-shadow:9px 11px 0 #ded9cf, 0 6px 18px rgba(0,0,0,0.2);';
+    // Soft, realistic cast shadow (like the other product mockups) — no hard offset block.
+    w.style.cssText = 'width:74%;max-width:300px;aspect-ratio:1/1;position:relative;border-radius:10px;overflow:hidden;container-type:inline-size;background:#ededed;box-shadow:0 18px 34px -6px rgba(0,0,0,0.28), 0 3px 8px rgba(0,0,0,0.12);';
     w.innerHTML =
       '<div class="bbm-photo" style="position:absolute;inset:0;background-size:cover;background-position:center;"></div>' +
       (title || subtitle ? '<div style="position:absolute;left:0;right:0;bottom:0;height:52%;background:linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.55));"></div>' +
         '<div style="position:absolute;left:8%;right:8%;bottom:8%;color:#fff;font-family:\'CooperBT\',Georgia,serif;text-shadow:0 2px 10px rgba(0,0,0,0.45);">' +
-          (title ? '<div style="font-size:9cqw;line-height:1.08;">' + esc(title) + '</div>' : '') +
-          (subtitle ? '<div style="font-size:5cqw;opacity:0.9;margin-top:2cqw;">' + esc(subtitle) + '</div>' : '') +
+          (title ? '<div style="font-size:7.5cqw;line-height:1.1;">' + esc(title) + '</div>' : '') +
+          (subtitle ? '<div style="font-size:4.5cqw;opacity:0.9;margin-top:2cqw;">' + esc(subtitle) + '</div>' : '') +
         '</div>' : '');
     const photo = w.querySelector('.bbm-photo');
     const im = new Image();
