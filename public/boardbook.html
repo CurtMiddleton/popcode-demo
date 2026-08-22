@@ -166,10 +166,27 @@
       <div class="hero" style="font-family:'CooperBT',Georgia,serif;font-size:28px;">Your board book is ready! 🎉</div>
       <p style="color:#555;">It's saved and scannable. Point the Popcode app at any linked page to see it play.</p>
       <div class="link" id="result-link"></div>
-      <p style="color:#888;font-size:14px;max-width:460px;margin:14px auto;">Ordering the printed board book is coming next — your design is saved to <strong>My Designs</strong>.</p>
-      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px;">
-        <a class="btn-primary" id="result-view" href="#">Open viewer</a>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:10px 0 26px;">
+        <a class="btn-secondary" id="result-view" href="#">Open viewer</a>
         <a class="btn-secondary" href="/manage.html">My Popcodes</a>
+      </div>
+
+      <!-- Order the printed board book -->
+      <div style="max-width:460px;margin:0 auto;text-align:left;background:#fff;border-radius:16px;padding:22px 20px;box-shadow:0 1px 6px rgba(0,0,0,0.06);">
+        <h2 style="font-family:'CooperBT',Georgia,serif;font-size:22px;margin:0 0 4px;text-align:center;">Order your printed board book</h2>
+        <p style="color:#666;font-size:14px;text-align:center;margin:0 0 18px;">Real 6×6″ laminated chipboard. <strong>~$32</strong> incl. shipping &amp; handling.</p>
+        <div class="field"><label for="o-name">Recipient name</label><input class="text-input" id="o-name" autocomplete="name" style="max-width:none"/></div>
+        <div class="field"><label for="o-email">Email</label><input class="text-input" id="o-email" type="email" autocomplete="email" style="max-width:none"/></div>
+        <div class="field"><label for="o-line1">Address line 1</label><input class="text-input" id="o-line1" autocomplete="address-line1" style="max-width:none"/></div>
+        <div class="field"><label for="o-line2">Address line 2 <span style="color:#aaa;font-weight:400">(optional)</span></label><input class="text-input" id="o-line2" autocomplete="address-line2" style="max-width:none"/></div>
+        <div class="field"><label for="o-city">City</label><input class="text-input" id="o-city" autocomplete="address-level2" style="max-width:none"/></div>
+        <div style="display:flex;gap:10px;">
+          <div class="field" style="flex:1"><label for="o-state">State / county</label><input class="text-input" id="o-state" autocomplete="address-level1" style="max-width:none"/></div>
+          <div class="field" style="flex:1"><label for="o-zip">Postal / ZIP</label><input class="text-input" id="o-zip" autocomplete="postal-code" style="max-width:none"/></div>
+        </div>
+        <div class="field"><label for="o-country">Country</label><select class="text-input" id="o-country" style="max-width:none"></select></div>
+        <button class="btn-primary" id="order-btn" style="width:100%;margin-top:6px;">Continue to payment</button>
+        <div class="note" id="order-note" style="text-align:center;margin-top:10px;"></div>
       </div>
     </div>
 
@@ -497,7 +514,7 @@
           if (iErr) throw new Error('Saved, but linking videos failed: ' + iErr.message);
 
           setProgress('Done!', 100);
-          showResult(slug);
+          showResult(slug, col.id);
         } catch (err) {
           console.error(err);
           if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
@@ -507,7 +524,9 @@
         }
       }
 
-      function showResult(slug) {
+      let savedSlug = null, savedCollectionId = null;
+      function showResult(slug, collectionId) {
+        savedSlug = slug; savedCollectionId = collectionId;
         document.getElementById('progress').classList.remove('visible');
         document.getElementById('builder').classList.add('hidden');
         document.getElementById('create-bar').classList.add('hidden');
@@ -515,6 +534,98 @@
         r.classList.add('visible');
         document.getElementById('result-link').textContent = 'popcode.app/' + slug;
         document.getElementById('result-view').href = '/' + slug;
+        window.scrollTo({ top: 0 });
+      }
+
+      // ── Print order (Printify) ─────────────────────────────────────
+      // Printify board-book print positions (exact px). We composite each page to
+      // these, with the scan badge on popcoded pages, upload to the public bucket,
+      // then hand them to /api/create-checkout (productType 'boardbook').
+      const POSITION_PX = { cover: [3863, 1875], spread: [3675, 1875] };
+      const COUNTRY_OPTIONS = [['US', 'United States'], ['CA', 'Canada'], ['GB', 'United Kingdom'], ['AU', 'Australia'], ['IE', 'Ireland'], ['NZ', 'New Zealand'], ['DE', 'Germany'], ['FR', 'France']];
+      (function fillCountries() {
+        const sel = document.getElementById('o-country');
+        sel.innerHTML = COUNTRY_OPTIONS.map(([c, n]) => `<option value="${c}">${n}</option>`).join('');
+      })();
+
+      function loadImg(src) {
+        return new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
+      }
+      // Composite one page at its exact print px: white ground, cover-fit photo,
+      // scan badge bottom-right on popcoded pages. Returns a JPEG blob.
+      async function compositePrintImage(pos, photo, hasBadge) {
+        const [W, H] = pos === 'cover' ? POSITION_PX.cover : POSITION_PX.spread;
+        const c = document.createElement('canvas'); c.width = W; c.height = H;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+        if (photo) {
+          const img = await loadImg(photo.url);
+          const iw = img.naturalWidth, ih = img.naturalHeight;
+          const s = Math.max(W / iw, H / ih);            // cover-fit
+          const dw = iw * s, dh = ih * s;
+          ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+        }
+        if (hasBadge) {
+          try {
+            const badge = await loadImg('/assets/popcode_icon.svg');
+            const bs = Math.round(Math.min(W, H) * 0.09), pad = Math.round(Math.min(W, H) * 0.03);
+            ctx.drawImage(badge, W - bs - pad, H - bs - pad, bs, bs);
+          } catch (_) {}
+        }
+        return new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
+      }
+
+      document.getElementById('order-btn').addEventListener('click', placeOrder);
+      async function placeOrder() {
+        const note = document.getElementById('order-note'); note.classList.remove('bad'); note.textContent = '';
+        const recipient = {
+          name: document.getElementById('o-name').value.trim(),
+          email: document.getElementById('o-email').value.trim(),
+          address: {
+            line1: document.getElementById('o-line1').value.trim(),
+            line2: document.getElementById('o-line2').value.trim(),
+            townOrCity: document.getElementById('o-city').value.trim(),
+            stateOrCounty: document.getElementById('o-state').value.trim(),
+            postalOrZipCode: document.getElementById('o-zip').value.trim(),
+            countryCode: document.getElementById('o-country').value,
+          },
+        };
+        if (!recipient.name || !recipient.email || !recipient.address.line1 || !recipient.address.townOrCity || !recipient.address.postalOrZipCode) {
+          note.textContent = 'Please fill in your name, email and address.'; note.classList.add('bad'); return;
+        }
+        const btn = document.getElementById('order-btn');
+        btn.disabled = true; btn.textContent = 'Preparing your book…';
+        try {
+          const bucket = 'experiences';
+          const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+          const assetUrls = [];
+          for (const pos of POSITIONS) {
+            const pid = slots[pos]; const photo = pid ? photos.get(pid) : null;
+            const blob = await compositePrintImage(pos, photo, photoHasMedia(photo));
+            const path = `${savedSlug}/board/print_${pos}.jpg`;
+            const { error } = await db.storage.from(bucket).upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+            if (error) throw new Error('Could not prepare a page: ' + error.message);
+            assetUrls.push({ url: pub(path), print_area: pos });
+          }
+          btn.textContent = 'Going to checkout…';
+          const { data: { session } } = await db.auth.getSession();
+          const resp = await fetch('/api/create-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+            body: JSON.stringify({
+              collectionId: savedCollectionId, productType: 'boardbook', variantId: 'bb-6x6',
+              copies: 1, shippingMethod: 'Standard', recipient, assetUrls,
+            }),
+          });
+          const j = await resp.json();
+          if (j.url) { window.location = j.url; return; }
+          throw new Error(j.error || 'Checkout failed');
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          note.textContent = err.message || 'Something went wrong.'; note.classList.add('bad');
+          btn.disabled = false; btn.textContent = 'Continue to payment';
+        }
       }
     </script>
   </body>

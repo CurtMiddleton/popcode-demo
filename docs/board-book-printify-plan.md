@@ -44,12 +44,29 @@ So a board book is scannable at popcode.app/{slug} exactly like a photo book. Ve
 end-to-end headlessly (real MINDAR compile, 0 page errors). NOT yet linked from nav
 (reachable at /boardbook.html) — deliberately, until ordering is wired.
 
-**Phase 3 stage 2 — TODO (the print order):** composite each of the 11 pages to Printify's
-exact px (cover 3863×1875, spreads 3675×1875) with the scan badge on popcoded pages →
-"Order board book" → create-checkout(productType 'boardbook') → the printify adapter (done).
-Needs the `print_orders.provider`/`provider_meta` migration run first, then a preview
-dry-run order. Also: audio popcodes (stage 1 is video-only), photo crop/adjust, drag-reorder,
-and a nav entry once ordering works.
+**Phase 3 stage 2 — BUILT (`public/boardbook.html`, branch only, headless-tested):** the
+print/order path. On the result screen after saving, a shipping form + "Continue to
+payment" composites each of the 11 pages to Printify's exact px (cover 3863×1875, spreads
+3675×1875) — white ground, cover-fit photo, scan badge bottom-right on popcoded pages —
+uploads them to `{slug}/board/print_{position}.jpg` (the public `experiences` bucket create-
+checkout validates), then POSTs `/api/create-checkout` with productType 'boardbook',
+variantId 'bb-6x6', 11 assetUrls tagged by position, and the recipient. Verified headlessly:
+correct checkout body, 11 assets under the experiences prefix, 0 page errors.
+
+**To actually place orders (go-live checklist):**
+1. Run `supabase/migrations/2026-08-21-print-orders-provider.sql` in prod Supabase (adds
+   `provider` + `provider_meta`; safe/additive) — REQUIRED, create-checkout writes them.
+2. Preview env already has (from the Prodigi print work) `SUPABASE_SERVICE_ROLE_KEY`,
+   `STRIPE_SECRET_KEY` (test), and `PRINTIFY_API_TOKEN`. `PRINTIFY_DRY_RUN` defaults true
+   (orders created send_to_production:false), `PRINTIFY_SHOP_ID` defaults to 28663478.
+3. On the preview: create a board book → order → pay with a Stripe test card → order-success
+   → finalize-order submits a dry-run Printify order. Confirm it appears in the Printify
+   dashboard with the real composited pages, then cancel it.
+4. Go-live: add the nav entry, set `PRINTIFY_DRY_RUN=false` (Production) + Stripe live keys,
+   merge to prod.
+
+Still deferred: audio popcodes (video-only now), photo crop/adjust, drag-reorder, and the
+cancel_url points at order.html (single-image flow) — a minor wrong-redirect on cancel only.
 
 ---
 
