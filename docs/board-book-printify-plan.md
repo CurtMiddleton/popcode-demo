@@ -15,11 +15,19 @@ The board book is real, API-accessible, and a genuine chipboard product. IDs to 
   - ≈ 312 DPI; each spread ≈ a two-page open leaf (two 6″ pages side by side).
 - **Artwork spec:** supply 11 flat images at those exact px sizes (full-bleed).
 
-Still to confirm in Phase 2 (needs a write, done as a `send_to_production:false` test
-order): the exact **base cost** (Printify variant cost isn't in the catalog read) and
-that the **order-with-`print_areas` upload path** works without a permanent product
-(high confidence — the variant exposes fixed `placeholders`/positions that map directly
-onto an order line item's `print_areas`, which is Printify's upload-based order shape).
+**CONFIRMED via a `send_to_production:false` test order (2026-08-21):** the order path
+works end-to-end (order `6a89856143d706d8240091bf`, status on-hold, never printed).
+Findings:
+- **Base product cost = $16.50 (1650 minor)** per copy, fixed regardless of artwork.
+  Shipping is separate and quoted live (was $5.99 to a US address). → with 1.4× markup +
+  whole-dollar round-up, a 6×6 retails **~$32 all-in**.
+- **No permanent product needed** and **no `/uploads` step**: the order line item's
+  `print_areas` takes the image **URL directly** as `src` (Printify fetches it). Format:
+  `print_areas: { cover: [{ src: <url>, x:0.5, y:0.5, scale:1, angle:0 }], spread_1: [...] }`.
+  (Two 8150 validation detours got us here: placements need `src`, and `src` must be a URL,
+  not an uploaded-image id.)
+- Recipient → `address_to` mapping and the numeric shipping method both validated.
+`catalog.boardbook.baseCostMinor` is now set to 1650, so the product prices correctly.
 
 **Builder implication:** unlike the single-page photo book, the board book is a FIXED
 cover + 10 landscape spreads. The builder produces 11 flat images at the sizes above;
