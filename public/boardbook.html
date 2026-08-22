@@ -91,7 +91,7 @@
       .chip-btn.dark { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
       .chip-btn:disabled { opacity: 0.45; cursor: not-allowed; }
       .tray { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 10px; touch-action: pan-x; }
-      .tray-thumb { flex: 0 0 auto; width: 74px; height: 74px; border-radius: 10px; background-size: cover; background-position: center; cursor: pointer; position: relative; border: 3px solid transparent; }
+      .tray-thumb { flex: 0 0 auto; width: 74px; height: 74px; border-radius: 10px; background-size: cover; background-position: center; cursor: pointer; position: relative; border: 3px solid transparent; touch-action: pan-x; }
       .tray-thumb.selected { border-color: #2dc0c5; }
       .tray-thumb.placed::after { content: '✓'; position: absolute; top: 3px; right: 5px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.6); font-weight: 700; font-size: 13px; }
       .tray-thumb .pop { position: absolute; bottom: 3px; right: 3px; width: 18px; height: 18px; }
@@ -121,7 +121,61 @@
       .slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
       .slot .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #b7b2a8; font-size: 13px; text-align: center; padding: 8px; }
       /* Scan badge on a popcoded page (the real Popcode mark, like the printed page). */
-      .slot .pc-badge { position: absolute; bottom: 6%; right: 6%; width: 13%; min-width: 20px; max-width: 34px; height: auto; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.35)); }
+      .slot .pc-badge { position: absolute; bottom: 6%; right: 6%; width: 13%; min-width: 20px; max-width: 34px; height: auto; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.35)); z-index: 2; }
+      /* Placed photo (carries the Edit Photo crop/zoom/rotate transform). */
+      .slot-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center center; z-index: 0; user-select: none; -webkit-user-drag: none; }
+      .slot-img.fit { object-fit: contain; }
+      /* Drag affordances */
+      .slot.place-target { outline: 3px solid #2dc0c5; outline-offset: -3px; }
+      .slot.slot-drag { opacity: 0.4; }
+      .tray-thumb.dragging { opacity: 0.35; }
+      .drag-ghost { position: fixed; width: 84px; height: 84px; border-radius: 50%; background-size: cover; background-position: center; border: 3px solid #fff; box-shadow: 0 12px 30px rgba(0,0,0,0.34); pointer-events: none; z-index: 700; transform: translate(-50%, -50%); animation: ghost-pop 0.16s ease-out; }
+      @keyframes ghost-pop { from { transform: translate(-50%,-50%) scale(0.5); opacity: 0.5; } to { transform: translate(-50%,-50%) scale(1); opacity: 1; } }
+      .slot-fill { position: absolute; inset: 0; background-size: cover; background-position: center; z-index: 3; clip-path: circle(0% at var(--cx, 50%) var(--cy, 50%)); will-change: clip-path; }
+      .slot-fill.go { animation: slot-reveal 0.42s cubic-bezier(0.22, 0.61, 0.36, 1) forwards; }
+      @keyframes slot-reveal { to { clip-path: circle(150% at var(--cx, 50%) var(--cy, 50%)); } }
+      /* Floating dock (Photos / Cover) */
+      .dock { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 40; display: flex; gap: 2px; background: #fff; border-radius: 20px; padding: 6px; box-shadow: 0 8px 30px rgba(0,0,0,0.16), 0 1px 3px rgba(0,0,0,0.08); border: 1px solid rgba(0,0,0,0.04); }
+      .dock-btn { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 72px; padding: 8px 10px 7px; border-radius: 14px; border: none; background: transparent; cursor: pointer; color: #1a1a1a; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; transition: background 0.12s; }
+      .dock-btn:hover { background: #f2f0ea; }
+      .dock-btn:active { background: #e8e5dd; }
+      .dock-btn svg { width: 24px; height: 24px; }
+      /* Photos sheet grid */
+      .photos-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 6px; }
+      @media (min-width: 620px) { .photos-grid { grid-template-columns: repeat(6, 1fr); } }
+      .pg-thumb { aspect-ratio: 1; border-radius: 10px; background-size: cover; background-position: center; background-color: #eee; cursor: pointer; position: relative; transition: transform 0.1s, box-shadow 0.1s; }
+      .pg-thumb:hover { transform: scale(1.03); box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
+      .menu-row.disabled { opacity: 0.4; pointer-events: none; }
+      .menu-ic { flex: 0 0 auto; width: 28px; display: flex; align-items: center; justify-content: center; color: #555; }
+      .menu-sub { font-size: 12px; color: #999; font-weight: 400; }
+      .menu-row.destructive { color: #d33; }
+      /* Edit Photo modal (Popsa-style) */
+      @media (min-width: 720px) { .sheet.sheet-wide { max-width: 960px; } }
+      .ep-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+      .ep-head h2 { font-size: 20px; font-weight: 700; }
+      .ep-x { border: none; background: transparent; cursor: pointer; color: #444; padding: 4px; display: flex; }
+      .ep-x:hover { color: #000; }
+      .ep-grid { display: flex; flex-direction: column; gap: 18px; }
+      @media (min-width: 720px) { .ep-grid { flex-direction: row; align-items: flex-start; } .ep-preview { flex: 1 1 0; min-width: 0; } .ep-side { flex: 0 0 340px; } }
+      .ep-frame { position: relative; width: 100%; background: #111; border-radius: 10px; overflow: hidden; touch-action: none; cursor: grab; }
+      .ep-frame:active { cursor: grabbing; }
+      .ep-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center center; user-select: none; -webkit-user-drag: none; }
+      .ep-img.fit { object-fit: contain; }
+      .ep-thirds { position: absolute; inset: 0; display: none; pointer-events: none; background-image: linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px); background-size: 33.333% 33.333%; }
+      .ep-hint { text-align: center; font-size: 12px; color: #999; margin-top: 8px; }
+      .ep-quality { display: flex; align-items: center; justify-content: space-between; background: #f2f0ea; border-radius: 12px; padding: 14px 16px; font-weight: 700; color: #444; margin-bottom: 12px; }
+      .ep-quality b { font-size: 18px; color: #1a1a1a; }
+      .ep-quality.good { background: #eaf7ee; } .ep-quality.good b { color: #1a7f45; }
+      .ep-quality.warn { background: #fdecec; } .ep-quality.warn b { color: #d33; }
+      .ep-stat { display: flex; align-items: center; justify-content: space-between; padding: 9px 4px; border-bottom: 1px solid #f2f0ea; font-weight: 600; color: #777; font-size: 15px; }
+      .ep-stat b { color: #1a1a1a; }
+      .ep-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
+      .ep-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 2px; border: 1px solid #e6e3db; border-radius: 12px; background: #fff; cursor: pointer; font-family: 'Inter', sans-serif; font-size: 11.5px; font-weight: 600; color: #1a1a1a; }
+      .ep-btn:hover { background: #faf9f5; }
+      .ep-btn.active { border-color: #7657FC; background: #f3f0ff; color: #5b3fd6; }
+      .ep-btn.ep-danger { color: #d33; } .ep-btn.ep-danger:hover { background: #fdecec; }
+      .ep-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+      .ep-foot button { padding: 12px 28px; border-radius: 14px; font-size: 15px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; border: none; }
 
       /* Sticky create bar */
       .create-bar { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #eee; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; z-index: 30; }
@@ -290,6 +344,18 @@
       </div>
     </div>
 
+    <!-- Floating quick-action dock (Photos / Cover), like the photo book -->
+    <div class="dock hidden" id="dock">
+      <button class="dock-btn" id="dock-photos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        Photos
+      </button>
+      <button class="dock-btn" id="dock-cover">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        Cover
+      </button>
+    </div>
+
     <!-- Create bar -->
     <div class="create-bar hidden" id="create-bar">
       <span class="summary" id="summary">Add photos to begin.</span>
@@ -387,8 +453,37 @@
         document.getElementById('intro').classList.add('hidden');
         document.getElementById('builder').classList.remove('hidden');
         document.getElementById('create-bar').classList.remove('hidden');
+        document.getElementById('dock').classList.remove('hidden');
         render();
       });
+      document.getElementById('dock-photos').addEventListener('click', openPhotosSheet);
+      document.getElementById('dock-cover').addEventListener('click', openCoverMenu);
+      // Photos quick-action sheet: add / auto-fill / tap-or-drag an unused photo.
+      function openPhotosSheet() {
+        const placed = placedIds();
+        const unplaced = [...photos.values()].filter(p => !placed.has(p.id));
+        const grid = unplaced.length
+          ? `<div class="photos-grid">${unplaced.map(p => `<div class="pg-thumb" data-id="${p.id}" style="background-image:url('${p.url}')"></div>`).join('')}</div>`
+          : (photos.size ? `<p class="sheet-sub" style="margin-top:6px">Every photo is placed. Tap a page to rearrange, or add more below.</p>` : '');
+        openSheet(`
+          <h2>Photos</h2>
+          <p class="sheet-sub">${photos.size ? `${unplaced.length} unused · ${photos.size} total` : 'No photos yet — add some to start your board book.'}</p>
+          <div class="menu-row" data-act="add"><div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div><div><div>Add photos</div><div class="menu-sub">Import more from your device</div></div></div>
+          <div class="menu-row${unplaced.length ? '' : ' disabled'}" data-act="autofill"><div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h16M4 19h10"/></svg></div><div><div>Auto-fill pages</div><div class="menu-sub">Flow unused photos into the book</div></div></div>
+          ${unplaced.length ? `<p class="sheet-sub" style="margin:16px 0 4px">Or tap a photo, then tap a page — or drag it straight onto a page.</p>` : ''}
+          ${grid}
+        `);
+        sheet.querySelector('[data-act="add"]').addEventListener('click', () => { closeSheet(); photoInput.click(); });
+        const af = sheet.querySelector('[data-act="autofill"]');
+        if (af && unplaced.length) af.addEventListener('click', () => { closeSheet(); autoFill(); });
+        sheet.querySelectorAll('.pg-thumb').forEach(t => {
+          const photo = photos.get(t.dataset.id); if (!photo) return;
+          enablePhotoDrag(t, photo, {
+            onDragStart: () => closeSheet(),
+            onTap: () => { selectedTrayId = t.dataset.id; closeSheet(); render(); showToast('Tap a page to place it.'); },
+          });
+        });
+      }
 
       // ── Helpers ────────────────────────────────────────────────────
       function escapeHtml(s) { const d = document.createElement('div'); d.appendChild(document.createTextNode(s == null ? '' : String(s))); return d.innerHTML; }
@@ -450,14 +545,47 @@
       // Cover-fit a photo into a square canvas of `size` px (what each 6×6 page prints
       // as). Optional scan badge bottom-right. Used for print + AR compile so the
       // compiled target matches the printed square page.
+      // Per-photo crop/zoom/rotate (Edit Photo), mirrors book.html.
+      const DEFAULT_ADJUST = () => ({ fit: 'fill', scale: 1, ox: 0, oy: 0, rot: 0 });
+      function normalizeAdjust(a) {
+        const d = DEFAULT_ADJUST();
+        if (!a || typeof a !== 'object') return d;
+        return {
+          fit: a.fit === 'fit' ? 'fit' : 'fill',
+          scale: Math.max(1, Math.min(3, +a.scale || 1)),
+          ox: Math.max(-80, Math.min(80, +a.ox || 0)),
+          oy: Math.max(-80, Math.min(80, +a.oy || 0)),
+          rot: ((Math.round((+a.rot || 0) / 90) * 90) % 360 + 360) % 360,
+        };
+      }
+      const adjustTransform = (a) => `translate(${a.ox}%, ${a.oy}%) scale(${a.scale}) rotate(${a.rot}deg)`;
+      function printQuality(w, h, scale) {
+        if (!w || !h) return 10;
+        const eff = Math.min(w, h) / (scale || 1);
+        return Math.max(1, Math.min(10, Math.round(eff / 170)));
+      }
+      // Draw `img` into rect (x,y,w,h) honoring the crop/zoom/rotate adjust — the
+      // canvas equivalent of the CSS object-fit + transform on .slot-img, so what a
+      // creator crops in the builder is exactly what's stored, compiled, and printed.
+      function drawPhotoAdjusted(ctx, img, adjust, x, y, w, h) {
+        const a = normalizeAdjust(adjust);
+        const iw = img.naturalWidth, ih = img.naturalHeight;
+        const fitScale = a.fit === 'fit' ? Math.min(w / iw, h / ih) : Math.max(w / iw, h / ih);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+        ctx.translate(x + w / 2 + (a.ox / 100) * w, y + h / 2 + (a.oy / 100) * h);
+        ctx.scale(a.scale, a.scale);
+        ctx.rotate(a.rot * Math.PI / 180);
+        const dw = iw * fitScale, dh = ih * fitScale;
+        ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
+      }
       async function squareCanvas(photo, size, withBadge) {
         const img = await loadPhotoImg(photo);
         const c = document.createElement('canvas'); c.width = size; c.height = size;
         const ctx = c.getContext('2d');
         ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size);
-        const s = Math.max(size / img.naturalWidth, size / img.naturalHeight);
-        const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
-        ctx.drawImage(img, (size - dw) / 2, (size - dh) / 2, dw, dh);
+        drawPhotoAdjusted(ctx, img, photo.adjust, 0, 0, size, size);
         if (withBadge) { try { const b = await loadImg('/assets/popcode_icon.svg'); const bs = Math.round(size * 0.13), pad = Math.round(size * 0.05); ctx.drawImage(b, size - bs - pad, size - bs - pad, bs, bs); } catch (_) {} }
         return c;
       }
@@ -479,7 +607,7 @@
           try {
             const out = await optimizePhoto(f);
             const id = uid();
-            photos.set(id, { id, file: out, url: URL.createObjectURL(out), popcode: null });
+            photos.set(id, { id, file: out, url: URL.createObjectURL(out), popcode: null, adjust: DEFAULT_ADJUST(), ow: out.width || 0, oh: out.height || 0, source: 'Device' });
             newIds.push(id);
           } catch (_) { showToast('Could not read a photo.'); }
         }
@@ -524,7 +652,8 @@
           t.className = 'tray-thumb' + (selectedTrayId === p.id ? ' selected' : '') + (placed.has(p.id) ? ' placed' : '');
           t.style.backgroundImage = `url('${p.url}')`;
           if (photoHasMedia(p)) { const d = document.createElement('img'); d.className = 'pop'; d.src = '/assets/popcode_icon.svg'; t.appendChild(d); }
-          t.addEventListener('click', () => { selectedTrayId = selectedTrayId === p.id ? null : p.id; renderTray(); });
+          // Tap selects for tap-to-place; drag drops the photo straight onto a page.
+          enablePhotoDrag(t, p, { onTap: () => { selectedTrayId = selectedTrayId === p.id ? null : p.id; renderTray(); } });
           tray.appendChild(t);
         });
         const add = document.createElement('div');
@@ -550,7 +679,7 @@
         }
         return `<div class="half"><div class="slot-label">${positionLabel(pos)}</div>
           <div class="slot square" data-pos="${pos}">
-            ${p ? `<img src="${p.url}"/>` : `<div class="ph">${isCover ? 'Tap to add a cover' : 'Tap a photo above, then tap here'}</div>`}
+            ${p ? `<img class="slot-img${(normalizeAdjust(p.adjust).fit === 'fit') ? ' fit' : ''}" src="${p.url}" draggable="false" style="transform:${adjustTransform(normalizeAdjust(p.adjust))}"/>` : `<div class="ph">${isCover ? 'Tap to add a cover' : 'Tap a photo above, then tap here'}</div>`}
             ${overlay}
             ${photoHasMedia(p) ? `<img class="pc-badge" src="/assets/popcode_icon.svg" title="Popcode — plays ${p.popcode.mediaType === 'audio' ? 'audio' : 'video'} when scanned"/>` : ''}
           </div></div>`;
@@ -564,10 +693,15 @@
           row.innerHTML = slotHalfHTML(l) + slotHalfHTML(r);
           grid.appendChild(row);
         });
-        grid.querySelectorAll('.slot[data-pos]').forEach(s => s.addEventListener('click', () => onSlotTap(s.dataset.pos)));
+        grid.querySelectorAll('.slot[data-pos]').forEach(s => {
+          s.addEventListener('click', () => onSlotTap(s.dataset.pos));
+          enableSlotDrag(s, s.dataset.pos);
+        });
       }
 
+      let justDragged = false;   // set briefly after a drag so the trailing click is ignored
       function onSlotTap(pos) {
+        if (justDragged) return;
         if (selectedTrayId) {
           // Place the selected tray photo here (if it's already elsewhere, move it).
           for (const k of POSITIONS) if (slots[k] === selectedTrayId) slots[k] = null;
@@ -589,6 +723,7 @@
           <p class="sheet-sub">Add a cover photo and a title — like the photo book.</p>
           <div class="menu-row" data-act="text">Edit cover text &amp; font</div>
           <div class="menu-row" data-act="photo">${has ? 'Change the cover photo' : 'Add a cover photo'}</div>
+          ${has ? '<div class="menu-row" data-act="edit">Adjust cover photo — crop, zoom, rotate</div>' : ''}
           ${has && photoHasMedia(photos.get(slots['cover'])) ? '<div class="menu-row" data-act="popcode">Edit the cover Popcode</div>'
             : has ? '<div class="menu-row" data-act="popcode">Add a Popcode to the cover</div>' : ''}
           ${has ? '<div class="menu-row danger" data-act="remove">Remove the cover photo</div>' : ''}
@@ -596,6 +731,7 @@
         sheet.querySelectorAll('.menu-row').forEach(row => row.addEventListener('click', () => {
           const act = row.dataset.act;
           if (act === 'text') { openCoverTextSheet(); }
+          else if (act === 'edit') { closeSheet(); openEditPhoto('cover'); }
           else if (act === 'photo') { closeSheet(); selectedTrayId = null; pendingCoverPick = true; document.getElementById('photo-input').click(); }
           else if (act === 'popcode') { closeSheet(); openPopcodeSheet('cover'); }
           else if (act === 'remove') { slots['cover'] = null; closeSheet(); render(); }
@@ -627,8 +763,8 @@
 
       // ── Slot menu ──────────────────────────────────────────────────
       const sheetBg = document.getElementById('sheet-bg'), sheet = document.getElementById('sheet');
-      function openSheet(html) { sheet.innerHTML = html; sheetBg.classList.add('open'); }
-      function closeSheet() { sheetBg.classList.remove('open'); sheet.innerHTML = ''; }
+      function openSheet(html, wide) { sheet.className = 'sheet' + (wide ? ' sheet-wide' : ''); sheet.innerHTML = html; sheetBg.classList.add('open'); }
+      function closeSheet() { sheetBg.classList.remove('open'); sheet.className = 'sheet'; sheet.innerHTML = ''; }
       sheetBg.addEventListener('click', e => { if (e.target === sheetBg) closeSheet(); });
 
       function openSlotMenu(pos) {
@@ -638,12 +774,14 @@
           <h2>${positionLabel(pos)}</h2>
           <p class="sheet-sub">${has ? 'This page plays its Popcode when scanned.' : 'Add a Popcode and this page comes to life when scanned.'}</p>
           <div class="menu-row" data-act="popcode">${has ? 'Edit the Popcode' : 'Add a Popcode (video or audio)'}</div>
+          <div class="menu-row" data-act="edit">Adjust photo — crop, zoom, rotate</div>
           ${has ? '<div class="menu-row danger" data-act="unlink">Remove the Popcode</div>' : ''}
           <div class="menu-row danger" data-act="remove">Remove photo from this page</div>
         `);
         sheet.querySelectorAll('.menu-row').forEach(row => row.addEventListener('click', () => {
           const act = row.dataset.act;
           if (act === 'popcode') { closeSheet(); openPopcodeSheet(pos); }
+          else if (act === 'edit') { closeSheet(); openEditPhoto(pos); }
           else if (act === 'unlink') { p.popcode = null; closeSheet(); render(); showToast('Popcode removed'); }
           else if (act === 'remove') { slots[pos] = null; closeSheet(); render(); }
         }));
@@ -786,6 +924,247 @@
         btn.addEventListener('click', () => { if (audio.paused) audio.play(); else audio.pause(); });
       }
 
+      // ── Edit Photo (Popsa-style crop / zoom / rotate) — mirrors book.html ──
+      let editPhotoState = null;   // { pos, photo, a, gridOn, ar, ctx }
+      const IC_X = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      function epIcon(name) {
+        const o = 'width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+        const P = {
+          fill: '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>',
+          fit: '<polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="10" y1="14" x2="3" y2="21"/>',
+          grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+          rotate: '<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',
+          replace: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
+          remove: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>',
+          zin: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>',
+          zout: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>',
+        };
+        return `<svg ${o}>${P[name] || ''}</svg>`;
+      }
+      function openEditPhoto(pos) {
+        const photo = photos.get(slots[pos]);
+        if (!photo) return;
+        photo.adjust = photo.adjust || DEFAULT_ADJUST();
+        editPhotoState = { pos, photo, a: { ...normalizeAdjust(photo.adjust) }, gridOn: false, ar: '1 / 1' };
+        renderEditPhoto();
+      }
+      function renderEditPhoto() {
+        const s = editPhotoState;
+        const source = s.photo.source || 'Device';
+        const btn = (act, label) => `<button class="ep-btn${act === 'remove' ? ' ep-danger' : ''}" data-act="${act}">${epIcon(act)}<span>${label}</span></button>`;
+        openSheet(`
+          <div class="ep-head"><h2>Adjust photo</h2><button class="ep-x" id="ep-close" aria-label="Close">${IC_X}</button></div>
+          <div class="ep-grid">
+            <div class="ep-preview">
+              <div class="ep-frame" id="ep-frame" style="aspect-ratio:${s.ar}">
+                <img class="ep-img" id="ep-img" src="${s.photo.url}" draggable="false"/>
+                <div class="ep-thirds" id="ep-thirds"></div>
+              </div>
+              <div class="ep-hint">Drag the photo to reposition</div>
+            </div>
+            <div class="ep-side">
+              <div class="ep-quality" id="ep-quality"><span>Print Quality</span><b id="ep-q">—</b></div>
+              <div class="ep-stat"><span>Scale</span><b id="ep-scale">100%</b></div>
+              <div class="ep-stat"><span>Dimensions</span><b id="ep-dims">—</b></div>
+              <div class="ep-stat"><span>Source</span><b>${escapeHtml(source)}</b></div>
+              <div class="ep-btns">
+                ${btn('fill', 'Fill')}${btn('fit', 'Fit')}${btn('grid', 'Grid')}${btn('rotate', 'Rotate')}
+                ${btn('replace', 'Replace')}${btn('remove', 'Remove')}${btn('zin', 'Zoom In')}${btn('zout', 'Zoom Out')}
+              </div>
+            </div>
+          </div>
+          <div class="ep-foot"><button class="btn-secondary" id="ep-cancel">Cancel</button><button class="btn-primary" id="ep-save">Save</button></div>
+        `, true);
+        const img = document.getElementById('ep-img');
+        const setDims = (w, h) => { s.photo.iw = w; s.photo.ih = h; if (!s.photo.ow) { s.photo.ow = w; s.photo.oh = h; } updateEp(); };
+        if (img.complete && img.naturalWidth) setDims(img.naturalWidth, img.naturalHeight);
+        else img.addEventListener('load', () => setDims(img.naturalWidth, img.naturalHeight));
+        document.getElementById('ep-close').addEventListener('click', () => closeSheet());
+        document.getElementById('ep-cancel').addEventListener('click', () => closeSheet());
+        document.getElementById('ep-save').addEventListener('click', () => {
+          s.photo.adjust = normalizeAdjust(s.a); closeSheet(); render(); showToast('Photo updated');
+        });
+        sheet.querySelectorAll('.ep-btn').forEach(b => b.addEventListener('click', () => epAction(b.dataset.act)));
+        enableEpPan();
+        updateEp();
+      }
+      function updateEp() {
+        const s = editPhotoState, a = s.a;
+        const img = document.getElementById('ep-img'); if (!img) return;
+        img.classList.toggle('fit', a.fit === 'fit');
+        img.style.transform = adjustTransform(a);
+        document.getElementById('ep-scale').textContent = Math.round(a.scale * 100) + '%';
+        const w = s.photo.ow || s.photo.iw, h = s.photo.oh || s.photo.ih;
+        document.getElementById('ep-dims').textContent = w ? `${w} × ${h}` : '—';
+        const q = printQuality(w, h, a.scale);
+        const qbox = document.getElementById('ep-quality');
+        document.getElementById('ep-q').textContent = q + '/10';
+        qbox.classList.toggle('good', q >= 8); qbox.classList.toggle('warn', q <= 4);
+        document.getElementById('ep-thirds').style.display = s.gridOn ? 'block' : 'none';
+        const set = (act, on) => { const el = sheet.querySelector(`.ep-btn[data-act="${act}"]`); if (el) el.classList.toggle('active', on); };
+        set('fill', a.fit === 'fill'); set('fit', a.fit === 'fit'); set('grid', s.gridOn);
+      }
+      function epAction(act) {
+        const s = editPhotoState, a = s.a;
+        if (act === 'fill') a.fit = 'fill';
+        else if (act === 'fit') a.fit = 'fit';
+        else if (act === 'grid') s.gridOn = !s.gridOn;
+        else if (act === 'rotate') a.rot = (a.rot + 90) % 360;
+        else if (act === 'zin') a.scale = Math.min(3, Math.round((a.scale + 0.1) * 10) / 10);
+        else if (act === 'zout') a.scale = Math.max(1, Math.round((a.scale - 0.1) * 10) / 10);
+        else if (act === 'replace') { epReplace(); return; }
+        else if (act === 'remove') { const pos = s.pos; slots[pos] = null; closeSheet(); render(); return; }
+        updateEp();
+      }
+      function epReplace() {
+        const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+        inp.addEventListener('change', async () => {
+          const f = inp.files[0]; if (!f) return;
+          let out; try { out = await optimizePhoto(f); } catch (_) { out = null; }
+          if (!out) { showToast('That photo could not be read — try another.'); return; }
+          const photo = editPhotoState.photo;
+          if (photo.file) URL.revokeObjectURL(photo.url);
+          photo.file = out; photo.url = URL.createObjectURL(out); photo.iw = 0; photo.ih = 0; photo.ow = 0; photo.oh = 0; photo.source = 'Device';
+          editPhotoState.a = DEFAULT_ADJUST(); editPhotoState.gridOn = false;
+          renderEditPhoto();
+        });
+        inp.click();
+      }
+      function enableEpPan() {
+        const frame = document.getElementById('ep-frame'); if (!frame) return;
+        frame.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          const a = editPhotoState.a;
+          const rect = frame.getBoundingClientRect();
+          const sx = e.clientX, sy = e.clientY, ox0 = a.ox, oy0 = a.oy;
+          const move = (ev) => {
+            a.ox = Math.max(-80, Math.min(80, ox0 + (ev.clientX - sx) / rect.width * 100));
+            a.oy = Math.max(-80, Math.min(80, oy0 + (ev.clientY - sy) / rect.height * 100));
+            updateEp();
+          };
+          const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); };
+          document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+        });
+      }
+
+      // ── Drag-and-drop flourish (tray → page, page ↔ page) — mirrors book.html ──
+      function makeCircleGhost(url, x, y) {
+        const g = document.createElement('div');
+        g.className = 'drag-ghost';
+        g.style.backgroundImage = `url('${url}')`;
+        g.style.left = x + 'px'; g.style.top = y + 'px';
+        document.body.appendChild(g);
+        return g;
+      }
+      function playFill(el, url, dropX, dropY) {
+        if (!el || !url) return;
+        const rect = el.getBoundingClientRect();
+        let cx = 50, cy = 50;
+        if (dropX != null && rect.width && rect.height) {
+          cx = Math.max(0, Math.min(100, (dropX - rect.left) / rect.width * 100));
+          cy = Math.max(0, Math.min(100, (dropY - rect.top) / rect.height * 100));
+        }
+        const ov = document.createElement('div');
+        ov.className = 'slot-fill';
+        ov.style.backgroundImage = `url('${url}')`;
+        ov.style.setProperty('--cx', cx + '%'); ov.style.setProperty('--cy', cy + '%');
+        el.appendChild(ov);
+        requestAnimationFrame(() => ov.classList.add('go'));
+        ov.addEventListener('animationend', () => ov.remove());
+      }
+      function revealSlotFill(pos, url, dropX, dropY) {
+        const slot = document.querySelector(`.slot[data-pos="${pos}"]`);
+        playFill(slot, url, dropX, dropY);
+      }
+      // Drag a placed photo between page slots (swap).
+      function enableSlotDrag(slot, pos) {
+        if (!slots[pos]) return;
+        slot.addEventListener('pointerdown', (e) => {
+          if (selectedTrayId) return;
+          const startX = e.clientX, startY = e.clientY;
+          const photo = photos.get(slots[pos]);
+          if (!photo) return;
+          let dragging = false, moved = false, ghost = null, holdTimer = null;
+          const startDrag = (x, y) => {
+            if (dragging) return;
+            clearTimeout(holdTimer); dragging = true;
+            slot.classList.add('slot-drag'); ghost = makeCircleGhost(photo.url, x, y);
+          };
+          if (e.pointerType === 'mouse') holdTimer = setTimeout(() => startDrag(startX, startY), 200);
+          const moveH = (ev) => {
+            if (!dragging) { if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 10) return; startDrag(ev.clientX, ev.clientY); }
+            moved = true;
+            ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
+            document.querySelectorAll('.slot.place-target').forEach(s => s.classList.remove('place-target'));
+            const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot[data-pos]');
+            if (under && under !== slot) under.classList.add('place-target');
+          };
+          const upH = (ev) => {
+            clearTimeout(holdTimer);
+            document.removeEventListener('pointermove', moveH); document.removeEventListener('pointerup', upH); document.removeEventListener('pointercancel', upH);
+            if (ghost) ghost.remove();
+            slot.classList.remove('slot-drag');
+            document.querySelectorAll('.slot.place-target').forEach(s => s.classList.remove('place-target'));
+            if (!moved || ev.type === 'pointercancel') return;
+            const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot[data-pos]');
+            let dropPos = null;
+            if (under && under !== slot && under.dataset.pos) {
+              const tPos = under.dataset.pos;
+              const tmp = slots[tPos]; slots[tPos] = slots[pos]; slots[pos] = tmp;
+              dropPos = tPos;
+            }
+            justDragged = true; setTimeout(() => { justDragged = false; }, 0);
+            render();
+            if (dropPos) revealSlotFill(dropPos, photo.url, ev.clientX, ev.clientY);
+          };
+          document.addEventListener('pointermove', moveH); document.addEventListener('pointerup', upH); document.addEventListener('pointercancel', upH);
+        });
+      }
+      // Drag a tray/photos-sheet thumbnail onto a page slot.
+      function enablePhotoDrag(el, photo, opts = {}) {
+        el.addEventListener('pointerdown', (e) => {
+          if (e.target.closest('.tray-x')) return;
+          const startX = e.clientX, startY = e.clientY;
+          let dragging = false, moved = false, ghost = null, holdTimer = null;
+          const startDrag = (x, y) => {
+            if (dragging) return;
+            clearTimeout(holdTimer); dragging = true;
+            el.classList.add('dragging'); ghost = makeCircleGhost(photo.url, x, y);
+            document.body.style.userSelect = 'none';
+            if (opts.onDragStart) opts.onDragStart();
+          };
+          if (e.pointerType === 'mouse') holdTimer = setTimeout(() => startDrag(startX, startY), 200);
+          const move = (ev) => {
+            if (!dragging) { if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 8) return; startDrag(ev.clientX, ev.clientY); }
+            moved = true;
+            ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
+            document.querySelectorAll('.slot.place-target').forEach(s => s.classList.remove('place-target'));
+            const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot[data-pos]');
+            if (under) under.classList.add('place-target');
+          };
+          const end = (ev) => {
+            clearTimeout(holdTimer);
+            document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', end); document.removeEventListener('pointercancel', end);
+            if (ghost) ghost.remove();
+            el.classList.remove('dragging'); document.body.style.userSelect = '';
+            document.querySelectorAll('.slot.place-target').forEach(s => s.classList.remove('place-target'));
+            if (!moved || ev.type === 'pointercancel') { if (opts.onTap) opts.onTap(); return; }
+            const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot[data-pos]');
+            let dropPos = null;
+            if (under && under.dataset.pos) {
+              const tPos = under.dataset.pos;
+              // Move this photo here; if it was placed elsewhere, clear that slot.
+              for (const k of POSITIONS) if (slots[k] === photo.id) slots[k] = null;
+              slots[tPos] = photo.id; selectedTrayId = null; dropPos = tPos;
+            }
+            justDragged = true; setTimeout(() => { justDragged = false; }, 0);
+            render();
+            if (dropPos) revealSlotFill(dropPos, photo.url, ev.clientX, ev.clientY);
+          };
+          document.addEventListener('pointermove', move); document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end);
+        });
+      }
+
       // ── Summary + create readiness ─────────────────────────────────
       function updateSummary() {
         const placed = placedIds().size;
@@ -896,6 +1275,7 @@
               position: pos,
               photo_url: photoUrlByPos[pos] || null,
               target_index: pos in targetIndexByPos ? targetIndexByPos[pos] : null,
+              adjust: slots[pos] ? normalizeAdjust((photos.get(slots[pos]) || {}).adjust) : null,
             })),
           };
 
@@ -926,6 +1306,7 @@
         document.getElementById('progress').classList.remove('visible');
         document.getElementById('builder').classList.add('hidden');
         document.getElementById('create-bar').classList.add('hidden');
+        document.getElementById('dock').classList.add('hidden');
         const r = document.getElementById('result');
         r.classList.add('visible');
         document.getElementById('result-link').textContent = 'popcode.app/' + slug;
@@ -960,10 +1341,8 @@
         const pid = slots[pos]; if (!pid) return;
         const photo = photos.get(pid);
         const img = await loadPhotoImg(photo);
-        const s = Math.max(w / img.naturalWidth, h / img.naturalHeight);
-        const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
-        ctx.save(); ctx.beginPath(); ctx.rect(x, 0, w, h); ctx.clip();
-        ctx.drawImage(img, x + (w - dw) / 2, (h - dh) / 2, dw, dh);
+        ctx.save();
+        drawPhotoAdjusted(ctx, img, photo.adjust, x, 0, w, h);
         if (photoHasMedia(photo)) {
           try { const b = await loadImg('/assets/popcode_icon.svg'); const bs = Math.round(Math.min(w, h) * 0.11), pad = Math.round(Math.min(w, h) * 0.05); ctx.drawImage(b, x + w - bs - pad, h - bs - pad, bs, bs); } catch (_) {}
         }
