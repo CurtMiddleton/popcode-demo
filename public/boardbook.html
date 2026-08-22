@@ -28,6 +28,9 @@
     </script>
     <script src="/vendor/mindar/1.2.2/mindar-image-aframe.prod.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body { margin: 0; font-family: 'Inter', system-ui, sans-serif; color: #1a1a1a; background: #f7f6f2; }
@@ -80,8 +83,11 @@
       .note.bad { color: #d33; }
 
       /* Tray */
-      .tray-head { display: flex; align-items: center; justify-content: space-between; margin: 24px 0 10px; }
+      .tray-head { display: flex; align-items: center; justify-content: space-between; margin: 24px 0 10px; gap: 10px; flex-wrap: wrap; }
       .tray-head h2 { font-size: 17px; margin: 0; }
+      .chip-btn { border: 1.5px solid #e3e1db; background: #fff; color: #1a1a1a; border-radius: 999px; padding: 9px 16px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; white-space: nowrap; }
+      .chip-btn.dark { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+      .chip-btn:disabled { opacity: 0.45; cursor: not-allowed; }
       .tray { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 10px; touch-action: pan-x; }
       .tray-thumb { flex: 0 0 auto; width: 74px; height: 74px; border-radius: 10px; background-size: cover; background-position: center; cursor: pointer; position: relative; border: 3px solid transparent; }
       .tray-thumb.selected { border-color: #2dc0c5; }
@@ -90,15 +96,20 @@
       .tray-add { flex: 0 0 auto; width: 74px; height: 74px; border-radius: 10px; border: 2px dashed #c9c4ba; background: #fff; color: #7657FC; font-size: 26px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
       /* Slots grid */
-      .slots { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
-      @media (max-width: 620px) { .slots { grid-template-columns: 1fr; } }
-      .slot-card { background: #fff; border-radius: 12px; padding: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+      /* Spread rows — one book opening per row (two facing pages), like the book maker. */
+      .slots { margin-top: 14px; display: flex; flex-direction: column; gap: 16px; }
+      .spread-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; background: #fff; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,0.07); overflow: hidden; }
+      .spread-row .half { padding: 12px; }
+      .spread-row .half + .half { border-left: 1px dashed #e6e3dc; }   /* center fold */
+      .spread-blank { display: flex; align-items: center; justify-content: center; color: #c4bfb5; font-size: 12px; }
+      .slot-card { background: transparent; }
       .slot-label { font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
       .slot { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #ededed; cursor: pointer; container-type: inline-size; }
       .slot.square { aspect-ratio: 1 / 1; }
       /* Cover title overlay (front cover only), like the photo book. */
       .slot .cover-scrim { position: absolute; left: 0; right: 0; bottom: 0; height: 55%; background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.6)); pointer-events: none; }
       .slot .cover-title { position: absolute; left: 8%; right: 8%; bottom: 8%; color: #fff; font-family: 'CooperBT', Georgia, serif; font-size: 9cqw; line-height: 1.08; text-shadow: 0 2px 10px rgba(0,0,0,0.45); pointer-events: none; }
+      .slot .cover-title .cover-sub { display: block; font-size: 5cqw; font-weight: 400; opacity: 0.92; margin-top: 2cqw; }
       .slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
       .slot .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #b7b2a8; font-size: 13px; text-align: center; padding: 8px; }
       .slot .tag { position: absolute; bottom: 6px; right: 6px; background: linear-gradient(135deg, #7657FC, #2dc0f7); color: #fff; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
@@ -190,12 +201,16 @@
         <div class="note" id="slug-note">6–10 lowercase letters or numbers.</div>
       </div>
       <div class="field">
-        <label for="title-input">Title <span style="color:#aaa;font-weight:400">(optional)</span></label>
+        <label for="title-input">Book title <span style="color:#aaa;font-weight:400">(optional)</span></label>
         <input id="title-input" class="text-input" type="text" placeholder="e.g. Baby's First Year"/>
       </div>
 
       <div class="tray-head">
-        <h2>Your photos</h2>
+        <h2>Your photos <span id="photo-counts" style="color:#999;font-weight:400;font-size:14px;"></span></h2>
+        <div style="display:flex;gap:8px;">
+          <button class="chip-btn" id="autofill-btn" type="button">↳ Auto-fill</button>
+          <button class="chip-btn dark" id="addphotos-btn" type="button">+ Add photos</button>
+        </div>
       </div>
       <div class="tray" id="tray"></div>
 
@@ -260,19 +275,48 @@
       const ADMIN_EMAILS = ['curtmid@gmail.com', 'curt@theworkshop.works'];
       let isAdmin = false;
 
-      // The 6×6 board book (Printify blueprint 2727 / variant 148738) is a wraparound
-      // cover + 10 two-page openings = 20 square pages. The UI shows SQUARE pages
-      // (front cover + Page 1..20); at print time we pair pages into the 10 landscape
-      // "spread" images Printify ingests (spread_N = page 2N-1 | page 2N), plus the
-      // cover wrap. So POSITIONS here are UI page slots, not Printify print positions.
-      const PAGE_COUNT = 20;
+      // The 6×6 board book (Printify blueprint 2727 / variant 148738) reads like a real
+      // book: front cover on the right, then Page 1 on the right (facing the inside
+      // cover), then facing pairs (2·3, 4·5 …), ending with Page 18 on the left. That
+      // maps to Printify's fixed 10 two-page "spread" openings + the wraparound cover.
+      // 18 printable content pages (the inside front/back covers are the blank halves).
+      const PAGE_COUNT = 18;
       const POSITIONS = ['cover', ...Array.from({ length: PAGE_COUNT }, (_, i) => 'page_' + (i + 1))];
       const positionLabel = (pos) => pos === 'cover' ? 'Front Cover' : 'Page ' + pos.split('_')[1];
-      // Printify print positions: cover wrap + 10 spreads, each spread = two pages.
-      const PRINT_SPREADS = Array.from({ length: 10 }, (_, i) => ({ pos: 'spread_' + (i + 1), left: 'page_' + (i * 2 + 1), right: 'page_' + (i * 2 + 2) }));
+      // How the builder lays the book out visually — one opening per row, null = a
+      // blank half (inside cover). Row 1 = cover on the right.
+      const SPREAD_ROWS = [
+        [null, 'cover'],
+        [null, 'page_1'],
+        ['page_2', 'page_3'], ['page_4', 'page_5'], ['page_6', 'page_7'], ['page_8', 'page_9'],
+        ['page_10', 'page_11'], ['page_12', 'page_13'], ['page_14', 'page_15'], ['page_16', 'page_17'],
+        ['page_18', null],
+      ];
+      // Printify's 10 print openings (each = left | right page; null → blank half) + cover.
+      const PRINT_SPREADS = [
+        { pos: 'spread_1', left: null, right: 'page_1' },
+        { pos: 'spread_2', left: 'page_2', right: 'page_3' },
+        { pos: 'spread_3', left: 'page_4', right: 'page_5' },
+        { pos: 'spread_4', left: 'page_6', right: 'page_7' },
+        { pos: 'spread_5', left: 'page_8', right: 'page_9' },
+        { pos: 'spread_6', left: 'page_10', right: 'page_11' },
+        { pos: 'spread_7', left: 'page_12', right: 'page_13' },
+        { pos: 'spread_8', left: 'page_14', right: 'page_15' },
+        { pos: 'spread_9', left: 'page_16', right: 'page_17' },
+        { pos: 'spread_10', left: 'page_18', right: null },
+      ];
       // Print pixels (from the Printify variant placeholders).
       const PX_COVER = [3863, 1875];      // wraparound: back | spine | front
       const PX_SPREAD = [3675, 1875];     // two facing 6×6 pages
+      // Cover text + font (editable, like the photo book cover).
+      const COVER_FONTS = [
+        { id: 'cooper', name: 'Cooper', stack: "'CooperBT', Georgia, serif" },
+        { id: 'cormorant', name: 'Cormorant', stack: "'Cormorant Garamond', Georgia, serif" },
+        { id: 'dmsans', name: 'DM Sans', stack: "'DM Sans', sans-serif" },
+        { id: 'inter', name: 'Inter', stack: "'Inter', sans-serif" },
+      ];
+      const coverFontStack = (id) => (COVER_FONTS.find(f => f.id === id) || COVER_FONTS[0]).stack;
+      let cover = { title: '', subtitle: '', font: 'cooper' };
 
       // photos: id -> { id, file, url, popcode|null }
       //   popcode: { mediaType:'video', video:File }
@@ -328,7 +372,7 @@
         n.classList.toggle('bad', !ok && chosenSlug().length > 0);
       }
       slugInput.addEventListener('input', () => { slugInput.value = slugInput.value.toLowerCase().replace(/[^a-z0-9]/g, ''); syncSlugNote(); updateSummary(); });
-      document.getElementById('title-input').addEventListener('input', renderSlots);   // live cover title
+      document.getElementById('title-input').addEventListener('input', (e) => { cover.title = e.target.value; renderSlots(); });   // live cover title
 
       function photoHasMedia(p) { return !!(p && p.popcode && p.popcode.video); }
       function placedIds() { const s = new Set(); Object.values(slots).forEach(id => { if (id) s.add(id); }); return s; }
@@ -389,21 +433,47 @@
       }
 
       // ── Add photos ─────────────────────────────────────────────────
+      let pendingCoverPick = false;   // set when "Add a cover photo" opens the picker
       const photoInput = document.getElementById('photo-input');
       photoInput.addEventListener('change', async () => {
         const files = [...photoInput.files]; photoInput.value = '';
+        const newIds = [];
         for (const f of files) {
           try {
             const out = await optimizePhoto(f);
             const id = uid();
             photos.set(id, { id, file: out, url: URL.createObjectURL(out), popcode: null });
+            newIds.push(id);
           } catch (_) { showToast('Could not read a photo.'); }
         }
+        if (pendingCoverPick && newIds.length) { slots['cover'] = newIds[0]; pendingCoverPick = false; }
         render();
       });
+      document.getElementById('addphotos-btn').addEventListener('click', () => photoInput.click());
+      document.getElementById('autofill-btn').addEventListener('click', autoFill);
+      // Fill empty pages (cover first, then Page 1..18) with unplaced photos in order.
+      function autoFill() {
+        const placed = placedIds();
+        const queue = [...photos.values()].filter(p => !placed.has(p.id)).map(p => p.id);
+        if (!queue.length) { showToast('All photos are already placed.'); return; }
+        for (const pos of POSITIONS) {
+          if (!queue.length) break;
+          if (!slots[pos]) slots[pos] = queue.shift();
+        }
+        render();
+      }
 
       // ── Render ─────────────────────────────────────────────────────
-      function render() { renderTray(); renderSlots(); updateSummary(); }
+      function render() { renderTray(); renderSlots(); updateSummary(); updateCounts(); }
+
+      function updateCounts() {
+        const total = photos.size;
+        const placed = placedIds().size;
+        const el = document.getElementById('photo-counts');
+        if (el) el.textContent = total ? `(${total - placed} unplaced · ${total} total)` : '';
+        const af = document.getElementById('autofill-btn');
+        if (af) af.disabled = (total - placed) === 0;
+      }
 
       function renderTray() {
         const tray = document.getElementById('tray');
@@ -423,26 +493,31 @@
         tray.appendChild(add);
       }
 
+      // One book opening (row) = two facing pages; null → a blank inside-cover half.
+      function slotHalfHTML(pos) {
+        if (!pos) return '<div class="half spread-blank">inside cover</div>';
+        const pid = slots[pos]; const p = pid ? photos.get(pid) : null;
+        const isCover = pos === 'cover';
+        const overlay = (isCover && (cover.title || cover.subtitle))
+          ? `<div class="cover-scrim"></div><div class="cover-title" style="font-family:${coverFontStack(cover.font)}">${escapeHtml(cover.title || '')}${cover.subtitle ? `<span class="cover-sub">${escapeHtml(cover.subtitle)}</span>` : ''}</div>`
+          : '';
+        return `<div class="half"><div class="slot-label">${positionLabel(pos)}</div>
+          <div class="slot square" data-pos="${pos}">
+            ${p ? `<img src="${p.url}"/>` : `<div class="ph">${isCover ? 'Tap to add a cover' : 'Tap a photo above, then tap here'}</div>`}
+            ${overlay}
+            ${photoHasMedia(p) ? '<div class="tag">▶ Video</div>' : ''}
+          </div></div>`;
+      }
       function renderSlots() {
         const grid = document.getElementById('slots');
         grid.innerHTML = '';
-        POSITIONS.forEach(pos => {
-          const card = document.createElement('div');
-          card.className = 'slot-card';
-          const pid = slots[pos];
-          const p = pid ? photos.get(pid) : null;
-          const title = pos === 'cover' ? (document.getElementById('title-input').value.trim()) : '';
-          const titleOverlay = title
-            ? `<div class="cover-scrim"></div><div class="cover-title">${escapeHtml(title)}</div>` : '';
-          card.innerHTML = `<div class="slot-label">${positionLabel(pos)}</div>
-            <div class="slot square">
-              ${p ? `<img src="${p.url}"/>` : `<div class="ph">Tap a photo above, then tap here</div>`}
-              ${titleOverlay}
-              ${photoHasMedia(p) ? `<div class="tag">▶ Video</div>` : ''}
-            </div>`;
-          card.querySelector('.slot').addEventListener('click', () => onSlotTap(pos));
-          grid.appendChild(card);
+        SPREAD_ROWS.forEach(([l, r]) => {
+          const row = document.createElement('div');
+          row.className = 'spread-row';
+          row.innerHTML = slotHalfHTML(l) + slotHalfHTML(r);
+          grid.appendChild(row);
         });
+        grid.querySelectorAll('.slot[data-pos]').forEach(s => s.addEventListener('click', () => onSlotTap(s.dataset.pos)));
       }
 
       function onSlotTap(pos) {
@@ -454,8 +529,53 @@
           render();
           return;
         }
-        if (slots[pos]) openSlotMenu(pos);
+        if (pos === 'cover') openCoverMenu();
+        else if (slots[pos]) openSlotMenu(pos);
         else showToast('Tap a photo above first, then tap a page.');
+      }
+
+      // ── Cover menu + text editor (title / subtitle / font) ─────────
+      function openCoverMenu() {
+        const has = !!slots['cover'];
+        openSheet(`
+          <h2>Front cover</h2>
+          <p class="sheet-sub">Add a cover photo and a title — like the photo book.</p>
+          <div class="menu-row" data-act="text">✎ Edit cover text &amp; font</div>
+          <div class="menu-row" data-act="photo">🖼️ ${has ? 'Change the cover photo' : 'Add a cover photo'}</div>
+          ${has && photoHasMedia(photos.get(slots['cover'])) ? '<div class="menu-row" data-act="popcode">🎬 Change the cover video</div>'
+            : has ? '<div class="menu-row" data-act="popcode">🎬 Add a video to the cover</div>' : ''}
+          ${has ? '<div class="menu-row danger" data-act="remove">Remove the cover photo</div>' : ''}
+        `);
+        sheet.querySelectorAll('.menu-row').forEach(row => row.addEventListener('click', () => {
+          const act = row.dataset.act;
+          if (act === 'text') { openCoverTextSheet(); }
+          else if (act === 'photo') { closeSheet(); selectedTrayId = null; pendingCoverPick = true; document.getElementById('photo-input').click(); }
+          else if (act === 'popcode') { closeSheet(); openPopcodeSheet('cover'); }
+          else if (act === 'remove') { slots['cover'] = null; closeSheet(); render(); }
+        }));
+      }
+      function openCoverTextSheet() {
+        openSheet(`
+          <h2>Cover text</h2>
+          <div class="field"><label for="cv-title">Title</label><input class="text-input" id="cv-title" style="max-width:none" value="${escapeHtml(cover.title)}" placeholder="e.g. Baby's First Year"/></div>
+          <div class="field"><label for="cv-sub">Subtitle / date <span style="color:#aaa;font-weight:400">(optional)</span></label><input class="text-input" id="cv-sub" style="max-width:none" value="${escapeHtml(cover.subtitle)}" placeholder="e.g. 2026"/></div>
+          <div class="field"><label>Font</label><div class="seg" id="cv-fonts">${COVER_FONTS.map(f => `<button type="button" data-font="${f.id}" class="${cover.font === f.id ? 'active' : ''}" style="font-family:${f.stack}">${f.name}</button>`).join('')}</div></div>
+          <div class="sheet-actions"><button class="btn-primary" id="cv-done">Done</button></div>
+        `);
+        const sync = () => {
+          cover.title = document.getElementById('cv-title').value;
+          cover.subtitle = document.getElementById('cv-sub').value;
+          document.getElementById('title-input').value = cover.title;
+          renderSlots();
+        };
+        document.getElementById('cv-title').addEventListener('input', sync);
+        document.getElementById('cv-sub').addEventListener('input', sync);
+        sheet.querySelectorAll('#cv-fonts button').forEach(b => b.addEventListener('click', () => {
+          cover.font = b.dataset.font;
+          sheet.querySelectorAll('#cv-fonts button').forEach(x => x.classList.toggle('active', x === b));
+          renderSlots();
+        }));
+        document.getElementById('cv-done').addEventListener('click', () => { closeSheet(); render(); });
       }
 
       // ── Slot menu ──────────────────────────────────────────────────
@@ -603,6 +723,7 @@
             product: 'boardbook',
             variantId: 'bb-6x6',
             title,
+            cover: { title: cover.title || null, subtitle: cover.subtitle || null, font: cover.font },
             slots: POSITIONS.map(pos => ({
               position: pos,
               photo_url: photoUrlByPos[pos] || null,
@@ -693,32 +814,42 @@
         const c = document.createElement('canvas'); c.width = W; c.height = H;
         const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
         await drawPageInto(ctx, 'cover', fx, H, H);
-        drawCoverTitle(ctx, fx, 0, H, H, (document.getElementById('title-input').value || '').trim());
+        drawCoverTitle(ctx, fx, 0, H, H);
         return new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
       }
-      // Overlay the book title on the front cover square (scrim + wrapped serif title),
-      // matching the builder's on-cover title.
-      function drawCoverTitle(ctx, x, y, w, h, title) {
-        if (!title) return;
+      // Overlay the cover title + subtitle on the front square (scrim + wrapped text in
+      // the chosen font), matching the builder's on-cover preview.
+      function drawCoverTitle(ctx, x, y, w, h) {
+        const title = (cover.title || '').trim(), subtitle = (cover.subtitle || '').trim();
+        if (!title && !subtitle) return;
+        const fam = coverFontStack(cover.font);
         ctx.save();
-        // Bottom scrim so the title reads over any photo.
         const g = ctx.createLinearGradient(0, y + h * 0.45, 0, y + h);
         g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.6)');
         ctx.fillStyle = g; ctx.fillRect(x, y + h * 0.45, w, h * 0.55);
-        // Wrapped title, bottom-left, white serif.
-        const fs = Math.round(h * 0.09), maxW = w * 0.84, lx = x + w * 0.08;
-        ctx.font = `${fs}px "CooperBT", Georgia, serif`;
+        const maxW = w * 0.84, lx = x + w * 0.08;
         ctx.fillStyle = '#fff'; ctx.textBaseline = 'alphabetic';
-        ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = fs * 0.4; ctx.shadowOffsetY = 2;
-        const words = title.split(/\s+/), lines = []; let line = '';
-        for (const wd of words) {
-          const t = line ? line + ' ' + wd : wd;
-          if (ctx.measureText(t).width > maxW && line) { lines.push(line); line = wd; } else line = t;
+        ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowOffsetY = 2;
+        // Subtitle line (smaller) sits below the title; draw bottom-up.
+        let by = y + h - h * 0.08;
+        if (subtitle) {
+          const sfs = Math.round(h * 0.05);
+          ctx.font = `${sfs}px ${fam}`; ctx.shadowBlur = sfs * 0.4;
+          ctx.fillText(subtitle, lx, by);
+          by -= sfs * 1.5;
         }
-        if (line) lines.push(line);
-        const lh = fs * 1.12;
-        let by = y + h - h * 0.08 - (lines.length - 1) * lh;
-        for (const ln of lines) { ctx.fillText(ln, lx, by); by += lh; }
+        if (title) {
+          const fs = Math.round(h * 0.09), lh = fs * 1.12;
+          ctx.font = `${fs}px ${fam}`; ctx.shadowBlur = fs * 0.4;
+          const words = title.split(/\s+/), lines = []; let line = '';
+          for (const wd of words) {
+            const t = line ? line + ' ' + wd : wd;
+            if (ctx.measureText(t).width > maxW && line) { lines.push(line); line = wd; } else line = t;
+          }
+          if (line) lines.push(line);
+          by -= (lines.length - 1) * lh;
+          for (const ln of lines) { ctx.fillText(ln, lx, by); by += lh; }
+        }
         ctx.restore();
       }
 
