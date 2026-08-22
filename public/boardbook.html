@@ -94,8 +94,11 @@
       @media (max-width: 620px) { .slots { grid-template-columns: 1fr; } }
       .slot-card { background: #fff; border-radius: 12px; padding: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
       .slot-label { font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
-      .slot { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #ededed; cursor: pointer; }
+      .slot { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #ededed; cursor: pointer; container-type: inline-size; }
       .slot.square { aspect-ratio: 1 / 1; }
+      /* Cover title overlay (front cover only), like the photo book. */
+      .slot .cover-scrim { position: absolute; left: 0; right: 0; bottom: 0; height: 55%; background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.6)); pointer-events: none; }
+      .slot .cover-title { position: absolute; left: 8%; right: 8%; bottom: 8%; color: #fff; font-family: 'CooperBT', Georgia, serif; font-size: 9cqw; line-height: 1.08; text-shadow: 0 2px 10px rgba(0,0,0,0.45); pointer-events: none; }
       .slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
       .slot .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #b7b2a8; font-size: 13px; text-align: center; padding: 8px; }
       .slot .tag { position: absolute; bottom: 6px; right: 6px; background: linear-gradient(135deg, #7657FC, #2dc0f7); color: #fff; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
@@ -325,6 +328,7 @@
         n.classList.toggle('bad', !ok && chosenSlug().length > 0);
       }
       slugInput.addEventListener('input', () => { slugInput.value = slugInput.value.toLowerCase().replace(/[^a-z0-9]/g, ''); syncSlugNote(); updateSummary(); });
+      document.getElementById('title-input').addEventListener('input', renderSlots);   // live cover title
 
       function photoHasMedia(p) { return !!(p && p.popcode && p.popcode.video); }
       function placedIds() { const s = new Set(); Object.values(slots).forEach(id => { if (id) s.add(id); }); return s; }
@@ -427,9 +431,13 @@
           card.className = 'slot-card';
           const pid = slots[pos];
           const p = pid ? photos.get(pid) : null;
+          const title = pos === 'cover' ? (document.getElementById('title-input').value.trim()) : '';
+          const titleOverlay = title
+            ? `<div class="cover-scrim"></div><div class="cover-title">${escapeHtml(title)}</div>` : '';
           card.innerHTML = `<div class="slot-label">${positionLabel(pos)}</div>
             <div class="slot square">
               ${p ? `<img src="${p.url}"/>` : `<div class="ph">Tap a photo above, then tap here</div>`}
+              ${titleOverlay}
               ${photoHasMedia(p) ? `<div class="tag">▶ Video</div>` : ''}
             </div>`;
           card.querySelector('.slot').addEventListener('click', () => onSlotTap(pos));
@@ -681,10 +689,37 @@
       // one test order; if it's mirrored, swap the x origin below.
       async function compositeCoverWrap() {
         const [W, H] = PX_COVER;
+        const fx = W - H;                                // front = right square
         const c = document.createElement('canvas'); c.width = W; c.height = H;
         const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-        await drawPageInto(ctx, 'cover', W - H, H, H);   // right square = front
+        await drawPageInto(ctx, 'cover', fx, H, H);
+        drawCoverTitle(ctx, fx, 0, H, H, (document.getElementById('title-input').value || '').trim());
         return new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
+      }
+      // Overlay the book title on the front cover square (scrim + wrapped serif title),
+      // matching the builder's on-cover title.
+      function drawCoverTitle(ctx, x, y, w, h, title) {
+        if (!title) return;
+        ctx.save();
+        // Bottom scrim so the title reads over any photo.
+        const g = ctx.createLinearGradient(0, y + h * 0.45, 0, y + h);
+        g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.6)');
+        ctx.fillStyle = g; ctx.fillRect(x, y + h * 0.45, w, h * 0.55);
+        // Wrapped title, bottom-left, white serif.
+        const fs = Math.round(h * 0.09), maxW = w * 0.84, lx = x + w * 0.08;
+        ctx.font = `${fs}px "CooperBT", Georgia, serif`;
+        ctx.fillStyle = '#fff'; ctx.textBaseline = 'alphabetic';
+        ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = fs * 0.4; ctx.shadowOffsetY = 2;
+        const words = title.split(/\s+/), lines = []; let line = '';
+        for (const wd of words) {
+          const t = line ? line + ' ' + wd : wd;
+          if (ctx.measureText(t).width > maxW && line) { lines.push(line); line = wd; } else line = t;
+        }
+        if (line) lines.push(line);
+        const lh = fs * 1.12;
+        let by = y + h - h * 0.08 - (lines.length - 1) * lh;
+        for (const ln of lines) { ctx.fillText(ln, lx, by); by += lh; }
+        ctx.restore();
       }
 
       // Live price: re-quote (base cost + live shipping) whenever the address is
