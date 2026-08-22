@@ -1,5 +1,19 @@
 # Printify board book + multi-provider fulfillment — design sketch
 
+## SHIPPED TO PROD 2026-08-21 (merge a506808)
+Board book is live: in the **Shop** (a "Board Book" card → /boardbook.html), designable +
+AR-scannable by everyone. **Ordering is admin-gated** (curtmid@/curt@theworkshop) until one
+real live Stripe→Printify order validates the chain. Phase 1 (Prodigi→adapter refactor) also
+went live — byte-identical, tested. The `print_orders.provider`/`provider_meta` migration was
+run in prod. To open ordering to everyone: (1) set `PRINTIFY_DRY_RUN=false` in Production,
+(2) place one admin order (use a 100%-off Stripe promo code to avoid the retail charge; you
+still pay Printify's ~$22 fulfillment for the real sample), (3) confirm the printed book +
+scan, (4) remove the admin gate in boardbook.html (`isAdmin` toggle around showResult).
+Until `PRINTIFY_DRY_RUN=false`, any admin order is charged on live Stripe but created
+send_to_production:false (no print) — so set it false for a real validation.
+
+
+
 ## Phase 0 spike — RESULTS (captured 2026-08-21 from a live read-only probe)
 
 The board book is real, API-accessible, and a genuine chipboard product. IDs to wire:
