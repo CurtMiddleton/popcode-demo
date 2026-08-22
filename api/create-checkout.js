@@ -176,7 +176,11 @@ export default async function handler(req, res) {
         },
       }],
       success_url: `${base}/order-success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${base}/order.html?id=${encodeURIComponent(collection.slug)}&cancelled=1`,
+      // Board books are created/ordered in boardbook.html (no single-image order page),
+      // so cancel returns to the user's library rather than order.html.
+      cancel_url: productType === 'boardbook'
+        ? `${base}/manage.html?cancelled=1`
+        : `${base}/order.html?id=${encodeURIComponent(collection.slug)}&cancelled=1`,
     });
 
     await admin.from('print_orders').update({ stripe_session_id: session.id, updated_at: new Date().toISOString() }).eq('id', order.id);

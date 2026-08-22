@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   try {
-    const { productType, variantId, copies, destinationCountryCode, shippingMethod } = req.body || {};
+    const { productType, variantId, copies, destinationCountryCode, shippingMethod, address } = req.body || {};
     if (!productType || !variantId || !destinationCountryCode) {
       return res.status(400).json({ error: 'Missing productType, variantId or destinationCountryCode' });
     }
@@ -39,7 +39,9 @@ export default async function handler(req, res) {
     let summed = null;
     for (let attempt = 0; attempt < 3 && !summed; attempt++) {
       try {
-        summed = await provider.quote({ variant, copies, destinationCountryCode, shippingMethod });
+        // `address` is optional and only used by providers that price shipping by
+        // full address (e.g. Printify); Prodigi ignores it and prices by country.
+        summed = await provider.quote({ variant, copies, destinationCountryCode, address, shippingMethod });
       } catch (err) {
         // Unservable routes are a normal answer, not a failure — don't retry.
         if (err.unservable) return res.status(502).json({ error: 'Could not price this product/destination', unservable: true });

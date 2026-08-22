@@ -174,7 +174,8 @@
       <!-- Order the printed board book -->
       <div style="max-width:460px;margin:0 auto;text-align:left;background:#fff;border-radius:16px;padding:22px 20px;box-shadow:0 1px 6px rgba(0,0,0,0.06);">
         <h2 style="font-family:'CooperBT',Georgia,serif;font-size:22px;margin:0 0 4px;text-align:center;">Order your printed board book</h2>
-        <p style="color:#666;font-size:14px;text-align:center;margin:0 0 18px;">Real 6×6″ laminated chipboard. <strong>~$32</strong> incl. shipping &amp; handling.</p>
+        <p style="color:#666;font-size:14px;text-align:center;margin:0 0 4px;">Real 6×6″ laminated chipboard.</p>
+        <div id="order-price" style="text-align:center;font-weight:700;font-size:18px;margin:0 0 18px;color:#1a1a1a;">Enter your address to see the total</div>
         <div class="field"><label for="o-name">Recipient name</label><input class="text-input" id="o-name" autocomplete="name" style="max-width:none"/></div>
         <div class="field"><label for="o-email">Email</label><input class="text-input" id="o-email" type="email" autocomplete="email" style="max-width:none"/></div>
         <div class="field"><label for="o-line1">Address line 1</label><input class="text-input" id="o-line1" autocomplete="address-line1" style="max-width:none"/></div>
@@ -574,6 +575,43 @@
         }
         return new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
       }
+
+      // Live price: re-quote (base cost + live shipping) whenever the address is
+      // complete enough for Printify to price shipping. Debounced.
+      function formatMoney(minor, cur) {
+        const v = (minor || 0) / 100; const c = cur || 'USD';
+        try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: c, minimumFractionDigits: v % 1 === 0 ? 0 : 2 }).format(v); }
+        catch (_) { return '$' + v.toFixed(v % 1 === 0 ? 0 : 2); }
+      }
+      let quoteTimer = null, quoteSeq = 0;
+      function scheduleQuote() { clearTimeout(quoteTimer); quoteTimer = setTimeout(quoteOrder, 500); }
+      async function quoteOrder() {
+        const el = document.getElementById('order-price');
+        const address = {
+          line1: document.getElementById('o-line1').value.trim(),
+          townOrCity: document.getElementById('o-city').value.trim(),
+          stateOrCounty: document.getElementById('o-state').value.trim(),
+          postalOrZipCode: document.getElementById('o-zip').value.trim(),
+          countryCode: document.getElementById('o-country').value,
+        };
+        if (!address.line1 || !address.townOrCity || !address.postalOrZipCode) {
+          el.textContent = 'Enter your address to see the total'; return;
+        }
+        const seq = ++quoteSeq;
+        el.textContent = 'Getting your price…';
+        try {
+          const resp = await fetch('/api/prodigi-quote', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productType: 'boardbook', variantId: 'bb-6x6', copies: 1, shippingMethod: 'Standard', destinationCountryCode: address.countryCode, address }),
+          });
+          const j = await resp.json();
+          if (seq !== quoteSeq) return; // a newer quote superseded this one
+          if (resp.ok && typeof j.total_minor === 'number') el.textContent = formatMoney(j.total_minor, j.currency) + ' incl. shipping';
+          else el.textContent = j.unservable ? "We can't ship to that country yet" : 'Price unavailable — you can still try checkout';
+        } catch (_) { if (seq === quoteSeq) el.textContent = 'Price unavailable — you can still try checkout'; }
+      }
+      ['o-line1', 'o-city', 'o-state', 'o-zip'].forEach(id => document.getElementById(id).addEventListener('input', scheduleQuote));
+      document.getElementById('o-country').addEventListener('change', quoteOrder);
 
       document.getElementById('order-btn').addEventListener('click', placeOrder);
       async function placeOrder() {
