@@ -19,6 +19,7 @@
     <title>Popcode — Create</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/frame-picker.js"></script>
     <script src="/montage-music.js"></script>
     <!-- create.html only needs MINDAR.IMAGE.Compiler, not AR rendering. The
          compiler ships in the image-aframe build, which exports MINDAR before
@@ -472,6 +473,10 @@
                   <img class="icon" src="/assets/photo.png" alt="Photo"/>
                   <img class="preview-img" id="photo-preview-${n}"/>
                 </label>
+                <select class="media-select photo-select" data-page="${n}" aria-label="Where the scan image comes from">
+                  <option value="photo" selected>Photo</option>
+                  <option value="frame">Frame from video</option>
+                </select>
                 <button type="button" class="tile-eye" id="photo-eye-${n}" title="Preview" data-preview-kind="photo"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></button>
               </div>
               <div class="file-name" id="photo-name-${n}"></div>
@@ -511,7 +516,8 @@
         `;
         document.getElementById('pages').appendChild(page);
 
-        page.querySelector('.media-select').addEventListener('change', (e) => onMediaSelect(n, e.target));
+        page.querySelector('.photo-select').addEventListener('change', (e) => onPhotoSourceSelect(n, e.target));
+        page.querySelector('.media-select:not(.photo-select)').addEventListener('change', (e) => onMediaSelect(n, e.target));
         page.querySelector('.audio-rec-btn[data-action="start"]').addEventListener('click', () => startRecording(n));
 
         renumberPages();
@@ -529,12 +535,27 @@
         switchMediaType(n, sel.value);
       }
 
+      // Scan-image source dropdown. iOS owns the native file-input action sheet
+      // (Photo Library / Take Photo / Choose File) and won't let us add to it, so
+      // "Frame from video" sits here instead. It isn't a persistent mode — it opens
+      // the frame picker and snaps back to Photo.
+      function onPhotoSourceSelect(n, sel) {
+        sel.value = 'photo';
+        if (typeof openFramePicker !== 'function') {
+          alert("The frame picker didn't load. Reload the page and try again.");
+          return;
+        }
+        openFramePicker({
+          onPick: (file) => { applyMediaFile(file, 'photo', n, null).catch(e => console.error(e)); }
+        });
+      }
+
       function switchMediaType(n, mode) {
         const pair = pairs[n];
         if (!pair) return;
         pair.mediaType = mode;
         const page = document.getElementById(`page-${n}`);
-        const sel = page.querySelector('.media-select');
+        const sel = page.querySelector('.media-select:not(.photo-select)');
         if (sel && sel.value !== mode) sel.value = mode;
         page.querySelector(`#video-slot-${n}`).style.display = mode === 'video' ? '' : 'none';
         page.querySelector(`#audio-slot-${n}`).style.display = mode === 'audio' ? '' : 'none';
@@ -727,8 +748,15 @@
       }
 
       async function handleFile(input, type, n) {
-        let file = input.files[0];
+        const file = input.files[0];
         if (!file) return;
+        return applyMediaFile(file, type, n, input);
+      }
+
+      // `input` may be null when the file came from somewhere other than a file
+      // input (e.g. a frame captured out of a video).
+      async function applyMediaFile(file, type, n, input) {
+        const clearInput = () => { if (input) input.value = ''; };
 
         let sizeMB = file.size / (1024 * 1024);
         const limitMB = type === 'video' ? MAX_VIDEO_MB : MAX_PHOTO_MB;
@@ -737,7 +765,7 @@
           if (type === 'video') {
             if (canCompressVideo()) {
               const go = confirm(`This video is ${sizeMB.toFixed(1)} MB — over the ${limitMB} MB limit.\n\nWould you like to compress it? It may take a few minutes.\n\nTap OK to compress, or Cancel to choose a different video.`);
-              if (!go) { input.value = ''; return; }
+              if (!go) { clearInput(); return; }
               // Show compression progress
               const msgEl = document.getElementById(`video-msg-${n}`);
               const btn = document.getElementById(`video-btn-${n}`);
@@ -756,7 +784,7 @@
               if (compressed && compressedMB <= limitMB) {
                 const compressedFile = new File([compressed], file.name.replace(/\.[^.]+$/, '.webm'), { type: compressed.type });
                 msgEl.innerHTML = `<div class="compressed-badge">✓ Compressed to ${compressedMB.toFixed(1)} MB</div>`;
-                input.value = '';
+                clearInput();
                 pairs[n][type] = compressedFile;
                 btn.classList.add('selected');
                 document.getElementById(`video-name-${n}`).textContent = compressedFile.name.length > 18 ? compressedFile.name.substring(0,18)+'…' : compressedFile.name;
@@ -775,14 +803,14 @@
                 return;
               } else {
                 msgEl.innerHTML = `<div class="video-msg-banner">Still too large (${compressedMB < Infinity ? compressedMB.toFixed(0) : sizeMB.toFixed(0)} MB). Try <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a> to compress further.</div>`;
-                input.value = ''; return;
+                clearInput(); return;
               }
             } else {
               // iOS Safari — no captureStream support
               const msgEl = document.getElementById(`video-msg-${n}`);
               msgEl.style.display = 'block';
               msgEl.innerHTML = `<div class="video-msg-banner">${sizeMB.toFixed(1)} MB — over limit. Compress free at <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a></div>`;
-              input.value = ''; return;
+              clearInput(); return;
             }
           } else {
             // Photo over the limit — downscale it (like the book maker) instead
@@ -793,7 +821,7 @@
               sizeMB = file.size / (1024 * 1024);
             } else {
               alert(`This photo is ${sizeMB.toFixed(1)} MB and is still over the ${limitMB} MB limit after resizing. Please choose a smaller photo.`);
-              input.value = ''; return;
+              clearInput(); return;
             }
           }
         }
