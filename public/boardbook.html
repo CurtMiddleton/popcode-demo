@@ -106,8 +106,17 @@
       .spread-row .half { padding: 10px 12px; }
       /* Center fold only between two real facing pages (not next to a blank half). */
       .spread-row.pair .half + .half { border-left: 1px dashed #e6e3dc; }
-      .half.blank { background: transparent; }   /* blank inside-cover half — no label */
+      .empty-half { background: transparent; }   /* the gap beside the cover — nothing drawn */
       .slot-card { background: transparent; }
+      /* Blank inside-cover page: a white page (prints white), like the photo book. */
+      .slot.blank-page { background: #fff; cursor: default; box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
+      /* Empty page slot — flat #ededed with a centered picture-frame icon (Popsa-style),
+         mirroring the photo book (no "tap a photo" text). */
+      .slot.empty {
+        background-color: #ededed;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b8b8b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Ccircle cx='8.5' cy='8.5' r='1.5'/%3E%3Cpolyline points='21 15 16 10 5 21'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: center; background-size: 16%;
+      }
       /* Faint "Your Title" placeholder on an untitled cover. */
       .slot .cover-title.placeholder { color: rgba(255,255,255,0.85); font-style: italic; opacity: 0.9; }
       .slot .cover-title.placeholder.on-empty { color: #b7b2a8; text-shadow: none; }
@@ -395,10 +404,10 @@
       // blank half (inside cover). Row 1 = cover on the right.
       const SPREAD_ROWS = [
         [null, 'cover'],
-        [null, 'page_1'],
+        ['blank', 'page_1'],
         ['page_2', 'page_3'], ['page_4', 'page_5'], ['page_6', 'page_7'], ['page_8', 'page_9'],
         ['page_10', 'page_11'], ['page_12', 'page_13'], ['page_14', 'page_15'], ['page_16', 'page_17'],
-        ['page_18', null],
+        ['page_18', 'blank'],
       ];
       // Printify's 10 print openings (each = left | right page; null → blank half) + cover.
       const PRINT_SPREADS = [
@@ -662,10 +671,13 @@
         tray.appendChild(add);
       }
 
-      // One book opening (row) = two facing pages; null → a blank inside-cover half
-      // (prints white, like a layflat endpaper) rendered with no label.
+      // One book opening (row) = two facing pages.
+      //   null    → an empty gap (the space beside the cover), nothing drawn.
+      //   'blank' → a visible blank page (inside front / back cover), prints white,
+      //             shown as a labelled white page like the photo book.
       function slotHalfHTML(pos) {
-        if (!pos) return '<div class="half blank"></div>';
+        if (pos === null) return '<div class="half empty-half"></div>';
+        if (pos === 'blank') return `<div class="half"><div class="slot-label">Blank Page</div><div class="slot square blank-page"></div></div>`;
         const pid = slots[pos]; const p = pid ? photos.get(pid) : null;
         const isCover = pos === 'cover';
         let overlay = '';
@@ -678,8 +690,8 @@
           }
         }
         return `<div class="half"><div class="slot-label">${positionLabel(pos)}</div>
-          <div class="slot square" data-pos="${pos}">
-            ${p ? `<img class="slot-img${(normalizeAdjust(p.adjust).fit === 'fit') ? ' fit' : ''}" src="${p.url}" draggable="false" style="transform:${adjustTransform(normalizeAdjust(p.adjust))}"/>` : `<div class="ph">${isCover ? 'Tap to add a cover' : 'Tap a photo above, then tap here'}</div>`}
+          <div class="slot square${p ? '' : ' empty'}" data-pos="${pos}">
+            ${p ? `<img class="slot-img${(normalizeAdjust(p.adjust).fit === 'fit') ? ' fit' : ''}" src="${p.url}" draggable="false" style="transform:${adjustTransform(normalizeAdjust(p.adjust))}"/>` : ''}
             ${overlay}
             ${photoHasMedia(p) ? `<img class="pc-badge" src="/assets/popcode_icon.svg" title="Popcode — plays ${p.popcode.mediaType === 'audio' ? 'audio' : 'video'} when scanned"/>` : ''}
           </div></div>`;
