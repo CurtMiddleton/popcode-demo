@@ -976,7 +976,13 @@
           } else {
             body.innerHTML = `<div class="audio-panel"><div class="audio-time" id="pop-audio-elapsed">0:00</div><button class="audio-rec-btn" id="pop-audio-rec">● Record</button><div class="dz-sub" style="margin-top:12px">Tap record and speak. Tap again to stop.</div><label class="mini-btn" style="margin-top:14px;display:inline-flex;cursor:pointer">Or upload audio<input type="file" accept="audio/*" id="pop-audio-input" style="display:none"/></label></div>`;
             document.getElementById('pop-audio-rec').addEventListener('click', toggleRecord);
-            document.getElementById('pop-audio-input').addEventListener('change', (e) => { if (e.target.files[0]) { s.audio = e.target.files[0]; renderPopBody(); syncPopSave(); } });
+            document.getElementById('pop-audio-input').addEventListener('change', async (e) => {
+              const f = e.target.files[0]; if (!f) return;
+              // Convert an uploaded webm/ogg to WAV so it plays on iOS (other formats pass through).
+              const norm = window.normalizeAudio ? await window.normalizeAudio(f, (f.name.split('.').pop() || '')) : { blob: f, ext: '' };
+              s.audio = norm.ext === 'wav' ? new File([norm.blob], 'audio.wav', { type: 'audio/wav' }) : f;
+              renderPopBody(); syncPopSave();
+            });
           }
         }
         syncPopSave();
