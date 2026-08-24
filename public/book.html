@@ -18,6 +18,7 @@
     <title>Popcode — Design a Book</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
     <script src="/countries.js"></script>
     <!-- book.html only needs MINDAR.IMAGE.Compiler (to compile popcoded photos
@@ -3367,11 +3368,13 @@
         const mr = new MediaRecorder(stream, pick.mime ? { mimeType: pick.mime } : {});
         const chunks = [];
         mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-        mr.onstop = () => {
+        mr.onstop = async () => {
           const blob = new Blob(chunks, { type: pick.mime || mr.mimeType || 'audio/webm' });
           stream.getTracks().forEach(t => t.stop());
           recorder = null;
-          popEditState.audio = new File([blob], `audio.${pick.ext}`, { type: blob.type });
+          // iOS can't play webm/opus — normalize to WAV so it plays on every device.
+          const norm = window.normalizeAudio ? await window.normalizeAudio(blob, pick.ext) : { blob, ext: pick.ext };
+          popEditState.audio = new File([norm.blob], `audio.${norm.ext}`, { type: norm.blob.type });
           renderPopBody(); syncPopSave();
         };
         mr.start();

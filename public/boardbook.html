@@ -16,6 +16,7 @@
     <title>Popcode — Design a Board Book</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
     <!-- Board book only needs MINDAR.IMAGE.Compiler (compile popcoded photos into a
          .mind), not AR rendering. Stub AFRAME so the compiler bundle loads without a
@@ -1050,7 +1051,7 @@
         let stream; try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { alert('Microphone access was denied. Enable it in your browser settings and try again.'); return; }
         const mr = new MediaRecorder(stream, pick.mime ? { mimeType: pick.mime } : {}); const chunks = [];
         mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-        mr.onstop = () => { const blob = new Blob(chunks, { type: pick.mime || mr.mimeType || 'audio/webm' }); stream.getTracks().forEach(t => t.stop()); recorder = null; popState.audio = new File([blob], `audio.${pick.ext}`, { type: blob.type }); renderPopBody(); syncPopSave(); };
+        mr.onstop = async () => { const blob = new Blob(chunks, { type: pick.mime || mr.mimeType || 'audio/webm' }); stream.getTracks().forEach(t => t.stop()); recorder = null; const norm = window.normalizeAudio ? await window.normalizeAudio(blob, pick.ext) : { blob, ext: pick.ext }; popState.audio = new File([norm.blob], `audio.${norm.ext}`, { type: norm.blob.type }); renderPopBody(); syncPopSave(); };
         mr.start(); recorder = { mediaRecorder: mr, chunks, stream, ext: pick.ext, startTs: Date.now(), timerId: null };
         const recBtn = document.getElementById('pop-audio-rec'); if (recBtn) { recBtn.textContent = '■ Stop'; recBtn.classList.add('stop'); }
         recorder.timerId = setInterval(() => { const sec = Math.floor((Date.now() - recorder.startTs) / 1000); const el = document.getElementById('pop-audio-elapsed'); if (el) el.innerHTML = `<span class="rec-dot"></span>${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }, 250);

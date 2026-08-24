@@ -22,6 +22,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/audio-wav.js"></script>
     <script src="/image-source.js"></script>
     <script src="/montage-music.js"></script>
     <!-- edit.html only needs MINDAR.IMAGE.Compiler, not AR rendering. The
@@ -1645,10 +1646,12 @@
         const mr = new MediaRecorder(stream, opts);
         const chunks = [];
         mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-        mr.onstop = () => {
+        mr.onstop = async () => {
           const blob = new Blob(chunks, { type: pick.mime || mr.mimeType || 'audio/webm' });
           stream.getTracks().forEach(t => t.stop());
-          const file = new File([blob], `recording.${pick.ext}`, { type: blob.type });
+          // iOS can't play webm/opus — normalize to WAV so it plays on every device.
+          const norm = window.normalizeAudio ? await window.normalizeAudio(blob, pick.ext) : { blob, ext: pick.ext };
+          const file = new File([norm.blob], `recording.${norm.ext}`, { type: norm.blob.type });
           if (recorders[token] && recorders[token].timerId) clearInterval(recorders[token].timerId);
           delete recorders[token];
           onDone(file);

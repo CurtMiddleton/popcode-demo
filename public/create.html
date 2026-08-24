@@ -19,6 +19,7 @@
     <title>Popcode — Create</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/audio-wav.js"></script>
     <script src="/image-source.js"></script>
     <script src="/montage-music.js"></script>
     <!-- create.html only needs MINDAR.IMAGE.Compiler, not AR rendering. The
@@ -602,10 +603,12 @@
         const mr = new MediaRecorder(stream, opts);
         const chunks = [];
         mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-        mr.onstop = () => {
+        mr.onstop = async () => {
           const blob = new Blob(chunks, { type: pick.mime || mr.mimeType || 'audio/webm' });
           stream.getTracks().forEach(t => t.stop());
-          finalizeRecording(n, blob, pick.ext);
+          // iOS can't play webm/opus — normalize to WAV so it plays on every device.
+          const norm = window.normalizeAudio ? await window.normalizeAudio(blob, pick.ext) : { blob, ext: pick.ext };
+          finalizeRecording(n, norm.blob, norm.ext);
         };
         mr.start();
         const startTs = Date.now();
