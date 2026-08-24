@@ -225,6 +225,22 @@
         pointer-events: none;
       }
       /* Eye = preview the photo / play the video (opposite corner to the ✎ replace). */
+      /* Fourth source for the scan image, beside the three iOS puts in its own
+         file-input sheet. It has to be a real <label> around a real file input:
+         iOS silently refuses a programmatic .click() on a file input outside a
+         direct tap handler, which is why a <select> can't drive this. */
+      .frame-src {
+        position: absolute; right: 8px; bottom: 8px; z-index: 3;
+        display: inline-flex; align-items: center; gap: 5px;
+        max-width: calc(100% - 46px); /* clears the eye button at bottom-left */
+        background: #ececec; border-radius: 999px; padding: 7px 13px;
+        font-size: 12px; font-weight: 700; color: #1a1a1a; font-family: 'Inter', sans-serif;
+        line-height: 1.2; cursor: pointer; white-space: nowrap;
+      }
+      .frame-src:hover { background: #e3e2de; }
+      .frame-src:active { background: #dcdbd7; }
+      .frame-src svg { width: 13px; height: 13px; flex: 0 0 auto; }
+      .frame-src input { display: none; }
       .tile-eye {
         position: absolute; bottom: 6px; left: 6px; z-index: 3;
         width: 28px; height: 28px; border: none; border-radius: 50%;
@@ -1411,10 +1427,10 @@
                   <img class="preview-img" id="photo-preview-${key}" src="${escapeHtml(photoThumb)}" style="display:block;"/>
                   ${photoThumb ? `<button type="button" class="tile-eye" data-preview-kind="photo" data-preview-url="${escapeHtml(photoThumb)}" title="Preview photo">${IC_EYE}</button>` : ''}
                 </label>
-                <select class="media-select photo-select" data-key="${key}" aria-label="Where the scan image comes from">
-                  <option value="photo" selected>Photo</option>
-                  <option value="frame">Frame from video</option>
-                </select>
+                <label class="frame-src" id="frame-src-${key}" title="Use a still frame from a video">
+                  <input type="file" accept="video/*"/>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/></svg>From video
+                </label>
                 <div class="existing-badge" id="photo-badge-${key}">Tap to replace</div>
               </div>
             </div>
@@ -1477,8 +1493,8 @@
         renderExistingAudioTile(item, key, audioUrl);
 
         // Media-type dropdown (Video / Montage / Audio) — same control as New Popcode.
-        page.querySelector('.photo-select').addEventListener('change', (e) => onPhotoSourceSelect(e.target, (file) => applyExistingPhoto(item, key, file)));
-        page.querySelector('.media-select:not(.photo-select)').addEventListener('change', (e) => onExistingMediaSelect(item, key, e.target));
+        page.querySelector('.frame-src input').addEventListener('change', (e) => onFrameSource(e.target, (file) => applyExistingPhoto(item, key, file)));
+        page.querySelector('.media-select').addEventListener('change', (e) => onExistingMediaSelect(item, key, e.target));
 
         // Photo replacement
         page.querySelector('#photo-btn-' + key + ' input').addEventListener('change', function() {
@@ -1795,10 +1811,10 @@
                   <img class="icon" src="/assets/photo.png" alt="Photo"/>
                   <img class="preview-img" id="photo-preview-new-${n}"/>
                 </label>
-                <select class="media-select photo-select" data-page="${n}" aria-label="Where the scan image comes from">
-                  <option value="photo" selected>Photo</option>
-                  <option value="frame">Frame from video</option>
-                </select>
+                <label class="frame-src" id="frame-src-new-${n}" title="Use a still frame from a video">
+                  <input type="file" accept="video/*"/>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/></svg>From video
+                </label>
                 <button type="button" class="tile-eye" id="photo-eye-new-${n}" title="Preview" data-preview-kind="photo">${IC_EYE}</button>
               </div>
               <div class="file-name" id="photo-name-new-${n}"></div>
@@ -1841,8 +1857,8 @@
           });
         });
         document.getElementById('pages').appendChild(page);
-        page.querySelector('.photo-select').addEventListener('change', (e) => onPhotoSourceSelect(e.target, (file) => applyMediaFile(file, 'photo', n, null).catch(err => console.error(err))));
-        page.querySelector('.media-select:not(.photo-select)').addEventListener('change', (e) => onNewMediaSelect(n, e.target));
+        page.querySelector('.frame-src input').addEventListener('change', (e) => onFrameSource(e.target, (file) => applyMediaFile(file, 'photo', n, null).catch(err => console.error(err))));
+        page.querySelector('.media-select').addEventListener('change', (e) => onNewMediaSelect(n, e.target));
         renderNewAudioTile(n);
         renumberPages();
       }
@@ -1865,7 +1881,7 @@
         pair.mediaType = mode;
         const page = document.getElementById(`page-new-${n}`);
         if (!page) return;
-        const sel = page.querySelector('.media-select:not(.photo-select)');
+        const sel = page.querySelector('.media-select');
         if (sel && sel.value !== mode) sel.value = mode;
         const vs = document.getElementById(`video-slot-new-${n}`);
         const as = document.getElementById(`audio-slot-new-${n}`);
@@ -1953,17 +1969,18 @@
         });
       }
 
-      // Scan-image source dropdown. iOS owns the native file-input action sheet
-      // (Photo Library / Take Photo / Choose File) and won't let us add to it, so
-      // "Frame from video" sits here instead. It isn't a persistent mode — it opens
-      // the frame picker and snaps back to Photo.
-      function onPhotoSourceSelect(sel, onPick) {
-        sel.value = 'photo';
-        if (typeof openFramePicker !== 'function') {
+      // A video was chosen for the "Frame from video" source — hand it to the
+      // frame sheet, and clear the input so picking the same video again still
+      // fires a change event.
+      function onFrameSource(input, onPick) {
+        const file = input.files && input.files[0];
+        input.value = '';
+        if (!file) return;
+        if (typeof openFrameSheet !== 'function') {
           alert("The frame picker didn't load. Reload the page and try again.");
           return;
         }
-        openFramePicker({ onPick });
+        openFrameSheet(file, { onPick });
       }
 
       // Apply a replacement photo to an existing page — same effect as picking a
@@ -2921,7 +2938,7 @@
         const as = document.getElementById(`audio-slot-${key}`);
         if (vs) vs.style.display = '';
         if (as) as.style.display = 'none';
-        const sel = document.querySelector(`#page-${key} .media-select:not(.photo-select)`);
+        const sel = document.querySelector(`#page-${key} .media-select`);
         if (sel) sel.value = 'video';
         setVideoPreview(`video-preview-${key}`, file);
         const badge = document.getElementById(`video-badge-${key}`);

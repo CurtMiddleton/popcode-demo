@@ -5,7 +5,7 @@
  * / Choose File) and there is no way to add an item to it, so this lives beside
  * that menu as its own option rather than inside it.
  *
- *   openFramePicker({ onPick(file) {}, onCancel() {} })
+ *   openFrameSheet(videoFile, { onPick(imageFile) {}, onCancel() {} })
  */
 (function () {
   const MAX_DIM = 2560; // matches create.html's photo downscale target
@@ -67,6 +67,7 @@
       }
       .vfr-btn[disabled] { opacity: .4; cursor: default; }
       .vfr-again { background: #fff; color: #1a1a1a; border-color: #e4e2dc; }
+      .vfr-again input { display: none; }
       .vfr-use { background: #1a1a1a; color: #fff; flex: 1; max-width: 260px; }
     `;
     document.head.appendChild(css);
@@ -79,25 +80,16 @@
     return m + ':' + String(s).padStart(2, '0');
   }
 
-  window.openFramePicker = function openFramePicker(opts) {
-    opts = opts || {};
+  // Open the sheet for a video the caller already has in hand.
+  //
+  // There is deliberately no "open the file picker for you" entry point: iOS
+  // Safari refuses a programmatic .click() on a file input unless it happens
+  // inside a direct tap handler, and it fails silently when it refuses. Callers
+  // put a real <label> around a real <input type="file"> — a tap on the label
+  // forwards activation natively — and hand us the File from its change event.
+  window.openFrameSheet = function openFrameSheet(file, opts) {
     injectStyles();
-
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'video/*';
-    input.style.display = 'none';
-    document.body.appendChild(input);
-
-    input.addEventListener('change', function () {
-      const file = this.files && this.files[0];
-      input.remove();
-      if (!file) { if (opts.onCancel) opts.onCancel(); return; }
-      showSheet(file, opts);
-    });
-    // If the picker is dismissed there is no reliable event, so nothing to do —
-    // the caller's UI is untouched until onPick fires.
-    input.click();
+    showSheet(file, opts || {});
   };
 
   function showSheet(file, opts) {
@@ -113,7 +105,7 @@
         </div>
         <div class="vfr-body">
           <p class="vfr-sub">Scrub to the moment you want. That frame becomes the image people point their camera at.</p>
-          <div class="vfr-stage"><video playsinline muted preload="metadata"></video></div>
+          <div class="vfr-stage"><video playsinline muted preload="auto"></video></div>
           <input class="vfr-scrub" type="range" min="0" max="1000" value="0" step="1" aria-label="Scrub through the video"/>
           <div class="vfr-times"><span class="vfr-cur">0:00</span><span class="vfr-dur">0:00</span></div>
           <div class="vfr-steps">
@@ -123,7 +115,7 @@
           <p class="vfr-tip">Pick a sharp, well-lit moment — blurry frames are harder for the camera to recognize.</p>
         </div>
         <div class="vfr-foot">
-          <button type="button" class="vfr-btn vfr-again">Different video</button>
+          <label class="vfr-btn vfr-again">Different video<input type="file" accept="video/*"/></label>
           <button type="button" class="vfr-btn vfr-use" disabled>Use this frame</button>
         </div>
       </div>
@@ -150,7 +142,12 @@
 
     ov.querySelector('.vfr-close').addEventListener('click', () => { close(); if (opts.onCancel) opts.onCancel(); });
     ov.addEventListener('click', (e) => { if (e.target === ov) { close(); if (opts.onCancel) opts.onCancel(); } });
-    ov.querySelector('.vfr-again').addEventListener('click', () => { close(); window.openFramePicker(opts); });
+    ov.querySelector('.vfr-again input').addEventListener('change', function () {
+      const next = this.files && this.files[0];
+      if (!next) return;
+      close();
+      showSheet(next, opts);
+    });
 
     // Some containers (notably webm written by MediaRecorder) report an infinite
     // duration until you seek past the end, which leaves the scrubber dead.
@@ -170,6 +167,9 @@
     }
 
     video.addEventListener('loadedmetadata', async () => {
+      // iOS won't seek — and draws a blank frame to canvas — until the element
+      // has actually decoded something. A muted inline play/pause primes it.
+      try { await video.play(); video.pause(); } catch (e) {}
       await resolveDuration();
       durEl.textContent = isFinite(video.duration) ? fmt(video.duration) : '—';
       // Start a little way in — the very first frame is often a blurry lens-open.
