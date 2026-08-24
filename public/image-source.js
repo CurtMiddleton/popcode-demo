@@ -1,14 +1,25 @@
-/* Frame picker — grab a still frame out of a video and hand it back as a File.
+/* Where the "Image to scan" comes from — one menu, every source in it.
  *
- * Used by create.html and edit.html as a fourth source for the "Image to scan"
- * tile. iOS owns the native file-input action sheet (Photo Library / Take Photo
- * / Choose File) and there is no way to add an item to it, so this lives beside
- * that menu as its own option rather than inside it.
+ *   openImageSourceMenu({ onPick(imageFile) {} })
  *
- *   openFrameSheet(videoFile, { onPick(imageFile) {}, onCancel() {} })
+ * Tapping the scan-image tile opens this instead of going straight to the OS
+ * picker, so "Frame from video" sits alongside the camera and the photo library
+ * rather than hiding behind a second control.
+ *
+ * Every row is a real <label> around a real <input type="file">. That is not
+ * cosmetic: iOS Safari silently refuses a programmatic .click() on a file input
+ * outside a direct tap handler, so nothing here may open a picker from JS.
+ *
+ * "Photo Library" and "Choose File" are one row, because on iOS they are two
+ * rows of Apple's own sheet and a web page cannot open that sheet pre-narrowed
+ * to one of them — listing them separately would just show Apple's sheet twice.
  */
 (function () {
   const MAX_DIM = 2560; // matches create.html's photo downscale target
+
+  const IC_LIBRARY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
+  const IC_CAMERA  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+  const IC_FILM    = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/><line x1="2" y1="12" x2="22" y2="12"/></svg>';
 
   let injected = false;
   function injectStyles() {
@@ -69,6 +80,25 @@
       .vfr-again { background: #fff; color: #1a1a1a; border-color: #e4e2dc; }
       .vfr-again input { display: none; }
       .vfr-use { background: #1a1a1a; color: #fff; flex: 1; max-width: 260px; }
+
+      .ism-list { padding: 0 16px 12px; }
+      .ism-row {
+        display: flex; align-items: center; gap: 14px; width: 100%;
+        padding: 15px 12px; border-radius: 14px; cursor: pointer;
+        font-family: 'Inter', sans-serif; text-align: left;
+      }
+      .ism-row:hover { background: #f7f6f2; }
+      .ism-row:active { background: #f0efea; }
+      .ism-row input { display: none; }
+      .ism-icon {
+        flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%;
+        background: #f3f2ef; color: #1a1a1a;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .ism-icon svg { width: 20px; height: 20px; }
+      .ism-text { min-width: 0; flex: 1; }
+      .ism-name { display: block; font-size: 15px; font-weight: 700; color: #1a1a1a; line-height: 1.3; }
+      .ism-desc { display: block; font-size: 12.5px; color: #8a8a8a; line-height: 1.4; margin-top: 2px; }
     `;
     document.head.appendChild(css);
   }
@@ -80,7 +110,78 @@
     return m + ':' + String(s).padStart(2, '0');
   }
 
-  // Open the sheet for a video the caller already has in hand.
+  // Pick where the scan image comes from. Resolves through opts.onPick(File).
+  window.openImageSourceMenu = function openImageSourceMenu(opts) {
+    opts = opts || {};
+    injectStyles();
+
+    const ov = document.createElement('div');
+    ov.className = 'vfr-overlay open';
+    ov.innerHTML = `
+      <div class="vfr-sheet" role="dialog" aria-modal="true" aria-label="Choose the image to scan">
+        <div class="vfr-head">
+          <div class="vfr-title">Image to scan</div>
+          <button type="button" class="vfr-close" title="Close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="ism-list">
+          <label class="ism-row" data-src="library">
+            <input type="file" accept="image/*"/>
+            <span class="ism-icon">${IC_LIBRARY}</span>
+            <span class="ism-text">
+              <span class="ism-name">Photo Library or File</span>
+              <span class="ism-desc">Pick a photo you already have</span>
+            </span>
+          </label>
+          <label class="ism-row" data-src="camera">
+            <input type="file" accept="image/*" capture="environment"/>
+            <span class="ism-icon">${IC_CAMERA}</span>
+            <span class="ism-text">
+              <span class="ism-name">Take Photo</span>
+              <span class="ism-desc">Shoot one with the camera now</span>
+            </span>
+          </label>
+          <label class="ism-row" data-src="frame">
+            <input type="file" accept="video/*"/>
+            <span class="ism-icon">${IC_FILM}</span>
+            <span class="ism-text">
+              <span class="ism-name">Frame from Video</span>
+              <span class="ism-desc">Scrub a video and grab a still from it</span>
+            </span>
+          </label>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(ov);
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    function close() {
+      document.body.style.overflow = prevOverflow;
+      ov.remove();
+      document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    ov.querySelector('.vfr-close').addEventListener('click', close);
+    ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+
+    ov.querySelectorAll('.ism-row').forEach(row => {
+      row.querySelector('input').addEventListener('change', function () {
+        const file = this.files && this.files[0];
+        this.value = ''; // so re-picking the same file still fires
+        if (!file) return;
+        if (row.dataset.src === 'frame') {
+          close();
+          showSheet(file, opts);
+        } else {
+          close();
+          if (opts.onPick) opts.onPick(file);
+        }
+      });
+    });
+  };
+
+  // Open the frame sheet for a video the caller already has in hand.
   //
   // There is deliberately no "open the file picker for you" entry point: iOS
   // Safari refuses a programmatic .click() on a file input unless it happens

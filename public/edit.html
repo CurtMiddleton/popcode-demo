@@ -22,7 +22,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
-    <script src="/frame-picker.js"></script>
+    <script src="/image-source.js"></script>
     <script src="/montage-music.js"></script>
     <!-- edit.html only needs MINDAR.IMAGE.Compiler, not AR rendering. The
          compiler ships in the image-aframe build, which exports MINDAR before
@@ -198,6 +198,7 @@
         position: relative; overflow: hidden;
       }
       .upload-btn:active { transform: scale(0.95); }
+      button.upload-btn { font: inherit; padding: 0; -webkit-appearance: none; appearance: none; }
       .upload-btn input[type="file"] { position: absolute; top: 0; right: 0; bottom: 0; left: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
       .upload-btn img.icon { width: 50px; height: 50px; }
       .upload-btn .btn-label { font-size: 11px; color: #888; font-weight: 600; text-align: center; padding: 0 8px; }
@@ -225,22 +226,6 @@
         pointer-events: none;
       }
       /* Eye = preview the photo / play the video (opposite corner to the ✎ replace). */
-      /* Fourth source for the scan image, beside the three iOS puts in its own
-         file-input sheet. It has to be a real <label> around a real file input:
-         iOS silently refuses a programmatic .click() on a file input outside a
-         direct tap handler, which is why a <select> can't drive this. */
-      .frame-src {
-        position: absolute; right: 8px; bottom: 8px; z-index: 3;
-        display: inline-flex; align-items: center; gap: 5px;
-        max-width: calc(100% - 46px); /* clears the eye button at bottom-left */
-        background: #ececec; border-radius: 999px; padding: 7px 13px;
-        font-size: 12px; font-weight: 700; color: #1a1a1a; font-family: 'Inter', sans-serif;
-        line-height: 1.2; cursor: pointer; white-space: nowrap;
-      }
-      .frame-src:hover { background: #e3e2de; }
-      .frame-src:active { background: #dcdbd7; }
-      .frame-src svg { width: 13px; height: 13px; flex: 0 0 auto; }
-      .frame-src input { display: none; }
       .tile-eye {
         position: absolute; bottom: 6px; left: 6px; z-index: 3;
         width: 28px; height: 28px; border: none; border-radius: 50%;
@@ -1422,15 +1407,10 @@
             <div class="upload-wrapper">
               <div class="media-card filled">
                 <div class="media-card-label">Image to scan</div>
-                <label class="upload-btn selected replaceable" id="photo-btn-${key}" title="Tap to replace photo">
-                  <input type="file" accept="image/*" style="position:absolute;top:0;right:0;bottom:0;left:0;opacity:0;cursor:pointer;width:100%;height:100%;"/>
+                <div class="upload-btn selected replaceable" id="photo-btn-${key}" role="button" tabindex="0" title="Tap to replace photo">
                   <img class="preview-img" id="photo-preview-${key}" src="${escapeHtml(photoThumb)}" style="display:block;"/>
                   ${photoThumb ? `<button type="button" class="tile-eye" data-preview-kind="photo" data-preview-url="${escapeHtml(photoThumb)}" title="Preview photo">${IC_EYE}</button>` : ''}
-                </label>
-                <label class="frame-src" id="frame-src-${key}" title="Use a still frame from a video">
-                  <input type="file" accept="video/*"/>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/></svg>From video
-                </label>
+                </div>
                 <div class="existing-badge" id="photo-badge-${key}">Tap to replace</div>
               </div>
             </div>
@@ -1493,22 +1473,13 @@
         renderExistingAudioTile(item, key, audioUrl);
 
         // Media-type dropdown (Video / Montage / Audio) — same control as New Popcode.
-        page.querySelector('.frame-src input').addEventListener('change', (e) => onFrameSource(e.target, (file) => applyExistingPhoto(item, key, file)));
         page.querySelector('.media-select').addEventListener('change', (e) => onExistingMediaSelect(item, key, e.target));
 
-        // Photo replacement
-        page.querySelector('#photo-btn-' + key + ' input').addEventListener('change', function() {
-          const file = this.files[0];
-          if (!file) return;
-          const sizeMB = file.size / (1024 * 1024);
-          if (sizeMB > MAX_PHOTO_MB) {
-            alert(`This photo is ${sizeMB.toFixed(1)} MB, which exceeds the ${MAX_PHOTO_MB} MB limit.`);
-            this.value = ''; return;
-          }
-          if (!replacements[item.id]) replacements[item.id] = {};
-          replacements[item.id].photo = file;
-          document.getElementById(`photo-preview-${key}`).src = URL.createObjectURL(file);
-          document.getElementById(`photo-badge-${key}`).textContent = '✓ Replaced';
+        // Photo replacement — the tile opens the source menu. The preview eye
+        // sits inside this tile, so let its own handler have that click.
+        page.querySelector('#photo-btn-' + key).addEventListener('click', (e) => {
+          if (e.target.closest('.tile-eye')) return;
+          openScanImageMenu((file) => applyExistingPhoto(item, key, file));
         });
 
         // Video replacement
@@ -1806,15 +1777,10 @@
             <div class="upload-wrapper">
               <div class="media-card">
                 <div class="media-card-label">Image to scan</div>
-                <label class="upload-btn" id="photo-btn-new-${n}">
-                  <input type="file" accept="image/*" onchange="handleFile(this,'photo',${n}).catch(e=>console.error(e))"/>
+                <button type="button" class="upload-btn" id="photo-btn-new-${n}" onclick="pickScanImage(${n})">
                   <img class="icon" src="/assets/photo.png" alt="Photo"/>
                   <img class="preview-img" id="photo-preview-new-${n}"/>
-                </label>
-                <label class="frame-src" id="frame-src-new-${n}" title="Use a still frame from a video">
-                  <input type="file" accept="video/*"/>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/></svg>From video
-                </label>
+                </button>
                 <button type="button" class="tile-eye" id="photo-eye-new-${n}" title="Preview" data-preview-kind="photo">${IC_EYE}</button>
               </div>
               <div class="file-name" id="photo-name-new-${n}"></div>
@@ -1857,7 +1823,6 @@
           });
         });
         document.getElementById('pages').appendChild(page);
-        page.querySelector('.frame-src input').addEventListener('change', (e) => onFrameSource(e.target, (file) => applyMediaFile(file, 'photo', n, null).catch(err => console.error(err))));
         page.querySelector('.media-select').addEventListener('change', (e) => onNewMediaSelect(n, e.target));
         renderNewAudioTile(n);
         renumberPages();
@@ -1969,18 +1934,18 @@
         });
       }
 
-      // A video was chosen for the "Frame from video" source — hand it to the
-      // frame sheet, and clear the input so picking the same video again still
-      // fires a change event.
-      function onFrameSource(input, onPick) {
-        const file = input.files && input.files[0];
-        input.value = '';
-        if (!file) return;
-        if (typeof openFrameSheet !== 'function') {
-          alert("The frame picker didn't load. Reload the page and try again.");
+      // Tapping a scan-image tile opens the source menu (library / camera /
+      // frame from a video) rather than going straight to the OS picker.
+      function openScanImageMenu(onPick) {
+        if (typeof openImageSourceMenu !== 'function') {
+          alert("The image picker didn't load. Reload the page and try again.");
           return;
         }
-        openFrameSheet(file, { onPick });
+        openImageSourceMenu({ onPick });
+      }
+
+      function pickScanImage(n) {
+        openScanImageMenu((file) => applyMediaFile(file, 'photo', n, null).catch(e => console.error(e)));
       }
 
       // Apply a replacement photo to an existing page — same effect as picking a
