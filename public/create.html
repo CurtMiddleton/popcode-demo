@@ -263,6 +263,13 @@
       @keyframes rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 
+      .confirm-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9700; align-items:center; justify-content:center; padding:24px; }
+      .confirm-overlay.visible { display:flex; }
+      .confirm-box { background:white; border-radius:20px; padding:28px 24px; max-width:340px; width:100%; box-shadow:0 8px 32px rgba(0,0,0,0.18); }
+      .confirm-box p { font-size:15px; color:#333; line-height:1.5; margin-bottom:20px; }
+      .confirm-actions { display:flex; gap:10px; }
+      .confirm-cancel-btn { flex:1; padding:12px; border-radius:24px; border:none; background:#eeeeee; color:#333; font-size:14px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; }
+      .confirm-delete-btn { flex:1; padding:12px; border-radius:24px; border:none; background:#e53935; color:white; font-size:14px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; }
       .add-page-btn { width: 100%; max-width: 420px; padding: 16px; border-radius: 30px; border: none; background: #eeeeee; color: #333333; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 16px; transition: background 0.2s; font-family: 'Inter', sans-serif; }
       .add-page-btn:hover { background: #e0e0e0; }
       .create-btn { width: 100%; max-width: 420px; padding: 16px; border-radius: 30px; border: none; background: #1a1a1a; color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: opacity 0.3s, box-shadow 0.3s; font-family: 'Inter', sans-serif; opacity: 0.6; }
@@ -381,6 +388,16 @@
       <div class="field-hint" id="code-hint">Your shareable link — auto&#8209;generated. Tap Edit to customize it.</div>
 
       <div class="pages" id="pages"></div>
+
+      <div class="confirm-overlay" id="confirm-overlay">
+        <div class="confirm-box">
+          <p id="confirm-msg"></p>
+          <div class="confirm-actions">
+            <button class="confirm-cancel-btn" id="confirm-cancel-btn">Cancel</button>
+            <button class="confirm-delete-btn" id="confirm-delete-btn">Delete</button>
+          </div>
+        </div>
+      </div>
 
       <button class="add-page-btn" id="add-page-btn">+ Add another Popcode</button>
       <button class="create-btn" id="create-btn">Generate Popcode</button>
@@ -876,11 +893,29 @@
       }
 
       function removePage(n) {
-        const page = document.getElementById(`page-${n}`);
-        if (page) page.remove();
-        delete pairs[n];
-        checkReady();
-        renumberPages();
+        confirmDelete('Delete this Popcode? Anything you\'ve added to it will be lost.', () => {
+          const page = document.getElementById(`page-${n}`);
+          if (page) page.remove();
+          delete pairs[n];
+          checkReady();
+          renumberPages();
+        });
+      }
+
+      // Same confirm dialog the Edit and My Popcodes screens use.
+      function confirmDelete(msg, onConfirm) {
+        const overlay = document.getElementById('confirm-overlay');
+        document.getElementById('confirm-msg').textContent = msg;
+        overlay.classList.add('visible');
+        const close = () => {
+          overlay.classList.remove('visible');
+          document.removeEventListener('keydown', onKey);
+        };
+        function onKey(e) { if (e.key === 'Escape') close(); }
+        document.addEventListener('keydown', onKey);
+        overlay.onclick = (e) => { if (e.target === overlay) close(); };
+        document.getElementById('confirm-delete-btn').onclick = () => { close(); onConfirm(); };
+        document.getElementById('confirm-cancel-btn').onclick = close;
       }
 
       function renumberPages() {
