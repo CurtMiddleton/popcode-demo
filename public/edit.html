@@ -266,7 +266,6 @@
       /* Inside a card the upload area is small + borderless (the card is the frame). */
       .media-card .upload-btn { width: 100%; height: auto; padding: 10px 0; background: transparent; border: none; box-shadow: none; }
       .media-card .audio-tile { width: 100%; height: auto; background: transparent; border: none; box-shadow: none; }
-      .media-card .media-select { position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px; margin: 0; max-width: calc(100% - 84px); z-index: 3; }
       /* Eye is hidden until the tile is filled (existing pages keep theirs visible). */
       .media-card .tile-eye { display: none; }
       .media-card.filled .tile-eye { display: flex; }
@@ -285,16 +284,6 @@
       }
 
       /* Media-type dropdown (Video / Montage / Audio) — matches New Popcode. */
-      .media-select {
-        appearance: none; -webkit-appearance: none;
-        background-color: #ececec;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-        background-repeat: no-repeat; background-position: right 12px center; background-size: 11px;
-        border: none; border-radius: 999px; padding: 7px 32px 7px 16px;
-        font-size: 12px; font-weight: 700; color: #1a1a1a; font-family: 'Inter', sans-serif;
-        cursor: pointer; line-height: 1.2;
-      }
-      .media-select:focus { outline: 2px solid #d7d5cf; outline-offset: 1px; }
 
       /* Media-type toggle (Video | Audio) — existing pages only */
       .media-toggle { display: inline-flex; background: #ececec; border-radius: 999px; padding: 3px; }
@@ -1386,6 +1375,10 @@
         return item.media_type === 'audio' ? 'audio' : 'video';
       }
 
+      // Per-card video replacers, keyed by card, so the playback menu can hand a
+      // chosen file to the right card's compress-and-preview path.
+      const replaceExistingVideo = {};
+
       function renderExistingPage(item) {
         const key = `existing-${item.id}`;
         const page = document.createElement('div');
@@ -1418,22 +1411,16 @@
               <div class="media-card filled">
                 <div class="media-card-label">Plays when scanned</div>
                 <div class="video-slot" id="video-slot-${key}" style="display:${startMode === 'video' ? '' : 'none'};">
-                  <label class="upload-btn selected replaceable" id="video-btn-${key}" title="Tap to replace video">
-                    <input type="file" accept="video/*" style="position:absolute;top:0;right:0;bottom:0;left:0;opacity:0;cursor:pointer;width:100%;height:100%;"/>
+                  <div class="upload-btn selected replaceable" id="video-btn-${key}" title="Tap to replace video">
                     <img class="preview-img" id="video-preview-${key}" style="display:block;"/>
                     <span class="play-overlay" style="display:block;"></span>
                     ${videoThumb ? `<button type="button" class="tile-eye" data-preview-kind="video" data-preview-url="${escapeHtml(videoThumb)}" title="Play video">${IC_EYE}</button>` : ''}
-                  </label>
+                  </div>
                   <div class="existing-badge" id="video-badge-${key}">Tap to replace</div>
                 </div>
                 <div class="audio-slot" id="audio-slot-${key}" style="display:${startMode === 'audio' ? '' : 'none'};">
                   <div class="audio-tile" id="audio-tile-${key}"></div>
                 </div>
-                <select class="media-select" data-key="${key}" aria-label="What plays when scanned">
-                  <option value="video" ${startMode === 'video' ? 'selected' : ''}>Video</option>
-                  <option value="montage">Montage</option>
-                  <option value="audio" ${startMode === 'audio' ? 'selected' : ''}>Audio</option>
-                </select>
               </div>
               <div class="file-size" id="audio-size-${key}" style="margin-top:6px;"></div>
             </div>
@@ -1473,7 +1460,10 @@
         renderExistingAudioTile(item, key, audioUrl);
 
         // Media-type dropdown (Video / Montage / Audio) — same control as New Popcode.
-        page.querySelector('.media-select').addEventListener('change', (e) => onExistingMediaSelect(item, key, e.target));
+        page.querySelector(`#media-wrapper-${key} .media-card`).addEventListener('click', (e) => {
+          if (e.target.closest('.tile-eye, .audio-play-btn, .audio-rerecord, .audio-rec-btn')) return;
+          pickExistingPlayback(item, key);
+        });
 
         // Photo replacement — the tile opens the source menu. The preview eye
         // sits inside this tile, so let its own handler have that click.
@@ -1482,15 +1472,14 @@
           openScanImageMenu((file) => applyExistingPhoto(item, key, file));
         });
 
-        // Video replacement
-        page.querySelector('#video-btn-' + key + ' input').addEventListener('change', async function() {
-          const file = this.files[0];
+        // Video replacement, driven by the playback source menu.
+        replaceExistingVideo[key] = async function (file) {
           if (!file) return;
           const sizeMB = file.size / (1024 * 1024);
           if (sizeMB > MAX_VIDEO_MB) {
             if (canCompressVideo()) {
               const go = confirm(`This video is ${sizeMB.toFixed(1)} MB — over the ${MAX_VIDEO_MB} MB limit.\n\nWould you like to compress it?\n\nTap OK to compress, or Cancel to choose a different video.`);
-              if (!go) { this.value = ''; return; }
+              if (!go) return;
               const badge = document.getElementById(`video-badge-${key}`);
               badge.textContent = 'Compressing…';
               let compressed;
@@ -1504,11 +1493,9 @@
                 badge.textContent = `✓ Compressed (${compMB.toFixed(1)} MB)`;
               } else {
                 badge.textContent = 'Too large — try clideo.com';
-                this.value = '';
               }
             } else {
               alert(`Video is ${sizeMB.toFixed(1)} MB — over the ${MAX_VIDEO_MB} MB limit. Compress at clideo.com first.`);
-              this.value = '';
             }
             return;
           }
@@ -1516,7 +1503,7 @@
           replacements[item.id].video = file;
           setVideoPreview(`video-preview-${key}`, file);
           document.getElementById(`video-badge-${key}`).textContent = '✓ Replaced';
-        });
+        };
 
         page.querySelector('.remove-page-btn').addEventListener('click', () => {
           confirmDeletePage('Remove this page? You\'ll still need to tap Save Changes to apply.', () => {
@@ -1528,16 +1515,22 @@
         });
       }
 
-      // Existing-page media dropdown. Montage opens the builder (its output
+      // Existing-page playback menu. Montage opens the builder (its output
       // replaces the video); Video/Audio switch the slot like the old toggle did.
-      function onExistingMediaSelect(item, key, sel) {
-        if (sel.value === 'montage') {
-          const cur = (replacements[item.id] && replacements[item.id].mediaType) || getExistingMediaType(item);
-          sel.value = cur;
-          openMontage({ kind: 'existing', itemId: item.id, key });
+      function pickExistingPlayback(item, key) {
+        if (typeof openMediaSourceMenu !== 'function') {
+          alert("The media picker didn't load. Reload the page and try again.");
           return;
         }
-        switchExistingMedia(item, key, sel.value);
+        openMediaSourceMenu({
+          onVideo: (file) => {
+            switchExistingMedia(item, key, 'video');
+            const run = replaceExistingVideo[key];
+            if (run) run(file).catch(e => console.error(e));
+          },
+          onMontage: () => openMontage({ kind: 'existing', itemId: item.id, key }),
+          onAudio: () => switchExistingMedia(item, key, 'audio')
+        });
       }
       function switchExistingMedia(item, key, mode) {
         if (!replacements[item.id]) replacements[item.id] = {};
@@ -1790,21 +1783,15 @@
               <div class="media-card">
                 <div class="media-card-label">Plays when scanned</div>
                 <div class="video-slot" id="video-slot-new-${n}">
-                  <label class="upload-btn" id="video-btn-new-${n}">
-                    <input type="file" accept="video/*" onchange="handleFile(this,'video',${n}).catch(e=>console.error(e))"/>
+                  <div class="upload-btn" id="video-btn-new-${n}">
                     <img class="icon" src="/assets/video.png" alt="Video"/>
                     <img class="preview-img" id="video-preview-new-${n}"/>
                     <span class="play-overlay"></span>
-                  </label>
+                  </div>
                 </div>
                 <div class="audio-slot" id="audio-slot-new-${n}" style="display:none;">
                   <div class="audio-tile" id="audio-tile-new-${n}"></div>
                 </div>
-                <select class="media-select" data-page="${n}" aria-label="What plays when scanned">
-                  <option value="video" selected>Video</option>
-                  <option value="montage">Montage</option>
-                  <option value="audio">Audio</option>
-                </select>
                 <button type="button" class="tile-eye" id="video-eye-new-${n}" title="Preview" data-preview-kind="video">${IC_EYE}</button>
               </div>
               <div class="file-name" id="video-name-new-${n}"></div>
@@ -1823,21 +1810,29 @@
           });
         });
         document.getElementById('pages').appendChild(page);
-        page.querySelector('.media-select').addEventListener('change', (e) => onNewMediaSelect(n, e.target));
+        page.querySelector(`#media-wrapper-new-${n} .media-card`).addEventListener('click', (e) => {
+          if (e.target.closest('.tile-eye, .audio-play-btn, .audio-rerecord, .audio-rec-btn')) return;
+          pickNewPlayback(n);
+        });
         renderNewAudioTile(n);
         renumberPages();
       }
 
-      // Media dropdown change on a new page. Montage isn't a persistent media
-      // type — it's a builder whose output fills the video slot — so selecting
-      // it opens the builder and snaps the dropdown back to the current type.
-      function onNewMediaSelect(n, sel) {
-        if (sel.value === 'montage') {
-          sel.value = newPairs[n] ? newPairs[n].mediaType : 'video';
-          openMontage(n);
+      // New-page playback menu. Montage isn't a persistent media type — it's a
+      // builder whose output fills the video slot — so it just opens the builder.
+      function pickNewPlayback(n) {
+        if (typeof openMediaSourceMenu !== 'function') {
+          alert("The media picker didn't load. Reload the page and try again.");
           return;
         }
-        mtgSwitchNewMedia(n, sel.value);
+        openMediaSourceMenu({
+          onVideo: (file) => {
+            mtgSwitchNewMedia(n, 'video');
+            applyMediaFile(file, 'video', n, null).catch(e => console.error(e));
+          },
+          onMontage: () => openMontage(n),
+          onAudio: () => mtgSwitchNewMedia(n, 'audio')
+        });
       }
 
       function mtgSwitchNewMedia(n, mode) {
@@ -1846,8 +1841,6 @@
         pair.mediaType = mode;
         const page = document.getElementById(`page-new-${n}`);
         if (!page) return;
-        const sel = page.querySelector('.media-select');
-        if (sel && sel.value !== mode) sel.value = mode;
         const vs = document.getElementById(`video-slot-new-${n}`);
         const as = document.getElementById(`audio-slot-new-${n}`);
         if (vs) vs.style.display = mode === 'video' ? '' : 'none';
@@ -2903,8 +2896,6 @@
         const as = document.getElementById(`audio-slot-${key}`);
         if (vs) vs.style.display = '';
         if (as) as.style.display = 'none';
-        const sel = document.querySelector(`#page-${key} .media-select`);
-        if (sel) sel.value = 'video';
         setVideoPreview(`video-preview-${key}`, file);
         const badge = document.getElementById(`video-badge-${key}`);
         if (badge) badge.textContent = '✓ Replaced';
