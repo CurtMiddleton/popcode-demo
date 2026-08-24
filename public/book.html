@@ -2328,15 +2328,34 @@
           if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
           await new Promise(r => setTimeout(r, 120));
 
+          // Bake the Popcode scan badge onto popcoded slots so the proof matches the
+          // printed page (the badge signals a page is scannable). html2canvas drops
+          // external SVG <img>s, so rasterize the badge to a PNG once.
+          const badgePng = await rasterizeBadge();
+
           // html2canvas (1.4.1) predates CSS `aspect-ratio`, mishandles
           // `object-fit` on a transformed <img>, and can't do `writing-mode`.
-          // So before capture we: (1) pin the browser-computed px size on every
-          // aspect-ratio box, (2) swap each photo <img> for a <div> using
-          // background-size (cover/contain) — which html2canvas renders faithfully
-          // — carrying over the same crop/zoom transform, and (3) re-lay the
-          // vertical cover spine as a rotated horizontal block. (Layout is correct
-          // off-screen, so getBoundingClientRect is authoritative here.)
+          // So before capture we: (1) bake the scan badge, (2) pin the
+          // browser-computed px size on every aspect-ratio box, (3) swap each photo
+          // <img> for a <div> using background-size (cover/contain) — which
+          // html2canvas renders faithfully — carrying over the same crop/zoom
+          // transform, and (4) re-lay the vertical cover spine as a rotated
+          // horizontal block. (Layout is correct off-screen, so
+          // getBoundingClientRect is authoritative here.)
           units.forEach(unit => {
+            unit.querySelectorAll('.slot').forEach(slot => {
+              const tag = slot.querySelector('.slot-badge');
+              if (!tag) return;             // slot isn't popcoded
+              tag.remove();                 // swap the SVG badge for a PNG
+              const br = slot.getBoundingClientRect();
+              const bsize = Math.round(Math.min(br.width, br.height) * PRINT_A4L.badgeScale);
+              const bpad = Math.round(bsize * 0.5);
+              const b = document.createElement('div');
+              b.style.cssText = 'position:absolute;z-index:3;right:' + bpad + 'px;bottom:' + bpad + 'px;'
+                + 'width:' + bsize + 'px;height:' + bsize + 'px;pointer-events:none;'
+                + 'background-image:url("' + badgePng + '");background-size:contain;background-repeat:no-repeat;background-position:center;';
+              slot.appendChild(b);
+            });
             unit.querySelectorAll('.slot, .bc-inset').forEach(el => {
               const r = el.getBoundingClientRect();
               el.style.width = r.width + 'px';
