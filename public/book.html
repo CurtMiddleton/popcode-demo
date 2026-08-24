@@ -374,11 +374,15 @@
       .ep-x:hover { color: #000; }
       .ep-grid { display: flex; flex-direction: column; gap: 18px; }
       @media (min-width: 720px) { .ep-grid { flex-direction: row; align-items: flex-start; } .ep-preview { flex: 1 1 0; min-width: 0; } .ep-side { flex: 0 0 340px; } }
-      .ep-frame { position: relative; width: 100%; background: #111; border-radius: 10px; overflow: hidden; touch-action: none; cursor: grab; }
-      .ep-frame:active { cursor: grabbing; }
-      .ep-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center center; user-select: none; -webkit-user-drag: none; }
+      /* Popsa-style crop stage: the whole photo shows; the area OUTSIDE the crop
+         window is ghosted (light wash) so you can see what you're panning into.
+         .ep-window + .ep-img are sized/positioned in JS (layoutEp) to the same rect. */
+      .ep-stage { position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 56vh; margin: 0 auto; overflow: hidden; background: #f4f3f0; border-radius: 10px; touch-action: none; cursor: grab; }
+      .ep-stage:active { cursor: grabbing; }
+      .ep-img { position: absolute; object-fit: cover; transform-origin: center center; user-select: none; -webkit-user-drag: none; will-change: transform; z-index: 1; }
       .ep-img.fit { object-fit: contain; }
-      .ep-thirds { position: absolute; inset: 0; display: none; pointer-events: none; background-image: linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px); background-size: 33.333% 33.333%; }
+      .ep-window { position: absolute; z-index: 2; pointer-events: none; box-shadow: 0 0 0 3000px rgba(247,246,242,0.66); border: 1.5px solid rgba(255,255,255,0.92); outline: 1px solid rgba(0,0,0,0.14); }
+      .ep-thirds { position: absolute; inset: 0; display: none; pointer-events: none; background-image: linear-gradient(rgba(255,255,255,0.55) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.55) 1px, transparent 1px); background-size: 33.333% 33.333%; }
       .ep-hint { text-align: center; font-size: 12px; color: #999; margin-top: 8px; }
       .ep-quality { display: flex; align-items: center; justify-content: space-between; background: #f2f0ea; border-radius: 12px; padding: 14px 16px; font-weight: 700; color: #444; margin-bottom: 12px; }
       .ep-quality b { font-size: 18px; color: #1a1a1a; }
@@ -2936,11 +2940,11 @@
           <div class="ep-head"><h2>Edit Photo</h2><button class="ep-x" id="ep-close" aria-label="Close">${IC_X}</button></div>
           <div class="ep-grid">
             <div class="ep-preview">
-              <div class="ep-frame" id="ep-frame" style="aspect-ratio:${s.ar}">
+              <div class="ep-stage" id="ep-stage">
                 <img class="ep-img" id="ep-img" src="${s.photo.url}" draggable="false"/>
-                <div class="ep-thirds" id="ep-thirds"></div>
+                <div class="ep-window" id="ep-window"><div class="ep-thirds" id="ep-thirds"></div></div>
               </div>
-              <div class="ep-hint">Drag the photo to reposition</div>
+              <div class="ep-hint">Drag the photo to reposition — the faded area is the rest of your photo</div>
             </div>
             <div class="ep-side">
               <div class="ep-quality" id="ep-quality"><span>Print Quality</span><b id="ep-q">—</b></div>
@@ -2964,14 +2968,51 @@
         document.getElementById('ep-save').addEventListener('click', () => s.ctx.save(s.a));
         document.querySelectorAll('#sheet .ep-btn').forEach(b => b.addEventListener('click', () => epAction(b.dataset.act)));
         enableEpPan();
+        layoutEp();
+        requestAnimationFrame(layoutEp);
         updateEp();
       }
+      // Lay out the crop window + photo layer inside the stage. The window is the
+      // fixed crop rect; the photo layer is drawn at its FULL cover/contain-fit size
+      // (so it overflows the window), centered on the window centre, then panned/
+      // scaled/rotated. The window's big light box-shadow ghosts everything outside
+      // it — so you can see the rest of the photo you're panning into. This mirrors
+      // the print-time crop exactly (percent offsets are of the window, not the img).
+      function layoutEp() {
+        const stage = document.getElementById('ep-stage'), win = document.getElementById('ep-window'), img = document.getElementById('ep-img');
+        if (!stage || !win || !img || !editPhotoState) return;
+        const s = editPhotoState;
+        const SW = stage.clientWidth, SH = stage.clientHeight;
+        if (!SW || !SH) return;
+        const m = String(s.ar || '1 / 1').split('/');
+        const arNum = (parseFloat(m[0]) || 1) / (parseFloat(m[1]) || 1);
+        const pad = 0.86;
+        let ww, wh;
+        if (SW / SH > arNum) { wh = SH * pad; ww = wh * arNum; } else { ww = SW * pad; wh = ww / arNum; }
+        const wx = (SW - ww) / 2, wy = (SH - wh) / 2;
+        win.style.left = wx + 'px'; win.style.top = wy + 'px'; win.style.width = ww + 'px'; win.style.height = wh + 'px';
+        s._ww = ww; s._wh = wh; s._wcx = wx + ww / 2; s._wcy = wy + wh / 2;
+        const iw = img.naturalWidth || s.photo.iw, ih = img.naturalHeight || s.photo.ih;
+        if (iw && ih) {
+          const a = s.a;
+          const fitScale = a.fit === 'fit' ? Math.min(ww / iw, wh / ih) : Math.max(ww / iw, wh / ih);
+          const imgW = iw * fitScale, imgH = ih * fitScale;
+          img.style.width = imgW + 'px'; img.style.height = imgH + 'px';
+          img.style.left = (s._wcx - imgW / 2) + 'px'; img.style.top = (s._wcy - imgH / 2) + 'px';
+        }
+        applyEpTransform();
+      }
+      function applyEpTransform() {
+        const img = document.getElementById('ep-img'), s = editPhotoState; if (!img || !s || !s._ww) return;
+        const a = s.a;
+        img.style.transform = `translate(${a.ox / 100 * s._ww}px, ${a.oy / 100 * s._wh}px) scale(${a.scale}) rotate(${a.rot}deg)`;
+      }
+      window.addEventListener('resize', () => { if (document.getElementById('ep-stage')) layoutEp(); });
 
       function updateEp() {
         const s = editPhotoState, a = s.a;
         const img = document.getElementById('ep-img'); if (!img) return;
-        img.classList.toggle('fit', a.fit === 'fit');
-        img.style.transform = adjustTransform(a);
+        layoutEp();   // re-fits the photo layer (fill/fit changes its size) + applies the transform
         document.getElementById('ep-scale').textContent = Math.round(a.scale * 100) + '%';
         const w = s.photo.ow || s.photo.iw, h = s.photo.oh || s.photo.ih;
         document.getElementById('ep-dims').textContent = w ? `${w} × ${h}` : '—';
@@ -3013,13 +3054,13 @@
         inp.click();
       }
 
-      // Drag inside the frame to pan the photo (offset in % of the frame).
+      // Drag inside the stage to pan the photo (offset in % of the crop window).
       function enableEpPan() {
-        const frame = document.getElementById('ep-frame'); if (!frame) return;
-        frame.addEventListener('pointerdown', (e) => {
+        const stage = document.getElementById('ep-stage'), win = document.getElementById('ep-window'); if (!stage || !win) return;
+        stage.addEventListener('pointerdown', (e) => {
           e.preventDefault();
           const a = editPhotoState.a;
-          const rect = frame.getBoundingClientRect();
+          const rect = win.getBoundingClientRect();
           const sx = e.clientX, sy = e.clientY, ox0 = a.ox, oy0 = a.oy;
           const move = (ev) => {
             a.ox = Math.max(-80, Math.min(80, ox0 + (ev.clientX - sx) / rect.width * 100));
