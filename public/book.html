@@ -248,7 +248,7 @@
         background-repeat: no-repeat; background-position: center; background-size: 16%;
       }
       .slot.place-target { outline: 3px solid #7657FC; outline-offset: -3px; z-index: 2; }
-      .page-canvas.cover.place-target { outline: 3px solid #7657FC; outline-offset: -3px; }
+      .page-canvas.cover.place-target, .page-canvas.backcover.place-target { outline: 3px solid #7657FC; outline-offset: -3px; }
       .slot.swap-source { outline: 3px solid #589AF9; outline-offset: -3px; z-index: 2; }
       .slot.slot-drag { opacity: 0.4; }
       /* Popcode scan badge on a linked slot — the REAL badge at print size and
@@ -1210,6 +1210,13 @@
       document.getElementById('autofill-btn').addEventListener('click', () => {
         let pool = unplacedPhotos();
         if (!pool.length) { showToast('All photos are already placed.'); return; }
+        // Give the front cover a photo too (the first one) if it hasn't got one — a
+        // shared reference so it still flows into the pages, and it's changeable via
+        // the cover ⋯ menu.
+        if (!cover.photo && pool.length) {
+          const c = pool[0];
+          cover.photo = { file: c.file || null, url: c.url, existingUrl: c.existingUrl || null, shared: true, adjust: DEFAULT_ADJUST() };
+        }
         // Every book opens on a blank inside-cover (the first left page).
         if (!pages.length) pages.push(blankPage());
         // Top off empty slots in existing photo pages first.
@@ -1392,8 +1399,9 @@
         head.querySelector('.tool-more').addEventListener('click', openBackCoverMenu);
         const canvas = document.createElement('div');
         canvas.className = 'page-canvas backcover';
+        if (selectedTrayId) canvas.classList.add('place-target');
         canvas.appendChild(buildBackCoverCanvas());
-        canvas.addEventListener('click', openBackCoverLayoutSheet);
+        canvas.addEventListener('click', () => { if (selectedTrayId) { placeCoverFromTray('back'); return; } openBackCoverLayoutSheet(); });
         const bpick = canvas.querySelector('.cv-pick');
         if (bpick) bpick.addEventListener('click', (e) => { e.stopPropagation(); chooseBackCoverPhoto(render); });
         left.appendChild(head); left.appendChild(canvas);
@@ -1433,8 +1441,9 @@
         head.querySelector('.tool-more').addEventListener('click', openCoverMenu);
         const canvas = document.createElement('div');
         canvas.className = 'page-canvas cover';
+        if (selectedTrayId) canvas.classList.add('place-target');
         canvas.appendChild(buildCoverCanvas());
-        canvas.addEventListener('click', openCoverTitleSheet);
+        canvas.addEventListener('click', () => { if (selectedTrayId) { placeCoverFromTray('front'); return; } openCoverTitleSheet(); });
         // "Choose cover photo" pill on the cover itself → pick a photo directly
         // (without opening the editor). Everything else on the cover opens the editor.
         const coverPick = canvas.querySelector('.cv-pick');
@@ -1655,6 +1664,19 @@
         refreshCoverPreview(true);
         wireCoverEditable();
         document.getElementById('cover-done').addEventListener('click', () => { closeSheet(); render(); });
+      }
+
+      // Place a tapped tray photo onto the front/back cover (a shared reference, so
+      // it isn't consumed from the tray). Lets you add cover photos the same easy way
+      // as page slots: tap a photo, then tap the cover.
+      function placeCoverFromTray(which) {
+        const photo = photos.get(selectedTrayId); if (!photo) return;
+        const ref = { file: photo.file || null, url: photo.url, existingUrl: photo.existingUrl || null, shared: true, adjust: DEFAULT_ADJUST() };
+        if (which === 'back') backCover.photo = ref; else cover.photo = ref;
+        selectedTrayId = null;
+        const hint = document.getElementById('tray-hint'); if (hint) hint.textContent = '';
+        render();
+        showToast(which === 'back' ? 'Back cover photo set' : 'Cover photo set');
       }
 
       // ⋯ more-info menu: Replace photo + Edit title (+ crop when a photo is set).
@@ -3637,7 +3659,7 @@
             ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
             document.querySelectorAll('.place-target').forEach(s => s.classList.remove('place-target'));
             const el = document.elementFromPoint(ev.clientX, ev.clientY);
-            const under = el?.closest('.slot') || el?.closest('#pages .page-canvas.cover');
+            const under = el?.closest('.slot') || el?.closest('#pages .page-canvas.cover') || el?.closest('#pages .page-canvas.backcover');
             if (under) under.classList.add('place-target');
           };
           const end = (ev) => {
@@ -3653,15 +3675,17 @@
             if (!moved || ev.type === 'pointercancel') { if (opts.onTap) opts.onTap(); return; }
             const pt = document.elementFromPoint(ev.clientX, ev.clientY);
             const coverEl = pt?.closest('#pages .page-canvas.cover');
+            const backEl = pt?.closest('#pages .page-canvas.backcover');
             const slotEl = pt?.closest('.slot');
             justDragged = true;
             setTimeout(() => { justDragged = false; }, 0);
-            if (coverEl) {
-              // Drop onto the front cover → set the cover photo (a shared reference,
-              // so its blob URL isn't revoked while the source photo still uses it).
-              cover.photo = { file: photo.file || null, url: photo.url, existingUrl: photo.existingUrl || null, shared: true };
+            if (coverEl || backEl) {
+              // Drop onto a cover → set that cover's photo (a shared reference, so its
+              // blob URL isn't revoked while the source photo still uses it).
+              const ref = { file: photo.file || null, url: photo.url, existingUrl: photo.existingUrl || null, shared: true };
+              if (backEl) backCover.photo = ref; else cover.photo = ref;
               render();
-              playFill(document.querySelector('#pages .cv-face') || document.querySelector('#pages .page-canvas.cover'), photo.url, ev.clientX, ev.clientY);
+              playFill((backEl || coverEl).querySelector('.cv-face, .bc-inset, .bc-photo-full') || (backEl || coverEl), photo.url, ev.clientX, ev.clientY);
               return;
             }
             let dropPg = null, dropIdx = null;
