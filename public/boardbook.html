@@ -143,9 +143,10 @@
       .slot .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #b7b2a8; font-size: 13px; text-align: center; padding: 8px; }
       /* Scan badge on a popcoded page (the real Popcode mark, like the printed page). */
       .slot .pc-badge { position: absolute; bottom: 6%; right: 6%; width: 13%; min-width: 20px; max-width: 34px; height: auto; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.35)); z-index: 2; }
-      /* Placed photo (carries the Edit Photo crop/zoom/rotate transform). */
-      .slot-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center center; z-index: 0; user-select: none; -webkit-user-drag: none; }
-      .slot-img.fit { object-fit: contain; }
+      /* Placed photo — sized/positioned in JS by layoutPhotoInSlot (full-image
+         crop-and-reposition), NOT object-fit, so a landscape photo can be panned
+         inside the square slot exactly as shown in Edit Photo and as it prints. */
+      .slot-img { position: absolute; transform-origin: center center; z-index: 0; user-select: none; -webkit-user-drag: none; max-width: none; }
       /* Drag affordances */
       .slot.place-target { outline: 3px solid #2dc0c5; outline-offset: -3px; }
       .slot.swap-source { outline: 3px solid #589AF9; outline-offset: -3px; }
@@ -680,6 +681,31 @@
         ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
         ctx.restore();
       }
+      // Position a placed photo inside its slot for a true crop-and-reposition —
+      // the same math as drawPhotoAdjusted (print) and the Edit Photo preview, so
+      // what you position is exactly what the page shows and prints. (object-fit +
+      // %-translate can't pan a landscape photo inside a square/portrait slot.)
+      function readAdj(img) { try { return normalizeAdjust(JSON.parse(img.dataset.adj || '{}')); } catch (e) { return DEFAULT_ADJUST(); } }
+      function layoutPhotoInSlot(slot, img) {
+        const a = readAdj(img);
+        const W = slot.clientWidth, H = slot.clientHeight;
+        const iw = img.naturalWidth, ih = img.naturalHeight;
+        if (!W || !H || !iw || !ih) return false;
+        const fitScale = a.fit === 'fit' ? Math.min(W / iw, H / ih) : Math.max(W / iw, H / ih);
+        const imgW = iw * fitScale, imgH = ih * fitScale;
+        img.style.width = imgW + 'px'; img.style.height = imgH + 'px';
+        img.style.left = ((W - imgW) / 2 + a.ox / 100 * W) + 'px';
+        img.style.top = ((H - imgH) / 2 + a.oy / 100 * H) + 'px';
+        img.style.transform = `scale(${a.scale}) rotate(${a.rot}deg)`;
+        return true;
+      }
+      function layoutAllSlotPhotos(root) {
+        (root || document).querySelectorAll('.slot-img').forEach(img => {
+          const slot = img.closest('.slot'); if (!slot) return;
+          if (!layoutPhotoInSlot(slot, img)) img.addEventListener('load', () => layoutPhotoInSlot(slot, img), { once: true });
+        });
+      }
+      window.addEventListener('resize', () => layoutAllSlotPhotos());
       async function squareCanvas(photo, size, withBadge) {
         const img = await loadPhotoImg(photo);
         const c = document.createElement('canvas'); c.width = size; c.height = size;
@@ -729,7 +755,7 @@
       }
 
       // ── Render ─────────────────────────────────────────────────────
-      function render() { renderTray(); renderSlots(); updateSummary(); updateCounts(); }
+      function render() { renderTray(); renderSlots(); updateSummary(); updateCounts(); requestAnimationFrame(() => layoutAllSlotPhotos()); }
 
       function updateCounts() {
         const total = photos.size;
@@ -782,7 +808,7 @@
         }
         return `<div class="half"><div class="slot-label">${positionLabel(pos)}</div>
           <div class="slot square${p ? '' : ' empty'}${pos === swapSource ? ' swap-source' : ''}" data-pos="${pos}">
-            ${p ? `<img class="slot-img${(normalizeAdjust(p.adjust).fit === 'fit') ? ' fit' : ''}" src="${p.url}" draggable="false" style="transform:${adjustTransform(normalizeAdjust(p.adjust))}"/>` : ''}
+            ${p ? `<img class="slot-img" src="${p.url}" crossorigin="anonymous" draggable="false" data-adj='${JSON.stringify(normalizeAdjust(p.adjust))}'/>` : ''}
             ${overlay}
             ${photoHasMedia(p) ? `<img class="pc-badge" src="/assets/popcode_icon.svg" title="Popcode — plays ${p.popcode.mediaType === 'audio' ? 'audio' : 'video'} when scanned"/>` : ''}
           </div></div>`;

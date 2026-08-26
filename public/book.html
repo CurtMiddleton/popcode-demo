@@ -275,8 +275,9 @@
       .tray-thumb { touch-action: pan-x; }
       .tray-thumb.dragging { opacity: 0.35; }
       /* Placed-photo image inside a slot (carries the Edit Photo crop/zoom/rotate). */
-      .slot-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center center; z-index: 0; user-select: none; -webkit-user-drag: none; }
-      .slot-img.fit { object-fit: contain; }
+      /* Sized/positioned in JS by layoutPhotoInSlot (full-image crop-and-reposition),
+         NOT object-fit — so a landscape photo can be panned inside a portrait slot. */
+      .slot-img { position: absolute; transform-origin: center center; z-index: 0; user-select: none; -webkit-user-drag: none; max-width: none; }
 
       /* ── Front cover (ported from Bashō: Overlay / Panel / Inset card) ── */
       /* container-type: inline-size lets the cover type scale with the page width
@@ -1276,7 +1277,7 @@
       function lockSlug(slug) { slugInput.value = slug; slugInput.disabled = true; syncSlugNote(); }
 
       // ── Rendering ───────────────────────────────────────────────
-      function render() { ensureBookEndpapers(); renderTray(); renderPages(); updateSummary(); requestAnimationFrame(sizeSlotBadges); }
+      function render() { ensureBookEndpapers(); renderTray(); renderPages(); updateSummary(); requestAnimationFrame(() => { sizeSlotBadges(); layoutAllSlotPhotos(); }); }
       // Size each slot's Popcode badge exactly like the print bake: 9% of the
       // slot's shorter edge, inset by half its size from the corner.
       function sizeSlotBadges() {
@@ -1821,6 +1822,73 @@
         return Math.max(1, Math.min(10, Math.round(eff / 170)));
       }
 
+      // ── True crop-and-reposition (matches the Edit Photo preview + the print) ──
+      // A placed photo is drawn at its cover/contain-fit size, centered in the slot,
+      // then panned by a fraction of the SLOT and scaled/rotated. This is the same
+      // model as the Edit Photo stage (layoutEp) and the canvas bake below, so what
+      // you position in the editor is exactly what the page shows and prints — unlike
+      // object-fit:cover + a %-translate, which can't pan a landscape photo inside a
+      // portrait slot.
+      function readAdj(img) { try { return normalizeAdjust(JSON.parse(img.dataset.adj || '{}')); } catch (e) { return DEFAULT_ADJUST(); } }
+      function layoutPhotoInSlot(slot, img) {
+        const a = readAdj(img);
+        const W = slot.clientWidth, H = slot.clientHeight;
+        const iw = img.naturalWidth, ih = img.naturalHeight;
+        if (!W || !H || !iw || !ih) return false;
+        const fitScale = a.fit === 'fit' ? Math.min(W / iw, H / ih) : Math.max(W / iw, H / ih);
+        const imgW = iw * fitScale, imgH = ih * fitScale;
+        img.style.width = imgW + 'px'; img.style.height = imgH + 'px';
+        img.style.left = ((W - imgW) / 2 + a.ox / 100 * W) + 'px';
+        img.style.top = ((H - imgH) / 2 + a.oy / 100 * H) + 'px';
+        img.style.transform = `scale(${a.scale}) rotate(${a.rot}deg)`;
+        return true;
+      }
+      function layoutAllSlotPhotos(root) {
+        (root || document).querySelectorAll('.slot-img').forEach(img => {
+          const slot = img.closest('.slot'); if (!slot) return;
+          if (!layoutPhotoInSlot(slot, img)) img.addEventListener('load', () => layoutPhotoInSlot(slot, img), { once: true });
+        });
+      }
+      window.addEventListener('resize', () => layoutAllSlotPhotos());
+      // Canvas bake used by the print/proof path: draw `img` into rect (x,y,w,h)
+      // honoring the crop/zoom/rotate — the exact geometry layoutPhotoInSlot renders.
+      function drawPhotoAdjusted(ctx, img, adjust, x, y, w, h) {
+        const a = normalizeAdjust(adjust);
+        const iw = img.naturalWidth, ih = img.naturalHeight;
+        const fitScale = a.fit === 'fit' ? Math.min(w / iw, h / ih) : Math.max(w / iw, h / ih);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+        ctx.translate(x + w / 2 + (a.ox / 100) * w, y + h / 2 + (a.oy / 100) * h);
+        ctx.scale(a.scale, a.scale);
+        ctx.rotate(a.rot * Math.PI / 180);
+        const dw = iw * fitScale, dh = ih * fitScale;
+        ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
+      }
+      // For the print/proof: bake a page slot's photo to a pre-cropped canvas so it
+      // prints exactly what the page shows (and html2canvas renders it trivially).
+      // Returns null for non-slot / unloaded / CORS-tainted images so the caller can
+      // fall back to the plain background-div path.
+      function bakeSlotImgForPrint(img) {
+        if (!img.classList.contains('slot-img')) return null;
+        const slot = img.closest('.slot');
+        if (!slot || !img.complete || !img.naturalWidth) return null;
+        const r = slot.getBoundingClientRect();
+        if (!r.width || !r.height) return null;
+        const S = 2;
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(r.width * S));
+        c.height = Math.max(1, Math.round(r.height * S));
+        let data;
+        try {
+          drawPhotoAdjusted(c.getContext('2d'), img, readAdj(img), 0, 0, c.width, c.height);
+          data = c.toDataURL('image/jpeg', 0.92);
+        } catch (e) { return null; }
+        const div = document.createElement('div');
+        div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background-image:url("' + data + '");background-size:100% 100%;background-repeat:no-repeat;';
+        return div;
+      }
+
       function mkSlot(pg, slotIdx) {
         const slot = document.createElement('div');
         slot.className = 'slot';
@@ -1831,9 +1899,11 @@
           const a = photo.adjust || DEFAULT_ADJUST();
           const img = document.createElement('img');
           img.className = 'slot-img' + (a.fit === 'fit' ? ' fit' : '');
+          img.crossOrigin = 'anonymous';   // canvas-safe so the print/proof can bake the crop
           img.src = photo.url;
           img.draggable = false;
-          img.style.transform = adjustTransform(a);
+          img.dataset.adj = JSON.stringify(normalizeAdjust(a));
+          img.addEventListener('load', () => layoutPhotoInSlot(slot, img));
           slot.appendChild(img);
           if (photoHasMedia(photo)) {
             const badge = document.createElement('div');
@@ -2364,6 +2434,8 @@
               el.style.aspectRatio = 'auto';
             });
             unit.querySelectorAll('.slot-img, .cv-photo-img, .bc-img').forEach(img => {
+              const baked = bakeSlotImgForPrint(img);
+              if (baked) { img.replaceWith(baked); return; }
               const isFit = img.classList.contains('fit');
               const div = document.createElement('div');
               div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
@@ -2495,6 +2567,8 @@
           });
           unit.querySelectorAll('.slot, .bc-inset').forEach(el => { const r = el.getBoundingClientRect(); el.style.width = r.width + 'px'; el.style.height = r.height + 'px'; el.style.aspectRatio = 'auto'; });
           unit.querySelectorAll('.slot-img, .cv-photo-img, .bc-img').forEach(img => {
+            const baked = bakeSlotImgForPrint(img);
+            if (baked) { img.replaceWith(baked); return; }
             const isFit = img.classList.contains('fit');
             const div = document.createElement('div');
             div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
