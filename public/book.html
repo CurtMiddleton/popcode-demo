@@ -1830,11 +1830,28 @@
       // object-fit:cover + a %-translate, which can't pan a landscape photo inside a
       // portrait slot.
       function readAdj(img) { try { return normalizeAdjust(JSON.parse(img.dataset.adj || '{}')); } catch (e) { return DEFAULT_ADJUST(); } }
+      // Clamp the pan so the photo always covers the crop box — you can't drag the
+      // crop past the edge of the photo and reveal the slot background. `a` is
+      // mutated in place. Fill mode only; fit mode is centered (no pan).
+      function clampPan(a, boxW, boxH, iw, ih) {
+        if (!iw || !ih || !boxW || !boxH) return a;
+        if (a.fit === 'fit') { a.ox = 0; a.oy = 0; return a; }
+        const fitScale = Math.max(boxW / iw, boxH / ih);
+        const rotated = (a.rot % 180) !== 0;
+        const imgW = (rotated ? ih : iw) * fitScale * a.scale;
+        const imgH = (rotated ? iw : ih) * fitScale * a.scale;
+        const maxOx = Math.max(0, (imgW - boxW) / (2 * boxW) * 100);
+        const maxOy = Math.max(0, (imgH - boxH) / (2 * boxH) * 100);
+        a.ox = Math.max(-maxOx, Math.min(maxOx, a.ox));
+        a.oy = Math.max(-maxOy, Math.min(maxOy, a.oy));
+        return a;
+      }
       function layoutPhotoInSlot(slot, img) {
         const a = readAdj(img);
         const W = slot.clientWidth, H = slot.clientHeight;
         const iw = img.naturalWidth, ih = img.naturalHeight;
         if (!W || !H || !iw || !ih) return false;
+        clampPan(a, W, H, iw, ih);
         const fitScale = a.fit === 'fit' ? Math.min(W / iw, H / ih) : Math.max(W / iw, H / ih);
         const imgW = iw * fitScale, imgH = ih * fitScale;
         img.style.width = imgW + 'px'; img.style.height = imgH + 'px';
@@ -1855,6 +1872,7 @@
       function drawPhotoAdjusted(ctx, img, adjust, x, y, w, h) {
         const a = normalizeAdjust(adjust);
         const iw = img.naturalWidth, ih = img.naturalHeight;
+        clampPan(a, w, h, iw, ih);
         const fitScale = a.fit === 'fit' ? Math.min(w / iw, h / ih) : Math.max(w / iw, h / ih);
         ctx.save();
         ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
@@ -3089,6 +3107,7 @@
         const iw = img.naturalWidth || s.photo.iw, ih = img.naturalHeight || s.photo.ih;
         if (iw && ih) {
           const a = s.a;
+          clampPan(a, ww, wh, iw, ih);   // keep the crop window inside the photo (no gray edges)
           const fitScale = a.fit === 'fit' ? Math.min(ww / iw, wh / ih) : Math.max(ww / iw, wh / ih);
           const imgW = iw * fitScale, imgH = ih * fitScale;
           img.style.width = imgW + 'px'; img.style.height = imgH + 'px';
