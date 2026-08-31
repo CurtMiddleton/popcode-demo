@@ -1443,7 +1443,12 @@
         canvas.className = 'page-canvas cover';
         if (selectedTrayId) canvas.classList.add('place-target');
         canvas.appendChild(buildCoverCanvas());
-        canvas.addEventListener('click', () => { if (selectedTrayId) { placeCoverFromTray('front'); return; } openCoverTitleSheet(); });
+        // Clicking the cover is for the PHOTO (edit/reposition, or add one). The title
+        // is edited from the ⋯ menu → Edit title.
+        canvas.addEventListener('click', () => {
+          if (selectedTrayId) { placeCoverFromTray('front'); return; }
+          if (cover.photo) openCoverPhotoEdit(); else chooseCoverPhoto(render);
+        });
         // "Choose cover photo" pill on the cover itself → pick a photo directly
         // (without opening the editor). Everything else on the cover opens the editor.
         const coverPick = canvas.querySelector('.cv-pick');
@@ -1652,17 +1657,28 @@
         document.getElementById('cvlay-done').addEventListener('click', () => { closeSheet(); render(); });
       }
 
-      // Tap the cover (or ⋯ → Edit title) → type headline / title / date inline.
+      // ⋯ → Edit title: an eyebrow / title / dates-year form (Popsa-style), with a
+      // live cover preview. Include the year in the dates field to show it on the
+      // cover and the spine.
       function openCoverTitleSheet(e) {
         if (e && e.stopPropagation) e.stopPropagation();
         openSheet(`
           <h2>Edit title</h2>
           <div class="cover-preview" id="cover-preview"></div>
-          <p class="sheet-sub" style="margin:10px 0 2px">Tap the cover to type your headline, title and date.</p>
+          <div class="field"><label for="cv-eyebrow">Eyebrow <span style="color:#aaa;font-weight:400">(small line above)</span></label><input class="text-input" id="cv-eyebrow" style="max-width:none" value="${escapeHtml(cover.eyebrow || '')}" placeholder="e.g. Summer Safari"/></div>
+          <div class="field"><label for="cv-title">Title</label><input class="text-input" id="cv-title" style="max-width:none" value="${escapeHtml(cover.title || '')}" placeholder="e.g. Rwanda &amp; South Africa"/></div>
+          <div class="field"><label for="cv-date">Dates / year</label><input class="text-input" id="cv-date" style="max-width:none" value="${escapeHtml(cover.subtitle || '')}" placeholder="e.g. July 14–24, 2024"/><div class="note" style="margin-top:6px">Include the year (e.g. 2024) to show it on the cover and spine.</div></div>
           <div class="sheet-actions"><button class="btn-primary" id="cover-done">Done</button></div>
         `);
-        refreshCoverPreview(true);
-        wireCoverEditable();
+        refreshCoverPreview(false);
+        const sync = () => {
+          cover.eyebrow = document.getElementById('cv-eyebrow').value;
+          cover.title = document.getElementById('cv-title').value;
+          cover.subtitle = document.getElementById('cv-date').value;
+          const ti = document.getElementById('title-input'); if (ti) ti.value = cover.title;
+          refreshCoverPreview(false);
+        };
+        ['cv-eyebrow', 'cv-title', 'cv-date'].forEach(id => document.getElementById(id).addEventListener('input', sync));
         document.getElementById('cover-done').addEventListener('click', () => { closeSheet(); render(); });
       }
 
