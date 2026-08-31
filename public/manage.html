@@ -609,6 +609,10 @@
         const kindPill = isProduct ? (PRODUCT_NOUN[col.kind] || 'Design') : null;
         const editHref = isBook ? '/book.html' : isCalendar ? '/calendar.html' : '/edit.html';
         const isCollection = !isProduct && pageCount > 1;
+        // Download the badged photos: available for plain projects AND for board
+        // books / calendars (multi-photo scannable products). Not for single-image
+        // print designs (those live in My Designs and are for ordering, not badging).
+        const showDownload = !isProduct || col.kind === 'boardbook' || col.kind === 'calendar';
         const viewUrl = `https://popcode.app/${col.slug}`;
         const shortUrl = `popcode.app/${col.slug}`;
 
@@ -642,7 +646,7 @@
             <a class="icon-btn" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></a>
             <a class="icon-btn" href="${editHref}?id=${escapeHtml(col.slug)}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></a>
             <button class="icon-btn btn-share-id" data-slug="${escapeHtml(col.slug)}" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
-            ${isProduct ? '' : `<button class="icon-btn btn-download" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>`}
+            ${showDownload ? `<button class="icon-btn btn-download" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>` : ''}
             ${isProduct
               ? `<a class="shop-btn" href="${editHref}?id=${escapeHtml(col.slug)}&order=1" title="Order a printed copy"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`
               : `<a class="shop-btn" href="/order.html?id=${escapeHtml(col.slug)}" title="Order prints"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`}
@@ -920,25 +924,38 @@
         dlAll.style.display = 'none';
         grid.innerHTML = '<div style="color:#aaa;font-size:14px;text-align:center;padding:20px">Loading photos...</div>';
 
-        const colRes = await db.from('collections').select('id').eq('slug', slug).single();
-        const { data: rawItems, error } = await db.from('collection_items')
+        const colRes = await db.from('collections').select('id, kind, book_layout').eq('slug', slug).single();
+        const col = colRes.data;
+        const { data: rawItems } = await db.from('collection_items')
           .select('target_index, photo_url')
-          .eq('collection_id', colRes.data.id)
+          .eq('collection_id', col.id)
           .order('target_index');
 
-        if (error || !rawItems || rawItems.length === 0) {
+        var items;
+        if (rawItems && rawItems.length) {
+          // Deduplicate by target_index, keep first occurrence.
+          var seen = {};
+          items = rawItems.filter(function(item) {
+            if (!item.photo_url) return false;
+            if (seen[item.target_index]) return false;
+            seen[item.target_index] = true;
+            return true;
+          });
+        } else if (col.kind === 'calendar' && col.book_layout && col.book_layout.calendar) {
+          // Calendars keep their photos in book_layout, not collection_items.
+          var cal = col.book_layout.calendar;
+          var urls = [];
+          if (cal.cover && cal.cover.photo_url) urls.push(cal.cover.photo_url);
+          (cal.months || []).forEach(function(m) { if (m && m.photo_url) urls.push(m.photo_url); });
+          items = urls.map(function(u, i) { return { target_index: i, photo_url: u }; });
+        } else {
+          items = [];
+        }
+
+        if (!items.length) {
           grid.innerHTML = '<div style="color:#aaa;font-size:14px;text-align:center;padding:20px">No photos found.</div>';
           return;
         }
-
-        // Deduplicate by target_index, keep first occurrence
-        var seen = {};
-        var items = rawItems.filter(function(item) {
-          if (!item.photo_url) return false;
-          if (seen[item.target_index]) return false;
-          seen[item.target_index] = true;
-          return true;
-        });
 
         dlItems = items;
         dlSafeTitle = title.replace(/[^a-z0-9]/gi, '-').toLowerCase();
