@@ -1320,3 +1320,51 @@ Things that are NOT the cause (tested, all passed unchanged): huge 108MP JPEG, 3
 - Not built, but cheap and probably worth it later: surface a toast when a photo can't be decoded at all (today an undecodable HEIC silently uploads as-is and viewers on other platforms may not see it either).
 
 **Also this session (no code):** user asked mid-session for a read on some "five years of hosting" onboarding copy, then said "wrong session" — nothing was changed for it. Ignore; it belongs to whatever other Popcode session they had open.
+
+### 2026-09-02 (later) — Tile source menus: "Frame from Video", one popup per tile, delete confirm
+
+**Branch `claude/video-frame-image-option-i188h9`. Six commits, all pushed straight to `main`/prod (user said "push to prod" early and kept iterating on the live site). No PR.** New shared file `public/image-source.js`; everything else is `create.html` + `edit.html`.
+
+`05b3c8a` → `70c5c25` → `9871718` (broken, see below) → `44a1fc2` → `cca9ab7` → `adcef67`.
+
+**What shipped:** a **"Frame from Video"** source for the scan image — pick a video, scrub to a moment, capture that frame as the image people point their camera at. Then, at the user's direction, BOTH tiles became tap-to-open popups instead of tiles-plus-dropdowns.
+
+- **`public/image-source.js`** (new, shared by create + edit): `openImageSourceMenu({onPick})`, `openMediaSourceMenu({onVideo,onMontage,onAudio})`, `openFrameSheet(videoFile,{onPick})`. One internal `openMenu(title, rows)` renders both sheets — a row either wraps a file input or runs an action. Frame capture: native-res canvas grab capped to `MAX_DIM` 2560, JPEG q0.92, filename `{video}-0m02s.jpg`.
+- **"Image to scan" tile** → sheet: `Photo Library or File` / `Take Photo` (capture="environment") / `Frame from Video`, each with a description line.
+- **"Plays when scanned" tile** → same treatment, dropping the `<select>`: `Video` / `Montage` / `Audio`. **All `.media-select` markup, CSS and handlers are gone from both pages** (`onMediaSelect`, `onNewMediaSelect`, `onExistingMediaSelect` replaced by `pickPlayback` / `pickNewPlayback` / `pickExistingPlayback`).
+- **Delete confirm on create.html** — the page-header trash deleted instantly with no undo. Now uses the same `.confirm-overlay` dialog `edit.html` and `manage.html` already had (+ Escape / backdrop dismiss). Create was the only screen missing it.
+
+#### THE BIG LESSON — iOS silently refuses a JS `.click()` on a file input
+The first build put the source in a `<select>` whose change handler called `.click()` on a JS-created file input. **On iOS Safari that only works inside a *direct* tap handler; a `<select>`'s change fires after the native option wheel closes and doesn't carry the activation. Safari refuses with no error and no picker** — the user's report was literally "I select frame from video and nothing happens." The "scrubber doesn't work" half of that report was the same bug: the sheet was never reached.
+
+**Rule for this codebase: a file picker must be a real `<label>` wrapping a real `<input type="file">`, the way `.upload-btn` and `.mtg-add` already do it.** A tap on the label forwards activation natively with no JS in the path. Never open a picker from JS. Every menu row follows this.
+
+Related iOS fix in the frame sheet: **prime the `<video>` with a muted inline `play()`/`pause()` before the first seek** — iOS won't seek, and draws a blank frame to canvas, until the element has decoded something. Also kept the seek-past-the-end workaround for containers reporting `duration === Infinity` (MediaRecorder webm does this; real camera .mov doesn't).
+
+#### THE OTHER BIG LESSON — I shipped a broken commit to prod (`9871718`)
+`git mv frame-picker.js image-source.js` staged the rename. Then I ran `git add -A public/create.html … public/frame-picker.js 2>/dev/null` — **the pathspec named the already-renamed old path, so git aborted the WHOLE add, and `2>/dev/null` hid the error.** `git status` showed ` M` (unstaged) and I read it as `M ` (staged). Result: the commit contained only the rename, so prod's pages asked for `/frame-picker.js` — a 404 — while the menu code sat in the working tree. Caught only by the stop hook flagging uncommitted changes. Fixed in `44a1fc2`.
+
+**Guard against it: `git status`'s two columns are staged/unstaged — " M" ≠ "M ". Before committing, run `git diff --cached --name-only` AND `git diff --name-only` (the latter must be empty), and after committing spot-check with `git show HEAD:<path> | grep -c <new symbol>`.** I did that on every commit after this and it's cheap.
+
+#### UX decisions worth keeping
+- **You cannot deliver the user's literal "photo library / take photo / frame from video / choose file" as four rows.** On iOS, Photo Library and Choose File are two rows of *Apple's own* sheet and a page can't open it pre-narrowed to one — four rows would show Apple's sheet twice with the same words. Shipped as **three rows with "Photo Library or File" merged**; Take Photo is genuinely distinct via `capture`. User accepted this after it was explained.
+- User rejected the intermediate design (tile tap = OS picker + a separate "From video" pill): *"this is confusing…can we not have video frame as one of the choices in the drop down?"* and *"just an icon with from video isnt clear enough"*. **Every row now has an icon + name + a plain-English description line.** The pill was also covering the `✎` replace hint (`.upload-btn.selected::after`) — check that corner when adding anything bottom-right on a tile.
+- **Frame icon**: user supplied a reference (film strip with a scrub playhead + triangles above/below). Drew it faithfully, then rendered it at the real chip size — the 8-sprocket version turned to mush at 20px, so the shipped `IC_FRAME` has **3 sprockets per band**, and menu icons went **20px → 22px**. Worth re-rendering any icon at true size before shipping; scratch script pattern is in `mk2.py` + `icons.mjs`.
+
+#### Structural notes for whoever touches this next
+- The scan-image tile and the video tile are no longer `<label>`s — they're a `<button class="upload-btn">` (create, new pages) or a `<div class="upload-btn" role="button">` (edit, existing pages). Added `button.upload-btn { font: inherit; padding: 0; appearance: none; }`; the existing `.media-card .upload-btn` padding rule still wins on specificity, which is intended.
+- **The media card's click handler must skip its own controls**: `if (e.target.closest('.tile-eye, .audio-play-btn, .audio-rerecord, .audio-rec-btn')) return;`. On edit.html's existing pages the preview eye is nested *inside* the photo tile, so that one guards on `.tile-eye` too.
+- `handleFile(input, type, n)` in both pages is now a thin wrapper over **`applyMediaFile(file, type, n, input)`** — `input` may be null when the file didn't come from a file input. All `input.value = ''` inside became `clearInput()`.
+- edit.html's existing-page video replacement moved out of its input listener into **`replaceExistingVideo[key]`**, declared immediately above `renderExistingPage` on purpose — see the scan.html TDZ note (2026-06-12); a `const` used by a function that can run early is a live trap in these files.
+
+#### Testing
+Headless Chromium (`playwright-core` in the scratchpad only — `node_modules` is tracked in this repo), `cd public && python3 -m http.server 8099`, stub `window.supabase` via `page.route` on the supabase-js CDN, abort sentry + Google Fonts. Scripts: `test3/test4/test5.mjs`, `test-eye.mjs`, `icons.mjs`.
+- **Trick worth reusing: the sandbox Chromium has no H.264 decoder, so you cannot test video with an .mp4.** Record a webm in-page with `canvas.captureStream()` + `MediaRecorder` and feed it in via `DataTransfer`. A two-tone clip (blue first half, red second) proves scrubbing picks different frames — sample the drawn frame's pixel and assert the colour changes.
+- Drive file inputs by setting `input.files` from a `DataTransfer` and dispatching `change`, exactly as a real pick does.
+- **Not covered:** edit.html's *existing* (already-saved) page cards never render under the stub (no collection rows), so `replaceExistingVideo` is the least-exercised path — worth a click on a real project. And all iOS activation behaviour is unverifiable here; the user tested on-device each round.
+
+#### Housekeeping / still open
+- Prod verified live by fetching popcode.app directly (`create.html` has `pickScanImage`/`pickPlayback`, no `media-select`, loads `/image-source.js`; `/frame-picker.js` is gone). **Do that after any push that renames a file** — the push succeeding proves nothing about the deployed page.
+- Delete confirm fires even on an empty page; predictable > clever, but easy to skip if the friction annoys.
+- A video frame is a weaker AR target than a real photo (motion blur, less detail) — the sheet nudges toward sharp, well-lit moments. If tracking on frame-derived targets turns out flaky, that's the reason, not the compile path.
+- A parallel session was pushing `boardbook.html` to main throughout (`8771a66`, `a31d2f3`); one rebase needed. Recurring — `git fetch origin main` before every push.
