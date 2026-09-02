@@ -19,6 +19,7 @@
     <title>Popcode — Create</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/slug.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/image-source.js"></script>
     <script src="/montage-music.js"></script>
@@ -99,14 +100,14 @@
         border: 1px solid #e8e8e8; font-size: 16px; color: #1a1a1a; margin-bottom: 40px; outline: none;
         background: white; font-family: 'Inter', sans-serif;
       }
-      #code-input { text-transform: lowercase; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+      #code-input { text-transform: lowercase; }
       #code-input::placeholder { font-size: 13px; text-transform: none; letter-spacing: 0; color: #aaa; }
       /* URL row: popcode.app/{slug} · Edit (replaces the confusing "code" field) */
       .url-row { display: flex; align-items: center; gap: 14px; width: 100%; max-width: 420px; margin-bottom: 40px; flex-wrap: wrap; }
       .url-display { font-size: 16px; }
       .url-base { color: #888; }
-      .url-slug { color: #1a1a1a; font-weight: 700; }
-      .url-row #code-input { display: none; margin: 0; flex: 1 1 200px; max-width: 240px; }
+      .url-slug { color: #1a1a1a; font-weight: 700; word-break: break-all; }
+      .url-row #code-input { display: none; margin: 0; flex: 1 1 240px; max-width: 320px; }
       .url-edit-btn { background: none; border: none; color: #2563eb; font-size: 13px; font-weight: 700; cursor: pointer; padding: 0; font-family: 'Inter', sans-serif; }
       .url-edit-btn:hover { text-decoration: underline; }
       .pages { width: 100%; max-width: 420px; align-self: flex-start; }
@@ -382,11 +383,11 @@
       <div class="field-label">URL</div>
       <div class="url-row">
         <span class="url-display" id="url-display"><span class="url-base">popcode.app/</span><span class="url-slug" id="url-slug"></span></span>
-        <input type="text" id="code-input" maxlength="10" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="display:none;"/>
+        <input type="text" id="code-input" maxlength="30" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="display:none;"/>
         <button type="button" class="url-edit-btn" id="url-edit-btn">Edit</button>
         <button type="button" class="url-edit-btn" id="url-done-btn" style="display:none;">Done</button>
       </div>
-      <div class="field-hint" id="code-hint">Your shareable link — auto&#8209;generated. Tap Edit to customize it.</div>
+      <div class="field-hint" id="code-hint">Your link fills in from the name above. Tap Edit to customize it.</div>
 
       <div class="pages" id="pages"></div>
 
@@ -967,102 +968,54 @@
         document.getElementById('create-btn').disabled = false;
       });
 
-      function randomSlug() {
-        return Math.random().toString(36).substring(2, 10);
-      }
-
-      // Reserved slugs — must match every top-level path under /public.
-      const RESERVED_SLUGS = new Set([
-        'index','create','manage','edit','view','views','auth','reset','account',
-        'howto','analytics','privacy','terms','marker-test','mockup-a','mockup-b','mockup-c','qr-test',
-        'admin','api','app','www','assets','static','public','login','signup','logout','help','support'
-      ]);
-
-      function normalizeCode(raw) {
-        return (raw || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-      }
-
-      function validateCode(code) {
-        if (!code) return { ok: false, msg: '' }; // blank = use random
-        if (code.length < 6) return { ok: false, err: true, msg: `${code.length}/6 characters` };
-        if (code.length > 10) return { ok: false, err: true, msg: 'Max 10 characters' };
-        if (RESERVED_SLUGS.has(code)) return { ok: false, err: true, msg: `"${code}" is reserved` };
-        return { ok: true };
-      }
-
-      // Debounced availability check
-      let codeCheckToken = 0;
+      // ── Popcode link ────────────────────────────────────────────────
+      // The link tracks the Popcode's name as it's typed, so "Max Chapter One"
+      // becomes popcode.app/maxchapterone. Tapping Edit hands control over to
+      // the creator and we stop rewriting it. Shared logic lives in slug.js.
       const codeInput = document.getElementById('code-input');
       const codeHint = document.getElementById('code-hint');
-      let codeAvailable = null; // null = not checked, true/false = result for the current input
-      let codeCheckTimer = null;
+      const nameInput = document.getElementById('name-input');
+      const randomSlug = PopcodeSlug.randomSlug;
+      const seedSlug = randomSlug();
 
       function setHint(text, kind) {
         codeHint.textContent = text;
         codeHint.className = 'field-hint' + (kind ? ' ' + kind : '');
       }
 
-      async function checkCodeAvailable(code, token) {
-        try {
-          const { data } = await db.from('collections').select('slug').eq('slug', code).maybeSingle();
-          if (token !== codeCheckToken) return; // stale
-          if (data) {
-            codeAvailable = false;
-            setHint(`"${code}" is already taken — pick another`, 'err');
-          } else {
-            codeAvailable = true;
-            setHint(`"${code}" is available`, 'ok');
-          }
-        } catch (e) {
-          if (token !== codeCheckToken) return;
-          setHint('Could not check availability — try again', 'err');
-        }
-      }
+      const urlSlug = document.getElementById('url-slug');
+      codeInput.value = seedSlug;
 
-      codeInput.addEventListener('input', () => {
-        const raw = codeInput.value;
-        const code = normalizeCode(raw);
-        // Reflect normalization in the field so the user sees what they're about to register.
-        if (raw !== code) codeInput.value = code;
-        codeAvailable = null;
-        if (codeCheckTimer) clearTimeout(codeCheckTimer);
-        const v = validateCode(code);
-        if (!code) {
-          setHint('6–10 letters or numbers. Leave blank for an auto-generated code.', '');
-          return;
-        }
-        if (!v.ok) { setHint(v.msg, 'err'); return; }
-        setHint(`Checking "${code}"…`, '');
-        const token = ++codeCheckToken;
-        codeCheckTimer = setTimeout(() => checkCodeAvailable(code, token), 350);
+      const slugField = PopcodeSlug.attach({
+        db,
+        nameInput,
+        slugInput: codeInput,
+        note: codeHint,
+        classes: { base: 'field-hint', ok: 'ok', err: 'err' },
+        fallbackSlug: seedSlug,
+        onChange: (slug) => { urlSlug.textContent = slug || seedSlug; }
       });
 
-      // URL row: seed an auto-generated slug and toggle the inline editor. The
-      // hidden #code-input still drives submit, so this is purely presentational
-      // over the existing code logic. WYSIWYG: what's shown is what gets used.
-      (function initUrlRow() {
-        const urlSlug = document.getElementById('url-slug');
+      // Inline editor for the URL row. The hidden #code-input is the source of
+      // truth either way, so this stays purely presentational.
+      const urlEditor = (function initUrlRow() {
         const urlDisplay = document.getElementById('url-display');
         const editBtn = document.getElementById('url-edit-btn');
         const doneBtn = document.getElementById('url-done-btn');
-        const seeded = randomSlug();
-        codeInput.value = seeded;
-        urlSlug.textContent = seeded;
         function toggle(on) {
           codeInput.style.display = on ? 'inline-block' : 'none';
           urlDisplay.style.display = on ? 'none' : '';
           editBtn.style.display = on ? 'none' : '';
           doneBtn.style.display = on ? '' : 'none';
-          if (on) { codeInput.focus(); codeInput.select(); }
-          else {
-            const v = normalizeCode(codeInput.value);
-            if (!v) codeInput.value = seeded;              // never leave it blank
-            urlSlug.textContent = normalizeCode(codeInput.value) || seeded;
-          }
+          if (on) { slugField.touch(); codeInput.focus(); codeInput.select(); }
+          else if (!slugField.get()) slugField.set(seedSlug);  // never leave it blank
         }
         editBtn.addEventListener('click', () => toggle(true));
         doneBtn.addEventListener('click', () => toggle(false));
-        codeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); toggle(false); } });
+        codeInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); toggle(false); }
+        });
+        return { open: () => toggle(true) };
       })();
 
       document.getElementById('create-btn').addEventListener('click', async () => {
@@ -1095,16 +1048,21 @@
 
         const createBtn = document.getElementById('create-btn');
 
-        // Pick the slug: custom code if provided + valid + available, else random.
-        const requestedCode = normalizeCode(document.getElementById('code-input').value);
-        if (requestedCode) {
-          const v = validateCode(requestedCode);
-          if (!v.ok) { setHint(v.msg, 'err'); codeInput.focus(); return; }
-          // Final availability re-check at submit time to close the race window.
-          const { data: clash } = await db.from('collections').select('slug').eq('slug', requestedCode).maybeSingle();
-          if (clash) { setHint(`"${requestedCode}" is already taken — pick another`, 'err'); codeInput.focus(); return; }
+        // Resolve the link: whatever's shown, re-validated and re-checked here
+        // so a slug taken while this page was open can't slip through.
+        const slug = slugField.get() || seedSlug;
+        const v = PopcodeSlug.validate(slug);
+        if (!v.ok) { setHint(v.msg, 'err'); urlEditor.open(); return; }
+        try {
+          if (!(await PopcodeSlug.isAvailable(db, slug))) {
+            slugField.refresh();          // repaints the hint with fresh suggestions
+            urlEditor.open();
+            return;
+          }
+        } catch (e) {
+          setHint('Couldn\'t check that link right now — try again', 'err');
+          return;
         }
-        const slug = requestedCode || randomSlug();
 
         createBtn.disabled = true;
         createBtn.classList.remove('ready');

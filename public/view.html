@@ -22,6 +22,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/slug.js"></script>
     <!-- Vendored A-Frame 1.4.2 — see public/vendor/aframe/1.4.2/PROVENANCE.md. Was a CDN URL. -->
     <script src="/vendor/aframe/1.4.2/aframe.min.js"></script>
     <!-- Vendored MindAR 1.2.2 — PATCHED build (stop()/start() lifecycle fix).
@@ -560,14 +561,14 @@
 
       // Code-entry form: wired up independently of loadCollection so it works
       // even when the page hits an error path. Vercel rewrites /{slug} to
-      // view.html?id={slug} for slugs matching [a-z0-9]{6,10}.
+      // view.html?id={slug} for slugs matching [a-z0-9][a-z0-9-]{2,29}.
       const codeForm = document.getElementById('wl-code-form');
       if (codeForm) {
         codeForm.addEventListener('submit', (e) => {
           e.preventDefault();
           const input = document.getElementById('wl-code-input');
           const raw = (input && input.value) || '';
-          const code = raw.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+          const code = PopcodeSlug.normalize(raw);
           if (!code) return;
           const currentSlug = location.pathname.replace(/^\//, '').toLowerCase();
           if (code === currentSlug) { location.reload(); return; }
