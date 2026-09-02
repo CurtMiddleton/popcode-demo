@@ -1278,3 +1278,91 @@ Also worth knowing: the two console errors that always show in these headless ru
 **Sync/deploy:** origin/main hadn't moved (the parallel session's edit.html commits `3720385` etc. were already in my branch history), so it was a clean fast-forward — pushed the branch then `git push origin <branch>:main`. Recurring parallel-Macs pattern held; no rebase needed this time.
 
 **Still queued (unchanged from 2026-07-17):** per-product sample shots (all use the leopard now); delete the dead scene code (`renderScene`/`sceneBackdrop`/`SCENE_BACKDROPS`/gallery-strip machinery is now unreferenced for the detail preview but left in for tight diffs); the design-card thumbnail shows the raw photo (not the product-shaped mockup) — acceptable, could reshape later.
+
+### 2026-09-01 — Homepage rebuild + pricing/hosting decisions + gallery segment analysis
+
+**Branch `homepage-rebuild` (commits `402a737`, `8403499`), pushed, NOT merged. One file: `public/index.html`.** Started as "should Claude Design build a new homepage or should we?", became a full rebuild plus the pricing decisions behind it.
+
+#### THE LESSON THAT MATTERS MOST — check how stale the checkout is before asserting anything
+
+The session opened with me auditing the working tree on branch `new-badge` and confidently telling the user that **the shop, Stripe billing, print fulfilment and pricing didn't exist**. All of it existed. `new-badge` was **483 commits behind `origin/main`** and I never checked. The user had to correct me with a screenshot of their own live shop.
+
+**Before making any claim about what this repo does or doesn't contain:**
+```bash
+git fetch origin && git rev-list --count HEAD..origin/main    # how far behind am I?
+git ls-tree -r --name-only origin/main | grep -i <thing>      # does it exist on main?
+```
+A `grep` over the working tree only tells you about the branch you happen to be standing on. This repo has many parallel branches and two machines pushing to it — assume the local checkout is stale until proven otherwise.
+
+**Getting current was fiddly:** an untracked local `.gitignore` (containing just `.vercel`) blocked the merge, and modified `.claude/settings.local.json` + `package-lock.json` blocked it again. Resolved by moving `.gitignore` aside and `git stash push -u`. **`stash@{0}` ("pre-main-pull local cruft") is still held** — it has the local settings/lock changes and the old `.gitignore` in it. `stash@{1}` is older, pre-existing.
+
+**Also still unmerged:** `new-badge` is 2 commits ahead of main — `popcode_new.svg` (the pinwheel badge) and the on-device CLIP identification swap (also on `clip-on-device-identification`). Neither is on main.
+
+#### Brand ground truth (write this down, a design session got every detail wrong)
+
+The user had a Claude Design session produce `~/Desktop/popcode-homepage-design-brief.md`. Its §5 Brand invented an entire identity. Correct values, verified in the repo:
+
+- **Type: CooperBT (display serif) + Inter (body sans)**, both loaded from `/assets/fonts.css` — Inter via a Google Fonts `@import`, CooperBT base64-embedded in that file. 19 pages link it. NOT Fraunces/Nunito.
+- **Mark: a black-and-white six-blade pinwheel** — `public/assets/popcode-symbol.png` (270×270, black on transparent) and `popcode-symbol.rev.png` (white). NOT a Fibonacci dot-spiral. The dot-spiral (`popcode_icon.svg`, the 2026-04-17 Illustrator conversion) is the OLDER mark and is still the favicon.
+- **Wordmark: gradient purple→blue** — `Popcode_logo.png`, `#7f36fe` → `#5b91fa`. In-app accent gradient is `linear-gradient(135deg,#7657FC,#589AF9)`. So the *mark* is monochrome but the *brand* is not — anyone told "black and white" will strip the gradient out of the logotype.
+- **"Badge" is shipped product language.** `howto.html:235` says "Popcode badge"; "Order badge stickers" is a live Sticker Mule product. The brief's "never say badge, say symbol" is a real rename touching UI and a physical product, not a style note.
+
+Lesson: a design session working from a *description* of Popcode will get the identity wrong. Give it the repo, or build in the repo.
+
+#### CLAUDE.md is itself stale
+
+`## Terminology` still says user-facing copy is "Projects". The shipped nav (built by `/nav.js`) reads **My Popcodes / My Designs / Shop / Past Views / How It Works**. Worth a cleanup pass.
+
+#### Pricing + hosting decisions (made in conversation; NOT derivable from code)
+
+- **Hosting is time-bounded and included: five years from creation**, one number for both printed products and free-tier popcodes, renewable, with an email before it lapses. Chosen over perpetual because a printed sale earns ~29% gross once (`PRINT_MARKUP_MULTIPLIER` default **1.4** in `api/create-checkout.js:29`) and was committing to hosting forever.
+- **Nothing enforces it.** There is no `expires_at` / `expiry` / `retention` column anywhere in `supabase/migrations/`. `collections.created_at` derives the term without a migration. Renewal email + any enforcement is future work — and in practice it should warn-and-renew, never delete.
+- **The homepage publishes no subscription table.** Stripe is `mode: 'payment'` only; there is no recurring billing and no plan/quota/tier concept anywhere in the codebase. Platform side says "free while we're in beta".
+- **Why the brief's 4-tier ladder was rejected:** it meters *popcodes*, and popcodes are nearly free (~8¢/month for 100 stored, using the April cost model). The cost driver is **views** — egress per scan. So it charged most where cost was lowest and offered "Venue — unlimited $99" to exactly the profile that generates the most views.
+
+#### The gallery / museum segment (user raised it; analysis worth keeping)
+
+**The economics invert, and I had this backwards at first.** I'd flagged venues as the cost risk — true for video, wrong for tours, because:
+- **Identification is once per visitor, not per artwork.** Point at one work → `/api/identify` resolves the gallery → the `.mind` loads → every other work tracks on-device. That's the Phase 3–5 architecture from June, and it is *already* museum-shaped: one handle, whole scoped library.
+- **Audio is ~40× smaller than video** (~1 MB for two minutes vs ~40 MB).
+- Net: roughly **a fifth of a cent per visitor**. A thousand visitors a month costs a couple of dollars.
+
+**Wedge:** no app install (Bloomberg Connects and Smartify both require a download — the biggest drop-off in visitor tech) and no QR beside the artwork. **Threat: Bloomberg Connects is free to institutions**, philanthropically funded — don't plan to win on price; win on "no app" and on small galleries Bloomberg won't onboard.
+
+**Gaps between what's built and what an institution needs** (bounded, nothing architectural):
+1. White-label cover is hard-gated to one email — `edit.html:832` `ADMIN_EMAIL` **plus a DB trigger** (`enforce_cover_config_admin`, see 2026-04-29). Biggest item; mostly un-gating.
+2. Analytics is admin-only (`analytics.html:406`).
+3. **Transcripts: the `transcript` column exists and is plumbed through `edit.html`, but nothing generates it.** The Whisper edge function was planned in April and never built. For consumers a nice-to-have; for institutions an accessibility/procurement blocker.
+4. No multi-language.
+
+**Decision: put a tertiary "For galleries" door on the homepage now (mailto to info@popcodeapp.com), build nothing until a pilot says yes.** Building 1–4 speculatively is weeks of work aimed at a months-long sales cycle while the print shop is already transacting. Pricing for this segment is *quoted* (per-exhibition or annual site licence), never a self-serve tier — the brief's "Show Pass $49" has the right shape and is off by roughly an order of magnitude.
+
+#### What the homepage actually is now
+
+Replaced the gradient splash (`public/index.html`) with a full marketing page. Structure: hero (rotating word) → code entry → two equal forks → six use cases (four audio-led) → four-step how-it-works → pricing → galleries strip → "Every printed photo used to be the end of the story." → FAQ → footer.
+
+- **The code-entry field was preserved.** It is load-bearing: printed pieces carry a short code and this is how someone who typed `popcode.app` on its own reaches their picture.
+- Uses a **light marketing header, deliberately not `/nav.js`** — that one builds the signed-in app chrome (Cart, Log Out, My Popcodes) and assumes an account.
+- No QR imagery. `Make anything play.` is in the HTML by default so the page reads correctly with JS off and under `prefers-reduced-motion`; the rotating word layers on top, and the slot is fixed-width — **verified the h1 stays exactly 155px tall across all eight words**, so it never jitters.
+
+**Then the hosting callout got demoted (`8403499`) — and this is the more interesting note.** I had put "every Popcode includes five years of hosting…" in a highlighted panel in the pricing section. The user pushed back: *"is your average new user even thinking of hosting… this feels too in the weeds."* They were right. A first-time visitor is still working out what the product is; a prominent panel about expiry hands them an objection they hadn't formed and reads as a catch rather than as candour. The term still gets a straight answer in the FAQ under "How long does it keep working?" — which is where someone hunting for the catch actually goes. **General principle: being honest about an awkward detail is about saying it once in the right place, not about making it prominent.** Placement is the decision, not disclosure.
+
+#### THE ASSET GAP — biggest blocker to launching this page
+
+**The repo contains exactly one real photograph: `public/assets/sample-photo.jpg`.** Everything else in `/assets` is a Prodigi product mockup with the same leopard in it (`book.jpg`, `framed.jpg`, `print.jpg`, `canvas.jpg`, `tile.jpg`), a blank white board book, or an icon. The first fork draft showed six near-identical leopards side by side.
+
+Worked around it: one strong visual per fork card (the photo-book mockup on the left; a CSS-built print card with the Popcode symbol on the right), and the hero's audio card reuses the *same* photo with a sepia/desaturate filter and a different `object-position` so it reads as an older picture. **It works at a glance and will not survive scrutiny — both hero cards are the same photograph.** Real photography is the single biggest thing between this and a launchable page.
+
+#### Not built / still open
+
+- **The brief's "Try it right now" block** (a live scannable target the visitor scans off their own monitor). Never decided, never built — the code-entry bar occupies that slot. MindAR against a glossy backlit screen with moiré is untested; don't ship it unverified.
+- **`shop.html:259` bounces anonymous visitors to `/auth.html`.** The new homepage sends cold traffic straight at that wall with equal weight. Browse-then-auth-at-checkout is the obvious shape. Deliberately left alone as a separate change.
+- Marketing site `marketing/index.html` (popcodeapp.com) is now inconsistent with this page — separate domain, older story. Decide whether it redirects or gets rebuilt.
+
+#### Build gotchas worth not relearning
+
+- **Browser-pane screenshots only render at `scrollTop === 0` while the pane is hidden.** Scrolled captures came back as blank cream with not even the sticky header — which is the tell that it's a capture artifact, not a CSS bug (a sticky header would paint at any scroll). Workaround that worked: `document.querySelectorAll(sel).forEach(e=>e.style.display='none')` on the preceding sections so the target section sits at the top, then screenshot at 0.
+- **`padding: 26px 0` on an element that also carries `.wrap` silently killed the horizontal padding** — same element, higher specificity, so the shorthand zeroed left/right and the code bar ran edge-to-edge on mobile. Use `padding-block` when adding vertical padding to something that already has horizontal padding from another class.
+- `html { scroll-behavior: smooth }` makes `window.scrollTo` animate, so a screenshot immediately after lands mid-animation. Set `scrollBehavior='auto'` first when scripting.
+- Check `document.documentElement.scrollWidth > clientWidth` after any rotated/negatively-positioned decorative element — the hero's overlapping audio card overflowed the viewport at 375px until it was pinned to the stage edge.
+- Preview server for this static site: `.claude/launch.json` with `python3 -m http.server 8099 --directory public` (left untracked, not committed).
