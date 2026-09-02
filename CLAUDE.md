@@ -1278,3 +1278,45 @@ Also worth knowing: the two console errors that always show in these headless ru
 **Sync/deploy:** origin/main hadn't moved (the parallel session's edit.html commits `3720385` etc. were already in my branch history), so it was a clean fast-forward — pushed the branch then `git push origin <branch>:main`. Recurring parallel-Macs pattern held; no rebase needed this time.
 
 **Still queued (unchanged from 2026-07-17):** per-product sample shots (all use the leopard now); delete the dead scene code (`renderScene`/`sceneBackdrop`/`SCENE_BACKDROPS`/gallery-strip machinery is now unreferenced for the detail preview but left in for tight diffs); the design-card thumbnail shows the raw photo (not the product-shaped mockup) — acceptable, could reshape later.
+
+### 2026-09-02 — Photos uploading as black squares: root-caused and fixed across all five upload paths (shipped to prod)
+
+**Branch `claude/photos-black-squares-bug-l9a2co`, commit `fc70937`, fast-forwarded to `main` (no merge commit) — live in prod.** No PR (user said "push to prod"). No schema/env/RLS change. Files: `public/{calendar,book,boardbook,create,edit}.html`.
+
+**The report:** user uploaded 9 photos to the calendar maker; 3 came into the tray as solid black squares (screenshot), the other 6 fine. "Photos seem to be fine" outside Popcode.
+
+**First diagnostic that mattered — the tray's own fallback tells you where the bug is.** `.tray-thumb` has `background-color:#eee` and renders `background-image:url(objectURL)`. So a photo that FAILS to load shows LIGHT GRAY, not black. Pure black means the stored JPEG genuinely contains black pixels — i.e. the bug is in our re-encode, not in loading/CORS/format support. That one observation ruled out the entire "unsupported format / broken URL" family in about a minute. Remember it: **gray tile = couldn't load; black tile = we baked black pixels.**
+
+**Root cause: JPEG has no alpha channel.** All five upload paths downscale a photo by drawing it onto a canvas and calling `toBlob('image/jpeg')`. A fresh canvas starts fully transparent, so anything the draw didn't paint opaquely flattens to **solid black** on encode. Two distinct ways a photo hit that:
+
+1. **Any source with transparency.** Reproduced in headless Chromium: a fully transparent PNG → mean `[0,0,0]` (pure black); a 50%-alpha white PNG → `[125,125,125]` (blended halfway to black instead of staying `[250,250,250]`). Affects RGBA PNG, LA (gray+alpha) PNG, anything with a cutout.
+2. **A source that decoded to nothing.** `createImageBitmap` can *resolve* with a blank bitmap of the correct dimensions rather than throwing — **Safari does this for some HEICs**. The `catch` never fires, `w0/h0` look sane, `drawImage` is a silent no-op, and the encode yields a fully black JPEG. Reproduced by monkey-patching `createImageBitmap` to return a blank 4000×3000 bitmap: **ordinary JPEGs came out `[0,0,0]` under the old code.** This is the one that best fits the user's symptom (some photos black, some fine, from one import batch).
+
+Things that are NOT the cause (tested, all passed unchanged): huge 108MP JPEG, 30000px-wide panorama, CMYK JPEG, 16-bit grayscale PNG. Canvas size limits and decoder exotica were red herrings.
+
+**The fix (same shape in all five files, inline — deliberately NOT a shared .js):**
+- New helper block `// ── Safe photo decoding` with `releaseSource` / `sourcePaints` / `loadViaImg` / `decodeDrawable` / `drawOpaque`, inserted where each file's old `loadDecodable` / `loadDecodablePhoto` lived.
+- **`drawOpaque(ctx, src, w, h)`** fills `#ffffff` before `drawImage` and try/catches the draw. Kills the transparency→black class outright (semi-transparent white now encodes 252, was 125).
+- **`sourcePaints(src)`** probes a 24×24 downsample and returns true only if some pixel is both opaque (`a>8`) and lit (`any channel >8`). Catches the blank-bitmap case that no `try/catch` can.
+- **`decodeDrawable(file)`** tries `createImageBitmap` then `<img>`, and **retries through the other path when the first decodes blank** — this is what actually rescues the Safari/HEIC photo rather than merely detecting it. Returns null only when no path yields pixels.
+- When nothing decodes, **keep the original file bytes** (subject to each file's existing `HARD_MAX_MB`/`PHOTO_HARD_MAX_MB` cap) instead of substituting a black JPEG. An original we can't shrink beats a black square.
+- `loadViaImg` awaits `img.decode()` after `onload`, closing the load-vs-decode race (Safari can fire load before pixels are ready).
+- Also hardened the **`resizeForCompile` / `resizeImage`** steps (calendar, boardbook, book, create, edit) that feed the MindAR compile — a blacked-out compile target would have silently broken *scanning*, not just the thumbnail.
+
+**Behavior notes / accepted trade-offs:**
+- A genuinely near-black photo (night shot below RGB 8 across all 576 probe samples) now keeps its original file instead of being downscaled. Non-destructive — larger upload, correct photo.
+- A fully transparent source now renders as the `#eee` gray tile rather than a black one, which is *diagnostically useful*: gray now means "this source really has no pixels."
+- Left alone on purpose: badge SVG→PNG rasterizers (`toDataURL('image/png')`, alpha is wanted) and video-frame→JPEG previews (frames are opaque).
+
+**Testing method worth reusing — extract the real page code, don't retype it.** These pages are auth-gated and load supabase-js/Sentry from CDNs that are 403 in-sandbox, so driving the live page is impractical. Instead `sed -n` the helper block + optimizer function straight out of each HTML file, paste into a tiny harness page with a file input, and run it under `playwright-core` (chromium `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`). Test images generated with PIL. Two conditions per file: normal, and with `createImageBitmap` monkey-patched to return blank bitmaps. Assert no output has mean RGB < 12. **Clean A/B: old code `[0,0,0]`, new code correct pixels** — that A/B is what proved both the reproduction and the fix, and is far more convincing than eyeballing. Harness lives in the scratchpad (`all.mjs`, `t.mjs`, `page*.html`); `playwright-core` installed in the scratchpad ONLY (`node_modules` is tracked in this repo).
+- Always `node --check` every inline `<script>` block after editing these files (the white-screen SyntaxError failure mode from 2026-04-12). Did it after every patch; all five clean.
+- Verified helpers and their callers land in the **same inline script block** in each file (function declarations hoist, so definition order doesn't matter — block identity does).
+
+**Deliberately NOT centralized.** Five near-identical copies of this helper block now exist. That's on purpose: the 2026-07-17 note warns that `order.html` broke when it depended on `/composite.js` (404/cache flake), and the repo's idiom is inline duplication. If this ever does get centralized, do it knowingly, not as a drive-by.
+
+**Told the user, and still open:**
+- **Already-uploaded black photos are NOT repaired** — the black JPEG is what's in Supabase storage. Those must be re-added. No backfill was written.
+- Needs a real-device check with the actual failing photos; I could only verify against synthesized inputs. The useful signal if any still misbehave: **gray tile** (source truly empty) vs **still black** (a path not yet seen).
+- Not built, but cheap and probably worth it later: surface a toast when a photo can't be decoded at all (today an undecodable HEIC silently uploads as-is and viewers on other platforms may not see it either).
+
+**Also this session (no code):** user asked mid-session for a read on some "five years of hosting" onboarding copy, then said "wrong session" — nothing was changed for it. Ignore; it belongs to whatever other Popcode session they had open.
