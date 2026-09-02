@@ -1130,7 +1130,7 @@
               const rc = document.createElement('canvas');
               rc.width = Math.round(img.naturalWidth * scale);
               rc.height = Math.round(img.naturalHeight * scale);
-              rc.getContext('2d').drawImage(img, 0, 0, rc.width, rc.height);
+              drawOpaque(rc.getContext('2d'), img, rc.width, rc.height);
               const resized = new Image();
               await new Promise((resolve, reject) => {
                 resized.onload = resolve;
@@ -1453,31 +1453,91 @@
       // original when already fine, or null if undecodable and very large.
       const PHOTO_QUALITY = 0.85;
       const PHOTO_HARD_MAX_MB = 25; // only give up on undecodable originals above this
-      async function loadDecodablePhoto(file) {
+      // ── Safe photo decoding ─────────────────────────────────────
+      // JPEG has no alpha channel, so anything transparent — or any source that
+      // silently decodes to nothing — re-encodes as SOLID BLACK. That was the
+      // "my photos upload as black squares" bug. Every draw below goes onto an
+      // opaque white canvas, and every source is probed before it is used.
+
+      function releaseSource(src) {
+        if (!src) return;
+        src.close?.();
+        if (src._url) { URL.revokeObjectURL(src._url); src._url = null; }
+      }
+
+      // True when `src` actually paints visible pixels. Catches both a fully
+      // transparent image and a decoder that handed back a blank/black bitmap
+      // (Safari does this for some HEICs), either of which would become a black
+      // square once flattened to JPEG.
+      function sourcePaints(src) {
+        const w = src.width || src.naturalWidth, h = src.height || src.naturalHeight;
+        if (!w || !h) return false;
+        try {
+          const probe = document.createElement('canvas');
+          probe.width = probe.height = 24;
+          const px = probe.getContext('2d', { willReadFrequently: true });
+          px.drawImage(src, 0, 0, 24, 24);
+          const d = px.getImageData(0, 0, 24, 24).data;
+          for (let i = 0; i < d.length; i += 4) {
+            if (d[i + 3] > 8 && (d[i] > 8 || d[i + 1] > 8 || d[i + 2] > 8)) return true;
+          }
+          return false;
+        } catch (e) { return true; } // couldn't inspect it — assume it's fine
+      }
+
+      function loadViaImg(file) {
+        return new Promise((res, rej) => {
+          const img = new Image();
+          const url = URL.createObjectURL(file);
+          img._url = url;
+          img.onload = async () => { if (img.decode) { try { await img.decode(); } catch (e) {} } res(img); };
+          img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('decode')); };
+          img.src = url;
+        });
+      }
+
+      // Decode to something drawable, preferring createImageBitmap but falling
+      // back to <img> — including when the bitmap decodes blank. Returns null if
+      // no path produced usable pixels.
+      async function decodeDrawable(file) {
+        const paths = [];
         if (typeof createImageBitmap === 'function') {
-          try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); }
-          catch (e) { /* fall through to <img> */ }
+          paths.push(() => createImageBitmap(file, { imageOrientation: 'from-image' }));
         }
-        const img = new Image();
-        const url = URL.createObjectURL(file);
-        await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('decode')); img.src = url; });
-        img._url = url;
-        return img;
+        paths.push(() => loadViaImg(file));
+        for (const open of paths) {
+          let src = null;
+          try { src = await open(); } catch (e) { continue; }
+          if (sourcePaints(src)) return src;
+          releaseSource(src);
+        }
+        return null;
+      }
+
+      // Draw onto an opaque white background so transparency never flattens to
+      // black. Returns false if the draw itself failed.
+      function drawOpaque(ctx, src, w, h) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        try { ctx.drawImage(src, 0, 0, w, h); return true; }
+        catch (e) { return false; }
       }
       async function optimizePhotoDim(file, maxDim) {
-        let src;
-        try { src = await loadDecodablePhoto(file); }
-        catch (e) { return file.size / (1024 * 1024) <= PHOTO_HARD_MAX_MB ? file : null; }
+        // Keep the original bytes when we can't safely re-encode — an original we
+        // can't shrink beats a black square.
+        const keepOriginal = () => file.size / (1024 * 1024) <= PHOTO_HARD_MAX_MB ? file : null;
+        const src = await decodeDrawable(file);
+        if (!src) return keepOriginal();
         const w0 = src.width || src.naturalWidth, h0 = src.height || src.naturalHeight;
         const scale = Math.min(1, maxDim / Math.max(w0, h0));
         const oversized = scale < 1;
         const heavy = file.size / (1024 * 1024) > 3;
-        const cleanup = () => { src.close?.(); if (src._url) URL.revokeObjectURL(src._url); };
-        if (!oversized && !heavy) { cleanup(); return file; }
+        if (!oversized && !heavy) { releaseSource(src); return file; }
         const w = Math.max(1, Math.round(w0 * scale)), h = Math.max(1, Math.round(h0 * scale));
         const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(src, 0, 0, w, h);
-        cleanup();
+        const drew = drawOpaque(canvas.getContext('2d'), src, w, h);
+        releaseSource(src);
+        if (!drew) return keepOriginal();
         const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', PHOTO_QUALITY));
         if (!blob) return file;
         const chosen = oversized ? blob : (blob.size < file.size ? blob : file);
