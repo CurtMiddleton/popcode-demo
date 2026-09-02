@@ -62,8 +62,8 @@
       // Dark rather than light: this sits on the purple splash and on whatever
       // photo a creator picked for their cover, and white text needs the same
       // ground under it either way.
-      'border-radius:20px;background:rgba(14,14,20,0.62);border:1px solid rgba(255,255,255,0.16);' +
-      '-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);' +
+      'border-radius:20px;background:rgba(22,22,32,0.42);border:1px solid rgba(255,255,255,0.18);' +
+      '-webkit-backdrop-filter:blur(14px) saturate(1.1);backdrop-filter:blur(14px) saturate(1.1);' +
       "font-family:'DM Sans',system-ui,sans-serif;color:#fff;text-align:center}" +
       '#desktop-note .dn-title{font-size:18px;font-weight:700;line-height:1.25}' +
       '#desktop-note .dn-body{font-size:14px;line-height:1.5;opacity:0.85}' +
