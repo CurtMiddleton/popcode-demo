@@ -158,6 +158,7 @@
        note        element that carries the hint text and suggestion chips
        classes     { base, ok, err } — class names this page's hint uses
        prefix      shown in hint copy, default 'popcode.app/'
+       nameLabel   what this page calls its name field ('name', 'title')
        onChange    (slug, status) — for the page's own display/summary refresh
 
      Returns { get, set, status, isReady, touch, untouch, lock, refresh }.
@@ -172,6 +173,7 @@
     var note = opts.note;
     var cls = opts.classes || {};
     var prefix = opts.prefix || 'popcode.app/';
+    var nameLabel = opts.nameLabel || 'name';   // what the host page calls its title field
     var onChange = opts.onChange || function () {};
 
     var touched = !!opts.touched;   // has the creator hand-edited the link?
@@ -211,8 +213,8 @@
 
       if (!trimmed) {
         status = 'empty';
-        setNote(touched ? 'Pick a link, or leave it blank and we\'ll make one.'
-                        : 'Your link fills in from the name above.', '');
+        setNote(touched ? 'Pick a link for your Popcode.'
+                        : 'Your link fills in from the ' + nameLabel + ' above.', '');
         return emit();
       }
 
@@ -269,9 +271,7 @@
     if (nameInput) {
       nameInput.addEventListener('input', function () {
         if (touched || locked) return;
-        // An unnamed Popcode still needs a working link, so fall back to the
-        // auto-generated one rather than leaving the URL blank.
-        slugInput.value = slugify(nameInput.value) || (opts.fallbackSlug || '');
+        slugInput.value = slugify(nameInput.value);
         run();
       });
     }

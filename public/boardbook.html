@@ -313,7 +313,7 @@
       <p class="sub">Add a photo to each page, then link a video to the pages you want to come alive.</p>
 
       <div class="field">
-        <label for="title-input">Book title <span style="color:#aaa;font-weight:400">(optional)</span></label>
+        <label for="title-input">Book title <span style="color:#aaa;font-weight:400">(required)</span></label>
         <input id="title-input" class="text-input" type="text" placeholder="e.g. Baby's First Year"/>
       </div>
       <div class="field">
@@ -595,18 +595,18 @@
       // becomes popcode.app/babysfirstyear. Editing the link by hand takes it
       // off the title. Shared logic lives in slug.js.
       function randomSlug() { return PopcodeSlug.randomSlug(); }
-      const seedSlug = randomSlug();
-      slugInput.value = seedSlug;
+      // Starts empty and fills in from the title — a random code here was only
+      // ever something the creator would want to replace.
       const slugField = PopcodeSlug.attach({
         db,
         nameInput: document.getElementById('title-input'),
+        nameLabel: 'title',
         slugInput,
         note: document.getElementById('slug-note'),
         classes: { base: 'note', err: 'bad' },
-        fallbackSlug: seedSlug,
         onChange: () => updateSummary()
       });
-      const chosenSlug = () => slugField.get() || seedSlug;
+      const chosenSlug = () => slugField.get();
       const slugValid = () => PopcodeSlug.validate(chosenSlug()).ok;
       function syncSlugNote() { slugField.refresh(); }
       document.getElementById('title-input').addEventListener('input', (e) => { cover.title = e.target.value; renderSlots(); });   // live cover title
@@ -1511,6 +1511,12 @@
         const popcodedPos = POSITIONS.filter(pos => photoHasMedia(photos.get(slots[pos])));
         if (!popcodedPos.length) { alert('Add a Popcode (video or audio) to at least one page so it comes to life when scanned.'); return; }
         const editing = !!editingCollection;
+        // The title is what the link is built from, so it can't be skipped.
+        if (!editing && !(document.getElementById('title-input').value || '').trim()) {
+          showToast('Give your book a title — it becomes its link.');
+          document.getElementById('title-input').focus();
+          return;
+        }
         // Re-check the link here, not just on keystroke — someone else may have
         // claimed it while this page sat open.
         if (!editing && !(await slugField.ensureFree())) {
