@@ -574,8 +574,29 @@
       // Defer to DOMContentLoaded so the module-scope `let/const` declared
       // below (e.g. coverConfig, read by showStartScreen) are initialized before
       // bootstrap runs — a synchronous call here hits a temporal-dead-zone error.
+      // Handles are case-bearing (@Curt), so unlike the viewer we can't just
+      // lowercase the path. But any path with a capital in it lands here rather
+      // than on the viewer, which means a hand-typed "/MaxChapterOne" arrives
+      // looking like a handle. Check the lowercase form against the project
+      // links first, and only fall through to the scan flow if it isn't one.
+      // An explicit ?handle= (the /u/{handle} route) is taken at its word.
+      function resolveMiscasedSlug(raw) {
+        var lower = PopcodeSlug.normalize(raw);
+        if (params.get('handle') || !lower || lower === raw) return Promise.resolve(false);
+        return PopcodeSlug.takenSet(db, [lower])
+          .then(function (t) {
+            if (!t.has(lower)) return false;
+            location.replace('/' + lower);
+            return true;
+          })
+          .catch(function () { return false; });   // never block the scan flow
+      }
+
       window.addEventListener('DOMContentLoaded', () => {
-        if (!handle) { showError(); } else { bootstrap(handle); }
+        if (!handle) { showError(); return; }
+        resolveMiscasedSlug(handle).then((redirected) => {
+          if (!redirected) bootstrap(handle);
+        });
       });
 
       // Code-entry form: wired up independently of loadCollection so it works

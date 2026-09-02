@@ -519,7 +519,16 @@
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
       const params = new URLSearchParams(location.search);
-      const id = params.get('id') || location.pathname.replace(/^\/|\/$/g, '');
+      const fromPath = location.pathname.replace(/^\/|\/$/g, '');
+      const id = params.get('id') || fromPath;
+
+      // Slugs are always stored lowercase, but links get typed by hand now that
+      // they read as words — phone keyboards autocapitalise, and a title written
+      // on a printed card is usually in title case. Send /MaxChapterOne to
+      // /maxchapterone rather than leaving it at a dead end.
+      if (!params.get('id') && fromPath && fromPath !== fromPath.toLowerCase()) {
+        location.replace('/' + fromPath.toLowerCase());
+      }
 
       // ── Analytics ────────────────────────────────────────────────────────────
       function getDeviceInfo() {
