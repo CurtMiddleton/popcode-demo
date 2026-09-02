@@ -9,7 +9,7 @@
       integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
       crossorigin="anonymous"></script>
     <script src="/sentry-init.js"></script>
-    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
     <meta property="og:title" content="Popcode — Design a Book">
     <meta property="og:description" content="Design a photo book where any page can come to life with video.">
@@ -1399,7 +1399,7 @@
           el.style.backgroundImage = `url('${p.url}')`;
           el.innerHTML = `
             <div class="tray-x" data-del="${p.id}">&times;</div>
-            ${photoHasMedia(p) ? '<div class="pop-dot"><img src="/assets/popcode_icon.svg" style="width:11px;height:11px"/></div>' : ''}`;
+            ${photoHasMedia(p) ? '<div class="pop-dot"><img src="/assets/popcode_symbol_color.svg" style="width:11px;height:11px"/></div>' : ''}`;
           el.querySelector('.tray-x').addEventListener('click', (e) => { e.stopPropagation(); deletePhoto(p.id); });
           enablePhotoDrag(el, p, { onTap: () => {
             selectedTrayId = (selectedTrayId === p.id) ? null : p.id;
@@ -1652,7 +1652,7 @@
         const brand = (rev) => `<div class="bc-brand${rev ? ' bc-brand-rev' : ''}">
           <img class="bc-logo" style="width:${inCqw(1.25)}" src="/assets/Popcode_logo${rev ? '.rev' : ''}.png" alt="Popcode"/>
           <div class="bc-inst" style="font-size:${textSz};line-height:${lead}">Go to <b>popcode.app/${escapeHtml(slug)}</b> on your phone.<br>Scan photos with the Popcode symbol.</div>
-          <img class="bc-symbol" style="width:${inCqw(0.4)}" src="/assets/popcode-symbol${rev ? '.rev' : ''}.png" alt=""/>
+          <img class="bc-symbol" style="width:${inCqw(0.4)}" src="/assets/popcode_symbol_color.svg" alt=""/>
         </div>`;
         const pick = !url ? `<div class="cv-pick" data-cv="bpick"><span class="cv-pick-btn">${IC_PHOTO_PH}</span></div>` : '';
         if (backCover.mode === 'fullbleed') {
@@ -2042,7 +2042,7 @@
             const badge = document.createElement('div');
             badge.className = 'slot-badge';
             badge.title = photo.popcode.mediaType === 'audio' ? 'Popcode — plays audio when scanned' : 'Popcode — plays video when scanned';
-            badge.innerHTML = `<img src="/assets/popcode_icon.svg" alt=""/>`;
+            badge.innerHTML = `<img src="/assets/popcode_symbol_color.svg" alt=""/>`;
             slot.appendChild(badge);
           }
         } else {
@@ -2558,6 +2558,9 @@
                 + 'background-image:url("' + badgePng + '");background-size:contain;background-repeat:no-repeat;background-position:center;';
               slot.appendChild(b);
             });
+            unit.querySelectorAll('.bc-symbol').forEach(sym => {
+              sym.src = badgePng;         // html2canvas can't render an external SVG
+            });
             unit.querySelectorAll('.slot, .bc-inset').forEach(el => {
               const r = el.getBoundingClientRect();
               el.style.width = r.width + 'px';
@@ -2625,7 +2628,7 @@
       // Rasterize the Popcode badge SVG (viewBox-only, no intrinsic size) to a
       // PNG data-URL so html2canvas renders it (it drops external SVG <img>s).
       async function rasterizeBadge() {
-        let svg = await (await fetch('/assets/popcode_icon.svg')).text();
+        let svg = await (await fetch('/assets/popcode_symbol_color.svg')).text();
         if (!/<svg[^>]*\bwidth=/.test(svg)) svg = svg.replace('<svg ', '<svg width="302" height="302" ');
         const img = new Image();
         img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
@@ -2695,6 +2698,9 @@
               + 'width:' + size + 'px;height:' + size + 'px;pointer-events:none;'
               + 'background-image:url("' + badgePng + '");background-size:contain;background-repeat:no-repeat;background-position:center;';
             slot.appendChild(b);
+          });
+          unit.querySelectorAll('.bc-symbol').forEach(sym => {
+            sym.src = badgePng;         // html2canvas can't render an external SVG
           });
           unit.querySelectorAll('.slot, .bc-inset').forEach(el => { const r = el.getBoundingClientRect(); el.style.width = r.width + 'px'; el.style.height = r.height + 'px'; el.style.aspectRatio = 'auto'; });
           unit.querySelectorAll('.slot-img, .cv-photo-img, .bc-img').forEach(img => {
@@ -3047,7 +3053,7 @@
           <h2>Photo options</h2>
           <p class="sheet-sub">${hasPop ? 'This photo is a Popcode — it plays its ' + (photo.popcode.mediaType === 'audio' ? 'audio' : 'video') + ' when scanned.' : 'Link a video or audio and this page will come to life when scanned.'}</p>
           <div class="menu-row" data-act="popcode">
-            <div class="menu-ic"><img src="/assets/popcode_icon.svg" style="width:20px;height:20px"/></div>
+            <div class="menu-ic"><img src="/assets/popcode_symbol_color.svg" style="width:20px;height:20px"/></div>
             <div><div>${hasPop ? 'Edit Popcode' : 'Add a Popcode'}</div><div class="menu-sub">${hasPop ? 'Change or remove the linked media' : 'Link a video or audio recording'}</div></div>
           </div>
           <div class="menu-row" data-act="edit">
