@@ -9,7 +9,7 @@
       integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
       crossorigin="anonymous"></script>
     <script src="/sentry-init.js"></script>
-    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
     <meta property="og:title" content="Popcode">
     <meta property="og:description" content="Bring your photos to life with AR video">
@@ -986,6 +986,8 @@
       // build a link from. Showing a random code here only ever offered the
       // creator something they'd want to replace.
       const urlSlug = document.getElementById('url-slug');
+      const editBtn = document.getElementById('url-edit-btn');
+      editBtn.style.display = 'none';       // until the name produces a link
 
       const slugField = PopcodeSlug.attach({
         db,
@@ -993,19 +995,24 @@
         slugInput: codeInput,
         note: codeHint,
         classes: { base: 'field-hint', ok: 'ok', err: 'err' },
-        onChange: (slug) => { urlSlug.textContent = slug; }
+        onChange: (slug) => {
+          urlSlug.textContent = slug;
+          // No link yet means nothing to edit — offering it before the name is
+          // typed reads like the URL is the thing you fill in first.
+          if (editBtn) editBtn.style.display = slug ? '' : 'none';
+        }
       });
 
       // Inline editor for the URL row. The hidden #code-input is the source of
       // truth either way, so this stays purely presentational.
       const urlEditor = (function initUrlRow() {
         const urlDisplay = document.getElementById('url-display');
-        const editBtn = document.getElementById('url-edit-btn');
         const doneBtn = document.getElementById('url-done-btn');
         function toggle(on) {
           codeInput.style.display = on ? 'inline-block' : 'none';
           urlDisplay.style.display = on ? 'none' : '';
-          editBtn.style.display = on ? 'none' : '';
+          // Editing hides it; leaving edit mode only restores it if a link exists.
+          editBtn.style.display = (on || !slugField.get()) ? 'none' : '';
           doneBtn.style.display = on ? '' : 'none';
           if (on) { slugField.touch(); codeInput.focus(); codeInput.select(); }
         }
