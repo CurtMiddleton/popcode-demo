@@ -22,6 +22,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/slug.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/image-source.js"></script>
     <script src="/montage-music.js"></script>
@@ -553,7 +554,7 @@
         <div class="field-label">URL</div>
         <div class="url-row">
           <span class="url-display" id="url-display"><span class="url-base">popcode.app/</span><span class="url-slug" id="url-slug"></span></span>
-          <input type="text" id="code-input" maxlength="10" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="display:none;text-transform:lowercase;letter-spacing:0.04em;font-variant-numeric:tabular-nums;"/>
+          <input type="text" id="code-input" maxlength="30" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="display:none;text-transform:lowercase;"/>
           <button type="button" class="url-edit-btn" id="url-edit-btn">Edit</button>
           <button type="button" class="url-edit-btn" id="rename-code-btn" style="display:none;">Save</button>
         </div>
@@ -845,20 +846,10 @@
       }
 
       // ── Project code rename ──────────────────────────────────────────────────
-      const RESERVED_SLUGS = new Set([
-        'index','create','manage','edit','view','views','auth','reset','account',
-        'howto','analytics','privacy','terms','marker-test','mockup-a','mockup-b','mockup-c','qr-test',
-        'admin','api','app','www','assets','static','public','login','signup','logout','help','support'
-      ]);
-
-      function normalizeCode(raw) { return (raw || '').trim().toLowerCase().replace(/[^a-z0-9]/g, ''); }
-
-      function validateCode(code) {
-        if (code.length < 6) return { ok: false, msg: `${code.length}/6 characters` };
-        if (code.length > 10) return { ok: false, msg: 'Max 10 characters' };
-        if (RESERVED_SLUGS.has(code)) return { ok: false, msg: `"${code}" is reserved` };
-        return { ok: true };
-      }
+      // Same rules as the create flow — see slug.js. Renaming has to accept
+      // every link the builders can hand out, hyphens and full length included.
+      const normalizeCode = (raw) => PopcodeSlug.normalize(raw).replace(/-+$/, '');
+      const validateCode = (code) => PopcodeSlug.validate(code);
 
       function initCodeRename() {
         const input = document.getElementById('code-input');
@@ -889,9 +880,9 @@
           const myToken = ++token;
           checkTimer = setTimeout(async () => {
             try {
-              const { data } = await db.from('collections').select('slug').eq('slug', code).maybeSingle();
+              const free = await PopcodeSlug.isAvailable(db, code);
               if (myToken !== token) return;
-              if (data) { available = false; setHint(`"${code}" is already taken`, 'err'); btn.style.display = 'none'; }
+              if (!free) { available = false; setHint(`"${code}" is already taken`, 'err'); btn.style.display = 'none'; }
               else { available = true; setHint(`"${code}" is available — click Save code to rename`, 'ok'); btn.style.display = ''; }
             } catch (e) { if (myToken === token) setHint('Could not check availability', 'err'); }
           }, 350);
