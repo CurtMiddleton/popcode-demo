@@ -39,7 +39,7 @@
   .site-header .header-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
   .site-header .hicon {
     position: relative; display: flex; align-items: center; justify-content: center;
-    width: 42px; height: 42px; border-radius: 50%; background: none; border: none;
+    width: 32px; height: 32px; border-radius: 50%; background: none; border: none;
     cursor: pointer; text-decoration: none; color: #1a1a1a; transition: background 0.15s;
   }
   .site-header .hicon:hover { background: #f3f2ef; }
@@ -51,9 +51,9 @@
      cluster, so this is the desktop half of the pair. */
   .site-header .account-wrap { position: relative; display: flex; }
   .site-header .account-menu {
-    position: absolute; top: calc(100% + 10px); right: 0; min-width: 224px;
-    background: #fff; border-radius: 18px; padding: 8px;
-    box-shadow: 0 14px 38px rgba(0,0,0,0.16), 0 2px 8px rgba(0,0,0,0.07);
+    position: absolute; top: calc(100% + 8px); right: 0; min-width: 186px;
+    background: #fff; border-radius: 14px; padding: 6px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.07);
     display: none; z-index: 60;
   }
   .site-header .account-wrap.open .account-menu { display: block; }
@@ -64,14 +64,14 @@
     .site-header .account-wrap:hover .account-menu { display: block; }
   }
   .site-header .account-menu a, .site-header .account-menu button {
-    display: flex; align-items: center; gap: 14px; width: 100%; box-sizing: border-box;
-    padding: 12px 14px; border-radius: 12px; border: none; background: none;
-    font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 600;
+    display: flex; align-items: center; gap: 12px; width: 100%; box-sizing: border-box;
+    padding: 9px 11px; border-radius: 10px; border: none; background: none;
+    font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600;
     color: #1a1a1a; text-decoration: none; text-align: left; cursor: pointer;
     white-space: nowrap;
   }
   .site-header .account-menu a:hover, .site-header .account-menu button:hover { background: #f3f2ef; }
-  .site-header .account-menu svg { width: 22px; height: 22px; flex-shrink: 0; color: #1a1a1a; }
+  .site-header .account-menu svg { width: 18px; height: 18px; flex-shrink: 0; color: #1a1a1a; }
   @media (max-width: 1040px) { .site-header .nav-inline { margin-left: 40px; } }
   @media (max-width: 760px) {
     /* Mobile: align the logo to the content margin (28px, where the page's h1
@@ -160,9 +160,9 @@
       '<a href="/manage.html" class="brand"><img src="/assets/Popcode_logo.png" alt="Popcode"/></a>' +
       '<nav class="nav-inline">' + nav + '</nav>' +
       '<div class="header-right">' +
-        '<a class="hicon cart-btn" href="/shop.html" title="Cart" aria-label="Cart"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></a>' +
+        '<a class="hicon cart-btn" href="/shop.html" title="Cart" aria-label="Cart"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></a>' +
         '<div class="account-wrap" id="account-wrap">' +
-          '<button type="button" class="hicon profile-btn" id="account-btn" title="My Account" aria-label="My Account" aria-haspopup="true" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>' +
+          '<button type="button" class="hicon profile-btn" id="account-btn" title="My Account" aria-label="My Account" aria-haspopup="true" aria-expanded="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>' +
           '<div class="account-menu" id="account-menu" role="menu">' +
             '<a href="/account.html" role="menuitem">' + IC_ACCOUNT + 'My Account</a>' +
             '<button type="button" role="menuitem" id="account-logout">' + IC_LOGOUT + 'Log Out</button>' +
