@@ -205,6 +205,11 @@
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       let currentUser = null, popcodes = [];
 
+      // Arriving from a Popcode's Shop button (manage.html) carries its slug, so
+      // whichever photo product you pick opens with that Popcode already chosen
+      // instead of making you find it again.
+      const fromSlug = new URLSearchParams(location.search).get('id');
+
       // Products. Photo Book is the hero (builds from scratch → book.html).
       // The print products need a photo, so they open a picker of the user's
       // Popcodes → order.html with the chosen category pre-selected. Photo-product
@@ -301,10 +306,14 @@
       }
 
       function chooseProduct(p) {
+        // Books, calendars and board books are built from scratch in their own
+        // maker, so there is no single photo to carry over.
         if (p.kind === 'build') { window.location.href = p.href || '/book.html'; return; }
         // Product-first funnel: go straight to the details screen; the photo is
-        // chosen there (order.html) after picking a size.
-        window.location.href = '/order.html?type=' + encodeURIComponent(p.type);
+        // chosen there (order.html) after picking a size — unless we already know
+        // which Popcode you came from.
+        window.location.href = '/order.html?type=' + encodeURIComponent(p.type)
+          + (fromSlug ? '&id=' + encodeURIComponent(fromSlug) : '');
       }
 
       async function loadPopcodes() {
