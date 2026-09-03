@@ -49,7 +49,7 @@ export default async function handler(req, res) {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    const { loadOrdersForSession, fulfillSession } = await import('../lib/print/fulfill.mjs');
+    const { loadOrdersForSession, fulfillSession, isSessionSettled } = await import('../lib/print/fulfill.mjs');
 
     // A cart checkout produces one row per fulfillment provider, all sharing this
     // session id — finalize every one of them, not just the first.
@@ -57,7 +57,7 @@ export default async function handler(req, res) {
     if (!orders.length) return res.status(404).json({ error: 'Order not found' });
     if (orders.some((o) => o.user_id !== user.id)) return res.status(403).json({ error: 'Not your order' });
 
-    if (session.payment_status !== 'paid') {
+    if (!isSessionSettled(session)) {
       return res.status(200).json({ status: orders[0].status, note: 'not paid yet' });
     }
 
