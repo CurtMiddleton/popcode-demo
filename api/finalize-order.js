@@ -7,9 +7,10 @@
 // Body: { sessionId }   (the Stripe Checkout session id from ?session_id=)
 // 200  { status, prodigi_order_id }
 //
-// Verifies the session is paid (server-side via Stripe), loads the matching
-// print_orders row, checks ownership, then submits to Prodigi (or dry-run) and
-// advances status. Safe to call repeatedly.
+// Verifies the session is paid (server-side via Stripe), loads EVERY print_orders
+// row for that session (a cart checkout makes one per fulfillment provider),
+// checks ownership, then submits each to its provider (or dry-run) and advances
+// status. Safe to call repeatedly.
 //
 // Env: STRIPE_SECRET_KEY, SUPABASE_SERVICE_ROLE_KEY, PRODIGI_API_KEY,
 //      PRODIGI_BASE_URL, PRODIGI_DRY_RUN.
@@ -22,8 +23,6 @@ const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-
-const ALREADY_HANDLED = new Set(['submitted', 'in_production', 'shipped', 'complete', 'prodigi_failed']);
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -50,59 +49,39 @@ export default async function handler(req, res) {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    const { data: order, error: loadErr } = await admin
-      .from('print_orders').select('*').eq('stripe_session_id', sessionId).single();
-    if (loadErr || !order) return res.status(404).json({ error: 'Order not found' });
-    if (order.user_id !== user.id) return res.status(403).json({ error: 'Not your order' });
+    const { loadOrdersForSession, fulfillSession } = await import('../lib/print/fulfill.mjs');
 
-    // Idempotent: already submitted/handled.
-    if (order.prodigi_order_id || ALREADY_HANDLED.has(order.status)) {
-      return res.status(200).json({ status: order.status, prodigi_order_id: order.prodigi_order_id });
-    }
+    // A cart checkout produces one row per fulfillment provider, all sharing this
+    // session id — finalize every one of them, not just the first.
+    const orders = await loadOrdersForSession(admin, sessionId, session.metadata?.print_order_id || null);
+    if (!orders.length) return res.status(404).json({ error: 'Order not found' });
+    if (orders.some((o) => o.user_id !== user.id)) return res.status(403).json({ error: 'Not your order' });
 
     if (session.payment_status !== 'paid') {
-      return res.status(200).json({ status: order.status, note: 'not paid yet' });
+      return res.status(200).json({ status: orders[0].status, note: 'not paid yet' });
     }
 
-    // Atomically claim this order for submission. The success page (this route)
-    // and the Stripe webhook can fire at the same time and both clear the
-    // idempotency check above before either writes prodigi_order_id — without a
-    // claim that races into TWO Prodigi orders (double print + double charge;
-    // merchantReference is NOT a Prodigi-side uniqueness guarantee). Only the
-    // caller that flips pending/paid -> submitting proceeds; the loser returns
-    // the current state.
-    const { data: claimed } = await admin.from('print_orders')
-      .update({ status: 'submitting', total_charged_minor: session.amount_total, updated_at: new Date().toISOString() })
-      .eq('id', order.id)
-      .is('prodigi_order_id', null)
-      .in('status', ['pending', 'paid'])
-      .select();
-    if (!claimed || claimed.length === 0) {
-      const { data: cur } = await admin.from('print_orders').select('status, prodigi_order_id').eq('id', order.id).single();
-      return res.status(200).json({ status: cur?.status, prodigi_order_id: cur?.prodigi_order_id, idempotent: true });
-    }
+    const results = await fulfillSession({
+      admin,
+      orders,
+      amountTotalMinor: session.amount_total,
+      onError: (err, result) => {
+        console.error(err.message, JSON.stringify(result.response).slice(0, 500));
+        Sentry.captureException(err);
+      },
+    });
+    await Sentry.flush(2000);
 
-    // Dispatch to the order's fulfillment provider (defaults to Prodigi for rows
-    // written before the provider column existed). The adapter builds the vendor
-    // payload, honors its own dry-run, and returns a normalized result; DB writes
-    // stay here. See docs/board-book-printify-plan.md.
-    const { getProvider } = await import('../lib/print/providers/index.mjs');
-    const provider = getProvider(order.provider || 'prodigi');
-    const result = await provider.submitOrder({ order });
-
-    if (!result.ok) {
-      await admin.from('print_orders').update({ status: 'prodigi_failed', prodigi_response: result.response, updated_at: new Date().toISOString() }).eq('id', order.id);
-      console.error(`Order submission failed for ${order.id}:`, JSON.stringify(result.response).slice(0, 500));
-      Sentry.captureException(new Error(result.error || `Order submission failed for ${order.id}`));
-      await Sentry.flush(2000);
-      return res.status(200).json({ status: 'prodigi_failed' });
-    }
-
-    await admin.from('print_orders')
-      .update({ status: 'submitted', prodigi_order_id: result.providerOrderId, prodigi_response: result.response, updated_at: new Date().toISOString() })
-      .eq('id', order.id);
-
-    return res.status(200).json({ status: 'submitted', prodigi_order_id: result.providerOrderId, ...(result.dryRun ? { dryRun: true } : {}) });
+    // Single-order sessions keep the original flat response shape so
+    // order-success.html's existing handling is unchanged.
+    const first = results[0] || {};
+    return res.status(200).json({
+      status: first.status,
+      prodigi_order_id: first.prodigi_order_id,
+      ...(first.idempotent ? { idempotent: true } : {}),
+      ...(first.dryRun ? { dryRun: true } : {}),
+      orders: results,
+    });
   } catch (e) {
     console.error('finalize-order error:', e);
     Sentry.captureException(e);

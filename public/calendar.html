@@ -240,6 +240,16 @@
       }
       .create-btn:hover { background: #000; }
       .create-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      /* Save design: leave the maker without finishing. Sits left of the primary. */
+      .save-btn {
+        border: 1.5px solid #ddd9d1; background: #fff; color: #1a1a1a; border-radius: 30px; padding: 14px 22px;
+        font-size: 15px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; white-space: nowrap;
+        margin-left: auto;
+      }
+      .save-btn:hover { background: #faf9f5; }
+      .save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      /* With a Save button present the primary no longer needs the auto margin. */
+      .save-btn + .create-btn { margin-left: 0; }
 
       /* ── Floating dock (Photos / Events / Options) ─────────────── */
       .dock {
@@ -511,6 +521,7 @@
     <div class="create-bar">
       <div class="create-bar-inner">
         <div class="create-summary" id="create-summary">Add photos to begin.</div>
+        <button class="save-btn" id="save-design-btn" disabled>Save design</button>
         <button class="create-btn" id="create-btn" disabled>Create Calendar</button>
       </div>
     </div>
@@ -530,7 +541,8 @@
         <p>Your design is saved to My Designs. Popcoded photos play their media when the printed calendar is scanned.</p>
         <div class="result-url" id="result-url" style="display:none" title="Tap to copy"></div>
         <div class="result-actions">
-          <button class="r-primary" id="result-order">Order a printed copy</button>
+          <button class="r-primary" id="result-cart">Add to cart</button>
+          <button class="r-secondary" id="result-order">Order this one now</button>
           <button class="r-secondary" id="result-keep">Keep editing</button>
           <a class="r-secondary" href="/manage.html?tab=designs">Back to My Designs</a>
         </div>
@@ -544,6 +556,8 @@
 
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      // /cart.js (injected by nav.js) reuses this client instead of making its own.
+      window.__popcodeCartDb = db;
 
       const IC_X = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
       const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -850,6 +864,14 @@
         else summary.innerHTML = `<strong>${filled}</strong> of <strong>12</strong> months filled${cover.photoId ? ' · cover set' : ' · no cover yet'}${popcoded ? ` · <strong>${popcoded}</strong> popcoded` : ''}`;
         btn.disabled = !(filled > 0 || cover.photoId);
         btn.textContent = editingCollection ? 'Save Changes' : 'Create Calendar';
+        const saveBtn = document.getElementById('save-design-btn');
+        if (saveBtn) {
+          // Same gate as the primary: there has to be something worth saving.
+          saveBtn.disabled = btn.disabled;
+          // Once the design exists the primary IS a save, so the extra button
+          // would just be a duplicate — it earns its place on a new design.
+          saveBtn.style.display = editingCollection ? 'none' : '';
+        }
       }
 
       // ── Placing photos ──────────────────────────────────────────
@@ -1421,9 +1443,13 @@
         openSheet(`
           <h2>Options</h2>
           <p class="sheet-sub">Your calendar’s title, year and printing.</p>
-          <div class="menu-row" data-act="order" style="background:#f0eefe">
-            <div class="menu-ic" style="background:#1a1a1a;color:#fff"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>
-            <div><div>Order a printed calendar</div><div class="menu-sub">A4 landscape · Wire-O · printed &amp; shipped</div></div>
+          <div class="menu-row" data-act="cart" style="background:#f0eefe">
+            <div class="menu-ic" style="background:#1a1a1a;color:#fff"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></div>
+            <div><div>Add to cart</div><div class="menu-sub">A4 landscape · Wire-O · ships with the rest of your order</div></div>
+          </div>
+          <div class="menu-row" data-act="order">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>
+            <div><div>Order this one now</div><div class="menu-sub">Skip the cart and check out with just this</div></div>
           </div>
           <div class="menu-row" data-act="title">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></div>
@@ -1443,6 +1469,7 @@
             <div><div>Proof: download print PDF</div><div class="menu-sub">Admin · the exact 26-page file sent to print</div></div>
           </div>` : ''}
         `);
+        document.querySelector('#sheet [data-act="cart"]').addEventListener('click', addCalendarToCart);
         document.querySelector('#sheet [data-act="order"]').addEventListener('click', orderPrintedCalendar);
         document.querySelector('#sheet [data-act="title"]').addEventListener('click', () => {
           closeSheet();
@@ -1512,9 +1539,17 @@
         document.getElementById('try-again-btn').style.display = 'none';
       });
 
-      document.getElementById('create-btn').addEventListener('click', saveCalendar);
+      document.getElementById('create-btn').addEventListener('click', () => saveCalendar());
+      // Save design: same save, but it leaves you in the editor instead of
+      // finishing on the result screen — so you can stop and come back later.
+      document.getElementById('save-design-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('save-design-btn');
+        btn.disabled = true;
+        try { await saveCalendar({ quiet: true }); } finally { updateSummary(); }
+      });
 
-      async function saveCalendar() {
+      async function saveCalendar(opts) {
+        const quiet = !!(opts && opts.quiet);
         const editing = !!editingCollection;
         // The title is what the link is built from, so it can't be skipped.
         if (!editing && !(document.getElementById('title-input').value || '').trim()) {
@@ -1693,6 +1728,11 @@
 
           setProgress('Done!', 100);
           document.getElementById('progress').classList.remove('visible');
+          if (quiet) {
+            showToast('Design saved — you can close this and come back any time.');
+            updateSummary();
+            return;
+          }
           document.getElementById('result-title').textContent = editing ? 'Your calendar is updated!' : 'Your calendar is ready!';
           // Popcoded calendars are scannable — show the share link.
           const linkEl = document.getElementById('result-url');
@@ -1720,6 +1760,7 @@
         document.getElementById('result').classList.remove('visible');
         orderPrintedCalendar();
       });
+      document.getElementById('result-cart').addEventListener('click', addCalendarToCart);
 
       // ── Print-ready PDF (26 pages, A4 landscape, 300 DPI) ───────
       // Page order matches Prodigi's undated-calendar template: front cover,
@@ -1805,39 +1846,76 @@
         return { blob: doc.output('blob'), pageCount: units.length };
       }
 
-      // ── Order a printed calendar (Prodigi via Stripe) ───────────
-      async function orderPrintedCalendar() {
-        closeSheet();
+      // ── Printing: shared prep for both "add to cart" and "order now" ──
+      // The print PDF can only be rendered here, where the calendar's DOM lives —
+      // so it is built and uploaded now, and a cart line carries its URL.
+      // Returns the public PDF url, or null when something is missing (the reason
+      // is already shown as a toast).
+      async function buildCalendarPrintAsset(verb) {
         if (!editingCollection || !editingCollection.id || !editingCollection.slug) {
-          showToast('Save your calendar first, then order a printed copy.');
-          return;
+          showToast(`Save your calendar first, then ${verb}.`);
+          return null;
         }
         const missing = [];
         if (!cover.photoId) missing.push('the cover');
         months.forEach((m, i) => { if (!m.photoId) missing.push(MONTH_NAMES[i]); });
         if (missing.length) {
           showToast(`Add photos first — missing: ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? ` +${missing.length - 3} more` : ''}`);
-          return;
+          return null;
         }
         // Photos placed but not yet saved (fresh Files) must be uploaded first so
         // the print PDF uses durable URLs.
         const unsaved = [...placedIds()].some(id => { const p = photos.get(id); return p && p.file; });
-        if (unsaved) { showToast('Save your changes first, then order.'); return; }
+        if (unsaved) { showToast(`Save your changes first, then ${verb}.`); return null; }
 
-        let pdfUrl;
         try {
           showToast('Building your print file…');
           const out = await buildCalendarPrintPdf();
           const path = `${editingCollection.slug}/print/calendar_${Date.now()}.pdf`;
           const { error } = await db.storage.from('experiences').upload(path, out.blob, { contentType: 'application/pdf', upsert: true });
           if (error) throw new Error('Upload failed: ' + error.message);
-          pdfUrl = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+          return db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
         } catch (err) {
           console.error(err);
           if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
           showToast('Could not build the print file: ' + (err.message || 'error'));
-          return;
+          return null;
         }
+      }
+
+      // A blob: object URL dies with this page, so it can never be a cart thumbnail.
+      const durableUrl = (u) => (typeof u === 'string' && /^https?:/i.test(u) ? u : null);
+
+      // Add this calendar to the cart, so it can ship alongside other designs.
+      async function addCalendarToCart() {
+        closeSheet();
+        document.getElementById('result').classList.remove('visible');
+        const pdfUrl = await buildCalendarPrintAsset('add it to your cart');
+        if (!pdfUrl) return;
+        try {
+          await PopcodeCart.add({
+            collectionId: editingCollection.id,
+            productType: 'calendar',
+            variantId: CAL_VARIANT_ID,
+            copies: 1,
+            assetUrls: [{ url: pdfUrl, print_area: 'default' }],
+            title: `${(document.getElementById('title-input').value || '').trim() || calYear + ' Calendar'} — wall calendar`,
+            thumbUrl: durableUrl(cover.photoId && (photos.get(cover.photoId) || {}).url),
+            options: { sizeLabel: 'A4 landscape · Wire-O', orientationLabel: `${calYear} · 12 months` },
+          });
+          showToast('Added to your cart.');
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast(err.message || 'Could not add to cart.');
+        }
+      }
+
+      // ── Order a printed calendar right now (Prodigi via Stripe) ──
+      async function orderPrintedCalendar() {
+        closeSheet();
+        const pdfUrl = await buildCalendarPrintAsset('order a printed copy');
+        if (!pdfUrl) return;
         openCalAddressSheet(pdfUrl);
       }
 
