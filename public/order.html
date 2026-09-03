@@ -225,8 +225,9 @@
             <div class="detail-price" id="review-price">—</div>
             <div class="detail-price-note">per print, incl. shipping &amp; handling</div>
             <ul class="specs" id="review-specs"></ul>
-            <button class="primary-btn" id="order-btn">Order</button>
-            <button class="secondary-btn" id="save-btn">Save to My Designs</button>
+            <button class="primary-btn" id="addcart-btn">Add to cart</button>
+            <button class="secondary-btn" id="order-btn">Buy this one now</button>
+            <button class="secondary-btn" id="save-btn">Save design</button>
             <div class="save-msg" id="save-msg"></div>
           </div>
         </div>
@@ -318,6 +319,8 @@
 
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      // /cart.js (injected by nav.js) reuses this client instead of making its own.
+      window.__popcodeCartDb = db;
       const qs = new URLSearchParams(location.search);
       const slug = qs.get('id');
       if (qs.get('cancelled')) document.getElementById('cancel-banner').style.display = 'block';
@@ -1311,7 +1314,8 @@
         document.getElementById('review-sub').textContent = v.size + ' · ' + (baseAspect() !== 1 ? (state.orientation === 'landscape' ? 'Landscape' : 'Portrait') : 'Square');
         document.getElementById('review-specs').innerHTML = meta.specs.map(s => '<li>' + s + '</li>').join('');
         const sm = document.getElementById('save-msg'); sm.textContent = ''; sm.classList.remove('err');
-        const sb = document.getElementById('save-btn'); sb.disabled = false; sb.textContent = 'Save to My Designs';
+        const sb = document.getElementById('save-btn'); sb.disabled = false; sb.textContent = 'Save design';
+        const ab = document.getElementById('addcart-btn'); ab.disabled = false; ab.textContent = 'Add to cart';
         showStep('review');
         // aspect-true product with the chosen photo composited in
         const aspect = currentAspect();
@@ -1371,8 +1375,68 @@
             msg.textContent = 'Saved to My Designs.';
           }
         } catch (e) {
-          btn.disabled = false; btn.textContent = 'Save to My Designs';
+          btn.disabled = false; btn.textContent = 'Save design';
           msg.textContent = 'Could not save — ' + (e.message || 'try again'); msg.classList.add('err');
+          if (window.Sentry) Sentry.captureException(e);
+        }
+      }
+
+      // Render the badge-composited print file at the chosen size/orientation and
+      // upload it to the public experiences bucket. Both "Add to cart" and
+      // "Buy this one now" go through here, so a cart line and an express order
+      // always print exactly the same file.
+      async function buildPrintAsset() {
+        const photo = state.selectedPhoto;
+        const calibrate = qs.get('calibrate');
+        const dataUrl = calibrate
+          ? await buildCalibrationSheet(photo.url, currentAspect())
+          : await compositeBadgedImage(photo.url, { scale: state.scale, aspect: currentAspect() });
+        const blob = dataUrlToBlob(dataUrl);
+        const scalePct = Math.round(state.scale * 100);
+        const path = photo.slug + '/print-' + photo.target_index + '-' + state.orientation
+          + (calibrate ? '-calib' : '-badge' + scalePct) + '.jpg';
+        const up = await db.storage.from('experiences').upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
+        if (up.error) throw new Error('Could not prepare the print image: ' + up.error.message);
+        return db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+      }
+
+      // ---- add to cart ----
+      document.getElementById('addcart-btn').addEventListener('click', addToCart);
+
+      async function addToCart() {
+        const btn = document.getElementById('addcart-btn');
+        const msg = document.getElementById('save-msg');
+        msg.classList.remove('err'); msg.textContent = '';
+        const photo = state.selectedPhoto;
+        if (!photo) { msg.textContent = 'Pick a photo first.'; msg.classList.add('err'); return; }
+        btn.disabled = true; btn.textContent = 'Adding…';
+        try {
+          const v = variantOf(state.productType, state.variantId);
+          const meta = CATEGORY_META[state.productType];
+          const fcl = frameColorsFor(state.productType);
+          const fcn = fcl ? fcl.find(c => c.id === state.frameColor) : null;
+          // The print file is built NOW, while this page still has the photo and
+          // the chosen crop — the cart can't re-render it later.
+          const publicUrl = await buildPrintAsset();
+          await PopcodeCart.add({
+            collectionId: photo.collectionId,
+            productType: state.productType,
+            variantId: orderVariantId(),
+            copies: 1,
+            assetUrls: [{ target_index: photo.target_index, print_area: 'default', url: publicUrl }],
+            title: meta.name + ' · ' + v.size + (fcn && fcn.id !== 'black' ? ' ' + fcn.name : ''),
+            thumbUrl: photo.url,
+            options: {
+              sizeLabel: v.size,
+              orientationLabel: baseAspect() !== 1 ? (state.orientation === 'landscape' ? 'Landscape' : 'Portrait') : 'Square',
+              orientation: state.orientation, scale: state.scale, frameColor: state.frameColor,
+            },
+          });
+          btn.textContent = 'Added to cart ✓';
+          msg.innerHTML = 'Added. <a class="linkback" href="/cart.html" style="margin:0">View cart &rarr;</a>';
+        } catch (e) {
+          btn.disabled = false; btn.textContent = 'Add to cart';
+          msg.textContent = 'Could not add to cart — ' + (e.message || 'try again'); msg.classList.add('err');
           if (window.Sentry) Sentry.captureException(e);
         }
       }
@@ -1475,17 +1539,7 @@
         const payBtn = document.getElementById('pay-btn');
         payBtn.disabled = true; payBtn.textContent = 'Preparing…';
         try {
-          const calibrate = qs.get('calibrate');
-          const dataUrl = calibrate
-            ? await buildCalibrationSheet(photo.url, currentAspect())
-            : await compositeBadgedImage(photo.url, { scale: state.scale, aspect: currentAspect() });
-          const blob = dataUrlToBlob(dataUrl);
-          const scalePct = Math.round(state.scale * 100);
-          const path = photo.slug + '/print-' + photo.target_index + '-' + state.orientation
-            + (calibrate ? '-calib' : '-badge' + scalePct) + '.jpg';
-          const up = await db.storage.from('experiences').upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
-          if (up.error) throw new Error('Could not prepare the print image: ' + up.error.message);
-          const publicUrl = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+          const publicUrl = await buildPrintAsset();
 
           const { data: sess } = await db.auth.getSession();
           const token = sess?.session?.access_token;

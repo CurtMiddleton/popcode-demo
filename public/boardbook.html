@@ -368,6 +368,8 @@
         </div>
         <div class="field"><label for="o-country">Country</label><select class="text-input" id="o-country" style="max-width:none"></select></div>
         <button class="btn-primary" id="order-btn" style="width:100%;margin-top:6px;">Continue to payment</button>
+        <button class="save-btn" id="cart-btn" style="width:100%;margin-top:10px;">Add to cart</button>
+        <p style="color:#888;font-size:12.5px;line-height:1.5;margin-top:10px;">Adding it to your cart lets you order it with your other designs in one go.</p>
         <div class="note" id="order-note" style="text-align:center;margin-top:10px;"></div>
       </div>
     </div>
@@ -384,9 +386,20 @@
       </button>
     </div>
 
+    <style>
+      /* Save design: leave the maker without finishing. Sits left of the primary. */
+      .save-btn {
+        border: 1.5px solid #ddd9d1; background: #fff; color: #1a1a1a; border-radius: 30px; padding: 13px 20px;
+        font-size: 15px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; white-space: nowrap;
+      }
+      .save-btn:hover { background: #faf9f5; }
+      .save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    </style>
+
     <!-- Create bar -->
     <div class="create-bar hidden" id="create-bar">
       <span class="summary" id="summary">Add photos to begin.</span>
+      <button class="save-btn" id="save-design-btn" disabled>Save design</button>
       <button class="btn-primary create-btn" id="create-btn" disabled>Create Board Book</button>
     </div>
 
@@ -404,6 +417,8 @@
 
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      // /cart.js (injected by nav.js) reuses this client instead of making its own.
+      window.__popcodeCartDb = db;
       let currentUser = null;
       // Ordering the printed board book is gated to admins until the live
       // Stripe→Printify chain is validated with one real order; everyone can still
@@ -1490,6 +1505,13 @@
         const btn = document.getElementById('create-btn');
         btn.disabled = !ready;
         btn.classList.toggle('ready', ready);
+        const saveBtn = document.getElementById('save-design-btn');
+        if (saveBtn) {
+          saveBtn.disabled = !ready;
+          // Once the board book exists the primary IS a save, so the extra
+          // button would just be a duplicate.
+          saveBtn.style.display = editingCollection ? 'none' : '';
+        }
       }
 
       // ── Save (compile .mind + collection + items) ──────────────────
@@ -1500,8 +1522,15 @@
       }
       function yieldToPaint() { return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); }
 
-      document.getElementById('create-btn').addEventListener('click', saveBoardBook);
-      async function saveBoardBook() {
+      document.getElementById('create-btn').addEventListener('click', () => saveBoardBook());
+      // Save design: same save, but it leaves you in the editor instead of
+      // finishing on the result screen — so you can stop and come back later.
+      document.getElementById('save-design-btn').addEventListener('click', async () => {
+        document.getElementById('save-design-btn').disabled = true;
+        try { await saveBoardBook({ quiet: true }); } finally { updateSummary(); }
+      });
+      async function saveBoardBook(opts) {
+        const quiet = !!(opts && opts.quiet);
         const placed = placedIds();
         if (!placed.size) { showToast('Place at least one photo first.'); return; }
         if (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler) {
@@ -1660,6 +1689,13 @@
           }
 
           setProgress('Done!', 100);
+          if (quiet) {
+            savedSlug = slug; savedCollectionId = collectionId;
+            document.getElementById('progress').classList.remove('visible');
+            showToast('Design saved — you can close this and come back any time.');
+            updateSummary();
+            return;
+          }
           showResult(slug, collectionId);
         } catch (err) {
           console.error(err);
@@ -1701,6 +1737,58 @@
         const sel = document.getElementById('o-country');
         sel.innerHTML = COUNTRY_OPTIONS.map(([c, n]) => `<option value="${c}">${n}</option>`).join('');
       })();
+
+      // Build the 11 Printify print images (cover wrap + 10 two-page spreads) and
+      // upload them. Shared by "add to cart" and "order now" — the images can only
+      // be rendered here, from the live board, so a cart line stores their URLs.
+      async function buildBoardBookPrintAssets() {
+        const bucket = 'experiences';
+        const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+        const assetUrls = [];
+        const jobs = [{ pos: 'cover', make: compositeCoverWrap }].concat(
+          PRINT_SPREADS.map(sp => ({ pos: sp.pos, make: () => compositeSpread(sp) })));
+        for (const job of jobs) {
+          const blob = await job.make();
+          const path = `${savedSlug}/board/print_${job.pos}.jpg`;
+          const { error } = await db.storage.from(bucket).upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+          if (error) throw new Error('Could not prepare a page: ' + error.message);
+          assetUrls.push({ url: pub(path), print_area: job.pos });
+        }
+        return assetUrls;
+      }
+
+      // Add this board book to the cart. Board books are made by a different
+      // printer than the rest of the shop, so they arrive in their own parcel —
+      // the cart says so and the shipping for it is already in the total.
+      async function addBoardBookToCart() {
+        if (!savedSlug || !savedCollectionId) { showToast('Save your board book first.'); return; }
+        const btn = document.getElementById('cart-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Preparing your book…'; }
+        try {
+          const assetUrls = await buildBoardBookPrintAssets();
+          const coverId = slots['cover'] || slots[POSITIONS[0]];
+          const coverPhoto = coverId ? photos.get(coverId) : null;
+          const thumb = coverPhoto && (coverPhoto.existingUrl || coverPhoto.url);
+          await PopcodeCart.add({
+            collectionId: savedCollectionId,
+            productType: 'boardbook',
+            variantId: 'bb-6x6',
+            copies: 1,
+            assetUrls,
+            title: `${(editingCollection && editingCollection.name) || 'Board book'} — 6×6″ board book`,
+            // A blob: object URL dies with this page, so it can never be a thumbnail.
+            thumbUrl: (typeof thumb === 'string' && /^https?:/i.test(thumb)) ? thumb : null,
+            options: { sizeLabel: '6×6″ board book', orientationLabel: `${PAGE_COUNT} pages` },
+          });
+          showToast('Added to your cart.');
+          if (btn) btn.textContent = 'Added to cart ✓';
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast(err.message || 'Could not add to cart.');
+          if (btn) { btn.disabled = false; btn.textContent = 'Add to cart'; }
+        }
+      }
 
       function loadImg(src) {
         return new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
@@ -1813,6 +1901,7 @@
       document.getElementById('o-country').addEventListener('change', quoteOrder);
 
       document.getElementById('order-btn').addEventListener('click', placeOrder);
+      document.getElementById('cart-btn').addEventListener('click', addBoardBookToCart);
       async function placeOrder() {
         const note = document.getElementById('order-note'); note.classList.remove('bad'); note.textContent = '';
         const recipient = {
@@ -1833,19 +1922,7 @@
         const btn = document.getElementById('order-btn');
         btn.disabled = true; btn.textContent = 'Preparing your book…';
         try {
-          const bucket = 'experiences';
-          const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
-          const assetUrls = [];
-          // Build the 11 Printify print images: cover wrap + 10 spreads (page pairs).
-          const jobs = [{ pos: 'cover', make: compositeCoverWrap }].concat(
-            PRINT_SPREADS.map(sp => ({ pos: sp.pos, make: () => compositeSpread(sp) })));
-          for (const job of jobs) {
-            const blob = await job.make();
-            const path = `${savedSlug}/board/print_${job.pos}.jpg`;
-            const { error } = await db.storage.from(bucket).upload(path, blob, { contentType: 'image/jpeg', upsert: true });
-            if (error) throw new Error('Could not prepare a page: ' + error.message);
-            assetUrls.push({ url: pub(path), print_area: job.pos });
-          }
+          const assetUrls = await buildBoardBookPrintAssets();
           btn.textContent = 'Going to checkout…';
           const { data: { session } } = await db.auth.getSession();
           const resp = await fetch('/api/create-checkout', {

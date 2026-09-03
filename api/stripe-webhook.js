@@ -1,5 +1,6 @@
 // POST /api/stripe-webhook — Stripe -> us. On checkout.session.completed, submit
-// the paid order to Prodigi and advance its status.
+// every paid order for that session to its fulfillment provider and advance status.
+// (A cart checkout produces one order row per provider.)
 //
 // Signature verification needs the RAW request body, so Vercel's JSON body parser
 // is disabled below and we read the stream into a Buffer ourselves. This route is
@@ -23,9 +24,6 @@ const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-
-// Terminal/in-flight statuses we must not re-submit on a webhook retry.
-const ALREADY_HANDLED = new Set(['submitted', 'in_production', 'shipped', 'complete', 'prodigi_failed']);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -54,74 +52,43 @@ export default async function handler(req, res) {
     }
 
     const session = event.data.object;
-    const printOrderId = session.metadata?.print_order_id;
-    if (!printOrderId) return res.status(200).json({ received: true, note: 'no print_order_id' });
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    const { data: order, error: loadErr } = await admin
-      .from('print_orders').select('*').eq('id', printOrderId).single();
-    if (loadErr || !order) {
-      console.error('stripe-webhook: order not found', printOrderId);
-      return res.status(200).json({ received: true, note: 'order not found' });
-    }
+    const { loadOrdersForSession, fulfillSession } = await import('../lib/print/fulfill.mjs');
 
-    // Idempotency: already submitted / handled -> noop.
-    if (order.prodigi_order_id || ALREADY_HANDLED.has(order.status)) {
-      return res.status(200).json({ received: true, idempotent: true });
+    // A cart checkout produces one print_orders row per fulfillment provider, all
+    // sharing this session id. Look them up by session (works for the legacy
+    // single-order case too) and fall back to the metadata id for a row whose
+    // stripe_session_id write didn't land.
+    const orders = await loadOrdersForSession(admin, session.id, session.metadata?.print_order_id || null);
+    if (!orders.length) {
+      console.error('stripe-webhook: no orders for session', session.id);
+      return res.status(200).json({ received: true, note: 'order not found' });
     }
 
     if (session.payment_status !== 'paid') {
       await admin.from('print_orders')
         .update({ status: 'payment_failed', updated_at: new Date().toISOString() })
-        .eq('id', order.id);
+        .in('id', orders.map((o) => o.id))
+        .in('status', ['pending']);
       return res.status(200).json({ received: true, note: 'not paid' });
     }
 
-    // Atomically claim this order for submission. This route and the success-page
-    // /api/finalize-order can fire at the same time and both clear the idempotency
-    // check above before either writes prodigi_order_id — without a claim that
-    // races into TWO Prodigi orders (double print + double charge;
-    // merchantReference is NOT a Prodigi-side uniqueness guarantee). Only the
-    // caller that flips pending/paid -> submitting proceeds.
-    const { data: claimed } = await admin.from('print_orders')
-      .update({ status: 'submitting', total_charged_minor: session.amount_total, updated_at: new Date().toISOString() })
-      .eq('id', order.id)
-      .is('prodigi_order_id', null)
-      .in('status', ['pending', 'paid'])
-      .select();
-    if (!claimed || claimed.length === 0) {
-      return res.status(200).json({ received: true, idempotent: true });
-    }
+    // merchantReference = our order id makes a manual retry idempotent on the
+    // vendor side too. Each row is claimed atomically inside fulfillSession, so
+    // this route and the success page's /api/finalize-order can race safely.
+    const results = await fulfillSession({
+      admin,
+      orders,
+      amountTotalMinor: session.amount_total,
+      onError: (err, result) => {
+        console.error(err.message, JSON.stringify(result.response).slice(0, 500));
+        Sentry.captureException(err);
+      },
+    });
+    await Sentry.flush(2000);
 
-    // Submit via the order's fulfillment provider (defaults to Prodigi for rows
-    // written before the provider column). merchantReference = our order id makes a
-    // manual retry idempotent on the vendor side too. The adapter builds the vendor
-    // payload + honors its own dry-run; DB writes stay here.
-    const { getProvider } = await import('../lib/print/providers/index.mjs');
-    const provider = getProvider(order.provider || 'prodigi');
-    const result = await provider.submitOrder({ order });
-
-    if (result.dryRun) {
-      await admin.from('print_orders')
-        .update({ status: 'submitted', prodigi_order_id: result.providerOrderId, prodigi_response: result.response, updated_at: new Date().toISOString() })
-        .eq('id', order.id);
-      return res.status(200).json({ received: true, dryRun: true });
-    }
-
-    if (!result.ok) {
-      await markProdigiFailed(admin, order.id, result.response);
-      const err = new Error(result.error || `Order submission failed for ${order.id}`);
-      console.error(err.message, JSON.stringify(result.response).slice(0, 500));
-      Sentry.captureException(err);
-      await Sentry.flush(2000);
-      return res.status(200).json({ received: true, prodigi: result.networkError ? 'network_error' : 'rejected' });
-    }
-
-    await admin.from('print_orders')
-      .update({ status: 'submitted', prodigi_order_id: result.providerOrderId, prodigi_response: result.response, updated_at: new Date().toISOString() })
-      .eq('id', order.id);
-
-    return res.status(200).json({ received: true, prodigi_order_id: result.providerOrderId });
+    return res.status(200).json({ received: true, orders: results });
   } catch (e) {
     console.error('stripe-webhook handler error:', e);
     Sentry.captureException(e);
@@ -129,12 +96,6 @@ export default async function handler(req, res) {
     // Unexpected server error — let Stripe retry.
     return res.status(500).json({ error: e.message });
   }
-}
-
-async function markProdigiFailed(admin, id, response) {
-  await admin.from('print_orders')
-    .update({ status: 'prodigi_failed', prodigi_response: response, updated_at: new Date().toISOString() })
-    .eq('id', id);
 }
 
 function readRawBody(req) {

@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <!-- Sentry error monitoring (errors-only; init in /sentry-init.js) -->
+    <script
+      src="https://browser.sentry-cdn.com/10.59.0/bundle.min.js"
+      integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
+      crossorigin="anonymous"></script>
+    <script src="/sentry-init.js"></script>
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
+    <title>Popcode — Your Cart</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <script src="/countries.js"></script>
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { min-height:100vh; background:#f9f9f9; font-family:'Inter',sans-serif; color:#1a1a1a; display:flex; flex-direction:column; align-items:center; }
+      #nav-overlay { display:none; position:fixed; inset:0; z-index:200; }
+      #nav-overlay.open { display:block; }
+      #nav-drawer-bg { position:absolute; inset:0; background:rgba(0,0,0,0.18); }
+      #nav-drawer { position:absolute; top:14px; left:14px; width:264px; background:#fff; border-radius:18px; box-shadow:0 12px 48px rgba(0,0,0,0.18); padding:8px 0; opacity:0; transform:translateY(-8px) scale(0.97); transform-origin:top left; transition:opacity .18s ease, transform .18s ease; }
+      #nav-overlay.open #nav-drawer { opacity:1; transform:translateY(0) scale(1); }
+      .nav-link { display:flex; align-items:center; gap:14px; padding:11px 20px; font-size:15px; font-weight:500; color:#1a1a1a; text-decoration:none; font-family:'Inter',sans-serif; }
+      .nav-link:hover { background:#f5f4f0; }
+      .nav-link svg { flex-shrink:0; color:#555; }
+      .nav-link.external { color:#666; font-size:14px; }
+      .nav-divider { height:1px; background:#ececec; margin:8px 0; }
+
+      .wrap { width:100%; max-width:1040px; margin:0 auto; padding:44px 28px 140px; }
+      h1 { font-family:'CooperBT', Georgia, serif; font-size:44px; font-weight:400; margin-bottom:16px; letter-spacing:-0.01em; }
+      @media (max-width:680px) { h1 { font-size:36px; } .wrap { padding-top:28px; } }
+      .sub { color:#666; font-size:16px; line-height:1.5; margin-bottom:32px; max-width:600px; }
+      .card { background:#fff; border-radius:22px; padding:30px; margin-bottom:26px; box-shadow:0 2px 12px rgba(0,0,0,0.05); }
+      .card h2 { font-size:17px; font-weight:600; margin-bottom:20px; }
+      label { display:block; font-size:13px; font-weight:500; margin:18px 0 8px; color:#333; }
+      select, input { width:100%; padding:11px 12px; border:1.5px solid #e3e1db; border-radius:12px; font-size:15px; font-family:'Inter',sans-serif; background:#fff; }
+      select:focus, input:focus { outline:none; border-color:#7657FC; }
+      .row { display:flex; gap:12px; flex-wrap:wrap; }
+      .row > div { flex:1; min-width:140px; }
+      .muted { color:#999; font-size:13px; }
+      .linkback { display:inline-flex; align-items:center; gap:6px; color:#7657FC; background:none; border:none; text-decoration:none; font-weight:600; font-size:14px; cursor:pointer; font-family:'Inter',sans-serif; }
+      .banner { padding:14px 16px; border-radius:14px; font-size:14px; margin-bottom:20px; }
+      .banner.error { background:#fdecec; color:#c0392b; }
+      .banner.info { background:#f3f0ff; color:#5b3fd6; }
+      .primary-btn { width:100%; margin-top:24px; padding:17px; border:none; border-radius:16px; font-size:16px; font-weight:600; color:#fff; font-family:'Inter',sans-serif; cursor:pointer; background:#1a1a1a; }
+      .primary-btn:disabled { opacity:.5; cursor:not-allowed; }
+
+      /* Cart lines */
+      .line { display:flex; gap:18px; align-items:flex-start; padding:20px 0; border-bottom:1px solid #f0efeb; }
+      .line:last-child { border-bottom:none; }
+      .line:first-child { padding-top:0; }
+      .line-thumb { width:88px; height:88px; flex:0 0 88px; border-radius:12px; background:#f0eeea center/cover no-repeat; box-shadow:0 2px 10px rgba(0,0,0,0.10); }
+      .line-main { flex:1; min-width:0; }
+      .line-title { font-size:16px; font-weight:600; line-height:1.35; }
+      .line-meta { color:#777; font-size:13px; margin-top:4px; }
+      .line-actions { display:flex; align-items:center; gap:16px; margin-top:12px; flex-wrap:wrap; }
+      .qty { display:inline-flex; align-items:center; border:1.5px solid #e3e1db; border-radius:999px; overflow:hidden; background:#fff; }
+      .qty button { border:none; background:none; width:34px; height:34px; font-size:17px; cursor:pointer; color:#1a1a1a; font-family:'Inter',sans-serif; }
+      .qty button:disabled { opacity:.3; cursor:default; }
+      .qty span { min-width:26px; text-align:center; font-size:14px; font-weight:600; }
+      .line-remove { background:none; border:none; color:#a09a90; font-size:13px; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; }
+      .line-remove:hover { color:#c0392b; }
+
+      .empty { text-align:center; padding:40px 10px; }
+      .empty p { color:#777; font-size:15px; margin-bottom:22px; }
+      .shop-btn { display:inline-block; padding:15px 34px; border-radius:16px; background:#1a1a1a; color:#fff; text-decoration:none; font-weight:600; font-size:15px; }
+
+      .totals { border-top:1px solid #f0efeb; padding-top:18px; margin-top:6px; }
+      .total-row { display:flex; justify-content:space-between; align-items:baseline; }
+      .total-row .price { font-size:32px; font-weight:600; }
+      .note { color:#888; font-size:12.5px; line-height:1.55; margin-top:10px; }
+    </style>
+  </head>
+  <body>
+    <script src="/nav.js"></script>
+    <div id="nav-overlay">
+      <div id="nav-drawer-bg"></div>
+      <div id="nav-drawer">
+        <a class="nav-link" href="/manage.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>My Popcodes</a>
+        <a class="nav-link" href="/manage.html?tab=designs"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>My Designs</a>
+        <a class="nav-link" href="/shop.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>
+        <a class="nav-link" href="/create.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>New Popcode</a>
+        <a class="nav-link" href="/account.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>My Account</a>
+        <a class="nav-link" href="/howto.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>How It Works</a>
+        <div class="nav-divider"></div>
+        <a class="nav-link external" href="https://popcodeapp.com" target="_blank"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>popcodeapp.com</a>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <h1>Your cart</h1>
+      <p class="sub" id="cart-sub">Everything here ships together where we can — one order, one delivery.</p>
+
+      <div id="error-banner" class="banner error" style="display:none;"></div>
+      <div id="cancel-banner" class="banner info" style="display:none;">Payment was cancelled — your cart is still here.</div>
+
+      <div class="card" id="items-card">
+        <div id="cart-list"><p class="muted">Loading your cart…</p></div>
+        <p class="note" id="edit-note" style="display:none;">
+          Editing a design after it is in your cart won’t change the print file we
+          already prepared — remove the item and add it again to pick up your changes.
+        </p>
+      </div>
+
+      <div id="checkout-area" style="display:none;">
+        <div class="card">
+          <h2>Where should we send it?</h2>
+          <div class="row">
+            <div>
+              <label for="country">Ship to (country)</label>
+              <select id="country"></select>
+            </div>
+            <div>
+              <label for="shipping">Shipping</label>
+              <select id="shipping">
+                <option value="Budget">Budget</option>
+                <option value="Standard" selected>Standard</option>
+                <option value="Express">Express</option>
+              </select>
+            </div>
+          </div>
+          <label for="r-name">Recipient name</label>
+          <input id="r-name" type="text" autocomplete="name"/>
+          <label for="r-email">Email</label>
+          <input id="r-email" type="email" autocomplete="email"/>
+          <label for="r-phone">Phone <span class="muted">(recommended — couriers and customs may need it)</span></label>
+          <input id="r-phone" type="tel" autocomplete="tel"/>
+          <label for="r-line1">Address line 1</label>
+          <input id="r-line1" type="text" autocomplete="address-line1"/>
+          <label for="r-line2">Address line 2 (optional)</label>
+          <input id="r-line2" type="text" autocomplete="address-line2"/>
+          <div class="row">
+            <div><label for="r-city">City</label><input id="r-city" type="text" autocomplete="address-level2"/></div>
+            <div><label for="r-state">State / county</label><input id="r-state" type="text" autocomplete="address-level1"/></div>
+            <div><label for="r-postal">Postal / ZIP</label><input id="r-postal" type="text" autocomplete="postal-code"/></div>
+          </div>
+          <p class="note" id="intl-note" style="display:none;">
+            We print at the lab closest to your address wherever we can. If your order
+            has to cross a border, import duties or VAT may be charged on delivery and
+            are not included in the price below.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="totals">
+            <div class="total-row">
+              <div><div class="muted">Total</div><div class="price" id="total">—</div></div>
+              <div class="muted" id="total-note">Getting price…</div>
+            </div>
+            <p class="note" id="parcel-note" style="display:none;"></p>
+          </div>
+          <button class="primary-btn" id="pay-btn" disabled>Pay with card</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Created before /cart.js loads so the cart module reuses this client
+      // rather than starting a second auth session on the page.
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      window.__popcodeCartDb = db;
+    </script>
+    <script src="/cart.js"></script>
+    <script src="/beta-feedback.js"></script>
+    <script>
+
+      const qs = new URLSearchParams(location.search);
+      let currentUser = null;
+      let rows = [];
+      let designs = new Map();     // collection_id -> { slug, name, kind }
+      let priced = null;           // last /api/cart-quote result
+
+      // Where "Edit design" goes for each product family.
+      const MAKER = { book: '/book.html?id=', boardbook: '/boardbook.html?id=', calendar: '/calendar.html?id=' };
+      function editHref(row) {
+        const d = designs.get(row.collection_id);
+        if (!d) return null;
+        const maker = MAKER[row.product_type];
+        return maker ? maker + encodeURIComponent(d.slug)
+                     : '/order.html?design=' + encodeURIComponent(d.slug) + '&edit=1';
+      }
+
+      const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+      function showError(msg) {
+        const b = document.getElementById('error-banner');
+        b.textContent = msg; b.style.display = 'block';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      function clearError() { document.getElementById('error-banner').style.display = 'none'; }
+
+      // ── boot ────────────────────────────────────────────────────
+      (async function init() {
+        if (qs.get('cancelled')) document.getElementById('cancel-banner').style.display = 'block';
+        const { data: { session } } = await db.auth.getSession();
+        if (!session) { window.location.href = '/auth.html?next=' + encodeURIComponent('/cart.html'); return; }
+        currentUser = session.user;
+
+        if (window.popcodeFillCountrySelect) window.popcodeFillCountrySelect(document.getElementById('country'), 'US');
+        document.getElementById('r-email').value = currentUser.email || '';
+        const fullName = (currentUser.user_metadata && (currentUser.user_metadata.full_name || currentUser.user_metadata.name)) || '';
+        document.getElementById('r-name').value = fullName;
+
+        await load();
+      })();
+
+      async function load() {
+        rows = await PopcodeCart.list(true);
+        // Pull the parent designs so each line can show a real title and link back
+        // to the maker it came from.
+        const ids = [...new Set(rows.map(r => r.collection_id).filter(Boolean))];
+        if (ids.length) {
+          const { data } = await db.from('collections').select('id, slug, name, kind').in('id', ids);
+          designs = new Map((data || []).map(c => [c.id, c]));
+        }
+        render();
+      }
+
+      function render() {
+        const list = document.getElementById('cart-list');
+        const area = document.getElementById('checkout-area');
+        document.getElementById('edit-note').style.display = rows.length ? 'block' : 'none';
+
+        if (!rows.length) {
+          area.style.display = 'none';
+          document.getElementById('cart-sub').textContent = 'Nothing in your cart yet.';
+          list.innerHTML = `
+            <div class="empty">
+              <p>Your cart is empty. Saved designs are waiting in My Designs.</p>
+              <a class="shop-btn" href="/shop.html">Browse the shop</a>
+            </div>`;
+          return;
+        }
+
+        area.style.display = 'block';
+        const n = rows.reduce((s, r) => s + (r.copies || 1), 0);
+        document.getElementById('cart-sub').textContent =
+          `${n} item${n === 1 ? '' : 's'} — everything that can ship together will.`;
+
+        list.innerHTML = rows.map(r => {
+          const d = designs.get(r.collection_id);
+          const opts = r.options || {};
+          const bits = [opts.sizeLabel, opts.orientationLabel, r.page_count ? r.page_count + ' pages' : null]
+            .filter(Boolean).join(' · ');
+          const href = editHref(r);
+          return `
+            <div class="line" data-id="${esc(r.id)}">
+              <div class="line-thumb" style="${r.thumb_url ? `background-image:url('${esc(r.thumb_url)}')` : ''}"></div>
+              <div class="line-main">
+                <div class="line-title">${esc(r.title || (d && d.name) || 'Popcode print')}</div>
+                <div class="line-meta">${esc(bits || (d && d.name) || '')}</div>
+                <div class="line-actions">
+                  <div class="qty">
+                    <button type="button" data-act="dec" ${r.copies <= 1 ? 'disabled' : ''} aria-label="One fewer">−</button>
+                    <span>${r.copies}</span>
+                    <button type="button" data-act="inc" aria-label="One more">+</button>
+                  </div>
+                  ${href ? `<a class="linkback" href="${esc(href)}">Edit design</a>` : ''}
+                  <button type="button" class="line-remove" data-act="remove">Remove</button>
+                </div>
+              </div>
+            </div>`;
+        }).join('');
+
+        requestQuote();
+      }
+
+      document.getElementById('cart-list').addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-act]');
+        if (!btn) return;
+        const line = btn.closest('.line');
+        const id = line && line.dataset.id;
+        const row = rows.find(r => r.id === id);
+        if (!row) return;
+        clearError();
+        try {
+          if (btn.dataset.act === 'remove') await PopcodeCart.remove(id);
+          else await PopcodeCart.setCopies(id, row.copies + (btn.dataset.act === 'inc' ? 1 : -1));
+          rows = await PopcodeCart.list(true);
+          render();
+        } catch (err) {
+          showError(err.message || 'Could not update your cart.');
+        }
+      });
+
+      // ── pricing ─────────────────────────────────────────────────
+      function addressFromForm() {
+        const v = (id) => (document.getElementById(id).value || '').trim();
+        return {
+          line1: v('r-line1'), line2: v('r-line2'),
+          townOrCity: v('r-city'), stateOrCounty: v('r-state'),
+          postalOrZipCode: v('r-postal'), countryCode: document.getElementById('country').value,
+        };
+      }
+
+      let quoteToken = 0;
+      async function requestQuote() {
+        const total = document.getElementById('total');
+        const note = document.getElementById('total-note');
+        const parcels = document.getElementById('parcel-note');
+        const payBtn = document.getElementById('pay-btn');
+        if (!rows.length) return;
+
+        const mine = ++quoteToken;
+        total.textContent = '—'; note.textContent = 'Getting price…';
+        payBtn.disabled = true; priced = null;
+
+        try {
+          const addr = addressFromForm();
+          const data = await PopcodeCart.quote(rows, {
+            countryCode: addr.countryCode,
+            // A full address gets exact shipping from providers that price by
+            // address; without one we still get a real country-level price.
+            address: addr.line1 && addr.townOrCity && addr.postalOrZipCode ? addr : null,
+            shippingMethod: document.getElementById('shipping').value,
+          });
+          if (mine !== quoteToken) return;   // a newer quote is already in flight
+          priced = data;
+          total.textContent = PopcodeCart.money(data.total_minor, data.currency);
+          note.textContent = 'Printing, shipping and taxes we collect are included.';
+          parcels.style.display = data.shipments > 1 ? 'block' : 'none';
+          if (data.shipments > 1) {
+            parcels.textContent = `These items are made in ${data.shipments} different workshops, so they arrive in ${data.shipments} parcels — shipping for each is already in the total.`;
+          }
+          payBtn.disabled = false;
+        } catch (err) {
+          if (mine !== quoteToken) return;
+          total.textContent = '—';
+          note.textContent = err.unservable
+            ? 'We can’t ship one of these to that country.'
+            : 'Could not get a price — try again.';
+          payBtn.disabled = true;
+        }
+      }
+
+      let quoteTimer = null;
+      function requestQuoteSoon() { clearTimeout(quoteTimer); quoteTimer = setTimeout(requestQuote, 500); }
+
+      document.getElementById('country').addEventListener('change', () => {
+        const c = document.getElementById('country').value;
+        document.getElementById('intl-note').style.display = c && c !== 'US' ? 'block' : 'none';
+        requestQuote();
+      });
+      document.getElementById('shipping').addEventListener('change', requestQuote);
+      ['r-line1', 'r-city', 'r-postal'].forEach(id =>
+        document.getElementById(id).addEventListener('input', requestQuoteSoon));
+
+      // ── checkout ────────────────────────────────────────────────
+      document.getElementById('pay-btn').addEventListener('click', pay);
+
+      async function pay() {
+        clearError();
+        const v = (id) => (document.getElementById(id).value || '').trim();
+        const recipient = {
+          name: v('r-name'), email: v('r-email'), phoneNumber: v('r-phone'),
+          address: addressFromForm(),
+        };
+        if (!recipient.name || !recipient.email || !recipient.address.line1 ||
+            !recipient.address.townOrCity || !recipient.address.postalOrZipCode) {
+          showError('Please fill in name, email, address, city and postal code.'); return;
+        }
+
+        const btn = document.getElementById('pay-btn');
+        btn.disabled = true; btn.textContent = 'Preparing…';
+        try {
+          const { data: { session } } = await db.auth.getSession();
+          const token = session && session.access_token;
+          if (!token) throw new Error('Please sign in again.');
+          const resp = await fetch('/api/create-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({
+              items: rows.map(PopcodeCart.toLine),
+              recipient,
+              shippingMethod: document.getElementById('shipping').value,
+            }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok || !data.url) throw new Error(data.error || 'Could not start checkout');
+          // The cart is cleared on the success page, only once payment is real.
+          try { sessionStorage.setItem('popcode_cart_pending', data.order_group_id || '1'); } catch (e) {}
+          window.location = data.url;
+        } catch (err) {
+          showError(err.message || 'Could not start checkout.');
+          btn.disabled = false; btn.textContent = 'Pay with card';
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+        }
+      }
+    </script>
+  </body>
+</html>

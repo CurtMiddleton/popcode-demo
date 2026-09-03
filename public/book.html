@@ -462,6 +462,15 @@
       }
       .create-btn:hover { background: #000; }
       .create-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      /* Save design: leave the maker without finishing. Sits left of the primary. */
+      .save-btn {
+        border: 1.5px solid #ddd9d1; background: #fff; color: #1a1a1a; border-radius: 30px; padding: 14px 22px;
+        font-size: 15px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; white-space: nowrap;
+        margin-left: auto;
+      }
+      .save-btn:hover { background: #faf9f5; }
+      .save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      .save-btn + .create-btn { margin-left: 0; }
       .create-btn.ready { box-shadow: 0 0 0 0 rgba(118,87,252,0.5); animation: pulse-ring 1.8s ease-out infinite; }
       @keyframes pulse-ring {
         0% { box-shadow: 0 0 0 0 rgba(118,87,252,0.45); }
@@ -780,6 +789,7 @@
     <div class="create-bar">
       <div class="create-bar-inner">
         <div class="create-summary" id="create-summary">Add photos to begin.</div>
+        <button class="save-btn" id="save-design-btn" disabled>Save design</button>
         <button class="create-btn" id="create-btn" disabled>Create Book</button>
       </div>
     </div>
@@ -815,7 +825,8 @@
         <p>Popcoded pages will play their video when scanned. Share the link or view your book.</p>
         <div class="result-url" id="result-url"></div>
         <div class="result-actions">
-          <a class="r-primary" id="result-view" target="_blank" rel="noopener">View book</a>
+          <button class="r-primary" id="result-cart">Add to cart</button>
+          <a class="r-secondary" id="result-view" target="_blank" rel="noopener">View book</a>
           <button class="r-secondary" id="result-copy">Copy link</button>
           <a class="r-secondary" href="/manage.html?tab=designs">Back to My Designs</a>
         </div>
@@ -829,6 +840,8 @@
 
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      // /cart.js (injected by nav.js) reuses this client instead of making its own.
+      window.__popcodeCartDb = db;
 
       let currentUser = null;
       let editingCollection = null;  // set when opened with ?id=slug (edit mode)
@@ -2347,9 +2360,13 @@
         openSheet(`
           <h2>Options</h2>
           <p class="sheet-sub">Edit your book’s title, cover, fonts and more.</p>
-          <div class="menu-row" data-act="order" style="background:#f0eefe">
+          <div class="menu-row" data-act="cart" style="background:#f0eefe">
+            <div class="menu-ic" style="background:#1a1a1a;color:#fff"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></div>
+            <div><div>Add to cart</div><div class="menu-sub">Layflat · ${escapeHtml(currentBookSize().label)} · ships with the rest of your order</div></div>
+          </div>
+          <div class="menu-row" data-act="order">
             <div class="menu-ic" style="background:#1a1a1a;color:#fff"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>
-            <div><div>Order a printed book</div><div class="menu-sub">Layflat · ${escapeHtml(currentBookSize().label)} · printed &amp; shipped</div></div>
+            <div><div>Order this one now</div><div class="menu-sub">Skip the cart and check out with just this</div></div>
           </div>
           <div class="menu-row" data-act="size">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3 9 15"/><path d="M21 8V3h-5"/><rect x="3" y="12" width="9" height="9" rx="1"/></svg></div>
@@ -2389,6 +2406,7 @@
             <div><div>Proof: PDF pages</div><div class="menu-sub">Admin · print one page per sheet to PDF</div></div>
           </div>` : ''}
         `);
+        document.querySelector('#sheet [data-act="cart"]').addEventListener('click', addBookToCart);
         document.querySelector('#sheet [data-act="order"]').addEventListener('click', orderPrintedBook);
         document.querySelector('#sheet [data-act="title"]').addEventListener('click', () => {
           closeSheet();
@@ -2819,13 +2837,17 @@
         });
       }
 
-      async function orderPrintedBook() {
+      // Shared prep for both "add to cart" and "order now". The print PDF can only
+      // be rendered here, where the book's DOM lives — so it is built and uploaded
+      // now, and a cart line carries its URL and page count.
+      // Returns { pdfUrl, pageCount } or null (the reason is already toasted).
+      async function buildBookPrintAsset(verb) {
         if (!editingCollection || !editingCollection.id || !editingCollection.slug) {
           closeSheet();
-          showToast('Save your book first, then order a printed copy.');
-          return;
+          showToast(`Save your book first, then ${verb}.`);
+          return null;
         }
-        if (!placedIds().size) { showToast('Add photos to your book first.'); return; }
+        if (!placedIds().size) { showToast('Add photos to your book first.'); return null; }
         // Warn if the book will be padded up to the layflat minimum.
         const contentCount = pages.filter(pg => pg.layout !== 'blank').length;
         const projected = 1 + contentCount + 1; // cover + content + back
@@ -2833,25 +2855,59 @@
           let target = Math.max(PRINT_A4L.minPages, projected);
           if (target % 2 !== 0) target += 1;
           const blanks = target - projected;
-          if (blanks > 0 && !(await confirmBookPadding(target, blanks))) return;
+          if (blanks > 0 && !(await confirmBookPadding(target, blanks))) return null;
         }
         closeSheet();
-        let pdfUrl, pageCount;
         try {
           showToast('Building your print file…');
           const out = await buildBookPrintPdf();
-          pageCount = out.pageCount;
           const path = `${editingCollection.slug}/print/book_${Date.now()}.pdf`;
           const { error } = await db.storage.from('experiences').upload(path, out.blob, { contentType: 'application/pdf', upsert: true });
           if (error) throw new Error('Upload failed: ' + error.message);
-          pdfUrl = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+          return { pdfUrl: db.storage.from('experiences').getPublicUrl(path).data.publicUrl, pageCount: out.pageCount };
         } catch (err) {
           console.error(err);
           if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
           showToast('Could not build the print file: ' + (err.message || 'error'));
-          return;
+          return null;
         }
-        openBookAddressSheet(pdfUrl, pageCount);
+      }
+
+      // A blob: object URL dies with this page, so it can never be a cart thumbnail.
+      const durableUrl = (u) => (typeof u === 'string' && /^https?:/i.test(u) ? u : null);
+
+      // Add this book to the cart, so it can ship alongside other designs.
+      async function addBookToCart() {
+        document.getElementById('result').classList.remove('visible');
+        const built = await buildBookPrintAsset('add it to your cart');
+        if (!built) return;
+        try {
+          const size = currentBookSize();
+          // book.html's cover holds the photo object itself (not a tray id).
+          const coverPhoto = cover && cover.photo ? cover.photo : null;
+          await PopcodeCart.add({
+            collectionId: editingCollection.id,
+            productType: 'book',
+            variantId: bookVariantId(),
+            copies: 1,
+            pageCount: built.pageCount,
+            assetUrls: [{ url: built.pdfUrl, print_area: 'default' }],
+            title: `${(editingCollection.name || 'Photo book')} — layflat photo book`,
+            thumbUrl: durableUrl(coverPhoto && (coverPhoto.existingUrl || coverPhoto.url)),
+            options: { sizeLabel: `Layflat · ${size.label}`, orientationLabel: `${built.pageCount} pages` },
+          });
+          showToast('Added to your cart.');
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast(err.message || 'Could not add to cart.');
+        }
+      }
+
+      async function orderPrintedBook() {
+        const built = await buildBookPrintAsset('order a printed copy');
+        if (!built) return;
+        openBookAddressSheet(built.pdfUrl, built.pageCount);
       }
 
       function openBookAddressSheet(pdfUrl, pageCount) {
@@ -2990,6 +3046,13 @@
         const ready = pageCount > 0 && placedCount > 0;
         btn.disabled = !ready;
         btn.classList.toggle('ready', ready);
+        const saveBtn = document.getElementById('save-design-btn');
+        if (saveBtn) {
+          saveBtn.disabled = !ready;
+          // Once the book exists the primary IS a save, so the extra button
+          // would just be a duplicate — it earns its place on a new design.
+          saveBtn.style.display = editingCollection ? 'none' : '';
+        }
       }
 
       // ── Slot interactions (tap-to-place / tap-to-swap / menu) ────
@@ -3846,9 +3909,16 @@
         return img;
       }
 
-      document.getElementById('create-btn').addEventListener('click', saveBook);
+      document.getElementById('create-btn').addEventListener('click', () => saveBook());
+      // Save design: same save, but it leaves you in the editor instead of
+      // finishing on the result screen — so you can stop and come back later.
+      document.getElementById('save-design-btn').addEventListener('click', async () => {
+        document.getElementById('save-design-btn').disabled = true;
+        try { await saveBook({ quiet: true }); } finally { updateSummary(); }
+      });
 
-      async function saveBook() {
+      async function saveBook(opts) {
+        const quiet = !!(opts && opts.quiet);
         const placed = placedIds();
         if (!placed.size) { showToast('Place at least one photo on a page first.'); return; }
         if (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler) {
@@ -4058,6 +4128,12 @@
 
           setProgress('Done!', 100);
           lockSlug(slug); // the link is fixed from the first save onwards
+          if (quiet) {
+            document.getElementById('progress').classList.remove('visible');
+            showToast('Design saved — you can close this and come back any time.');
+            updateSummary();
+            return;
+          }
           showResult(slug, editing);
         } catch (err) {
           console.error(err);
@@ -4075,6 +4151,7 @@
         document.getElementById('result-copy').onclick = () => {
           navigator.clipboard.writeText(viewUrl).then(() => showToast('Link copied!')).catch(() => prompt('Copy this link:', viewUrl));
         };
+        document.getElementById('result-cart').onclick = addBookToCart;
         document.getElementById('result').classList.add('visible');
       }
 

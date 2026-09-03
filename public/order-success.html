@@ -46,6 +46,8 @@
 
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      // /cart.js is injected by nav.js and picks this up instead of making its own.
+      window.__popcodeCartDb = db;
       const sessionId = new URLSearchParams(location.search).get('session_id');
 
       const LABELS = {
@@ -62,6 +64,31 @@
       function showStatus(status, prodigiOrderId) {
         document.getElementById('status').textContent = LABELS[status] || status || 'Order placed';
         if (prodigiOrderId) document.getElementById('ref').textContent = 'Order ref: ' + prodigiOrderId;
+      }
+
+      // A cart checkout can produce several provider orders (one per workshop).
+      // Show them as one purchase: the weakest status wins, refs are listed.
+      const STATUS_RANK = { prodigi_failed: 0, payment_failed: 0, pending: 1, paid: 1, submitting: 1, submitted: 2, in_production: 3, shipped: 4, complete: 5 };
+      function showOrders(list) {
+        const worst = list.reduce((a, o) => (STATUS_RANK[o.status] ?? 9) < (STATUS_RANK[a.status] ?? 9) ? o : a, list[0]);
+        showStatus(worst.status);
+        const refs = list.map((o) => o.prodigi_order_id).filter(Boolean);
+        if (refs.length) {
+          document.getElementById('ref').textContent =
+            (refs.length > 1 ? 'Order refs: ' : 'Order ref: ') + refs.join(', ');
+        }
+      }
+
+      // Payment is real, so the cart it came from is spent. Clearing here (not
+      // before the Stripe redirect) means an abandoned or failed payment leaves
+      // the cart intact.
+      async function clearCartIfPaid() {
+        try {
+          // nav.js injects /cart.js deferred, so give it a moment to appear.
+          for (let i = 0; i < 20 && !window.PopcodeCart; i++) await new Promise(r => setTimeout(r, 100));
+          if (window.PopcodeCart) await PopcodeCart.clear();
+          sessionStorage.removeItem('popcode_cart_pending');
+        } catch (e) {}
       }
 
       // Drive finalization from the success page (independent of the webhook).
@@ -82,12 +109,14 @@
         if (!token) { showStatus('submitted'); return; }
         try {
           const result = await finalize(token);
-          showStatus(result.status, result.prodigi_order_id);
+          if (Array.isArray(result.orders) && result.orders.length) showOrders(result.orders);
+          else showStatus(result.status, result.prodigi_order_id);
+          await clearCartIfPaid();
         } catch (e) {
-          // Fall back to reading the row (the webhook may finalize it instead).
-          const { data: row } = await db.from('print_orders')
-            .select('status, prodigi_order_id').eq('stripe_session_id', sessionId).maybeSingle();
-          if (row) showStatus(row.status, row.prodigi_order_id);
+          // Fall back to reading the rows (the webhook may finalize them instead).
+          const { data: rows } = await db.from('print_orders')
+            .select('status, prodigi_order_id').eq('stripe_session_id', sessionId);
+          if (rows && rows.length) { showOrders(rows); await clearCartIfPaid(); }
           else showStatus('submitted');
         }
       });

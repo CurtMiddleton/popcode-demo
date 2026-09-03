@@ -11,6 +11,15 @@
   if (window.__popcodeNavInjected) return;
   window.__popcodeNavInjected = true;
 
+  // The cart badge needs the shared cart module. Load it here (once) so every
+  // page with the nav gets a live count without each one adding a script tag.
+  if (!document.querySelector('script[src="/cart.js"]')) {
+    var cartScript = document.createElement('script');
+    cartScript.src = '/cart.js';
+    cartScript.defer = true;
+    document.head.appendChild(cartScript);
+  }
+
   var css = `
   .site-header {
     position: sticky; top: 0; z-index: 50; width: 100vw;
@@ -46,6 +55,12 @@
   .site-header .hicon.profile-btn { background: #f0eeea; }
   .site-header .hicon.profile-btn:hover, .site-header .account-wrap.open .hicon.profile-btn { background: #e7e4dd; }
   .site-header .hamburger { display: none; }
+  .site-header .cart-btn { position: relative; }
+  .site-header .cart-btn .cart-badge {
+    position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px;
+    border-radius: 999px; background: #ff3b6b; color: #fff; font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; line-height: 1; pointer-events: none;
+  }
 
   /* Avatar menu. The mobile drawer carries these same actions in its bottom
      cluster, so this is the desktop half of the pair. */
@@ -160,7 +175,7 @@
       '<a href="/manage.html" class="brand"><img src="/assets/Popcode_logo.png" alt="Popcode"/></a>' +
       '<nav class="nav-inline">' + nav + '</nav>' +
       '<div class="header-right">' +
-        '<a class="hicon cart-btn" href="/shop.html" title="Cart" aria-label="Cart"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></a>' +
+        '<a class="hicon cart-btn" href="/cart.html" title="Cart" aria-label="Cart"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></a>' +
         '<div class="account-wrap" id="account-wrap">' +
           '<button type="button" class="hicon profile-btn" id="account-btn" title="My Account" aria-label="My Account" aria-haspopup="true" aria-expanded="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>' +
           '<div class="account-menu" id="account-menu" role="menu">' +
@@ -249,7 +264,7 @@
       var account = drawer.querySelector('.nav-link[href="/account.html"]');
       if (account) bottom.appendChild(account);
       var cart = document.createElement('a');
-      cart.className = 'nav-link'; cart.href = '/shop.html';
+      cart.className = 'nav-link'; cart.href = '/cart.html';
       cart.innerHTML = IC_CART + 'Cart<span class="nav-cart-count" id="nav-cart-count">0</span>';
       bottom.appendChild(cart);
       var logout = document.createElement('button');

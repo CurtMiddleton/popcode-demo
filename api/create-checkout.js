@@ -1,25 +1,34 @@
-// POST /api/create-checkout — validate an order, re-quote Prodigi, create a
-// pending print_orders row, and open a Stripe Checkout Session.
+// POST /api/create-checkout — validate an order, re-quote the print provider,
+// create the pending print_orders row(s), and open a Stripe Checkout Session.
 //
 // Auth: Authorization: Bearer <supabase access token> (same pattern as
 //       api/delete-account.js). Returns { url } — client does window.location = url.
 //
-// Body: {
-//   collectionId, productType, variantId, copies, shippingMethod,
-//   recipient: { name, email, address:{ line1,line2,townOrCity,stateOrCounty,postalOrZipCode,countryCode } },
-//   assetUrls: [{ target_index, print_area, url }]   // already uploaded to the public print-assets bucket
-// }
+// Two body shapes, one pipeline:
 //
-// The client's displayed price is NOT trusted: we re-quote Prodigi server-side
-// for the real destination and charge that × markup. The SKU is validated against
-// the catalog, the collection ownership is verified, and every asset URL must live
-// under this Supabase project's public print-assets prefix.
+//   CART      { items: [{ collectionId, productType, variantId, copies,
+//                         assetUrls, pageCount, title }], recipient, shippingMethod }
+//   SINGLE    { collectionId, productType, variantId, copies, assetUrls,
+//               pageCount, recipient, shippingMethod }        (legacy "buy it now")
+//
+// The single shape is normalized into a one-line cart, so the makers' existing
+// buy-now buttons keep working untouched.
+//
+// Lines are grouped by fulfillment provider — each group becomes ONE provider
+// order (one shipment, one shipping charge) and ONE print_orders row, and all
+// rows from a checkout share an order_group_id.
+//
+// The client's displayed price is NOT trusted: every group is re-quoted
+// server-side for the real destination and charged at that × markup. Every SKU is
+// validated against the catalog, collection ownership is verified, and every
+// asset URL must live under this Supabase project's public storage prefix.
 //
 // Env: PRODIGI_API_KEY, PRODIGI_BASE_URL, PRINT_MARKUP_MULTIPLIER,
 //      STRIPE_SECRET_KEY, SUPABASE_SERVICE_ROLE_KEY, (optional) PUBLIC_BASE_URL.
 
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
+import { randomUUID } from 'node:crypto';
 import { Sentry } from './_sentry.js';
 
 const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
@@ -51,21 +60,17 @@ export default async function handler(req, res) {
     const { data: { user }, error: userError } = await anonClient.auth.getUser(token);
     if (userError || !user) return res.status(401).json({ error: 'Invalid token' });
 
-    // 2. Validate the request shape against the catalog.
-    const { collectionId, productType, variantId, copies, shippingMethod, recipient, assetUrls, pageCount } = req.body || {};
-    const { findVariant, priceFromQuote, providerFor } = await import('../lib/print/catalog.mjs');
-    const variant = findVariant(productType, variantId);
-    if (!variant) return res.status(400).json({ error: 'Unknown product' });
-
-    // Books are page-priced: require an even page count within the SKU's range.
-    let bookPageCount = null;
-    if (variant.isBook) {
-      bookPageCount = parseInt(pageCount, 10);
-      if (!Number.isInteger(bookPageCount) || bookPageCount % 2 !== 0 ||
-          bookPageCount < (variant.minPages || 2) || bookPageCount > (variant.maxPages || 1000)) {
-        return res.status(400).json({ error: 'Invalid book page count' });
-      }
-    }
+    const body = req.body || {};
+    const { recipient, shippingMethod } = body;
+    const isCart = Array.isArray(body.items) && body.items.length > 0;
+    const rawLines = isCart ? body.items : [{
+      collectionId: body.collectionId,
+      productType: body.productType,
+      variantId: body.variantId,
+      copies: body.copies,
+      assetUrls: body.assetUrls,
+      pageCount: body.pageCount,
+    }];
 
     if (!recipient?.name || !recipient?.email || !recipient?.address?.line1 ||
         !recipient?.address?.townOrCity || !recipient?.address?.postalOrZipCode ||
@@ -73,87 +78,133 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Incomplete shipping address' });
     }
 
-    if (!Array.isArray(assetUrls) || !assetUrls.length) {
-      return res.status(400).json({ error: 'No print assets provided' });
-    }
-    for (const a of assetUrls) {
-      if (!a?.url || typeof a.url !== 'string' || !a.url.startsWith(PUBLIC_ASSET_PREFIX)) {
-        return res.status(400).json({ error: 'Invalid asset URL' });
-      }
+    // 2. Validate every line against the catalog + our own storage prefix.
+    const { normalizeLines, quoteCart, CartError } = await import('../lib/print/cart.mjs');
+    let lines;
+    try {
+      lines = normalizeLines(rawLines, { requireAssets: true, assetPrefix: PUBLIC_ASSET_PREFIX });
+    } catch (e) {
+      if (e instanceof CartError) return res.status(e.status).json({ error: e.message });
+      throw e;
     }
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    // 3. Verify the buyer owns the project being printed.
-    const { data: collection, error: colErr } = await admin
-      .from('collections')
-      .select('id, user_id, name, slug')
-      .eq('id', collectionId)
-      .single();
-    if (colErr || !collection) return res.status(404).json({ error: 'Project not found' });
-    if (collection.user_id !== user.id) return res.status(403).json({ error: 'Not your project' });
+    // 3. Verify the buyer owns every project being printed.
+    const collectionIds = [...new Set(lines.map((l) => l.collectionId).filter(Boolean))];
+    if (!collectionIds.length) return res.status(400).json({ error: 'Nothing to order' });
+    const { data: collections, error: colErr } = await admin
+      .from('collections').select('id, user_id, name, slug').in('id', collectionIds);
+    if (colErr) throw colErr;
+    const byId = new Map((collections || []).map((c) => [c.id, c]));
+    for (const id of collectionIds) {
+      const c = byId.get(id);
+      if (!c) return res.status(404).json({ error: 'Design not found' });
+      if (c.user_id !== user.id) return res.status(403).json({ error: 'Not your design' });
+    }
 
-    // 4. Authoritative re-quote (never trust the client's displayed price).
+    // 4. Authoritative re-quote, per provider group (never trust the client price).
     const { getProvider } = await import('../lib/print/providers/index.mjs');
-    const provider = getProvider(providerFor(productType));
-    if (!provider.isConfigured()) return res.status(500).json({ error: 'Print provider not configured' });
-    // Retry transient empty quotes so a print-provider blip can't fail a paid checkout.
-    let summed = null;
-    let unservable = false;
-    for (let attempt = 0; attempt < 3 && !summed; attempt++) {
-      try {
-        summed = await provider.quote({ variant, copies, pageCount: bookPageCount, destinationCountryCode: recipient.address.countryCode, address: recipient.address, shippingMethod });
-      } catch (err) {
-        // Deterministic "we don't ship that there" — stop retrying and say so.
-        if (err.unservable) { unservable = true; break; }
-        if (attempt === 2) throw err;
-      }
-    }
-    if (unservable) {
-      return res.status(502).json({
-        error: "We can't ship this item to that country. Try a different size or shipping speed.",
-        unservable: true,
-      });
-    }
-    if (!summed) return res.status(502).json({ error: 'Could not price this order' });
-    const totalMinor = priceFromQuote(summed.totalMinor, MARKUP);
-
-    // 5. Persist a pending order. (service role bypasses RLS)
-    const copiesInt = Math.max(1, parseInt(copies, 10) || 1);
-    // For books, stamp the page count onto the INTERIOR asset only (Prodigi's
-    // page-priced default print area) so finalize-order submits it without the
-    // catalog variant. The spine asset must not carry pageCount.
-    const storedAssets = bookPageCount
-      ? assetUrls.map((a) => ((a.print_area || 'default') === 'spine' ? a : { ...a, page_count: bookPageCount }))
-      : assetUrls;
-    const { data: order, error: insErr } = await admin
-      .from('print_orders')
-      .insert({
-        user_id: user.id,
-        collection_id: collection.id,
-        status: 'pending',
-        product_type: productType,
-        provider: providerFor(productType),
-        provider_meta: variant.printify || null,
-        sku: variant.sku,
-        copies: copiesInt,
-        sizing: variant.sizing || 'fillPrintArea',
-        attributes: variant.attributes || {},
-        asset_urls: storedAssets,
-        recipient,
-        shipping_method: shippingMethod || 'Standard',
-        currency: summed.currency,
-        quote_cost_minor: summed.totalMinor,
+    let priced;
+    try {
+      priced = await quoteCart({
+        lines,
+        address: recipient.address,
+        shippingMethod: shippingMethod || 'Standard',
         markup: MARKUP,
-        total_charged_minor: totalMinor,
-      })
-      .select('id')
-      .single();
-    if (insErr || !order) throw insErr || new Error('Could not create order');
+        getProvider,
+      });
+    } catch (e) {
+      if (e instanceof CartError) {
+        return res.status(e.status).json({ error: e.message, ...(e.unservable ? { unservable: true } : {}) });
+      }
+      throw e;
+    }
 
-    // 6. Stripe Checkout Session.
+    // 5. Persist one pending order per provider group. (service role bypasses RLS)
+    const orderGroupId = randomUUID();
+    const orderIds = [];
+    for (const group of priced.groups) {
+      const first = group.lines[0];
+      const items = group.lines.map((l) => ({
+        collection_id: l.collectionId,
+        product_type: l.productType,
+        variant_id: l.variantId,
+        sku: l.variant.sku,
+        copies: l.copies,
+        sizing: l.variant.sizing || 'fillPrintArea',
+        attributes: l.variant.attributes || {},
+        print_area: l.variant.printArea || 'default',
+        provider_meta: l.variant.printify || null,
+        page_count: l.pageCount,
+        asset_urls: l.assetUrls,
+        title: l.title,
+      }));
+      const { data: order, error: insErr } = await admin
+        .from('print_orders')
+        .insert({
+          user_id: user.id,
+          // A group can span designs; the row's collection_id points at the first
+          // (kept for the existing admin views), with the full mapping in `items`.
+          collection_id: first.collectionId,
+          order_group_id: orderGroupId,
+          status: 'pending',
+          product_type: first.productType,
+          provider: group.provider,
+          provider_meta: first.variant.printify || null,
+          sku: first.variant.sku,
+          copies: first.copies,
+          sizing: first.variant.sizing || 'fillPrintArea',
+          attributes: first.variant.attributes || {},
+          // Legacy single-item readers (admin tools, retry-print-order) still see
+          // the first line's assets here; `items` is the full truth.
+          asset_urls: first.assetUrls,
+          items,
+          recipient,
+          shipping_method: shippingMethod || 'Standard',
+          currency: group.currency,
+          quote_cost_minor: group.costMinor,
+          markup: MARKUP,
+          total_charged_minor: group.totalMinor,
+        })
+        .select('id')
+        .single();
+      if (insErr || !order) throw insErr || new Error('Could not create order');
+      orderIds.push(order.id);
+      group.orderId = order.id;
+    }
+
+    // 6. One Stripe Checkout Session for the whole cart — a line per shipment, so
+    //    the receipt reads the way the parcels arrive.
     const stripe = new Stripe(STRIPE_SECRET_KEY);
     const base = process.env.PUBLIC_BASE_URL || `https://${req.headers.host}`;
+    const lineItems = priced.groups.map((group) => {
+      const titles = group.lines.map((l) => `${l.title}${l.copies > 1 ? ` ×${l.copies}` : ''}`);
+      const label = group.lines.length === 1
+        ? `${group.lines[0].variant.label} — ${byId.get(group.lines[0].collectionId)?.name || 'Popcode print'}`
+        : `Popcode order — ${group.lines.length} items`;
+      return {
+        quantity: 1,
+        price_data: {
+          currency: group.currency.toLowerCase(),
+          unit_amount: group.totalMinor,
+          product_data: {
+            name: label.slice(0, 250),
+            description: titles.join(', ').slice(0, 250),
+          },
+        },
+      };
+    });
+
+    const firstLine = lines[0];
+    const cancelUrl = isCart
+      ? `${base}/cart.html?cancelled=1`
+      : firstLine.productType === 'boardbook'
+        // Board books are created/ordered in boardbook.html (no single-image order
+        // page), so cancel returns to the library rather than order.html.
+        ? `${base}/manage.html?cancelled=1`
+        : `${base}/order.html?id=${encodeURIComponent(byId.get(firstLine.collectionId)?.slug || '')}&cancelled=1`;
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       // Show a promo-code box on the Stripe Checkout page. Lets a valid
@@ -162,30 +213,23 @@ export default async function handler(req, res) {
       // price; the code only discounts from there.
       allow_promotion_codes: true,
       customer_email: recipient.email,
-      client_reference_id: order.id,
-      metadata: { print_order_id: order.id },
-      line_items: [{
-        quantity: 1,
-        price_data: {
-          currency: summed.currency.toLowerCase(),
-          unit_amount: totalMinor,
-          product_data: {
-            name: `${variant.label} — ${collection.name || 'Popcode print'}`,
-            description: `Quantity: ${copiesInt}`,
-          },
-        },
-      }],
+      client_reference_id: orderGroupId,
+      // print_order_id stays for single-order sessions (older webhook lookups);
+      // print_order_group is the cart-aware key.
+      metadata: {
+        print_order_group: orderGroupId,
+        ...(orderIds.length === 1 ? { print_order_id: orderIds[0] } : {}),
+      },
+      line_items: lineItems,
       success_url: `${base}/order-success.html?session_id={CHECKOUT_SESSION_ID}`,
-      // Board books are created/ordered in boardbook.html (no single-image order page),
-      // so cancel returns to the user's library rather than order.html.
-      cancel_url: productType === 'boardbook'
-        ? `${base}/manage.html?cancelled=1`
-        : `${base}/order.html?id=${encodeURIComponent(collection.slug)}&cancelled=1`,
+      cancel_url: cancelUrl,
     });
 
-    await admin.from('print_orders').update({ stripe_session_id: session.id, updated_at: new Date().toISOString() }).eq('id', order.id);
+    await admin.from('print_orders')
+      .update({ stripe_session_id: session.id, updated_at: new Date().toISOString() })
+      .in('id', orderIds);
 
-    res.status(200).json({ url: session.url });
+    res.status(200).json({ url: session.url, order_group_id: orderGroupId });
   } catch (e) {
     console.error('create-checkout error:', e);
     Sentry.captureException(e);
