@@ -54,7 +54,7 @@ export default async function handler(req, res) {
     const session = event.data.object;
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    const { loadOrdersForSession, fulfillSession } = await import('../lib/print/fulfill.mjs');
+    const { loadOrdersForSession, fulfillSession, isSessionSettled } = await import('../lib/print/fulfill.mjs');
 
     // A cart checkout produces one print_orders row per fulfillment provider, all
     // sharing this session id. Look them up by session (works for the legacy
@@ -66,7 +66,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ received: true, note: 'order not found' });
     }
 
-    if (session.payment_status !== 'paid') {
+    if (!isSessionSettled(session)) {
       await admin.from('print_orders')
         .update({ status: 'payment_failed', updated_at: new Date().toISOString() })
         .in('id', orders.map((o) => o.id))
