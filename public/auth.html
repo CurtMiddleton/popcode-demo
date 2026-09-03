@@ -171,9 +171,20 @@
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+      // Where to land after signing in. A page that bounced you here (e.g. the
+      // cart) passes ?next=/cart.html so you continue where you left off rather
+      // than being dumped on My Popcodes. Only a same-origin ABSOLUTE PATH is
+      // accepted — "//evil.com" and "https://evil.com" are rejected, so this
+      // can't be turned into an open redirect.
+      function landingPage() {
+        const next = new URLSearchParams(location.search).get('next');
+        if (next && /^\/[^/\\]/.test(next)) return next;
+        return '/manage.html';
+      }
+
       // Redirect if already signed in
       db.auth.getSession().then(({ data }) => {
-        if (data.session) window.location.href = '/manage.html';
+        if (data.session) window.location.href = landingPage();
       });
 
       let mode = 'signin'; // 'signin' | 'signup' | 'forgot'
@@ -287,7 +298,7 @@
           btn.disabled = false;
           btn.textContent = mode === 'signup' ? 'Create Account' : 'Sign In';
         } else {
-          window.location.href = '/manage.html';
+          window.location.href = landingPage();
         }
       });
 
