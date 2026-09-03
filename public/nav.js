@@ -5,8 +5,8 @@
    renders before the page's own inline scripts run.
 
    It provides #nav-btn (hamburger) and hidden #user-greeting / #logout-btn so
-   each page's existing nav/logout JS keeps working unchanged. Sign-out lives on
-   the Account page (profile icon). */
+   each page's existing nav/logout JS keeps working unchanged. Sign-out lives in
+   the avatar menu on desktop and in the drawer's bottom cluster on mobile. */
 (function () {
   if (window.__popcodeNavInjected) return;
   window.__popcodeNavInjected = true;
@@ -39,13 +39,39 @@
   .site-header .header-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
   .site-header .hicon {
     position: relative; display: flex; align-items: center; justify-content: center;
-    width: 42px; height: 42px; border-radius: 50%; background: none; border: none;
+    width: 32px; height: 32px; border-radius: 50%; background: none; border: none;
     cursor: pointer; text-decoration: none; color: #1a1a1a; transition: background 0.15s;
   }
   .site-header .hicon:hover { background: #f3f2ef; }
   .site-header .hicon.profile-btn { background: #f0eeea; }
-  .site-header .hicon.profile-btn:hover { background: #e7e4dd; }
+  .site-header .hicon.profile-btn:hover, .site-header .account-wrap.open .hicon.profile-btn { background: #e7e4dd; }
   .site-header .hamburger { display: none; }
+
+  /* Avatar menu. The mobile drawer carries these same actions in its bottom
+     cluster, so this is the desktop half of the pair. */
+  .site-header .account-wrap { position: relative; display: flex; }
+  .site-header .account-menu {
+    position: absolute; top: calc(100% + 8px); right: 0; min-width: 186px;
+    background: #fff; border-radius: 14px; padding: 6px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.07);
+    display: none; z-index: 60;
+  }
+  .site-header .account-wrap.open .account-menu { display: block; }
+  /* Rollover on real pointers; tap/click drives it everywhere else. The
+     padding bridges the gap so the menu doesn't close crossing into it. */
+  @media (hover: hover) and (pointer: fine) {
+    .site-header .account-wrap::after { content: ''; position: absolute; top: 100%; right: 0; width: 100%; height: 12px; }
+    .site-header .account-wrap:hover .account-menu { display: block; }
+  }
+  .site-header .account-menu a, .site-header .account-menu button {
+    display: flex; align-items: center; gap: 12px; width: 100%; box-sizing: border-box;
+    padding: 9px 11px; border-radius: 10px; border: none; background: none;
+    font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600;
+    color: #1a1a1a; text-decoration: none; text-align: left; cursor: pointer;
+    white-space: nowrap;
+  }
+  .site-header .account-menu a:hover, .site-header .account-menu button:hover { background: #f3f2ef; }
+  .site-header .account-menu svg { width: 18px; height: 18px; flex-shrink: 0; color: #1a1a1a; }
   @media (max-width: 1040px) { .site-header .nav-inline { margin-left: 40px; } }
   @media (max-width: 760px) {
     /* Mobile: align the logo to the content margin (28px, where the page's h1
@@ -53,7 +79,7 @@
        the hamburger sits the same distance from the edge. */
     .site-header { padding: 0 28px; gap: 0; }
     .site-header .nav-inline { display: none; }
-    .site-header .cart-btn, .site-header .profile-btn { display: none; }
+    .site-header .cart-btn, .site-header .profile-btn, .site-header .account-wrap { display: none; }
     .site-header .hamburger { display: flex; margin-left: auto; }
   }
 
@@ -123,13 +149,25 @@
     return '<a href="' + it.href + '"' + dn + active + '>' + it.label + '</a>';
   }).join('');
 
+  var IC_CART = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>';
+  var IC_LOGOUT = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
+  var IC_CLOSE = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  // Person-in-a-circle, matching the avatar button itself.
+  var IC_ACCOUNT = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18.5a6.5 6.5 0 0 1 11 0"/></svg>';
+
   var header =
     '<header class="site-header">' +
       '<a href="/manage.html" class="brand"><img src="/assets/Popcode_logo.png" alt="Popcode"/></a>' +
       '<nav class="nav-inline">' + nav + '</nav>' +
       '<div class="header-right">' +
-        '<a class="hicon cart-btn" href="/shop.html" title="Cart" aria-label="Cart"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></a>' +
-        '<a class="hicon profile-btn" href="/account.html" title="My Account" aria-label="My Account"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></a>' +
+        '<a class="hicon cart-btn" href="/shop.html" title="Cart" aria-label="Cart"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></a>' +
+        '<div class="account-wrap" id="account-wrap">' +
+          '<button type="button" class="hicon profile-btn" id="account-btn" title="My Account" aria-label="My Account" aria-haspopup="true" aria-expanded="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>' +
+          '<div class="account-menu" id="account-menu" role="menu">' +
+            '<a href="/account.html" role="menuitem">' + IC_ACCOUNT + 'My Account</a>' +
+            '<button type="button" role="menuitem" id="account-logout">' + IC_LOGOUT + 'Log Out</button>' +
+          '</div>' +
+        '</div>' +
         '<button id="nav-btn" class="hicon hamburger" aria-label="Menu"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>' +
         // Hidden — kept so existing per-page greeting/logout JS never errors.
         '<span id="user-greeting" style="display:none"></span>' +
@@ -139,9 +177,6 @@
 
   if (document.body) document.body.insertAdjacentHTML('afterbegin', header);
 
-  var IC_CART = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>';
-  var IC_LOGOUT = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
-  var IC_CLOSE = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
 
   function signOut() {
     try {
@@ -156,6 +191,31 @@
 
   // Turn each page's small dropdown drawer into a Popsa-style full-screen sheet:
   // add a logo + close header, and pin account / cart / log-out to the bottom.
+  // ── Avatar menu (desktop) ───────────────────────────────────────────────
+  // Rollover is handled in CSS; this adds click/tap, keyboard and the
+  // dismissals a hover-only menu can't provide.
+  (function wireAccountMenu() {
+    var wrap = document.getElementById('account-wrap');
+    var btn = wrap && document.getElementById('account-btn');
+    if (!wrap || !btn) return;
+    function setOpen(on) {
+      wrap.classList.toggle('open', on);
+      btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+    }
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      setOpen(!wrap.classList.contains('open'));
+    });
+    document.addEventListener('click', function (e) {
+      if (!wrap.contains(e.target)) setOpen(false);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') setOpen(false);
+    });
+    var out = document.getElementById('account-logout');
+    if (out) out.addEventListener('click', signOut);
+  })();
+
   document.addEventListener('DOMContentLoaded', function () {
     var btn = document.getElementById('nav-btn');
     var overlay = document.getElementById('nav-overlay');

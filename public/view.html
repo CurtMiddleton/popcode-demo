@@ -9,7 +9,7 @@
       integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
       crossorigin="anonymous"></script>
     <script src="/sentry-init.js"></script>
-    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
     <meta property="og:title" content="Popcode">
     <meta property="og:description" content="Bring your photos to life with AR video">
@@ -22,6 +22,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/slug.js"></script>
+    <script src="/desktop-note.js"></script>
     <!-- Vendored A-Frame 1.4.2 — see public/vendor/aframe/1.4.2/PROVENANCE.md. Was a CDN URL. -->
     <script src="/vendor/aframe/1.4.2/aframe.min.js"></script>
     <!-- Vendored MindAR 1.2.2 — PATCHED build (stop()/start() lifecycle fix).
@@ -518,7 +520,16 @@
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
       const params = new URLSearchParams(location.search);
-      const id = params.get('id') || location.pathname.replace(/^\/|\/$/g, '');
+      const fromPath = location.pathname.replace(/^\/|\/$/g, '');
+      const id = params.get('id') || fromPath;
+
+      // Slugs are always stored lowercase, but links get typed by hand now that
+      // they read as words — phone keyboards autocapitalise, and a title written
+      // on a printed card is usually in title case. Send /MaxChapterOne to
+      // /maxchapterone rather than leaving it at a dead end.
+      if (!params.get('id') && fromPath && fromPath !== fromPath.toLowerCase()) {
+        location.replace('/' + fromPath.toLowerCase());
+      }
 
       // ── Analytics ────────────────────────────────────────────────────────────
       function getDeviceInfo() {
@@ -560,14 +571,14 @@
 
       // Code-entry form: wired up independently of loadCollection so it works
       // even when the page hits an error path. Vercel rewrites /{slug} to
-      // view.html?id={slug} for slugs matching [a-z0-9]{6,10}.
+      // view.html?id={slug} for slugs matching [a-z0-9][a-z0-9-]{2,29}.
       const codeForm = document.getElementById('wl-code-form');
       if (codeForm) {
         codeForm.addEventListener('submit', (e) => {
           e.preventDefault();
           const input = document.getElementById('wl-code-input');
           const raw = (input && input.value) || '';
-          const code = raw.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+          const code = PopcodeSlug.normalize(raw);
           if (!code) return;
           const currentSlug = location.pathname.replace(/^\//, '').toLowerCase();
           if (code === currentSlug) { location.reload(); return; }
@@ -813,9 +824,13 @@
         if (coverConfig) {
           document.getElementById('start-screen').style.display = 'none';
           document.getElementById('wl-cover').style.display = 'block';
+          // A device with no camera to point at a print gets told so here,
+          // instead of finding out by tapping Scan and meeting its own webcam.
+          PopcodeDesktopNote.mount(document.querySelector('#wl-cover .wl-cta'));
         } else {
           document.getElementById('wl-cover').style.display = 'none';
           document.getElementById('start-screen').style.display = 'flex';
+          PopcodeDesktopNote.mount(document.getElementById('start-screen'));
         }
       }
       function hideStartScreen() {

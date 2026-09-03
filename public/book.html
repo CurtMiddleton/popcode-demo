@@ -9,7 +9,7 @@
       integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
       crossorigin="anonymous"></script>
     <script src="/sentry-init.js"></script>
-    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
     <meta property="og:title" content="Popcode — Design a Book">
     <meta property="og:description" content="Design a photo book where any page can come to life with video.">
@@ -18,6 +18,7 @@
     <title>Popcode — Design a Book</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/slug.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
     <script src="/countries.js"></script>
@@ -721,7 +722,7 @@
       <h1>Design a Book</h1>
       <p class="subtitle">Design a photo book, then bring any page to life — link a photo to a video and it plays when someone scans the printed page.</p>
 
-      <div class="field-label">Book title</div>
+      <div class="field-label">Book title <span style="color:#999;font-weight:500">(required)</span></div>
       <input class="text-input" id="title-input" type="text" placeholder="e.g. Our 2026 Year" autocomplete="off"/>
 
       <div class="field-label">Popcode link <span style="color:#999;font-weight:500">(where scans open)</span></div>
@@ -729,7 +730,7 @@
         <span class="slug-prefix">popcode.app/</span>
         <input class="text-input" id="slug-input" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="yourlink"/>
       </div>
-      <div class="slug-note" id="slug-note">6–10 lowercase letters or numbers. The link is locked once your book is created, so printed pages keep working.</div>
+      <div class="slug-note" id="slug-note">Fills in from your book title. The link is locked once your book is created, so printed pages keep working.</div>
 
       <!-- Photo tray -->
       <div class="tray-card">
@@ -1328,24 +1329,25 @@
       // ── Popcode link (custom slug) ──────────────────────────────
       // Editable until the book is first created; locked afterwards so the
       // link on printed badged pages never breaks. Must match the site's slug
-      // routing pattern: 6–10 lowercase letters/digits.
+      // routing pattern: 3–30 lowercase letters, digits and hyphens.
       const slugInput = document.getElementById('slug-input');
-      slugInput.value = randomSlug();
-      slugInput.addEventListener('input', () => {
-        const clean = slugInput.value.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10);
-        if (clean !== slugInput.value) slugInput.value = clean;
-        syncSlugNote();
+      // Starts empty and fills in from the title — a random code here was only
+      // ever something the creator would want to replace.
+      const slugField = PopcodeSlug.attach({
+        db,
+        nameInput: document.getElementById('title-input'),
+        nameLabel: 'title',
+        slugInput,
+        note: document.getElementById('slug-note'),
+        classes: { base: 'slug-note', err: 'bad' },
+        onChange: () => updateSummary()
       });
-      const chosenSlug = () => (slugInput.value || '').trim();
-      const slugValid = () => /^[a-z0-9]{6,10}$/.test(chosenSlug());
-      function syncSlugNote() {
-        const n = document.getElementById('slug-note');
-        if (slugInput.disabled) { n.textContent = 'This book’s link — locked so printed pages keep working.'; n.classList.remove('bad'); return; }
-        const ok = slugValid();
-        n.textContent = ok ? `Scans will open popcode.app/${chosenSlug()}` : '6–10 lowercase letters or numbers.';
-        n.classList.toggle('bad', !ok && chosenSlug().length > 0);
+      const chosenSlug = () => slugField.get();
+      const slugValid = () => PopcodeSlug.validate(chosenSlug()).ok;
+      function syncSlugNote() { slugField.refresh(); }
+      function lockSlug(slug) {
+        slugField.lock(slug, 'This book’s link — locked so printed pages keep working.');
       }
-      function lockSlug(slug) { slugInput.value = slug; slugInput.disabled = true; syncSlugNote(); }
 
       // ── Rendering ───────────────────────────────────────────────
       function render() { ensureBookEndpapers(); renderTray(); renderPages(); updateSummary(); requestAnimationFrame(() => { sizeSlotBadges(); layoutAllSlotPhotos(); }); }
@@ -1397,7 +1399,7 @@
           el.style.backgroundImage = `url('${p.url}')`;
           el.innerHTML = `
             <div class="tray-x" data-del="${p.id}">&times;</div>
-            ${photoHasMedia(p) ? '<div class="pop-dot"><img src="/assets/popcode_icon.svg" style="width:11px;height:11px"/></div>' : ''}`;
+            ${photoHasMedia(p) ? '<div class="pop-dot"><img src="/assets/popcode_symbol_color.svg" style="width:11px;height:11px"/></div>' : ''}`;
           el.querySelector('.tray-x').addEventListener('click', (e) => { e.stopPropagation(); deletePhoto(p.id); });
           enablePhotoDrag(el, p, { onTap: () => {
             selectedTrayId = (selectedTrayId === p.id) ? null : p.id;
@@ -1650,7 +1652,7 @@
         const brand = (rev) => `<div class="bc-brand${rev ? ' bc-brand-rev' : ''}">
           <img class="bc-logo" style="width:${inCqw(1.25)}" src="/assets/Popcode_logo${rev ? '.rev' : ''}.png" alt="Popcode"/>
           <div class="bc-inst" style="font-size:${textSz};line-height:${lead}">Go to <b>popcode.app/${escapeHtml(slug)}</b> on your phone.<br>Scan photos with the Popcode symbol.</div>
-          <img class="bc-symbol" style="width:${inCqw(0.4)}" src="/assets/popcode-symbol${rev ? '.rev' : ''}.png" alt=""/>
+          <img class="bc-symbol" style="width:${inCqw(0.4)}" src="/assets/popcode_symbol_color.svg" alt=""/>
         </div>`;
         const pick = !url ? `<div class="cv-pick" data-cv="bpick"><span class="cv-pick-btn">${IC_PHOTO_PH}</span></div>` : '';
         if (backCover.mode === 'fullbleed') {
@@ -2040,7 +2042,7 @@
             const badge = document.createElement('div');
             badge.className = 'slot-badge';
             badge.title = photo.popcode.mediaType === 'audio' ? 'Popcode — plays audio when scanned' : 'Popcode — plays video when scanned';
-            badge.innerHTML = `<img src="/assets/popcode_icon.svg" alt=""/>`;
+            badge.innerHTML = `<img src="/assets/popcode_symbol_color.svg" alt=""/>`;
             slot.appendChild(badge);
           }
         } else {
@@ -2454,9 +2456,7 @@
       function duplicateBook() {
         editingCollection = null; // so the next Create saves a brand-new book
         // A copy gets its own (editable) Popcode link.
-        slugInput.disabled = false;
-        slugInput.value = randomSlug();
-        syncSlugNote();
+        slugField.unlock();
         const inp = document.getElementById('title-input');
         inp.value = ((inp.value || cover.title || 'Untitled').trim()) + ' (copy)';
         document.querySelector('.wrap h1').textContent = 'Design a Book';
@@ -2558,6 +2558,9 @@
                 + 'background-image:url("' + badgePng + '");background-size:contain;background-repeat:no-repeat;background-position:center;';
               slot.appendChild(b);
             });
+            unit.querySelectorAll('.bc-symbol').forEach(sym => {
+              sym.src = badgePng;         // html2canvas can't render an external SVG
+            });
             unit.querySelectorAll('.slot, .bc-inset').forEach(el => {
               const r = el.getBoundingClientRect();
               el.style.width = r.width + 'px';
@@ -2625,7 +2628,7 @@
       // Rasterize the Popcode badge SVG (viewBox-only, no intrinsic size) to a
       // PNG data-URL so html2canvas renders it (it drops external SVG <img>s).
       async function rasterizeBadge() {
-        let svg = await (await fetch('/assets/popcode_icon.svg')).text();
+        let svg = await (await fetch('/assets/popcode_symbol_color.svg')).text();
         if (!/<svg[^>]*\bwidth=/.test(svg)) svg = svg.replace('<svg ', '<svg width="302" height="302" ');
         const img = new Image();
         img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
@@ -2695,6 +2698,9 @@
               + 'width:' + size + 'px;height:' + size + 'px;pointer-events:none;'
               + 'background-image:url("' + badgePng + '");background-size:contain;background-repeat:no-repeat;background-position:center;';
             slot.appendChild(b);
+          });
+          unit.querySelectorAll('.bc-symbol').forEach(sym => {
+            sym.src = badgePng;         // html2canvas can't render an external SVG
           });
           unit.querySelectorAll('.slot, .bc-inset').forEach(el => { const r = el.getBoundingClientRect(); el.style.width = r.width + 'px'; el.style.height = r.height + 'px'; el.style.aspectRatio = 'auto'; });
           unit.querySelectorAll('.slot-img, .cv-photo-img, .bc-img').forEach(img => {
@@ -3047,7 +3053,7 @@
           <h2>Photo options</h2>
           <p class="sheet-sub">${hasPop ? 'This photo is a Popcode — it plays its ' + (photo.popcode.mediaType === 'audio' ? 'audio' : 'video') + ' when scanned.' : 'Link a video or audio and this page will come to life when scanned.'}</p>
           <div class="menu-row" data-act="popcode">
-            <div class="menu-ic"><img src="/assets/popcode_icon.svg" style="width:20px;height:20px"/></div>
+            <div class="menu-ic"><img src="/assets/popcode_symbol_color.svg" style="width:20px;height:20px"/></div>
             <div><div>${hasPop ? 'Edit Popcode' : 'Add a Popcode'}</div><div class="menu-sub">${hasPop ? 'Change or remove the linked media' : 'Link a video or audio recording'}</div></div>
           </div>
           <div class="menu-row" data-act="edit">
@@ -3862,9 +3868,18 @@
         }
 
         const editing = !!editingCollection;
-        if (!editing && !slugValid()) {
-          showToast('Pick your Popcode link first — 6–10 lowercase letters or numbers.');
+        // The title is what the link is built from, so it can't be skipped.
+        if (!editing && !(document.getElementById('title-input').value || '').trim()) {
+          showToast('Give your book a title — it becomes its link.');
+          document.getElementById('title-input').focus();
+          return;
+        }
+        // Re-check the link here, not just on keystroke — someone else may have
+        // claimed it while this page sat open.
+        if (!editing && !(await slugField.ensureFree())) {
+          showToast('That link isn’t available — pick another.');
           slugInput.focus();
+          slugInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
           return;
         }
         document.getElementById('create-btn').disabled = true;

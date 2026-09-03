@@ -23,7 +23,7 @@
     var iconImg = new Image();
     await new Promise(function (resolve, reject) {
       iconImg.onload = resolve; iconImg.onerror = reject;
-      iconImg.src = '/assets/popcode_icon.svg';
+      iconImg.src = '/assets/popcode_symbol_color.svg';
     });
 
     var c = document.createElement('canvas');

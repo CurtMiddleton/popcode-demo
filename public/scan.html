@@ -9,7 +9,7 @@
       integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
       crossorigin="anonymous"></script>
     <script src="/sentry-init.js"></script>
-    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
     <meta property="og:title" content="Popcode">
     <meta property="og:description" content="Bring your photos to life with AR video">
@@ -22,6 +22,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/slug.js"></script>
+    <script src="/desktop-note.js"></script>
     <!-- Vendored A-Frame 1.4.2 — see public/vendor/aframe/1.4.2/PROVENANCE.md. Was a CDN URL. -->
     <script src="/vendor/aframe/1.4.2/aframe.min.js"></script>
     <!-- Vendored MindAR 1.2.2 — PATCHED build (stop()/start() lifecycle fix).
@@ -573,20 +575,41 @@
       // Defer to DOMContentLoaded so the module-scope `let/const` declared
       // below (e.g. coverConfig, read by showStartScreen) are initialized before
       // bootstrap runs — a synchronous call here hits a temporal-dead-zone error.
+      // Handles are case-bearing (@Curt), so unlike the viewer we can't just
+      // lowercase the path. But any path with a capital in it lands here rather
+      // than on the viewer, which means a hand-typed "/MaxChapterOne" arrives
+      // looking like a handle. Check the lowercase form against the project
+      // links first, and only fall through to the scan flow if it isn't one.
+      // An explicit ?handle= (the /u/{handle} route) is taken at its word.
+      function resolveMiscasedSlug(raw) {
+        var lower = PopcodeSlug.normalize(raw);
+        if (params.get('handle') || !lower || lower === raw) return Promise.resolve(false);
+        return PopcodeSlug.takenSet(db, [lower])
+          .then(function (t) {
+            if (!t.has(lower)) return false;
+            location.replace('/' + lower);
+            return true;
+          })
+          .catch(function () { return false; });   // never block the scan flow
+      }
+
       window.addEventListener('DOMContentLoaded', () => {
-        if (!handle) { showError(); } else { bootstrap(handle); }
+        if (!handle) { showError(); return; }
+        resolveMiscasedSlug(handle).then((redirected) => {
+          if (!redirected) bootstrap(handle);
+        });
       });
 
       // Code-entry form: wired up independently of loadCollection so it works
       // even when the page hits an error path. Vercel rewrites /{slug} to
-      // view.html?id={slug} for slugs matching [a-z0-9]{6,10}.
+      // view.html?id={slug} for slugs matching [a-z0-9][a-z0-9-]{2,29}.
       const codeForm = document.getElementById('wl-code-form');
       if (codeForm) {
         codeForm.addEventListener('submit', (e) => {
           e.preventDefault();
           const input = document.getElementById('wl-code-input');
           const raw = (input && input.value) || '';
-          const code = raw.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+          const code = PopcodeSlug.normalize(raw);
           if (!code) return;
           const currentSlug = location.pathname.replace(/^\//, '').toLowerCase();
           if (code === currentSlug) { location.reload(); return; }
@@ -992,9 +1015,13 @@
         if (coverConfig) {
           document.getElementById('start-screen').style.display = 'none';
           document.getElementById('wl-cover').style.display = 'block';
+          // A device with no camera to point at a print gets told so here,
+          // instead of finding out by tapping Scan and meeting its own webcam.
+          PopcodeDesktopNote.mount(document.querySelector('#wl-cover .wl-cta'));
         } else {
           document.getElementById('wl-cover').style.display = 'none';
           document.getElementById('start-screen').style.display = 'flex';
+          PopcodeDesktopNote.mount(document.getElementById('start-screen'));
         }
       }
       function hideStartScreen() {
