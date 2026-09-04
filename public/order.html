@@ -133,6 +133,48 @@
       .price-row { display:flex; justify-content:space-between; align-items:baseline; margin-top:12px; }
       .price { font-size:32px; font-weight:600; }
       .price-note { color:#888; font-size:12px; }
+
+      /* Row of secondary actions under the product preview (Change / Adjust photo). */
+      .preview-actions { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:14px; }
+      .preview-actions .change-photo-btn { margin:0; align-self:auto; }
+
+      /* ── Edit Photo modal (Popsa-style crop/zoom/reposition) — ported from book.html ── */
+      .ep-overlay { display:none; position:fixed; inset:0; z-index:700; background:rgba(0,0,0,0.5); align-items:flex-end; justify-content:center; padding:0; }
+      .ep-overlay.visible { display:flex; }
+      @media (min-width:620px){ .ep-overlay { align-items:center; padding:24px; } }
+      .ep-sheet { background:#fff; width:100%; max-width:520px; border-radius:22px 22px 0 0; padding:18px 22px calc(22px + env(safe-area-inset-bottom)); box-shadow:0 -8px 40px rgba(0,0,0,0.2); max-height:94vh; overflow-y:auto; }
+      @media (min-width:620px){ .ep-sheet { border-radius:22px; } }
+      @media (min-width:720px){ .ep-sheet { max-width:960px; } }
+      .ep-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+      .ep-head h2 { font-size:20px; font-weight:700; font-family:'Inter',sans-serif; }
+      .ep-x { border:none; background:transparent; cursor:pointer; color:#444; padding:4px; display:flex; }
+      .ep-x:hover { color:#000; }
+      .ep-grid { display:flex; flex-direction:column; gap:18px; }
+      @media (min-width:720px){ .ep-grid { flex-direction:row; align-items:flex-start; } .ep-preview { flex:1 1 0; min-width:0; } .ep-side { flex:0 0 340px; } }
+      .ep-stage { position:relative; width:100%; aspect-ratio:4 / 3; max-height:56vh; margin:0 auto; overflow:hidden; background:#f4f3f0; border-radius:10px; touch-action:none; cursor:grab; }
+      .ep-stage:active { cursor:grabbing; }
+      .ep-img { position:absolute; object-fit:cover; transform-origin:center center; user-select:none; -webkit-user-drag:none; will-change:transform; z-index:1; }
+      .ep-img.fit { object-fit:contain; }
+      .ep-window { position:absolute; z-index:2; pointer-events:none; box-shadow:0 0 0 3000px rgba(247,246,242,0.66); border:1.5px solid rgba(255,255,255,0.92); outline:1px solid rgba(0,0,0,0.14); }
+      .ep-thirds { position:absolute; inset:0; display:none; pointer-events:none; background-image:linear-gradient(rgba(255,255,255,0.55) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.55) 1px, transparent 1px); background-size:33.333% 33.333%; }
+      .ep-hint { text-align:center; font-size:12px; color:#999; margin-top:8px; }
+      .ep-quality { display:flex; align-items:center; justify-content:space-between; background:#f2f0ea; border-radius:12px; padding:14px 16px; font-weight:700; color:#444; margin-bottom:12px; }
+      .ep-quality b { font-size:18px; color:#1a1a1a; }
+      .ep-quality.good { background:#eaf7ee; } .ep-quality.good b { color:#1a7f45; }
+      .ep-quality.warn { background:#fdecec; } .ep-quality.warn b { color:#d33; }
+      .ep-stat { display:flex; align-items:center; justify-content:space-between; padding:9px 4px; border-bottom:1px solid #f2f0ea; font-weight:600; color:#777; font-size:15px; }
+      .ep-stat b { color:#1a1a1a; }
+      .ep-btns { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-top:16px; }
+      .ep-btn { display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 2px; border:1px solid #e6e3db; border-radius:12px; background:#fff; cursor:pointer; font-family:'Inter',sans-serif; font-size:11.5px; font-weight:600; color:#1a1a1a; }
+      .ep-btn:hover { background:#faf9f5; }
+      .ep-btn.active { border-color:#7657FC; background:#f3f0ff; color:#5b3fd6; }
+      .ep-btn.ep-danger { color:#d33; } .ep-btn.ep-danger:hover { background:#fdecec; }
+      .ep-foot { display:flex; justify-content:flex-end; gap:10px; margin-top:22px; }
+      .ep-foot button { padding:12px 28px; border-radius:14px; font-size:15px; font-weight:700; font-family:'Inter',sans-serif; cursor:pointer; border:none; }
+      .ep-foot .ep-cancel { background:#f0eeea; color:#1a1a1a; }
+      .ep-foot .ep-do { background:#1a1a1a; color:#fff; }
+      .ep-toast { position:fixed; bottom:40px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.82); color:#fff; padding:10px 22px; border-radius:24px; font-size:14px; font-weight:600; opacity:0; pointer-events:none; transition:opacity .3s; z-index:800; white-space:nowrap; }
+      .ep-toast.show { opacity:1; }
     </style>
   </head>
   <body>
@@ -170,7 +212,10 @@
         <div class="detail">
           <div class="detail-left">
             <div class="detail-preview" id="detail-preview"><div class="detail-stage"><canvas id="detail-canvas" width="400" height="400"></canvas></div></div>
-            <button type="button" class="change-photo-btn" id="change-photo-btn" style="display:none;">Change photo</button>
+            <div class="preview-actions" id="detail-photo-actions" style="display:none;">
+              <button type="button" class="change-photo-btn" id="adjust-photo-btn">Adjust photo</button>
+              <button type="button" class="change-photo-btn" id="change-photo-btn">Change photo</button>
+            </div>
             <div class="view-row" id="view-row"></div>
           </div>
           <div class="detail-info">
@@ -218,6 +263,9 @@
         <div class="detail">
           <div class="detail-left">
             <div class="detail-preview"><div class="detail-stage"><canvas id="review-canvas" width="400" height="400"></canvas></div></div>
+            <div class="preview-actions">
+              <button type="button" class="change-photo-btn" id="review-adjust-btn">Adjust photo</button>
+            </div>
           </div>
           <div class="detail-info">
             <h2 id="review-name">Product</h2>
@@ -413,7 +461,7 @@
       let currentUser = null;
       let collection = null;
       let photos = [];
-      let state = { step: 'detail', productType: null, variantId: null, frameColor: 'black', mounted: false, orientation: 'portrait', scale: 0.06, selectedPhoto: null, scene: 'plain', galleryIndex: 0 };
+      let state = { step: 'detail', productType: null, variantId: null, frameColor: 'black', mounted: false, orientation: 'portrait', scale: 0.06, selectedPhoto: null, scene: 'plain', galleryIndex: 0, photoAdjust: { fit: 'fill', scale: 1, ox: 0, oy: 0, rot: 0 } };
 
       // Frame colours per product (mirrors the server catalog: one variant per
       // size × colour, where black keeps the bare size id).
@@ -503,11 +551,66 @@
         ctx.putImageData(imgd, 0, 0);
       }
 
+      // ---- crop / zoom / reposition model (ported from book.html Edit Photo) ------
+      // A photo is drawn at its cover/contain-fit size, centered in the crop box,
+      // then panned by a fraction of the box and scaled/rotated. Same math used by
+      // the Edit Photo stage (layoutEp) and the print/preview bake below, so what you
+      // position in the editor is exactly what the product shows and prints.
+      const DEFAULT_ADJUST = () => ({ fit: 'fill', scale: 1, ox: 0, oy: 0, rot: 0 });
+      function normalizeAdjust(a) {
+        const d = DEFAULT_ADJUST();
+        if (!a || typeof a !== 'object') return d;
+        return {
+          fit: a.fit === 'fit' ? 'fit' : 'fill',
+          scale: Math.max(1, Math.min(3, +a.scale || 1)),
+          ox: Math.max(-80, Math.min(80, +a.ox || 0)),
+          oy: Math.max(-80, Math.min(80, +a.oy || 0)),
+          rot: ((Math.round((+a.rot || 0) / 90) * 90) % 360 + 360) % 360,
+        };
+      }
+      function printQuality(w, h, scale) {
+        if (!w || !h) return 10;
+        const eff = Math.min(w, h) / (scale || 1);
+        return Math.max(1, Math.min(10, Math.round(eff / 170)));
+      }
+      // Clamp the pan so the photo always covers the crop box (no background bleed).
+      function clampPan(a, boxW, boxH, iw, ih) {
+        if (!iw || !ih || !boxW || !boxH) return a;
+        if (a.fit === 'fit') { a.ox = 0; a.oy = 0; return a; }
+        const fitScale = Math.max(boxW / iw, boxH / ih);
+        const rotated = (a.rot % 180) !== 0;
+        const imgW = (rotated ? ih : iw) * fitScale * a.scale;
+        const imgH = (rotated ? iw : ih) * fitScale * a.scale;
+        const maxOx = Math.max(0, (imgW - boxW) / (2 * boxW) * 100);
+        const maxOy = Math.max(0, (imgH - boxH) / (2 * boxH) * 100);
+        a.ox = Math.max(-maxOx, Math.min(maxOx, a.ox));
+        a.oy = Math.max(-maxOy, Math.min(maxOy, a.oy));
+        return a;
+      }
+      // Canvas bake: draw `img` into rect (x,y,w,h) honoring crop/zoom/rotate. At the
+      // default adjust this is exactly a center-crop, so un-edited photos are unchanged.
+      function drawPhotoAdjusted(ctx, img, adjust, x, y, w, h) {
+        const a = normalizeAdjust(adjust);
+        const iw = img.naturalWidth, ih = img.naturalHeight;
+        if (!iw || !ih) return;
+        clampPan(a, w, h, iw, ih);
+        const fitScale = a.fit === 'fit' ? Math.min(w / iw, h / ih) : Math.max(w / iw, h / ih);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+        ctx.translate(x + w / 2 + (a.ox / 100) * w, y + h / 2 + (a.oy / 100) * h);
+        ctx.scale(a.scale, a.scale);
+        ctx.rotate(a.rot * Math.PI / 180);
+        const dw = iw * fitScale, dh = ih * fitScale;
+        ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
+      }
+
       // ---- badge compositor (inlined; never depends on a separate file) ----
       async function compositeBadgedImage(photoUrl, opts) {
         opts = opts || {};
         var scale = typeof opts.scale === 'number' ? opts.scale : 0.06;
         var aspect = (typeof opts.aspect === 'number' && opts.aspect > 0) ? opts.aspect : null;
+        var adjust = opts.adjust || null;
         var previewCanvas = opts.previewCanvas || null;
         var img = new Image(); img.crossOrigin = 'anonymous';
         await new Promise(function (res, rej) { img.onload = res; img.onerror = rej; img.src = photoUrl; });
@@ -529,7 +632,8 @@
           previewCanvas.width = pw; previewCanvas.height = ph;
           var pc = previewCanvas.getContext('2d');
           pc.clearRect(0, 0, pw, ph);
-          pc.drawImage(img, sx, sy, cropW, cropH, 0, 0, pw, ph);
+          if (adjust) drawPhotoAdjusted(pc, img, adjust, 0, 0, pw, ph);
+          else pc.drawImage(img, sx, sy, cropW, cropH, 0, 0, pw, ph);
           var pbS = Math.round(Math.min(pw, ph) * scale), pbp = Math.round(Math.min(pw, ph) * 0.025);
           pc.drawImage(iconImg, pw - pbS - pbp, ph - pbS - pbp, pbS, pbS);
           if (!returnDataUrl) return null;
@@ -540,7 +644,8 @@
         var c = document.createElement('canvas');
         c.width = cropW; c.height = cropH;
         var ctx = c.getContext('2d');
-        ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+        if (adjust) drawPhotoAdjusted(ctx, img, adjust, 0, 0, cropW, cropH);
+        else ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
         // Brighten/pop the photo for print before the badge goes on top.
         var corr = opts.correction || correctionByKey(ACTIVE_CORRECTION);
         applyCorrection(ctx, cropW, cropH, corr);
@@ -724,6 +829,7 @@
           state.mounted = /^cfpm-/.test(savedVid);
           state.orientation = pc.orientation || 'portrait';
           state.scale = pc.scale || 0.06;
+          state.photoAdjust = normalizeAdjust(pc.adjust);
           renderSizeChips(); renderFrameChips(); renderMountChips(); updateOrientationVisibility();
           document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b.dataset.orientation === state.orientation));
           if (edit) { editingDesign = { id: col.id, slug }; renderDetailPreview(); refreshDetailPrice(); }
@@ -963,7 +1069,7 @@
         }
       }
       async function badgedImg(src, aspect) {
-        const url = await compositeBadgedImage(src, { scale: state.scale, aspect });
+        const url = await compositeBadgedImage(src, { scale: state.scale, aspect, adjust: state.selectedPhoto ? state.photoAdjust : null });
         const img = new Image();
         await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
         return img;
@@ -1248,7 +1354,7 @@
       function updateDetailCta() {
         const has = !!state.selectedPhoto;
         document.getElementById('create-btn').textContent = has ? 'Continue' : 'Choose a photo';
-        document.getElementById('change-photo-btn').style.display = has ? '' : 'none';
+        document.getElementById('detail-photo-actions').style.display = has ? '' : 'none';
       }
       async function refreshDetailPrice() {
         const el = document.getElementById('detail-price');
@@ -1272,6 +1378,173 @@
         if (state.selectedPhoto) goReview(); else openPhotoStep();
       });
       document.getElementById('change-photo-btn').addEventListener('click', openPhotoStep);
+      document.getElementById('adjust-photo-btn').addEventListener('click', openAdjustPhoto);
+      document.getElementById('review-adjust-btn').addEventListener('click', openAdjustPhoto);
+
+      // ── Edit Photo (Popsa-style crop / zoom / reposition / rotate) ───────────
+      // The whole photo shows; the area outside the crop window is ghosted so you can
+      // see what you're panning into. Same geometry as drawPhotoAdjusted (the print
+      // bake), so what you position here is exactly what the product prints.
+      let editPhotoState = null;
+      const EP_IC_X = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      function epIcon(name) {
+        const o = 'width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+        const P = {
+          fill: '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>',
+          fit: '<polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="10" y1="14" x2="3" y2="21"/>',
+          grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+          rotate: '<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',
+          reset: '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>',
+          change: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
+          zin: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>',
+          zout: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>',
+        };
+        return `<svg ${o}>${P[name] || ''}</svg>`;
+      }
+      function epToast(msg) {
+        const t = document.getElementById('ep-toast');
+        t.textContent = msg; t.classList.add('show');
+        clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 1600);
+      }
+      function openAdjustPhoto() {
+        if (!state.selectedPhoto) return;
+        const aspect = currentAspect() || 1;
+        editPhotoState = { photo: state.selectedPhoto, a: { ...normalizeAdjust(state.photoAdjust) }, gridOn: false, ar: aspect + ' / 1' };
+        renderEditPhoto();
+        const m = document.getElementById('ep-modal');
+        m.classList.add('visible'); m.setAttribute('aria-hidden', 'false');
+      }
+      function closeAdjustPhoto() {
+        const m = document.getElementById('ep-modal');
+        m.classList.remove('visible'); m.setAttribute('aria-hidden', 'true'); m.innerHTML = '';
+        editPhotoState = null;
+      }
+      function epSave() {
+        if (!editPhotoState) return;
+        state.photoAdjust = normalizeAdjust(editPhotoState.a);
+        closeAdjustPhoto();
+        if (state.step === 'review') {
+          const aspect = currentAspect();
+          getArtImage(aspect).then(art => renderProductOnly(document.getElementById('review-canvas'), art, aspect));
+        } else renderDetailPreview();
+        epToast('Photo updated');
+      }
+      function renderEditPhoto() {
+        const s = editPhotoState;
+        const source = s.photo.name || 'Popcode photo';
+        const btn = (act, label) => `<button class="ep-btn" data-act="${act}">${epIcon(act)}<span>${label}</span></button>`;
+        document.getElementById('ep-modal').innerHTML = `
+          <div class="ep-sheet">
+            <div class="ep-head"><h2>Adjust photo</h2><button class="ep-x" id="ep-close" aria-label="Close">${EP_IC_X}</button></div>
+            <div class="ep-grid">
+              <div class="ep-preview">
+                <div class="ep-stage" id="ep-stage">
+                  <img class="ep-img" id="ep-img" src="${s.photo.url}" draggable="false" crossorigin="anonymous"/>
+                  <div class="ep-window" id="ep-window"><div class="ep-thirds" id="ep-thirds"></div></div>
+                </div>
+                <div class="ep-hint">Drag the photo to reposition — the faded area is the rest of your photo</div>
+              </div>
+              <div class="ep-side">
+                <div class="ep-quality" id="ep-quality"><span>Print Quality</span><b id="ep-q">—</b></div>
+                <div class="ep-stat"><span>Scale</span><b id="ep-scale">100%</b></div>
+                <div class="ep-stat"><span>Dimensions</span><b id="ep-dims">—</b></div>
+                <div class="ep-stat"><span>Source</span><b>${source}</b></div>
+                <div class="ep-btns">
+                  ${btn('fill', 'Fill')}${btn('fit', 'Fit')}${btn('grid', 'Grid')}${btn('rotate', 'Rotate')}
+                  ${btn('zin', 'Zoom In')}${btn('zout', 'Zoom Out')}${btn('reset', 'Reset')}${btn('change', 'Change')}
+                </div>
+              </div>
+            </div>
+            <div class="ep-foot"><button class="ep-cancel" id="ep-cancel">Cancel</button><button class="ep-do" id="ep-save">Done</button></div>
+          </div>`;
+        const img = document.getElementById('ep-img');
+        const setDims = (w, h) => { s.photo.iw = w; s.photo.ih = h; if (!s.photo.ow) { s.photo.ow = w; s.photo.oh = h; } updateEp(); };
+        if (img.complete && img.naturalWidth) setDims(img.naturalWidth, img.naturalHeight);
+        else img.addEventListener('load', () => setDims(img.naturalWidth, img.naturalHeight));
+        document.getElementById('ep-close').addEventListener('click', closeAdjustPhoto);
+        document.getElementById('ep-cancel').addEventListener('click', closeAdjustPhoto);
+        document.getElementById('ep-save').addEventListener('click', epSave);
+        document.querySelectorAll('#ep-modal .ep-btn').forEach(b => b.addEventListener('click', () => epAction(b.dataset.act)));
+        enableEpPan();
+        layoutEp();
+        requestAnimationFrame(layoutEp);
+        updateEp();
+      }
+      function layoutEp() {
+        const stage = document.getElementById('ep-stage'), win = document.getElementById('ep-window'), img = document.getElementById('ep-img');
+        if (!stage || !win || !img || !editPhotoState) return;
+        const s = editPhotoState;
+        const SW = stage.clientWidth, SH = stage.clientHeight;
+        if (!SW || !SH) return;
+        const m = String(s.ar || '1 / 1').split('/');
+        const arNum = (parseFloat(m[0]) || 1) / (parseFloat(m[1]) || 1);
+        const pad = 0.86;
+        let ww, wh;
+        if (SW / SH > arNum) { wh = SH * pad; ww = wh * arNum; } else { ww = SW * pad; wh = ww / arNum; }
+        const wx = (SW - ww) / 2, wy = (SH - wh) / 2;
+        win.style.left = wx + 'px'; win.style.top = wy + 'px'; win.style.width = ww + 'px'; win.style.height = wh + 'px';
+        s._ww = ww; s._wh = wh; s._wcx = wx + ww / 2; s._wcy = wy + wh / 2;
+        const iw = img.naturalWidth || s.photo.iw, ih = img.naturalHeight || s.photo.ih;
+        if (iw && ih) {
+          const a = s.a;
+          clampPan(a, ww, wh, iw, ih);
+          const fitScale = a.fit === 'fit' ? Math.min(ww / iw, wh / ih) : Math.max(ww / iw, wh / ih);
+          const imgW = iw * fitScale, imgH = ih * fitScale;
+          img.style.width = imgW + 'px'; img.style.height = imgH + 'px';
+          img.style.left = (s._wcx - imgW / 2) + 'px'; img.style.top = (s._wcy - imgH / 2) + 'px';
+        }
+        applyEpTransform();
+      }
+      function applyEpTransform() {
+        const img = document.getElementById('ep-img'), s = editPhotoState; if (!img || !s || !s._ww) return;
+        const a = s.a;
+        img.style.transform = `translate(${a.ox / 100 * s._ww}px, ${a.oy / 100 * s._wh}px) scale(${a.scale}) rotate(${a.rot}deg)`;
+        img.classList.toggle('fit', a.fit === 'fit');
+      }
+      window.addEventListener('resize', () => { if (document.getElementById('ep-stage')) layoutEp(); });
+      function updateEp() {
+        const s = editPhotoState, a = s.a;
+        const img = document.getElementById('ep-img'); if (!img) return;
+        layoutEp();
+        document.getElementById('ep-scale').textContent = Math.round(a.scale * 100) + '%';
+        const w = s.photo.ow || s.photo.iw, h = s.photo.oh || s.photo.ih;
+        document.getElementById('ep-dims').textContent = w ? `${w} × ${h}` : '—';
+        const q = printQuality(w, h, a.scale);
+        const qbox = document.getElementById('ep-quality');
+        document.getElementById('ep-q').textContent = q + '/10';
+        qbox.classList.toggle('good', q >= 8); qbox.classList.toggle('warn', q <= 4);
+        document.getElementById('ep-thirds').style.display = s.gridOn ? 'block' : 'none';
+        const set = (act, on) => { const el = document.querySelector(`#ep-modal .ep-btn[data-act="${act}"]`); if (el) el.classList.toggle('active', on); };
+        set('fill', a.fit === 'fill'); set('fit', a.fit === 'fit'); set('grid', s.gridOn);
+      }
+      function epAction(act) {
+        const s = editPhotoState, a = s.a;
+        if (act === 'fill') a.fit = 'fill';
+        else if (act === 'fit') a.fit = 'fit';
+        else if (act === 'grid') s.gridOn = !s.gridOn;
+        else if (act === 'rotate') a.rot = (a.rot + 90) % 360;
+        else if (act === 'zin') a.scale = Math.min(3, Math.round((a.scale + 0.1) * 10) / 10);
+        else if (act === 'zout') a.scale = Math.max(1, Math.round((a.scale - 0.1) * 10) / 10);
+        else if (act === 'reset') { editPhotoState.a = DEFAULT_ADJUST(); editPhotoState.gridOn = false; updateEp(); return; }
+        else if (act === 'change') { closeAdjustPhoto(); openPhotoStep(); return; }
+        updateEp();
+      }
+      function enableEpPan() {
+        const stage = document.getElementById('ep-stage'), win = document.getElementById('ep-window'); if (!stage || !win) return;
+        stage.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          const a = editPhotoState.a;
+          const rect = win.getBoundingClientRect();
+          const sx = e.clientX, sy = e.clientY, ox0 = a.ox, oy0 = a.oy;
+          const move = (ev) => {
+            a.ox = Math.max(-80, Math.min(80, ox0 + (ev.clientX - sx) / rect.width * 100));
+            a.oy = Math.max(-80, Math.min(80, oy0 + (ev.clientY - sy) / rect.height * 100));
+            updateEp();
+          };
+          const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); };
+          document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+        });
+      }
 
       // ---- choose a photo (tray of the user's Popcode photos) ----
       function openPhotoStep() { renderTray(); showStep('photo'); }
@@ -1289,7 +1562,7 @@
           cell.className = 'photo-cell' + (state.selectedPhoto && state.selectedPhoto.url === p.url ? ' selected' : '');
           const cv = document.createElement('canvas'); cv.width = 200; cv.height = 200;
           cell.appendChild(cv);
-          cell.onclick = () => { state.selectedPhoto = p; renderDetailPreview(); showStep('detail'); };
+          cell.onclick = () => { state.selectedPhoto = p; state.photoAdjust = DEFAULT_ADJUST(); renderDetailPreview(); showStep('detail'); };
           grid.appendChild(cell);
           compositeBadgedImage(p.url, { scale: state.scale, aspect: 1, previewCanvas: cv, returnDataUrl: false }).catch(() => {});
         });
@@ -1346,6 +1619,7 @@
           const printConfig = {
             productType: state.productType, variantId: orderVariantId(), orientation: state.orientation,
             scale: state.scale, photoUrl: state.selectedPhoto.url,
+            adjust: normalizeAdjust(state.photoAdjust),
             sourceSlug: state.selectedPhoto.slug, sourceTargetIndex: state.selectedPhoto.target_index,
           };
           if (editingDesign) {
@@ -1478,7 +1752,7 @@
           const calibrate = qs.get('calibrate');
           const dataUrl = calibrate
             ? await buildCalibrationSheet(photo.url, currentAspect())
-            : await compositeBadgedImage(photo.url, { scale: state.scale, aspect: currentAspect() });
+            : await compositeBadgedImage(photo.url, { scale: state.scale, aspect: currentAspect(), adjust: state.photoAdjust });
           const blob = dataUrlToBlob(dataUrl);
           const scalePct = Math.round(state.scale * 100);
           const path = photo.slug + '/print-' + photo.target_index + '-' + state.orientation
@@ -1518,5 +1792,8 @@
       }
       function clearError() { document.getElementById('error-banner').style.display = 'none'; }
     </script>
+    <!-- Edit Photo modal (crop / zoom / reposition / rotate) -->
+    <div class="ep-overlay" id="ep-modal" aria-hidden="true"></div>
+    <div class="ep-toast" id="ep-toast"></div>
   </body>
 </html>
