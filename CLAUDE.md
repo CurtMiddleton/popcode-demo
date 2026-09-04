@@ -1467,9 +1467,18 @@ Correct rule: **code first, SQL second** (SQL-first breaks the public viewer, si
 
 Endpoint: returns correct data, **no `user_id`, no `book_layout`**, 404 on unknown slug, 400 on `../../etc/passwd`, legacy fallback works. `popcode_slugs_taken` correctly reports taken/free. `popcode_view_cards` returns name + thumb. 101-slug request refused. User confirmed on a real iPhone: **scan works, video plays.**
 
-#### UNFINISHED — STORAGE IS STILL WIDE OPEN (highest-priority follow-up)
+#### STORAGE WAS THE WORST OF IT — and I rated it wrong twice before getting there
 
-**I initially rated this a minor follow-up. That was WRONG, and it got corrected at the end of the session.** As anon, against the `experiences` bucket:
+**I first called this a minor follow-up, then "anon can list". Both were wrong.** The live policy turned out to be:
+`"Allow all on experiences"  cmd: ALL  roles: {public}  qual: (bucket_id = 'experiences')`. In Postgres `public` means EVERYONE including anon, and `ALL` covers INSERT/UPDATE/DELETE. **So the public key could upload, overwrite and delete any file in the bucket** — worse than the database hole, because overwriting `{slug}/video_0.mp4` repoints every printed copy of that book directly (no duplicate-row trick), deleting `{slug}/target.mind` stops it scanning, and deleted files are actually gone. Confirmed non-destructively: a DELETE of a non-existent path returned `NoSuchKey`, not a permission error — the policy permitted it, the object just wasn't there.
+
+**Fix written: `supabase/migrations/2026-09-04-lock-storage-bucket.sql`** — drops the wide-open policy, replaces it with four scoped to `authenticated`. Public playback is unaffected because Supabase serves a public bucket's `/object/public/...` URLs **without consulting RLS**; what goes away is the `/object/list/...` API and every anonymous write. **No deploy ordering needed** — no shipped code depends on it. Verified every upload (create/edit/book/boardbook/calendar/design/order) and every list (analytics cost panel, manage delete, edit rename) happens while signed in.
+
+**Known limit, deliberately not fixed:** this closes anonymous access, not cross-account access — any signed-in user can still write to any `{slug}/` folder. Scoping per owner needs a CODE change first: `create.html` uploads files (~1141-1185) **before** inserting the collections row (~1199), so a policy joining `name -> collections.slug -> user_id` would block project creation outright. Reserve the row before the uploads, then tighten.
+
+**THE METHOD LESSON, three times over this session:** I twice under-rated storage because I accepted a status code (`http 200`) and then a partial read instead of looking at the actual policy definition. **`select policyname, cmd, roles, qual from pg_policies where schemaname='storage' and tablename='objects'` is the ground truth — read it FIRST, before probing behaviour.** The probes tell you what happened; the policy tells you what's allowed.
+
+Original (now superseded) notes on the read-only symptom: As anon, against the `experiences` bucket:
 - top-level list returns **all 52 project folders** (slugs)
 - drilling into one returns its filenames (`photo_0.jpg`, `target.mind`, `video_0.mp4`)
 - the bucket is public, so any file downloads **with no key at all** (pulled a 2 MB photo to confirm)
