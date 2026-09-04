@@ -1415,3 +1415,80 @@ Shipped in several commits:
 - Testing pattern (unchanged, still works): `playwright-core` installed **in the scratchpad only** (`node_modules` is tracked in this repo), chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, `cd public && python3 -m http.server 8099`, `page.route` to stub supabase-js / abort Sentry + Google Fonts. `order.html`'s shipping form lives on a hidden step — walk the parent chain from `#country` setting `style.display=''` to reveal it. **Avoid `pkill -f "http.server"`** — it killed the shell (exit 144); use `nohup … &` and just leave the old one.
 
 **Parallel-Macs collisions are now a pattern, not an anomaly** — this is the fifth (2026-04-17, 2026-04-22, 2026-08-18, and twice today: `ba11dd0` mid-PR, then `7af09ce` session notes landing while I was writing mine). **`git fetch origin main` before starting AND before pushing**, on every machine.
+
+### 2026-09-04 — Security audit: anon key had full read/write on the content tables (fixed, shipped to prod)
+
+**Branch `claude/popcode-image-recognition-safety-i1pwp7`, commit `635dd44`, fast-forwarded to `main`. No PR. Migration RUN in prod the same session. Storage half still OPEN — see "unfinished" at the bottom.**
+
+Started as a product question ("is it risky to launch on MindAR alone instead of the CLIP/Replicate identification gating?"), turned into a real security finding. Short answer to the original question: **MindAR-only is the LOWER-risk launch.** The identification layer was never a safety gate — in slug-world the scope is the URL (a foreign key, can't go wrong); in handle-world it's a cosine similarity search that can pick the wrong book within a creator. Slug-only has strictly fewer failure modes. Also cheaper, no Replicate cold-start, and no viewer camera frames leaving the device. The CLIP work isn't wasted, it's just answering a question we haven't been forced to ask.
+
+#### THE FINDING — anon could read AND write `collections` / `collection_items`
+
+The anon key in `public/config.js` (public by design, served to every visitor) had far more than read.
+
+**The probe technique worth reusing — a CONTROL TEST, not a single request.** An anon `INSERT {}` into `collections` returned `23502` (null value in "slug"), while the same insert into `print_orders` / `pop_images` / `cart_items` returned `42501` "new row violates row-level security policy". Different error = different layer. The locked tables were rejected by the *policy*; collections got *through* the policy and was only stopped by a column constraint. **Never conclude from one endpoint's error alone — compare against a table you know is locked.**
+
+Also: **an UPDATE probe with a non-matching filter is USELESS.** A denied update and a permitted-but-zero-row update both return 204. I ran that first and it proved nothing. (The definitive no-op-write test got blocked by the sandbox classifier, so UPDATE/DELETE were never conclusively confirmed — the policies were rebuilt from scratch anyway.)
+
+**Why it mattered more here than for a normal web app: we ship physical objects.** `view.html` builds its media map as `mediaMap[item.target_index] = {...}`, so a *second* `collection_items` row with an existing target_index silently overrides what plays. Insert alone was enough to repoint the video behind an already-printed book. You cannot recall a printed book. (Sanity check on the mechanism: `9xyx1ryb` legitimately returns **78 items for 21 real pages** — the known duplicate-target_index data issue. Duplicates genuinely occur and last-one-wins is genuinely how it resolves.)
+
+**Reads were unfiltered too.** `GET /rest/v1/collections?select=*` with no filter returned all **45** collections (names, slugs, `user_id`, full `book_layout` photo manifest); `collection_items` returned all **294** media URLs. PostgREST cannot require a filter — "anon may read this table" means "anon may read the whole table". Default cap is 1000 rows, so at this scale one request really did get everything.
+
+**Correctly locked already (good news):** `print_orders` (shipping addresses), `cart_items`, `beta_feedback`, `scan_events`, `creators`, `pop_images`, `identify_events` all returned 0 rows to anon. The sensitive PII was fine. This was purely a content-tables problem — a leftover from the original "anon key, no auth currently" design that the app grew around.
+
+Also confirmed clean while in there: **zero `innerHTML` in view.html or scan.html** (all DB text via `textContent`), vendored+SRI'd MindAR/A-Frame, and every admin endpoint (`update-print-order`, `retry-print-order`, `delete-account`) properly Bearer-token + email gated. The player wrapper itself was never the problem.
+
+#### WHAT SHIPPED
+
+- **`supabase/migrations/2026-09-04-lock-content-tables.sql`** — DO-block drops every existing policy on `collections`/`collection_items`/`experiences` (they were hand-made in the dashboard, names not in git), then rebuilds owner-scoped: `user_id = auth.uid()` for writes, owner-or-admin for reads. `collection_items` inherits ownership via an `exists` subquery on its parent (+ indexes). `experiences` gets RLS on with **no** client policies. New `is_popcode_admin()` helper lists BOTH admin emails.
+- **`api/collection.js`** — `GET /api/collection?slug=` , service key, returns ONLY `slug, name, kind, mind_file_url, cover_config, items[]`. Never `user_id`, never `book_layout`. Legacy `experiences` fallback included. Slug regex rejects anything malformed. 60s CDN window.
+- **Two SECURITY DEFINER RPCs** for the reads that legitimately cross ownership — both require an explicit candidate list (capped) so neither can enumerate:
+  - `popcode_slugs_taken(text[])` — slug availability. Granted to **anon too**, because `scan.html`'s `resolveMiscasedSlug` calls it unauthenticated.
+  - `popcode_view_cards(text[])` — Past Views name + first photo. A viewer's scanned list is by definition other people's projects.
+- **Wiring:** `view.html` → endpoint; `slug.js` `takenSet()` → RPC; `views.html` `attachThumbs()` + name lookup → RPC; `log-event.js` prefers service key (falls back to anon) so anon INSERT on `scan_events` can be revoked later.
+
+**Callers checked so the policies wouldn't break anything:** analytics.html's unfiltered admin read (covered by the admin exception), cart/shop/design/order/manage (all own-rows), `manage.html:474`'s orphan-claim (**0 rows have NULL user_id**, so it's a silent no-op — verified before relying on it). **Behavior change worth knowing: `edit.html` previously let any signed-in user open another user's slug; now it returns nothing. That's a fix, not a regression.**
+
+#### THE DEPLOY-ORDERING MISTAKE (my error — don't repeat it)
+
+Correct rule: **code first, SQL second** (SQL-first breaks the public viewer, since prod's `view.html` still read the DB directly). Vercel swaps deployments atomically, so there's no broken-viewer window — while the endpoint 404s, the OLD build is still serving.
+
+**What I got wrong:** I told the user to verify "Past Views thumbnails" and "create-a-link suggestions" *before* running the SQL. Both call the new RPCs, which don't exist until the SQL runs. So in the gap: thumbnails went blank, and **creating a project was blocked** with *"Couldn't check that link right now — try again"* (slug.js's catch — it fails safely, no crash, no duplicate slugs). Names still rendered because `views.html` falls back to localStorage. Diagnosed by calling the RPCs directly → `PGRST202 "Could not find the function ... in the schema cache"`.
+**Lesson: when a deploy splits across code and DB, enumerate which features are down IN THE GAP and keep the gap to minutes.** Only the scan test is valid before the SQL.
+
+#### VERIFICATION (all run from outside, against prod)
+
+| | Before | After |
+|---|---|---|
+| Read all collections | 45 rows | `[]` / `*/0` |
+| Read all collection_items | 294 rows | 0 |
+| Read experiences | 2 rows | 0 |
+| Anon `INSERT {}` | `23502` (allowed) | `42501` (blocked) |
+
+Endpoint: returns correct data, **no `user_id`, no `book_layout`**, 404 on unknown slug, 400 on `../../etc/passwd`, legacy fallback works. `popcode_slugs_taken` correctly reports taken/free. `popcode_view_cards` returns name + thumb. 101-slug request refused. User confirmed on a real iPhone: **scan works, video plays.**
+
+#### UNFINISHED — STORAGE IS STILL WIDE OPEN (highest-priority follow-up)
+
+**I initially rated this a minor follow-up. That was WRONG, and it got corrected at the end of the session.** As anon, against the `experiences` bucket:
+- top-level list returns **all 52 project folders** (slugs)
+- drilling into one returns its filenames (`photo_0.jpg`, `target.mind`, `video_0.mp4`)
+- the bucket is public, so any file downloads **with no key at all** (pulled a 2 MB photo to confirm)
+
+**So the "someone downloads every customer's family videos" exposure is NOT closed — it's fully intact via storage.** The DB route (names, owner ids, layouts) is genuinely gone; the media itself is not. **Lesson: I accepted an `http 200` from the list endpoint as "it responds" without reading the body. Always inspect the response, not the status code.**
+
+The fix is NOT making the bucket private (that breaks video playback and Prodigi's print-asset fetches). It's removing **anon SELECT on `storage.objects`** for that bucket — which gates the `/object/list/` API — while leaving `/object/public/` URL reads working. Verified only signed-in users ever list the bucket (analytics cost panel, manage delete, edit rename), so this shouldn't break uploads. Blocked on seeing the live policies, which are hand-made and not in git:
+```sql
+select policyname, cmd, roles, qual from pg_policies
+where schemaname = 'storage' and tablename = 'objects';
+```
+
+Also still open (genuinely low): anon can INSERT `scan_events` → fake analytics rows. `log-event.js` already prefers the service key; revoke the anon grant once that's confirmed live in every Vercel env. Both items are written up as commented instructions at the bottom of the migration file (everything after `commit;` is comments only — safe to paste the whole file).
+
+#### GOTCHAS
+
+- **A Supabase key's project ref is in the JWT**, but a Vercel "Sensitive" var can't be revealed to check it. Instead just hit the endpoint on the preview — JSON back = right key.
+- **Emergency rollback** if a policy change breaks the viewer (restores read only, still safer than before):
+  `create policy emergency_anon_read on public.collections for select to anon using (true);` (+ same for `collection_items`).
+- **GitHub raw link for pasting SQL:** `raw.githubusercontent.com/CurtMiddleton/popcode-demo/main/<path>`. A bare `github.com/...` URL pasted into GitHub's file-finder is read as a *path inside the branch you're viewing* → confusing 404 naming the feature branch.
+- Testing `view.html` headless (this worked well): playwright-core in the **scratchpad only** (`node_modules` is tracked in this repo), chromium `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, `cd public && python3 -m http.server`, `page.route` to stub `@supabase/supabase-js` + abort sentry/fonts, and **stub `/api/collection` to test the happy path, a 404 and a 500** — all three must reach the right screen, never an infinite spinner.
+- Foreground `sleep` is blocked in this sandbox; use a backgrounded `until` loop to wait for a deploy.
