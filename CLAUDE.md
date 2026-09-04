@@ -1467,7 +1467,7 @@ Correct rule: **code first, SQL second** (SQL-first breaks the public viewer, si
 
 Endpoint: returns correct data, **no `user_id`, no `book_layout`**, 404 on unknown slug, 400 on `../../etc/passwd`, legacy fallback works. `popcode_slugs_taken` correctly reports taken/free. `popcode_view_cards` returns name + thumb. 101-slug request refused. User confirmed on a real iPhone: **scan works, video plays.**
 
-#### STORAGE WAS THE WORST OF IT — and I rated it wrong twice before getting there
+#### STORAGE WAS THE WORST OF IT — found, fixed and verified the same session (rated wrong twice first)
 
 **I first called this a minor follow-up, then "anon can list". Both were wrong.** The live policy turned out to be:
 `"Allow all on experiences"  cmd: ALL  roles: {public}  qual: (bucket_id = 'experiences')`. In Postgres `public` means EVERYONE including anon, and `ALL` covers INSERT/UPDATE/DELETE. **So the public key could upload, overwrite and delete any file in the bucket** — worse than the database hole, because overwriting `{slug}/video_0.mp4` repoints every printed copy of that book directly (no duplicate-row trick), deleting `{slug}/target.mind` stops it scanning, and deleted files are actually gone. The conclusive evidence is the policy text itself (`ALL` + `public`), not a probe. **A correction worth carrying forward: I first cited "a DELETE of a non-existent path returns `NoSuchKey`, not a permission error" as proof anon could delete. That was an over-read — the Storage API looks the object up BEFORE RLS decides, so a missing path returns `NoSuchKey` either way. It still returns `NoSuchKey` today, with anon writes provably blocked.** The valid write test is an anonymous UPLOAD to a junk path: accepted before, `403 "new row violates row-level security policy"` after.
@@ -1478,20 +1478,24 @@ Endpoint: returns correct data, **no `user_id`, no `book_layout`**, 404 on unkno
 
 **THE METHOD LESSON, three times over this session:** I twice under-rated storage because I accepted a status code (`http 200`) and then a partial read instead of looking at the actual policy definition. **`select policyname, cmd, roles, qual from pg_policies where schemaname='storage' and tablename='objects'` is the ground truth — read it FIRST, before probing behaviour.** The probes tell you what happened; the policy tells you what's allowed.
 
-Original (now superseded) notes on the read-only symptom: As anon, against the `experiences` bucket:
-- top-level list returns **all 52 project folders** (slugs)
-- drilling into one returns its filenames (`photo_0.jpg`, `target.mind`, `video_0.mp4`)
-- the bucket is public, so any file downloads **with no key at all** (pulled a 2 MB photo to confirm)
+**RAN IN PROD AND VERIFIED THE SAME SESSION.** Operator pasted it in the Supabase SQL editor; "Success. No rows returned". Verified from outside with only the public key:
 
-**So the "someone downloads every customer's family videos" exposure is NOT closed — it's fully intact via storage.** The DB route (names, owner ids, layouts) is genuinely gone; the media itself is not. **Lesson: I accepted an `http 200` from the list endpoint as "it responds" without reading the body. Always inspect the response, not the status code.**
+| | Before | After |
+|---|---|---|
+| anon list bucket | 52 project folders | `[]` |
+| anon list one folder | photo_0.jpg / target.mind / video_0.mp4 | `[]` |
+| anon upload to a junk path | accepted | `403` "new row violates row-level security policy" |
+| public photo, NO key | 200 | 200, 2.0 MB (unchanged, as intended) |
+| public `.mind`, NO key | 200 | 200, 9.6 MB (unchanged, as intended) |
 
-The fix is NOT making the bucket private (that breaks video playback and Prodigi's print-asset fetches). It's removing **anon SELECT on `storage.objects`** for that bucket — which gates the `/object/list/` API — while leaving `/object/public/` URL reads working. Verified only signed-in users ever list the bucket (analytics cost panel, manage delete, edit rename), so this shouldn't break uploads. Blocked on seeing the live policies, which are hand-made and not in git:
-```sql
-select policyname, cmd, roles, qual from pg_policies
-where schemaname = 'storage' and tablename = 'objects';
-```
+User then confirmed on their side: **creating a project (upload), scanning a book (playback), and the Analytics cost panel (admin bucket listing) all still work.** So the four authenticated policies cover every real code path.
 
-Also still open (genuinely low): anon can INSERT `scan_events` → fake analytics rows. `log-event.js` already prefers the service key; revoke the anon grant once that's confirmed live in every Vercel env. Both items are written up as commented instructions at the bottom of the migration file (everything after `commit;` is comments only — safe to paste the whole file).
+**The superseded intermediate reading** (kept because the mistake is the lesson): I first reported this as "anon can LIST the bucket" — a read-only enumeration problem — because I called the list endpoint, got `http 200`, and never read the body. The body would have shown all 52 folders. And listing was only the symptom; `cmd: ALL` + `roles: {public}` was the disease.
+
+**STILL OPEN after today (both deliberate, neither anonymous-facing):**
+
+1. **Cross-account storage writes.** The fix above closes ANONYMOUS access, not cross-account: any signed-in user can still write to any `{slug}/` folder. Scoping per owner needs a CODE change first — `create.html` uploads the files (~1141-1185) BEFORE inserting the collections row (~1199), so a policy joining `name -> collections.slug -> user_id` would block project creation outright. Reserve the row before the uploads, then tighten.
+2. **Fake analytics (genuinely low):** anon can INSERT `scan_events` → fake analytics rows. `log-event.js` already prefers the service key; revoke the anon grant once that's confirmed live in every Vercel env. Both items are written up as commented instructions at the bottom of the migration file (everything after `commit;` is comments only — safe to paste the whole file).
 
 #### GOTCHAS
 
