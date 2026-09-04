@@ -13,6 +13,7 @@
     <title>Popcode — Shop</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
     <script src="/countries.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
@@ -175,6 +176,48 @@
       .ep-foot .ep-do { background:#1a1a1a; color:#fff; }
       .ep-toast { position:fixed; bottom:40px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.82); color:#fff; padding:10px 22px; border-radius:24px; font-size:14px; font-weight:600; opacity:0; pointer-events:none; transition:opacity .3s; z-index:800; white-space:nowrap; }
       .ep-toast.show { opacity:1; }
+
+      /* ── Popcode CTA near the product (the headline feature, front and centre) ── */
+      .popcode-cta { display:inline-flex; align-items:center; gap:9px; margin:12px auto 0; padding:11px 20px 11px 14px; border:1.5px solid #d9d2fb; border-radius:999px; background:linear-gradient(135deg,#f3f0ff,#eef4ff); color:#4b34c7; font-family:'Inter',sans-serif; font-size:14px; font-weight:700; cursor:pointer; box-shadow:0 1px 6px rgba(118,87,252,0.12); }
+      .popcode-cta:hover { border-color:#b9a9f7; }
+      .popcode-cta .pc-sym { width:26px; height:26px; border-radius:50%; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.15); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+      .popcode-cta .pc-sym img { width:17px; height:17px; display:block; }
+      .popcode-cta.has-media { border-color:#b9a9f7; }
+
+      /* ── Popcode editor sheet (ported from the book maker) ── */
+      .ep-sheet h2 { font-size:20px; font-weight:700; font-family:'Inter',sans-serif; margin-bottom:4px; }
+      .ep-sheet .sheet-sub { font-size:13px; color:#888; margin-bottom:18px; line-height:1.5; }
+      .pop-media-toggle { display:inline-flex; background:#ececec; border-radius:999px; padding:3px; margin-bottom:16px; }
+      .pop-media-toggle button { background:transparent; border:none; padding:8px 20px; font-size:13px; font-weight:700; color:#666; border-radius:999px; cursor:pointer; font-family:'Inter',sans-serif; }
+      .pop-media-toggle button.active { background:#fff; color:#1a1a1a; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+      .drop-zone { border:2px dashed #d6d2c8; border-radius:14px; padding:26px 16px; text-align:center; cursor:pointer; position:relative; background:#faf9f5; transition:border-color .12s, background .12s; }
+      .drop-zone:hover { border-color:#7657FC; background:#f6f3ff; }
+      .drop-zone input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; }
+      .drop-zone .dz-icon { width:46px; height:46px; margin:0 auto 10px; }
+      .drop-zone .dz-title { font-size:14px; font-weight:700; color:#1a1a1a; }
+      .drop-zone .dz-sub { font-size:12px; color:#999; margin-top:3px; }
+      .media-preview { display:none; margin-top:4px; }
+      .media-preview.show { display:block; }
+      .media-preview video { width:100%; border-radius:12px; max-height:260px; background:#000; }
+      .compress-status { font-size:12px; color:#555; font-weight:600; margin-top:10px; }
+      .compress-bar-wrap { background:#e8e8e8; border-radius:99px; height:5px; margin-top:6px; overflow:hidden; }
+      .compress-bar { height:100%; background:#1a1a1a; border-radius:99px; width:0%; transition:width .2s; }
+      .warn-banner { background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:10px 12px; font-size:12px; color:#555; line-height:1.5; margin-top:10px; }
+      .warn-banner a { color:#1a1a1a; font-weight:700; }
+      .mini-btn { border:1px solid #e0ded8; background:#fff; color:#1a1a1a; border-radius:999px; padding:7px 13px; font-size:12px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; display:inline-flex; align-items:center; gap:5px; }
+      .audio-panel { text-align:center; padding:10px 0 4px; }
+      .audio-rec-btn { background:#1a1a1a; color:#fff; border:none; border-radius:999px; padding:13px 26px; font-size:15px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; }
+      .audio-rec-btn.stop { background:#dc2626; }
+      .audio-time { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; margin:14px 0; color:#1a1a1a; }
+      .rec-dot { display:inline-block; width:10px; height:10px; border-radius:50%; background:#dc2626; margin-right:8px; vertical-align:middle; animation:rec-pulse 1s infinite; }
+      @keyframes rec-pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+      .audio-player-row { display:flex; align-items:center; justify-content:center; gap:14px; margin:12px 0; }
+      .audio-play-btn { width:56px; height:56px; border-radius:50%; background:#1a1a1a; border:none; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+      .pc-actions { display:flex; gap:12px; margin-top:22px; }
+      .pc-actions button { flex:1; padding:14px; border-radius:14px; font-size:15px; font-weight:700; font-family:'Inter',sans-serif; cursor:pointer; border:none; }
+      .pc-actions .pc-secondary { background:#f0eeea; color:#1a1a1a; }
+      .pc-actions .pc-primary { background:#1a1a1a; color:#fff; }
+      .pc-actions .pc-primary:disabled { opacity:0.4; cursor:not-allowed; }
     </style>
   </head>
   <body>
@@ -215,6 +258,12 @@
             <div class="preview-actions" id="detail-photo-actions" style="display:none;">
               <button type="button" class="change-photo-btn" id="adjust-photo-btn">Adjust photo</button>
               <button type="button" class="change-photo-btn" id="change-photo-btn">Change photo</button>
+            </div>
+            <div class="preview-actions" id="detail-popcode-row" style="display:none;">
+              <button type="button" class="popcode-cta" id="detail-popcode-cta">
+                <span class="pc-sym"><img src="/assets/popcode_icon.svg" alt=""/></span>
+                <span id="detail-popcode-label">Add Popcode</span>
+              </button>
             </div>
             <div class="view-row" id="view-row"></div>
           </div>
@@ -265,6 +314,12 @@
             <div class="detail-preview"><div class="detail-stage"><canvas id="review-canvas" width="400" height="400"></canvas></div></div>
             <div class="preview-actions">
               <button type="button" class="change-photo-btn" id="review-adjust-btn">Adjust photo</button>
+            </div>
+            <div class="preview-actions" id="review-popcode-row" style="display:none;">
+              <button type="button" class="popcode-cta" id="review-popcode-cta">
+                <span class="pc-sym"><img src="/assets/popcode_icon.svg" alt=""/></span>
+                <span id="review-popcode-label">Add Popcode</span>
+              </button>
             </div>
           </div>
           <div class="detail-info">
@@ -855,14 +910,21 @@
             const ids = src.map(c => c.id);
             const byId = {}; src.forEach(c => { byId[c.id] = c; });
             const { data: items } = await db.from('collection_items')
-              .select('collection_id, photo_url, target_index').in('collection_id', ids).order('target_index');
+              .select('collection_id, photo_url, target_index, media_type, video_url, audio_url').in('collection_id', ids).order('target_index');
             const seen = new Set();
             (items || []).forEach(it => {
               if (!it.photo_url || it.target_index == null) return;
               const key = it.collection_id + ':' + it.target_index;
               if (seen.has(key)) return; seen.add(key);
               const c = byId[it.collection_id];
-              photos.push({ url: it.photo_url, target_index: it.target_index, slug: c.slug, collectionId: c.id, name: c.name || c.slug });
+              photos.push({
+                url: it.photo_url, target_index: it.target_index, slug: c.slug, collectionId: c.id, name: c.name || c.slug,
+                // A tray photo is a real Popcode target, so its linked media can be
+                // edited here (fromTray gates the Popcode CTA). media_type/video_url/
+                // audio_url reflect what currently plays when it's scanned.
+                fromTray: true, media_type: it.media_type || (it.video_url ? 'video' : (it.audio_url ? 'audio' : 'video')),
+                video_url: it.video_url || null, audio_url: it.audio_url || null,
+              });
             });
           }
         } catch (e) { photos = []; }
@@ -1335,6 +1397,7 @@
         const art = await getArtImage(aspect);
         renderProductOnly(cv, art, aspect);
         updateDetailCta();
+        renderPopcodeCta();
       }
       // Repaint main preview + the 4 view thumbnails from an already-loaded art image
       // (scene switching reuses this — no re-compositing).
@@ -1546,6 +1609,308 @@
         });
       }
 
+      // ── Add / edit Popcode (the headline feature, front and centre) ──────────
+      // The Shop photo is a real Popcode target from one of the user's projects, so
+      // linking/replacing its video or audio here just uploads the file and updates
+      // that photo's collection_items row — the printed photo already scans, this is
+      // what plays. No .mind recompile (the image/target set is unchanged).
+      const MAX_VIDEO_MB = 200;
+      function formatMB(bytes) { return (bytes / (1024 * 1024)).toFixed(1) + ' MB'; }
+      let popEditState = null;
+      let recorder = null; // active audio recorder
+
+      // Does the current photo already play something when scanned?
+      function photoHasExistingMedia(p) { return !!(p && (p.video_url || p.audio_url)); }
+      function renderPopcodeCta() {
+        const has = !!state.selectedPhoto && !!state.selectedPhoto.fromTray;
+        const hasMedia = has && photoHasExistingMedia(state.selectedPhoto);
+        [['detail-popcode-row', 'detail-popcode-label', 'detail-popcode-cta'], ['review-popcode-row', 'review-popcode-label', 'review-popcode-cta']].forEach(([row, label, cta]) => {
+          const r = document.getElementById(row); if (!r) return;
+          r.style.display = has ? '' : 'none';
+          const l = document.getElementById(label); if (l) l.textContent = hasMedia ? 'Edit Popcode' : 'Add Popcode';
+          const c = document.getElementById(cta); if (c) c.classList.toggle('has-media', hasMedia);
+        });
+      }
+      function openPcSheet(html) {
+        const m = document.getElementById('pc-modal');
+        m.innerHTML = '<div class="ep-sheet"><div class="sheet-grip" style="width:38px;height:4px;border-radius:99px;background:#e0ded8;margin:0 auto 14px"></div>' + html + '</div>';
+        m.classList.add('visible'); m.setAttribute('aria-hidden', 'false');
+        // Bind the backdrop-close once, lazily — #pc-modal lives after this <script>,
+        // so it can't be referenced at parse time.
+        if (!m._bound) { m._bound = true; m.addEventListener('click', (e) => { if (e.target.id === 'pc-modal') closePcSheet(); }); }
+      }
+      function closePcSheet() {
+        const m = document.getElementById('pc-modal');
+        m.classList.remove('visible'); m.setAttribute('aria-hidden', 'true'); m.innerHTML = '';
+        if (recorder) { try { if (recorder.timerId) clearInterval(recorder.timerId); recorder.mediaRecorder.stop(); } catch (e) {} recorder = null; }
+      }
+      document.getElementById('detail-popcode-cta').addEventListener('click', openPopcodeSheet);
+      document.getElementById('review-popcode-cta').addEventListener('click', openPopcodeSheet);
+
+      function openPopcodeSheet() {
+        const photo = state.selectedPhoto;
+        if (!photo || !photo.fromTray) { epToast('Pick one of your Popcode photos first.'); return; }
+        popEditState = {
+          mediaType: photo.media_type || 'video',
+          video: null, audio: null,
+          existingVideoUrl: photo.video_url || null, existingAudioUrl: photo.audio_url || null,
+        };
+        renderPopcodeSheet();
+      }
+      function popEditHasMedia(s) {
+        return s.mediaType === 'video' ? !!(s.video || s.existingVideoUrl) : !!(s.audio || s.existingAudioUrl);
+      }
+      function renderPopcodeSheet() {
+        const s = popEditState;
+        const hasExisting = photoHasExistingMedia(state.selectedPhoto);
+        const hasMedia = popEditHasMedia(s);
+        openPcSheet(`
+          <h2>${hasExisting ? 'Edit' : 'Add a'} Popcode</h2>
+          <p class="sheet-sub">Link a video or audio clip. When someone scans this printed photo, it plays automatically.</p>
+          <div class="pop-media-toggle">
+            <button data-mode="video" class="${s.mediaType === 'video' ? 'active' : ''}">Video</button>
+            <button data-mode="audio" class="${s.mediaType === 'audio' ? 'active' : ''}">Audio</button>
+          </div>
+          <div id="pop-body"></div>
+          <div class="pc-actions">
+            <button class="pc-secondary" id="pop-cancel">Cancel</button>
+            <button class="pc-primary" id="pop-save" ${hasMedia ? '' : 'disabled'}>Save Popcode</button>
+          </div>`);
+        document.querySelectorAll('#pc-modal .pop-media-toggle button').forEach(b => {
+          b.addEventListener('click', () => { s.mediaType = b.dataset.mode; renderPopcodeSheet(); });
+        });
+        document.getElementById('pop-save').addEventListener('click', savePopcode);
+        document.getElementById('pop-cancel').addEventListener('click', closePcSheet);
+        renderPopBody();
+      }
+      function renderPopBody() {
+        const s = popEditState;
+        const body = document.getElementById('pop-body');
+        if (s.mediaType === 'video') {
+          if (s.video || s.existingVideoUrl) {
+            const src = s.video ? URL.createObjectURL(s.video) : s.existingVideoUrl;
+            const caption = s.video ? `${s.video.name || 'video'} · ${formatMB(s.video.size)}` : 'Current video';
+            body.innerHTML = `
+              <div class="media-preview show">
+                <video src="${src}" controls playsinline muted></video>
+                <div class="compress-status">${caption}</div>
+                <button class="mini-btn" id="pop-video-change" style="margin-top:10px">Choose a different video</button>
+              </div>`;
+            document.getElementById('pop-video-change').addEventListener('click', () => { s.video = null; s.existingVideoUrl = null; renderPopBody(); syncPopSave(); });
+          } else {
+            body.innerHTML = `
+              <div class="drop-zone">
+                <input type="file" accept="video/*" id="pop-video-input"/>
+                <img class="dz-icon" src="/assets/video.png" alt=""/>
+                <div class="dz-title">Choose a video</div>
+                <div class="dz-sub">Up to ${MAX_VIDEO_MB} MB · large files can be compressed</div>
+              </div>
+              <div id="pop-video-msg"></div>`;
+            document.getElementById('pop-video-input').addEventListener('change', (e) => handleVideoPick(e.target));
+          }
+        } else {
+          if (s.audio || s.existingAudioUrl) {
+            const src = s.audio ? URL.createObjectURL(s.audio) : s.existingAudioUrl;
+            body.innerHTML = `
+              <div class="audio-panel">
+                <div class="audio-player-row">
+                  <button class="audio-play-btn" id="pop-audio-play"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+                  <div class="audio-time" id="pop-audio-dur" style="margin:0">0:00</div>
+                </div>
+                <audio id="pop-audio-el" src="${src}" preload="metadata"></audio>
+                <button class="mini-btn" id="pop-audio-rerec">${s.audio ? 'Re-record' : 'Record a new clip'}</button>
+                ${s.audio ? `<div class="compress-status">${formatMB(s.audio.size)}</div>` : '<div class="compress-status">Current audio</div>'}
+              </div>`;
+            wireAudioPreview();
+            document.getElementById('pop-audio-rerec').addEventListener('click', () => { s.audio = null; s.existingAudioUrl = null; renderPopBody(); syncPopSave(); });
+          } else {
+            body.innerHTML = `
+              <div class="audio-panel">
+                <div class="audio-time" id="pop-audio-elapsed">0:00</div>
+                <button class="audio-rec-btn" id="pop-audio-rec">● Record</button>
+                <div class="dz-sub" style="margin-top:12px">Tap record and speak. Tap again to stop.</div>
+              </div>`;
+            document.getElementById('pop-audio-rec').addEventListener('click', toggleRecord);
+          }
+        }
+        syncPopSave();
+      }
+      function syncPopSave() {
+        const btn = document.getElementById('pop-save');
+        if (btn) btn.disabled = !popEditHasMedia(popEditState);
+      }
+      async function savePopcode() {
+        const s = popEditState;
+        if (!popEditHasMedia(s)) return;
+        const photo = state.selectedPhoto;
+        if (!photo || !photo.collectionId) { epToast('Could not find this photo’s project.'); return; }
+        const btn = document.getElementById('pop-save');
+        btn.disabled = true; btn.textContent = 'Saving…';
+        try {
+          const isVideo = s.mediaType === 'video';
+          const ti = photo.target_index;
+          const patch = { media_type: s.mediaType };
+          if (isVideo && s.video) {
+            const vPath = `${photo.slug}/video_${ti}.mp4`;
+            const up = await db.storage.from('experiences').upload(vPath, s.video, { contentType: s.video.type || 'video/mp4', upsert: true });
+            if (up.error) throw new Error(up.error.message);
+            patch.video_url = db.storage.from('experiences').getPublicUrl(vPath).data.publicUrl + `?v=${Date.now()}`;
+          } else if (!isVideo && s.audio) {
+            const ext = (s.audio.name && s.audio.name.split('.').pop()) || 'wav';
+            const aPath = `${photo.slug}/audio_${ti}.${ext}`;
+            const up = await db.storage.from('experiences').upload(aPath, s.audio, { contentType: s.audio.type || 'audio/wav', upsert: true });
+            if (up.error) throw new Error(up.error.message);
+            patch.audio_url = db.storage.from('experiences').getPublicUrl(aPath).data.publicUrl + `?v=${Date.now()}`;
+            patch.transcript = null; // audio changed — old transcript is stale
+          }
+          const { data: upd, error } = await db.from('collection_items').update(patch)
+            .eq('collection_id', photo.collectionId).eq('target_index', ti).select();
+          if (error) throw error;
+          if (!upd || !upd.length) throw new Error('could not find this photo to update');
+          photo.media_type = s.mediaType;
+          if (patch.video_url) photo.video_url = patch.video_url;
+          if (patch.audio_url) photo.audio_url = patch.audio_url;
+          closePcSheet();
+          renderPopcodeCta();
+          epToast('Popcode saved');
+        } catch (e) {
+          btn.disabled = false; btn.textContent = 'Save Popcode';
+          epToast('Could not save — ' + (e.message || 'try again'));
+          if (window.Sentry) Sentry.captureException(e);
+        }
+      }
+
+      // Video pick + optional compress (ported from the book maker) --------------
+      function canCompressVideo() {
+        try {
+          const canvas = document.createElement('canvas');
+          if (typeof canvas.captureStream !== 'function') return false;
+          if (typeof MediaRecorder === 'undefined') return false;
+          return ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].some(t => MediaRecorder.isTypeSupported(t));
+        } catch (e) { return false; }
+      }
+      function compressVideo(file, onProgress) {
+        const types = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+        const mimeType = types.find(t => MediaRecorder.isTypeSupported(t));
+        return new Promise((resolve, reject) => {
+          const video = document.createElement('video');
+          const srcUrl = URL.createObjectURL(file);
+          video.src = srcUrl; video.muted = true; video.playsInline = true;
+          video.onloadedmetadata = () => {
+            const MAX_DIM = 1280;
+            const scale = Math.min(1, MAX_DIM / Math.max(video.videoWidth || 1, video.videoHeight || 1));
+            const w = Math.max(2, Math.round(video.videoWidth * scale / 2) * 2);
+            const h = Math.max(2, Math.round(video.videoHeight * scale / 2) * 2);
+            const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            const stream = canvas.captureStream(30);
+            const rec = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2500000 });
+            const chunks = [];
+            rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+            rec.onstop = () => { URL.revokeObjectURL(srcUrl); resolve(new Blob(chunks, { type: mimeType.split(';')[0] })); };
+            rec.onerror = e => { URL.revokeObjectURL(srcUrl); reject(e.error || new Error('Compression error')); };
+            let animId;
+            const draw = () => { if (!video.ended && !video.paused) { ctx.drawImage(video, 0, 0, w, h); onProgress && onProgress(video.currentTime / (video.duration || 1)); animId = requestAnimationFrame(draw); } };
+            video.onended = () => { cancelAnimationFrame(animId); rec.stop(); };
+            rec.start(200);
+            video.play().then(draw).catch(reject);
+          };
+          video.onerror = () => reject(new Error('Could not load video for compression'));
+          video.load();
+        });
+      }
+      async function handleVideoPick(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const sizeMB = file.size / (1024 * 1024);
+        const msg = document.getElementById('pop-video-msg');
+        if (sizeMB > MAX_VIDEO_MB) {
+          if (canCompressVideo()) {
+            if (!confirm(`This video is ${sizeMB.toFixed(1)} MB — over the ${MAX_VIDEO_MB} MB limit.\n\nCompress it now? This can take a minute.`)) { input.value = ''; return; }
+            msg.innerHTML = `<div class="compress-status">Compressing… 0%</div><div class="compress-bar-wrap"><div class="compress-bar" id="cbar"></div></div>`;
+            let compressed;
+            try {
+              compressed = await compressVideo(file, p => {
+                document.getElementById('cbar').style.width = Math.round(p * 100) + '%';
+                msg.querySelector('.compress-status').textContent = `Compressing… ${Math.round(p * 100)}%`;
+              });
+            } catch (e) { compressed = null; }
+            const cMB = compressed ? compressed.size / (1024 * 1024) : Infinity;
+            if (compressed && cMB <= MAX_VIDEO_MB) {
+              popEditState.video = new File([compressed], (file.name || 'video').replace(/\.[^.]+$/, '.webm'), { type: compressed.type });
+              renderPopBody(); syncPopSave();
+            } else {
+              msg.innerHTML = `<div class="warn-banner">Still too large${cMB < Infinity ? ' (' + cMB.toFixed(0) + ' MB)' : ''}. Compress further at <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a>, then choose it again.</div>`;
+              input.value = '';
+            }
+          } else {
+            msg.innerHTML = `<div class="warn-banner">${sizeMB.toFixed(1)} MB — over the ${MAX_VIDEO_MB} MB limit. Compress free at <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a>, then choose it again.</div>`;
+            input.value = '';
+          }
+          return;
+        }
+        popEditState.video = file;
+        renderPopBody(); syncPopSave();
+      }
+
+      // Audio record (ported from the book maker) --------------------------------
+      function pickAudioMime() {
+        const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/ogg;codecs=opus'];
+        if (typeof MediaRecorder === 'undefined') return null;
+        for (const c of candidates) if (MediaRecorder.isTypeSupported(c)) {
+          const ext = c.startsWith('audio/webm') ? 'webm' : c.startsWith('audio/mp4') ? 'm4a' : c.startsWith('audio/ogg') ? 'ogg' : 'webm';
+          return { mime: c, ext };
+        }
+        return { mime: '', ext: 'webm' };
+      }
+      async function toggleRecord() {
+        if (recorder) {
+          if (recorder.timerId) clearInterval(recorder.timerId);
+          try { recorder.mediaRecorder.stop(); } catch (e) {}
+          return;
+        }
+        const pick = pickAudioMime();
+        if (!pick) { alert('Audio recording is not supported in this browser.'); return; }
+        let stream;
+        try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+        catch (e) { alert('Microphone access was denied. Enable it in your browser settings and try again.'); return; }
+        const mr = new MediaRecorder(stream, pick.mime ? { mimeType: pick.mime } : {});
+        const chunks = [];
+        mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+        mr.onstop = async () => {
+          const blob = new Blob(chunks, { type: pick.mime || mr.mimeType || 'audio/webm' });
+          stream.getTracks().forEach(t => t.stop());
+          recorder = null;
+          const norm = window.normalizeAudio ? await window.normalizeAudio(blob, pick.ext) : { blob, ext: pick.ext };
+          popEditState.audio = new File([norm.blob], `audio.${norm.ext}`, { type: norm.blob.type });
+          renderPopBody(); syncPopSave();
+        };
+        mr.start();
+        recorder = { mediaRecorder: mr, chunks, stream, ext: pick.ext, startTs: Date.now(), timerId: null };
+        const recBtn = document.getElementById('pop-audio-rec');
+        if (recBtn) { recBtn.textContent = '■ Stop'; recBtn.classList.add('stop'); }
+        recorder.timerId = setInterval(() => {
+          const sec = Math.floor((Date.now() - recorder.startTs) / 1000);
+          const el = document.getElementById('pop-audio-elapsed');
+          if (el) el.innerHTML = `<span class="rec-dot"></span>${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+        }, 250);
+      }
+      function wireAudioPreview() {
+        const audio = document.getElementById('pop-audio-el');
+        const btn = document.getElementById('pop-audio-play');
+        const dur = document.getElementById('pop-audio-dur');
+        if (!audio || !btn) return;
+        const play = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+        const pause = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+        const fmt = sec => (sec && isFinite(sec)) ? `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}` : '0:00';
+        audio.addEventListener('loadedmetadata', () => dur.textContent = fmt(audio.duration));
+        audio.addEventListener('play', () => btn.innerHTML = pause);
+        audio.addEventListener('pause', () => btn.innerHTML = play);
+        audio.addEventListener('timeupdate', () => { if (!audio.paused) dur.textContent = fmt(audio.currentTime); });
+        audio.addEventListener('ended', () => { dur.textContent = fmt(audio.duration); btn.innerHTML = play; });
+        btn.addEventListener('click', () => { if (audio.paused) audio.play(); else audio.pause(); });
+      }
+
       // ---- choose a photo (tray of the user's Popcode photos) ----
       function openPhotoStep() { renderTray(); showStep('photo'); }
       function renderTray() {
@@ -1586,6 +1951,7 @@
         const sm = document.getElementById('save-msg'); sm.textContent = ''; sm.classList.remove('err');
         const sb = document.getElementById('save-btn'); sb.disabled = false; sb.textContent = 'Save to My Designs';
         showStep('review');
+        renderPopcodeCta();
         // aspect-true product with the chosen photo composited in
         const aspect = currentAspect();
         const art = await getArtImage(aspect);
@@ -1794,6 +2160,8 @@
     </script>
     <!-- Edit Photo modal (crop / zoom / reposition / rotate) -->
     <div class="ep-overlay" id="ep-modal" aria-hidden="true"></div>
+    <!-- Add/Edit Popcode modal (link the video or audio that plays when scanned) -->
+    <div class="ep-overlay" id="pc-modal" aria-hidden="true"></div>
     <div class="ep-toast" id="ep-toast"></div>
   </body>
 </html>
