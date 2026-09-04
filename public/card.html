@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+    <script
+      src="https://browser.sentry-cdn.com/10.59.0/bundle.min.js"
+      integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
+      crossorigin="anonymous"></script>
+    <script src="/sentry-init.js"></script>
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
+    <meta property="og:title" content="Popcode — Holiday Cards">
+    <meta property="og:description" content="Flat 5×7 photo cards that come to life when you scan them.">
+    <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=2">
+    <meta property="og:type" content="website">
+    <title>Popcode — Cards</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <script src="/slug.js"></script>
+    <script src="/card-templates.js"></script>
+    <script src="/unsplash-samples.js"></script>
+    <!-- MindAR compiler only (no AR rendering here) — stub AFRAME so the bundle
+         loads without booting WebGL. Same trick as create.html / calendar.html. -->
+    <script>
+      window.AFRAME = window.AFRAME || {
+        registerSystem(){}, registerComponent(){}, registerShader(){},
+        registerGeometry(){}, registerPrimitive(){}, registerElement(){}
+      };
+    </script>
+    <script src="/vendor/mindar/1.2.2/mindar-image-aframe.prod.js"></script>
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        min-height: 100vh; background: #f7f6f2; font-family: 'Inter', sans-serif;
+        color: #1a1a1a; -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── Top bar ─────────────────────────────────────────────────────── */
+      .top-bar { padding: 22px 24px 0; max-width: 1180px; margin: 0 auto; }
+      .bi-back { display: inline-block; color: #7657FC; font-weight: 600; font-size: 14px; text-decoration: none; margin-bottom: 18px; }
+      h1 { font-size: 40px; font-weight: 400; font-family: 'CooperBT', serif; line-height: 1.05; margin-bottom: 6px; }
+      .subtitle { color: #8a857d; font-size: 15px; margin-bottom: 22px; }
+
+      /* ── Step 1: occasion + template grid ────────────────────────────── */
+      .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px 120px; }
+      .occ-group { margin-bottom: 26px; }
+      .occ-group-name { font-family: 'CooperBT', serif; font-size: 20px; margin-bottom: 10px; }
+      .occ-row { display: flex; flex-wrap: wrap; gap: 8px; }
+      .occ-chip {
+        border: 1px solid #e4e2dc; background: #fff; border-radius: 999px;
+        padding: 8px 15px; font-size: 13px; font-weight: 600; cursor: pointer;
+        font-family: 'Inter', sans-serif; color: #1a1a1a;
+      }
+      .occ-chip.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+      .occ-chip .n { opacity: 0.45; margin-left: 5px; font-weight: 400; }
+
+      .tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; margin-top: 26px; }
+      .tpl-card { cursor: pointer; }
+      .tpl-stage { background: #eceae4; border-radius: 10px; padding: 16px; display: flex; justify-content: center; }
+      .tpl-name { font-size: 13px; font-weight: 600; margin-top: 9px; }
+      .tpl-meta { font-size: 12px; color: #8a857d; margin-top: 1px; }
+
+      /* ── The card face ───────────────────────────────────────────────────
+         Geometry is fractional (see lib/print/cards.mjs). `container-type: size`
+         makes cqw/cqh resolve against the CARD, so one set of numbers drives the
+         editor and the 300 DPI bake — same discipline as book.html's cover. */
+      .card-face {
+        position: relative; overflow: hidden; background: #fff;
+        container-type: size; box-shadow: 0 3px 14px rgba(0,0,0,0.13);
+        flex: none;
+      }
+      .cf-photo { position: absolute; overflow: hidden; background: #dedbd4; }
+      .cf-photo img { position: absolute; width: 100%; height: 100%; object-fit: cover; }
+      .cf-photo.empty::after {
+        content: '+'; position: absolute; inset: 0; display: flex;
+        align-items: center; justify-content: center;
+        font-size: 8cqh; color: #a9a49b; font-family: 'Inter', sans-serif; font-weight: 300;
+      }
+      .cf-scrim { position: absolute; inset: 0; pointer-events: none;
+        background: linear-gradient(to bottom, rgba(0,0,0,0) 42%, rgba(0,0,0,0.55) 100%); }
+      .cf-band { position: absolute; left: 0; right: 0; bottom: 0; }
+      .cf-text { position: absolute; line-height: 1.15; white-space: pre-wrap; word-break: break-word; }
+      .cf-text[contenteditable="true"]:focus { outline: 2px solid #7657FC; outline-offset: 3px; border-radius: 2px; }
+      .cf-text.placeholder::before { content: attr(data-ph); opacity: 0.42; }
+      .cf-pop {
+        position: absolute; right: 3.2%; bottom: 2.6%; width: 7%; z-index: 4;
+        opacity: 0.92; pointer-events: none;
+      }
+
+      /* ── Step 2: editor ──────────────────────────────────────────────── */
+      .editor { display: flex; gap: 34px; align-items: flex-start; flex-wrap: wrap; }
+      .ed-stage { flex: 1 1 320px; display: flex; justify-content: center; padding: 8px 0 20px; }
+      .ed-side { flex: 0 0 340px; max-width: 100%; }
+      @media (max-width: 780px) { .ed-side { flex: 1 1 100%; } }
+
+      .panel { background: #fff; border-radius: 16px; padding: 20px; margin-bottom: 16px; }
+      .panel h3 { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+      .panel .hint { font-size: 12.5px; color: #8a857d; line-height: 1.5; margin-bottom: 14px; }
+      .field { margin-bottom: 13px; }
+      .field label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px; }
+      .field label .lim { float: right; font-weight: 400; color: #b3aea5; }
+      .text-input {
+        width: 100%; border: 1.5px solid #e4e2dc; border-radius: 11px; padding: 11px 13px;
+        font-size: 14px; font-family: 'Inter', sans-serif; background: #fff; color: #1a1a1a;
+      }
+      .text-input:focus { outline: none; border-color: #7657FC; }
+
+      .pack-row { display: flex; gap: 8px; flex-wrap: wrap; }
+      .pack-btn {
+        flex: 1 1 68px; border: 1.5px solid #e4e2dc; background: #fff; border-radius: 12px;
+        padding: 10px 6px; cursor: pointer; font-family: 'Inter', sans-serif; text-align: center;
+      }
+      .pack-btn.active { border-color: #1a1a1a; background: #1a1a1a; color: #fff; }
+      .pack-qty { font-size: 15px; font-weight: 700; }
+      .pack-each { font-size: 11px; opacity: 0.6; margin-top: 2px; }
+
+      .price-row { display: flex; align-items: baseline; justify-content: space-between; margin-top: 4px; }
+      .price-big { font-family: 'CooperBT', serif; font-size: 30px; }
+      .price-note { font-size: 12px; color: #8a857d; }
+
+      .btn-primary {
+        width: 100%; padding: 15px; border: none; border-radius: 14px; background: #1a1a1a;
+        color: #fff; font-size: 15px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer;
+      }
+      .btn-primary:disabled { opacity: 0.4; cursor: default; }
+      .btn-ghost {
+        width: 100%; padding: 13px; border: 1.5px solid #e4e2dc; border-radius: 14px; background: #fff;
+        color: #1a1a1a; font-size: 14px; font-weight: 700; font-family: 'Inter', sans-serif;
+        cursor: pointer; margin-top: 9px;
+      }
+
+      /* ── Sheet (shared idiom) ────────────────────────────────────────── */
+      .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; z-index: 8000; align-items: flex-end; justify-content: center; }
+      .overlay.visible { display: flex; }
+      .sheet { background: #fff; width: 100%; max-width: 520px; border-radius: 22px 22px 0 0; padding: 26px 24px 32px; max-height: 86vh; overflow-y: auto; }
+      @media (min-width: 620px) { .overlay { align-items: center; } .sheet { border-radius: 22px; } }
+      .sheet h2 { font-size: 19px; font-weight: 700; margin-bottom: 4px; }
+      .sheet-sub { font-size: 13px; color: #888; margin-bottom: 18px; line-height: 1.5; }
+      .sheet-actions { display: flex; gap: 12px; margin-top: 20px; }
+      .sheet-actions button { flex: 1; padding: 14px; border-radius: 14px; font-size: 15px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; border: none; }
+      .photos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 9px; }
+      .photos-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 9px; cursor: pointer; }
+      .hidden { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <div class="top-bar">
+      <a class="bi-back" href="/shop.html">&larr; Back to Shop</a>
+      <h1 id="page-title">Holiday Cards</h1>
+      <p class="subtitle" id="page-sub">Flat 5&times;7&Prime; photo cards. Scan the photo and your video plays.</p>
+    </div>
+
+    <div class="wrap">
+      <div id="step-browse"></div>
+      <div id="step-edit" class="hidden"></div>
+    </div>
+
+    <div class="overlay" id="overlay"><div class="sheet" id="sheet"></div></div>
+    <input type="file" id="photo-input" accept="image/*" class="hidden"/>
+    <input type="file" id="video-input" accept="video/*" class="hidden"/>
+
+    <script>
+      const C = window.PopcodeCards;
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      const $ = (id) => document.getElementById(id);
+
+      let currentUser = null;
+      let state = {
+        occasionId: 'christmas',
+        template: null,
+        text: {},               // zoneId -> string typed by the buyer
+        photos: {},             // slotId -> { url, file }
+        pack: C.DEFAULT_PACK,
+        popcode: null,          // { file, url } video attached to the popcode slot
+      };
+
+      function openSheet(html) { $('sheet').innerHTML = html; $('overlay').classList.add('visible'); }
+      function closeSheet() { $('overlay').classList.remove('visible'); }
+      $('overlay').addEventListener('click', (e) => { if (e.target === $('overlay')) closeSheet(); });
+      const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+      // ── Card renderer ───────────────────────────────────────────────────
+      // ONE function draws the picker thumbnail, the live editor, and (at print
+      // scale) the bake. Fractional geometry + container queries mean the only
+      // difference between a 200px thumbnail and a 1575px print asset is the
+      // element's width — never a second layout code path that can drift.
+      function renderCard(tpl, opts) {
+        opts = opts || {};
+        const widthPx = opts.width || 300;
+        const fmt = C.CARD_FORMATS[tpl.formatId];
+        const land = tpl.orientation === 'landscape';
+        const aspect = land ? 1 / fmt.aspect : fmt.aspect;
+
+        const face = document.createElement('div');
+        face.className = 'card-face';
+        face.style.width = widthPx + 'px';
+        face.style.height = Math.round(widthPx / aspect) + 'px';
+        if (tpl.palette && tpl.palette.band) face.style.background = tpl.palette.band;
+
+        // Photo slots.
+        (tpl.photos || []).forEach((slot) => {
+          const d = document.createElement('div');
+          d.className = 'cf-photo';
+          d.style.left = slot.x * 100 + '%';
+          d.style.top = slot.y * 100 + '%';
+          d.style.width = slot.w * 100 + '%';
+          d.style.height = slot.h * 100 + '%';
+          const got = (opts.photos || {})[slot.id];
+          if (got && got.url) {
+            const im = document.createElement('img');
+            im.src = got.url;
+            if (opts.crossOrigin) im.crossOrigin = 'anonymous';
+            d.appendChild(im);
+          } else if (opts.sample) {
+            const im = document.createElement('img');
+            im.src = opts.sample;
+            d.appendChild(im);
+          } else {
+            d.classList.add('empty');
+          }
+          if (opts.onPickPhoto) {
+            d.style.cursor = 'pointer';
+            d.addEventListener('click', () => opts.onPickPhoto(slot.id));
+          }
+          face.appendChild(d);
+        });
+
+        // Scrim only when type sits directly on a full-bleed photo.
+        if (tpl.palette && typeof tpl.palette.scrim === 'number') {
+          const s = document.createElement('div');
+          s.className = 'cf-scrim';
+          s.style.opacity = String(tpl.palette.scrim / 0.55);
+          face.appendChild(s);
+        }
+
+        // Text zones.
+        C.resolveText(tpl, opts.text || {}).forEach((z) => {
+          const t = document.createElement('div');
+          t.className = 'cf-text';
+          t.style.top = z.y * 100 + '%';
+          t.style.fontSize = (z.size * 100) + 'cqh';
+          t.style.color = z.color;
+          t.style.textAlign = z.align;
+          t.style.fontWeight = String(z.weight || 400);
+          t.style.fontFamily = z.font === 'inter'
+            ? "'Inter', sans-serif"
+            : "'Cormorant Garamond', 'CooperBT', serif";
+          const w = (z.maxW || 0.84) * 100;
+          t.style.width = w + '%';
+          t.style.left = (z.align === 'center' ? (z.x * 100 - w / 2) : z.x * 100) + '%';
+          t.textContent = z.value;
+
+          if (opts.editable) {
+            t.contentEditable = 'plaintext-only';
+            t.dataset.zone = z.id;
+            t.dataset.ph = (C.TEXT_ROLES[z.role] || {}).hint || '';
+            if (!z.value) t.classList.add('placeholder');
+            t.addEventListener('input', () => {
+              const max = (C.TEXT_ROLES[z.role] || {}).maxChars || 120;
+              if (t.textContent.length > max) t.textContent = t.textContent.slice(0, max);
+              state.text[z.id] = t.textContent;
+              t.classList.toggle('placeholder', !t.textContent);
+              if (face.isConnected) fitCardText(face);
+              syncSideInputs();
+            });
+            // Enter would inject a newline the print bake can't honour.
+            t.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); t.blur(); } });
+          }
+          face.appendChild(t);
+        });
+
+        // The Popcode symbol — printed on every card so a recipient knows to scan.
+        if (opts.showBadge !== false) {
+          const b = document.createElement('img');
+          b.className = 'cf-pop';
+          b.src = '/assets/popcode-symbol.png';
+          b.alt = '';
+          face.appendChild(b);
+        }
+        return face;
+      }
+
+      // Shrink a zone's type until it fits its role's maxLines. Must run AFTER the
+      // face is in the document (detached elements have no layout). Idempotent, so
+      // re-running on resize is safe. Applied at every scale — thumbnail, editor and
+      // print bake — so what fits on screen is what fits on the card.
+      function fitCardText(face) {
+        face.querySelectorAll('.cf-text').forEach((el) => {
+          const maxLines = parseInt(el.dataset.maxLines, 10) || 1;
+          const base = parseFloat(el.dataset.baseFs || getComputedStyle(el).fontSize);
+          el.dataset.baseFs = String(base);
+          el.style.fontSize = base + 'px';
+          const lh = 1.15;
+          let fs = base;
+          // 12 halvings of a 0.94 step bottoms out near 50% — enough for any
+          // realistic overrun, and bounded so a pathological string can't hang.
+          for (let i = 0; i < 12 && el.scrollHeight > fs * lh * maxLines + 1; i++) {
+            fs *= 0.94;
+            el.style.fontSize = fs + 'px';
+          }
+        });
+      }
+
+      // ── Step 1: browse ──────────────────────────────────────────────────
+      function renderBrowse() {
+        const host = $('step-browse');
+        host.innerHTML = '';
+        const live = C.occasionsWithCounts();
+        if (!live.some((o) => o.id === state.occasionId)) state.occasionId = live[0].id;
+
+        const groups = [...new Set(live.map((o) => o.group))];
+        groups.forEach((g) => {
+          const wrap = document.createElement('div');
+          wrap.className = 'occ-group';
+          wrap.innerHTML = '<div class="occ-group-name">' + esc(g) + '</div>';
+          const row = document.createElement('div');
+          row.className = 'occ-row';
+          live.filter((o) => o.group === g).forEach((o) => {
+            const b = document.createElement('button');
+            b.className = 'occ-chip' + (o.id === state.occasionId ? ' active' : '');
+            b.innerHTML = esc(o.label) + '<span class="n">' + o.count + '</span>';
+            b.addEventListener('click', () => { state.occasionId = o.id; renderBrowse(); });
+            row.appendChild(b);
+          });
+          wrap.appendChild(row);
+          host.appendChild(wrap);
+        });
+
+        const grid = document.createElement('div');
+        grid.className = 'tpl-grid';
+        const tpls = C.templatesForOccasion(state.occasionId);
+        const samples = window.unsplashSamples ? window.unsplashSamples(tpls.length, 700) : [];
+        tpls.forEach((t, i) => {
+          const card = document.createElement('div');
+          card.className = 'tpl-card';
+          const stage = document.createElement('div');
+          stage.className = 'tpl-stage';
+          const thumb = renderCard(t, { width: 168, sample: samples[i] || '/assets/sample-photo.jpg' });
+          stage.appendChild(thumb);
+          card.appendChild(stage);
+          requestAnimationFrame(() => fitCardText(thumb));
+          const fmt = C.CARD_FORMATS[t.formatId];
+          card.insertAdjacentHTML('beforeend',
+            '<div class="tpl-name">' + esc(t.name) + '</div>' +
+            '<div class="tpl-meta">' + esc(fmt.label.replace('Flat Card ', '')) + ' flat &middot; ' +
+            (t.photos.length) + ' photo' + (t.photos.length > 1 ? 's' : '') + '</div>');
+          card.addEventListener('click', () => chooseTemplate(t));
+          grid.appendChild(card);
+        });
+        host.appendChild(grid);
+
+        const occ = C.occasionById(state.occasionId);
+        $('page-title').textContent = occ ? occ.label : 'Cards';
+      }
+
+      function chooseTemplate(tpl) {
+        state.template = tpl;
+        state.text = {};
+        state.photos = {};
+        state.popcode = null;
+        $('step-browse').classList.add('hidden');
+        $('step-edit').classList.remove('hidden');
+        renderEditor();
+        window.scrollTo(0, 0);
+      }
+
+      // ── Step 2: editor ──────────────────────────────────────────────────
+      function renderEditor() {
+        const tpl = state.template;
+        const host = $('step-edit');
+        host.innerHTML =
+          '<div class="editor">' +
+            '<div class="ed-stage" id="ed-stage"></div>' +
+            '<div class="ed-side">' +
+              '<div class="panel"><h3>Your words</h3>' +
+                '<p class="hint">Type straight onto the card, or edit here. The layout is fixed so it always prints clean.</p>' +
+                '<div id="zone-fields"></div></div>' +
+              '<div class="panel"><h3>Bring it to life</h3>' +
+                '<p class="hint" id="pop-hint"></p>' +
+                '<button class="btn-ghost" id="pop-btn" style="margin-top:0">Attach a video</button></div>' +
+              '<div class="panel"><h3>How many?</h3>' +
+                '<p class="hint">Envelopes included. The more you order, the less each one costs.</p>' +
+                '<div class="pack-row" id="pack-row"></div>' +
+                '<div class="price-row"><span class="price-big" id="price-big">&mdash;</span>' +
+                '<span class="price-note" id="price-note"></span></div></div>' +
+              '<button class="btn-primary" id="save-btn">Save this card</button>' +
+              '<button class="btn-ghost" id="back-btn">&larr; Pick a different design</button>' +
+            '</div>' +
+          '</div>';
+
+        drawEditorCard();
+        renderZoneFields();
+        renderPacks();
+        updatePopHint();
+
+        $('back-btn').addEventListener('click', () => {
+          $('step-edit').classList.add('hidden');
+          $('step-browse').classList.remove('hidden');
+          renderBrowse();
+        });
+        $('pop-btn').addEventListener('click', () => $('video-input').click());
+        $('save-btn').addEventListener('click', saveCard);
+      }
+
+      function drawEditorCard() {
+        const stage = $('ed-stage');
+        stage.innerHTML = '';
+        const w = Math.min(360, Math.max(240, window.innerWidth - 80));
+        const face = renderCard(state.template, {
+          width: w, editable: true, text: state.text, photos: state.photos,
+          onPickPhoto: pickPhotoFor,
+        });
+        stage.appendChild(face);
+        fitCardText(face);
+      }
+
+      // Side inputs and on-card editing are two views of the same string.
+      function renderZoneFields() {
+        const host = $('zone-fields');
+        host.innerHTML = '';
+        C.resolveText(state.template, state.text).forEach((z) => {
+          const role = C.TEXT_ROLES[z.role] || {};
+          const f = document.createElement('div');
+          f.className = 'field';
+          f.innerHTML =
+            '<label for="zf-' + z.id + '">' + esc(role.label || z.id) +
+            '<span class="lim" id="lim-' + z.id + '"></span></label>' +
+            '<input class="text-input" id="zf-' + z.id + '" maxlength="' + (role.maxChars || 120) +
+            '" value="' + esc(z.value) + '" placeholder="' + esc(role.hint || '') + '"/>';
+          host.appendChild(f);
+          const input = f.querySelector('input');
+          input.addEventListener('input', () => {
+            state.text[z.id] = input.value;
+            const el = $('ed-stage').querySelector('[data-zone="' + z.id + '"]');
+            if (el) {
+              el.textContent = input.value;
+              el.classList.toggle('placeholder', !input.value);
+              const f = el.closest('.card-face');
+              if (f) fitCardText(f);
+            }
+            updateLimit(z.id, input.value.length, role.maxChars || 120);
+          });
+          updateLimit(z.id, z.value.length, role.maxChars || 120);
+        });
+      }
+      function updateLimit(id, len, max) {
+        const el = $('lim-' + id);
+        if (el) el.textContent = len > max - 8 ? len + '/' + max : '';
+      }
+      // On-card typing → mirror into the side inputs.
+      function syncSideInputs() {
+        C.resolveText(state.template, state.text).forEach((z) => {
+          const input = $('zf-' + z.id);
+          if (input && input.value !== z.value) input.value = z.value;
+          updateLimit(z.id, z.value.length, (C.TEXT_ROLES[z.role] || {}).maxChars || 120);
+        });
+      }
+
+      function renderPacks() {
+        const row = $('pack-row');
+        row.innerHTML = '';
+        C.CARD_PACKS.forEach((p) => {
+          const b = document.createElement('button');
+          b.className = 'pack-btn' + (p.qty === state.pack ? ' active' : '');
+          b.innerHTML = '<div class="pack-qty">' + p.qty + '</div>' +
+            '<div class="pack-each">' + (p.discount ? 'save ' + Math.round(p.discount * 100) + '%' : 'cards') + '</div>';
+          b.addEventListener('click', () => { state.pack = p.qty; renderPacks(); refreshPrice(); });
+          row.appendChild(b);
+        });
+        refreshPrice();
+      }
+
+      // Price comes from the server (never computed here — the client is not
+      // trusted for money). Until the Printify card SKU is pinned down the quote
+      // endpoint has nothing to price, so we show a placeholder rather than a
+      // number we'd have to walk back.
+      async function refreshPrice() {
+        $('price-big').textContent = '—';
+        $('price-note').textContent = state.pack + ' cards · pricing once the card SKU is live';
+      }
+
+      function updatePopHint() {
+        const slot = state.template.popcodeSlot;
+        const has = !!state.popcode;
+        $('pop-hint').textContent = has
+          ? 'Video attached. Scanning the photo on the printed card plays it.'
+          : 'Attach a video and the photo on this card becomes scannable — point a phone at it and the video plays.';
+        $('pop-btn').textContent = has ? 'Replace video' : 'Attach a video';
+        void slot;
+      }
+
+      // ── Photos ──────────────────────────────────────────────────────────
+      let pendingSlot = null;
+      function pickPhotoFor(slotId) {
+        pendingSlot = slotId;
+        $('photo-input').click();
+      }
+      $('photo-input').addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        e.target.value = '';
+        if (!file || !pendingSlot) return;
+        state.photos[pendingSlot] = { file, url: URL.createObjectURL(file) };
+        pendingSlot = null;
+        drawEditorCard();
+      });
+      $('video-input').addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        e.target.value = '';
+        if (!file) return;
+        state.popcode = { file, url: URL.createObjectURL(file) };
+        updatePopHint();
+      });
+
+      // ── Save ────────────────────────────────────────────────────────────
+      // Persists as a design (kind:'card') the same way order.html saves print
+      // designs — reuses collections + book_layout jsonb, so My Designs, rename
+      // and delete all work with no migration.
+      async function saveCard() {
+        const tpl = state.template;
+        const need = tpl.photos.filter((s) => !state.photos[s.id]);
+        if (need.length) { alert('Add ' + (need.length === 1 ? 'a photo' : need.length + ' photos') + ' first.'); return; }
+
+        const btn = $('save-btn');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        try {
+          const slug = await window.generateUniqueSlug();
+          const uploaded = {};
+          for (const s of tpl.photos) {
+            const p = state.photos[s.id];
+            const ext = (p.file.name.split('.').pop() || 'jpg').toLowerCase();
+            const path = slug + '/card/' + s.id + '.' + ext;
+            const up = await db.storage.from('experiences').upload(path, p.file, { upsert: true });
+            if (up.error) throw up.error;
+            uploaded[s.id] = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+          }
+
+          const headline = (C.resolveText(tpl, state.text).find((z) => z.role === 'headline') || {}).value || tpl.name;
+          const row = {
+            slug,
+            name: 'Cards · ' + C.CARD_FORMATS[tpl.formatId].label.replace('Flat Card ', '') + ' — ' + headline,
+            kind: 'card',
+            user_id: currentUser.id,
+            mind_file_url: '',
+            book_layout: {
+              card: {
+                templateId: tpl.id,
+                formatId: tpl.formatId,
+                orientation: tpl.orientation,
+                occasionId: state.occasionId,
+                text: state.text,
+                photos: uploaded,
+                pack: state.pack,
+              },
+            },
+          };
+          const ins = await db.from('collections').insert(row).select();
+          if (ins.error) throw ins.error;
+          if (!ins.data || !ins.data.length) throw new Error('Save was blocked — check you are signed in.');
+
+          openSheet('<h2>Card saved</h2><p class="sheet-sub">It is in My Designs. Ordering opens up once the flat 5&times;7 card SKU is wired to Printify.</p>' +
+            '<div class="sheet-actions"><button style="background:#f0efec" onclick="location.href=\'/manage.html\'">My Designs</button>' +
+            '<button style="background:#1a1a1a;color:#fff" onclick="location.reload()">Make another</button></div>');
+        } catch (err) {
+          alert('Could not save: ' + (err.message || err));
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Save this card';
+        }
+      }
+
+      // ── Boot ────────────────────────────────────────────────────────────
+      // Deferred to DOMContentLoaded: running at parse time would hit the TDZ on
+      // the `let`s above (the scan.html lesson).
+      document.addEventListener('DOMContentLoaded', () => {
+        if (!C || !C.CARD_TEMPLATES) {
+          document.querySelector('.wrap').innerHTML =
+            '<p style="color:#b00">Card templates failed to load. Run <code>node scripts/build-card-templates.mjs</code>.</p>';
+          return;
+        }
+        const q = new URLSearchParams(location.search);
+        if (q.get('occasion')) state.occasionId = q.get('occasion');
+        db.auth.getSession().then(({ data }) => {
+          if (!data.session) { location.href = '/auth.html'; return; }
+          currentUser = data.session.user;
+          renderBrowse();
+        });
+      });
+    </script>
+  </body>
+</html>
