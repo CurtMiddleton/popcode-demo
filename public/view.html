@@ -652,38 +652,40 @@
         return scene;
       }
 
+      // Reads through /api/collection rather than querying Supabase directly.
+      // The anon key can no longer SELECT the content tables (see
+      // supabase/migrations/2026-09-04-lock-content-tables.sql) — the endpoint
+      // uses the service key server-side and returns only the player's fields.
       async function loadCollection(id) {
         let mindUrl, mediaMap = {};
 
-        const { data: col } = await db.from('collections').select('*').eq('slug', id).single();
+        let col = null;
+        try {
+          const resp = await fetch('/api/collection?slug=' + encodeURIComponent(id));
+          if (resp.ok) col = await resp.json();
+        } catch (e) { /* fall through to the error screen */ }
 
-        if (col) {
-          // Save to recent views localStorage
-          try {
-            const views = JSON.parse(localStorage.getItem('popcode_views') || '{}');
-            views[id] = { name: col.name || id, last_viewed: new Date().toISOString() };
-            localStorage.setItem('popcode_views', JSON.stringify(views));
-          } catch(e) {}
-          mindUrl = col.mind_file_url;
-          applyCoverConfig(col.cover_config);
-          const { data: items } = await db.from('collection_items')
-            .select('*').eq('collection_id', col.id).order('target_index');
-          (items || []).forEach(item => {
-            mediaMap[item.target_index] = {
-              type: item.media_type === 'audio' ? 'audio' : 'video',
-              videoUrl: item.video_url || null,
-              audioUrl: item.audio_url || null,
-              transcript: item.transcript || null,
-              photoUrl: item.photo_url || null
-            };
-          });
-          if (!mindUrl || Object.keys(mediaMap).length === 0) { showError(); return; }
-        } else {
-          const { data: exp } = await db.from('experiences').select('*').eq('slug', id).single();
-          if (!exp) { showError(); return; }
-          mindUrl = exp.mind_file_url;
-          mediaMap[0] = { type: 'video', videoUrl: exp.video_url, audioUrl: null, transcript: null, photoUrl: null };
-        }
+        if (!col) { showError(); return; }
+
+        // Save to recent views localStorage
+        try {
+          const views = JSON.parse(localStorage.getItem('popcode_views') || '{}');
+          views[id] = { name: col.name || id, last_viewed: new Date().toISOString() };
+          localStorage.setItem('popcode_views', JSON.stringify(views));
+        } catch(e) {}
+
+        mindUrl = col.mind_file_url;
+        applyCoverConfig(col.cover_config);
+        (col.items || []).forEach(item => {
+          mediaMap[item.target_index] = {
+            type: item.media_type === 'audio' ? 'audio' : 'video',
+            videoUrl: item.video_url || null,
+            audioUrl: item.audio_url || null,
+            transcript: item.transcript || null,
+            photoUrl: item.photo_url || null
+          };
+        });
+        if (!mindUrl || Object.keys(mediaMap).length === 0) { showError(); return; }
 
         // Save for scene rebuilds on rescan
         savedMindUrl = mindUrl;

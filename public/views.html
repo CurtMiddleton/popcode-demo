@@ -181,17 +181,16 @@
       async function attachThumbs(views) {
         if (!views.length) return;
         try {
-          var slugs = views.map(function(v){ return v.slug; });
-          var { data: cols } = await db.from('collections').select('id, slug').in('slug', slugs);
-          if (!cols || !cols.length) return;
-          var slugById = {};
-          cols.forEach(function(c){ slugById[c.id] = c.slug; });
-          var { data: rows } = await db.from('collection_items')
-            .select('collection_id, photo_url, target_index')
-            .in('collection_id', cols.map(function(c){ return c.id; })).order('target_index');
-          var firstBySlug = {};
-          (rows || []).forEach(function(r){ var s = slugById[r.collection_id]; if (s && !firstBySlug[s] && r.photo_url) firstBySlug[s] = r.photo_url; });
-          views.forEach(function(v){ v.thumb = firstBySlug[v.slug] || null; });
+          // A recently-scanned list is by definition other people's projects,
+          // so this can't read the owner-scoped tables. popcode_view_cards is
+          // SECURITY DEFINER and returns name + first photo only, for slugs the
+          // viewer already has.
+          var slugs = views.map(function(v){ return v.slug; }).slice(0, 100);
+          var { data: cards } = await db.rpc('popcode_view_cards', { slugs: slugs });
+          if (!cards || !cards.length) return;
+          var thumbBySlug = {};
+          cards.forEach(function(c){ if (c.thumb) thumbBySlug[c.slug] = c.thumb; });
+          views.forEach(function(v){ v.thumb = thumbBySlug[v.slug] || null; });
         } catch (e) {}
       }
 
@@ -229,7 +228,7 @@
 
           // Fetch collection names
           var slugs = Object.keys(seen);
-          var { data: cols } = await db.from('collections').select('slug, name').in('slug', slugs);
+          var { data: cols } = await db.rpc('popcode_view_cards', { slugs: slugs.slice(0, 100) });
           var nameMap = {};
           (cols || []).forEach(function(c) { nameMap[c.slug] = c.name || c.slug; });
 

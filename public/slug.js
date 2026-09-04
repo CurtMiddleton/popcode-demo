@@ -87,16 +87,17 @@
     var out = new Set();
     if (!list || !list.length) return Promise.resolve(out);
     var uniq = Array.from(new Set(list));
-    return Promise.all([
-      db.from('collections').select('slug').in('slug', uniq),
-      db.from('experiences').select('slug').in('slug', uniq)
-    ]).then(function (results) {
-      results.forEach(function (r) {
-        // A read error can't be read as "free" — that would hand out a slug
-        // that fails at insert time. Surface it instead.
-        if (r && r.error) throw r.error;
-        (r && r.data || []).forEach(function (row) { out.add(row.slug); });
-      });
+    // Goes through an RPC rather than reading the tables: availability has to
+    // consider slugs owned by everyone, but the content tables are now scoped
+    // to their owner. popcode_slugs_taken is SECURITY DEFINER and answers only
+    // for candidates you supply, so it can't be used to enumerate. It covers
+    // the legacy `experiences` slugs too — view.html still falls back to them,
+    // so they're live URLs and have to count as taken.
+    return db.rpc('popcode_slugs_taken', { slugs: uniq }).then(function (r) {
+      // A read error can't be read as "free" — that would hand out a slug
+      // that fails at insert time. Surface it instead.
+      if (r && r.error) throw r.error;
+      (r && r.data || []).forEach(function (slug) { out.add(slug); });
       return out;
     });
   }

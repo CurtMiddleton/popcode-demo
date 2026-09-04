@@ -2,7 +2,15 @@ import { createClient } from '@supabase/supabase-js';
 import { Sentry } from './_sentry.js';
 
 const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
+
+// This runs server-side, so it has no reason to write as anon. Using the
+// service key here is what makes it possible to revoke anon INSERT on
+// scan_events — without that, anyone holding the public key (i.e. anyone) can
+// post arbitrary analytics rows. Falls back to anon so logging degrades rather
+// than breaks if the service key is missing from an environment; revoke the
+// anon grant only once you've confirmed it's set everywhere.
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 
 export default async function handler(req, res) {
   // Allow CORS from popcode.app
