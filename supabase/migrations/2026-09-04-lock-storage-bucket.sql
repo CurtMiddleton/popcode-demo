@@ -14,8 +14,13 @@
 -- Verified 2026-09-04 from outside, with only the public key:
 --   * listing the bucket returned all 52 project folders
 --   * listing one folder returned photo_0.jpg / target.mind / video_0.mp4
---   * a DELETE of a non-existent path returned `NoSuchKey` (not a permission
---     error) — i.e. the policy permitted the delete, the object just wasn't there
+--   * anonymous upload to a junk path was ACCEPTED before this change and is
+--     refused after it with 403 "new row violates row-level security policy"
+--
+-- (Note: a DELETE probe against a non-existent path is NOT a permission test —
+-- it returns `NoSuchKey` whether or not the policy allows it, because the
+-- Storage API looks the object up before RLS decides. The conclusive evidence
+-- for the before-state is the policy definition above: ALL + public.)
 --
 -- That is worse than the database hole fixed earlier today. Overwriting
 -- {slug}/video_0.mp4 repoints every printed copy of that book directly, with no
