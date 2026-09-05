@@ -530,7 +530,16 @@
         btn.disabled = true;
         btn.textContent = 'Saving…';
         try {
-          const slug = await window.generateUniqueSlug();
+          // PopcodeSlug.randomSlug() is 8 chars from the same alphabet the rest of
+          // the app uses; isAvailable() checks it against existing collections.
+          // Retry a few times rather than trusting one draw (collisions are rare
+          // but a duplicate slug would silently collide with someone's project).
+          let slug = null;
+          for (let i = 0; i < 6 && !slug; i++) {
+            const cand = PopcodeSlug.randomSlug();
+            if (await PopcodeSlug.isAvailable(db, cand)) slug = cand;
+          }
+          if (!slug) throw new Error('Could not reserve a link — please try again.');
           const uploaded = {};
           for (const s of tpl.photos) {
             const p = state.photos[s.id];
