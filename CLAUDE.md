@@ -17,8 +17,8 @@ User-facing copy calls them **"Projects"** (renamed from "Collections" on 2026-0
 ## Stack
 - Frontend: Vanilla HTML/CSS/JS (no framework)
 - AR: MindAR (`mind-ar@1.2.2`) + A-Frame (`1.4.2`)
-  - **MindAR is VENDORED** (self-hosted, not CDN) at `public/vendor/mindar/1.2.2/mindar-image-aframe.prod.js`. Loaded by `view.html`, `create.html`, `edit.html`. Pinned to upstream commit `1ad668d` (npm 1.2.2). Rebuild/upgrade/rollback steps + integrity hashes live in `public/vendor/mindar/1.2.2/PROVENANCE.md`. See 2026-06-06 session note.
-  - **A-Frame is also VENDORED** at `public/vendor/aframe/1.4.2/aframe.min.js` (loaded by view.html only). Pinned to upstream commit `8692d8a` (npm 1.4.2). Details + the caveat about its optional remote-loading features in `public/vendor/aframe/1.4.2/PROVENANCE.md`.
+  - **MindAR is VENDORED** (self-hosted, not CDN) at `public/vendor/mindar/1.2.2/mindar-image-aframe.prod.js`. Loaded by `view.html`, `create.html`, `edit.html`. Pinned to upstream commit `1ad668d` (npm 1.2.2). Rebuild/upgrade/rollback steps + integrity hashes live in `docs/vendor/mindar/1.2.2/PROVENANCE.md` (moved out of `public/` 2026-09-04 so it isn't web-served). See 2026-06-06 session note.
+  - **A-Frame is also VENDORED** at `public/vendor/aframe/1.4.2/aframe.min.js` (loaded by view.html only). Pinned to upstream commit `8692d8a` (npm 1.4.2). Details + the caveat about its optional remote-loading features in `docs/vendor/aframe/1.4.2/PROVENANCE.md`.
 - Backend/DB/Storage: Supabase (anon key, no auth currently)
 - Hosting: Vercel (static, `public/` folder)
 - Short URLs: popcode.app
