@@ -1497,6 +1497,14 @@ User then confirmed on their side: **creating a project (upload), scanning a boo
 1. **Cross-account storage writes.** The fix above closes ANONYMOUS access, not cross-account: any signed-in user can still write to any `{slug}/` folder. Scoping per owner needs a CODE change first — `create.html` uploads the files (~1141-1185) BEFORE inserting the collections row (~1199), so a policy joining `name -> collections.slug -> user_id` would block project creation outright. Reserve the row before the uploads, then tighten.
 2. **Fake analytics (genuinely low):** anon can INSERT `scan_events` → fake analytics rows. `log-event.js` already prefers the service key; revoke the anon grant once that's confirmed live in every Vercel env. Both items are written up as commented instructions at the bottom of the migration file (everything after `commit;` is comments only — safe to paste the whole file).
 
+#### LATE ADDITION — vendor docs taken off the public web
+
+Asked whether a coder can tell we use MindAR, and whether hiding it is worth anything. **Yes, completely visible, and no, don't try:** the `<script src>` says `/vendor/mindar/1.2.2-popcode.1/...`, the DOM carries `mindar-image` / `mindar-image-system` / `mindar-image-target`, and MindAR + A-Frame are MIT — the licence *requires* keeping the copyright notice, so stripping it to conceal the dependency would be a violation. Obfuscation buys hours against anyone who cares, makes our own iOS debugging worse, and the moat was never the tracker (`npm install mind-ar` is an afternoon; the print pipeline, the builders, and the accumulated media-session fixes are not).
+
+**But four internal docs were being web-served** (all returned 200): both `PROVENANCE.md` files, A-Frame's, and `stop-start-fix.patch` — our literal source diff — plus `assets/music/README.md`. They name the exact pinned upstream commit, which is the one genuinely useful piece of reconnaissance in there. Moved to `docs/`, mirroring the old paths (commit `7a2faa8`); verified 404 after deploy while the bundles still serve at their recorded byte counts (mindar 1,734,013). **`LICENSE` files deliberately stay under `public/`** — MIT text, correct to ship. Source comments in create/edit/scan/view and the Stack section now point at `docs/`; session-history entries keep the old paths since they were accurate when written.
+
+**General rule this exposes: `public/` IS the web root.** Any `.md`, `.patch` or note dropped next to an asset gets published. Keep engineering docs in `docs/`.
+
 #### GOTCHAS
 
 - **A Supabase key's project ref is in the JWT**, but a Vercel "Sensitive" var can't be revealed to check it. Instead just hit the endpoint on the preview — JSON back = right key.
