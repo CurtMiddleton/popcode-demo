@@ -244,10 +244,83 @@
       "hint": "A note on the back"
     }
   },
+  "FONTS": {
+    "script": {
+      "label": "Script",
+      "css": "'Great Vibes', cursive",
+      "google": "Great+Vibes"
+    },
+    "serif": {
+      "label": "Serif",
+      "css": "'Playfair Display', serif",
+      "google": "Playfair+Display:ital,wght@0,400;0,600;1,400"
+    },
+    "cormorant": {
+      "label": "Garamond",
+      "css": "'Cormorant Garamond', serif",
+      "google": "Cormorant+Garamond:ital,wght@0,400;0,600;1,400"
+    },
+    "cinzel": {
+      "label": "Engraved",
+      "css": "'Cinzel', serif",
+      "google": "Cinzel:wght@400;600"
+    },
+    "sans": {
+      "label": "Sans",
+      "css": "'Inter', sans-serif",
+      "google": null
+    }
+  },
+  "COLORWAYS": {
+    "cream": {
+      "label": "Cream",
+      "ground": "#F4F1EA",
+      "ink": "#2C2A26",
+      "accent": "#8A7F6B",
+      "onPhoto": "#FFFFFF"
+    },
+    "sage": {
+      "label": "Sage",
+      "ground": "#E4E9E0",
+      "ink": "#33402F",
+      "accent": "#6F8466",
+      "onPhoto": "#FFFFFF"
+    },
+    "midnight": {
+      "label": "Midnight",
+      "ground": "#1E2A38",
+      "ink": "#F2F0EA",
+      "accent": "#9DB2C4",
+      "onPhoto": "#FFFFFF"
+    },
+    "burgundy": {
+      "label": "Burgundy",
+      "ground": "#5C1F26",
+      "ink": "#F6EDE6",
+      "accent": "#C89B78",
+      "onPhoto": "#FFFFFF"
+    },
+    "blush": {
+      "label": "Blush",
+      "ground": "#F3E3DE",
+      "ink": "#4A3239",
+      "accent": "#B98A83",
+      "onPhoto": "#FFFFFF"
+    }
+  },
+  "DEFAULT_COLORWAY": "cream",
+  "ORNAMENTS": [
+    "none",
+    "arch",
+    "branches",
+    "snow",
+    "frame",
+    "confetti"
+  ],
   "CARD_TEMPLATES": [
     {
-      "id": "xmas-classic-full",
-      "name": "Classic Full Bleed",
+      "id": "bleed-script",
+      "name": "Snowfall Script",
       "formatId": "flat-5x7",
       "orientation": "portrait",
       "tags": [
@@ -257,10 +330,15 @@
         "pet",
         "newlywed"
       ],
-      "palette": {
-        "ink": "#FFFFFF",
-        "scrim": 0.34
-      },
+      "ground": "bleed",
+      "ornament": "snow",
+      "scrim": 0.42,
+      "colorways": [
+        "cream",
+        "midnight",
+        "sage",
+        "burgundy"
+      ],
       "photos": [
         {
           "id": "main",
@@ -277,53 +355,64 @@
           "id": "headline",
           "role": "headline",
           "default": "Happy Holidays",
-          "font": "cormorant",
+          "font": "script",
           "weight": 400,
-          "color": "#FFFFFF",
+          "color": "onPhoto",
           "align": "center",
+          "track": 0,
+          "upper": false,
+          "lines": 1,
           "x": 0.5,
-          "y": 0.76,
-          "size": 0.072,
-          "maxW": 0.84
+          "y": 0.735,
+          "size": 0.098,
+          "maxW": 0.86
         },
         {
           "id": "signature",
           "role": "signature",
-          "default": "Love, the Middletons",
-          "font": "inter",
+          "default": "The Middleton Family",
+          "font": "sans",
           "weight": 400,
-          "color": "#FFFFFF",
+          "color": "onPhoto",
           "align": "center",
+          "track": 0.22,
+          "upper": true,
+          "lines": null,
           "x": 0.5,
-          "y": 0.862,
-          "size": 0.034,
+          "y": 0.872,
+          "size": 0.026,
           "maxW": 0.8
         }
       ]
     },
     {
-      "id": "xmas-band-bottom",
-      "name": "Photo with Type Band",
+      "id": "bleed-stacked",
+      "name": "Stacked Serif",
       "formatId": "flat-5x7",
       "orientation": "portrait",
       "tags": [
         "christmas",
         "holiday",
         "newyear",
-        "baby",
-        "pet"
+        "pet",
+        "multiphoto"
       ],
-      "palette": {
-        "ink": "#1A1814",
-        "band": "#F7F6F2"
-      },
+      "ground": "bleed",
+      "ornament": "none",
+      "scrim": 0.5,
+      "colorways": [
+        "cream",
+        "midnight",
+        "burgundy",
+        "blush"
+      ],
       "photos": [
         {
           "id": "main",
           "x": 0,
           "y": 0,
           "w": 1,
-          "h": 0.74,
+          "h": 1,
           "fit": "cover"
         }
       ],
@@ -332,34 +421,336 @@
         {
           "id": "headline",
           "role": "headline",
-          "default": "Merry Christmas",
-          "font": "cormorant",
+          "default": "MERRY",
+          "font": "serif",
           "weight": 400,
-          "color": "#1A1814",
+          "color": "onPhoto",
           "align": "center",
+          "track": 0.1,
+          "upper": true,
+          "lines": 1,
           "x": 0.5,
-          "y": 0.792,
-          "size": 0.062,
-          "maxW": 0.86
+          "y": 0.69,
+          "size": 0.132,
+          "maxW": 0.9
+        },
+        {
+          "id": "subhead",
+          "role": "subhead",
+          "default": "CHRISTMAS",
+          "font": "serif",
+          "weight": 400,
+          "color": "onPhoto",
+          "align": "center",
+          "track": 0.18,
+          "upper": true,
+          "lines": 1,
+          "x": 0.5,
+          "y": 0.8,
+          "size": 0.086,
+          "maxW": 0.9
         },
         {
           "id": "signature",
           "role": "signature",
-          "default": "The Middletons",
-          "font": "inter",
+          "default": "love, the Middletons",
+          "font": "sans",
           "weight": 400,
-          "color": "#5C574E",
+          "color": "onPhoto",
           "align": "center",
+          "track": 0,
+          "upper": false,
+          "lines": null,
           "x": 0.5,
-          "y": 0.884,
-          "size": 0.03,
+          "y": 0.892,
+          "size": 0.028,
           "maxW": 0.8
         }
       ]
     },
     {
-      "id": "yir-four-up",
-      "name": "Year in Review — Four Photos",
+      "id": "bleed-corner",
+      "name": "Corner Note",
+      "formatId": "flat-5x7",
+      "orientation": "portrait",
+      "tags": [
+        "christmas",
+        "holiday",
+        "baby",
+        "birth",
+        "newyear"
+      ],
+      "ground": "bleed",
+      "ornament": "none",
+      "scrim": 0.34,
+      "colorways": [
+        "cream",
+        "sage",
+        "midnight"
+      ],
+      "photos": [
+        {
+          "id": "main",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "fit": "cover"
+        }
+      ],
+      "popcodeSlot": "main",
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "joy",
+          "font": "script",
+          "weight": 400,
+          "color": "onPhoto",
+          "align": "left",
+          "track": 0,
+          "upper": false,
+          "lines": 1,
+          "x": 0.09,
+          "y": 0.755,
+          "size": 0.15,
+          "maxW": 0.62
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "the Middletons · 2026",
+          "font": "sans",
+          "weight": 400,
+          "color": "onPhoto",
+          "align": "left",
+          "track": 0.14,
+          "upper": false,
+          "lines": null,
+          "x": 0.09,
+          "y": 0.9,
+          "size": 0.026,
+          "maxW": 0.6
+        }
+      ]
+    },
+    {
+      "id": "inset-arch",
+      "name": "Arched Branches",
+      "formatId": "flat-5x7",
+      "orientation": "portrait",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newlywed",
+        "baby"
+      ],
+      "ground": "inset",
+      "ornament": "branches",
+      "colorways": [
+        "cream",
+        "sage",
+        "blush",
+        "burgundy"
+      ],
+      "photos": [
+        {
+          "id": "main",
+          "x": 0.14,
+          "y": 0.2,
+          "w": 0.72,
+          "h": 0.56,
+          "fit": "cover",
+          "arch": true
+        }
+      ],
+      "popcodeSlot": "main",
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "HAPPY HOLIDAYS",
+          "font": "cinzel",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0.2,
+          "upper": true,
+          "lines": null,
+          "x": 0.5,
+          "y": 0.108,
+          "size": 0.04,
+          "maxW": 0.76
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "From, the Middletons",
+          "font": "sans",
+          "weight": 400,
+          "color": "accent",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lines": null,
+          "x": 0.5,
+          "y": 0.822,
+          "size": 0.026,
+          "maxW": 0.76
+        }
+      ]
+    },
+    {
+      "id": "inset-signature",
+      "name": "Modern Signature",
+      "formatId": "flat-5x7",
+      "orientation": "portrait",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "pet"
+      ],
+      "ground": "inset",
+      "ornament": "none",
+      "colorways": [
+        "cream",
+        "sage",
+        "burgundy",
+        "midnight"
+      ],
+      "photos": [
+        {
+          "id": "main",
+          "x": 0.22,
+          "y": 0.285,
+          "w": 0.56,
+          "h": 0.42,
+          "fit": "cover"
+        }
+      ],
+      "popcodeSlot": "main",
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "HAPPY",
+          "font": "serif",
+          "weight": 400,
+          "color": "accent",
+          "align": "center",
+          "track": 0.06,
+          "upper": true,
+          "lines": null,
+          "x": 0.5,
+          "y": 0.115,
+          "size": 0.098,
+          "maxW": 0.86
+        },
+        {
+          "id": "subhead",
+          "role": "subhead",
+          "default": "the Middletons, 2026",
+          "font": "script",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lines": null,
+          "x": 0.5,
+          "y": 0.222,
+          "size": 0.028,
+          "maxW": 0.7
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "HOLIDAYS",
+          "font": "serif",
+          "weight": 400,
+          "color": "accent",
+          "align": "center",
+          "track": 0.06,
+          "upper": true,
+          "lines": null,
+          "x": 0.5,
+          "y": 0.76,
+          "size": 0.098,
+          "maxW": 0.86
+        }
+      ]
+    },
+    {
+      "id": "inset-frame",
+      "name": "Ruled Frame",
+      "formatId": "flat-5x7",
+      "orientation": "portrait",
+      "tags": [
+        "christmas",
+        "holiday",
+        "birth",
+        "baby",
+        "graduation",
+        "savethedate"
+      ],
+      "ground": "inset",
+      "ornament": "frame",
+      "colorways": [
+        "midnight",
+        "cream",
+        "burgundy",
+        "sage"
+      ],
+      "photos": [
+        {
+          "id": "main",
+          "x": 0.12,
+          "y": 0.14,
+          "w": 0.76,
+          "h": 0.6,
+          "fit": "cover"
+        }
+      ],
+      "popcodeSlot": "main",
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "Season’s Greetings",
+          "font": "cormorant",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lines": null,
+          "x": 0.5,
+          "y": 0.79,
+          "size": 0.062,
+          "maxW": 0.8
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "THE MIDDLETONS",
+          "font": "sans",
+          "weight": 400,
+          "color": "accent",
+          "align": "center",
+          "track": 0.24,
+          "upper": true,
+          "lines": null,
+          "x": 0.5,
+          "y": 0.884,
+          "size": 0.024,
+          "maxW": 0.76
+        }
+      ]
+    },
+    {
+      "id": "collage-editorial",
+      "name": "Editorial Collage",
       "formatId": "flat-5x7",
       "orientation": "portrait",
       "tags": [
@@ -368,41 +759,45 @@
         "multiphoto",
         "newyear"
       ],
-      "palette": {
-        "ink": "#1A1814",
-        "band": "#FFFFFF"
-      },
+      "ground": "collage",
+      "ornament": "none",
+      "colorways": [
+        "sage",
+        "cream",
+        "midnight",
+        "burgundy"
+      ],
       "photos": [
         {
           "id": "p1",
-          "x": 0.06,
-          "y": 0.06,
-          "w": 0.42,
-          "h": 0.3,
+          "x": 0.05,
+          "y": 0.05,
+          "w": 0.44,
+          "h": 0.28,
           "fit": "cover"
         },
         {
           "id": "p2",
-          "x": 0.52,
-          "y": 0.06,
-          "w": 0.42,
-          "h": 0.3,
+          "x": 0.51,
+          "y": 0.05,
+          "w": 0.44,
+          "h": 0.4,
           "fit": "cover"
         },
         {
           "id": "p3",
-          "x": 0.06,
-          "y": 0.38,
-          "w": 0.42,
-          "h": 0.3,
+          "x": 0.05,
+          "y": 0.35,
+          "w": 0.44,
+          "h": 0.28,
           "fit": "cover"
         },
         {
           "id": "p4",
-          "x": 0.52,
-          "y": 0.38,
-          "w": 0.42,
-          "h": 0.3,
+          "x": 0.51,
+          "y": 0.47,
+          "w": 0.44,
+          "h": 0.28,
           "fit": "cover"
         }
       ],
@@ -411,46 +806,39 @@
         {
           "id": "headline",
           "role": "headline",
-          "default": "2026",
-          "font": "cormorant",
+          "default": "ENJOY EVERY MOMENT",
+          "font": "serif",
           "weight": 400,
-          "color": "#1A1814",
+          "color": "ink",
           "align": "center",
+          "track": 0.1,
+          "upper": true,
+          "lines": 2,
           "x": 0.5,
-          "y": 0.74,
-          "size": 0.085,
-          "maxW": 0.86
-        },
-        {
-          "id": "subhead",
-          "role": "subhead",
-          "default": "What a year it has been",
-          "font": "inter",
-          "weight": 400,
-          "color": "#5C574E",
-          "align": "center",
-          "x": 0.5,
-          "y": 0.842,
-          "size": 0.03,
-          "maxW": 0.82
+          "y": 0.782,
+          "size": 0.05,
+          "maxW": 0.88
         },
         {
           "id": "signature",
           "role": "signature",
-          "default": "Love, the Middletons",
-          "font": "inter",
+          "default": "the Middletons · 2026",
+          "font": "sans",
           "weight": 400,
-          "color": "#5C574E",
+          "color": "accent",
           "align": "center",
+          "track": 0,
+          "upper": false,
+          "lines": null,
           "x": 0.5,
-          "y": 0.896,
-          "size": 0.03,
-          "maxW": 0.82
+          "y": 0.9,
+          "size": 0.026,
+          "maxW": 0.8
         }
       ]
     },
     {
-      "id": "birth-simple",
+      "id": "inset-birth",
       "name": "Introducing",
       "formatId": "flat-5x7",
       "orientation": "portrait",
@@ -458,17 +846,20 @@
         "birth",
         "baby"
       ],
-      "palette": {
-        "ink": "#1A1814",
-        "band": "#F7F6F2"
-      },
+      "ground": "inset",
+      "ornament": "none",
+      "colorways": [
+        "blush",
+        "cream",
+        "sage"
+      ],
       "photos": [
         {
           "id": "main",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 0.7,
+          "x": 0.1,
+          "y": 0.1,
+          "w": 0.8,
+          "h": 0.6,
           "fit": "cover"
         }
       ],
@@ -477,14 +868,17 @@
         {
           "id": "subhead",
           "role": "subhead",
-          "default": "Introducing",
-          "font": "inter",
+          "default": "INTRODUCING",
+          "font": "sans",
           "weight": 400,
-          "color": "#5C574E",
+          "color": "accent",
           "align": "center",
+          "track": 0.28,
+          "upper": true,
+          "lines": null,
           "x": 0.5,
-          "y": 0.744,
-          "size": 0.028,
+          "y": 0.742,
+          "size": 0.026,
           "maxW": 0.8
         },
         {
@@ -493,24 +887,30 @@
           "default": "Adelaide Rose",
           "font": "cormorant",
           "weight": 400,
-          "color": "#1A1814",
+          "color": "ink",
           "align": "center",
+          "track": 0,
+          "upper": false,
+          "lines": null,
           "x": 0.5,
           "y": 0.79,
-          "size": 0.066,
+          "size": 0.076,
           "maxW": 0.86
         },
         {
           "id": "signature",
           "role": "signature",
           "default": "March 4, 2026 · 7lb 2oz",
-          "font": "inter",
+          "font": "sans",
           "weight": 400,
-          "color": "#5C574E",
+          "color": "accent",
           "align": "center",
+          "track": 0,
+          "upper": false,
+          "lines": null,
           "x": 0.5,
-          "y": 0.888,
-          "size": 0.028,
+          "y": 0.898,
+          "size": 0.026,
           "maxW": 0.82
         }
       ]

@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Great+Vibes&family=Cinzel:wght@400;600&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
@@ -81,6 +81,8 @@
         align-items: center; justify-content: center;
         font-size: 8cqh; color: #a9a49b; font-family: 'Inter', sans-serif; font-weight: 300;
       }
+      .cf-ornament { position: absolute; inset: 0; pointer-events: none; }
+      .cf-photo.arch { border-radius: 50% 50% 4px 4px / 34% 34% 4px 4px; }
       .cf-scrim { position: absolute; inset: 0; pointer-events: none;
         background: linear-gradient(to bottom, rgba(0,0,0,0) 42%, rgba(0,0,0,0.55) 100%); }
       .cf-band { position: absolute; left: 0; right: 0; bottom: 0; }
@@ -134,6 +136,11 @@
         cursor: pointer; margin-top: 9px;
       }
 
+      .sw-row { display: flex; gap: 6px; margin-top: 9px; flex-wrap: wrap; }
+      .sw { width: 18px; height: 18px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.16); cursor: pointer; padding: 0; }
+      .sw.active { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px #1a1a1a; }
+      .sw-lg { width: 26px; height: 26px; }
+
       /* ── Sheet (shared idiom) ────────────────────────────────────────── */
       .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; z-index: 8000; align-items: flex-end; justify-content: center; }
       .overlay.visible { display: flex; }
@@ -176,6 +183,7 @@
         text: {},               // zoneId -> string typed by the buyer
         photos: {},             // slotId -> { url, file }
         pack: C.DEFAULT_PACK,
+        colorway: C.DEFAULT_COLORWAY,
         popcode: null,          // { file, url } video attached to the popcode slot
       };
 
@@ -197,29 +205,33 @@
         const land = tpl.orientation === 'landscape';
         const aspect = land ? 1 / fmt.aspect : fmt.aspect;
 
+        // Colourway drives every colour on the card, so one swatch click
+        // recolours ground, type and ornament together and a buyer can't
+        // assemble an incoherent combination.
+        const cwId = opts.colorway || (tpl.colorways && tpl.colorways[0]) || C.DEFAULT_COLORWAY;
+        const cw = C.COLORWAYS[cwId] || C.COLORWAYS[C.DEFAULT_COLORWAY];
+        const paint = (role) => (role && cw[role]) || role || cw.ink;
+
         const face = document.createElement('div');
         face.className = 'card-face';
         face.style.width = widthPx + 'px';
         face.style.height = Math.round(widthPx / aspect) + 'px';
-        if (tpl.palette && tpl.palette.band) face.style.background = tpl.palette.band;
+        // Full-bleed cards are the photo; inset/collage sit on the colourway ground.
+        face.style.background = tpl.ground === 'bleed' ? '#dedbd4' : cw.ground;
 
-        // Photo slots.
         (tpl.photos || []).forEach((slot) => {
           const d = document.createElement('div');
-          d.className = 'cf-photo';
+          d.className = 'cf-photo' + (slot.arch ? ' arch' : '');
           d.style.left = slot.x * 100 + '%';
           d.style.top = slot.y * 100 + '%';
           d.style.width = slot.w * 100 + '%';
           d.style.height = slot.h * 100 + '%';
           const got = (opts.photos || {})[slot.id];
-          if (got && got.url) {
+          const src = (got && got.url) || opts.sample;
+          if (src) {
             const im = document.createElement('img');
-            im.src = got.url;
+            im.src = src;
             if (opts.crossOrigin) im.crossOrigin = 'anonymous';
-            d.appendChild(im);
-          } else if (opts.sample) {
-            const im = document.createElement('img');
-            im.src = opts.sample;
             d.appendChild(im);
           } else {
             d.classList.add('empty');
@@ -231,30 +243,38 @@
           face.appendChild(d);
         });
 
-        // Scrim only when type sits directly on a full-bleed photo.
-        if (tpl.palette && typeof tpl.palette.scrim === 'number') {
-          const s = document.createElement('div');
-          s.className = 'cf-scrim';
-          s.style.opacity = String(tpl.palette.scrim / 0.55);
-          face.appendChild(s);
+        // Scrim: only full-bleed cards need type legible over a photo.
+        if (tpl.ground === 'bleed' && tpl.scrim) {
+          const sc = document.createElement('div');
+          sc.className = 'cf-scrim';
+          sc.style.opacity = String(Math.min(1, tpl.scrim / 0.55));
+          face.appendChild(sc);
         }
 
-        // Text zones.
+        // Ornament is drawn, never licensed — see the note in cards.mjs.
+        if (tpl.ornament && tpl.ornament !== 'none') {
+          const o = drawOrnament(tpl.ornament, cw, tpl.ground);
+          if (o) face.appendChild(o);
+        }
+
         C.resolveText(tpl, opts.text || {}).forEach((z) => {
           const t = document.createElement('div');
           t.className = 'cf-text';
           t.style.top = z.y * 100 + '%';
           t.style.fontSize = (z.size * 100) + 'cqh';
-          t.style.color = z.color;
+          t.style.color = paint(z.color);
           t.style.textAlign = z.align;
           t.style.fontWeight = String(z.weight || 400);
-          t.style.fontFamily = z.font === 'inter'
-            ? "'Inter', sans-serif"
-            : "'Cormorant Garamond', 'CooperBT', serif";
+          t.style.fontFamily = (C.FONTS[z.font] || C.FONTS.cormorant).css;
+          if (z.track) t.style.letterSpacing = z.track + 'em';
+          if (z.upper) t.style.textTransform = 'uppercase';
+          if (tpl.ground === 'bleed') t.style.textShadow = '0 1px 6px rgba(0,0,0,0.30)';
           const w = (z.maxW || 0.84) * 100;
           t.style.width = w + '%';
-          t.style.left = (z.align === 'center' ? (z.x * 100 - w / 2) : z.x * 100) + '%';
+          t.style.left = (z.align === 'center' ? (z.x * 100 - w / 2)
+                        : z.align === 'right' ? (z.x * 100 - w) : z.x * 100) + '%';
           t.textContent = z.value;
+          t.dataset.maxLines = String(z.lines || (C.TEXT_ROLES[z.role] || {}).maxLines || 1);
 
           if (opts.editable) {
             t.contentEditable = 'plaintext-only';
@@ -269,13 +289,11 @@
               if (face.isConnected) fitCardText(face);
               syncSideInputs();
             });
-            // Enter would inject a newline the print bake can't honour.
             t.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); t.blur(); } });
           }
           face.appendChild(t);
         });
 
-        // The Popcode symbol — printed on every card so a recipient knows to scan.
         if (opts.showBadge !== false) {
           const b = document.createElement('img');
           b.className = 'cf-pop';
@@ -286,25 +304,117 @@
         return face;
       }
 
+      // Ornaments as generated SVG. Drawing them in code means they recolour with
+      // the colourway for free AND carry no licence surface — which matters here,
+      // because the obvious stock sources (Envato Elements, Creative Market) both
+      // explicitly forbid use in a print-on-demand product configurator.
+      function drawOrnament(kind, cw, ground) {
+        const NS = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(NS, 'svg');
+        svg.setAttribute('class', 'cf-ornament');
+        svg.setAttribute('viewBox', '0 0 100 140');
+        svg.setAttribute('preserveAspectRatio', 'none');
+        const add = (tag, attrs) => {
+          const el = document.createElementNS(NS, tag);
+          Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+          svg.appendChild(el); return el;
+        };
+        const onPhoto = ground === 'bleed';
+        const tint = onPhoto ? '#ffffff' : cw.accent;
+
+        if (kind === 'snow') {
+          // Deterministic scatter: a seeded walk, so a card looks identical every
+          // render (a random() here would reshuffle on every keystroke).
+          let seed = 7;
+          const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+          for (let i = 0; i < 90; i++) {
+            add('circle', { cx: (rnd() * 100).toFixed(2), cy: (rnd() * 140).toFixed(2),
+              r: (0.25 + rnd() * 0.85).toFixed(2), fill: '#ffffff',
+              opacity: (0.25 + rnd() * 0.5).toFixed(2) });
+          }
+        } else if (kind === 'frame') {
+          add('rect', { x: 4, y: 4, width: 92, height: 132, fill: 'none', stroke: tint, 'stroke-width': 0.5, opacity: 0.85 });
+          add('rect', { x: 6.5, y: 6.5, width: 87, height: 127, fill: 'none', stroke: tint, 'stroke-width': 0.2, opacity: 0.6 });
+        } else if (kind === 'arch' || kind === 'branches') {
+          // Leaves placed parametrically along the arched photo opening: up the
+          // straight sides, then over the curve. Following the actual opening is
+          // what reads as a wreath rather than as tally marks.
+          const leaf = (x, y, rot, sc) => add('ellipse', {
+            cx: x.toFixed(2), cy: y.toFixed(2), rx: (2.2 * sc).toFixed(2), ry: (0.85 * sc).toFixed(2),
+            fill: tint, opacity: 0.8, transform: `rotate(${rot.toFixed(0)} ${x.toFixed(2)} ${y.toFixed(2)})`
+          });
+          const L = 11.5, R = 88.5, yTop = 60, yBot = 104;
+          for (let i = 0; i <= 8; i++) {
+            const y = yBot - (i / 8) * (yBot - yTop);
+            leaf(L, y, 118, 1); leaf(L - 1.4, y - 2.2, 152, 0.8);
+            leaf(R, y, 62, 1);  leaf(R + 1.4, y - 2.2, 28, 0.8);
+          }
+          // Over the arch: half-ellipse from left jamb to right jamb.
+          const cx = 50, rx = 38.5, ry = 26, cy = yTop;
+          for (let i = 0; i <= 14; i++) {
+            const a = Math.PI - (i / 14) * Math.PI;
+            const x = cx + rx * Math.cos(a), y = cy - ry * Math.sin(a);
+            const tangent = (Math.atan2(ry * Math.cos(a), rx * Math.sin(a)) * 180) / Math.PI;
+            leaf(x, y, tangent + 90, 1);
+            leaf(x - 0.9 * Math.cos(a), y - 1.9, tangent + 130, 0.75);
+          }
+        } else if (kind === 'confetti') {
+          let seed = 21;
+          const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+          for (let i = 0; i < 26; i++) {
+            const x = (rnd() * 100).toFixed(2), y = (rnd() * 140).toFixed(2);
+            add('rect', { x, y, width: 1.1, height: 3.4, fill: tint, opacity: 0.55,
+              transform: `rotate(${(rnd() * 180).toFixed(0)} ${x} ${y})` });
+          }
+        } else { return null; }
+        return svg;
+      }
+
       // Shrink a zone's type until it fits its role's maxLines. Must run AFTER the
       // face is in the document (detached elements have no layout). Idempotent, so
       // re-running on resize is safe. Applied at every scale — thumbnail, editor and
       // print bake — so what fits on screen is what fits on the card.
       function fitCardText(face) {
-        face.querySelectorAll('.cf-text').forEach((el) => {
+        const zones = [...face.querySelectorAll('.cf-text')];
+        // Pass 1 — honour each zone's own line budget.
+        zones.forEach((el) => {
           const maxLines = parseInt(el.dataset.maxLines, 10) || 1;
           const base = parseFloat(el.dataset.baseFs || getComputedStyle(el).fontSize);
           el.dataset.baseFs = String(base);
           el.style.fontSize = base + 'px';
-          const lh = 1.15;
           let fs = base;
-          // 12 halvings of a 0.94 step bottoms out near 50% — enough for any
-          // realistic overrun, and bounded so a pathological string can't hang.
-          for (let i = 0; i < 12 && el.scrollHeight > fs * lh * maxLines + 1; i++) {
+          for (let i = 0; i < 14 && el.scrollHeight > fs * 1.15 * maxLines + 1; i++) {
             fs *= 0.94;
             el.style.fontSize = fs + 'px';
           }
         });
+
+        // Pass 2 — enforce the real invariant: no zone may overlap another.
+        // Line budgets alone can't guarantee this (a single line of 13% display
+        // type is taller than the gap a template leaves beneath it), and an
+        // overlap is the one text failure that would actually reach print. So
+        // resolve it geometrically: shrink the larger of any overlapping pair
+        // until they clear. Bounded, and independent of what a template author
+        // wrote or a buyer typed.
+        const overlaps = (a, b) =>
+          a.right > b.left + 0.5 && b.right > a.left + 0.5 &&
+          a.bottom > b.top + 0.5 && b.bottom > a.top + 0.5;
+        for (let pass = 0; pass < 24; pass++) {
+          const rects = zones.map((el) => ({ el, r: el.getBoundingClientRect() }));
+          let hit = null;
+          for (let i = 0; i < rects.length && !hit; i++) {
+            for (let j = i + 1; j < rects.length; j++) {
+              if (overlaps(rects[i].r, rects[j].r)) { hit = [rects[i], rects[j]]; break; }
+            }
+          }
+          if (!hit) break;
+          // Shrink whichever is set larger — the display line has the most to give.
+          const pick = parseFloat(getComputedStyle(hit[0].el).fontSize) >=
+                       parseFloat(getComputedStyle(hit[1].el).fontSize) ? hit[0].el : hit[1].el;
+          const cur = parseFloat(getComputedStyle(pick).fontSize);
+          if (cur < 4) break;
+          pick.style.fontSize = cur * 0.93 + 'px';
+        }
       }
 
       // ── Step 1: browse ──────────────────────────────────────────────────
@@ -341,7 +451,8 @@
           card.className = 'tpl-card';
           const stage = document.createElement('div');
           stage.className = 'tpl-stage';
-          const thumb = renderCard(t, { width: 168, sample: samples[i] || '/assets/sample-photo.jpg' });
+          const thumb = renderCard(t, { width: 168, sample: samples[i] || '/assets/sample-photo.jpg',
+            colorway: (t.colorways && t.colorways[0]) || C.DEFAULT_COLORWAY });
           stage.appendChild(thumb);
           card.appendChild(stage);
           requestAnimationFrame(() => fitCardText(thumb));
@@ -350,7 +461,35 @@
             '<div class="tpl-name">' + esc(t.name) + '</div>' +
             '<div class="tpl-meta">' + esc(fmt.label.replace('Flat Card ', '')) + ' flat &middot; ' +
             (t.photos.length) + ' photo' + (t.photos.length > 1 ? 's' : '') + '</div>');
-          card.addEventListener('click', () => chooseTemplate(t));
+          // Swatch row: clicking one re-renders the thumbnail in that colourway
+          // and carries the choice into the editor, so what you clicked is what
+          // you get.
+          if (t.colorways && t.colorways.length > 1) {
+            const sw = document.createElement('div');
+            sw.className = 'sw-row';
+            t.colorways.forEach((id, k) => {
+              const c = C.COLORWAYS[id]; if (!c) return;
+              const dot = document.createElement('button');
+              dot.className = 'sw' + (k === 0 ? ' active' : '');
+              dot.style.background = c.ground;
+              dot.title = c.label;
+              dot.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                sw.querySelectorAll('.sw').forEach((x) => x.classList.remove('active'));
+                dot.classList.add('active');
+                const fresh = renderCard(t, { width: 168, sample: samples[i] || '/assets/sample-photo.jpg', colorway: id });
+                stage.innerHTML = ''; stage.appendChild(fresh);
+                requestAnimationFrame(() => fitCardText(fresh));
+                card.dataset.colorway = id;
+              });
+              sw.appendChild(dot);
+            });
+            card.appendChild(sw);
+          }
+          card.addEventListener('click', () => {
+            chooseTemplate(t);
+            if (card.dataset.colorway) { state.colorway = card.dataset.colorway; renderEditor(); }
+          });
           grid.appendChild(card);
         });
         host.appendChild(grid);
@@ -361,6 +500,7 @@
 
       function chooseTemplate(tpl) {
         state.template = tpl;
+        state.colorway = (tpl.colorways && tpl.colorways[0]) || C.DEFAULT_COLORWAY;
         state.text = {};
         state.photos = {};
         state.popcode = null;
@@ -381,6 +521,9 @@
               '<div class="panel"><h3>Your words</h3>' +
                 '<p class="hint">Type straight onto the card, or edit here. The layout is fixed so it always prints clean.</p>' +
                 '<div id="zone-fields"></div></div>' +
+              '<div class="panel" id="cw-panel"><h3>Colour</h3>' +
+                '<p class="hint">Every element recolours together.</p>' +
+                '<div class="sw-row" id="cw-row"></div></div>' +
               '<div class="panel"><h3>Bring it to life</h3>' +
                 '<p class="hint" id="pop-hint"></p>' +
                 '<button class="btn-ghost" id="pop-btn" style="margin-top:0">Attach a video</button></div>' +
@@ -396,6 +539,7 @@
 
         drawEditorCard();
         renderZoneFields();
+        renderColorways();
         renderPacks();
         updatePopHint();
 
@@ -408,13 +552,30 @@
         $('save-btn').addEventListener('click', saveCard);
       }
 
+      function renderColorways() {
+        const tpl = state.template;
+        const row = $('cw-row');
+        const list = tpl.colorways || [C.DEFAULT_COLORWAY];
+        if (list.length < 2) { $('cw-panel').classList.add('hidden'); return; }
+        row.innerHTML = '';
+        list.forEach((id) => {
+          const c = C.COLORWAYS[id]; if (!c) return;
+          const dot = document.createElement('button');
+          dot.className = 'sw sw-lg' + (id === state.colorway ? ' active' : '');
+          dot.style.background = c.ground;
+          dot.title = c.label;
+          dot.addEventListener('click', () => { state.colorway = id; renderColorways(); drawEditorCard(); });
+          row.appendChild(dot);
+        });
+      }
+
       function drawEditorCard() {
         const stage = $('ed-stage');
         stage.innerHTML = '';
         const w = Math.min(360, Math.max(240, window.innerWidth - 80));
         const face = renderCard(state.template, {
           width: w, editable: true, text: state.text, photos: state.photos,
-          onPickPhoto: pickPhotoFor,
+          colorway: state.colorway, onPickPhoto: pickPhotoFor,
         });
         stage.appendChild(face);
         fitCardText(face);
@@ -565,6 +726,7 @@
                 occasionId: state.occasionId,
                 text: state.text,
                 photos: uploaded,
+                colorway: state.colorway,
                 pack: state.pack,
               },
             },

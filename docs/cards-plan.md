@@ -40,13 +40,61 @@ for each prints providers, variants and placeholder sizes. Feed the winner into 
 `baseCostMinor` from the first `send_to_production:false` test order — same
 sequence the board book followed.
 
+## Decorative art: the obvious sources are BLOCKED for us
+
+A card builder is a print-on-demand product configurator, and the two biggest
+stock marketplaces specifically prohibit that use. This is the opposite of the
+intuitive answer, so it is worth stating plainly:
+
+- **Envato Elements — prohibited.** Items may not be used in "a print-on-demand
+  service, a custom product configurator, or any similar build-your-own or
+  made-to-order workflow." Separately, its "merchandising / primary value" clause
+  bars products where the licensed item is the main reason someone buys.
+- **Creative Market (Extended Commercial) — prohibited.** You may not "allow
+  anyone other than the Licensee (such as an End User) to customize a digital or
+  physical End Product", and may not use an asset in a "print on demand", "made
+  to order" or "download on-demand" application. Their allowance is narrow: you
+  may sell pre-designed products on demand *only* where "your customer doesn't
+  have control over the design."
+
+A subscription to either would feel like the fast path and would be a licence
+breach on day one. Enterprise licensing exists at both if we ever want a specific
+asset badly enough to negotiate.
+
+### What we may safely use
+
+1. **SIL OFL / Apache fonts** — Google Fonts, Fontshare. The OFL restricts selling
+   the *font software*, not products typeset with it, and carries no
+   print-on-demand or end-user-customisation carve-out. This is the strongest
+   position available and costs nothing. Shipping: Great Vibes (script), Playfair
+   Display, Cormorant Garamond, Cinzel, Inter.
+2. **Ornament drawn in code** — `drawOrnament()` in card.html generates the
+   snow, wreath, frame and confetti as SVG. Zero licence surface, and it
+   recolours with the colourway for free. Most of the Shutterfly look is type
+   plus simple geometry, so this covers more ground than it sounds.
+3. **Public domain / CC0** — Rawpixel public-domain, Smithsonian Open Access,
+   NYPL Digital Collections, openclipart. Good for vintage botanical and holiday
+   ornament when we want real illustration.
+4. **Commissioned work-for-hire** — the durable answer for a real card line.
+   Owning the art outright removes the question permanently.
+
+## Colourways
+
+Each template lists the colourways it supports; a zone's `color` is a palette
+ROLE (`ink` / `accent` / `onPhoto`), never a hex. One swatch click recolours
+ground, type and ornament together, so a family cannot assemble an incoherent
+card. Benchmark from Shutterfly's own grid: they run 2–5 swatches per design and
+price at **$1.01–$1.44/card**, against our modelled $1.10–$1.72 — we are in the
+right zone but slightly high, which the shipping-inclusive markup explains.
+
 ## Architecture: three layers, kept apart
 
 Shutterfly's ~40 nav links resolve to a handful of physical cards. We mirror that
 in `lib/print/cards.mjs`:
 
 - **FORMAT** — the physical thing. Two: `flat-5x7`, `flat-5.5sq`. Binds to a SKU.
-- **TEMPLATE** — photo slots + text zones + palette. Pure data; hundreds possible.
+- **TEMPLATE** — a `ground` (`bleed` / `inset` / `collage`), photo slots, text
+  zones, an ornament and a colourway list. Pure data; hundreds possible.
 - **CATEGORY** — a tag query over templates. `OCCASIONS` entries are named queries.
 
 "Pet Christmas Cards" is `tags ⊇ {christmas, pet}` — one line, no new product and
@@ -60,8 +108,13 @@ owns the typography. That's what stops 200 designs becoming 200 layout bugs.
 - Geometry is **fractional (of the trimmed card)**, so one set of numbers drives
   the editor and the 300 DPI bake. Verified: at 1500px trim width a `size: 0.072`
   headline renders at exactly 151.2px = 0.072 × 2100.
-- `TEXT_ROLES` carries `maxChars` **and `maxLines`**. `fitCardText()` shrinks type
-  until it honours the line budget — character limits alone can't prevent overflow
+- `TEXT_ROLES` carries `maxChars` **and `maxLines`** (a zone may override with
+  `lines`, since display type is single-line by intent). `fitCardText()` runs two
+  passes: first shrink to the line budget, then **resolve overlaps
+  geometrically** — a single line of 13% display type is taller than the gap a
+  template leaves beneath it, so line budgets alone cannot guarantee the
+  invariant. Pass 2 shrinks the larger of any overlapping pair until they clear,
+  which holds regardless of what a template author wrote or a buyer typed — character limits alone can't prevent overflow
   ("Wishing You a Merry Christmas" is 29 chars but far wider than "2026"), and an
   overflowing greeting colliding with the signature is the one failure mode that
   would otherwise reach print.
