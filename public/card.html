@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Great+Vibes&family=Cinzel:wght@400;600&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Ballet&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,600;1,6..96,400&family=Cinzel:wght@400;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500&family=Jost:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
@@ -82,9 +82,23 @@
         font-size: 8cqh; color: #a9a49b; font-family: 'Inter', sans-serif; font-weight: 300;
       }
       .cf-ornament { position: absolute; inset: 0; pointer-events: none; }
-      .cf-photo.arch { border-radius: 50% 50% 4px 4px / 34% 34% 4px 4px; }
+      .cf-photo.arch { border-radius: 50% 50% 3px 3px / 34% 34% 3px 3px; }
+      /* Inset photos get a hairline + small radius. A bare hard-edged rectangle
+         dropped on a flat ground is what makes an inset card look like clip art. */
+      .cf-photo.inset { border-radius: 0.9cqw; box-shadow: 0 0 0 1px rgba(0,0,0,0.07); }
+      /* EASED scrim. A two-stop linear gradient has a visible onset line across
+         the photo -- the giveaway. These stops approximate an ease-in curve so
+         the darkening has no perceptible edge, at roughly half the old strength. */
       .cf-scrim { position: absolute; inset: 0; pointer-events: none;
-        background: linear-gradient(to bottom, rgba(0,0,0,0) 42%, rgba(0,0,0,0.55) 100%); }
+        background: linear-gradient(to bottom,
+          rgba(0,0,0,0) 30%, rgba(0,0,0,0.012) 44%, rgba(0,0,0,0.05) 56%,
+          rgba(0,0,0,0.115) 66%, rgba(0,0,0,0.21) 76%, rgba(0,0,0,0.33) 86%,
+          rgba(0,0,0,0.46) 94%, rgba(0,0,0,0.55) 100%); }
+      /* Foil = a banded metallic gradient clipped to the glyphs. A flat gold fill
+         reads as yellow text; the bands are what read as reflected light. */
+      .cf-text.foil { -webkit-background-clip: text; background-clip: text;
+        color: transparent !important; -webkit-text-fill-color: transparent;
+        filter: drop-shadow(0 0.35cqh 0.5cqh rgba(0,0,0,0.16)); }
       .cf-band { position: absolute; left: 0; right: 0; bottom: 0; }
       .cf-text { position: absolute; line-height: 1.15; white-space: pre-wrap; word-break: break-word; }
       .cf-text[contenteditable="true"]:focus { outline: 2px solid #7657FC; outline-offset: 3px; border-radius: 2px; }
@@ -221,7 +235,8 @@
 
         (tpl.photos || []).forEach((slot) => {
           const d = document.createElement('div');
-          d.className = 'cf-photo' + (slot.arch ? ' arch' : '');
+          d.className = 'cf-photo' + (slot.arch ? ' arch' : '')
+            + (tpl.ground !== 'bleed' ? ' inset' : '');
           d.style.left = slot.x * 100 + '%';
           d.style.top = slot.y * 100 + '%';
           d.style.width = slot.w * 100 + '%';
@@ -262,13 +277,21 @@
           t.className = 'cf-text';
           t.style.top = z.y * 100 + '%';
           t.style.fontSize = (z.size * 100) + 'cqh';
+          // Leading tightens as type grows -- a flat 1.15 makes display lines
+          // look slack and body copy look cramped.
+          t.style.lineHeight = String(z.lead || (z.size >= 0.09 ? C.TYPE.lead.display
+                              : z.size >= 0.04 ? C.TYPE.lead.mid : C.TYPE.lead.body));
           t.style.color = paint(z.color);
           t.style.textAlign = z.align;
           t.style.fontWeight = String(z.weight || 400);
           t.style.fontFamily = (C.FONTS[z.font] || C.FONTS.cormorant).css;
           if (z.track) t.style.letterSpacing = z.track + 'em';
           if (z.upper) t.style.textTransform = 'uppercase';
-          if (tpl.ground === 'bleed') t.style.textShadow = '0 1px 6px rgba(0,0,0,0.30)';
+          // A tight shadow lifts type off a photo without the muddy halo a wide
+          // blur gives; scaled in cq units so it holds at print resolution.
+          if (tpl.ground === 'bleed') t.style.textShadow = '0 0.12cqh 0.7cqh rgba(0,0,0,0.34)';
+          const fin = C.FINISHES[z.finish || 'flat'];
+          if (fin && fin.gradient) { t.classList.add('foil'); t.style.backgroundImage = fin.gradient; }
           const w = (z.maxW || 0.84) * 100;
           t.style.width = w + '%';
           t.style.left = (z.align === 'center' ? (z.x * 100 - w / 2)
@@ -294,7 +317,12 @@
           face.appendChild(t);
         });
 
-        if (opts.showBadge !== false) {
+        // The Popcode mark used to sit on every card front. On a $1.40 card a
+        // black dot in the corner is the most expensive-looking thing you can
+        // remove -- no competitor prints a logo on the face. It belongs on the
+        // BACK panel (these SKUs are duplex), alongside the popcode.app/{slug}
+        // instructions. Opt in explicitly if a front mark is ever wanted.
+        if (opts.showBadge === true) {
           const b = document.createElement('img');
           b.className = 'cf-pop';
           b.src = '/assets/popcode-symbol.png';
@@ -336,28 +364,44 @@
           add('rect', { x: 4, y: 4, width: 92, height: 132, fill: 'none', stroke: tint, 'stroke-width': 0.5, opacity: 0.85 });
           add('rect', { x: 6.5, y: 6.5, width: 87, height: 127, fill: 'none', stroke: tint, 'stroke-width': 0.2, opacity: 0.6 });
         } else if (kind === 'arch' || kind === 'branches') {
-          // Leaves placed parametrically along the arched photo opening: up the
-          // straight sides, then over the curve. Following the actual opening is
-          // what reads as a wreath rather than as tally marks.
-          const leaf = (x, y, rot, sc) => add('ellipse', {
-            cx: x.toFixed(2), cy: y.toFixed(2), rx: (2.2 * sc).toFixed(2), ry: (0.85 * sc).toFixed(2),
-            fill: tint, opacity: 0.8, transform: `rotate(${rot.toFixed(0)} ${x.toFixed(2)} ${y.toFixed(2)})`
+          // A real laurel: walk a path around the photo opening, and at each step
+          // lay a PAIR of leaves angled off the local tangent. The previous
+          // version placed leaves at fixed angles in rows, which is why it read
+          // as tally marks -- the angle has to come from the curve, not a
+          // constant, or the eye immediately sees a grid instead of a branch.
+          const pts = [];
+          const L = 12, R = 88, yBase = 104, yShoulder = 64;
+          for (let i = 0; i <= 10; i++) pts.push([L, yBase - (i / 10) * (yBase - yShoulder)]);
+          for (let i = 1; i < 24; i++) {           // over the arch, left to right
+            const a = Math.PI - (i / 24) * Math.PI;
+            pts.push([50 + 38 * Math.cos(a), yShoulder - 30 * Math.sin(a)]);
+          }
+          for (let i = 0; i <= 10; i++) pts.push([R, yShoulder + (i / 10) * (yBase - yShoulder)]);
+
+          const leaf = (x, y, deg, sc) => add('ellipse', {
+            cx: x.toFixed(2), cy: y.toFixed(2),
+            rx: (2.6 * sc).toFixed(2), ry: (0.95 * sc).toFixed(2),
+            fill: tint, opacity: 0.82,
+            transform: `rotate(${deg.toFixed(1)} ${x.toFixed(2)} ${y.toFixed(2)})`,
           });
-          const L = 11.5, R = 88.5, yTop = 60, yBot = 104;
-          for (let i = 0; i <= 8; i++) {
-            const y = yBot - (i / 8) * (yBot - yTop);
-            leaf(L, y, 118, 1); leaf(L - 1.4, y - 2.2, 152, 0.8);
-            leaf(R, y, 62, 1);  leaf(R + 1.4, y - 2.2, 28, 0.8);
-          }
-          // Over the arch: half-ellipse from left jamb to right jamb.
-          const cx = 50, rx = 38.5, ry = 26, cy = yTop;
-          for (let i = 0; i <= 14; i++) {
-            const a = Math.PI - (i / 14) * Math.PI;
-            const x = cx + rx * Math.cos(a), y = cy - ry * Math.sin(a);
-            const tangent = (Math.atan2(ry * Math.cos(a), rx * Math.sin(a)) * 180) / Math.PI;
-            leaf(x, y, tangent + 90, 1);
-            leaf(x - 0.9 * Math.cos(a), y - 1.9, tangent + 130, 0.75);
-          }
+
+          pts.forEach((p, i) => {
+            const q = pts[Math.min(i + 1, pts.length - 1)];
+            const r = pts[Math.max(i - 1, 0)];
+            const tan = (Math.atan2(q[1] - r[1], q[0] - r[0]) * 180) / Math.PI;
+            // Outward normal, so the pair opens away from the photo.
+            const nx = Math.cos(((tan - 90) * Math.PI) / 180);
+            const ny = Math.sin(((tan - 90) * Math.PI) / 180);
+            const sc = 0.78 + 0.22 * Math.sin((i / pts.length) * Math.PI); // taper at the tips
+            // Two leaves per node, splayed off the tangent like a real sprig.
+            leaf(p[0] + nx * 2.1, p[1] + ny * 2.1, tan - 38, sc);
+            leaf(p[0] + nx * 0.5, p[1] + ny * 0.5, tan + 34, sc * 0.85);
+          });
+          // The stem the leaves grow from.
+          add('path', {
+            d: 'M' + pts.map((p) => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L'),
+            fill: 'none', stroke: tint, 'stroke-width': 0.35, opacity: 0.5,
+          });
         } else if (kind === 'confetti') {
           let seed = 21;
           const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
@@ -382,10 +426,16 @@
           const base = parseFloat(el.dataset.baseFs || getComputedStyle(el).fontSize);
           el.dataset.baseFs = String(base);
           el.style.fontSize = base + 'px';
-          let fs = base;
-          for (let i = 0; i < 14 && el.scrollHeight > fs * 1.15 * maxLines + 1; i++) {
-            fs *= 0.94;
-            el.style.fontSize = fs + 'px';
+          // COUNT LINES, don't compare raw heights. A script face's ascenders and
+          // flourishes make scrollHeight exceed fontSize x leading even on ONE
+          // line, so the old `scrollHeight > fs * lead * maxLines` test fired on
+          // display scripts that fit perfectly and shrank them to nothing.
+          // Dividing by the computed line-height and rounding is immune to that
+          // overshoot: one line of Ballet measures ~1.35x but still rounds to 1.
+          for (let i = 0; i < 14; i++) {
+            const lh = parseFloat(getComputedStyle(el).lineHeight) || parseFloat(el.style.fontSize);
+            if (Math.round(el.scrollHeight / lh) <= maxLines) break;
+            el.style.fontSize = parseFloat(el.style.fontSize) * 0.94 + 'px';
           }
         });
 
@@ -415,6 +465,20 @@
           if (cur < 4) break;
           pick.style.fontSize = cur * 0.93 + 'px';
         }
+      }
+
+      // Webfonts change every metric the fitter measures, and they land AFTER
+      // first paint. Fitting only once means the layout is computed against
+      // fallback faces and is stale the moment the real ones swap in -- which is
+      // exactly when a display line grows and lands on the signature. So re-fit
+      // every card on the page whenever fonts finish loading. Cheap and
+      // idempotent (fitCardText resets to each zone's stored base size first).
+      function refitAll() {
+        document.querySelectorAll('.card-face').forEach(fitCardText);
+      }
+      if (document.fonts) {
+        document.fonts.ready.then(refitAll);
+        document.fonts.addEventListener('loadingdone', refitAll);
       }
 
       // ── Step 1: browse ──────────────────────────────────────────────────

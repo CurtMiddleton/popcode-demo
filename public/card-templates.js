@@ -247,28 +247,85 @@
   "FONTS": {
     "script": {
       "label": "Script",
-      "css": "'Great Vibes', cursive",
-      "google": "Great+Vibes"
+      "css": "'Ballet', 'Snell Roundhand', cursive",
+      "google": "Ballet"
+    },
+    "didone": {
+      "label": "Didone",
+      "css": "'Bodoni Moda', 'Didot', serif",
+      "google": "Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,600;1,6..96,400"
+    },
+    "editorial": {
+      "label": "Editorial",
+      "css": "'Fraunces', Georgia, serif",
+      "google": "Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,300"
     },
     "serif": {
       "label": "Serif",
-      "css": "'Playfair Display', serif",
+      "css": "'Playfair Display', Georgia, serif",
       "google": "Playfair+Display:ital,wght@0,400;0,600;1,400"
     },
     "cormorant": {
       "label": "Garamond",
-      "css": "'Cormorant Garamond', serif",
-      "google": "Cormorant+Garamond:ital,wght@0,400;0,600;1,400"
+      "css": "'Cormorant Garamond', Garamond, serif",
+      "google": "Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400"
     },
     "cinzel": {
       "label": "Engraved",
-      "css": "'Cinzel', serif",
+      "css": "'Cinzel', 'Trajan Pro', serif",
       "google": "Cinzel:wght@400;600"
+    },
+    "grotesk": {
+      "label": "Grotesk",
+      "css": "'Jost', 'Futura', sans-serif",
+      "google": "Jost:wght@300;400;500"
     },
     "sans": {
       "label": "Sans",
       "css": "'Inter', sans-serif",
       "google": null
+    }
+  },
+  "TYPE": {
+    "margin": 0.075,
+    "measure": 0.85,
+    "display": {
+      "xl": 0.15,
+      "lg": 0.118,
+      "md": 0.092,
+      "sm": 0.072
+    },
+    "body": {
+      "lg": 0.034,
+      "md": 0.028,
+      "sm": 0.023
+    },
+    "lead": {
+      "display": 1.02,
+      "mid": 1.18,
+      "body": 1.4
+    },
+    "track": {
+      "display": -0.015,
+      "caps": 0.16,
+      "capsWide": 0.28
+    }
+  },
+  "FINISHES": {
+    "flat": {
+      "label": "Flat"
+    },
+    "gold": {
+      "label": "Gold Foil",
+      "gradient": "linear-gradient(100deg,#8a6a2f 0%,#d9b45e 17%,#f7e9b0 33%,#c99b3f 50%,#f2dc98 67%,#b98c33 84%,#7d5f28 100%)"
+    },
+    "rose": {
+      "label": "Rose Foil",
+      "gradient": "linear-gradient(100deg,#8c5245 0%,#d69b88 17%,#f6ddd2 33%,#c07f6b 50%,#efd0c2 67%,#b0705c 84%,#7d4739 100%)"
+    },
+    "silver": {
+      "label": "Silver Foil",
+      "gradient": "linear-gradient(100deg,#6e727a 0%,#b8bec7 17%,#eef1f5 33%,#9aa1ab 50%,#e2e6ec 67%,#8b929c 84%,#63676e 100%)"
     }
   },
   "COLORWAYS": {
@@ -320,7 +377,7 @@
   "CARD_TEMPLATES": [
     {
       "id": "bleed-script",
-      "name": "Snowfall Script",
+      "name": "Winter Script",
       "formatId": "flat-5x7",
       "orientation": "portrait",
       "tags": [
@@ -332,7 +389,7 @@
       ],
       "ground": "bleed",
       "ornament": "snow",
-      "scrim": 0.42,
+      "scrim": 0.26,
       "colorways": [
         "cream",
         "midnight",
@@ -361,33 +418,37 @@
           "align": "center",
           "track": 0,
           "upper": false,
+          "lead": 1,
+          "finish": "flat",
           "lines": 1,
           "x": 0.5,
-          "y": 0.735,
-          "size": 0.098,
-          "maxW": 0.86
+          "y": 0.74,
+          "size": 0.118,
+          "maxW": 0.85
         },
         {
           "id": "signature",
           "role": "signature",
           "default": "The Middleton Family",
-          "font": "sans",
+          "font": "grotesk",
           "weight": 400,
           "color": "onPhoto",
           "align": "center",
-          "track": 0.22,
+          "track": 0.28,
           "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
           "lines": null,
           "x": 0.5,
-          "y": 0.872,
-          "size": 0.026,
-          "maxW": 0.8
+          "y": 0.88,
+          "size": 0.023,
+          "maxW": 0.78
         }
       ]
     },
     {
       "id": "bleed-stacked",
-      "name": "Stacked Serif",
+      "name": "Stacked Didone",
       "formatId": "flat-5x7",
       "orientation": "portrait",
       "tags": [
@@ -399,7 +460,7 @@
       ],
       "ground": "bleed",
       "ornament": "none",
-      "scrim": 0.5,
+      "scrim": 0.3,
       "colorways": [
         "cream",
         "midnight",
@@ -422,49 +483,55 @@
           "id": "headline",
           "role": "headline",
           "default": "MERRY",
-          "font": "serif",
+          "font": "didone",
           "weight": 400,
           "color": "onPhoto",
           "align": "center",
-          "track": 0.1,
+          "track": 0.16,
           "upper": true,
+          "lead": 1.02,
+          "finish": "flat",
           "lines": 1,
           "x": 0.5,
-          "y": 0.69,
-          "size": 0.132,
-          "maxW": 0.9
+          "y": 0.7,
+          "size": 0.118,
+          "maxW": 0.85
         },
         {
           "id": "subhead",
           "role": "subhead",
           "default": "CHRISTMAS",
-          "font": "serif",
+          "font": "didone",
           "weight": 400,
           "color": "onPhoto",
           "align": "center",
-          "track": 0.18,
+          "track": 0.28,
           "upper": true,
+          "lead": 1.02,
+          "finish": "flat",
           "lines": 1,
           "x": 0.5,
-          "y": 0.8,
-          "size": 0.086,
-          "maxW": 0.9
+          "y": 0.806,
+          "size": 0.072,
+          "maxW": 0.85
         },
         {
           "id": "signature",
           "role": "signature",
-          "default": "love, the Middletons",
-          "font": "sans",
+          "default": "the Middletons",
+          "font": "grotesk",
           "weight": 400,
           "color": "onPhoto",
           "align": "center",
-          "track": 0,
-          "upper": false,
+          "track": 0.22,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
           "lines": null,
           "x": 0.5,
           "y": 0.892,
-          "size": 0.028,
-          "maxW": 0.8
+          "size": 0.023,
+          "maxW": 0.78
         }
       ]
     },
@@ -482,7 +549,7 @@
       ],
       "ground": "bleed",
       "ornament": "none",
-      "scrim": 0.34,
+      "scrim": 0.22,
       "colorways": [
         "cream",
         "sage",
@@ -510,27 +577,31 @@
           "align": "left",
           "track": 0,
           "upper": false,
+          "lead": 1,
+          "finish": "flat",
           "lines": 1,
-          "x": 0.09,
-          "y": 0.755,
+          "x": 0.075,
+          "y": 0.712,
           "size": 0.15,
-          "maxW": 0.62
+          "maxW": 0.6
         },
         {
           "id": "signature",
           "role": "signature",
-          "default": "the Middletons · 2026",
-          "font": "sans",
+          "default": "the Middletons 2026",
+          "font": "grotesk",
           "weight": 400,
           "color": "onPhoto",
           "align": "left",
-          "track": 0.14,
-          "upper": false,
+          "track": 0.28,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
           "lines": null,
-          "x": 0.09,
-          "y": 0.9,
-          "size": 0.026,
-          "maxW": 0.6
+          "x": 0.075,
+          "y": 0.902,
+          "size": 0.023,
+          "maxW": 0.62
         }
       ]
     },
@@ -547,6 +618,7 @@
       ],
       "ground": "inset",
       "ornament": "branches",
+      "mat": true,
       "colorways": [
         "cream",
         "sage",
@@ -556,10 +628,10 @@
       "photos": [
         {
           "id": "main",
-          "x": 0.14,
-          "y": 0.2,
-          "w": 0.72,
-          "h": 0.56,
+          "x": 0.15,
+          "y": 0.205,
+          "w": 0.7,
+          "h": 0.545,
           "fit": "cover",
           "arch": true
         }
@@ -574,29 +646,33 @@
           "weight": 400,
           "color": "ink",
           "align": "center",
-          "track": 0.2,
+          "track": 0.28,
           "upper": true,
+          "lead": 1.4,
+          "finish": "gold",
           "lines": null,
           "x": 0.5,
-          "y": 0.108,
-          "size": 0.04,
-          "maxW": 0.76
+          "y": 0.115,
+          "size": 0.034,
+          "maxW": 0.78
         },
         {
           "id": "signature",
           "role": "signature",
           "default": "From, the Middletons",
-          "font": "sans",
+          "font": "grotesk",
           "weight": 400,
           "color": "accent",
           "align": "center",
-          "track": 0,
+          "track": 0.16,
           "upper": false,
+          "lead": 1.4,
+          "finish": "flat",
           "lines": null,
           "x": 0.5,
-          "y": 0.822,
-          "size": 0.026,
-          "maxW": 0.76
+          "y": 0.828,
+          "size": 0.023,
+          "maxW": 0.78
         }
       ]
     },
@@ -613,6 +689,7 @@
       ],
       "ground": "inset",
       "ornament": "none",
+      "mat": true,
       "colorways": [
         "cream",
         "sage",
@@ -623,9 +700,9 @@
         {
           "id": "main",
           "x": 0.22,
-          "y": 0.285,
+          "y": 0.3,
           "w": 0.56,
-          "h": 0.42,
+          "h": 0.4,
           "fit": "cover"
         }
       ],
@@ -635,17 +712,19 @@
           "id": "headline",
           "role": "headline",
           "default": "HAPPY",
-          "font": "serif",
+          "font": "didone",
           "weight": 400,
-          "color": "accent",
+          "color": "ink",
           "align": "center",
-          "track": 0.06,
+          "track": 0.16,
           "upper": true,
-          "lines": null,
+          "lead": 1.02,
+          "finish": "flat",
+          "lines": 1,
           "x": 0.5,
-          "y": 0.115,
-          "size": 0.098,
-          "maxW": 0.86
+          "y": 0.12,
+          "size": 0.092,
+          "maxW": 0.85
         },
         {
           "id": "subhead",
@@ -657,27 +736,31 @@
           "align": "center",
           "track": 0,
           "upper": false,
-          "lines": null,
+          "lead": 1.1,
+          "finish": "flat",
+          "lines": 1,
           "x": 0.5,
           "y": 0.222,
-          "size": 0.028,
-          "maxW": 0.7
+          "size": 0.046,
+          "maxW": 0.72
         },
         {
           "id": "signature",
           "role": "signature",
           "default": "HOLIDAYS",
-          "font": "serif",
+          "font": "didone",
           "weight": 400,
-          "color": "accent",
+          "color": "ink",
           "align": "center",
-          "track": 0.06,
+          "track": 0.16,
           "upper": true,
-          "lines": null,
+          "lead": 1.02,
+          "finish": "flat",
+          "lines": 1,
           "x": 0.5,
-          "y": 0.76,
-          "size": 0.098,
-          "maxW": 0.86
+          "y": 0.762,
+          "size": 0.092,
+          "maxW": 0.85
         }
       ]
     },
@@ -705,10 +788,10 @@
       "photos": [
         {
           "id": "main",
-          "x": 0.12,
-          "y": 0.14,
-          "w": 0.76,
-          "h": 0.6,
+          "x": 0.125,
+          "y": 0.15,
+          "w": 0.75,
+          "h": 0.58,
           "fit": "cover"
         }
       ],
@@ -724,27 +807,31 @@
           "align": "center",
           "track": 0,
           "upper": false,
-          "lines": null,
+          "lead": 1.02,
+          "finish": "gold",
+          "lines": 1,
           "x": 0.5,
-          "y": 0.79,
-          "size": 0.062,
+          "y": 0.798,
+          "size": 0.072,
           "maxW": 0.8
         },
         {
           "id": "signature",
           "role": "signature",
           "default": "THE MIDDLETONS",
-          "font": "sans",
+          "font": "grotesk",
           "weight": 400,
           "color": "accent",
           "align": "center",
-          "track": 0.24,
+          "track": 0.28,
           "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
           "lines": null,
           "x": 0.5,
-          "y": 0.884,
-          "size": 0.024,
-          "maxW": 0.76
+          "y": 0.892,
+          "size": 0.023,
+          "maxW": 0.78
         }
       ]
     },
@@ -761,6 +848,7 @@
       ],
       "ground": "collage",
       "ornament": "none",
+      "mat": true,
       "colorways": [
         "sage",
         "cream",
@@ -770,34 +858,34 @@
       "photos": [
         {
           "id": "p1",
-          "x": 0.05,
-          "y": 0.05,
-          "w": 0.44,
-          "h": 0.28,
+          "x": 0.075,
+          "y": 0.075,
+          "w": 0.415,
+          "h": 0.275,
           "fit": "cover"
         },
         {
           "id": "p2",
           "x": 0.51,
-          "y": 0.05,
-          "w": 0.44,
-          "h": 0.4,
+          "y": 0.075,
+          "w": 0.415,
+          "h": 0.385,
           "fit": "cover"
         },
         {
           "id": "p3",
-          "x": 0.05,
-          "y": 0.35,
-          "w": 0.44,
-          "h": 0.28,
+          "x": 0.075,
+          "y": 0.37,
+          "w": 0.415,
+          "h": 0.275,
           "fit": "cover"
         },
         {
           "id": "p4",
           "x": 0.51,
-          "y": 0.47,
-          "w": 0.44,
-          "h": 0.28,
+          "y": 0.48,
+          "w": 0.415,
+          "h": 0.275,
           "fit": "cover"
         }
       ],
@@ -807,32 +895,36 @@
           "id": "headline",
           "role": "headline",
           "default": "ENJOY EVERY MOMENT",
-          "font": "serif",
+          "font": "editorial",
           "weight": 400,
           "color": "ink",
           "align": "center",
-          "track": 0.1,
+          "track": 0.16,
           "upper": true,
+          "lead": 1.18,
+          "finish": "flat",
           "lines": 2,
           "x": 0.5,
-          "y": 0.782,
-          "size": 0.05,
-          "maxW": 0.88
+          "y": 0.8,
+          "size": 0.04,
+          "maxW": 0.85
         },
         {
           "id": "signature",
           "role": "signature",
-          "default": "the Middletons · 2026",
-          "font": "sans",
+          "default": "the Middletons 2026",
+          "font": "grotesk",
           "weight": 400,
           "color": "accent",
           "align": "center",
-          "track": 0,
-          "upper": false,
+          "track": 0.22,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
           "lines": null,
           "x": 0.5,
           "y": 0.9,
-          "size": 0.026,
+          "size": 0.023,
           "maxW": 0.8
         }
       ]
@@ -848,6 +940,7 @@
       ],
       "ground": "inset",
       "ornament": "none",
+      "mat": true,
       "colorways": [
         "blush",
         "cream",
@@ -859,7 +952,7 @@
           "x": 0.1,
           "y": 0.1,
           "w": 0.8,
-          "h": 0.6,
+          "h": 0.585,
           "fit": "cover"
         }
       ],
@@ -869,16 +962,18 @@
           "id": "subhead",
           "role": "subhead",
           "default": "INTRODUCING",
-          "font": "sans",
+          "font": "grotesk",
           "weight": 400,
           "color": "accent",
           "align": "center",
           "track": 0.28,
           "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
           "lines": null,
           "x": 0.5,
-          "y": 0.742,
-          "size": 0.026,
+          "y": 0.748,
+          "size": 0.023,
           "maxW": 0.8
         },
         {
@@ -891,26 +986,30 @@
           "align": "center",
           "track": 0,
           "upper": false,
-          "lines": null,
+          "lead": 1.02,
+          "finish": "flat",
+          "lines": 1,
           "x": 0.5,
-          "y": 0.79,
-          "size": 0.076,
-          "maxW": 0.86
+          "y": 0.796,
+          "size": 0.072,
+          "maxW": 0.85
         },
         {
           "id": "signature",
           "role": "signature",
-          "default": "March 4, 2026 · 7lb 2oz",
-          "font": "sans",
+          "default": "March 4, 2026",
+          "font": "grotesk",
           "weight": 400,
           "color": "accent",
           "align": "center",
-          "track": 0,
-          "upper": false,
+          "track": 0.22,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
           "lines": null,
           "x": 0.5,
           "y": 0.898,
-          "size": 0.026,
+          "size": 0.023,
           "maxW": 0.82
         }
       ]
