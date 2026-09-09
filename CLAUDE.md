@@ -1513,3 +1513,80 @@ Asked whether a coder can tell we use MindAR, and whether hiding it is worth any
 - **GitHub raw link for pasting SQL:** `raw.githubusercontent.com/CurtMiddleton/popcode-demo/main/<path>`. A bare `github.com/...` URL pasted into GitHub's file-finder is read as a *path inside the branch you're viewing* → confusing 404 naming the feature branch.
 - Testing `view.html` headless (this worked well): playwright-core in the **scratchpad only** (`node_modules` is tracked in this repo), chromium `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, `cd public && python3 -m http.server`, `page.route` to stub `@supabase/supabase-js` + abort sentry/fonts, and **stub `/api/collection` to test the happy path, a 404 and a 500** — all three must reach the right screen, never an infinite spinner.
 - Foreground `sleep` is blocked in this sandbox; use a backgrounded `until` loop to wait for a deploy.
+
+### 2026-09-09 — Analytics: creator-side activity logging, Content tab + contact sheet, all-time funnel (all shipped to prod)
+
+**Branch `main`, three commits pushed straight to prod: `8de7a87`, `83d2eeb`, `f8159a9`.** No PRs. One migration, already run in prod (see below). Started as a security question about a viewer in Egypt, turned into the analytics work the dashboard had been missing.
+
+#### Part 0 — the "unauthorized user in Egypt?" scare (NOT a breach; keep this reasoning)
+
+User saw `16th Birthday` — created by **Zoe Wietbrock** in Munich — being viewed from **Giza, Egypt**, tagged with Zoe's name, and asked whether someone had her account. Answer: **no, it was Zoe's own iPhone on a trip.** How that was established, because the same question will recur:
+
+- **The `USER` column in the Activity Log is NOT the project owner.** `view.html:551` reads the *viewer's own* Supabase session (`db.auth.getSession()`) and posts `user_id` to `/api/log-event`; analytics joins that to `auth.users`. So a stranger with the link shows `—`; a name means that browser was holding that person's session. Proof it isn't the owner: several `16th Birthday` rows show `—`.
+- Decisive evidence it was one travelling phone, from `select ... from scan_events where user_id = '<zoe>' group by country, city, ip, user_agent`:
+  - **Same device across an OS update.** Munich Aug 17 = `Version/26.6`; Munich Aug 21 and BOTH Egypt sessions = `Version/26.6.1`. Everything else byte-identical (`OS 18_7`, WebKit `605.1.15`, `Mobile/15E148`).
+  - **A network handover mid-session.** Giza IP `41.33.246.187` last event `18:30:11`, Cairo IP `156.187.0.143` first event `18:30:19` — **8 seconds apart**, and Giza/Cairo are one metro area. Two people cannot produce that.
+  - German IPs `46.142.174.30` / `46.142.175.3` are the same /23 = one ISP handing out rotating addresses.
+- **Do NOT read the `MODEL` column as device identity** — `parseModel()` maps iOS 18+ → "iPhone 16+", a coarse OS bucket. Matching models prove nothing.
+- Blast radius if it HAD been real: being signed in buys nothing on the viewer (link-based sharing, `view.html` gates nothing on auth). The exposure is the account — `manage.html`/`edit.html` are RLS'd by `user_id`.
+- **Decision: did NOT build session revocation.** No payment data on these accounts; worst case is someone editing their own projects. Trigger to build it = first paying customer, or a real reported compromise.
+- Gotcha that wasted a round trip: the first diagnostic query returned "Success. No rows returned" because the user pasted `'<16th-birthday-slug>'` **literally**. The dashboard shows project *names*, not slugs. Give queries that need no substitution (key off a known IP, or join `collections` on `name ilike`).
+
+#### Part 1 — creator-side activity logging (`8de7a87`)
+
+The dashboard only ever saw **consumption** (scan_events written solely by view.html), so it could not answer *"did this signup ever make anything?"* — the metric that matters most for a beta.
+
+- **NEW `public/activity.js`** (65 lines) — `window.logActivity(eventType, { slug, user_id })`. Posts to the existing `/api/log-event`. `keepalive: true` (create.html redirects right after saving). Fire-and-forget, swallows its own errors — logging must never break a save the user waited 30s for. Callers pass their **own** `user_id`, so the file holds no Supabase client and couples to nothing.
+- **Event types:** `signup`, `create_project`, `create_book`, `create_boardbook`, `create_calendar`, `create_montage`, `save_design`.
+- **Call sites:** `auth.html:291` (signUp — captures `data.user.id`, which exists even while email confirmation is pending), `create.html:1205` (project), `create.html:1653` (montage), `book.html:4123`, `boardbook.html:1688`, `calendar.html:1704`, `order.html:1375` (save design). **All three makers log only in the INSERT branch, not the update branch** — deliberate, so "Created" doesn't fill with edits. Consequence: **editing a design/book logs nothing.** Add `edit_*` events if that's ever wanted.
+- **Reused `scan_events` rather than a new table.** Free session grouping, geo, device parsing, and the Activity Log renders it with no new plumbing. Cost: the table name is now a misnomer (mild, next to `collections` meaning Projects).
+- **MIGRATION (RUN IN PROD, confirmed `is_nullable = YES`):** `supabase/migrations/2026-09-09-activity-events.sql` → `alter table public.scan_events alter column slug drop not null;`. Needed because `signup` and `create_montage` fire before any project row exists. `api/log-event.js` has `ACCOUNT_EVENTS = ['signup','create_montage']` — those may omit a slug; everything else still must supply one. **The `get_events_with_users` RPC did NOT need recreating** — only a null constraint was relaxed, no column added (contrast the 2026-04-15 lesson).
+
+#### Part 2 — Activity Log fixes (same commit)
+
+- **`User` → `Signed in as`.** Deviated from the user's suggested "Viewer (signed in)" *because* creation events now share the stream — half the rows are creators, so "Viewer" would be wrong exactly on the new rows.
+- **Location trail**: a session that moves now renders `Giza → Cairo` (first 3 places, then `→ …`) instead of only the first city, which hid the movement that caused the whole scare.
+- **Session keying rewritten** (`buildSessions`, analytics.html:594). Anonymous events now key on **user_agent**, not IP, and an event whose **IP changed** only joins the session within **2 minutes** (a real handover is seconds); unchanged IP keeps the 30-min window. Fixes both directions of the old IP key: one anon visitor whose IP rotated was split in two, and two people behind one household connection were merged into one.
+- `eventCategory()` (analytics.html:538) maps event_type → `created` / `viewed` / `ordered`; drives the new **All / Created / Viewed / Ordered** filter pills. `projectCell()` (:534) renders account-level (null-slug) events as **"Account"**.
+
+#### Part 3 — Content tab + contact sheet (`83d2eeb`)
+
+- **Library + Projects merged into one `Content` tab** (8 tabs → 7). Trick used: two separate `.tab-body` elements both carry `data-tab="content"`, and `showTab` reveals every matching one — so the static `#library-section` (outside `#main-content`) and the by-photo body (inside it) display together without moving any DOM. `RANGE_TABS` now `['activity','overview','content']`.
+- **Contact sheet** — clicking a project opens a grid of every photo with the media it triggers (`Video` / `Audio` / **`No media`**) plus its scan count, instead of dropping into the first video. `lbMode` is `'sheet'` or `'single'`; `lbApplyMode()` (analytics.html ~1745) switches, `lbRenderSheet()` (:1776) draws it. Opening from a **By Photo thumbnail still jumps straight to that photo** (`openLightbox(slug, targetIndex)` sets single mode when the index matches). **Escape steps single → sheet** before closing, so browsing a project doesn't mean reopening it after every photo. Per-photo counts come from a new `cachedTargetCounts` keyed `'slug|target_index'`, populated in `renderByVideo` from `get_target_scan_counts`.
+- **User feedback mid-build: tiles were too small to recognise a photo.** Fixed to `minmax(240px, 1fr)`, `aspect-ratio: 4/3`, **`object-fit: contain`** (the old square `cover` crop was cutting the top and bottom off every portrait shot — fatal for a sheet whose job is showing what a viewer aims a camera at). The media tag moved from floating over the image into the caption row, because on portrait photos it sat on empty letterbox.
+
+#### Part 4 — REGRESSION I introduced in Part 1, fixed in Part 3 (watch for this shape)
+
+Putting creation events in `scan_events` silently polluted two view-only metrics, and they were live in prod for a while:
+- **By Project** grew a row for every project the moment it was *created* (all zeros) plus one **literally named `null`** for account-level events with no slug.
+- **Unique Visitors** counted creators who had never opened a scanner.
+
+Both now early-return unless `eventCategory(e.event_type) === 'viewed'`. **Lesson: when you add a new event class to a shared table, audit every aggregate that iterates the whole event array** — the ones filtering on an explicit `event_type` were fine; the ones grouping by `slug` or mapping `ip_address` were not.
+
+#### Part 5 — all-time funnel (`f8159a9`)
+
+`Overview` now opens with a five-stage funnel counting **accounts**: Signed up → Made something → Got scanned → Media played → Ordered a print, each with count-of-total and **drop-off vs the previous stage** (amber under 50%). `renderFunnel()` at analytics.html:1545.
+
+- **Deliberately ALL-TIME while the rest of Overview stays range-scoped**, with a note on the page saying so. A lifetime question answered over a rolling 30 days would score an account that joined in March and built something yesterday as a failure.
+- **It works retroactively** — stages derive from `cachedUsers` (`get_all_users`, max_rows 1000), `cachedCols`, and `cachedPrints`, all of which have full history. It did NOT need the new events, so it shows real numbers on the existing ~35 accounts immediately.
+- `ensureAllEvents()` (:1508) pulls all-time events once (`get_events_with_users` with `days_back: 0`, falling back to `fetchAllRows('scan_events', …)`), promise-cached.
+- **`#funnel-wrap` lives inside `#main-content`, which `loadAnalytics` rebuilds on every range change**, so `loadFunnel()` is called again at the end of that rebuild (cheap — all inputs are promise-cached). Same hazard applies to anything else added inside `#main-content`.
+- "Ordered a print" matches orders to accounts by **`buyer_email`**, so an order placed under a different email than the account's won't attribute. Only `PAID_PLUS` statuses count (a `pending` order is correctly excluded).
+
+#### Gotchas / lessons
+
+- **After deploying, an already-open tab runs the OLD JavaScript.** User saved a design, it didn't log, and it looked like a bug — a hard refresh fixed it. Check this FIRST for any "my new client-side event didn't fire" report; verify the deploy actually landed by `curl`ing prod for the new string rather than trusting timing.
+- **This machine is NOT the Linux sandbox.** `/opt/pw-browsers` and a scratchpad `playwright-core` do **not** exist here. Use the **Browser pane** (`preview_start` with a `.claude/launch.json` entry) instead. Recipe that worked: copy `analytics.html` into the scratchpad, swap the supabase-js CDN tag for a local `stub.js`, strip `sentry-init.js` / `nav.js` / `beta-feedback.js` / `config.js`, and inject dummy `#logout-btn` + `#user-greeting` (nav.js normally provides them). **Remove the temp launch config afterwards** — it points at a scratchpad path.
+- The stub's `config.js` replacement must define **`SUPABASE_URL` / `SUPABASE_KEY`** as bare `const`s (those exact names), not `window.*`.
+- **An instant-resolving stub session exposes latent TDZ** the real network hides: `loadPrints()` runs before `let cachedPrints` initialises. Added a 60ms delay in the stub's `getSession` to test realistically. **That fragility is still in prod code** — untouched, currently masked by the network round-trip. Same class as the scan.html TDZ in the 2026-06-12 notes.
+- Pure logic (session grouping, categories) is far better tested in **node** by extracting the real functions with a brace-matching script than by driving the DOM — 10 assertions ran in a second, including the negative cases (10-min IP change must split; two UAs on one IP must stay separate).
+- **PIL is available on this Mac** (11.3.0). Generating deliberately mixed-aspect test photos with visible borders and TOP/BOTTOM labels is what made the contact-sheet cropping bug obvious at a glance.
+- Console noise in the stub harness that is NOT real: `nav-btn` null (stripped nav.js), `fonts.googleapis.com`, and 404s for fake media URLs.
+
+#### Still open / next
+
+- **People** and **Business** tab merges from the agreed IA (Accounts gaining per-person made/received/ordered; Prints + Cost combined to show margin). Tidying, not new information.
+- `analytics.html` is still gated to **`curtmid@gmail.com` only** (`ADMIN_EMAIL`, ~line 418) — signing in as `curt@theworkshop.works` bounces to manage.html. One-line fix, offered twice, not yet taken.
+- Consider `edit_project` / `edit_design` events if edits should be visible.
+- Fix the `cachedPrints` TDZ properly.
+- No backfill: creation events only exist from 2026-09-09 onward. The **funnel** is unaffected (it reads accounts/collections/orders), but the Activity Log's "Created" filter will look empty for anything older.
