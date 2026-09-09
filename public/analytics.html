@@ -94,6 +94,15 @@
       .badge-video_error   { background: #ffe8e8; color: #c92a2a; }
       .badge-audio_play    { background: #e0f7f4; color: #0f8b81; }
       .badge-audio_complete{ background: #d6f0e4; color: #1f7a4d; }
+      /* Creation-side events — warm tones, so "made something" reads at a
+         glance as a different kind of event from "watched something". */
+      .badge-signup           { background: #fff3d6; color: #a06800; }
+      .badge-create_project   { background: #ffeccc; color: #b35309; }
+      .badge-create_book      { background: #ffeccc; color: #b35309; }
+      .badge-create_boardbook { background: #ffeccc; color: #b35309; }
+      .badge-create_calendar  { background: #ffeccc; color: #b35309; }
+      .badge-create_montage   { background: #ffe4d6; color: #b1400a; }
+      .badge-save_design      { background: #f3e8d6; color: #86601f; }
 
       /* Print-order status pills + Retry action */
       .ps { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
@@ -219,6 +228,8 @@
       .limit-bar { display: inline-flex; gap: 6px; }
       .limit-btn { padding: 4px 12px; border-radius: 16px; border: 1px solid #e0ddd6; background: white; font-size: 12px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; color: #555; }
       .limit-btn.active { background: #1a1a1a; color: white; border-color: transparent; }
+      .cat-btn { padding: 4px 12px; border-radius: 16px; border: 1px solid #e0ddd6; background: white; font-size: 12px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; color: #555; }
+      .cat-btn.active { background: #7657FC; color: white; border-color: transparent; }
 
       /* Accounts section — expand/collapse for rows 11+ */
       .accounts-toggle-row td { text-align: center; padding: 12px 10px; border-top: 1px solid #f0eeea; background: #fafaf8; }
@@ -392,6 +403,7 @@
       let sortCol = 'created_at', sortDir = 'desc';
       let searchQuery = '';
       let cachedEvts = [], cachedColNames = {};
+      let activityCategory = 'all';  // Activity filter pill: all | created | viewed | ordered
       let activityLimit = 25;   // chunk size: how many sessions each "show N" / "load more" click adds
       let activityShown = 25;   // how many sessions are currently visible in the activity log
       let cachedAccounts = null;
@@ -467,8 +479,24 @@
         return `<span class="pill ${cls}">${d || 'Unknown'}</span>`;
       }
       function eventBadge(e) {
-        const labels = { scan_open: 'Opened', target_found: 'Photo Found', video_play: 'Video Played', video_complete: 'Video Done', video_error: 'Error', audio_play: 'Audio Played', audio_complete: 'Audio Done' };
+        const labels = { scan_open: 'Opened', target_found: 'Photo Found', video_play: 'Video Played', video_complete: 'Video Done', video_error: 'Error', audio_play: 'Audio Played', audio_complete: 'Audio Done',
+          signup: 'Signed Up', create_project: 'Made a Popcode', create_book: 'Made a Book', create_boardbook: 'Made a Board Book', create_calendar: 'Made a Calendar', create_montage: 'Made a Montage', save_design: 'Saved a Design' };
         return `<span class="badge badge-${e}">${labels[e] || e}</span>`;
+      }
+
+      // Which funnel an event belongs to. Drives the Activity filter pills, and
+      // keeps "made something" separable from "watched something" — the
+      // question the dashboard could not answer before creation events existed.
+      var CREATE_EVENTS = ['signup', 'create_project', 'create_book', 'create_boardbook', 'create_calendar', 'create_montage'];
+      // Account-level events (signup, montage) precede any project.
+      function projectCell(e) {
+        if (!e.slug) return '<span class="muted" style="font-weight:400">Account</span>';
+        return escapeHtml(cachedColNames[e.slug] || e.slug);
+      }
+      function eventCategory(t) {
+        if (CREATE_EVENTS.indexOf(t) !== -1) return 'created';
+        if (t === 'save_design') return 'ordered';
+        return 'viewed';
       }
       function countryFlag(code) {
         if (!code) return '';
@@ -483,7 +511,11 @@
         { key: 'browser',    label: 'Browser' },
         { key: 'country',    label: 'Location' },
         { key: 'ip_address', label: 'IP' },
-        { key: 'user',       label: 'User' }
+        // NOT the project owner — this is whoever's Popcode session the browser
+        // was holding when the event fired. A viewer who merely has the link
+        // shows "—". Mislabelling this as "User" once made an owner watching
+        // her own project abroad look like an intruder.
+        { key: 'user',       label: 'Signed in as' }
       ];
 
       function getUser(e) { return e.user_name || e.user_email || ''; }
@@ -524,14 +556,27 @@
         var openMap = {}; // key -> session ref
 
         sorted.forEach(function(e) {
-          var userKey = e.user_id || e.ip_address || 'anon';
+          // Signed-in events identify the person directly. Anonymous ones fall
+          // back to the user agent rather than the IP, so a session survives a
+          // network change; the IP-change window below is what stops two
+          // different anonymous visitors from being merged. (Keying on IP also
+          // wrongly merged two people behind one household connection.)
+          var userKey = e.user_id || ('ua:' + (e.user_agent || e.ip_address || 'anon'));
           var key = userKey + '|' + (e.slug || '');
           var t = new Date(e.created_at).getTime();
 
           if (openMap[key]) {
             var sess = openMap[key];
-            var lastT = new Date(sess.events[sess.events.length - 1].created_at).getTime();
-            if (t - lastT <= 30 * 60 * 1000) {
+            var last = sess.events[sess.events.length - 1];
+            var lastT = new Date(last.created_at).getTime();
+            // A phone that switches Wi-Fi to cellular mid-session changes IP in
+            // seconds, so a changed IP only stays in the same session if the
+            // gap is short. Without this, an anonymous visitor whose IP rotates
+            // gets split into two sessions; with too loose a window, two
+            // different visitors would get merged into one.
+            var ipChanged = (last.ip_address || '') !== (e.ip_address || '');
+            var window = ipChanged ? 2 * 60 * 1000 : 30 * 60 * 1000;
+            if (t - lastT <= window) {
               sess.events.push(e);
               return;
             }
@@ -553,6 +598,7 @@
 
         var q = searchQuery.trim().toLowerCase();
         var rows = cachedEvts.filter(function(e) {
+          if (activityCategory !== 'all' && eventCategory(e.event_type) !== activityCategory) return false;
           if (!q) return true;
           return (cachedColNames[e.slug] || e.slug || '').toLowerCase().includes(q) ||
                  getUser(e).toLowerCase().includes(q) ||
@@ -593,7 +639,16 @@
             var count = sess.events.length;
             var hasMore = count > 1;
             var sid = 'sess-' + sess.id;
-            var loc = countryFlag(first.country) + (first.city ? first.city + ', ' : '') + (first.region ? first.region + ' ' : '') + (first.country || '—');
+            // A session can move — a phone changing network, or someone
+            // genuinely travelling. Labelling the row with only the first
+            // event's city hid that. Show the trail instead: "Giza → Cairo".
+            var placeSeq = [];
+            sess.events.forEach(function(ev) {
+              var p = countryFlag(ev.country) + (ev.city ? ev.city + ', ' : '') + (ev.region ? ev.region + ' ' : '') + (ev.country || '—');
+              if (p !== placeSeq[placeSeq.length - 1]) placeSeq.push(p);
+            });
+            var loc = placeSeq.slice(0, 3).join(' <span style="color:#bbb">→</span> ') +
+                      (placeSeq.length > 3 ? ' <span style="color:#bbb">→ …</span>' : '');
 
             var opens     = sess.events.filter(function(e) { return e.event_type === 'scan_open'; }).length;
             var found     = sess.events.filter(function(e) { return e.event_type === 'target_found'; }).length;
@@ -612,7 +667,7 @@
             tbody += '<tr class="session-row">';
             tbody += '<td class="muted" style="white-space:nowrap">' + formatDate(first.created_at) + '</td>';
             tbody += '<td>' + eventBadge(first.event_type) + (hasMore ? ' <span style="font-size:10px;color:#aaa;font-weight:700">+' + (count - 1) + '</span>' : '') + '</td>';
-            tbody += '<td style="font-weight:600">' + (cachedColNames[first.slug] || first.slug) + '</td>';
+            tbody += '<td style="font-weight:600">' + projectCell(first) + '</td>';
             tbody += '<td>' + devicePill(first.device_type) + '</td>';
             tbody += '<td class="muted">' + (first.browser || '—') + '</td>';
             tbody += '<td style="white-space:nowrap">' + loc + '</td>';
@@ -629,7 +684,7 @@
                 tbody += '<tr class="child-row" data-parent="' + sid + '" style="display:none">';
                 tbody += '<td class="muted" style="white-space:nowrap;padding-left:20px">' + formatDate(e.created_at) + '</td>';
                 tbody += '<td>' + eventBadge(e.event_type) + '</td>';
-                tbody += '<td style="font-weight:600">' + (cachedColNames[e.slug] || e.slug) + '</td>';
+                tbody += '<td style="font-weight:600">' + projectCell(e) + '</td>';
                 tbody += '<td>' + devicePill(e.device_type) + '</td>';
                 tbody += '<td class="muted">' + (e.browser || '—') + '</td>';
                 tbody += '<td style="white-space:nowrap">' + cloc + '</td>';
@@ -1690,6 +1745,12 @@
                 <div class="section-title">Activity Log</div>
                 <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                   <div class="limit-bar">
+                    <button class="cat-btn${activityCategory==='all'?' active':''}" data-cat="all">All</button>
+                    <button class="cat-btn${activityCategory==='created'?' active':''}" data-cat="created">Created</button>
+                    <button class="cat-btn${activityCategory==='viewed'?' active':''}" data-cat="viewed">Viewed</button>
+                    <button class="cat-btn${activityCategory==='ordered'?' active':''}" data-cat="ordered">Ordered</button>
+                  </div>
+                  <div class="limit-bar">
                     <button class="limit-btn${activityLimit===25?' active':''}" data-limit="25">Show 25</button>
                     <button class="limit-btn${activityLimit===50?' active':''}" data-limit="50">Show 50</button>
                     <button class="limit-btn${activityLimit===100?' active':''}" data-limit="100">Show 100</button>
@@ -1800,6 +1861,16 @@
             btn.classList.add('active');
             activityLimit = parseInt(btn.dataset.limit, 10);
             activityShown = activityLimit;
+            renderActivityTable();
+          });
+        });
+
+        document.querySelectorAll('.cat-btn').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            document.querySelectorAll('.cat-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            activityCategory = btn.dataset.cat;
+            activityShown = activityLimit; // start the list over on a filter change
             renderActivityTable();
           });
         });

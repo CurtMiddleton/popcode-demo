@@ -22,7 +22,15 @@ export default async function handler(req, res) {
 
   try {
     const { slug, event_type, target_index, device_type, browser, user_agent, user_id } = req.body;
-    if (!slug || !event_type) return res.status(400).json({ error: 'Missing fields' });
+    // Account-level events (signup) belong to a person, not a project, so slug
+    // is optional. Everything project-scoped still has to name one.
+    // A montage is rendered before the project exists (and may be abandoned),
+    // so it is logged against the account rather than a slug.
+    const ACCOUNT_EVENTS = ['signup', 'create_montage'];
+    if (!event_type) return res.status(400).json({ error: 'Missing fields' });
+    if (!slug && !ACCOUNT_EVENTS.includes(event_type)) {
+      return res.status(400).json({ error: 'Missing fields' });
+    }
 
     // IP address — use x-forwarded-for (Vercel sets this)
     const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
@@ -36,7 +44,7 @@ export default async function handler(req, res) {
 
     const db = createClient(SUPABASE_URL, SUPABASE_KEY);
     const { error } = await db.from('scan_events').insert({
-      slug,
+      slug:         slug         ?? null,
       event_type,
       target_index: target_index ?? null,
       device_type:  device_type  ?? null,

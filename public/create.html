@@ -19,6 +19,7 @@
     <title>Popcode — Create</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/activity.js"></script>
     <script src="/slug.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/image-source.js"></script>
@@ -1201,6 +1202,7 @@
             .select().single();
           if (colError) throw colError;
           collection = data;
+          logActivity('create_project', { slug, user_id: currentUser.id });
         } catch (err) {
           showError('Step 5 failed (saving project) — ' + (err.message || 'Database error. Your files were uploaded but the project record could not be saved.'));
           return;
@@ -1645,7 +1647,12 @@
         while (Date.now() - start < TIMEOUT_MS) {
           const r = await fetch('/api/montage-status?id=' + encodeURIComponent(renderId)).then(x => x.json());
           if (r.error) throw new Error(r.error);
-          if (r.status === 'done') return r;
+          if (r.status === 'done') {
+            // No slug yet — the project is created later, if at all. Logged
+            // against the account so an abandoned montage still shows up.
+            logActivity('create_montage', { user_id: currentUser && currentUser.id });
+            return r;
+          }
           if (r.status === 'failed') throw new Error('The render failed. Try fewer photos or a different track.');
           const secs = Math.round((Date.now() - start) / 1000);
           mtgStatus(`Rendering your video… (${secs}s)`, 60 + Math.min(30, secs), '');

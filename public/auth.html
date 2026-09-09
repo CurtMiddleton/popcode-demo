@@ -19,6 +19,7 @@
     <title>Popcode — Sign In</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/activity.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <style>
       @font-face {
@@ -282,8 +283,12 @@
 
         let error;
         if (mode === 'signup') {
-          ({ error } = await db.auth.signUp({ email, password, options: { data: { full_name: name } } }));
+          let signUpData;
+          ({ data: signUpData, error } = await db.auth.signUp({ email, password, options: { data: { full_name: name } } }));
           if (!error) {
+            // signUp returns the user even while the confirmation is pending,
+            // so the top of the funnel is captured whether or not they confirm.
+            logActivity('signup', { user_id: signUpData && signUpData.user && signUpData.user.id });
             showError('Check your email for a confirmation link, then sign in.');
             btn.disabled = false;
             btn.textContent = 'Create Account';
