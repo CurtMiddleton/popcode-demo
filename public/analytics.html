@@ -169,21 +169,37 @@
       /* Contact sheet — every photo in a project with the media it triggers.
          The photo is the thing a viewer points a camera at, so it leads; the
          video/audio is what that photo is wired to. */
+      /* Funnel — one bar per stage, width relative to total signups so the
+         drop-off is visible as shape, not just numbers. */
+      .fn-row { margin-bottom: 16px; }
+      .fn-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 5px; }
+      .fn-label { font-size: 13px; font-weight: 700; color: #1a1a1a; }
+      .fn-n { font-size: 20px; font-weight: 700; color: #1a1a1a; font-family: 'Inter', sans-serif; }
+      .fn-of { font-size: 11px; font-weight: 600; color: #999; }
+      .fn-track { height: 10px; border-radius: 6px; background: #efedea; overflow: hidden; }
+      .fn-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #7657FC, #9d86ff); }
+      .fn-foot { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; font-size: 11px; }
+      .fn-step { font-weight: 700; color: #2b8a3e; }
+      .fn-step.low { color: #e67700; }
       .lb-sheet { display: none; flex: 1; overflow-y: auto; padding: 18px 22px 26px; }
       .lb-sheet.on { display: block; }
-      .lb-sheet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+      .lb-sheet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
       .lb-tile { background: rgba(255,255,255,0.06); border: none; padding: 0; border-radius: 12px; overflow: hidden; cursor: pointer; text-align: left; font-family: inherit; display: block; width: 100%; }
       .lb-tile:hover { background: rgba(255,255,255,0.13); }
-      .lb-tile-img { position: relative; aspect-ratio: 1; background: #222; }
-      .lb-tile-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      /* 4:3 and `contain`, not a square crop: this is the photo a viewer has to
+         point a camera at, so it has to be recognisable — a cropped square hid
+         whatever sat at the top or bottom of a portrait shot. */
+      .lb-tile-img { position: relative; aspect-ratio: 4 / 3; background: #111; }
+      .lb-tile-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
       .lb-tile-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: rgba(255,255,255,0.35); font-size: 11px; }
-      .lb-tag { position: absolute; left: 7px; bottom: 7px; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; letter-spacing: 0.02em; }
+      .lb-tag { flex-shrink: 0; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
       .lb-tag-video { background: #e8f0fe; color: #3b5bdb; }
       .lb-tag-audio { background: #e0f7f4; color: #0f8b81; }
       .lb-tag-none  { background: rgba(255,255,255,0.18); color: rgba(255,255,255,0.75); }
-      .lb-tile-body { padding: 8px 10px 10px; }
-      .lb-tile-name { color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .lb-tile-sub { color: rgba(255,255,255,0.5); font-size: 10.5px; margin-top: 2px; }
+      .lb-tile-body { padding: 10px 12px 12px; }
+      .lb-tile-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .lb-tile-name { color: #fff; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .lb-tile-sub { color: rgba(255,255,255,0.5); font-size: 11.5px; margin-top: 3px; }
       .lb-back { background: none; border: 1px solid rgba(255,255,255,0.3); color: #fff; border-radius: 20px; padding: 5px 12px; font-size: 12px; font-weight: 700; font-family: inherit; cursor: pointer; }
       .lb-back:hover { background: rgba(255,255,255,0.12); }
       .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
@@ -485,6 +501,7 @@
         const rb = document.getElementById('range-bar');
         if (rb) rb.style.display = RANGE_TABS.has(name) ? '' : 'none';
         if (name === 'content') loadLibrary();
+        if (name === 'overview') loadFunnel();
       }
       document.querySelectorAll('#tabs .tab').forEach(function(btn) {
         btn.addEventListener('click', function() { showTab(btn.dataset.tab); });
@@ -1093,6 +1110,7 @@
           if (error) throw error;
           cachedPrints = data || [];
           renderPrints();
+          renderFunnel(); // last funnel stage depends on orders; refresh once they land
         } catch (e) {
           console.error('loadPrints error:', e);
           el.innerHTML =
@@ -1480,6 +1498,116 @@
       // lists EVERY project in the database — scanned or not — and opens each
       // photo full-size with the video/audio a viewer would get on scan.
       let usersPromise = null;
+      // ── Funnel ───────────────────────────────────────────────────────────
+      // Deliberately ALL-TIME, unlike the rest of Overview. This asks a lifetime
+      // question — did this signup ever make anything — and answering it over a
+      // rolling 30-day window would count an account that signed up in March and
+      // built something yesterday as a failure.
+      let allEvtsPromise = null, cachedAllEvts = null;
+
+      async function ensureAllEvents() {
+        if (!allEvtsPromise) allEvtsPromise = ensureAllEventsOnce();
+        return allEvtsPromise;
+      }
+      async function ensureAllEventsOnce() {
+        try {
+          const { data, error } = await db.rpc('get_events_with_users', { days_back: 0, max_rows: 50000 });
+          if (error) throw error;
+          cachedAllEvts = data || [];
+        } catch (e) {
+          // Fall back to a direct read; the funnel needs slug + event_type only.
+          try {
+            cachedAllEvts = await fetchAllRows('scan_events', 'slug, event_type, user_id, created_at');
+          } catch (e2) {
+            console.warn('ensureAllEvents error', e2);
+            cachedAllEvts = [];
+            allEvtsPromise = null; // let a later attempt retry
+          }
+        }
+        return cachedAllEvts;
+      }
+
+      async function loadFunnel() {
+        const wrap = document.getElementById('funnel-wrap');
+        if (!wrap) return;
+        try {
+          await loadThumbs();
+          await ensureUsers();
+          await ensureAllEvents();
+          renderFunnel();
+        } catch (e) {
+          console.error('loadFunnel error:', e);
+          wrap.innerHTML = '<div class="empty" style="padding:20px">Could not build the funnel: ' +
+            escapeHtml(e.message || String(e)) + '</div>';
+        }
+      }
+
+      function renderFunnel() {
+        const wrap = document.getElementById('funnel-wrap');
+        if (!wrap) return;
+
+        const users = cachedUsers || [];
+        const cols  = cachedCols || [];
+        const evts  = cachedAllEvts || [];
+
+        // slug -> owner, so a view on a project counts for whoever made it.
+        const ownerBySlug = {};
+        cols.forEach(c => { if (c.slug) ownerBySlug[c.slug] = c.user_id; });
+
+        const made    = new Set(cols.map(c => c.user_id).filter(Boolean));
+        const scanned = new Set();
+        const played  = new Set();
+        evts.forEach(e => {
+          const owner = ownerBySlug[e.slug];
+          if (!owner) return;
+          if (e.event_type === 'scan_open') scanned.add(owner);
+          if (e.event_type === 'video_play' || e.event_type === 'audio_play') played.add(owner);
+        });
+
+        // Print orders are keyed by buyer email, so match on that.
+        const emailToId = {};
+        users.forEach(u => { if (u.email) emailToId[u.email.toLowerCase()] = u.id; });
+        const ordered = new Set();
+        (cachedPrints || []).forEach(o => {
+          if (!PAID_PLUS.has(o.status)) return;
+          const id = o.buyer_email && emailToId[String(o.buyer_email).toLowerCase()];
+          if (id) ordered.add(id);
+        });
+
+        const total = users.length;
+        const stages = [
+          { label: 'Signed up',      n: total,         hint: 'Accounts created' },
+          { label: 'Made something', n: made.size,     hint: 'Have at least one project' },
+          { label: 'Got scanned',    n: scanned.size,  hint: 'Someone opened one of their projects' },
+          { label: 'Media played',   n: played.size,   hint: 'A video or audio actually played' },
+          { label: 'Ordered a print',n: ordered.size,  hint: 'Placed a paid print order' },
+        ];
+
+        const rows = stages.map((st, i) => {
+          const prev = i === 0 ? null : stages[i - 1].n;
+          const ofTotal = total ? Math.round(st.n / total * 100) : 0;
+          // Drop-off is measured against the previous stage, which is the number
+          // that tells you where people are actually being lost.
+          const step = (prev === null || prev === 0) ? null : Math.round(st.n / prev * 100);
+          return '<div class="fn-row">' +
+            '<div class="fn-head">' +
+              '<span class="fn-label">' + st.label + '</span>' +
+              '<span class="fn-n">' + st.n + '<span class="fn-of"> of ' + total + '</span></span>' +
+            '</div>' +
+            '<div class="fn-track"><div class="fn-fill" style="width:' + ofTotal + '%"></div></div>' +
+            '<div class="fn-foot">' +
+              '<span class="muted">' + st.hint + '</span>' +
+              (step === null ? '' :
+                '<span class="fn-step' + (step < 50 ? ' low' : '') + '">' + step + '% of previous</span>') +
+            '</div>' +
+          '</div>';
+        }).join('');
+
+        const noPrints = cachedPrints === null;
+        wrap.innerHTML = rows +
+          (noPrints ? '<p class="muted" style="font-size:11px;margin-top:10px">Print orders still loading — the last stage may read low.</p>' : '');
+      }
+
       async function ensureUsers() {
         if (!usersPromise) usersPromise = ensureUsersOnce();
         return usersPromise;
@@ -1666,10 +1794,12 @@
               '<div class="lb-tile-img">' +
                 (it.url ? '<img src="' + encodeURI(it.url) + '" alt="" loading="lazy">'
                         : '<div class="lb-tile-empty">No photo</div>') +
-                '<span class="lb-tag lb-tag-' + kind + '">' + tag + '</span>' +
               '</div>' +
               '<div class="lb-tile-body">' +
-                '<div class="lb-tile-name">' + escapeHtml(label) + '</div>' +
+                '<div class="lb-tile-top">' +
+                  '<span class="lb-tile-name">' + escapeHtml(label) + '</span>' +
+                  '<span class="lb-tag lb-tag-' + kind + '">' + tag + '</span>' +
+                '</div>' +
                 '<div class="lb-tile-sub">' + sub + '</div>' +
               '</div>' +
             '</button>';
@@ -1873,6 +2003,11 @@
 
           <!-- Overview -->
           <div class="tab-body" data-tab="overview">
+            <div class="section" style="margin-bottom:20px">
+              <div class="section-title" style="margin-bottom:4px">Funnel</div>
+              <p class="muted" style="font-size:12px;margin-bottom:16px">How far accounts get, all time — this one ignores the date range above, because whether a signup ever made something is a lifetime question.</p>
+              <div id="funnel-wrap"><div class="loading-msg" style="padding:24px"><div class="spinner"></div>Building funnel&hellip;</div></div>
+            </div>
             <div class="cards">
               <div class="card"><div class="card-value">${opens}</div><div class="card-label">Total Opens</div></div>
               <div class="card highlight" title="How often a photo was successfully detected after the scanner was opened."><div class="card-value">${pct(sessionsWithFound,sessionOpens)}</div><div class="card-label">Scan Rate</div></div>
@@ -1957,6 +2092,10 @@
         loadFeedback();
         loadAccounts();
         loadByVideo();
+        // The funnel markup lives inside #main-content, which this function
+        // rebuilds on every range change, so it has to be re-rendered here too.
+        // Its inputs are promise-cached, so repeat calls cost nothing.
+        loadFunnel();
         showTab(activeTab);
 
         document.getElementById('activity-search').addEventListener('input', function() {
