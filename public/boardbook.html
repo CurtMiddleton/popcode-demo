@@ -247,13 +247,30 @@
       .sw.active { outline: 2.5px solid #1a1a1a; outline-offset: 2px; }
       .sw-custom { position: relative; overflow: hidden; background: conic-gradient(#f2857a, #f8a94e, #edc521, #93cc79, #2dc0c5, #6d93ef, #a87ede, #dda2c6, #f2857a); }
       .sw-custom input { position: absolute; inset: -20%; width: 140%; height: 140%; opacity: 0; cursor: pointer; border: none; padding: 0; }
-      .seg.seg-wrap { display: flex; flex-wrap: wrap; }
       .text-area { width: 100%; border: 1.5px solid #e3e1db; border-radius: 12px; padding: 12px 14px; font-size: 15px; font-family: 'Inter', sans-serif; outline: none; resize: vertical; min-height: 74px; }
+      /* Font picker — a native <select> can't render each option in its own face,
+         and this list will grow, so it's a small dropdown of its own. */
+      .picker { position: relative; max-width: 330px; }
+      .picker-btn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #f0efec; border: none; border-radius: 12px; padding: 13px 14px; font-size: 17px; color: #1a1a1a; text-align: left; cursor: pointer; }
+      .picker-btn .chev { flex: none; opacity: 0.45; }
+      .picker-menu { position: absolute; left: 0; top: calc(100% + 6px); z-index: 5; width: 100%; max-height: 304px; overflow-y: auto; background: #fff; border-radius: 12px; padding: 6px; box-shadow: 0 10px 34px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.07); }
+      .picker-menu button { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; background: none; border: none; border-radius: 9px; padding: 11px 12px; font-size: 18px; color: #1a1a1a; text-align: left; cursor: pointer; }
+      .picker-menu button:hover { background: #f5f3ef; }
+      .picker-menu button.active { background: #f0efec; }
+      .picker-menu .tick { flex: none; opacity: 0; }
+      .picker-menu button.active .tick { opacity: 1; }
+      /* Size — a preset menu you can override by typing an exact point size. */
+      .size-row { display: flex; gap: 10px; align-items: stretch; max-width: 330px; }
+      .size-row select { flex: 1; min-width: 0; -webkit-appearance: none; appearance: none; background: #f0efec url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E") no-repeat right 14px center; border: none; border-radius: 12px; padding: 13px 34px 13px 14px; font-size: 16px; font-family: 'Inter', sans-serif; color: #1a1a1a; cursor: pointer; }
+      .num-field { display: flex; align-items: center; gap: 5px; width: 104px; background: #f0efec; border-radius: 12px; padding: 0 14px; }
+      .num-field input { width: 100%; min-width: 0; border: none; background: none; outline: none; padding: 13px 0; font-size: 16px; font-family: 'Inter', sans-serif; color: #1a1a1a; }
+      .num-field .unit { color: #8a8a86; font-size: 14px; }
       /* A tall sheet has to be reachable — without this the Done button can sit
          off the bottom of a phone screen. */
       .sheet.sheet-scroll { max-height: 92vh; overflow-y: auto; }
       /* Live preview of the page being written, at the real page's square aspect.
          Sticky, so it stays visible while you work down through the colours. */
+      .tx-eyebrow { display: block; font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
       .tx-sticky { position: sticky; top: 0; z-index: 2; background: #fff; padding: 4px 0 14px; margin-bottom: 4px; }
       .tx-preview { width: 100%; max-width: 168px; margin: 0 auto; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; position: relative; container-type: inline-size; background-size: cover; background-position: center; box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
       .sheet-actions { display: flex; gap: 10px; margin-top: 18px; }
@@ -520,20 +537,30 @@
         '#d4eff4', '#a3dfe9', '#58c9d6', '#2dc0c5', '#1a8b96', '#dbe4fb', '#a9bef5', '#6d93ef', '#2f56b0',
         '#e9dcf8', '#cbb0ee', '#a87ede', '#8354c6', '#603a94', '#3f2769', '#f2d6e6', '#dda2c6', '#b35d92',
       ];
-      // Text size as a percentage of the page's width, so it scales identically in
-      // the builder (cqw) and on the printed page (a fraction of the print pixels).
-      const TEXT_SIZES = [
-        { id: 'sm', name: 'Small', pct: 5.5 },
-        { id: 'md', name: 'Medium', pct: 8 },
-        { id: 'lg', name: 'Large', pct: 11.5 },
-        { id: 'xl', name: 'Huge', pct: 16 },
+      // Text size is stored in points on the printed page. A board book page is 6″
+      // across, so 432pt of width — everything renders as a fraction of that, which
+      // is why the builder (cqw) and the print pixels agree at any size.
+      const PAGE_WIDTH_PT = 6 * 72;
+      const MIN_PT = 8, MAX_PT = 140, DEFAULT_PT = 35;
+      const TEXT_PRESETS = [
+        { id: 'sm', name: 'Small', pt: 24 },
+        { id: 'md', name: 'Medium', pt: DEFAULT_PT },
+        { id: 'lg', name: 'Large', pt: 50 },
+        { id: 'xl', name: 'Huge', pt: 69 },
       ];
+      // Books saved before sizes were points still carry 'sm'/'md'/'lg'/'xl'.
+      function normalizeSizePt(v) {
+        const preset = TEXT_PRESETS.find(z => z.id === v);
+        if (preset) return preset.pt;
+        const n = Math.round(+v);
+        return Number.isFinite(n) && n > 0 ? Math.max(MIN_PT, Math.min(MAX_PT, n)) : DEFAULT_PT;
+      }
       const TEXT_PLACES = [
         { id: 'top', name: 'Top', css: 'flex-start' },
         { id: 'middle', name: 'Middle', css: 'center' },
         { id: 'bottom', name: 'Bottom', css: 'flex-end' },
       ];
-      const DEFAULT_TEXT = () => ({ text: '', font: 'filson', color: '#ffffff', bg: '#62ab58', size: 'md', place: 'middle' });
+      const DEFAULT_TEXT = () => ({ text: '', font: 'filson', color: '#ffffff', bg: '#62ab58', size: DEFAULT_PT, place: 'middle' });
       const HEX = /^#[0-9a-f]{6}$/i;
       function normalizeText(t) {
         if (!t || typeof t !== 'object') return null;
@@ -543,11 +570,11 @@
           font: COVER_FONTS.some(f => f.id === t.font) ? t.font : d.font,
           color: HEX.test(t.color || '') ? t.color.toLowerCase() : d.color,
           bg: HEX.test(t.bg || '') ? t.bg.toLowerCase() : d.bg,
-          size: TEXT_SIZES.some(z => z.id === t.size) ? t.size : d.size,
+          size: normalizeSizePt(t.size),
           place: TEXT_PLACES.some(z => z.id === t.place) ? t.place : d.place,
         };
       }
-      const textSizePct = (id) => (TEXT_SIZES.find(z => z.id === id) || TEXT_SIZES[1]).pct;
+      const textSizePct = (pt) => normalizeSizePt(pt) / PAGE_WIDTH_PT * 100;
       const textPlaceCss = (id) => (TEXT_PLACES.find(z => z.id === id) || TEXT_PLACES[1]).css;
       // Inset from the bottom, as a fraction of the page width. Bottom-set text on a
       // popcoded page has to clear the scan badge (5% pad + 11% mark).
@@ -1237,20 +1264,36 @@
           <label class="sw sw-custom${known ? '' : ' active'}" title="Any other colour"><input type="color" value="${selected}"/></label>
         </div>`;
       }
+      const CHEV = '<svg class="chev" width="12" height="8" viewBox="0 0 12 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 1.5 6 6.5 11 1.5"/></svg>';
+      const TICK = '<svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      const fontName = (id) => (COVER_FONTS.find(f => f.id === id) || COVER_FONTS[0]).name;
       let txState = null;   // working copy; the page only changes when you tap Done
       function openTextSheet(pos) {
         const photo = photos.get(slots[pos]) || null;
         txState = Object.assign(DEFAULT_TEXT(), normalizeText(texts[pos]) || {});
+        const fontStyle = (id) => `font-family:${coverFontStack(id)};font-weight:${textWeight(id)}`;
         openSheet(`
-          <h2>${positionLabel(pos)} text</h2>
-          <p class="sheet-sub">${photo ? 'Your photo is the background — pick type and a colour that reads over it.' : 'Words on a colour. Add a photo from the page menu to use one as the background instead.'}</p>
+          <span class="tx-eyebrow">${positionLabel(pos)}</span>
+          <h2 style="margin-bottom:16px">Text</h2>
           <div class="tx-sticky"><div class="tx-preview" id="tx-preview"></div></div>
-          <div class="field"><label for="tx-text">Words</label><textarea class="text-area" id="tx-text" maxlength="300" placeholder="e.g. It is so fun to ride the pony.">${escapeHtml(txState.text)}</textarea></div>
-          <div class="field"><label>Type</label><div class="seg seg-wrap" id="tx-font">${COVER_FONTS.map(f => `<button type="button" data-v="${f.id}" class="${txState.font === f.id ? 'active' : ''}" style="font-family:${f.stack}">${f.name}</button>`).join('')}</div></div>
-          <div class="field"><label>Size</label><div class="seg" id="tx-size">${TEXT_SIZES.map(z => `<button type="button" data-v="${z.id}" class="${txState.size === z.id ? 'active' : ''}">${z.name}</button>`).join('')}</div></div>
+          <div class="field"><label for="tx-text">Text</label><textarea class="text-area" id="tx-text" maxlength="300">${escapeHtml(txState.text)}</textarea></div>
+          <div class="field"><label>Type</label>
+            <div class="picker" id="tx-font">
+              <button type="button" class="picker-btn" id="tx-font-btn" aria-haspopup="listbox" aria-expanded="false"><span style="${fontStyle(txState.font)}">${fontName(txState.font)}</span>${CHEV}</button>
+              <div class="picker-menu" id="tx-font-menu" role="listbox" hidden>
+                ${COVER_FONTS.map(f => `<button type="button" role="option" data-v="${f.id}" class="${txState.font === f.id ? 'active' : ''}"><span style="${fontStyle(f.id)}">${f.name}</span>${TICK}</button>`).join('')}
+              </div>
+            </div>
+          </div>
+          <div class="field"><label for="tx-size-pt">Size</label>
+            <div class="size-row">
+              <select id="tx-size-preset">${TEXT_PRESETS.map(z => `<option value="${z.pt}">${z.name} — ${z.pt} pt</option>`).join('')}<option value="">Custom</option></select>
+              <div class="num-field"><input id="tx-size-pt" type="number" inputmode="numeric" min="${MIN_PT}" max="${MAX_PT}" step="1" value="${txState.size}"/><span class="unit">pt</span></div>
+            </div>
+          </div>
           <div class="field"><label>Position</label><div class="seg" id="tx-place">${TEXT_PLACES.map(z => `<button type="button" data-v="${z.id}" class="${txState.place === z.id ? 'active' : ''}">${z.name}</button>`).join('')}</div></div>
-          <div class="field"><label>Text colour</label>${swatchesHTML('tx-color', txState.color)}</div>
           ${photo ? '' : `<div class="field"><label>Background colour</label>${swatchesHTML('tx-bg', txState.bg)}</div>`}
+          <div class="field"><label>Text colour</label>${swatchesHTML('tx-color', txState.color)}</div>
           <div class="sheet-actions">
             <button class="btn-secondary" id="tx-cancel" style="flex:1">Cancel</button>
             <button class="btn-primary" id="tx-done" style="flex:1">Done</button>
@@ -1271,7 +1314,43 @@
         syncPreview();
 
         document.getElementById('tx-text').addEventListener('input', e => { txState.text = e.target.value; syncPreview(); });
-        [['tx-font', 'font'], ['tx-size', 'size'], ['tx-place', 'place']].forEach(([id, key]) => {
+
+        // Font picker
+        const fBtn = document.getElementById('tx-font-btn'), fMenu = document.getElementById('tx-font-menu');
+        const onDocClick = (e) => { if (!e.target.closest('#tx-font')) closeFontMenu(); };
+        const closeFontMenu = () => {
+          fMenu.hidden = true; fBtn.setAttribute('aria-expanded', 'false');
+          document.removeEventListener('click', onDocClick);
+        };
+        fBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          if (fMenu.hidden) {
+            fMenu.hidden = false; fBtn.setAttribute('aria-expanded', 'true');
+            fMenu.querySelector('button.active')?.scrollIntoView({ block: 'nearest' });
+            document.addEventListener('click', onDocClick);
+          } else closeFontMenu();
+        });
+        fMenu.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+          txState.font = b.dataset.v;
+          fMenu.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+          fBtn.querySelector('span').outerHTML = `<span style="${fontStyle(txState.font)}">${fontName(txState.font)}</span>`;
+          closeFontMenu(); syncPreview();
+        }));
+
+        // Size — presets and an exact point size, each keeping the other honest.
+        const sPreset = document.getElementById('tx-size-preset'), sPt = document.getElementById('tx-size-pt');
+        const matchPreset = () => { sPreset.value = TEXT_PRESETS.some(z => z.pt === txState.size) ? String(txState.size) : ''; };
+        matchPreset();
+        sPreset.addEventListener('change', () => {
+          if (!sPreset.value) { matchPreset(); return; }        // "Custom" is a label, not a choice
+          txState.size = +sPreset.value; sPt.value = txState.size; syncPreview();
+        });
+        // Commit on blur too, so a half-typed number can't stick as the saved size.
+        const readPt = () => { txState.size = normalizeSizePt(sPt.value); matchPreset(); syncPreview(); };
+        sPt.addEventListener('input', () => { if (sPt.value !== '') readPt(); });
+        sPt.addEventListener('blur', () => { readPt(); sPt.value = txState.size; });
+
+        [['tx-place', 'place']].forEach(([id, key]) => {
           const grp = document.getElementById(id);
           grp.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
             txState[key] = b.dataset.v;
@@ -1290,8 +1369,10 @@
           grp.querySelector('.sw-custom input').addEventListener('input', e => { txState[key] = e.target.value.toLowerCase(); mark(txState[key]); syncPreview(); });
         });
 
-        document.getElementById('tx-cancel').addEventListener('click', () => { txState = null; closeSheet(); });
+        document.getElementById('tx-cancel').addEventListener('click', () => { closeFontMenu(); txState = null; closeSheet(); });
         document.getElementById('tx-done').addEventListener('click', () => {
+          closeFontMenu();
+          txState.size = normalizeSizePt(sPt.value);
           // Clearing the words is how you take the text off a page.
           texts[pos] = txState.text.trim() ? normalizeText(txState) : null;
           txState = null; closeSheet(); render();
