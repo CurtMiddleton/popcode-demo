@@ -79,6 +79,13 @@ After writing the entry, commit CLAUDE.md with a message like `Add session notes
 
 **At the start of every session**, read `## Session history` (at least the most recent 2–3 entries) before doing anything else — that's how context persists across sessions in this repo.
 
+## Queued briefs
+
+- **`docs/postcard-brief.md`** — the companion postcard that ships with flat/wall
+  print orders (prints, framed, canvas, framed canvas, acrylic, tiles). Copy and
+  headline are settled; the Prodigi card SKU, card size and per-order-vs-per-design
+  question are open. Nothing built yet.
+
 ## Session history
 
 ### 2026-04-12 / 2026-04-13 — The "iPhone loading spinner" marathon
