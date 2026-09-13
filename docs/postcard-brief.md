@@ -87,6 +87,50 @@ Rejected: **"Scan. Play. Wow."** — the first two beats are things we control,
 the third is a promise the card makes on the product's behalf. If a first scan
 is slow or misses, "Wow" reads as sarcasm.
 
+## How to build it — decided 2026-09-13
+
+**Build it directly as an HTML artboard at real card dimensions, with the real
+brand fonts. Iterate on that. When it's approved, it IS the production
+renderer.** One artifact, not two — what you approve is what prints.
+
+**A Claude Design canvas was considered and rejected for this card.** The design
+space is small (a headline, one sentence, two marks) and the copy is settled, so
+there's little to explore. More importantly the shipping artwork must be
+*generated per order* with a different URL each time, so a canvas design could
+only ever be a template you then rebuild in code — two artifacts, and a real
+chance the code version drifts from the approved one. (Precedent: the book's
+back-cover panel was built to a PDF spec and still needed careful `cqw`/`cqh`
+work to hold that spec at two book sizes.)
+
+Revisit the canvas only if someone wants several genuinely different looks
+compared side by side before committing.
+
+### Fonts — the gotcha that decided the above
+
+- **CooperBT** (the brand display face, used for h1s and the marketing hero) is
+  **self-hosted, base64-embedded in `public/assets/fonts.css`** — a licensed
+  Bitstream face. It is NOT on Google Fonts. Anything rendering outside this
+  repo's pages has to embed that `@font-face` block or it will silently
+  substitute and the design will drift.
+- **Inter** comes from Google Fonts and is available anywhere.
+
+### Rendering precedent to copy
+
+`buildCalendarPrintPdf()` (`public/calendar.html:1780`) and
+`buildBookPrintPdf()` (`public/book.html:2660`) — html2canvas + jsPDF, lazy
+loaded from cdnjs, rendering at **300 DPI** (`calendar.html:573`:
+`{ wIn, hIn, dpi: 300, PXW, PXH }`). Copy that shape.
+
+Watch the html2canvas 1.4.1 limits documented in the 2026-07-09 session notes:
+it mishandles `object-fit` on a **transformed** `<img>`, can't render
+`writing-mode: vertical-rl`, and predates CSS `aspect-ratio`. A type-only card
+mostly dodges these, but the Popcode symbol must be a **PNG data-URL, not an
+SVG** — same reason the badge is rasterised before capture
+(`calendar.html:1229`).
+
+**Also needs bleed.** The print PDFs above are trim-size only because Prodigi's
+book/calendar templates handle it; confirm what the card SKU wants.
+
 ## OPEN decisions
 
 - **Card size** — 4×6 postcard, or something smaller that tucks into a frame box.
