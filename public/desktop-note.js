@@ -52,10 +52,8 @@
       '.popcode-desktop #wl-cover .wl-subtitle { font-size: 15px !important; }' +
       // The splash pins its Create/Sign-in group to the bottom absolutely,
       // which is fine behind a single button but collides with this panel on a
-      // short laptop window. Put it back in flow so the column just stacks,
-      // and give the tagline back some of its margin to pay for the height.
+      // short laptop window. Put it back in flow so the column just stacks.
       '.popcode-desktop #start-screen #cta-group { position: static; margin-top: 4px; }' +
-      '.popcode-desktop #start-screen #tagline { margin-bottom: 30px; }' +
       '.popcode-desktop #start-screen { padding-top: 28px; padding-bottom: 28px; overflow-y: auto; }' +
       '#desktop-note{display:flex;flex-direction:column;align-items:center;gap:10px;' +
       'width:100%;max-width:330px;box-sizing:border-box;margin-bottom:22px;padding:18px;' +
