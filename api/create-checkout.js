@@ -79,7 +79,7 @@ export default async function handler(req, res) {
     }
 
     // 2. Validate every line against the catalog + our own storage prefix.
-    const { normalizeLines, quoteCart, CartError } = await import('../lib/print/cart.mjs');
+    const { normalizeLines, withCompanionCards, quoteCart, CartError } = await import('../lib/print/cart.mjs');
     let lines;
     try {
       lines = normalizeLines(rawLines, { requireAssets: true, assetPrefix: PUBLIC_ASSET_PREFIX });
@@ -101,6 +101,19 @@ export default async function handler(req, res) {
       const c = byId.get(id);
       if (!c) return res.status(404).json({ error: 'Design not found' });
       if (c.user_id !== user.id) return res.status(403).json({ error: 'Not your design' });
+    }
+
+    // 3b. Add the companion postcard(s) this order earns. Deliberately AFTER the
+    // ownership check: the card is server-authored, and its artwork URL is built
+    // from the slug we just read here rather than anything the client sent, so a
+    // client can neither add a card nor choose what one points at. Priced with
+    // everything else below, so the charge covers it.
+    try {
+      const slugFor = Object.fromEntries([...byId].map(([id, c]) => [id, c.slug]));
+      lines = withCompanionCards(lines, { slugFor, assetPrefix: PUBLIC_ASSET_PREFIX });
+    } catch (e) {
+      if (e instanceof CartError) return res.status(e.status).json({ error: e.message });
+      throw e;
     }
 
     // 4. Authoritative re-quote, per provider group (never trust the client price).

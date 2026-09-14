@@ -335,8 +335,52 @@ the front. Verified both shapes produce correct quote and order items with no
 code change. `buildPostcardAssets()` renders both faces regardless, so this
 stays configuration.
 
-Not yet wired into checkout — that is the next step, and it wants the SKU
-confirmed first.
+## Wired into checkout — 2026-09-14, BEHIND A FLAG
+
+**`COMPANION_CARD.enabled` is `false`.** The card joins the same Prodigi quote as
+the rest of the cart, so an unresolvable SKU would fail the quote for the WHOLE
+order — taking checkout down, not just the card. Flipping it to `true` is the
+go-live step, once `scripts/verify-prodigi-sku.mjs` passes.
+
+- **`public/postcard-render.js`** (new) — the design AND its export, shared by
+  the artboard and the checkout flow, so the approved card and the printed one
+  cannot drift. A deliberate departure from the repo's inline-duplication idiom:
+  that is right for a 30-line helper, wrong for 200 lines of print geometry
+  measured to a quarter of a point. Verified the extraction is byte-identical to
+  the pre-extraction export.
+- **`withCompanionCards()`** in `lib/print/cart.mjs` — called from BOTH
+  `/api/cart-quote` and `/api/create-checkout`, so the price shown is the price
+  charged. At quote time no slug is needed (Prodigi prices by SKU).
+- **`/api/create-checkout`** adds the card after the ownership check, building
+  its asset URL from the slug it just read. A client can neither add a card nor
+  choose what one points at.
+- **`public/cart.html`** renders and uploads the artwork to
+  `{slug}/companion-card-{face}.png` before checkout. Best-effort: if the card
+  can't be made the order still goes through without one — a missing insert is a
+  disappointment, a blocked checkout is lost revenue. Both faces upload even
+  though the SKU may use only the front, so switching to a two-print-area SKU
+  needs no client change.
+
+Correction to the earlier draft: cart lines carry `collectionId`, not a slug, so
+the helper keys on that and the slug is looked up server-side.
+
+### OPEN: who pays for the card?
+
+As wired, the card is **priced into the order** and marked up like everything
+else — about **$1.40** on the customer's total. The alternative is to absorb it
+as a marketing cost (roughly $1 off the margin on a ~$30 order, so healthy
+either way). Included-and-marked-up is the safer default given the
+never-lose-money rule, but it does mean the customer pays for an insert they
+didn't choose. Worth a decision before go-live.
+
+### Go-live, in order
+
+1. `node scripts/verify-prodigi-sku.mjs GLOBAL-POST-MOH-6X4-BLA` — confirm the
+   SKU and its print-area count.
+2. Set `COMPANION_CARD.faces` from that output (one area: leave it).
+3. Decide the pricing question above.
+4. Set `COMPANION_CARD.enabled = true`.
+5. Place one sandbox order and confirm the card appears as a second line item.
 
 ## Design precedent
 
