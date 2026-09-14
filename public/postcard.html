@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Popcode Companion Postcard</title>
+
+<!-- CooperBT (self-hosted, base64). See docs/postcard-brief.md. -->
+<link rel="stylesheet" href="/assets/fonts.css">
+
+<style>
+  /* ══════════════════════════════════════════════════════════════════
+     COMPANION POSTCARD — production artboard / renderer.
+
+     Built to the approved artwork (PC_ProductPostcard.01.pdf, 2026-09-14).
+     Every number in CARD below was measured out of that PDF rather than
+     eyeballed: the trim and bleed boxes from its TrimBox/BleedBox, the type
+     from its text spans, and the background from its axial shading function
+     and pattern matrix. Provenance for each is noted at the constant.
+
+     .pc-card is the BLEED box; .pc-trim is the cut line. Every element is
+     positioned from a trim edge in inches, so the CSS reads the same way a
+     press-ready spec does.
+     ══════════════════════════════════════════════════════════════════ */
+
+  :root {
+    --stage-bg:   #e8e6e1;
+    --bar-bg:     rgba(255,255,255,.86);
+    --bar-line:   rgba(0,0,0,.08);
+    --bar-ink:    #3a3731;
+    --bar-strong: #17150f;
+    --bar-dim:    #8a857c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --stage-bg: #1c1b19; --bar-bg: rgba(30,29,27,.9); --bar-line: rgba(255,255,255,.1);
+      --bar-ink: #cdc8bf; --bar-strong: #f3f0ea; --bar-dim: #8a857c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --stage-bg: #1c1b19; --bar-bg: rgba(30,29,27,.9); --bar-line: rgba(255,255,255,.1);
+    --bar-ink: #cdc8bf; --bar-strong: #f3f0ea; --bar-dim: #8a857c;
+  }
+
+  /* ── Artboard chrome (screen only — stripped before any capture) ── */
+  html, body { margin: 0; }
+  body {
+    background: var(--stage-bg);
+    font-family: 'Inter', system-ui, sans-serif;
+    color: var(--bar-ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  .pc-bar {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    padding: 14px 22px;
+    background: var(--bar-bg);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--bar-line);
+    font-size: 13px;
+  }
+  .pc-bar strong { font-weight: 600; color: var(--bar-strong); }
+  .pc-bar .dim { color: var(--bar-dim); }
+  .pc-bar label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  .pc-sep { width: 1px; align-self: stretch; background: var(--bar-line); }
+  .pc-btn {
+    font: inherit; font-size: 13px; font-weight: 500;
+    padding: 5px 11px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--bar-line);
+    background: transparent; color: var(--bar-strong);
+  }
+  .pc-btn:hover:not(:disabled) { background: var(--bar-line); }
+  .pc-btn:disabled { opacity: .5; cursor: progress; }
+  .pc-btn:focus-visible { outline: 2px solid #5f8dfa; outline-offset: 2px; }
+
+  .pc-stage { padding: 40px 16px 80px; display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; align-items: flex-start; }
+  .pc-slot { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 0; }
+  .pc-slot figcaption { font-size: 12px; color: var(--bar-dim); letter-spacing: .06em; text-transform: uppercase; }
+  .pc-zoom { transform-origin: top left; }
+
+</style>
+</head>
+<body>
+
+<div class="pc-bar">
+  <strong>Companion postcard</strong>
+  <span class="dim" id="pc-meta"></span>
+  <label><input type="checkbox" id="pc-g"> Guides <span class="dim">(red&nbsp;trim · white&nbsp;safe)</span></label>
+  <label><input type="checkbox" id="pc-s" checked> Card shadow</label>
+  <label>Zoom <input type="range" id="pc-z" min="40" max="260" value="175" style="width:110px"> <span class="dim" id="pc-zv">175%</span></label>
+  <span class="pc-sep"></span>
+  <button type="button" class="pc-btn" id="pc-ex-front">Front PNG</button>
+  <button type="button" class="pc-btn" id="pc-ex-back">Back PNG</button>
+  <button type="button" class="pc-btn" id="pc-ex-pdf">Proof PDF</button>
+  <span class="dim" id="pc-ex-note">300 DPI</span>
+</div>
+
+<div class="pc-stage" id="pc-stage"></div>
+
+<script src="/postcard-render.js"></script>
+<script>
+/* The card, its print geometry and its export all live in the shared module,
+   so the artboard and the checkout flow render from one source. */
+const { CARD, PRINT } = PopcodePostcard;
+const buildPostcard = PopcodePostcard.buildCard;
+const setBaselines  = PopcodePostcard.setBaselines;
+const downloadFace  = PopcodePostcard.downloadFace;
+const buildPostcardProofPdf = PopcodePostcard.buildProofPdf;
+
+/* ── Artboard ─────────────────────────────────────────────────────── */
+const qs = new URLSearchParams(location.search);
+const SLUG = qs.get('slug') || 'Max20';
+/* ?side=front renders the front alone, for capturing a single print asset. */
+const SIDES = qs.has('side') ? [qs.get('side')] : ['front', 'back'];
+
+function renderStage() {
+  const stage = document.getElementById('pc-stage');
+  const zoom = +document.getElementById('pc-z').value / 100;
+  const guides = document.getElementById('pc-g').checked;
+  const shadow = document.getElementById('pc-s').checked;
+
+  stage.innerHTML = '';
+  const built = [];
+
+  SIDES.forEach((side) => {
+    const card = buildPostcard({ slug: SLUG, side, guides });
+    if (shadow) card.classList.add('pc-shadow');
+
+    const zoomBox = document.createElement('div');
+    zoomBox.className = 'pc-zoom';
+    zoomBox.style.transform = `scale(${zoom})`;
+    zoomBox.appendChild(card);
+
+    const hold = document.createElement('div');
+    hold.style.width  = ((CARD.wIn + CARD.bleedIn * 2) * 96 * zoom) + 'px';
+    hold.style.height = ((CARD.hIn + CARD.bleedIn * 2) * 96 * zoom) + 'px';
+    hold.appendChild(zoomBox);
+
+    const fig = document.createElement('figure');
+    fig.className = 'pc-slot';
+    fig.appendChild(hold);
+    const cap = document.createElement('figcaption');
+    cap.textContent = side === 'back' ? 'Back — blank' : 'Front';
+    fig.appendChild(cap);
+    stage.appendChild(fig);
+    built.push(card);
+  });
+
+  built.forEach(setBaselines);
+
+  document.getElementById('pc-meta').textContent =
+    `trim ${CARD.wIn}×${CARD.hIn}in · bleed ${CARD.bleedIn}in · `
+    + `${CARD.headSizePt}/${CARD.headLeadPt}pt CooperBT · `
+    + `${CARD.copySizePt}/${CARD.copyLeadPt}pt FilsonPro Bold`;
+  document.getElementById('pc-zv').textContent = Math.round(zoom * 100) + '%';
+}
+
+let zoomTouched = false;
+function autoZoom() {
+  if (zoomTouched) return;
+  const cardW = (CARD.wIn + CARD.bleedIn * 2) * 96;
+  const wide = window.innerWidth - 48 >= cardW * 2 + 40;
+  const avail = Math.min(window.innerWidth - 48, 1180) / (wide && SIDES.length > 1 ? 2 : 1);
+  const z = Math.round(Math.max(40, Math.min(260, (avail / cardW) * 100)));
+  document.getElementById('pc-z').value = z;
+}
+
+/* Export buttons. Each reports its own failure rather than dying silently —
+   these produce artwork that goes to press. */
+function wireExport(id, label, run) {
+  const btn = document.getElementById(id);
+  const note = document.getElementById('pc-ex-note');
+  btn.addEventListener('click', async () => {
+    const buttons = ['pc-ex-front', 'pc-ex-back', 'pc-ex-pdf'].map((i) => document.getElementById(i));
+    buttons.forEach((b) => { b.disabled = true; });
+    note.textContent = `Rendering ${label} at ${PRINT.dpi} DPI…`;
+    try {
+      await run();
+      note.textContent = `${label} exported · ${PRINT.dpi} DPI`;
+    } catch (err) {
+      note.textContent = 'Export failed — ' + err.message;
+      console.error(err);
+    } finally {
+      buttons.forEach((b) => { b.disabled = false; });
+    }
+  });
+}
+wireExport('pc-ex-front', 'Front', () => downloadFace('front', SLUG));
+wireExport('pc-ex-back',  'Back',  () => downloadFace('back', SLUG));
+wireExport('pc-ex-pdf',   'Proof', () => buildPostcardProofPdf(SLUG));
+
+/* Embedded viewers (an Artifact, a preview pane) sandbox the frame and drop
+   downloads silently, so a click here would look like nothing happened. Say
+   why instead. The page itself works normally when opened directly. */
+if (window.self !== window.top) {
+  ['pc-ex-front', 'pc-ex-back', 'pc-ex-pdf'].forEach((id) => {
+    const b = document.getElementById(id);
+    b.disabled = true;
+    b.title = 'Downloads are blocked in an embedded view — open /postcard.html directly';
+  });
+  document.getElementById('pc-ex-note').textContent =
+    '300 DPI — export needs the page opened directly';
+}
+
+['pc-g', 'pc-s'].forEach(id => document.getElementById(id).addEventListener('input', renderStage));
+document.getElementById('pc-z').addEventListener('input', () => { zoomTouched = true; renderStage(); });
+window.addEventListener('resize', () => { autoZoom(); renderStage(); });
+
+autoZoom();
+renderStage();
+document.fonts.ready.then(renderStage);
+</script>
+</body>
+</html>

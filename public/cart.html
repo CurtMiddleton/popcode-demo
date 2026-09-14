@@ -164,6 +164,7 @@
       window.__popcodeCartDb = db;
     </script>
     <script src="/cart.js"></script>
+    <script src="/postcard-render.js"></script>
     <script src="/beta-feedback.js"></script>
     <script>
 
@@ -352,6 +353,43 @@
       // ── checkout ────────────────────────────────────────────────
       document.getElementById('pay-btn').addEventListener('click', pay);
 
+
+      /**
+       * Render and upload the companion postcard artwork for this order.
+       *
+       * The server adds the card line itself and builds its asset URL from the
+       * slug, so this only has to put the files where that URL points. One card
+       * per distinct popcode, matching companionCardCollectionIds() server-side.
+       *
+       * Best-effort by design: if the card can't be made, the order still goes
+       * through without one. A missing insert is a disappointment; a blocked
+       * checkout is lost revenue.
+       */
+      async function uploadCompanionCards(rowsToOrder) {
+        const CARD_FOR = ['print', 'framed', 'framedcanvas', 'canvas', 'acrylic', 'tile'];
+        if (!window.PopcodePostcard) return;
+        const ids = [...new Set(rowsToOrder
+          .filter((r) => CARD_FOR.indexOf(r.product_type) !== -1)
+          .map((r) => r.collection_id).filter(Boolean))];
+        if (!ids.length) return;
+
+        const { data: cols } = await db.from('collections').select('id, slug').in('id', ids);
+        for (const col of cols || []) {
+          if (!col.slug) continue;
+          try {
+            // ONE sheet carrying both sides — that is what the SKU's single
+            // print area asks for (3708 x 1263px).
+            const sheet = await window.PopcodePostcard.buildSheet(col.slug);
+            await db.storage.from('experiences').upload(
+              `${col.slug}/companion-card.png`, sheet,
+              { contentType: 'image/png', upsert: true },
+            );
+          } catch (err) {
+            if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          }
+        }
+      }
+
       async function pay() {
         clearError();
         const v = (id) => (document.getElementById(id).value || '').trim();
@@ -370,6 +408,10 @@
           const { data: { session } } = await db.auth.getSession();
           const token = session && session.access_token;
           if (!token) throw new Error('Please sign in again.');
+
+          // Put the card artwork in place before checkout builds the order.
+          btn.textContent = 'Preparing…';
+          await uploadCompanionCards(rows);
           const resp = await fetch('/api/create-checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },

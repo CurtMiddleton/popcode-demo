@@ -30,12 +30,15 @@ export default async function handler(req, res) {
     const country = (address && address.countryCode) || destinationCountryCode;
     if (!country) return res.status(400).json({ error: 'Missing destinationCountryCode' });
 
-    const { normalizeLines, quoteCart, CartError } = await import('../lib/print/cart.mjs');
+    const { normalizeLines, withCompanionCards, quoteCart, CartError } = await import('../lib/print/cart.mjs');
     const { getProvider } = await import('../lib/print/providers/index.mjs');
 
     let priced;
     try {
-      const lines = normalizeLines(items);
+      // The companion card is priced here too — it ships in the same parcel, so
+      // leaving it out would quote less than checkout charges. No slug needed:
+      // Prodigi prices by SKU.
+      const lines = withCompanionCards(normalizeLines(items));
       priced = await quoteCart({
         lines,
         address: { ...(address || {}), countryCode: country },
