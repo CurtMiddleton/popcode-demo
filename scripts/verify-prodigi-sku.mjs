@@ -30,6 +30,21 @@ if (!KEY || !skus.length) {
 
 const dim = (d) => (d && d.width != null ? `${d.width}×${d.height} ${d.units || ''}`.trim() : '—');
 
+// Sandbox keys are prefixed test_; live keys are not. Pointing one at the other
+// base URL returns 401 on every SKU, which reads like "the SKU is wrong" unless
+// you already know the trap. Say so up front rather than after three failures.
+const isSandboxUrl = /sandbox/.test(BASE);
+const looksSandboxKey = KEY.startsWith('test_');
+if (isSandboxUrl !== looksSandboxKey) {
+  const other = isSandboxUrl ? 'https://api.prodigi.com' : 'https://api.sandbox.prodigi.com';
+  console.error(
+    `\n! Key/URL mismatch: this looks like a ${looksSandboxKey ? 'SANDBOX' : 'LIVE'} key `
+    + `but the base URL is ${BASE}.\n`
+    + `  Expect 401 on everything. Either use the matching key, or re-run with:\n`
+    + `      PRODIGI_BASE_URL=${other} node scripts/verify-prodigi-sku.mjs <SKU>...\n`
+    + `  Reading the catalogue is a pure lookup either way — it places no orders.\n`);
+}
+
 let failed = 0;
 
 for (const sku of skus) {
@@ -47,7 +62,9 @@ for (const sku of skus) {
   if (!resp.ok) {
     // 401 here almost always means key/base-URL mismatch rather than a bad SKU.
     const hint = resp.status === 401
-      ? '  (401 — is this key for the base URL above? sandbox and live keys differ)'
+      ? `  (401 — this key is not valid for ${BASE}. Sandbox and live keys differ;`
+        + ` a ${looksSandboxKey ? 'sandbox' : 'live'} key only works against the`
+        + ` ${looksSandboxKey ? 'sandbox' : 'live'} base URL.)`
       : '';
     console.log(`\n✗ ${sku}\n  HTTP ${resp.status} ${text.slice(0, 200)}${hint ? '\n' + hint : ''}`);
     failed++;
