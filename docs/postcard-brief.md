@@ -319,12 +319,38 @@ after trimming.
 
 - ~~**Card size**~~ — settled: **6×4 landscape**, matching the approved artwork
   and Prodigi's own `GLOBAL-POST` sizing (which names these landscape-first).
-- **One card per order, or one per design?** The cart means one order can hold
-  several designs with different URLs. Leaning: one card listing them all —
-  cheaper, and it reads as a welcome note rather than a receipt.
+- ~~**One card per order, or one per design?**~~ — settled by the artwork, not
+  by preference: the approved card carries exactly ONE URL in 56pt display
+  type, so "one card listing them all" would be a different design, not a
+  config choice. It is therefore **one card per distinct slug**
+  (`companionCardSlugs()`), and two prints of the same popcode share one card.
+  Revisit only if someone wants a multi-link card drawn.
 - **Per-order noun tailoring** — each design's media type is known from
   `collection_items`, so the card could say "a voice" for an all-audio project
   and "a video" for all-video. Only worth it if the copy grows past one line.
+
+## Catalogue entry — DRAFTED 2026-09-14
+
+In `lib/print/catalog.mjs`, as `COMPANION_CARD` and helpers — **deliberately not
+a `PRODUCTS` entry**, so it stays out of `PRODUCT_TYPES`: nobody chooses one,
+the server adds it, and a client must not be able to order a bare postcard. It
+carries the same fields a variant does, so it flows through
+`buildProdigiItems()` unchanged.
+
+- `COMPANION_CARD_FOR` — the six flat/wall types that earn a card.
+- `cartNeedsCompanionCard(lines)` / `companionCardSlugs(lines)` — one card per
+  distinct slug, deduped; book/calendar/boardbook lines excluded.
+- `companionCardAssets({front, back})` — maps rendered faces to the SKU's print
+  areas, and throws on a missing one rather than quietly shipping a blank face.
+
+**`COMPANION_CARD.faces` is the single line that changes after SKU
+verification.** One print area: leave as is. Two: add the back entry and rename
+the front. Verified both shapes produce correct quote and order items with no
+code change. `buildPostcardAssets()` renders both faces regardless, so this
+stays configuration.
+
+Not yet wired into checkout — that is the next step, and it wants the SKU
+confirmed first.
 
 ## Design precedent
 
