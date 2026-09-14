@@ -44,11 +44,9 @@ bitten by that more than once.
 
 **Not folded.** Nothing hidden, the URL on the outside, cheaper to print.
 
-**A back was added 2026-09-14** (mocked, not yet approved). The "one side only"
-reasoning above was an argument against a *folded* card and still holds — but it
-never addressed blank-back versus printed-back. A one-sided card lands
-blank-side-up in the parcel **half the time**, and a blank white rectangle beside
-a fine-art print reads as unfinished. See "The back" below.
+**One printed side.** A branded back was mocked up and rejected — see "The back"
+below. The card is still rendered two-sided so a white asset exists if the SKU
+requires one.
 
 > ## Scan & Play
 >
@@ -261,35 +259,23 @@ Two things this caught that guessing would not have:
 Verified by rendering at 300 DPI and diffing against the PDF: mean difference
 **1.57/255**, with the remainder confined to glyph antialiasing edges.
 
-## The back — mocked 2026-09-14, NOT yet approved
+## The back — BLANK WHITE, settled 2026-09-14
 
-Same gradient ground, wordmark centred, and one sentence:
+One printed side only. A branded back was mocked up (gradient + wordmark + "No
+app to download. Works on any phone.") and rejected after seeing it: one side is
+cheaper and keeps the card's single message undiluted. The "No app" line remains
+the best sentence we're not printing, if a back is ever revisited.
 
-> **No app to download. Works on any phone.**
+**The back is still rendered**, deliberately. If the chosen SKU declares the back
+as a REQUIRED print area, a front-only order fails with `MissingRequiredAssets`,
+and the fix is to supply a plain white asset — which `buildPostcardAssets()`
+already produces (verified: a single colour, pure white, fully opaque, ~50KB).
+When the back is optional we send no asset at all, so no white ink is laid down.
+`COMPANION_CARD.faces` governs which is sent.
 
-**Why that sentence and no other.** People assume AR needs an app, and that
-assumption sits between opening the box and actually scanning. It can't go on
-the front without breaking the two-step structure the headline is built on, and
-the back is the only place it fits. Everything else considered — what Popcode
-is, troubleshooting, a repeated URL — is either redundant or undermines the
-front.
-
-**No Popcode symbol here, deliberately.** The symbol marks a photo as
-scannable, but you scan the *photo*, not the mark (see the 2026-09-02 wording
-fix in `order.html`). Showing it unexplained implies otherwise; explaining it
-takes a second sentence, which is exactly what this side is not for.
-
-**No QR** — the back is where that temptation lives, and it would contradict the
-positioning pillar.
-
-### OPEN: "Works on any phone" may overclaim
-
-Popcode needs a reasonably modern mobile browser with camera access, and the
-session notes record real trouble on iPhone XR / iOS 16 (video freezing on first
-play, 2026-06-10). Printed on a card in a box, that claim can't be hot-fixed.
-The "No app to download" half is both accurate and the valuable half. If the
-claim looks too strong, swap the second sentence for **"It opens in your
-browser."** — same reassurance, nothing to walk back.
+`assertFaceRendered()` checks the two faces for opposite things — the front must
+NOT be white (the gradient is missing if it is), the back must BE white. A single
+rule would either miss a broken front or reject every good back.
 
 ### Settled after the artwork
 

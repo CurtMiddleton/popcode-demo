@@ -97,7 +97,7 @@
     /* The full-bleed gradient. Unlike a white card, this MUST run into the
        bleed — any shortfall shows as a white sliver after trimming. The
        element is the bleed box, so the gradient covers it by construction. */
-    background: var(--art-gradient);
+    background: var(--art-ground);
   }
   .pc-shadow { box-shadow: 0 10px 34px rgba(0,0,0,.18), 0 2px 6px rgba(0,0,0,.1); }
 
@@ -134,20 +134,6 @@
     text-align: center;
   }
 
-  /* Back: one centred line, wordmark above it. */
-  .pc-back-line {
-    position: absolute;
-    left: 0; right: 0;
-    top: var(--back-line-top);
-    margin: 0;
-    font-family: 'FilsonPro', 'Inter', system-ui, sans-serif;
-    font-weight: 700;
-    font-size: var(--back-line-size);
-    line-height: 1.3;
-    color: #fff;
-    text-align: center;
-  }
-
   /* Popcode wordmark, reversed. */
   .pc-mark {
     position: absolute;
@@ -162,6 +148,7 @@
   .pc-guides { position: absolute; inset: 0; pointer-events: none; }
   .pc-guides::before { content: ''; position: absolute; inset: var(--bleed); outline: 1px solid rgba(255,90,90,.85); }
   .pc-guides::after  { content: ''; position: absolute; inset: calc(var(--bleed) + var(--margin)); outline: 1px dashed rgba(255,255,255,.55); }
+  .pc-back .pc-guides::after { outline-color: rgba(70,110,200,.5); }   /* white ground */
   .pc-card.no-guides .pc-guides { display: none; }
 </style>
 </head>
@@ -234,20 +221,16 @@ const CARD = {
   markLeftIn: 4.13333,
   markTopIn:  0.4083,
 
-  /* BACK. Same gradient ground so the card reads as branded whichever way up it
-     lands in the parcel — a one-sided card shows a blank white back half the
-     time, which is the whole reason this side exists.
+  /* BACK — blank white. Decided 2026-09-14 after seeing it printed as a second
+     branded side: one side only is cheaper and keeps the card's single message
+     undiluted.
 
-     One sentence, and no Popcode symbol: the symbol marks the photo as
-     scannable but you scan the PHOTO, not the mark, and showing it here
-     unexplained would imply otherwise. Explaining it would take a second
-     sentence, which is exactly what this side is not for. */
-  back: {
-    markWIn:   1.10,    // smaller than the front's — this side is the quiet one
-    markTopIn: 1.42,
-    linePt:    12,      // alone on a 6×4 field, so a touch above the front's 11pt
-    lineBaseIn: 2.26,
-  },
+     It is still RENDERED, deliberately. If the chosen SKU declares the back as
+     a REQUIRED print area, a front-only order fails with MissingRequiredAssets,
+     and the fix is to supply a plain white asset — this one. When the back is
+     optional we send nothing at all, so no white ink is laid down; that is
+     governed by COMPANION_CARD.faces in lib/print/catalog.mjs. */
+  backGround: '#ffffff',
 
   cyan: '#00aeef',    // the ampersand — sampled from the PDF text span
 
@@ -285,10 +268,6 @@ const COPY = {
   head: { scan: 'Scan', amp: '&', play: 'Play' },
   line: (slug) => [`Go to popcode.app/${slug}`, 'on your phone and hit Scan image.'],
 
-  /* The back's one job: kill the assumption that AR needs an app, which is the
-     main thing between opening the box and actually scanning. It can't go on
-     the front without breaking the two-step structure the headline is built on. */
-  back: 'No app to download. Works on any phone.',
 };
 
 /**
@@ -351,30 +330,20 @@ function buildPostcard(o) {
   el.style.cssText = [
     `--w:${wIn}in`, `--h:${hIn}in`,
     `--bleed:${CARD.bleedIn}in`, `--margin:${CARD.marginIn}in`,
-    `--art-gradient:${artGradient(bleedW, bleedH)}`,
+    `--art-ground:${side === 'back' ? CARD.backGround : artGradient(bleedW, bleedH)}`,
     `--cyan:${CARD.cyan}`,
     `--head-size:${CARD.headSizePt}pt`,
     `--copy-size:${CARD.copySizePt}pt`, `--copy-lead:${CARD.copyLeadPt}pt`,
     `--copy-top:${(CARD.copyBaseIn - CARD.copySizePt * 0.72 / 72).toFixed(4)}in`,
-    `--mark-w:${(side === 'back' ? CARD.back.markWIn : CARD.markWIn)}in`,
-    // Centred by computed offset rather than a transform: html2canvas is
-    // unreliable with transformed <img> elements (see the 2026-07-09 notes).
-    `--mark-left:${(side === 'back'
-      ? (wIn - CARD.back.markWIn) / 2
-      : CARD.markLeftIn).toFixed(5)}in`,
-    `--mark-top:${(side === 'back' ? CARD.back.markTopIn : CARD.markTopIn)}in`,
-    `--back-line-size:${CARD.back.linePt}pt`,
-    `--back-line-top:${(CARD.back.lineBaseIn - CARD.back.linePt * 0.72 / 72).toFixed(4)}in`,
+    `--mark-w:${CARD.markWIn}in`,
+    `--mark-left:${CARD.markLeftIn}in`, `--mark-top:${CARD.markTopIn}in`,
   ].join(';');
 
   const trim = document.createElement('div');
   trim.className = 'pc-trim';
 
   if (side === 'back') {
-    trim.innerHTML = `
-      <img class="pc-mark" src="/assets/Popcode_wordmark.rev.png" alt="Popcode">
-      <p class="pc-back-line">${escapeHtml(COPY.back)}</p>
-    `;
+    trim.innerHTML = '';          // blank — see CARD.backGround
   } else {
     const [l1, l2] = COPY.line(o.slug);
     const runs = CARD.headRuns.map((r) =>
@@ -426,7 +395,6 @@ function setBaselines(card) {
   // Baselines are stated from the TRIM edge; .pc-trim is that box.
   CARD.headRuns.forEach((r) => place(`.pc-${r.key}`, r.baseIn));
   place('.pc-copy', CARD.copyBaseIn);
-  place('.pc-back-line', CARD.back.lineBaseIn);
 }
 
 /** The slug is order data, so it is escaped even though slugs are constrained. */
@@ -465,22 +433,35 @@ function loadPrintLibs() {
 }
 
 /**
- * Fail loudly if a face came back blank.
+ * Fail loudly if a face didn't render as intended.
  *
- * This card is almost entirely one CSS gradient, and the repo's other print
+ * The front is almost entirely one CSS gradient, and this repo's other print
  * paths only ever captured solid fills and images — so gradient support is the
- * one thing that could silently turn the artwork into a transparent rectangle.
- * A blank asset would sail through upload and checkout and only surface as a
- * blank printed card, which is unrecoverable. Cheap to check, so check.
+ * one thing that could silently turn the artwork into a transparent or white
+ * rectangle. Such an asset would pass upload and checkout and surface only as a
+ * blank printed card, which is unrecoverable.
+ *
+ * The check is per face, because the two want opposite things: the FRONT must
+ * not be white (the gradient is missing if it is), while the BACK must be white
+ * (it is deliberately blank). A single rule would either miss a broken front or
+ * reject every good back.
  */
 function assertFaceRendered(canvas, side) {
   const ctx = canvas.getContext('2d');
   const pts = [[4, 4], [canvas.width - 5, 4], [4, canvas.height - 5],
                [canvas.width - 5, canvas.height - 5], [canvas.width >> 1, canvas.height >> 1]];
+  const white = (r, g, b) => r > 245 && g > 245 && b > 245;
   for (const [x, y] of pts) {
     const [r, g, b, a] = ctx.getImageData(x, y, 1, 1).data;
-    if (a < 250) throw new Error(`Postcard ${side}: background did not render (transparent at ${x},${y}) — check html2canvas gradient support`);
-    if (r > 245 && g > 245 && b > 245) throw new Error(`Postcard ${side}: background rendered white at ${x},${y} — the gradient is missing`);
+    if (a < 250) {
+      throw new Error(`Postcard ${side}: did not render — transparent at ${x},${y}`);
+    }
+    if (side === 'back' && !white(r, g, b)) {
+      throw new Error(`Postcard back: expected a blank white face, got rgb(${r},${g},${b}) at ${x},${y}`);
+    }
+    if (side !== 'back' && white(r, g, b)) {
+      throw new Error(`Postcard ${side}: rendered white at ${x},${y} — the gradient is missing`);
+    }
   }
   return canvas;
 }
@@ -602,7 +583,7 @@ function renderStage() {
     fig.className = 'pc-slot';
     fig.appendChild(hold);
     const cap = document.createElement('figcaption');
-    cap.textContent = side === 'back' ? 'Back' : 'Front';
+    cap.textContent = side === 'back' ? 'Back — blank' : 'Front';
     fig.appendChild(cap);
     stage.appendChild(fig);
     built.push(card);
