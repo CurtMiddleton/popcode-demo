@@ -79,7 +79,7 @@ export default async function handler(req, res) {
     }
 
     // 2. Validate every line against the catalog + our own storage prefix.
-    const { normalizeLines, withCompanionCards, quoteCart, CartError } = await import('../lib/print/cart.mjs');
+    const { normalizeLines, quoteCart, CartError } = await import('../lib/print/cart.mjs');
     let lines;
     try {
       lines = normalizeLines(rawLines, { requireAssets: true, assetPrefix: PUBLIC_ASSET_PREFIX });
@@ -103,17 +103,17 @@ export default async function handler(req, res) {
       if (c.user_id !== user.id) return res.status(403).json({ error: 'Not your design' });
     }
 
-    // 3b. Add the companion postcard(s) this order earns. Deliberately AFTER the
-    // ownership check: the card is server-authored, and its artwork URL is built
-    // from the slug we just read here rather than anything the client sent, so a
-    // client can neither add a card nor choose what one points at. Priced with
-    // everything else below, so the charge covers it.
-    try {
-      const slugFor = Object.fromEntries([...byId].map(([id, c]) => [id, c.slug]));
-      lines = withCompanionCards(lines, { slugFor, assetPrefix: PUBLIC_ASSET_PREFIX });
-    } catch (e) {
-      if (e instanceof CartError) return res.status(e.status).json({ error: e.message });
-      throw e;
+    // 3b. Resolve the companion postcard, if this order earns one. It is a
+    // BRANDED INSERT, not a line item — the fulfilling lab puts it in the box,
+    // so it is absent from the quote and adds no shipping. Its URL is built
+    // from the slug read above, never from anything the client sent.
+    const { COMPANION_INSERT, companionInsertCollectionId, companionInsertPath, companionInsertBranding } =
+      await import('../lib/print/catalog.mjs');
+    let branding = null;
+    if (COMPANION_INSERT.enabled) {
+      const cardFor = companionInsertCollectionId(lines);
+      const slug = cardFor && byId.get(cardFor)?.slug;
+      if (slug) branding = companionInsertBranding(PUBLIC_ASSET_PREFIX + companionInsertPath(slug));
     }
 
     // 4. Authoritative re-quote, per provider group (never trust the client price).
@@ -165,6 +165,7 @@ export default async function handler(req, res) {
           product_type: first.productType,
           provider: group.provider,
           provider_meta: first.variant.printify || null,
+          branding,
           sku: first.variant.sku,
           copies: first.copies,
           sizing: first.variant.sizing || 'fillPrintArea',

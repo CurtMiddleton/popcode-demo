@@ -107,36 +107,42 @@
   }
 
   const CARD = {
-    // Trim and bleed come from Prodigi's own product record for
-    // GLOBAL-POST-MOH-6X4-BLA, verified 2026-09-14 — not from the artwork's
-    // TrimBox, which was a nominal 6×4in. The real card is 15.2 × 10.2 cm and
-    // the required asset implies 2.5mm bleed, not the 3mm we had assumed.
-    // Everything is positioned from a trim edge, so the sub-millimetre change
-    // moves nothing perceptibly; it just makes the geometry true.
-    wIn: 15.2 / 2.54,   // 5.9843in
-    hIn: 10.2 / 2.54,   // 4.0157in
-    bleedIn: 2.5 / 25.4, // 0.0984in
-    marginIn: 0.40,     // safe margin — guide only, no element relies on it
+    /* A6 PORTRAIT — Prodigi's branded-insert postcard: 105 × 148mm on 260gsm
+       ultra smooth, "including 4mm border". The fulfilling lab puts it in the
+       box, so there is no separate shipment and no bleed to supply: the stock
+       is pre-cut and the file edge IS the card edge.
+
+       This replaces the 6 × 4in landscape card, which was ordered as its own
+       line item and turned out to be fulfilled in a different country — a
+       second transatlantic parcel that never travelled with the print. See
+       docs/postcard-brief.md. */
+    wIn: 105 / 25.4,    // 4.1339in
+    hIn: 148 / 25.4,    // 5.8268in
+    bleedIn: 0,         // pre-cut stock; the file edge is the card edge
+    marginIn: 8 / 25.4, // 8mm — double Prodigi's stated 4mm border, for comfort
 
     // Headline: CooperBT-Light, two authored lines, 46pt leading on 56.07pt.
     // PDF: "Scan " span at x=61.7 (= trim + 31.7pt), em-box top y=49.4.
-    headSizePt: 56.0701,  // Tm scale
-    headLeadPt: 46,       // baseline delta 244.5046 - 198.5272
+    headSizePt: 56.0701,  // unchanged from the approved artwork
+    headLeadPt: 46,
     // Each headline run carries its own text matrix in the artwork, so each is
     // placed here the same way — left edge + baseline, both from the trim edge.
     // "Play" is positioned, NOT flowed after a space: the artwork tightens that
     // gap by hand, and a literal space glyph renders it ~10pt too wide.
+    // Left edge and the ampersand-to-Play offset are carried over from the
+    // approved artwork (that gap is hand-tightened and must not be re-flowed);
+    // only the vertical placement is re-composed for portrait.
     headRuns: [
-      { key: 'scan', leftIn: 0.44000, baseIn: 1.02077 },   // Tm 61.6800, 244.5046
-      { key: 'amp',  leftIn: 0.44000, baseIn: 1.65934 },   // Tm 61.6800, 198.5272
-      { key: 'play', leftIn: 1.13618, baseIn: 1.65934 },   // Tm 111.8047, 198.5272
+      { key: 'scan', leftIn: 12 / 25.4, baseIn: 62 / 25.4 },
+      { key: 'amp',  leftIn: 12 / 25.4, baseIn: 78 / 25.4 },
+      { key: 'play', leftIn: 12 / 25.4 + 0.69618, baseIn: 78 / 25.4 },
     ],
 
     // Sentence: Bold 11pt / 14pt, centred on the trim.
     // PDF: line 1 em-box top y=212.8 (= trim + 182.8pt), centred on x=246.
     copySizePt: 11,
-    copyLeadPt: 14,       // baseline delta 124.2871 - 110.2871
-    copyBaseIn: 2.69046,  // first baseline: Tm ty 124.2871 -> 193.7129pt below trim top
+    copyLeadPt: 14,
+    copyBaseIn: 112 / 25.4,
 
     // Wordmark, reversed. PDF ink box 100.3 × 26.5pt, left edge 297.6pt from the
     // trim's left edge, top 29.4pt below it.
@@ -148,9 +154,9 @@
     // asset's width, so 1.17226in of letterform (the artwork's) needs 1.38222in
     // of image. Both assets are cropped tight to the letterforms top and left, so
     // left/top carry over from the artwork unchanged.
-    markWIn:    1.38222,
-    markLeftIn: 4.13333,
-    markTopIn:  0.4083,
+    markWIn:    38 / 25.4,               // 38mm
+    markLeftIn: (105 - 38) / 2 / 25.4,   // centred on the portrait card
+    markTopIn:  16 / 25.4,
 
     /* BACK — blank white. Decided 2026-09-14 after seeing it printed as a second
        branded side: one side only is cheaper and keeps the card's single message
@@ -248,20 +254,18 @@
    * Build one card face at real print dimensions.
    * @param {object} o
    * @param {string} o.slug      the per-order slug — the whole reason this card exists
-   * @param {'front'|'back'} [o.side]
    * @param {boolean} [o.guides] draw trim/safe guides (screen only, never for print)
    */
   function buildPostcard(o) {
-    const side = o.side || 'front';
     const wIn = CARD.wIn, hIn = CARD.hIn;
     const bleedW = wIn + CARD.bleedIn * 2, bleedH = hIn + CARD.bleedIn * 2;
 
     const el = document.createElement('div');
-    el.className = 'pc-card pc-' + side + (o.guides ? '' : ' no-guides');
+    el.className = 'pc-card' + (o.guides ? '' : ' no-guides');
     el.style.cssText = [
       `--w:${wIn}in`, `--h:${hIn}in`,
       `--bleed:${CARD.bleedIn}in`, `--margin:${CARD.marginIn}in`,
-      `--art-ground:${side === 'back' ? CARD.backGround : artGradient(bleedW, bleedH)}`,
+      `--art-ground:${artGradient(bleedW, bleedH)}`,
       `--cyan:${CARD.cyan}`,
       `--head-size:${CARD.headSizePt}pt`,
       `--copy-size:${CARD.copySizePt}pt`, `--copy-lead:${CARD.copyLeadPt}pt`,
@@ -273,9 +277,7 @@
     const trim = document.createElement('div');
     trim.className = 'pc-trim';
 
-    if (side === 'back') {
-      trim.innerHTML = '';          // blank — see CARD.backGround
-    } else {
+    {
       const [l1, l2] = COPY.line(o.slug);
       const runs = CARD.headRuns.map((r) =>
         `<span class="pc-run pc-${r.key}" data-run="${r.key}"`
@@ -347,20 +349,14 @@
      ════════════════════════════════════════════════════════════════════ */
   const PRINT = {
     dpi: 300,
-    /* Prodigi declares ONE required print area for this SKU, and its asset is
-       3708 × 1263px — which is not the shape of a card. It is BOTH SIDES on a
-       single sheet, side by side: 2 × (15.2 + 0.5) × (10.2 + 0.5) cm at 300 DPI
-       is 3709 × 1264, matching to a pixel of rounding.
+    /* The insert is a single printed face on pre-cut A6 stock.
 
-       So the blank back is not optional after all — the sheet has to carry it
-       either way. Front is placed on the LEFT half; with a blank back, having
-       the halves the wrong way round would simply flip which face the design
-       lands on, so this is a cheap thing to be wrong about. Confirm from
-       Prodigi's proof image on the first order. */
-    sheetPx: { w: 3708, h: 1263 },
-    frontHalf: 'left',
+       A branded insert is printed on one side of pre-cut stock, so there is no
+       sheet to compose and no back to supply. */
+    // One face, at the size Prodigi's insert postcard expects.
+    insertPx: { w: 1240, h: 1748 },   // 105 x 148mm at 300 DPI
   };
-  const FACES = ['front', 'back'];
+  const FACES = ['front'];   // an insert is printed on one side
 
   function loadPrintLibs() {
     if (window._pcPrintLibs) return window._pcPrintLibs;
@@ -386,40 +382,45 @@
    * rectangle. Such an asset would pass upload and checkout and surface only as a
    * blank printed card, which is unrecoverable.
    *
-   * The check is per face, because the two want opposite things: the FRONT must
-   * not be white (the gradient is missing if it is), while the BACK must be white
-   * (it is deliberately blank). A single rule would either miss a broken front or
-   * reject every good back.
+   * A missing gradient shows up as a transparent or white face, so both are
+   * treated as failures.
    */
   function assertFaceRendered(canvas, side) {
     const ctx = canvas.getContext('2d');
-    const pts = [[4, 4], [canvas.width - 5, 4], [4, canvas.height - 5],
-                 [canvas.width - 5, canvas.height - 5], [canvas.width >> 1, canvas.height >> 1]];
+    const W = canvas.width, H = canvas.height;
     const white = (r, g, b) => r > 245 && g > 245 && b > 245;
-    for (const [x, y] of pts) {
+
+    // Corners sit inside the margin, so they are background on any layout.
+    // Never sample the centre: it is background on a landscape card but lands
+    // on white type in portrait, which is what made an earlier version of this
+    // check reject a perfectly good render.
+    for (const [x, y] of [[4, 4], [W - 5, 4], [4, H - 5], [W - 5, H - 5]]) {
       const [r, g, b, a] = ctx.getImageData(x, y, 1, 1).data;
-      if (a < 250) {
-        throw new Error(`Postcard ${side}: did not render — transparent at ${x},${y}`);
-      }
-      if (side === 'back' && !white(r, g, b)) {
-        throw new Error(`Postcard back: expected a blank white face, got rgb(${r},${g},${b}) at ${x},${y}`);
-      }
-      if (side !== 'back' && white(r, g, b)) {
-        throw new Error(`Postcard ${side}: rendered white at ${x},${y} — the gradient is missing`);
+      if (a < 250) throw new Error(`Postcard ${side}: did not render — transparent at ${x},${y}`);
+      if (white(r, g, b)) throw new Error(`Postcard ${side}: rendered white at ${x},${y} — the gradient is missing`);
+    }
+
+    // And the ground must cover the card, not just its corners. Type is a small
+    // share of the face, so a mostly-white grid means the gradient is absent.
+    let lit = 0, n = 0;
+    for (let gy = 1; gy < 6; gy++) {
+      for (let gx = 1; gx < 6; gx++) {
+        const [r, g, b] = ctx.getImageData((W * gx / 6) | 0, (H * gy / 6) | 0, 1, 1).data;
+        n++; if (!white(r, g, b)) lit++;
       }
     }
+    if (lit / n < 0.6) throw new Error(`Postcard ${side}: only ${lit}/${n} sampled points carry the gradient`);
     return canvas;
   }
 
   /**
    * Render one face to a 300 DPI canvas at bleed size.
-   * @param {'front'|'back'} side
    * @param {string} slug
    */
-  async function renderFace(side, slug) {
+  async function renderFace(slug) {
     const holder = document.createElement('div');
     holder.style.cssText = 'position:fixed;left:-10000px;top:0;pointer-events:none;';
-    const card = buildPostcard({ slug, side, guides: false });
+    const card = buildPostcard({ slug, guides: false });
     holder.appendChild(card);
     document.body.appendChild(holder);
 
@@ -440,32 +441,23 @@
         width: card.offsetWidth,
         height: card.offsetHeight,
       });
-      return assertFaceRendered(canvas, side);
+      return assertFaceRendered(canvas, 'insert');
     } finally {
       holder.remove();
     }
   }
 
   /**
-   * Production entry point: the print-ready asset for each face.
+   * Production entry point: the insert artwork for one order.
    *
-   * Returns PNGs, not JPEGs — the card is a smooth gradient, which is exactly
-   * what JPEG bands. Upload these to the `experiences` bucket and attach each as
-   * its print area's asset, the same shape as the other single-image products.
+   * PNG rather than JPEG — the card is a smooth gradient, which is exactly
+   * what JPEG bands. Upload to the `experiences` bucket and hand the public URL
+   * to Prodigi as branding.postcard.url on the order.
    *
    * @param {string} slug the order's slug — what the whole card exists to carry
-   * @returns {Promise<{front: Blob, back: Blob, widthPx: number, heightPx: number, dpi: number}>}
    */
   window.buildPostcardAssets = async function buildPostcardAssets(slug) {
-    await loadPrintLibs();
-    const out = { dpi: PRINT.dpi };
-    for (const side of FACES) {
-      const canvas = await renderFace(side, slug);
-      out[side] = await new Promise((res) => canvas.toBlob(res, 'image/png'));
-      out.widthPx = canvas.width;
-      out.heightPx = canvas.height;
-    }
-    return out;
+    return { insert: await buildPostcardInsert(slug), dpi: PRINT.dpi, ...PRINT.insertPx };
   };
 
   /** A two-page proof for human review. JPEG here — it is read, not printed. */
@@ -473,7 +465,7 @@
     await loadPrintLibs();
     const { jsPDF } = window.jspdf;
     const w = CARD.wIn + CARD.bleedIn * 2, h = CARD.hIn + CARD.bleedIn * 2;
-    const doc = new jsPDF({ unit: 'in', format: [w, h], orientation: 'landscape', compress: true });
+    const doc = new jsPDF({ unit: 'in', format: [w, h], orientation: 'portrait', compress: true });
     for (let i = 0; i < FACES.length; i++) {
       const canvas = await renderFace(FACES[i], slug);
       if (i) doc.addPage([w, h], 'landscape');
@@ -483,14 +475,14 @@
   }
 
   /** Save one face as the print-ready PNG. */
-  async function downloadFace(side, slug) {
+  async function downloadFace(slug) {
     await loadPrintLibs();
-    const canvas = await renderFace(side, slug);
+    const canvas = await renderFace(slug);
     const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `popcode-postcard-${slug}-${side}-${PRINT.dpi}dpi.png`;
+    a.download = `popcode-insert-${slug}-${PRINT.dpi}dpi.png`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
@@ -498,35 +490,30 @@
   injectCss();
 
   /**
-   * The print-ready asset: ONE sheet carrying both faces, at exactly the pixel
-   * size Prodigi asks for.
+   * The print-ready insert: one face at exactly the pixel size Prodigi's
+   * branded-insert postcard expects.
    *
    * @param {string} slug
-   * @returns {Promise<Blob>} PNG, PRINT.sheetPx
+   * @returns {Promise<Blob>} PNG, PRINT.insertPx
    */
-  async function buildPostcardSheet(slug) {
+  async function buildPostcardInsert(slug) {
     await loadPrintLibs();
-    const { w, h } = PRINT.sheetPx;
-    const half = Math.round(w / 2);
+    const { w, h } = PRINT.insertPx;
+    const face = await renderFace(slug);
 
-    const sheet = document.createElement('canvas');
-    sheet.width = w; sheet.height = h;
-    const ctx = sheet.getContext('2d');
+    // Drawn to an exact rect: the face renders at its natural CSS size and the
+    // asset must be exactly the declared pixel size, so scale on the way in.
+    const out = document.createElement('canvas');
+    out.width = w; out.height = h;
+    const ctx = out.getContext('2d');
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, w, h);   // so a failed face is white, never transparent
-
-    const order = PRINT.frontHalf === 'left' ? ['front', 'back'] : ['back', 'front'];
-    for (let i = 0; i < order.length; i++) {
-      const face = await renderFace(order[i], slug);
-      // Drawn to an exact rect: each face renders at 1854.3 × 1263.8 natural,
-      // and the sheet must be exactly the declared size, so scale on the way in.
-      ctx.drawImage(face, i * half, 0, half, h);
-    }
-    return new Promise((res) => sheet.toBlob(res, 'image/png'));
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(face, 0, 0, w, h);
+    return new Promise((res) => out.toBlob(res, 'image/png'));
   }
 
   window.PopcodePostcard = {
-    buildSheet: buildPostcardSheet,
+    buildInsert: buildPostcardInsert,
     CARD, COPY, PRINT, FACES,
     buildCard: buildPostcard,
     setBaselines,

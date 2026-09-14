@@ -373,7 +373,34 @@ either way). Included-and-marked-up is the safer default given the
 never-lose-money rule, but it does mean the customer pays for an insert they
 didn't choose. Worth a decision before go-live.
 
-## STOP — the line-item approach is wrong. 2026-09-14
+## REBUILT as a branded insert — 2026-09-14
+
+`COMPANION_INSERT.enabled` is `false` until the A6 artwork has been through a
+real order.
+
+- **A6 portrait, 105 × 148mm**, 260gsm ultra smooth, 4mm border, 1240 × 1748px
+  at 300 DPI — verified the export hits that size exactly. Pre-cut stock, so no
+  bleed to supply.
+- **Not a line item.** `branding.postcard.url` on the Prodigi order; the
+  fulfilling lab puts it in the box. No second SKU, no second shipment, no
+  second shipping charge, and **nothing added to the quote** — an 8×10 print
+  quotes $30 again, as it did before.
+- **One insert per parcel.** That is how branded inserts work, so an order
+  mixing several popcodes gets NO card rather than one naming a single project
+  — sending a customer to the wrong link is worse than sending none.
+- Resolved at checkout from the slug (never from client input) and stored on
+  `print_orders.branding`; migration
+  `supabase/migrations/2026-09-14-print-orders-branding.sql`.
+
+The renderer, export, gradient and typography carried over unchanged; only the
+composition was re-laid for portrait.
+
+**A bug the rebuild exposed:** `assertFaceRendered()` sampled the card's centre
+point, which is background on a landscape card and lands on white type in
+portrait — so it rejected a perfectly good render. It now samples corners (always
+inside the margin) plus a grid, and is layout-independent.
+
+## SUPERSEDED — the line-item approach, 2026-09-14
 
 `COMPANION_CARD.enabled` is back to `false`, hours after being turned on.
 
