@@ -555,6 +555,26 @@
                         /Firefox/.test(ua) ? 'Firefox' : 'Other';
         return { device, browser };
       }
+      // MindAR throws away the real getUserMedia rejection: its arError carries
+      // only { error: 'VIDEO_FAIL' }, so a viewer refusing camera access and a
+      // camera that broke for some other reason arrive here identical. Wrapping
+      // getUserMedia keeps the DOMException around long enough for the arError
+      // handler to tell them apart. It is a pass-through — the original promise
+      // is returned and the rejection re-thrown — so MindAR behaves exactly as
+      // before. Deliberately NOT a pre-flight getUserMedia call of our own:
+      // opening a second camera stream is the root of the iOS media-session
+      // problems this viewer spent a long time fixing.
+      let lastCameraError = null;
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const nativeGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+        navigator.mediaDevices.getUserMedia = function (constraints) {
+          return nativeGetUserMedia(constraints).then(
+            stream => { lastCameraError = null; return stream; },
+            err => { lastCameraError = err; throw err; }
+          );
+        };
+      }
+
       async function logEvent(eventType, targetIndex = null) {
         if (!id) return;
         try {
@@ -656,6 +676,12 @@
 
         scene.addEventListener('arError', () => {
           if (cleanRescanActive) return; // a clean-rescan attempt will handle its own fallback
+          // NotAllowedError is the viewer refusing camera access (or having
+          // refused it before) — a different problem, and a different fix, from
+          // a camera that failed to start.
+          logEvent(lastCameraError && lastCameraError.name === 'NotAllowedError'
+            ? 'camera_denied'
+            : 'camera_error');
           document.getElementById('loading').style.display = 'none';
           showError();
         });
@@ -714,6 +740,13 @@
 
       function handleStartTap() {
         hideStartScreen();
+        // Fires on every camera start, first scan and rescans alike. scan_open
+        // only records the page loading, which happens whether or not anyone
+        // taps; without this step the gap between "opened the link" and "found
+        // a photo" mixes viewers who never started the camera in with genuine
+        // match failures. Read it as a funnel step by counting sessions that
+        // have at least one scan_start, not by counting the events.
+        logEvent('scan_start');
         document.getElementById('scanner').style.display = 'block';
         document.getElementById('home-btn').style.display = 'flex';
         const hint = document.getElementById('scan-hint');
