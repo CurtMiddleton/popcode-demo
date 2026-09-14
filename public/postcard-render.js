@@ -107,9 +107,15 @@
   }
 
   const CARD = {
-    wIn: 6,             // TrimBox 432pt
-    hIn: 4,             // TrimBox 288pt
-    bleedIn: 0.125,     // BleedBox is 9pt outside trim on every edge
+    // Trim and bleed come from Prodigi's own product record for
+    // GLOBAL-POST-MOH-6X4-BLA, verified 2026-09-14 — not from the artwork's
+    // TrimBox, which was a nominal 6×4in. The real card is 15.2 × 10.2 cm and
+    // the required asset implies 2.5mm bleed, not the 3mm we had assumed.
+    // Everything is positioned from a trim edge, so the sub-millimetre change
+    // moves nothing perceptibly; it just makes the geometry true.
+    wIn: 15.2 / 2.54,   // 5.9843in
+    hIn: 10.2 / 2.54,   // 4.0157in
+    bleedIn: 2.5 / 25.4, // 0.0984in
     marginIn: 0.40,     // safe margin — guide only, no element relies on it
 
     // Headline: CooperBT-Light, two authored lines, 46pt leading on 56.07pt.
@@ -339,7 +345,21 @@
      Faces are captured from a fresh off-screen card at 1:1, never from the
      artboard's zoomed one — html2canvas and CSS transforms don't mix.
      ════════════════════════════════════════════════════════════════════ */
-  const PRINT = { dpi: 300 };
+  const PRINT = {
+    dpi: 300,
+    /* Prodigi declares ONE required print area for this SKU, and its asset is
+       3708 × 1263px — which is not the shape of a card. It is BOTH SIDES on a
+       single sheet, side by side: 2 × (15.2 + 0.5) × (10.2 + 0.5) cm at 300 DPI
+       is 3709 × 1264, matching to a pixel of rounding.
+
+       So the blank back is not optional after all — the sheet has to carry it
+       either way. Front is placed on the LEFT half; with a blank back, having
+       the halves the wrong way round would simply flip which face the design
+       lands on, so this is a cheap thing to be wrong about. Confirm from
+       Prodigi's proof image on the first order. */
+    sheetPx: { w: 3708, h: 1263 },
+    frontHalf: 'left',
+  };
   const FACES = ['front', 'back'];
 
   function loadPrintLibs() {
@@ -477,7 +497,36 @@
 
   injectCss();
 
+  /**
+   * The print-ready asset: ONE sheet carrying both faces, at exactly the pixel
+   * size Prodigi asks for.
+   *
+   * @param {string} slug
+   * @returns {Promise<Blob>} PNG, PRINT.sheetPx
+   */
+  async function buildPostcardSheet(slug) {
+    await loadPrintLibs();
+    const { w, h } = PRINT.sheetPx;
+    const half = Math.round(w / 2);
+
+    const sheet = document.createElement('canvas');
+    sheet.width = w; sheet.height = h;
+    const ctx = sheet.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);   // so a failed face is white, never transparent
+
+    const order = PRINT.frontHalf === 'left' ? ['front', 'back'] : ['back', 'front'];
+    for (let i = 0; i < order.length; i++) {
+      const face = await renderFace(order[i], slug);
+      // Drawn to an exact rect: each face renders at 1854.3 × 1263.8 natural,
+      // and the sheet must be exactly the declared size, so scale on the way in.
+      ctx.drawImage(face, i * half, 0, half, h);
+    }
+    return new Promise((res) => sheet.toBlob(res, 'image/png'));
+  }
+
   window.PopcodePostcard = {
+    buildSheet: buildPostcardSheet,
     CARD, COPY, PRINT, FACES,
     buildCard: buildPostcard,
     setBaselines,

@@ -373,14 +373,47 @@ either way). Included-and-marked-up is the safer default given the
 never-lose-money rule, but it does mean the customer pays for an insert they
 didn't choose. Worth a decision before go-live.
 
+## SKU VERIFIED — 2026-09-14
+
+`GET /v4.0/products/GLOBAL-POST-MOH-6X4-BLA` → `outcome: "Ok"`.
+
+- **15.2 × 10.2 cm**, Mohawk Superfine **324gsm**, style `Single`.
+- **One print area**, `default`, **required**.
+- Ships to ~200 countries, US and GB included.
+- `"BLA"` is the blank **envelope** it ships with — not a blank back, which is
+  what the earlier guess assumed.
+
+### The finding that changed the export
+
+The required asset for that single print area is **3708 × 1263px**, which is not
+the shape of a card (aspect 2.94 vs 1.49). It is **both sides on one sheet, side
+by side**: 2 × (15.2 + 0.5) × (10.2 + 0.5) cm at 300 DPI = 3709 × 1264, matching
+to a pixel of rounding.
+
+Three consequences:
+
+1. **Bleed is 2.5mm**, not the 3mm taken from the artwork's own BleedBox.
+2. **Trim is 15.2 × 10.2 cm** (5.9843 × 4.0157 in), not a nominal 6 × 4in. Every
+   element is positioned from a trim edge, so the sub-millimetre change moves
+   nothing perceptibly — it just makes the geometry true.
+3. **The blank back is not optional.** The sheet carries it either way, so
+   building it was necessary rather than precautionary.
+
+`PopcodePostcard.buildSheet(slug)` produces the combined sheet at exactly
+3708 × 1263 — verified — with the front on the LEFT half.
+
+**Still unconfirmed: which half Prodigi treats as the front.** With a blank back
+this is cheap to be wrong about (it would simply flip which face the design
+lands on). Confirm from the proof image on the first order.
+
 ### Go-live, in order
 
-1. `node scripts/verify-prodigi-sku.mjs GLOBAL-POST-MOH-6X4-BLA` — confirm the
-   SKU and its print-area count.
-2. Set `COMPANION_CARD.faces` from that output (one area: leave it).
+1. ~~Verify the SKU~~ — done.
+2. ~~Set `COMPANION_CARD.faces`~~ — done: one asset, one print area.
 3. Decide the pricing question above.
 4. Set `COMPANION_CARD.enabled = true`.
-5. Place one sandbox order and confirm the card appears as a second line item.
+5. Place one order and check the proof image: card present as a second line
+   item, design on the intended face.
 
 ## Design precedent
 

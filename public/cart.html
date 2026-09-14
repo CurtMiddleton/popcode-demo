@@ -377,17 +377,13 @@
         for (const col of cols || []) {
           if (!col.slug) continue;
           try {
-            const assets = await window.PopcodePostcard.buildAssets(col.slug);
-            // Upload BOTH faces even though the SKU may only use the front. The
-            // blank back is ~50KB, and having it there means switching the
-            // server to a two-print-area SKU needs no client change.
-            for (const face of ['front', 'back']) {
-              if (!assets[face]) continue;
-              await db.storage.from('experiences').upload(
-                `${col.slug}/companion-card-${face}.png`, assets[face],
-                { contentType: 'image/png', upsert: true },
-              );
-            }
+            // ONE sheet carrying both sides — that is what the SKU's single
+            // print area asks for (3708 x 1263px).
+            const sheet = await window.PopcodePostcard.buildSheet(col.slug);
+            await db.storage.from('experiences').upload(
+              `${col.slug}/companion-card.png`, sheet,
+              { contentType: 'image/png', upsert: true },
+            );
           } catch (err) {
             if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
           }
