@@ -373,6 +373,58 @@ either way). Included-and-marked-up is the safer default given the
 never-lose-money rule, but it does mean the customer pays for an insert they
 didn't choose. Worth a decision before go-live.
 
+## STOP — the line-item approach is wrong. 2026-09-14
+
+`COMPANION_CARD.enabled` is back to `false`, hours after being turned on.
+
+**`GLOBAL-POST-*` is fulfilled in the UK/EU. The flat and wall products are
+fulfilled in the US.** Prodigi quotes different fulfilment locations as separate
+shipments, so adding the card added a second, transatlantic one. A checkout for
+one 8×10 print — which should total about $30 — quoted **$76**. The card itself
+costs ~$1.30, so roughly $33 of that was a second parcel's shipping.
+
+**The cost is the smaller problem.** A separate shipment means the card doesn't
+travel with the print. It would arrive days later, alone, from another continent.
+That isn't a companion card; it's a second order. The entire premise of the brief
+is that the card is *in the box*.
+
+### The premise that was wrong
+
+The brief opens by ruling out vendor branded inserts:
+
+> an insert is a *static* file uploaded once to your vendor account — the same
+> sheet in every parcel. Our URL changes per order, so it physically can't be one.
+
+**That is true of the dashboard, and false of the API.** Prodigi's order schema
+takes a `branding` object with a per-order URL for each insert type:
+
+```json
+"branding": {
+  "postcard": { "url": "https://…" },
+  "sticker_exterior_round": { "url": "https://…" },
+  "packing_slip_bw": { "url": "https://…" }
+}
+```
+
+So the card can be a **branded insert with per-order artwork** — placed in the
+box by whichever lab fulfils the order, with no second SKU, no second shipment,
+and no second shipping charge. That is what this should have been from the start.
+
+What changes if we go that way:
+
+- **Size**: Prodigi's insert postcard is **A6, 105 × 148mm portrait, including a
+  4mm border**, on 260gsm ultra smooth — not our 6 × 4in landscape. The design
+  needs re-laying for portrait A6.
+- **Cost**: about $2.50 per order (less on Prodigi Pro), charged as an insert
+  rather than a line item — so it is probably NOT in the quote, and comes off
+  margin unless the markup absorbs it.
+- **Code**: simpler. No catalogue entry, no cart line, no ownership plumbing —
+  just `branding.postcard.url` on the order, pointing at the per-order artwork
+  the renderer already produces.
+
+The renderer, the export, the gradient work and the verified typography all
+carry over. What goes is the line-item machinery and the 6×4 geometry.
+
 ## SKU VERIFIED — 2026-09-14
 
 `GET /v4.0/products/GLOBAL-POST-MOH-6X4-BLA` → `outcome: "Ok"`.
