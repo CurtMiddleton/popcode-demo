@@ -131,9 +131,68 @@ SVG** — same reason the badge is rasterised before capture
 **Also needs bleed.** The print PDFs above are trim-size only because Prodigi's
 book/calendar templates handle it; confirm what the card SKU wants.
 
+## Prodigi SKUs — pulled 2026-09-14
+
+From Prodigi's public product pages. **None of these are verified against
+`GET /v4.0/products/{sku}` yet** — that needs the API key, which lives only in
+Vercel. Run `scripts/verify-prodigi-sku.mjs` (added with this work) before
+adding anything here to `lib/print/catalog.mjs`.
+
+### Ruled out
+
+- **Greeting cards** — `GLOBAL-GRE` (fine art) and `CLASSIC-GRE-FEDR` (classic)
+  are **folded**. The card is settled as one side only, so a folded card is
+  three blank faces we'd pay for. It's also the shape most likely to declare
+  several print areas.
+- **Classic postcards** — `CLASSIC-POST-GLOS` is a *mailing service*: "sent
+  direct with no packaging" to a recipient, and the reverse must carry the
+  shipping address and postage mark. It never reaches the parcel. Wrong product
+  despite the tempting £0.40.
+
+### The right family — fine art postcards, `GLOBAL-POST`
+
+Flat, ships to the customer with the order, "designed for self-sending". From
+£1.00. Sizes **4×6" (152×102mm)** and **5×7" (178×127mm)**; note the SKU names
+them landscape-first, which matches where the design landed independently.
+
+Stocks: Mohawk fine paper 324gsm recycled (matte), or gloss-laminated 280gsm.
+
+Variants seen on the product page:
+
+| SKU | Size | Stock | Note |
+|---|---|---|---|
+| `GLOBAL-POST-MOH-6X4-BLA` | 6×4" | Mohawk 324gsm | ships with an envelope |
+| `GLOBAL-POST-GLOS-6X4` | 6×4" | gloss 280gsm | |
+| `GLOBAL-POST-MOH-7X5` | 7×5" | Mohawk 324gsm | |
+| `GLOBAL-POST-GLOS-7X5` | 7×5" | gloss 280gsm | |
+
+**Matte Mohawk is the one to want.** It's the recycled stock, it suits a light
+high-contrast serif far better than gloss, and it won't fight the matte fine-art
+prints it ships beside.
+
+### Still unanswered — and it's the deciding question
+
+The page says front and back are both customisable, which is exactly the
+`MissingRequiredAssets` trap flagged below. Three things need the API:
+
+1. **How many print areas each SKU declares, and whether the back is required.**
+   If the back is required we must supply a plain white asset for it — that's a
+   renderer change, not just a catalogue entry.
+2. **Real bleed and safe-margin figures.** The artboard currently assumes 0.125in
+   bleed and a 0.42in safe margin.
+3. **Exact attribute names/casing** for stock and finish.
+
+`-BLA` on the 6×4 Mohawk plausibly reads as *blank* (blank reverse, hence the
+envelope), which would mean one print area and no white-back asset at all. That
+is a guess and must be confirmed, not assumed.
+
 ## OPEN decisions
 
-- **Card size** — 4×6 postcard, or something smaller that tucks into a frame box.
+- **Card size** — the artboard says **landscape**, and Prodigi's real sizes are
+  6×4" and 7×5". A 4×6 *portrait* is off the table on both counts: Prodigi
+  doesn't offer it in this family, and the copy can't fill it (at 4in wide the
+  headline caps near 38pt before "Scan & Play" wraps, leaving ~2in of dead
+  space). 6×4 composes well at 46pt; 7×5 is worth seeing before committing.
 - **One card per order, or one per design?** The cart means one order can hold
   several designs with different URLs. Leaning: one card listing them all —
   cheaper, and it reads as a welcome note rather than a receipt.
