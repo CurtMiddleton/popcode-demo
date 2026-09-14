@@ -124,8 +124,8 @@
   /* Popcode wordmark, reversed. */
   .pc-mark {
     position: absolute;
-    right: var(--mark-right);
-    top:   var(--mark-top);
+    left: var(--mark-left);
+    top:  var(--mark-top);
     width: var(--mark-w);
     height: auto;
     display: block;
@@ -188,11 +188,19 @@ const CARD = {
   copyLeadPt: 14,       // baseline delta 124.2871 - 110.2871
   copyBaseIn: 2.69046,  // first baseline: Tm ty 124.2871 -> 193.7129pt below trim top
 
-  // Wordmark, reversed. PDF ink box 100.3 × 26.5pt, right edge 34.1pt from
-  // the trim's right edge, top 29.4pt below the trim's top edge.
-  markWIn:     1.3931,
-  markRightIn: 0.4736,
-  markTopIn:   0.4083,
+  // Wordmark, reversed. PDF ink box 100.3 × 26.5pt, left edge 297.6pt from the
+  // trim's left edge, top 29.4pt below it.
+  //
+  // Anchored LEFT, not right, and sized by its LETTERFORMS rather than its
+  // overall box: the artwork was set with a ™ but Popcode is registered, and ®
+  // is a different width. Matching the whole box would have shifted "popcode"
+  // itself to accommodate the glyph swap. The letterforms occupy 84.81% of this
+  // asset's width, so 1.17226in of letterform (the artwork's) needs 1.38222in
+  // of image. Both assets are cropped tight to the letterforms top and left, so
+  // left/top carry over from the artwork unchanged.
+  markWIn:    1.38222,
+  markLeftIn: 4.13333,
+  markTopIn:  0.4083,
 
   cyan: '#00aeef',    // the ampersand — sampled from the PDF text span
 
@@ -295,7 +303,7 @@ function buildPostcard(o) {
     `--copy-size:${CARD.copySizePt}pt`, `--copy-lead:${CARD.copyLeadPt}pt`,
     `--copy-top:${(CARD.copyBaseIn - CARD.copySizePt * 0.72 / 72).toFixed(4)}in`,
     `--mark-w:${CARD.markWIn}in`,
-    `--mark-right:${CARD.markRightIn}in`, `--mark-top:${CARD.markTopIn}in`,
+    `--mark-left:${CARD.markLeftIn}in`, `--mark-top:${CARD.markTopIn}in`,
   ].join(';');
 
   const [l1, l2] = COPY.line(o.slug);

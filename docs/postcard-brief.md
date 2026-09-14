@@ -223,15 +223,17 @@ Two things this caught that guessing would not have:
 Verified by rendering at 300 DPI and diffing against the PDF: mean difference
 **1.57/255**, with the remainder confined to glyph antialiasing edges.
 
-### Two things to decide
+### Settled after the artwork
 
-1. **™ or ®.** The approved card uses **™**. The repo's `Popcode_logo.png` uses
-   **®** and is used across the whole app — nav, viewer, emails, book back
-   covers. These are different legal claims (® asserts a *registered* mark), so
-   they should not disagree by accident. The card ships with the ™ wordmark
-   extracted from the approved PDF (`public/assets/Popcode_wordmark.rev.png`);
-   if ® is correct, the card should change, and if ™ is correct, the rest of the
-   app should.
+1. **® , not ™.** Popcode is a registered mark, so the card uses **®**, matching
+   `Popcode_logo.png` and therefore the rest of the app. The approved PDF was
+   set with ™; that is the one intentional departure from it.
+
+   The swap is not a like-for-like drop-in, because ® and ™ are different
+   widths. The wordmark is therefore anchored **left and sized by its
+   letterforms**, not by its overall box — matching the box would have nudged
+   "popcode" itself sideways to make room for the glyph. Verified: the
+   letterforms land within 0.24pt of the artwork on every edge.
 2. **Filson Soft vs Filson Pro.** The artwork uses Filson **Soft** Bold; the repo
    only has Filson **Pro**. Confirmed fine to use Pro, which is also what the
    app itself uses. The PDF's embedded Filson Soft is a 25-glyph subset — only
