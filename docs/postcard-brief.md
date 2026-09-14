@@ -378,9 +378,15 @@ didn't choose. Worth a decision before go-live.
 `COMPANION_INSERT.enabled` is `false` until the A6 artwork has been through a
 real order.
 
-- **A6 portrait, 105 × 148mm**, 260gsm ultra smooth, 4mm border, 1240 × 1748px
+- **A6 landscape, 148 × 105mm**, 260gsm ultra smooth, 4mm border, 1748 × 1240px
   at 300 DPI — verified the export hits that size exactly. Pre-cut stock, so no
   bleed to supply.
+
+  Prodigi states the size as "A6, 105 × 148mm", which is portrait notation. We
+  supply it landscape, matching the approved artwork — which also means the
+  measured composition carries over instead of being re-invented.
+  **ORIENTATION IS UNCONFIRMED**: check the proof on the first order and flip if
+  Prodigi rotates or crops it.
 - **Not a line item.** `branding.postcard.url` on the Prodigi order; the
   fulfilling lab puts it in the box. No second SKU, no second shipment, no
   second shipping charge, and **nothing added to the quote** — an 8×10 print
@@ -392,8 +398,10 @@ real order.
   `print_orders.branding`; migration
   `supabase/migrations/2026-09-14-print-orders-branding.sql`.
 
-The renderer, export, gradient and typography carried over unchanged; only the
-composition was re-laid for portrait.
+The renderer, export, gradient and typography carried over unchanged. The
+composition is the approved one, nudged for a card 4mm narrower and 3mm taller
+than the artwork's: same type, same left margin, same hand-tightened
+ampersand-to-Play gap, right margin preserved.
 
 **A bug the rebuild exposed:** `assertFaceRendered()` sampled the card's centre
 point, which is background on a landscape card and lands on white type in

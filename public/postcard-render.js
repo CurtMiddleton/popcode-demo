@@ -107,17 +107,23 @@
   }
 
   const CARD = {
-    /* A6 PORTRAIT — Prodigi's branded-insert postcard: 105 × 148mm on 260gsm
+    /* A6 LANDSCAPE — Prodigi's branded-insert postcard, 148 × 105mm on 260gsm
        ultra smooth, "including 4mm border". The fulfilling lab puts it in the
        box, so there is no separate shipment and no bleed to supply: the stock
        is pre-cut and the file edge IS the card edge.
 
-       This replaces the 6 × 4in landscape card, which was ordered as its own
-       line item and turned out to be fulfilled in a different country — a
-       second transatlantic parcel that never travelled with the print. See
-       docs/postcard-brief.md. */
-    wIn: 105 / 25.4,    // 4.1339in
-    hIn: 148 / 25.4,    // 5.8268in
+       Prodigi states the size as "A6, 105 × 148mm", which is portrait notation.
+       We supply it LANDSCAPE, matching the approved artwork — and landscape is
+       also what the design was measured against, so the composition carries
+       over rather than being re-invented. ORIENTATION IS UNCONFIRMED: check the
+       proof image on the first order, and flip to portrait if Prodigi rotates
+       or crops it.
+
+       This replaces a GLOBAL-POST line item, which turned out to be fulfilled
+       in a different country — a second transatlantic parcel that never
+       travelled with the print. See docs/postcard-brief.md. */
+    wIn: 148 / 25.4,    // 5.8268in
+    hIn: 105 / 25.4,    // 4.1339in
     bleedIn: 0,         // pre-cut stock; the file edge is the card edge
     marginIn: 8 / 25.4, // 8mm — double Prodigi's stated 4mm border, for comfort
 
@@ -132,17 +138,20 @@
     // Left edge and the ampersand-to-Play offset are carried over from the
     // approved artwork (that gap is hand-tightened and must not be re-flowed);
     // only the vertical placement is re-composed for portrait.
+    // Carried over from the approved artwork. Left margin and the hand-tightened
+    // ampersand-to-Play offset are unchanged; baselines drop 1.5mm because this
+    // card is 3mm taller than the one the artwork was drawn at.
     headRuns: [
-      { key: 'scan', leftIn: 12 / 25.4, baseIn: 62 / 25.4 },
-      { key: 'amp',  leftIn: 12 / 25.4, baseIn: 78 / 25.4 },
-      { key: 'play', leftIn: 12 / 25.4 + 0.69618, baseIn: 78 / 25.4 },
+      { key: 'scan', leftIn: 11.18 / 25.4, baseIn: 27.43 / 25.4 },
+      { key: 'amp',  leftIn: 11.18 / 25.4, baseIn: 43.65 / 25.4 },
+      { key: 'play', leftIn: 11.18 / 25.4 + 0.69618, baseIn: 43.65 / 25.4 },
     ],
 
     // Sentence: Bold 11pt / 14pt, centred on the trim.
     // PDF: line 1 em-box top y=212.8 (= trim + 182.8pt), centred on x=246.
     copySizePt: 11,
     copyLeadPt: 14,
-    copyBaseIn: 112 / 25.4,
+    copyBaseIn: 70.35 / 25.4,   // 68.34mm in the artwork, scaled for the taller card
 
     // Wordmark, reversed. PDF ink box 100.3 × 26.5pt, left edge 297.6pt from the
     // trim's left edge, top 29.4pt below it.
@@ -154,9 +163,9 @@
     // asset's width, so 1.17226in of letterform (the artwork's) needs 1.38222in
     // of image. Both assets are cropped tight to the letterforms top and left, so
     // left/top carry over from the artwork unchanged.
-    markWIn:    38 / 25.4,               // 38mm
-    markLeftIn: (105 - 38) / 2 / 25.4,   // centred on the portrait card
-    markTopIn:  16 / 25.4,
+    markWIn:    35.11 / 25.4,            // as the artwork sets it
+    markLeftIn: 101 / 25.4,              // keeps the artwork's ~11.9mm right margin
+    markTopIn:  11.37 / 25.4,
 
     /* BACK — blank white. Decided 2026-09-14 after seeing it printed as a second
        branded side: one side only is cheaper and keeps the card's single message
@@ -354,7 +363,7 @@
        A branded insert is printed on one side of pre-cut stock, so there is no
        sheet to compose and no back to supply. */
     // One face, at the size Prodigi's insert postcard expects.
-    insertPx: { w: 1240, h: 1748 },   // 105 x 148mm at 300 DPI
+    insertPx: { w: 1748, h: 1240 },   // 148 x 105mm at 300 DPI
   };
   const FACES = ['front'];   // an insert is printed on one side
 
