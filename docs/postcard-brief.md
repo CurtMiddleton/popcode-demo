@@ -42,8 +42,13 @@ bitten by that more than once.
 
 ## The card — settled
 
-**One side only.** Nothing hidden, the URL always faces up in the box, cheaper
-to print.
+**Not folded.** Nothing hidden, the URL on the outside, cheaper to print.
+
+**A back was added 2026-09-14** (mocked, not yet approved). The "one side only"
+reasoning above was an argument against a *folded* card and still holds — but it
+never addressed blank-back versus printed-back. A one-sided card lands
+blank-side-up in the parcel **half the time**, and a blank white rectangle beside
+a fine-art print reads as unfinished. See "The back" below.
 
 > ## Scan & Play
 >
@@ -222,6 +227,36 @@ Two things this caught that guessing would not have:
 
 Verified by rendering at 300 DPI and diffing against the PDF: mean difference
 **1.57/255**, with the remainder confined to glyph antialiasing edges.
+
+## The back — mocked 2026-09-14, NOT yet approved
+
+Same gradient ground, wordmark centred, and one sentence:
+
+> **No app to download. Works on any phone.**
+
+**Why that sentence and no other.** People assume AR needs an app, and that
+assumption sits between opening the box and actually scanning. It can't go on
+the front without breaking the two-step structure the headline is built on, and
+the back is the only place it fits. Everything else considered — what Popcode
+is, troubleshooting, a repeated URL — is either redundant or undermines the
+front.
+
+**No Popcode symbol here, deliberately.** The symbol marks a photo as
+scannable, but you scan the *photo*, not the mark (see the 2026-09-02 wording
+fix in `order.html`). Showing it unexplained implies otherwise; explaining it
+takes a second sentence, which is exactly what this side is not for.
+
+**No QR** — the back is where that temptation lives, and it would contradict the
+positioning pillar.
+
+### OPEN: "Works on any phone" may overclaim
+
+Popcode needs a reasonably modern mobile browser with camera access, and the
+session notes record real trouble on iPhone XR / iOS 16 (video freezing on first
+play, 2026-06-10). Printed on a card in a box, that claim can't be hot-fixed.
+The "No app to download" half is both accurate and the valuable half. If the
+claim looks too strong, swap the second sentence for **"It opens in your
+browser."** — same reassurance, nothing to walk back.
 
 ### Settled after the artwork
 

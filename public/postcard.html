@@ -71,7 +71,9 @@
   .pc-bar strong { font-weight: 600; color: var(--bar-strong); }
   .pc-bar .dim { color: var(--bar-dim); }
   .pc-bar label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
-  .pc-stage { padding: 40px 16px 80px; display: flex; justify-content: center; }
+  .pc-stage { padding: 40px 16px 80px; display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; align-items: flex-start; }
+  .pc-slot { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 0; }
+  .pc-slot figcaption { font-size: 12px; color: var(--bar-dim); letter-spacing: .06em; text-transform: uppercase; }
   .pc-zoom { transform-origin: top left; }
 
   /* ── The card ──────────────────────────────────────────────────── */
@@ -117,6 +119,20 @@
     font-weight: 700;
     font-size: var(--copy-size);
     line-height: var(--copy-lead);
+    color: #fff;
+    text-align: center;
+  }
+
+  /* Back: one centred line, wordmark above it. */
+  .pc-back-line {
+    position: absolute;
+    left: 0; right: 0;
+    top: var(--back-line-top);
+    margin: 0;
+    font-family: 'FilsonPro', 'Inter', system-ui, sans-serif;
+    font-weight: 700;
+    font-size: var(--back-line-size);
+    line-height: 1.3;
     color: #fff;
     text-align: center;
   }
@@ -202,6 +218,21 @@ const CARD = {
   markLeftIn: 4.13333,
   markTopIn:  0.4083,
 
+  /* BACK. Same gradient ground so the card reads as branded whichever way up it
+     lands in the parcel — a one-sided card shows a blank white back half the
+     time, which is the whole reason this side exists.
+
+     One sentence, and no Popcode symbol: the symbol marks the photo as
+     scannable but you scan the PHOTO, not the mark, and showing it here
+     unexplained would imply otherwise. Explaining it would take a second
+     sentence, which is exactly what this side is not for. */
+  back: {
+    markWIn:   1.10,    // smaller than the front's — this side is the quiet one
+    markTopIn: 1.42,
+    linePt:    12,      // alone on a 6×4 field, so a touch above the front's 11pt
+    lineBaseIn: 2.26,
+  },
+
   cyan: '#00aeef',    // the ampersand — sampled from the PDF text span
 
   /* Background: axial shading (ShadingType 2) lifted from the PDF.
@@ -237,6 +268,11 @@ const CARD = {
 const COPY = {
   head: { scan: 'Scan', amp: '&', play: 'Play' },
   line: (slug) => [`Go to popcode.app/${slug}`, 'on your phone and hit Scan image.'],
+
+  /* The back's one job: kill the assumption that AR needs an app, which is the
+     main thing between opening the box and actually scanning. It can't go on
+     the front without breaking the two-step structure the headline is built on. */
+  back: 'No app to download. Works on any phone.',
 };
 
 /**
@@ -283,17 +319,19 @@ function artGradient(wIn, hIn) {
 }
 
 /**
- * Build one card at real print dimensions.
+ * Build one card face at real print dimensions.
  * @param {object} o
  * @param {string} o.slug      the per-order slug — the whole reason this card exists
+ * @param {'front'|'back'} [o.side]
  * @param {boolean} [o.guides] draw trim/safe guides (screen only, never for print)
  */
 function buildPostcard(o) {
+  const side = o.side || 'front';
   const wIn = CARD.wIn, hIn = CARD.hIn;
   const bleedW = wIn + CARD.bleedIn * 2, bleedH = hIn + CARD.bleedIn * 2;
 
   const el = document.createElement('div');
-  el.className = 'pc-card' + (o.guides ? '' : ' no-guides');
+  el.className = 'pc-card pc-' + side + (o.guides ? '' : ' no-guides');
   el.style.cssText = [
     `--w:${wIn}in`, `--h:${hIn}in`,
     `--bleed:${CARD.bleedIn}in`, `--margin:${CARD.marginIn}in`,
@@ -302,24 +340,37 @@ function buildPostcard(o) {
     `--head-size:${CARD.headSizePt}pt`,
     `--copy-size:${CARD.copySizePt}pt`, `--copy-lead:${CARD.copyLeadPt}pt`,
     `--copy-top:${(CARD.copyBaseIn - CARD.copySizePt * 0.72 / 72).toFixed(4)}in`,
-    `--mark-w:${CARD.markWIn}in`,
-    `--mark-left:${CARD.markLeftIn}in`, `--mark-top:${CARD.markTopIn}in`,
+    `--mark-w:${(side === 'back' ? CARD.back.markWIn : CARD.markWIn)}in`,
+    // Centred by computed offset rather than a transform: html2canvas is
+    // unreliable with transformed <img> elements (see the 2026-07-09 notes).
+    `--mark-left:${(side === 'back'
+      ? (wIn - CARD.back.markWIn) / 2
+      : CARD.markLeftIn).toFixed(5)}in`,
+    `--mark-top:${(side === 'back' ? CARD.back.markTopIn : CARD.markTopIn)}in`,
+    `--back-line-size:${CARD.back.linePt}pt`,
+    `--back-line-top:${(CARD.back.lineBaseIn - CARD.back.linePt * 0.72 / 72).toFixed(4)}in`,
   ].join(';');
-
-  const [l1, l2] = COPY.line(o.slug);
-
-  const runs = CARD.headRuns.map((r) =>
-    `<span class="pc-run pc-${r.key}" data-run="${r.key}"`
-    + ` style="left:${r.leftIn}in;top:${(r.baseIn - CARD.headSizePt * 0.72 / 72).toFixed(4)}in"`
-    + `>${COPY.head[r.key]}</span>`).join('');
 
   const trim = document.createElement('div');
   trim.className = 'pc-trim';
-  trim.innerHTML = `
-    <h1 class="pc-head">${runs}</h1>
-    <p class="pc-copy">${escapeHtml(l1)}<br>${escapeHtml(l2)}</p>
-    <img class="pc-mark" src="/assets/Popcode_wordmark.rev.png" alt="Popcode">
-  `;
+
+  if (side === 'back') {
+    trim.innerHTML = `
+      <img class="pc-mark" src="/assets/Popcode_wordmark.rev.png" alt="Popcode">
+      <p class="pc-back-line">${escapeHtml(COPY.back)}</p>
+    `;
+  } else {
+    const [l1, l2] = COPY.line(o.slug);
+    const runs = CARD.headRuns.map((r) =>
+      `<span class="pc-run pc-${r.key}" data-run="${r.key}"`
+      + ` style="left:${r.leftIn}in;top:${(r.baseIn - CARD.headSizePt * 0.72 / 72).toFixed(4)}in"`
+      + `>${COPY.head[r.key]}</span>`).join('');
+    trim.innerHTML = `
+      <h1 class="pc-head">${runs}</h1>
+      <p class="pc-copy">${escapeHtml(l1)}<br>${escapeHtml(l2)}</p>
+      <img class="pc-mark" src="/assets/Popcode_wordmark.rev.png" alt="Popcode">
+    `;
+  }
   el.appendChild(trim);
 
   const guides = document.createElement('div');
@@ -359,6 +410,7 @@ function setBaselines(card) {
   // Baselines are stated from the TRIM edge; .pc-trim is that box.
   CARD.headRuns.forEach((r) => place(`.pc-${r.key}`, r.baseIn));
   place('.pc-copy', CARD.copyBaseIn);
+  place('.pc-back-line', CARD.back.lineBaseIn);
 }
 
 /** The slug is order data, so it is escaped even though slugs are constrained. */
@@ -370,27 +422,43 @@ function escapeHtml(s) {
 /* ── Artboard ─────────────────────────────────────────────────────── */
 const qs = new URLSearchParams(location.search);
 const SLUG = qs.get('slug') || 'Max20';
+/* ?side=front renders the front alone, for capturing a single print asset. */
+const SIDES = qs.has('side') ? [qs.get('side')] : ['front', 'back'];
 
 function renderStage() {
   const stage = document.getElementById('pc-stage');
   const zoom = +document.getElementById('pc-z').value / 100;
-
-  const card = buildPostcard({ slug: SLUG, guides: document.getElementById('pc-g').checked });
-  if (document.getElementById('pc-s').checked) card.classList.add('pc-shadow');
-
-  const zoomBox = document.createElement('div');
-  zoomBox.className = 'pc-zoom';
-  zoomBox.style.transform = `scale(${zoom})`;
-  zoomBox.appendChild(card);
-
-  const hold = document.createElement('div');
-  hold.style.width  = ((CARD.wIn + CARD.bleedIn * 2) * 96 * zoom) + 'px';
-  hold.style.height = ((CARD.hIn + CARD.bleedIn * 2) * 96 * zoom) + 'px';
-  hold.appendChild(zoomBox);
+  const guides = document.getElementById('pc-g').checked;
+  const shadow = document.getElementById('pc-s').checked;
 
   stage.innerHTML = '';
-  stage.appendChild(hold);
-  setBaselines(card);
+  const built = [];
+
+  SIDES.forEach((side) => {
+    const card = buildPostcard({ slug: SLUG, side, guides });
+    if (shadow) card.classList.add('pc-shadow');
+
+    const zoomBox = document.createElement('div');
+    zoomBox.className = 'pc-zoom';
+    zoomBox.style.transform = `scale(${zoom})`;
+    zoomBox.appendChild(card);
+
+    const hold = document.createElement('div');
+    hold.style.width  = ((CARD.wIn + CARD.bleedIn * 2) * 96 * zoom) + 'px';
+    hold.style.height = ((CARD.hIn + CARD.bleedIn * 2) * 96 * zoom) + 'px';
+    hold.appendChild(zoomBox);
+
+    const fig = document.createElement('figure');
+    fig.className = 'pc-slot';
+    fig.appendChild(hold);
+    const cap = document.createElement('figcaption');
+    cap.textContent = side === 'back' ? 'Back' : 'Front';
+    fig.appendChild(cap);
+    stage.appendChild(fig);
+    built.push(card);
+  });
+
+  built.forEach(setBaselines);
 
   document.getElementById('pc-meta').textContent =
     `trim ${CARD.wIn}×${CARD.hIn}in · bleed ${CARD.bleedIn}in · `
@@ -402,8 +470,10 @@ function renderStage() {
 let zoomTouched = false;
 function autoZoom() {
   if (zoomTouched) return;
-  const avail = Math.min(window.innerWidth - 48, 980);
-  const z = Math.round(Math.max(40, Math.min(260, (avail / ((CARD.wIn + CARD.bleedIn * 2) * 96)) * 100)));
+  const cardW = (CARD.wIn + CARD.bleedIn * 2) * 96;
+  const wide = window.innerWidth - 48 >= cardW * 2 + 40;
+  const avail = Math.min(window.innerWidth - 48, 1180) / (wide && SIDES.length > 1 ? 2 : 1);
+  const z = Math.round(Math.max(40, Math.min(260, (avail / cardW) * 100)));
   document.getElementById('pc-z').value = z;
 }
 
