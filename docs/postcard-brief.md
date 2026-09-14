@@ -186,13 +186,69 @@ The page says front and back are both customisable, which is exactly the
 envelope), which would mean one print area and no white-back asset at all. That
 is a guess and must be confirmed, not assumed.
 
+## The artwork — SETTLED 2026-09-14
+
+**`PC_ProductPostcard.01.pdf`, 6×4 landscape, is the approved design.** The
+earlier white-ground exploration is superseded. `public/postcard.html` now
+reproduces it and is the production renderer.
+
+What changed versus the first pass: a **full-bleed brand gradient** instead of
+white, white type throughout, the headline **left-aligned over two lines with
+the ampersand in cyan**, the wordmark **top-right** as the anchor, and the
+Popcode symbol dropped entirely. The copy is set **all bold**, with the line
+break authored after the URL so the link never splits.
+
+### Every number is measured, not eyeballed
+
+The PDF is the spec, and the renderer's constants cite it:
+
+- **Trim 6×4in and bleed 0.125in** come from the PDF's own TrimBox/BleedBox —
+  so the bleed question in "Also needs bleed" below is answered for the artwork,
+  though the SKU's requirement still needs confirming.
+- **Type** from the text matrices: CooperBT-Light 56.0701pt on 46pt leading with
+  `-0.02 Tc` tracking; FilsonPro Bold 11/14pt centred.
+- **The gradient** from the PDF's axial shading function (ShadingType 2) and its
+  pattern matrix — five stops, reproduced to within 1/255.
+
+Two things this caught that guessing would not have:
+
+- **"Play" is positioned, not flowed.** The artwork tightens the gap after the
+  ampersand by hand. Setting it as a literal space renders ~10pt too wide, so
+  each headline run carries its own position, exactly as the PDF draws it.
+- **Vertical placement is by baseline.** CSS positions a line box, whose
+  relation to the baseline depends on font metrics. The renderer measures that
+  offset from the live font instead of hard-coding it, so a font swap or a
+  failed webfont load can't silently drift the type a few points.
+
+Verified by rendering at 300 DPI and diffing against the PDF: mean difference
+**1.57/255**, with the remainder confined to glyph antialiasing edges.
+
+### Two things to decide
+
+1. **™ or ®.** The approved card uses **™**. The repo's `Popcode_logo.png` uses
+   **®** and is used across the whole app — nav, viewer, emails, book back
+   covers. These are different legal claims (® asserts a *registered* mark), so
+   they should not disagree by accident. The card ships with the ™ wordmark
+   extracted from the approved PDF (`public/assets/Popcode_wordmark.rev.png`);
+   if ® is correct, the card should change, and if ™ is correct, the rest of the
+   app should.
+2. **Filson Soft vs Filson Pro.** The artwork uses Filson **Soft** Bold; the repo
+   only has Filson **Pro**. Confirmed fine to use Pro, which is also what the
+   app itself uses. The PDF's embedded Filson Soft is a 25-glyph subset — only
+   the characters in that one sentence — so it could not have been reused
+   anyway, since the slug changes per order.
+
+### One deliberate difference from the PDF
+
+The PDF's gradient is clipped at x=21.479 while its bleed box starts at 21,
+leaving a ~0.5pt white sliver down the left and right edges. The renderer covers
+the full bleed. If that sliver reached press it would show as a white hairline
+after trimming.
+
 ## OPEN decisions
 
-- **Card size** — the artboard says **landscape**, and Prodigi's real sizes are
-  6×4" and 7×5". A 4×6 *portrait* is off the table on both counts: Prodigi
-  doesn't offer it in this family, and the copy can't fill it (at 4in wide the
-  headline caps near 38pt before "Scan & Play" wraps, leaving ~2in of dead
-  space). 6×4 composes well at 46pt; 7×5 is worth seeing before committing.
+- ~~**Card size**~~ — settled: **6×4 landscape**, matching the approved artwork
+  and Prodigi's own `GLOBAL-POST` sizing (which names these landscape-first).
 - **One card per order, or one per design?** The cart means one order can hold
   several designs with different URLs. Leaning: one card listing them all —
   cheaper, and it reads as a welcome note rather than a receipt.
