@@ -119,6 +119,39 @@ compared side by side before committing.
   substitute and the design will drift.
 - **Inter** comes from Google Fonts and is available anywhere.
 
+### Export — BUILT 2026-09-14
+
+`public/postcard.html` renders both faces at **300 DPI at bleed size
+(1875 × 1275px)** via html2canvas + jsPDF, lazy-loaded from cdnjs, same shape as
+`buildBookPrintPdf()` / `buildCalendarPrintPdf()`.
+
+- **`window.buildPostcardAssets(slug)`** is the production entry point —
+  `{ front: Blob, back: Blob, widthPx, heightPx, dpi }`. Upload to the
+  `experiences` bucket and attach each as its print area's asset, the same shape
+  the other single-image products already use. **PNG, not JPEG**: the card is a
+  smooth gradient, which is exactly what JPEG bands.
+- Toolbar buttons export either face or a two-page proof PDF. They disable
+  themselves inside an embedded view (an Artifact, a preview pane), where the
+  frame sandbox drops downloads silently — otherwise a click looks like nothing
+  happened.
+- Faces are captured from a fresh off-screen card at 1:1, never the artboard's
+  zoomed one: html2canvas and CSS transforms don't mix.
+
+**Verified against the approved PDF at 300 DPI**: every element within
+**0.96pt (0.34mm)**, gradient corners within 1/255, fully opaque, ~0.5s per pair.
+
+`assertFaceRendered()` fails the export loudly if a face comes back transparent
+or white. This card is almost entirely one CSS gradient and the repo's other
+print paths only ever captured solid fills and images, so gradient support was
+the one thing that could quietly turn the artwork into a blank rectangle — which
+would pass upload and checkout and only surface as a blank printed card.
+(It does render correctly; the guard is for future library changes.)
+
+**Sandbox note:** cdnjs IS reachable from the Claude Code sandbox via curl,
+contradicting the 2026-09-02 note. The browser can't use the sandbox proxy, so
+to test the export, `page.route` the cdnjs URLs to locally downloaded copies of
+the same bundles.
+
 ### Rendering precedent to copy
 
 `buildCalendarPrintPdf()` (`public/calendar.html:1780`) and
