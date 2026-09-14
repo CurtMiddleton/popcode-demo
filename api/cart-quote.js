@@ -30,15 +30,16 @@ export default async function handler(req, res) {
     const country = (address && address.countryCode) || destinationCountryCode;
     if (!country) return res.status(400).json({ error: 'Missing destinationCountryCode' });
 
-    const { normalizeLines, withCompanionCards, quoteCart, CartError } = await import('../lib/print/cart.mjs');
+    const { normalizeLines, quoteCart, CartError } = await import('../lib/print/cart.mjs');
     const { getProvider } = await import('../lib/print/providers/index.mjs');
 
     let priced;
     try {
       // The companion card is priced here too — it ships in the same parcel, so
       // leaving it out would quote less than checkout charges. No slug needed:
-      // Prodigi prices by SKU.
-      const lines = withCompanionCards(normalizeLines(items));
+      // The companion postcard is a branded insert, not a line item, so it
+      // never appears here — it adds nothing to the quote.
+      const lines = normalizeLines(items);
       priced = await quoteCart({
         lines,
         address: { ...(address || {}), countryCode: country },
@@ -55,6 +56,8 @@ export default async function handler(req, res) {
 
     res.status(200).json({
       total_minor: priced.totalMinor,
+      printing_minor: priced.printingMinor,
+      shipping_minor: priced.shippingMinor,
       currency: priced.currency,
       markup: MARKUP,
       // One group = one parcel, so the UI can say "ships in 2 parcels" honestly.

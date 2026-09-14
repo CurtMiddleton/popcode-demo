@@ -16,6 +16,9 @@
     <script src="/countries.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <style>
+      .cost-lines { display: grid; gap: 6px; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid rgba(0,0,0,.08); }
+      .cost-line { display: flex; justify-content: space-between; font-size: 15px; color: #5a564e; }
+      .cost-line span:last-child { font-variant-numeric: tabular-nums; color: #1a1a1a; }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { min-height:100vh; background:#f9f9f9; font-family:'Inter',sans-serif; color:#1a1a1a; display:flex; flex-direction:column; align-items:center; }
       #nav-overlay { display:none; position:fixed; inset:0; z-index:200; }
@@ -146,6 +149,10 @@
 
         <div class="card">
           <div class="totals">
+            <div class="cost-lines" id="cost-lines" style="display:none;">
+              <div class="cost-line"><span>Printing</span><span id="line-printing">—</span></div>
+              <div class="cost-line"><span>Shipping</span><span id="line-shipping">—</span></div>
+            </div>
             <div class="total-row">
               <div><div class="muted">Total</div><div class="price" id="total">—</div></div>
               <div class="muted" id="total-note">Getting price…</div>
@@ -309,6 +316,8 @@
         const mine = ++quoteToken;
         total.textContent = '—'; note.textContent = 'Getting price…';
         payBtn.disabled = true; priced = null;
+        const costLines = document.getElementById('cost-lines');
+        if (costLines) costLines.style.display = 'none';
 
         try {
           const addr = addressFromForm();
@@ -322,7 +331,17 @@
           if (mine !== quoteToken) return;   // a newer quote is already in flight
           priced = data;
           total.textContent = PopcodeCart.money(data.total_minor, data.currency);
-          note.textContent = 'Printing, shipping and taxes we collect are included.';
+          // Show what the money is for. On a small print, shipping is most of
+          // it — a single figure makes that look like an expensive print.
+          const lines = document.getElementById('cost-lines');
+          if (data.shipping_minor != null && data.printing_minor != null) {
+            document.getElementById('line-printing').textContent = PopcodeCart.money(data.printing_minor, data.currency);
+            document.getElementById('line-shipping').textContent = PopcodeCart.money(data.shipping_minor, data.currency);
+            lines.style.display = '';
+          } else {
+            lines.style.display = 'none';
+          }
+          note.textContent = 'Taxes we collect are included.';
           parcels.style.display = data.shipments > 1 ? 'block' : 'none';
           if (data.shipments > 1) {
             parcels.textContent = `These items are made in ${data.shipments} different workshops, so they arrive in ${data.shipments} parcels — shipping for each is already in the total.`;
