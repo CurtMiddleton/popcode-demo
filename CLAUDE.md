@@ -1597,3 +1597,79 @@ Both now early-return unless `eventCategory(e.event_type) === 'viewed'`. **Lesso
 - Consider `edit_project` / `edit_design` events if edits should be visible.
 - Fix the `cachedPrints` TDZ properly.
 - No backfill: creation events only exist from 2026-09-09 onward. The **funnel** is unaffected (it reads accounts/collections/orders), but the Activity Log's "Created" filter will look empty for anything older.
+
+### 2026-09-14 — "Will scanning get slower with thousands of popcodes?" — answered no, and fixed the funnel hole it exposed
+
+**Branch `claude/popcode-scanning-performance-hyk7z9`, commit `0e9ebfb`, fast-forwarded to `main` and verified live on popcode.app (~80s deploy). No PR.** One file: `public/view.html`. No schema, RLS, or env change. Started as a scaling worry, ended as instrumentation work, with a detour through real scan data.
+
+#### The question and the answer
+
+*"When there are thousands of popcodes out there will scanning get slower or less reliable?"* **Globally, no — and the architecture is why.** A viewer loads exactly ONE project's `.mind` (`view.html:688`, via `/api/collection?slug=`, an indexed single-row lookup). Nothing on the device ever compares against another project's targets. 50 popcodes or 5 million, the per-scan work is identical. Global growth costs **money** (storage + egress) and eventually a DB index check — never milliseconds. Say this confidently; it recurs.
+
+**Per project, the code does scale linearly with photos-in-that-project.** Decoded from the vendored matcher worker (see technique below), the worker's `"match"` handler is:
+
+```js
+for (let f = 0; f < targetIndexes.length; f++) {
+  const g = targetIndexes[f];
+  const { keyframeIndex } = matchDetection(matchingDataList[g], featurePoints);
+  if (keyframeIndex !== -1) { ...estimate...; break; }
+}
+```
+
+and the caller rebuilds `targetIndexes` **every frame** as *every target not currently tracking*. Three real consequences: (1) **a miss costs the full loop**, and misses are exactly what happens while the viewer is still hunting for the photo — so the part that feels slow scales worst; (2) it is **first-acceptable, not best** — threshold + `break`, no argmax, so in a book of similar-looking pages an earlier page can win and play the wrong video; (3) **page 1 is cheaper than page 22** (index order). Plus the `.mind` download itself is linear — one real project's `target.mind` measured **9.6 MB** (from the 2026-09-04 storage audit).
+
+**The `@handle`/CLIP path is the only thing that scales with library size** — scoped per creator with an ivfflat index, so speed is fine; the exposure is the **accuracy margin** (matches 0.62–0.72 vs noise ceiling 0.595, a 0.025 gap), which tightens as a creator's library grows.
+
+#### What the real data said — the theory did NOT show up
+
+Ran a lock-rate-by-project-size query against prod (`scan_open` → next `target_found` for the same slug+IP within 5 min, bucketed by `count(distinct target_index)`):
+
+| bucket | opens | locked | lock rate | avg secs to lock |
+|---|---|---|---|---|
+| 1 photo | 316 | 147 | 46.5% | 32.6 |
+| 2–5 | 116 | 67 | 57.8% | 12.9 |
+| 6–15 | 75 | 37 | 49.3% | 9.9 |
+| 16+ | 135 | 75 | 55.6% | 7.4 |
+
+**Lock rate has no trend** (46–58%, biggest books at 55.6% — *above* single photos). **Time-to-lock slopes hard the WRONG way** — big books lock 4× faster. Almost certainly confounded by intent: someone opening a 16-page book popcode has the book in their hands; a single-photo open is often a test link with no print nearby. The millisecond-scale matcher effect is buried under tens-of-seconds of human behaviour. **Conclusion: don't build anything for it** — no target reordering, no book-size caps.
+
+**Then the user said: "I'm just about the only one using popcode."** Which reframes the whole ~50%: it is not a product metric, it is a log of him testing his own links. Worth asking about user volume EARLY next time before mining a behavioural metric.
+
+#### The real finding — the viewer funnel had a hole exactly at the drop-off
+
+`scan_open` fires at **page load** (`view.html:709`), before any tap. The next recorded event is `target_found`, which needs a successful match. Four completely different outcomes were landing in that gap identically: never tapped Scan; tapped and **refused** the camera; tapped and the camera **failed**; pointed at a photo and it **genuinely didn't match**. Only the last is a scanning problem, and they need different fixes. `handleStartTap` logged nothing, and the `arError` path (`view.html:657`) reached the error screen silently.
+
+**Shipped three events:** `scan_start` (in `handleStartTap`, every camera start incl. rescans — read it as a funnel step by counting *sessions with ≥1*, not events), `camera_denied`, and `camera_error` (both on the `arError` path).
+
+**The non-obvious part — MindAR discards the real error.** Both `arError` emit sites in the vendored bundle are `emit("arError",{error:"VIDEO_FAIL"})`; the actual `DOMException` only reaches `console.log`. So a refusal and a broken camera are indistinguishable downstream. Fix: **wrap `navigator.mediaDevices.getUserMedia`** in view.html to stash the rejection (`lastCameraError`), then read `.name === 'NotAllowedError'` in the arError handler. Pass-through — original promise returned, rejection re-thrown, cleared on success. **Deliberately NOT a pre-flight `getUserMedia` call of our own — opening a second camera stream is the root cause of the iOS media-session bugs this viewer already works around.** Also verified `arError` is *only* ever emitted for camera failure (both sites are VIDEO_FAIL), so the `camera_*` naming can't mislabel a `.mind` load failure.
+
+**Checked before shipping** (per the 2026-09-09 lesson about adding event classes to a shared table): every `analytics.html` aggregate filters on a *named* `event_type`, so the new types distort no existing number; `eventCategory()` files them under `viewed`, which is correct.
+
+#### Reading the new funnel
+
+```sql
+select count(*) filter (where event_type = 'scan_open')     as opened,
+       count(*) filter (where event_type = 'scan_start')    as started_camera,
+       count(*) filter (where event_type = 'camera_denied') as refused_camera,
+       count(*) filter (where event_type = 'camera_error')  as camera_failed,
+       count(*) filter (where event_type = 'target_found')  as found_photo,
+       count(*) filter (where event_type in ('video_play','audio_play')) as media_played
+from scan_events where created_at > now() - interval '30 days';
+```
+
+`opened → started_camera` is the drop that was previously invisible. `scan_start` counts rescans so it can legitimately exceed `opened`.
+
+#### Techniques worth reusing
+
+- **Reading MindAR's worker source.** It is NOT a `data:` URI you can regex for — it is a long base64 *string literal* passed to `new Worker("data:application/javascript;base64,"+cI)` / `Blob([atob(TI)])`. Extract with `re.findall(r'"([A-Za-z0-9+/]{4000,}={0,2})"', bundle)` then `base64.b64decode`. That is how the match loop above was read.
+- **Headless testing `view.html` in this sandbox** (worked cleanly, 10 assertions, 0 page errors): `playwright-core` in the **scratchpad only** (`node_modules` is tracked in this repo), chromium `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, `cd public && nohup python3 -m http.server <port> &`. `page.route` to stub `@supabase/supabase-js`, `/api/collection` (fake collection JSON), `/api/log-event` (capture `event_type`), abort sentry/fonts. **Simulate the camera with `page.addInitScript` redefining `navigator.mediaDevices`** — the page wraps whatever it finds, exactly as it wraps the real one; reject with `NotAllowedError` / `NotFoundError`, or resolve with a `canvas.captureStream()` for the success path.
+- **TWO gotchas that cost a few minutes each:** (1) `#start-btn` is **hidden on non-touch devices** by `desktop-note.js` (it gates on `(any-pointer: coarse)`), so headless always hides it — append **`&desktopnote=0`** to force it visible. (2) `document.querySelector('video')` grabs the page's own `#full-video` playback element, not MindAR's camera video — assert with `[...document.querySelectorAll('video')].some(v => v.srcObject)`.
+- A fake `.mind` fixture (a 404 page) throws `Extra N of M byte(s) found at buffer[1]` from the msgpack decoder. That is the fixture, not product code.
+- Always `node --check` every extracted inline `<script>` after editing `view.html` (the 2026-04-12 white-screen SyntaxError failure mode). One block, ~34.7k chars.
+
+#### Still open
+
+- **`scan.html` logging is a deliberate no-op** (`async function logEvent() {}`, `scan.html:584`) from the staged handle work — the `@handle` scanner records **nothing at all**. Deliberately not touched here (adding calls would be dead code); worth turning on before that path gets real use, then mirroring these three events into it.
+- No analytics tile for the new funnel — Activity Log shows the rows, nothing summarises them. Left until real scans exist to shape it against.
+- No backfill: the three events exist only from 2026-09-14 onward.
+- The "is the matcher really linear in practice" question was never isolated. The clean test that cancels out user intent: within ONE big book, does time-to-lock correlate with `target_index` (checked in order, so page 20 should lag page 1)? One query, never run.
