@@ -1600,15 +1600,15 @@ Both now early-return unless `eventCategory(e.event_type) === 'viewed'`. **Lesso
 
 ### 2026-09-15 — Companion postcard → branded insert, shipping as its own line, smaller print sizes, two mobile-layout bugs
 
-**Branch `claude/eloquent-turing-7vwk8u`. Five fast-forward merges to `main` across the session: `08bfba8`, `1e8f3fc`, `933320d` (plus `3c4d8fe` = PR #66, the emergency disable). All live in prod.** Long session that began with building the companion postcard from `docs/postcard-brief.md` and ended in mobile layout forensics. One prod-money bug found and killed, one code review that caught six real defects, and two mobile bugs that had been shipping for a while.
+**Branch `claude/eloquent-turing-7vwk8u`. Fast-forward merges to `main` across the session: `08bfba8`, `1e8f3fc`, `933320d`, `35723df`, `cc87dd5` (plus `3c4d8fe` = PR #66, the emergency disable). All live in prod.** Long session: built the companion postcard from `docs/postcard-brief.md`, detoured through mobile layout forensics, and ended with the insert switched on for every Prodigi product. One prod-money bug found and killed, one code review that caught six real defects, and two mobile bugs that had been shipping for a while.
 
 #### THE $76 BUG (the important one — PR #66, merged first)
 The companion postcard was originally a **second line item** (`GLOBAL-POST-MOH-6X4-BLA`). A real order quoted **$76**. Cause: **that card SKU is fulfilled in the UK/EU while the prints were fulfilled in the US**, so Prodigi split the order into two shipments and charged a second transatlantic parcel — for a postcard. Prodigi groups a shipment by `labCode`; **two SKUs in one order are only one parcel if the same lab makes both.** Disabled immediately (PR #66) before anything else.
 
 **The rebuild: the card is no longer a line item at all.** Prodigi supports per-order **branding** (`branding: { postcard: { url } }`) — the fulfilling lab prints and inserts the card *in the same box*. No second SKU, no second parcel, no line on the quote. This is the right shape for anything that ships *with* a product.
-- `COMPANION_INSERT_FOR` = the set of product types that get one (print/framed/framedcanvas/canvas/acrylic/tile).
+- `COMPANION_INSERT_FOR` = the set of product types that get one. Started as the wall-art set (print/framed/framedcanvas/canvas/acrylic/tile); **later in the session the user extended it to books and calendars too** — see "Turned on" below.
 - `companionInsertCollectionId(lines)` → a single collection id or null; `companionInsertPath(slug)` → `{slug}/companion-card.png`; `companionInsertBranding(url)`.
-- **`COMPANION_INSERT.enabled` is still `false`.** Turning it on is a deliberate separate decision. Nothing about it reaches a customer today.
+- **`COMPANION_INSERT.enabled` was `false` for most of the session**, then flipped on at the end — see "Turned on" below.
 - **Migration `supabase/migrations/2026-09-14-print-orders-branding.sql`** — `alter table print_orders add column if not exists branding jsonb;`. **RUN IN PROD this session.**
 - **DEPLOY ORDER MATTERS AND IS THE OPPOSITE OF THE 2026-09-04 CASE: SQL FIRST, THEN MERGE.** `create-checkout` puts `branding` in the `print_orders` insert **unconditionally** (`api/create-checkout.js:179`) — it's in the payload as `null` even with the feature disabled. PostgREST rejects the whole insert if the column is missing, so merging first takes **checkout down for every customer**. The feature flag does not protect you. Adding a nullable column nothing reads yet is completely safe, so SQL-first has no window at all.
 
@@ -1656,6 +1656,16 @@ User reported "my popcodes now 2 lines and trash icon dropping". **I initially b
 
 **CSS gotcha that cost a round trip:** the gutter override lost to `.collections-list { padding: 0 28px }` declared *further down the file*. Media queries add no specificity — **an equally specific rule only wins from later in the source**, so that block is deliberately parked at the end of the `<style>`, with a comment saying so.
 
+#### Turned on, and widened to every Prodigi product (`35723df`, `cc87dd5`)
+At the end of the session the user said to flip it on — "i'm the only one ordering" — so the first real order is the proof rather than a staging step.
+
+- **`enabled: true`.** Low blast radius by construction: an insert is not part of the quote and the fulfilling lab puts it in the same box, so it cannot repeat the line item's second-parcel mistake or move a price. `create-checkout` HEAD-checks the artwork first, so a slug whose card never uploaded ships without one instead of failing after payment.
+- **Then extended to books and calendars.** The user's reasoning: a back cover is easy to miss, the card costs nothing extra, so reinforce the URL everywhere. `COMPANION_INSERT_FOR` is now print/framed/framedcanvas/canvas/acrylic/tile/**book**/**calendar**.
+- **Adding them to the set was NOT sufficient, and this is the trap.** `book.html` and `calendar.html` check out directly and did not load `postcard-render.js`, so no card would ever have been built or uploaded — and the HEAD guard would have silently shipped them cardless with no error anywhere. Both now load the renderer and upload before checkout, best-effort, matching `cart.html` / `order.html`. **Any future checkout surface needs the same two things: the script tag AND the upload.**
+- **`boardbook` is deliberately EXCLUDED and must stay that way.** It is the one Printify product, and `providers/printify.mjs` ignores `branding` entirely — there is no insert mechanism on that side. Listing it would generate and upload a card nobody prints. If board books should carry the URL it has to go into the artwork the builder produces. A comment at the set says so.
+- Before putting the renderer on two more pages I checked it couldn't leak: every rule in its injected CSS is `.pc-*` scoped and its two `@font-face` families (CooperBT, FilsonPro) are ones both pages already load. Smoke-tested book/calendar/cart/order — renderer present, nothing visible added, zero page errors.
+- **Verification limit worth knowing:** `lib/print/catalog.mjs` is a server module, never served to a browser, and `create-checkout` needs auth — so the flag state cannot be confirmed by fetching prod. **The first real order is the check:** the `print_orders` row should carry `branding = {"postcard":{"url":"…/companion-card.png"}}`, and the Prodigi proof image settles the orientation question.
+
 #### LESSONS
 - **A `200` on a path that already existed proves nothing about your deploy.** I checked `/postcard-render.js` after merging, got 200, and nearly called it done — prod was serving the *old* copy of that file from the earlier disable PR. **Poll for a string that only exists in the new build** (I used the changed `popcode-insert-` filename). Byte-count comparison against `git show <sha>:<path>` is the quick way to tell which commit prod is actually on.
 - **When a user says a page looks wrong on their phone, measure before theorising.** I burned a chunk of this session on a zoom hypothesis. What actually settled it: fetch prod's copy of the page, `diff` it against local (byte-identical → the page isn't the variable), then sweep viewport widths 320→430 in headless Chromium measuring `scrollWidth` vs `clientWidth` and the computed geometry of the specific elements. The breakpoint falls out immediately.
@@ -1664,8 +1674,9 @@ User reported "my popcodes now 2 lines and trash icon dropping". **I initially b
 - **Verify every new Prodigi SKU.** One of seven was fictitious, and a bad SKU now surfaces as *"we can't ship this size to X"* (from the 2026-09-02 unservable classification) — misleading rather than obviously broken.
 
 #### STATE AT END OF SESSION
-- `main` = `933320d`. Branch and main identical.
-- **`COMPANION_INSERT.enabled = false`** — the insert ships to nobody until that flips.
+- `main` = `cc87dd5` (then `39e20c8`/later for these notes). Branch and main identical.
+- **`COMPANION_INSERT.enabled = true`**, for print/framed/framedcanvas/canvas/acrylic/tile/book/calendar. Board books excluded (Printify has no insert mechanism).
+- **No real order has carried a card yet** — the first one proves the whole chain (upload → HEAD check → Prodigi branding) and settles orientation.
 - **Insert orientation unconfirmed** — settle it from the first real order's proof image.
 - **Two pre-existing horizontal-overflow bugs found and NOT fixed** (both confirmed identical before/after my changes, so neither is a regression): `order.html` scrolls sideways ~16px on phones (`.detail` grid children need `min-width: 0` — grid items default to `min-width: auto`); `manage.html` scrolls sideways at ~768px tablet width. Offered both, user hasn't picked them up.
 - Small-size pricing (shipping-dominated) still open as a business decision.
