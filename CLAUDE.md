@@ -1597,3 +1597,75 @@ Both now early-return unless `eventCategory(e.event_type) === 'viewed'`. **Lesso
 - Consider `edit_project` / `edit_design` events if edits should be visible.
 - Fix the `cachedPrints` TDZ properly.
 - No backfill: creation events only exist from 2026-09-09 onward. The **funnel** is unaffected (it reads accounts/collections/orders), but the Activity Log's "Created" filter will look empty for anything older.
+
+### 2026-09-15 — Companion postcard → branded insert, shipping as its own line, smaller print sizes, two mobile-layout bugs
+
+**Branch `claude/eloquent-turing-7vwk8u`. Five fast-forward merges to `main` across the session: `08bfba8`, `1e8f3fc`, `933320d` (plus `3c4d8fe` = PR #66, the emergency disable). All live in prod.** Long session that began with building the companion postcard from `docs/postcard-brief.md` and ended in mobile layout forensics. One prod-money bug found and killed, one code review that caught six real defects, and two mobile bugs that had been shipping for a while.
+
+#### THE $76 BUG (the important one — PR #66, merged first)
+The companion postcard was originally a **second line item** (`GLOBAL-POST-MOH-6X4-BLA`). A real order quoted **$76**. Cause: **that card SKU is fulfilled in the UK/EU while the prints were fulfilled in the US**, so Prodigi split the order into two shipments and charged a second transatlantic parcel — for a postcard. Prodigi groups a shipment by `labCode`; **two SKUs in one order are only one parcel if the same lab makes both.** Disabled immediately (PR #66) before anything else.
+
+**The rebuild: the card is no longer a line item at all.** Prodigi supports per-order **branding** (`branding: { postcard: { url } }`) — the fulfilling lab prints and inserts the card *in the same box*. No second SKU, no second parcel, no line on the quote. This is the right shape for anything that ships *with* a product.
+- `COMPANION_INSERT_FOR` = the set of product types that get one (print/framed/framedcanvas/canvas/acrylic/tile).
+- `companionInsertCollectionId(lines)` → a single collection id or null; `companionInsertPath(slug)` → `{slug}/companion-card.png`; `companionInsertBranding(url)`.
+- **`COMPANION_INSERT.enabled` is still `false`.** Turning it on is a deliberate separate decision. Nothing about it reaches a customer today.
+- **Migration `supabase/migrations/2026-09-14-print-orders-branding.sql`** — `alter table print_orders add column if not exists branding jsonb;`. **RUN IN PROD this session.**
+- **DEPLOY ORDER MATTERS AND IS THE OPPOSITE OF THE 2026-09-04 CASE: SQL FIRST, THEN MERGE.** `create-checkout` puts `branding` in the `print_orders` insert **unconditionally** (`api/create-checkout.js:179`) — it's in the payload as `null` even with the feature disabled. PostgREST rejects the whole insert if the column is missing, so merging first takes **checkout down for every customer**. The feature flag does not protect you. Adding a nullable column nothing reads yet is completely safe, so SQL-first has no window at all.
+
+#### `public/postcard-render.js` (NEW) — one module for design AND export
+Deliberate departure from the repo's inline-duplication idiom, and worth keeping: the artboard (`postcard.html`) and the checkout upload **must not drift**, because a drifted card prints wrong on a physical object. Verified byte-identical to the pre-extraction export before committing. Exports `window.PopcodePostcard = { buildInsert, CARD, COPY, PRINT, FACES, buildCard, setBaselines, renderFace, buildAssets, buildProofPdf, downloadFace, artGradient }`.
+- **A6 LANDSCAPE, 148 × 105mm, `bleedIn: 0`** — pre-cut stock, the file edge IS the card edge. Prodigi states the size in *portrait* notation ("A6, 105 × 148mm") and I built portrait from it first; the user caught it ("the postcard needs to be landscape like tyhe design"). **ORIENTATION IS STILL UNCONFIRMED — check the proof image on the first real order and flip if Prodigi rotates or crops it.**
+- `setBaselines()` measures the font's baseline offset with a zero-size inline-block probe, because **CSS positions a line box, not a baseline**, and the artwork's geometry is baseline-relative.
+- Verified against the approved PDF at 300 DPI: mean difference 1.57/255, every element within 0.96pt.
+
+#### Shipping as its own line at checkout (user asked: "so the customer knows what they are paying for")
+`quoteCart` now returns `{ groups, totalMinor, currency, shippingMinor, printingMinor }`, `sumQuoteMinor` returns `{ totalMinor, itemsMinor, shippingMinor, currency }`, and `cart.html` shows the split. Shipping is rounded to whole dollars and clamped so it can never exceed the total minus $1.
+
+#### `/code-review high` over the branch — SIX findings, all real, all fixed (`08bfba8`)
+Ran it before merging because the branch touches the quote path, and that's the thing that takes checkout down when it's wrong. Worth noting **every one was a genuine defect** — this is the review that earned its keep:
+1. **`renderFace(FACES[i], slug)`** — the signature had changed to `(slug)` when the card went single-sided, so the proof PDF printed the literal string `popcode.app/front`.
+2. **Proof PDF still `orientation: 'portrait'`** after the landscape flip. jsPDF reorders the format array to match the orientation, so it cropped ~a third off the right edge.
+3. **`branding.postcard.url` named without checking the file exists.** The upload is best-effort, and **Prodigi fetches that URL server-side — a 404 becomes a failed order AFTER the customer has paid.** Now HEAD-checked in `create-checkout` (same guard `create-montage.js` uses on a soundtrack URL); missing artwork just means no card.
+4. **`order.html` never uploaded the insert at all** — it checks out directly, so a buy-now order could only ever have named a missing file. (My own miss: I added the upload to `cart.html` and forgot the second path.) Also fixed a wrong state reference there: `state.sourceSlug` → `state.selectedPhoto && state.selectedPhoto.slug`.
+5. **Printify groups reported no shipping**, so a mixed cart showed the whole carrier cost as printing and "Shipping $0.00" — directly undercutting the line-item split. `printify.mjs` now tracks and returns `shippingMinor`. Verified end-to-end: Prodigi + Printify cart → Printing $65.00 / Shipping $21.00 / Total $86.00, both carriers' shipping in the shipping line, parts summing to the total.
+6. Stale contradictory comment in `cart-quote.js`.
+
+**Near-misses from earlier in the same session, worth remembering as a class:**
+- An `@import` regex `[^;]+;` **broke on the semicolons inside a Google Fonts URL** and silently killed CooperBT. Caught by comparing glyph widths, not by looking. Fixed with `/@import\s+url\([^)]*\)\s*;/g`.
+- The artifact inliner used `String.replace` with a **string** replacement, so `$` was special and mangled the module's `${}`. Use a **function** replacement.
+- `assertFaceRendered` sampled the card *centre*, which is background in landscape but white type in portrait — it rejected a good render. Now samples corners + a 5×5 grid (layout-independent).
+- I deleted `PRODUCT_PROVIDER`/`providerFor` during a catalogue rewrite and restored them; and `cart-quote.js` was still calling the removed `withCompanionCards`, which would have thrown on **every** quote.
+
+#### Smaller print sizes (`1e8f3fc`) — and the SKU that doesn't exist
+Smallest print and framed print were both 8×10. Added **prints 4×6, 5×7, 6×6, 8×8** and **frames 5×7, 8×8** (each in the existing black/white/natural).
+- **All verified with `scripts/verify-prodigi-sku.mjs` before going live.** 6 of 7 resolved. **`GLOBAL-CFP-6x6` returned 404 — there is no 6×6 classic frame**, even though the bare 6×6 print exists. Removed, with a comment so nobody re-adds it for symmetry.
+- Verification also settled two things previously marked as guesses in the code: frame colours come back as `black | brown | dark grey | gold | light grey | natural | silver | white` (our lowercase trio was already right), and **the CFP SKU carries its own glaze and mount**, so no extra attribute is needed.
+- **Keep `lib/print/catalog.mjs` and the client mirror in `order.html` in sync.** I wrote a throwaway cross-check (extract the mirror with a regex, `eval` it, compare every id + aspect against the server catalogue, and flag server variants with no UI entry) — run something like it after any catalogue edit. Gotcha: strip the trailing `;` before `eval`, or you get `Unexpected token ';'`.
+- **Pricing caveat told to the user, unresolved:** markup is 1.4× on product **and** shipping, so a 5×7 costing ~$3 to make lands at **$12–$21** depending on shipping. The small sizes are not yet the cheap entry point they look like. The lever that never risks eating cost is still the one from 2026-06-28: mark up product only, pass shipping at cost.
+
+#### iOS zoom-on-focus, app-wide (`8814860`)
+**iOS Safari zooms the page whenever you focus an input whose computed font-size is under 16px.** `create.html` and `auth.html` were already fixed; everything else was still 15px — **including every field of the checkout address form**, which zooms field-by-field as you tab through an address. Raised to 16px in `order.html`, `cart.html`, `boardbook.html`, `account.html`, `reset.html`, with a comment at each saying *why* (15px otherwise reads as a free style choice and will get "tidied" back). Verified by measuring the computed font-size of every visible input across thirteen pages, and confirmed the 1px bump adds no horizontal overflow at 320/390.
+
+#### manage.html: delete button dropping to its own row (`933320d`)
+User reported "my popcodes now 2 lines and trash icon dropping". **I initially blamed Safari page zoom and was wrong** — they checked, it read 100%, and it still broke. The real cause: the layout fitted at 430px and ran a few pixels over below that, so it looked fine on a Pro Max and broke on every smaller iPhone. Three narrow misses:
+- The `@media (max-width: 600px)` rule **GREW** the Shop button (height 36→40, padding 18→20, font 14→15) and it kept a `margin-left` the flex gap already provided. Height is worth keeping for the thumb; the width is what overflowed.
+- `.card-actions` was a flat wrap container with `margin-left: auto` on delete, so once the row overflowed **delete was the item that wrapped**, and the auto margin parked it alone at the right.
+- Heading + "+ New Popcode" came within ~1px of the available width at 390.
+
+**The structural fix is the part that matters: the other five buttons are now wrapped in `.card-actions-main`, so `.card-actions` has exactly two flex children.** The group wraps internally if it must and delete stays beside it, vertically centred — it cannot be stranded at any width. Also narrowed the 28px side gutter to 20px below 390px, which buys back the width without shrinking a tap target. Result, measured at 320/344/360/375/390/402/414/430/600/1100: **one row from 375px up (was 414px), heading on one line from 360px up (was 390px).**
+
+**CSS gotcha that cost a round trip:** the gutter override lost to `.collections-list { padding: 0 28px }` declared *further down the file*. Media queries add no specificity — **an equally specific rule only wins from later in the source**, so that block is deliberately parked at the end of the `<style>`, with a comment saying so.
+
+#### LESSONS
+- **A `200` on a path that already existed proves nothing about your deploy.** I checked `/postcard-render.js` after merging, got 200, and nearly called it done — prod was serving the *old* copy of that file from the earlier disable PR. **Poll for a string that only exists in the new build** (I used the changed `popcode-insert-` filename). Byte-count comparison against `git show <sha>:<path>` is the quick way to tell which commit prod is actually on.
+- **When a user says a page looks wrong on their phone, measure before theorising.** I burned a chunk of this session on a zoom hypothesis. What actually settled it: fetch prod's copy of the page, `diff` it against local (byte-identical → the page isn't the variable), then sweep viewport widths 320→430 in headless Chromium measuring `scrollWidth` vs `clientWidth` and the computed geometry of the specific elements. The breakpoint falls out immediately.
+- **Trust the user's observation over your own model.** They said 100% and it was still breaking; they were right and I was wrong.
+- **Fonts matter in headless layout tests.** Blocking Google Fonts changes wrap points and will make a marginal-fit bug invisible. `fonts.googleapis.com` and `fonts.gstatic.com` are **reachable from this sandbox** (200), and CooperBT/Inter are base64 `@font-face` in **`public/assets/fonts.css`** served locally — so don't block fonts when measuring layout.
+- **Verify every new Prodigi SKU.** One of seven was fictitious, and a bad SKU now surfaces as *"we can't ship this size to X"* (from the 2026-09-02 unservable classification) — misleading rather than obviously broken.
+
+#### STATE AT END OF SESSION
+- `main` = `933320d`. Branch and main identical.
+- **`COMPANION_INSERT.enabled = false`** — the insert ships to nobody until that flips.
+- **Insert orientation unconfirmed** — settle it from the first real order's proof image.
+- **Two pre-existing horizontal-overflow bugs found and NOT fixed** (both confirmed identical before/after my changes, so neither is a regression): `order.html` scrolls sideways ~16px on phones (`.detail` grid children need `min-width: 0` — grid items default to `min-width: auto`); `manage.html` scrolls sideways at ~768px tablet width. Offered both, user hasn't picked them up.
+- Small-size pricing (shipping-dominated) still open as a business decision.
