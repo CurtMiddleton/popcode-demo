@@ -98,6 +98,12 @@
       .lib-sub { color: #656565; font-size: 16px; line-height: 1.5; margin-top: 22px; max-width: 560px; font-family: 'Inter', sans-serif; }
       .top-bar-actions { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
       @media (max-width: 680px) { .top-bar h1 { font-size: 34px; } .top-bar { padding-top: 48px; margin-bottom: 48px; } }
+      /* Under ~390px the heading and the button can't both hold their size, and
+         "My Popcodes" breaking across two lines reads worse than a slightly
+         smaller heading. The 28px side gutter is also more than a small phone
+         can spare — narrowing it buys back the width that was forcing the card
+         action row to wrap, without shrinking any tap target. */
+      @media (max-width: 389px) { .top-bar h1 { font-size: 31px; } }
 
       .create-btn {
         background: #1a1a1a; color: white;
@@ -108,8 +114,11 @@
       }
       .create-btn:hover { opacity: 0.9; }
 
-      @media (max-width: 400px) {
+      /* From 440px down, give the heading room so it stays on one line;
+         the button and the gap are the cheaper things to shrink. */
+      @media (max-width: 440px) {
         .create-btn { font-size: 13px; padding: 9px 14px; }
+        .top-bar-head { gap: 12px; }
       }
 
       .collections-list { width: 100%; max-width: 1040px; padding: 0 28px; display: flex; flex-direction: column; gap: 16px; }
@@ -194,7 +203,12 @@
       .card-meta { font-size: 12px; color: #888; margin-top: auto; }
       .card-id { font-size: 12px; color: #aaa; margin-top: 12px; }
       .card-id strong { color: #1a1a1a; font-weight: 700; }
-      .card-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; justify-content: flex-start; margin-top: 6px; }
+      /* Two children only: the button group, and delete. The group wraps
+         internally when it must, so delete stays beside it, vertically
+         centred — it can never end up stranded on a line of its own, which
+         is what it did on a 390px phone. */
+      .card-actions { display: flex; gap: 8px; flex-wrap: nowrap; align-items: center; justify-content: flex-start; margin-top: 6px; }
+      .card-actions-main { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; flex: 1 1 auto; min-width: 0; }
       .btn-download { background: #eeeeee; color: #333333; }
       .btn {
         border: none; border-radius: 20px; padding: 6px 11px; font-size: 13px; font-weight: 400;
@@ -243,6 +257,7 @@
           flex-wrap: nowrap;
           margin-top: 0;
         }
+        .card-actions-main { flex-wrap: nowrap; }
         .icon-btn { width: 40px; height: 40px; }
         .icon-btn svg { width: 20px; height: 20px; }
         .icon-btn img { width: 20px; height: 20px; }
@@ -260,7 +275,14 @@
       .shop-btn:hover { box-shadow: 0 4px 14px rgba(118,87,252,0.45); }
       .shop-btn:active { transform: scale(0.96); }
       .shop-btn svg { width: 18px; height: 18px; }
-      @media (max-width: 600px) { .shop-btn { height: 40px; padding: 0 20px; font-size: 15px; } }
+      /* Taller for the thumb, but no wider — the extra width was what broke
+         the action row on a 390px phone. margin-left goes too: the flex gap
+         already spaces it, and those 4px were the difference between one row
+         and two. */
+      @media (max-width: 600px) {
+        .shop-btn { height: 40px; padding: 0 13px; font-size: 14px; margin-left: 0; }
+        .card-actions-main { gap: 5px; }
+      }
       .empty-state {
         width: 100%; max-width: 560px; text-align: center; padding: 60px 24px;
         background: white; border-radius: 20px; border: 2px dashed #e8e8e8;
@@ -364,6 +386,13 @@
       .nav-link.external { color:#666; font-size:14px; }
       .nav-divider { height:1px; background:#ececec; margin:8px 0; }
       .nav-close { display:none; }
+    
+      /* Kept last on purpose: .collections-list and .designs-grid declare their
+         own `padding: 0 28px` further up, and an equally specific rule only
+         wins from here. */
+      @media (max-width: 389px) {
+        .top-bar, .collections-list, .designs-grid { padding-left: 20px; padding-right: 20px; }
+      }
     </style>
   </head>
   <body>
@@ -643,6 +672,7 @@
             </div>
           </div>
           <div class="card-actions">
+            <div class="card-actions-main">
             <a class="icon-btn" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></a>
             <a class="icon-btn" href="${editHref}?id=${escapeHtml(col.slug)}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></a>
             <button class="icon-btn btn-share-id" data-slug="${escapeHtml(col.slug)}" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
@@ -650,6 +680,7 @@
             ${isProduct
               ? `<a class="shop-btn" href="${editHref}?id=${escapeHtml(col.slug)}&order=1" title="Order a printed copy"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`
               : `<a class="shop-btn" href="/shop.html?id=${escapeHtml(col.slug)}" title="Shop products with this Popcode"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`}
+            </div>
             <button class="btn btn-delete" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
           </div>
         `;
