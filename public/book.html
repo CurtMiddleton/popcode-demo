@@ -20,6 +20,7 @@
     <script src="/config.js"></script>
     <script src="/activity.js"></script>
     <script src="/slug.js"></script>
+    <script src="/postcard-render.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
     <script src="/countries.js"></script>
@@ -3001,6 +3002,23 @@
               if (!sErr) assetUrls.push({ url: db.storage.from('experiences').getPublicUrl(spath).data.publicUrl, print_area: 'spine' });
             }
           } catch (e) { /* best-effort: interior-only if the spine step fails */ }
+
+          // Put the companion card artwork in place before checkout, so the
+          // server has something to point Prodigi at. Best-effort by design:
+          // a missing card must never block a sale, and create-checkout
+          // HEAD-checks the file before naming it.
+          try {
+            const cardSlug = editingCollection && editingCollection.slug;
+            if (cardSlug && window.PopcodePostcard) {
+              const insert = await window.PopcodePostcard.buildInsert(cardSlug);
+              await db.storage.from('experiences').upload(
+                `${cardSlug}/companion-card.png`, insert,
+                { contentType: 'image/png', upsert: true },
+              );
+            }
+          } catch (e) {
+            if (window.Sentry) try { Sentry.captureException(e); } catch (_) {}
+          }
 
           const resp = await fetch('/api/create-checkout', {
             method: 'POST',
