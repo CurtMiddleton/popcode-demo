@@ -12,6 +12,7 @@
     <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
     <title>Popcode — Shop</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/postcard-render.js"></script>
     <script src="/config.js"></script>
     <script src="/activity.js"></script>
     <script src="/unsplash-samples.js"></script>
@@ -1545,6 +1546,23 @@
 
           const { data: sess } = await db.auth.getSession();
           const token = sess?.session?.access_token;
+          // Put the companion card artwork in place first. This page checks
+          // out directly, so without this a buy-now order would name artwork
+          // that was never uploaded. Best-effort: a missing card must not stop
+          // the sale, and create-checkout verifies the file before using it.
+          try {
+            const slug = state.selectedPhoto && state.selectedPhoto.slug;
+            if (slug && window.PopcodePostcard) {
+              const insert = await window.PopcodePostcard.buildInsert(slug);
+              await db.storage.from('experiences').upload(
+                `${slug}/companion-card.png`, insert,
+                { contentType: 'image/png', upsert: true },
+              );
+            }
+          } catch (e) {
+            if (window.Sentry) try { Sentry.captureException(e); } catch (_) {}
+          }
+
           const resp = await fetch('/api/create-checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },

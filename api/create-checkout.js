@@ -113,7 +113,18 @@ export default async function handler(req, res) {
     if (COMPANION_INSERT.enabled) {
       const cardFor = companionInsertCollectionId(lines);
       const slug = cardFor && byId.get(cardFor)?.slug;
-      if (slug) branding = companionInsertBranding(PUBLIC_ASSET_PREFIX + companionInsertPath(slug));
+      if (slug) {
+        // Confirm the artwork exists before naming it. The client uploads it
+        // best-effort, so it can legitimately be missing — and Prodigi fetches
+        // this URL server-side, so a 404 here becomes a failed order AFTER the
+        // customer has paid. Going without a card is much the better failure.
+        // Same guard as create-montage.js uses on a soundtrack URL.
+        const url = PUBLIC_ASSET_PREFIX + companionInsertPath(slug);
+        try {
+          const head = await fetch(url, { method: 'HEAD' });
+          if (head.ok) branding = companionInsertBranding(url);
+        } catch { /* unreachable — ship without the card */ }
+      }
     }
 
     // 4. Authoritative re-quote, per provider group (never trust the client price).

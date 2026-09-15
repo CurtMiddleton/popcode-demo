@@ -35,8 +35,6 @@ export default async function handler(req, res) {
 
     let priced;
     try {
-      // The companion card is priced here too — it ships in the same parcel, so
-      // leaving it out would quote less than checkout charges. No slug needed:
       // The companion postcard is a branded insert, not a line item, so it
       // never appears here — it adds nothing to the quote.
       const lines = normalizeLines(items);

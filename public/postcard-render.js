@@ -474,13 +474,12 @@
     await loadPrintLibs();
     const { jsPDF } = window.jspdf;
     const w = CARD.wIn + CARD.bleedIn * 2, h = CARD.hIn + CARD.bleedIn * 2;
-    const doc = new jsPDF({ unit: 'in', format: [w, h], orientation: 'portrait', compress: true });
-    for (let i = 0; i < FACES.length; i++) {
-      const canvas = await renderFace(FACES[i], slug);
-      if (i) doc.addPage([w, h], 'landscape');
-      doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, w, h);
-    }
-    doc.save(`popcode-postcard-${slug}.pdf`);
+    // Landscape, matching the card — jsPDF swaps the format array to suit the
+    // orientation, so a portrait setting here crops the right edge off.
+    const doc = new jsPDF({ unit: 'in', format: [w, h], orientation: 'landscape', compress: true });
+    const canvas = await renderFace(slug);
+    doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, w, h);
+    doc.save(`popcode-insert-${slug}.pdf`);
   }
 
   /** Save one face as the print-ready PNG. */
