@@ -77,6 +77,10 @@
       .bi-size em { display: block; font-style: normal; font-size: 12px; color: #8a857d; margin-top: 1px; }
       .bi-cta { width: 100%; max-width: 340px; padding: 16px; border: none; border-radius: 16px; font-size: 16px; font-weight: 700; color: #fff; font-family: 'Inter', sans-serif; cursor: pointer; background: #1a1a1a; }
       .bi-cta:hover { opacity: 0.94; }
+      /* Starting price — same type as order.html's .detail-price so a board book
+         reads like every other product in the Shop. */
+      .bi-price { font-size: 20px; font-weight: 600; color: #1a1a1a; margin: 0 0 4px; font-family: 'Inter', sans-serif; }
+      .bi-price-note { color: #888; font-size: 12px; margin-bottom: 22px; font-family: 'Inter', sans-serif; }
       .btn-primary { background: #1a1a1a; color: #fff; border: none; border-radius: 999px; padding: 15px 30px; font-size: 16px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; }
       .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
       .btn-secondary { background: #fff; color: #1a1a1a; border: 1.5px solid #ddd; border-radius: 999px; padding: 13px 26px; font-size: 15px; font-weight: 600; cursor: pointer; }
@@ -352,6 +356,8 @@
           </ul>
           <div class="bi-size-label">Size</div>
           <div class="bi-sizes"><button class="bi-size active" type="button"><span class="bs-shape square"></span><span><strong>6×6″ Square</strong><em>Chipboard board book</em></span></button></div>
+          <div class="bi-price" id="bi-price">From &mdash;</div>
+          <div class="bi-price-note" id="bi-price-note">Getting price&hellip;</div>
           <button class="bi-cta" id="start-btn">Design a Board Book</button>
         </div>
       </div>
@@ -689,6 +695,33 @@
         const stage = document.getElementById('intro-mock');
         if (!stage || !window.boardbookMockup) return;
         window.boardbookMockup(stage, window.unsplashBaby ? window.unsplashBaby(800) : '', { title: "Baby’s First Book" });
+      })();
+
+      // "From $X" on the intro. Unlike the Prodigi products this is the product
+      // cost ONLY: board books are fulfilled by Printify, which prices shipping
+      // from a full address, so there is nothing to quote until the checkout
+      // sheet has one (see quoteOrder below, which re-quotes all-in there).
+      // Hence "plus shipping" in the note — the number must not read as a total.
+      (function introPrice() {
+        // Edit mode skips the intro entirely, so don't spend a quote on it.
+        if (new URLSearchParams(location.search).get('id')) return;
+        const el = document.getElementById('bi-price');
+        const note = document.getElementById('bi-price-note');
+        if (!el || !note) return;
+        fetch('/api/prodigi-quote', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productType: 'boardbook', variantId: 'bb-6x6', copies: 1,
+            destinationCountryCode: 'US', shippingMethod: 'Standard',
+          }),
+        }).then(r => r.json().then(d => ({ ok: r.ok, d }))).then(({ ok, d }) => {
+          if (!ok || typeof d.total_minor !== 'number') throw new Error('no price');
+          el.textContent = 'From ' + formatMoney(d.total_minor, d.currency);
+          note.textContent = 'per book, plus shipping \u2014 your total is shown before you pay';
+        }).catch(() => {
+          el.textContent = 'From \u2014';
+          note.textContent = 'Pricing is unavailable right now \u2014 you\u2019ll see the full price before you pay.';
+        });
       })();
 
       document.getElementById('start-btn').addEventListener('click', () => {
