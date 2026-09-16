@@ -113,27 +113,40 @@
       .stage { position: relative; height: var(--stage-h, 620px); }
       /* The art runs off the right edge on purpose — it reads as a real object
          on a table rather than a product shot pasted into a column. */
-      .art {
+      /* The wrapper carries the size, angle and fade; it shrink-wraps the image,
+         which is what lets the badge be positioned as a percentage of the
+         artwork rather than of the stage. */
+      .art-wrap {
         position: absolute; left: 0; top: 50%;
         /* Sized by HEIGHT, not width. The set mixes a wide spread with portrait
            frames, and a shared width makes one of them tiny and the other spill
            off the top; a shared height lands them all at the same visual weight. */
-        height: var(--art-h, 90%); width: auto; max-width: none;
+        height: var(--art-h, 90%);
         /* Most pieces sit at a slight angle, as they would on a table; --art-rot
            lets one stand square when that suits it better. */
         transform: translate(0, -50%) rotate(var(--art-rot, -7deg));
         transform-origin: center;
-        /* No CSS shadow. filter: drop-shadow traces the alpha silhouette, and
-           these cut-outs are 94–98% opaque rectangles, so it rendered as a hard
-           offset block behind each one — on top of the soft shadow already baked
-           into the artwork. The baked one is the real one. */
         opacity: 1; transition: opacity .8s ease;
       }
       /* One picture leaves before the next arrives — they never cross-dissolve
          into each other, which on two busy photographs reads as a smear. */
-      .art.fading { opacity: 0; }
+      .art-wrap.fading { opacity: 0; }
       @media (prefers-reduced-motion: reduce) {
-        .art { transition: none; opacity: 1; }
+        .art-wrap { transition: none; opacity: 1; }
+      }
+      /* No CSS shadow on the art. filter: drop-shadow traces the alpha
+         silhouette, and these cut-outs are 94–98% opaque rectangles, so it
+         rendered as a hard offset block behind each one — on top of the soft
+         shadow already baked into the artwork. The baked one is the real one. */
+      .art { height: 100%; width: auto; max-width: none; display: block; }
+      /* The scan symbol, as it would be printed on the product. Every value is
+         per scene, because where a product's lower-left corner falls inside its
+         cut-out varies wildly — the framed pieces fill their image, the elephant
+         print occupies only the middle half of its wall. */
+      .art-symbol {
+        position: absolute; left: var(--sym-x, 6%); bottom: var(--sym-y, 5%);
+        width: var(--sym-w, 9%); height: auto;
+        filter: drop-shadow(0 1px 2px rgba(0,0,0,.28));
       }
 
       /* The phone sits still. It used to be draggable; it isn't any more, so the
@@ -402,7 +415,10 @@
         </div>
 
         <div class="stage">
-          <img class="art" id="scene-art" src="/assets/mockups/scenes/Album.webp" alt="An open photo album"/>
+          <div class="art-wrap" id="art-wrap">
+            <img class="art" id="scene-art" src="/assets/mockups/scenes/Album.webp" alt="An open photo album"/>
+            <img class="art-symbol" src="/assets/popcode_symbol_color.svg" alt=""/>
+          </div>
           <div class="phone" id="phone">
             <div class="phone-screen">
               <div class="phone-home" id="phone-home">
@@ -689,26 +705,29 @@
       // picture instead of playing it, so a missing clip degrades quietly.
       var POPCODE_SCENES = window.POPCODE_SCENES = {
         albums:    { img: '/assets/mockups/scenes/Album.webp', alt: 'An open photo album', h: '86%',
-                     video: '/video/Album.mp4', dwell: 5500,
+                     video: '/video/Album.mp4', dwell: 5500, sym: { x: '10%', y: '15%', w: '5%' },
                      fallback: 'https://images.unsplash.com/photo-1766366622533-7f12737f6af8?auto=format&fit=crop&w=1200&q=80' },
         // Calendar, print and exhibit hang square: things on a wall read wrong at
         // an angle in a way a book lying open on a table doesn't.
         calendars: { img: '/assets/mockups/scenes/calendar.webp', alt: 'A wall calendar', h: '100%', rot: '0deg',
-                     video: '/video/calendar.mp4', mediaShape: 'square', dwell: 5500 },
+                     video: '/video/calendar.mp4', mediaShape: 'square', dwell: 5500,
+                     sym: { x: '7%', y: '5%', w: '9%' } },
         // Audio, not video — half of what people make is a voice over an old
         // picture, and these two are where that reads truest.
         prints:    { img: '/assets/mockups/scenes/print.webp', alt: 'A framed print', h: '100%', rot: '0deg',
-                     dwell: 6000,
+                     dwell: 6000, sym: { x: '11%', y: '9%', w: '9%' },
                      audio: ['This is us coming down the aisle —',
                              "we couldn't believe how many people showed up."] },
         exhibits:  { img: '/assets/mockups/scenes/exhibit.webp', alt: 'A painting in an ornate frame', h: '94%', rot: '0deg',
-                     dwell: 6000,
+                     dwell: 6000, sym: { x: '12%', y: '11%', w: '8%' },
                      audio: ['She sat for this over four afternoons.',
                              'I kept the eyes blank — she said that was the truest part.'] },
         // The resting word, and the one people linger on: a framed print on a
         // wall, so it hangs square like the others.
         anything:  { img: '/assets/mockups/scenes/anything.webp', alt: 'A framed photograph of an elephant',
                      h: '94%', rot: '0deg', video: '/video/anything.mp4',
+                     // Its frame occupies only the middle half of the image.
+                     sym: { x: '29%', y: '23%', w: '5%' },
                      fallback: '/assets/sample-photo.jpg' }
       };
 
@@ -716,9 +735,10 @@
       // screen, then hands over to whatever that thing plays.
       (function () {
         var art = document.getElementById('scene-art');
+        var artWrap = document.getElementById('art-wrap');
         var phone = document.getElementById('phone');
         var media = document.getElementById('phone-media');
-        if (!art || !phone) return;
+        if (!art || !artWrap || !phone) return;
         var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         // Matches the .art opacity transition — the swap has to happen while the
         // old picture is invisible, or you see it change.
@@ -737,6 +757,15 @@
             alt2.src = fallback;
           };
           next.src = src;
+        }
+
+        // Measured off each cut-out's alpha: where the product's own lower-left
+        // corner actually falls inside the image.
+        function placeSymbol(scene) {
+          var sym = scene.sym || {};
+          artWrap.style.setProperty('--sym-x', sym.x || '6%');
+          artWrap.style.setProperty('--sym-y', sym.y || '5%');
+          artWrap.style.setProperty('--sym-w', sym.w || '9%');
         }
 
         function play(scene) {
@@ -812,19 +841,21 @@
           clearInterval(captions);
 
           if (still) {
-            art.style.setProperty('--art-rot', scene.rot || '-7deg');
-            art.style.setProperty('--art-h', scene.h || '90%');
+            artWrap.style.setProperty('--art-rot', scene.rot || '-7deg');
+            artWrap.style.setProperty('--art-h', scene.h || '90%');
+            placeSymbol(scene);
             setArt(scene.img, scene.alt, scene.fallback); play(scene); return;
           }
 
           // Out, swap, in — then, after a beat to take it in, the phone plays it.
           phone.classList.remove('playing');
-          art.classList.add('fading');
+          artWrap.classList.add('fading');
           swapIn = setTimeout(function () {
-            art.style.setProperty('--art-rot', scene.rot || '-7deg');
-            art.style.setProperty('--art-h', scene.h || '90%');
+            artWrap.style.setProperty('--art-rot', scene.rot || '-7deg');
+            artWrap.style.setProperty('--art-h', scene.h || '90%');
+            placeSymbol(scene);
             setArt(scene.img, scene.alt, scene.fallback);
-            art.classList.remove('fading');
+            artWrap.classList.remove('fading');
           }, FADE_OUT);
           handOver = setTimeout(function () { play(scene); }, 1500);
         };
