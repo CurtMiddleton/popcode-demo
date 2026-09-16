@@ -131,9 +131,11 @@
         width: 490px; height: 450px;
         margin: 0 auto;
       }
+      /* --ar and --fw are set per scene: art that isn't a 4:5 print gets a frame
+         its own shape, rather than being cropped to fit a card it never was. */
       .demo-frame {
         position: absolute; left: 0; top: 14px;
-        width: 262px;
+        width: var(--fw, 262px);
         background: #fff;
         padding: 11px 11px 13px;
         border-radius: 6px;
@@ -142,8 +144,15 @@
       }
       .demo-photo, .demo-view-img, .demo-live img { transition: opacity .3s ease; }
       .demo-frame img.demo-photo {
-        display: block; width: 100%; aspect-ratio: 4/5; object-fit: cover; border-radius: 2px;
+        display: block; width: 100%; aspect-ratio: var(--ar, 4/5); object-fit: cover; border-radius: 2px;
       }
+      /* Cut-out art (the photo book) carries its own white and its own shadow,
+         so the print card underneath it would only add a second one. */
+      .demo-frame.bare { background: none; padding: 0; box-shadow: none; border-radius: 0; }
+      /* The badge is pinned to the card's corner, which on cut-out art is empty
+         space beside the object. Hidden until each scene says where it sits. */
+      .demo-frame.bare .demo-badge { display: none; }
+      .demo-frame.bare img.demo-photo { object-fit: contain; border-radius: 0; }
       .demo-badge {
         position: absolute; right: 20px; bottom: 22px;
         width: 30px; height: 30px;
@@ -767,7 +776,8 @@
       var POPCODE_SCENES = {
         // Curt's own photo-book shot. Until that file lands the Unsplash
         // scrapbook stands in, so the frame is never empty on the preview.
-        albums:    { img: '/assets/mockups/scenes/Album.png', alt: 'An open photo album',
+        albums:    { img: '/assets/mockups/scenes/Album.webp', alt: 'An open photo album',
+                     ar: '1200 / 661', w: '330px', bare: true,
                      fallback: 'https://images.unsplash.com/photo-1766366622533-7f12737f6af8?auto=format&fit=crop&w=700&q=80' },
         calendars: { img: 'https://images.unsplash.com/photo-1610888662651-05dbdec7cfae?auto=format&fit=crop&w=700&q=80', alt: 'A wall calendar' },
         photos:    { img: '/assets/sample-photo.jpg', alt: 'A printed photograph' },
@@ -785,6 +795,12 @@
         window.popcodeShowScene = function (word) {
           var scene = POPCODE_SCENES[word];
           if (!scene) return;
+          var frame = document.getElementById('demo-frame');
+          if (frame) {
+            frame.style.setProperty('--ar', scene.ar || '4 / 5');
+            frame.style.setProperty('--fw', scene.w || '262px');
+            frame.classList.toggle('bare', !!scene.bare);
+          }
           var els = targets.map(function (id) { return document.getElementById(id); });
           var live = document.querySelector('#demo-live img');
           if (live) els.push(live);
