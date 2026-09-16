@@ -165,10 +165,14 @@
       }
       .phone-media { position: absolute; inset: 0; opacity: 0; transition: opacity .7s ease; }
       .phone-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
-      /* The clips are landscape and the screen is portrait, so cover would crop
-         them to a strip down the middle. Letterboxed on black, the way a
-         landscape video actually plays on a phone. */
-      .phone-media video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+      /* The clips are landscape and the screen is portrait, so filling it keeps
+         roughly the middle third of the frame. That's deliberate — it reads as
+         video shot on a phone. --media-pos moves the crop when the subject
+         isn't centred; it's a percentage across the source frame. */
+      .phone-media video {
+        width: 100%; height: 100%; display: block; background: #000;
+        object-fit: cover; object-position: var(--media-pos, 50% 50%);
+      }
       .phone.playing .phone-home { opacity: 0; }
       .phone.playing .phone-media { opacity: 1; }
       .phone-chip {
@@ -725,6 +729,7 @@
         // Tries a clip; on a missing file or a format this browser won't take,
         // tries the stand-in, then gives up to the still. Never a black rectangle.
         function mount(scene, src, next) {
+          media.style.setProperty('--media-pos', scene.pos || '50% 50%');
           var v = document.createElement('video');
           v.muted = true; v.loop = true; v.playsInline = true; v.autoplay = true;
           v.setAttribute('playsinline', ''); v.setAttribute('muted', '');
