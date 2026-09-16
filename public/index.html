@@ -56,33 +56,34 @@
       @media (max-width: 560px) { .wrap { padding: 0 20px; } }
 
       /* ── Hero ───────────────────────────────────────────────── */
-      /* Full-bleed brand gradient; the nav.js header sits above it in white. */
       /* nav.js draws a soft gray shelf under the header (.site-header::after) to
-         separate the nav from the app's cream pages. Over the gradient it reads
-         as a white smear, so it's switched off here — and only here. nav.js
-         appends its stylesheet after this one, so this needs the extra
-         specificity of the body selector to win. */
+         separate it from the app's cream pages. Over the gradient that reads as
+         a white smear, so it's off here and only here — and it needs the extra
+         specificity of the body selector, because nav.js appends its stylesheet
+         after this one. */
       body .site-header::after { display: none; }
 
       .hero {
+        position: relative; overflow: hidden;
         background: linear-gradient(160deg, #5bc8f5 0%, #7c3aed 100%);
-        color: #fff;
-        padding: 56px 0 64px;
+        color: #fff; padding: 64px 0 210px;
       }
-      /* The copy starts where the first nav item's text starts. nav.js pins the
-         logo a fixed distance from the viewport edge, so that x doesn't move as
-         the window resizes — but a centred .wrap does, which is why this hero
-         is full-width with a measured left pad instead. --hero-pad is set from
-         the real nav link at runtime (see alignHeroToNav); the fallback here is
-         what desktop nav.js currently works out to. */
+      /* The copy column starts where the first nav item's text starts (measured
+         at runtime, see alignHeroToNav) and is set flush right; the stage beside
+         it is deliberately unbounded so the artwork can bleed off the page. */
       .hero-inner {
-        padding-left: var(--hero-pad, 394px); padding-right: 28px;
-        display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 520px);
-        gap: 40px; align-items: center;
+        padding-left: var(--hero-pad, 394px);
+        /* The copy column is sized to the longest word the odometer can show —
+           "calendars", 406px at 100px CooperBT. Any narrower and .odo's
+           overflow:hidden clips it from the left, because the text is flush
+           right. Shrink the font and this can shrink with it. */
+        display: grid; grid-template-columns: minmax(0, 430px) minmax(0, 1fr);
+        align-items: center; gap: 44px;
       }
+      .hero-copy { text-align: right; }
       h1.headline {
-        /* --hl-lh is shared with the odometer below, which has to offset itself
-           by exactly this much. Change it here and the odometer follows. */
+        /* --hl-lh is shared with the odometer, which offsets itself by exactly
+           this much. Change it here and the odometer follows. */
         --hl-lh: 0.94;
         font-family: var(--serif); font-weight: 400; font-size: 100px; line-height: var(--hl-lh);
         letter-spacing: -0.02em; margin: 0 0 26px; color: #fff;
@@ -90,8 +91,8 @@
       .hl-line { display: block; }
       /* Odometer. Every word occupies a slot exactly as tall as the mask, so the
          roll can never clip a descender or let the next word peek. The slot has
-         to stay taller than the tight 1.02 line spacing to clear descenders, so
-         it's pulled back into line with negative margins — keep the two in step. */
+         to stay taller than the tight line spacing to clear descenders, so it's
+         pulled back into line with negative margins — keep the two in step. */
       .odo {
         --slot: 1.18em;
         display: block; height: var(--slot); overflow: hidden;
@@ -100,13 +101,82 @@
       .odo-track { display: block; transition: transform .52s cubic-bezier(.16,.84,.26,1); }
       .odo-word { display: block; height: var(--slot); line-height: var(--slot); white-space: nowrap; }
       @media (prefers-reduced-motion: reduce) { .odo-track { transition: none; } }
-      .sub { font-size: 16px; line-height: 1.55; color: rgba(255,255,255,0.93); margin: 0 0 28px; max-width: 26em; }
-      .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+      .sub { font-size: 16px; line-height: 1.55; color: rgba(255,255,255,0.93); margin: 0 0 28px auto; max-width: 30em; }
+      .hero-cta { display: flex; flex-wrap: nowrap; gap: 12px; align-items: center; justify-content: flex-end; }
+      /* Without this the buttons shrink to the column and their labels wrap. */
+      .hero-cta .btn { flex-shrink: 0; white-space: nowrap; }
       /* On the gradient the outlined button reads as white-on-white, so it fills. */
       .hero .btn-ghost { background: #fff; border-color: #fff; color: var(--ink); }
-      .stage { position: relative; display: grid; place-items: center; }
 
-      /* Printed-picture card — the fork section builds on this. */
+      /* ── Hero stage: the printed thing, and the phone playing it ──────── */
+      .stage { position: relative; min-height: 520px; }
+      /* The art runs off the right edge on purpose — it reads as a real object
+         on a table rather than a product shot pasted into a column. */
+      .art {
+        position: absolute; left: 0; top: 50%;
+        width: 142%; max-width: none;
+        transform: translate(0, -50%) rotate(-7deg);
+        transform-origin: center;
+        filter: drop-shadow(0 34px 60px rgba(20, 10, 60, .34));
+        opacity: 1; transition: opacity .5s ease, transform .7s cubic-bezier(.2,.85,.3,1);
+      }
+      /* Slides in from the right as each word lands. */
+      .art.entering { opacity: 0; transform: translate(16%, -50%) rotate(-7deg); }
+      @media (prefers-reduced-motion: reduce) {
+        .art, .art.entering { transition: none; opacity: 1; transform: translate(0, -50%) rotate(-7deg); }
+      }
+
+      /* The phone sits still. It used to be draggable; it isn't any more, so the
+         whole overlap/recognition dance is gone with it. */
+      .phone {
+        position: absolute; z-index: 3;
+        left: 34%; top: 46%;
+        width: 236px; height: 476px;
+        background: #16121f; border-radius: 44px; padding: 11px;
+        box-shadow: 0 40px 80px rgba(10, 5, 40, .5);
+      }
+      .phone-screen {
+        position: relative; width: 100%; height: 100%;
+        border-radius: 34px; overflow: hidden;
+        background: linear-gradient(160deg, #5bc8f5 0%, #7c3aed 100%);
+      }
+      .phone-notch {
+        position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+        width: 82px; height: 22px; border-radius: 12px; background: #16121f; z-index: 4;
+      }
+      /* Two states, crossfaded: the Popcode start screen, then what plays. */
+      .phone-home {
+        position: absolute; inset: 0; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 14px;
+        transition: opacity .45s ease;
+      }
+      .phone-home img { width: 58%; display: block; }
+      .phone-home-tag { font-family: var(--serif); font-size: 15px; line-height: 1.3; text-align: center; color: rgba(255,255,255,.92); }
+      .phone-home-btn {
+        background: #fff; color: #7c3aed; border: 0; border-radius: 999px;
+        font-family: var(--sans); font-size: 13px; font-weight: 700; padding: 10px 20px;
+      }
+      .phone-media { position: absolute; inset: 0; opacity: 0; transition: opacity .45s ease; }
+      .phone-media video, .phone-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .phone.playing .phone-home { opacity: 0; }
+      .phone.playing .phone-media { opacity: 1; }
+      .phone-chip {
+        position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 7px; z-index: 5;
+        background: rgba(20,14,40,.72); color: #fff; border-radius: 999px;
+        font-family: var(--sans); font-size: 11px; font-weight: 600; padding: 7px 13px;
+        white-space: nowrap; opacity: 0; transition: opacity .4s ease;
+      }
+      .phone.playing .phone-chip { opacity: 1; }
+      .phone-chip svg { width: 8px; height: 9px; flex-shrink: 0; }
+
+      /* The curve the hero sits on. Its fill is the page colour, so it reads as
+         the page rising into the gradient rather than a shape drawn on top. */
+      .hero-curve {
+        position: absolute; left: -2%; bottom: -1px; width: 104%; height: 190px;
+        z-index: 2; display: block; pointer-events: none;
+      }
+
       .print {
         position: relative; width: 100%; max-width: 400px; background: #fff; padding: 16px 16px 62px;
         border-radius: 4px; box-shadow: 0 26px 60px rgba(0,0,0,0.17), 0 3px 10px rgba(0,0,0,0.07);
@@ -118,205 +188,36 @@
                     display: flex; align-items: center; gap: 10px; }
       .print .sym { width: 26px; flex-shrink: 0; opacity: .9; }
 
-      /* Hero demo: drag the phone over the print and it plays */
-      /* The scene is built at a fixed 490x450 so the absolute positions inside it
-         stay simple. To fit narrower screens it scales — and .demo-box shrinks
-         with it, because transform alone leaves the old footprint behind and the
-         page scrolls sideways. Keep the two numbers in step. */
-      .demo-wrap { display: grid; place-items: center; --demo-s: 1; }
-      .demo-box { width: calc(490px * var(--demo-s)); height: calc(450px * var(--demo-s)); }
-      .demo-scene { transform: scale(var(--demo-s)); transform-origin: top left; }
-      .demo-scene {
-        position: relative;
-        width: 490px; height: 450px;
-        margin: 0 auto;
+      @media (max-width: 1240px) {
+        h1.headline { font-size: 82px; }
+        .hero-inner { grid-template-columns: minmax(0, 355px) minmax(0, 1fr); gap: 34px; }
+        .phone { width: 200px; height: 404px; border-radius: 38px; }
       }
-      /* --ar and --fw are set per scene: art that isn't a 4:5 print gets a frame
-         its own shape, rather than being cropped to fit a card it never was. */
-      .demo-frame {
-        position: absolute; left: 0; top: 14px;
-        width: var(--fw, 262px);
-        background: #fff;
-        padding: 11px 11px 13px;
-        border-radius: 6px;
-        box-shadow: 0 24px 60px rgba(20, 10, 60, 0.35);
-        transform: rotate(-3deg);
-      }
-      .demo-photo, .demo-view-img, .demo-live img { transition: opacity .3s ease; }
-      .demo-frame img.demo-photo {
-        display: block; width: 100%; aspect-ratio: var(--ar, 4/5); object-fit: cover; border-radius: 2px;
-      }
-      /* Cut-out art (the photo book) carries its own white and its own shadow,
-         so the print card underneath it would only add a second one. */
-      .demo-frame.bare { background: none; padding: 0; box-shadow: none; border-radius: 0; }
-      /* The badge is pinned to the card's corner, which on cut-out art is empty
-         space beside the object. Hidden until each scene says where it sits. */
-      .demo-frame.bare .demo-badge { display: none; }
-      .demo-frame.bare img.demo-photo { object-fit: contain; border-radius: 0; }
-      .demo-badge {
-        position: absolute; right: 20px; bottom: 22px;
-        width: 30px; height: 30px;
-      }
-      .demo-phone {
-        position: absolute; left: 0; top: 0;
-        width: 164px; height: 330px;
-        background: #16121f;
-        border-radius: 32px;
-        padding: 9px;
-        box-shadow: 0 34px 70px rgba(10, 5, 40, 0.5);
-        z-index: 2;
-        cursor: grab;
-        touch-action: none;
-        user-select: none;
-        -webkit-user-select: none;
-        will-change: transform;
-      }
-      .demo-phone.grabbing { cursor: grabbing; }
-      .demo-phone-screen {
-        position: relative; width: 100%; height: 100%;
-        border-radius: 24px; overflow: hidden;
-        background: linear-gradient(160deg, #4a3f8f 0%, #2c2350 100%);
-      }
-      .demo-view { position: absolute; inset: 0; overflow: hidden; }
-      .demo-view-img {
-        position: absolute; left: 0; top: 0;
-        transform-origin: top left;
-        will-change: transform;
-        pointer-events: none;
-      }
-      .demo-live {
-        position: absolute; inset: 0; z-index: 2;
-        opacity: 0; transition: opacity 0.4s;
-        pointer-events: none;
-      }
-      .demo-live img, .demo-live video {
-        width: 100%; height: 100%; object-fit: cover; display: block;
-      }
-      .demo-scene.playing .demo-live { opacity: 1; }
-      .demo-scene.playing .demo-live img { animation: kenburns 7s ease-in-out infinite alternate; }
-      @keyframes kenburns {
-        from { transform: scale(1.02); }
-        to   { transform: scale(1.18) translate(2%, -2%); }
-      }
-      .demo-home {
-        position: absolute; inset: 0; z-index: 4;
-        background: linear-gradient(160deg, #5bc8f5 0%, #7c3aed 100%);
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 10px; padding: 14px;
-        opacity: 1; transition: opacity 0.35s;
-      }
-      .demo-scene.scanning .demo-home { opacity: 0; pointer-events: none; }
-      .demo-home img { width: 62%; display: block; }
-      .demo-home-tag {
-        font-family: 'CooperBT', serif; font-weight: 300;
-        font-size: 11px; line-height: 1.2; color: #fff; text-align: center;
-        opacity: 0.92;
-      }
-      .demo-scan-btn {
-        margin-top: 6px;
-        border: none; border-radius: 999px;
-        background: #fff; color: #6a30e8;
-        font-family: 'Inter', sans-serif;
-        font-size: 10px; font-weight: 700;
-        padding: 8px 16px; cursor: pointer;
-        transition: transform 0.15s;
-      }
-      .demo-scan-btn.pressed, .demo-scan-btn:active { transform: scale(0.92); }
-      .demo-scanhint {
-        position: absolute; left: 50%; bottom: 12px; z-index: 3;
-        transform: translateX(-50%);
-        background: rgba(20, 16, 30, 0.7);
-        color: rgba(255,255,255,0.95);
-        font-size: 9px; font-weight: 600;
-        padding: 6px 11px; border-radius: 999px;
-        white-space: nowrap;
-        opacity: 0; transition: opacity 0.3s;
-        pointer-events: none;
-      }
-      .demo-scene.scanning .demo-scanhint { opacity: 1; }
-      .demo-scene.found .demo-scanhint, .demo-scene.playing .demo-scanhint { opacity: 0; }
-      .demo-notch {
-        position: absolute; top: 9px; left: 50%; transform: translateX(-50%);
-        width: 52px; height: 13px; border-radius: 999px;
-        background: #16121f; z-index: 6;
-      }
-      .demo-play {
-        position: absolute; inset: 0; z-index: 3;
-        display: flex; align-items: center; justify-content: center;
-        opacity: 0; transition: opacity 0.25s;
-        pointer-events: none;
-      }
-      .demo-scene.found .demo-play { opacity: 1; }
-      .demo-scene.playing .demo-play { opacity: 0; }
-      .demo-play-btn {
-        position: relative;
-        width: 54px; height: 54px; border-radius: 50%;
-        background: rgba(255,255,255,0.22);
-        border: 1.5px solid rgba(255,255,255,0.85);
-        backdrop-filter: blur(3px);
-        display: flex; align-items: center; justify-content: center;
-      }
-      .demo-ring {
-        position: absolute; left: 50%; top: 50%;
-        width: 54px; height: 54px; margin: -27px 0 0 -27px;
-        border-radius: 50%;
-        border: 2px solid rgba(255,255,255,0.9);
-        pointer-events: none;
-        animation: ringpulse 1.6s ease-out infinite;
-      }
-      .demo-ring.r2 { animation-delay: 0.8s; }
-      @keyframes ringpulse {
-        0%   { transform: scale(0.9); opacity: 0.9; }
-        100% { transform: scale(2.4); opacity: 0; }
-      }
-      .demo-chip {
-        position: absolute; left: 50%; bottom: 12px; z-index: 4;
-        transform: translate(-50%, 6px);
-        background: rgba(20, 16, 30, 0.85);
-        color: #fff;
-        font-size: 9px; font-weight: 600;
-        padding: 6px 10px; border-radius: 999px; max-width: 92%;
-        white-space: nowrap;
-        display: flex; align-items: center; gap: 6px;
-        opacity: 0; transition: opacity 0.35s, transform 0.35s;
-        pointer-events: none;
-      }
-      .demo-scene.playing .demo-chip { opacity: 1; transform: translate(-50%, 0); }
-      .demo-chip svg { flex-shrink: 0; width: 8px; height: 9px; }
-      .demo-caption {
-        margin-top: 16px;
-        font-size: 13px; font-weight: 600;
-        color: rgba(255,255,255,0.85);
-      }
-      /* Scroll-driven hero (default). ?hero=drag switches to the draggable version. */
-      @media (prefers-reduced-motion: reduce) {
-        .demo-ring { animation: none; }
-        .demo-scene.playing .demo-live img { animation: none; }
-      }
-
-
       @media (max-width: 1040px) {
-        h1.headline { font-size: 78px; }
-        .demo-wrap { --demo-s: .84; }
+        h1.headline { font-size: 68px; }
+        .hero-inner { grid-template-columns: minmax(0, 296px) minmax(0, 1fr); gap: 26px; }
       }
-      @media (max-width: 940px) {
-        .hero { padding: 40px 0 52px; }
-        .hero-inner { grid-template-columns: 1fr; gap: 24px; }
-        h1.headline { font-size: 66px; }
-        /* Stacked now, so the full width is available again. */
-        .demo-wrap { --demo-s: 1; }
-      }
-      @media (max-width: 760px) { .hero-inner { padding-left: 28px; } }
-      @media (max-width: 620px) { .demo-wrap { --demo-s: .78; } }
-      @media (max-width: 560px) { .hero-inner { padding-left: 20px; padding-right: 20px; } }
-      @media (max-width: 460px) { .demo-wrap { --demo-s: .64; } }
-      /* Smallest phones: "calendar" at 46px is wider than the gutter allows. */
-      @media (max-width: 380px) {
-        h1.headline { font-size: 38px; }
-        .demo-wrap { --demo-s: .55; }
+      @media (max-width: 860px) {
+        /* Stacked: the sentence first, then the thing it describes. Flush right
+           stops making sense once the copy is the full width, so it centres. */
+        .hero { padding: 40px 0 150px; }
+        .hero-inner { grid-template-columns: 1fr; padding-left: 28px; padding-right: 28px; }
+        .hero-copy { text-align: center; padding-right: 0; }
+        .sub { margin-left: auto; margin-right: auto; }
+        .hero-cta { justify-content: center; flex-wrap: wrap; }
+        h1.headline { font-size: 60px; }
+        .stage { min-height: 420px; margin-top: 18px; }
+        .art { left: -10%; width: 120%; }
+        .phone { left: 50%; margin-left: -100px; width: 200px; height: 404px; }
+        .hero-curve { height: 120px; }
       }
       @media (max-width: 560px) {
-        h1.headline { font-size: 46px; }
+        .hero-inner { padding-left: 20px; padding-right: 20px; }
+        h1.headline { font-size: 44px; }
+        .stage { min-height: 330px; }
+        .phone { width: 158px; height: 320px; border-radius: 30px; margin-left: -79px; padding: 8px; }
+        .phone-screen { border-radius: 24px; }
+        .phone-notch { width: 60px; height: 17px; }
       }
 
       /* ── Code entry ─────────────────────────────────────────── */
@@ -453,7 +354,7 @@
     <!-- ── Hero ─────────────────────────────────────────────── -->
     <section class="hero">
       <div class="hero-inner">
-        <div>
+        <div class="hero-copy">
           <h1 class="headline" aria-label="Make anything play.">
             <span class="hl-line" aria-hidden="true">Make</span>
             <span class="odo" id="odo" aria-hidden="true"><span class="odo-track" id="odo-track"><span class="odo-word">anything</span></span></span>
@@ -467,47 +368,28 @@
         </div>
 
         <div class="stage">
-          <div class="demo-wrap">
-            <div class="demo-box">
-            <div class="demo-scene" id="demo-scene">
-              <div class="demo-frame" id="demo-frame">
-                <img class="demo-photo" id="demo-photo" src="/assets/sample-photo.jpg" alt="A framed photograph"/>
-                <img class="demo-badge" src="/assets/popcode-symbol.png" alt=""/>
+          <img class="art" id="scene-art" src="/assets/mockups/scenes/Album.webp" alt="An open photo album"/>
+          <div class="phone" id="phone">
+            <div class="phone-screen">
+              <div class="phone-home" id="phone-home">
+                <img src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
+                <div class="phone-home-tag">Your Stories.<br>Brought to Life.</div>
+                <button class="phone-home-btn" type="button" tabindex="-1">Tap to Scan</button>
               </div>
-              <div class="demo-phone" id="demo-phone">
-                <div class="demo-phone-screen">
-                  <div class="demo-view">
-                    <img class="demo-view-img" id="demo-view-img" src="/assets/sample-photo.jpg" alt=""/>
-                  </div>
-                  <div class="demo-scanhint">Point at a picture</div>
-                  <div class="demo-live" id="demo-live">
-                    <img src="/assets/sample-photo.jpg" alt=""/>
-                  </div>
-                  <div class="demo-home" id="demo-home">
-                    <img src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
-                    <div class="demo-home-tag">Your Stories.<br>Brought to Life.</div>
-                    <button class="demo-scan-btn" id="demo-scan-btn" type="button">Tap to Scan</button>
-                  </div>
-                  <div class="demo-notch"></div>
-                  <div class="demo-play">
-                    <div class="demo-play-btn">
-                      <span class="demo-ring"></span>
-                      <span class="demo-ring r2"></span>
-                      <svg width="16" height="18" viewBox="0 0 11 12" fill="none"><path d="M0 0.7C0 0.15 0.6 -0.18 1.07 0.11L10.4 5.4C10.86 5.68 10.86 6.32 10.4 6.6L1.07 11.89C0.6 12.18 0 11.85 0 11.3V0.7Z" fill="white"/></svg>
-                    </div>
-                  </div>
-                  <div class="demo-chip">
-                    <svg viewBox="0 0 11 12" fill="none"><path d="M0 0.7C0 0.15 0.6 -0.18 1.07 0.11L10.4 5.4C10.86 5.68 10.86 6.32 10.4 6.6L1.07 11.89C0.6 12.18 0 11.85 0 11.3V0.7Z" fill="white"/></svg>
-                    Dad tells the story
-                  </div>
-                </div>
+              <div class="phone-media" id="phone-media"></div>
+              <div class="phone-notch"></div>
+              <div class="phone-chip" id="phone-chip">
+                <svg viewBox="0 0 11 12" fill="none"><path d="M0 0.7C0 0.15 0.6 -0.18 1.07 0.11L10.4 5.4C10.86 5.68 10.86 6.32 10.4 6.6L1.07 11.89C0.6 12.18 0 11.85 0 11.3V0.7Z" fill="white"/></svg>
+                <span id="phone-chip-text">Dad tells the story</span>
               </div>
             </div>
-            </div>
-            <div class="demo-caption" id="demo-caption"></div>
           </div>
         </div>
       </div>
+
+      <svg class="hero-curve" viewBox="0 0 1200 190" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0 96 C 260 8, 700 -18, 1200 52 L1200 190 L0 190 Z" fill="#f7f6f2"/>
+      </svg>
     </section>
 
     <!-- ── Code entry (load-bearing: printed pieces carry a code) ── -->
@@ -769,63 +651,101 @@
 
       document.getElementById('yr').textContent = new Date().getFullYear();
 
-      // The headline names a thing; the demo shows that thing. Local files where
-      // the repo has one, Unsplash (as elsewhere in the app) where it doesn't —
-      // every URL checked for a 200 and for the free licence, not Unsplash+,
-      // whose hotlinked files come back watermarked.
+      // The headline names a thing; the stage shows that thing, and the phone
+      // plays what it holds. Local files where the repo has one, Unsplash (as
+      // elsewhere in the app) where it doesn't — every URL checked for a 200 and
+      // for the free licence, not Unsplash+, whose hotlinked files come back
+      // watermarked. `video` is optional: without one the phone shows the
+      // picture instead of playing it, so a missing clip degrades quietly.
       var POPCODE_SCENES = {
-        // Curt's own photo-book shot. Until that file lands the Unsplash
-        // scrapbook stands in, so the frame is never empty on the preview.
         albums:    { img: '/assets/mockups/scenes/Album.webp', alt: 'An open photo album',
-                     ar: '1200 / 661', w: '330px', bare: true,
-                     fallback: 'https://images.unsplash.com/photo-1766366622533-7f12737f6af8?auto=format&fit=crop&w=700&q=80' },
-        calendars: { img: 'https://images.unsplash.com/photo-1610888662651-05dbdec7cfae?auto=format&fit=crop&w=700&q=80', alt: 'A wall calendar' },
-        photos:    { img: '/assets/sample-photo.jpg', alt: 'A printed photograph' },
-        prints:    { img: '/assets/mockups/framed.jpg', alt: 'A framed print' },
-        exhibits:  { img: 'https://images.unsplash.com/photo-1560828343-a0b3d8864d1b?auto=format&fit=crop&w=700&q=80', alt: 'A painting in an ornate frame' },
-        murals:    { img: 'https://images.unsplash.com/photo-1759352642380-8340b846c45d?auto=format&fit=crop&w=700&q=80', alt: 'A painted wall mural' },
-        anything:  { img: '/assets/sample-photo.jpg', alt: 'A printed photograph' }
+                     video: '/video/Album.mp4', chip: 'Dad tells the story',
+                     fallback: 'https://images.unsplash.com/photo-1766366622533-7f12737f6af8?auto=format&fit=crop&w=1200&q=80' },
+        calendars: { img: '/assets/mockups/scenes/calendar.png', alt: 'A wall calendar',
+                     video: '/video/calendar.mp4', chip: 'Her birthday, that year',
+                     fallback: 'https://images.unsplash.com/photo-1610888662651-05dbdec7cfae?auto=format&fit=crop&w=1200&q=80' },
+        photos:    { img: '/assets/sample-photo.jpg', alt: 'A printed photograph', chip: 'The whole afternoon' },
+        prints:    { img: '/assets/mockups/scenes/print.png', alt: 'A framed print', chip: 'The first dance',
+                     fallback: '/assets/mockups/framed.jpg' },
+        exhibits:  { img: '/assets/mockups/scenes/exhibit.png', alt: 'A painting in an ornate frame', chip: 'The artist, on this piece',
+                     fallback: 'https://images.unsplash.com/photo-1560828343-a0b3d8864d1b?auto=format&fit=crop&w=1200&q=80' },
+        murals:    { img: 'https://images.unsplash.com/photo-1759352642380-8340b846c45d?auto=format&fit=crop&w=1200&q=80', alt: 'A painted wall mural', chip: 'How it got painted' },
+        anything:  { img: '/assets/sample-photo.jpg', alt: 'A printed photograph', chip: 'The whole afternoon' }
       };
 
-      // Swaps the picture in the frame, in the phone's camera view and in the
-      // playing layer together — they're the same picture seen three ways, so
-      // letting them drift apart would break the whole illusion.
+      // One scene at a time: the art slides in, the phone shows the Popcode start
+      // screen, then hands over to whatever that thing plays.
       (function () {
-        var targets = ['demo-photo', 'demo-view-img'];
+        var art = document.getElementById('scene-art');
+        var phone = document.getElementById('phone');
+        var media = document.getElementById('phone-media');
+        var chipText = document.getElementById('phone-chip-text');
+        if (!art || !phone) return;
+        var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var handOver = null;
+
+        function setArt(src, alt, fallback) {
+          var next = new Image();
+          next.onload = function () { art.src = src; art.alt = alt || ''; };
+          // A picture that never loads shouldn't empty the stage: try the
+          // stand-in, and failing that keep whatever is already showing.
+          next.onerror = function () {
+            if (!fallback) return;
+            var alt2 = new Image();
+            alt2.onload = function () { art.src = fallback; };
+            alt2.src = fallback;
+          };
+          next.src = src;
+        }
+
+        function play(scene) {
+          media.innerHTML = '';
+          if (scene.video) {
+            var v = document.createElement('video');
+            v.muted = true; v.loop = true; v.playsInline = true; v.autoplay = true;
+            v.setAttribute('playsinline', ''); v.setAttribute('muted', '');
+            // No clip yet (or a format this browser won't take) — show the thing
+            // itself rather than a black rectangle.
+            v.onerror = function () { media.innerHTML = ''; showStill(scene); };
+            v.src = scene.video;
+            media.appendChild(v);
+            v.play().catch(function () {});
+          } else {
+            showStill(scene);
+          }
+          phone.classList.add('playing');
+        }
+
+        function showStill(scene) {
+          var im = document.createElement('img');
+          im.src = art.currentSrc || art.src;
+          im.alt = '';
+          media.appendChild(im);
+        }
+
         window.popcodeShowScene = function (word) {
           var scene = POPCODE_SCENES[word];
           if (!scene) return;
-          var frame = document.getElementById('demo-frame');
-          if (frame) {
-            frame.style.setProperty('--ar', scene.ar || '4 / 5');
-            frame.style.setProperty('--fw', scene.w || '262px');
-            frame.classList.toggle('bare', !!scene.bare);
-          }
-          var els = targets.map(function (id) { return document.getElementById(id); });
-          var live = document.querySelector('#demo-live img');
-          if (live) els.push(live);
-          els.forEach(function (el) {
-            if (!el || el.getAttribute('src') === scene.img) return;
-            el.style.opacity = '0';
-            var next = new Image();
-            next.onload = function () {
-              el.src = scene.img;
-              if (el.alt !== undefined && el.id === 'demo-photo') el.alt = scene.alt;
-              el.style.opacity = '';
-            };
-            // A picture that never loads shouldn't leave the frame blank: try
-            // the stand-in, and failing that leave whatever is already there.
-            next.onerror = function () {
-              if (!scene.fallback) { el.style.opacity = ''; return; }
-              var alt = new Image();
-              alt.onload = function () { el.src = scene.fallback; el.style.opacity = ''; };
-              alt.onerror = function () { el.style.opacity = ''; };
-              alt.src = scene.fallback;
-            };
-            next.src = scene.img;
-          });
+          if (chipText) chipText.textContent = scene.chip || 'Dad tells the story';
+          clearTimeout(handOver);
+
+          if (still) { setArt(scene.img, scene.alt, scene.fallback); play(scene); return; }
+
+          // Back to the start screen, slide the new thing in, then hand over.
+          phone.classList.remove('playing');
+          art.classList.add('entering');
+          setTimeout(function () {
+            setArt(scene.img, scene.alt, scene.fallback);
+            art.classList.remove('entering');
+          }, 60);
+          handOver = setTimeout(function () { play(scene); }, 760);
         };
-        // Warm the next few so the swap doesn't land on an empty frame.
+
+        // Under reduced motion the reel never runs, so nothing else would ever
+        // set a scene — rest on the word the sentence rests on.
+        if (still) window.popcodeShowScene('anything');
+
+        // Warm every picture so a swap never lands on an empty stage.
         Object.keys(POPCODE_SCENES).forEach(function (k) {
           var im = new Image(); im.src = POPCODE_SCENES[k].img;
           if (POPCODE_SCENES[k].fallback) { var f = new Image(); f.src = POPCODE_SCENES[k].fallback; }
@@ -842,7 +762,7 @@
 
         // Ends on "anything" — the reel rolls through the specifics and resolves
         // to the word the sentence rests on. Each word shows the thing it names
-        // in the demo alongside, so the headline and the picture stay in step.
+        // on the stage alongside, so headline and picture stay in step.
         var words = ['albums', 'calendars', 'photos', 'prints', 'exhibits', 'murals', 'anything'];
         track.innerHTML = words.map(function (w) {
           return '<span class="odo-word">' + w + '</span>';
@@ -889,168 +809,6 @@
         if (document.fonts && document.fonts.ready) document.fonts.ready.then(alignHeroToNav);
       })();
 
-      // Hero demo: the phone glides over the print and the picture plays. Ported
-      // from the August scroll-driven build, minus the scroll hijacking — this
-      // hero sits beside the headline, so it plays on its own instead.
-      (function () {
-        var scene = document.getElementById('demo-scene');
-        if (!scene) return;
-        var phone = document.getElementById('demo-phone');
-        var screenEl = phone.querySelector('.demo-phone-screen');
-        var photoEl = document.getElementById('demo-photo');
-        var viewImg = document.getElementById('demo-view-img');
-        var scanBtn = document.getElementById('demo-scan-btn');
-        var px = 0, py = 0, rot = 4;
-        var scanning = false, dragging = false, found = false, interacted = false;
-        var dragOffX = 0, dragOffY = 0;
-        var autoTimer = null, raf = null, playTimer = null;
-
-        function sceneRect() { return scene.getBoundingClientRect(); }
-
-        function render() {
-          phone.style.transform = 'translate(' + px + 'px,' + py + 'px) rotate(' + rot + 'deg)';
-          updateCamera();
-          checkFound();
-        }
-
-        // Keeps the on-screen "camera" framing the real print, so the phone shows
-        // the picture it is actually over rather than a canned still.
-        function updateCamera() {
-          var sr = screenEl.getBoundingClientRect();
-          var fr = photoEl.getBoundingClientRect();
-          var z = 1.15;
-          var cx = sr.left + sr.width / 2, cy = sr.top + sr.height / 2;
-          viewImg.style.width = (fr.width * z) + 'px';
-          viewImg.style.height = (fr.height * z) + 'px';
-          viewImg.style.transform = 'translate(' + ((fr.left - cx) * z + sr.width / 2) + 'px,' +
-                                    ((fr.top - cy) * z + sr.height / 2) + 'px)';
-        }
-
-        function startScanning() {
-          if (scanning) return;
-          scanning = true;
-          scene.classList.add('scanning');
-        }
-
-        // "Recognition" is just overlap: once the screen mostly covers the print,
-        // hold a beat and play — the same rhythm as a real scan.
-        function checkFound() {
-          if (!scanning) return;
-          var sr = screenEl.getBoundingClientRect();
-          var fr = photoEl.getBoundingClientRect();
-          var ix = Math.max(0, Math.min(sr.right, fr.right) - Math.max(sr.left, fr.left));
-          var iy = Math.max(0, Math.min(sr.bottom, fr.bottom) - Math.max(sr.top, fr.top));
-          var nowFound = (ix * iy) / (sr.width * sr.height) > 0.55;
-          if (nowFound && !found) {
-            found = true;
-            scene.classList.add('found');
-            playTimer = setTimeout(function () { if (found) scene.classList.add('playing'); }, 700);
-          } else if (!nowFound && found) {
-            found = false;
-            clearTimeout(playTimer);
-            scene.classList.remove('found');
-            scene.classList.remove('playing');
-          }
-        }
-
-        scanBtn.addEventListener('click', function () {
-          interacted = true;
-          clearTimeout(autoTimer);
-          startScanning();
-        });
-
-        phone.addEventListener('pointerdown', function (e) {
-          interacted = true;
-          startScanning();
-          clearTimeout(autoTimer);
-          if (raf) cancelAnimationFrame(raf);
-          dragging = true;
-          try { phone.setPointerCapture(e.pointerId); } catch (err) {}
-          var r = sceneRect(), sc = sceneScale();
-          dragOffX = (e.clientX - r.left) / sc - px;
-          dragOffY = (e.clientY - r.top) / sc - py;
-          phone.classList.add('grabbing');
-          e.preventDefault();
-        });
-        phone.addEventListener('pointermove', function (e) {
-          if (!dragging) return;
-          var r = sceneRect(), sc = sceneScale();
-          px = Math.max(-30, Math.min(scene.offsetWidth - phone.offsetWidth + 30, (e.clientX - r.left) / sc - dragOffX));
-          py = Math.max(-20, Math.min(scene.offsetHeight - phone.offsetHeight + 20, (e.clientY - r.top) / sc - dragOffY));
-          render();
-        });
-        function endDrag() { dragging = false; phone.classList.remove('grabbing'); }
-        phone.addEventListener('pointerup', endDrag);
-        phone.addEventListener('pointercancel', endDrag);
-
-        // The scene is scaled on narrow screens, so screen pixels and scene
-        // coordinates diverge. Everything below works in scene coordinates.
-        function sceneScale() {
-          return scene.offsetWidth ? sceneRect().width / scene.offsetWidth : 1;
-        }
-        function targetPos() {
-          var sc = sceneScale(), r = sceneRect(), fr = photoEl.getBoundingClientRect();
-          return {
-            x: (fr.left - r.left + fr.width / 2) / sc - phone.offsetWidth / 2 + 26,
-            y: (fr.top - r.top + fr.height / 2) / sc - phone.offsetHeight / 2 + 18
-          };
-        }
-        function startPos() {
-          return { x: scene.offsetWidth - phone.offsetWidth, y: scene.offsetHeight - phone.offsetHeight - 6 };
-        }
-
-        // Plays itself, so a visitor who never touches anything still sees it work.
-        function autoDemo() {
-          if (interacted) return;
-          scanBtn.classList.add('pressed');
-          setTimeout(function () {
-            scanBtn.classList.remove('pressed');
-            if (interacted) return;
-            startScanning();
-            setTimeout(function () { if (!interacted) glide(); }, 420);
-          }, 320);
-        }
-
-        function glide() {
-          var tp = targetPos();
-          var sx = px, sy = py, dur = 2200, t0 = null;
-          function step(t) {
-            if (interacted) return;
-            if (t0 === null) t0 = t;
-            var k = Math.min(1, (t - t0) / dur);
-            k = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-            px = sx + (tp.x - sx) * k;
-            py = sy + (tp.y - sy) * k;
-            render();
-            if (k < 1) raf = requestAnimationFrame(step);
-          }
-          raf = requestAnimationFrame(step);
-        }
-
-        function init() {
-          var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-          if (still && window.popcodeShowScene) window.popcodeShowScene('anything');
-          var sp = startPos();
-          px = sp.x; py = sp.y;
-          render();
-          var cap = document.getElementById('demo-caption');
-          if (still) {
-            // No glide: park the phone on the picture already playing.
-            var tp = targetPos();
-            px = tp.x; py = tp.y;
-            startScanning();
-            render();
-            scene.classList.add('found', 'playing');
-            return;
-          }
-          if (cap) cap.innerHTML = 'Drag the phone over the picture.';
-          autoTimer = setTimeout(autoDemo, 1200);
-        }
-        window.addEventListener('resize', render);
-        // Images size the camera maths, so wait for them rather than guessing.
-        if (document.readyState === 'complete') init();
-        else window.addEventListener('load', init);
-      })();
     </script>
     <script src="/beta-feedback.js"></script>
   </body>
