@@ -114,7 +114,9 @@
          on a table rather than a product shot pasted into a column. */
       .art {
         position: absolute; left: 0; top: 50%;
-        width: 142%; max-width: none;
+        /* Set per scene: the album is a wide spread, the framed pieces are
+           portrait, and one width can't flatter both. */
+        width: var(--art-w, 100%); max-width: none;
         transform: translate(0, -50%) rotate(-7deg);
         transform-origin: center;
         filter: drop-shadow(0 34px 60px rgba(20, 10, 60, .34));
@@ -658,19 +660,16 @@
       // watermarked. `video` is optional: without one the phone shows the
       // picture instead of playing it, so a missing clip degrades quietly.
       var POPCODE_SCENES = {
-        albums:    { img: '/assets/mockups/scenes/Album.webp', alt: 'An open photo album',
+        albums:    { img: '/assets/mockups/scenes/Album.webp', alt: 'An open photo album', w: '142%',
                      video: '/video/Album.mp4', chip: 'Dad tells the story',
                      fallback: 'https://images.unsplash.com/photo-1766366622533-7f12737f6af8?auto=format&fit=crop&w=1200&q=80' },
-        calendars: { img: '/assets/mockups/scenes/calendar.png', alt: 'A wall calendar',
-                     video: '/video/calendar.mp4', chip: 'Her birthday, that year',
-                     fallback: 'https://images.unsplash.com/photo-1610888662651-05dbdec7cfae?auto=format&fit=crop&w=1200&q=80' },
-        photos:    { img: '/assets/sample-photo.jpg', alt: 'A printed photograph', chip: 'The whole afternoon' },
-        prints:    { img: '/assets/mockups/scenes/print.png', alt: 'A framed print', chip: 'The first dance',
-                     fallback: '/assets/mockups/framed.jpg' },
-        exhibits:  { img: '/assets/mockups/scenes/exhibit.png', alt: 'A painting in an ornate frame', chip: 'The artist, on this piece',
-                     fallback: 'https://images.unsplash.com/photo-1560828343-a0b3d8864d1b?auto=format&fit=crop&w=1200&q=80' },
-        murals:    { img: 'https://images.unsplash.com/photo-1759352642380-8340b846c45d?auto=format&fit=crop&w=1200&q=80', alt: 'A painted wall mural', chip: 'How it got painted' },
-        anything:  { img: '/assets/sample-photo.jpg', alt: 'A printed photograph', chip: 'The whole afternoon' }
+        calendars: { img: '/assets/mockups/scenes/calendar.webp', alt: 'A wall calendar', w: '68%',
+                     video: '/video/calendar.mp4', chip: 'Her birthday, that year' },
+        photos:    { img: '/assets/sample-photo.jpg', alt: 'A printed photograph', w: '104%', chip: 'The whole afternoon' },
+        prints:    { img: '/assets/mockups/scenes/print.webp', alt: 'A framed print', w: '68%', chip: 'The first dance' },
+        exhibits:  { img: '/assets/mockups/scenes/exhibit.webp', alt: 'A painting in an ornate frame', w: '80%', chip: 'The artist, on this piece' },
+        murals:    { img: 'https://images.unsplash.com/photo-1759352642380-8340b846c45d?auto=format&fit=crop&w=1200&q=80', alt: 'A painted wall mural', w: '124%', chip: 'How it got painted' },
+        anything:  { img: '/assets/sample-photo.jpg', alt: 'A printed photograph', w: '104%', chip: 'The whole afternoon' }
       };
 
       // One scene at a time: the art slides in, the phone shows the Popcode start
@@ -727,6 +726,7 @@
           var scene = POPCODE_SCENES[word];
           if (!scene) return;
           if (chipText) chipText.textContent = scene.chip || 'Dad tells the story';
+          art.style.setProperty('--art-w', scene.w || '100%');
           clearTimeout(handOver);
 
           if (still) { setArt(scene.img, scene.alt, scene.fallback); play(scene); return; }
