@@ -888,6 +888,11 @@
               introStage.appendChild(cv);
             }).catch(() => {});
           }
+          // Drop any size we can't actually sell right now (see BOOK_SIZES).
+          document.querySelectorAll('#bi-sizes .bi-size').forEach(chip => {
+            const size = BOOK_SIZES[chip.dataset.size];
+            if (size && size.unavailable) chip.remove();
+          });
           renderIntroBook();
           refreshIntroPrice();
           // Size chips on the intro — applies immediately (builder re-renders on start).
@@ -1121,7 +1126,12 @@
       // variant follow the selected size. Persisted in book_layout.size.
       const BOOK_SIZES = {
         'a4-landscape': { id: 'a4-landscape', variantId: 'book-a4l-layflat',  label: 'A4 Landscape', dims: '11.7 × 8.3"', wIn: 11.6929, hIn: 8.2677, ar: '117 / 83' },
-        'square-8x8':   { id: 'square-8x8',   variantId: 'book-21sq-layflat', label: '8×8" Square',  dims: '8.3 × 8.3"',  wIn: 8.2677,  hIn: 8.2677, ar: '1 / 1' },
+        // `unavailable` — Prodigi won't quote this size's SKU (it was a guess and
+        // it's wrong; see lib/print/catalog.mjs). Kept here so an already-saved
+        // square book still opens and renders at the right shape, but hidden
+        // from both size pickers so nobody starts a new one that can't be
+        // ordered. Delete the flag once the real SKU is in the catalog.
+        'square-8x8':   { id: 'square-8x8',   variantId: 'book-21sq-layflat', label: '8×8" Square',  dims: '8.3 × 8.3"',  wIn: 8.2677,  hIn: 8.2677, ar: '1 / 1', unavailable: true },
       };
       let bookSize = 'a4-landscape';
       const currentBookSize = () => BOOK_SIZES[bookSize] || BOOK_SIZES['a4-landscape'];
@@ -2439,7 +2449,7 @@
       // Book size picker — photos keep their crops; pages just re-flow to the
       // new aspect ratio, so switching mid-design is safe.
       function openBookSizeSheet() {
-        const rows = Object.values(BOOK_SIZES).map(s => `
+        const rows = Object.values(BOOK_SIZES).filter(s => !s.unavailable).map(s => `
           <div class="menu-row" data-size="${s.id}"${s.id === bookSize ? ' style="background:#f0eefe"' : ''}>
             <div class="menu-ic"><span style="display:block;background:#1a1a1a;border-radius:2px;width:${s.wIn > s.hIn ? 22 : 17}px;height:${s.wIn > s.hIn ? 15.6 : 17}px"></span></div>
             <div><div>${escapeHtml(s.label)}</div><div class="menu-sub">${escapeHtml(s.dims)} · layflat hardcover</div></div>

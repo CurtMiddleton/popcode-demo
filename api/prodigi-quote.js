@@ -39,7 +39,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing productType, variantId or destinationCountryCode' });
     }
 
-    const { findVariant, priceParts, providerFor } = await import('../lib/print/catalog.mjs');
+    const { findVariant, markupFor, priceParts, providerFor } = await import('../lib/print/catalog.mjs');
     const variant = findVariant(productType, variantId);
     if (!variant) return res.status(400).json({ error: 'Unknown product' });
 
@@ -79,10 +79,13 @@ export default async function handler(req, res) {
     }
     if (!summed) return res.status(502).json({ error: 'Could not price this product/destination', unservable: true });
 
-    const parts = priceParts(summed, MARKUP);
+    // Markup is per product type (see catalog.TYPE_MARKUPS); MARKUP is only the
+    // fallback for a type with no entry.
+    const typeMarkup = markupFor(productType, MARKUP);
+    const parts = priceParts(summed, typeMarkup);
     res.status(200).json({
       quote_cost_minor: summed.totalMinor,
-      markup: MARKUP,
+      markup: typeMarkup,
       total_minor: parts.totalMinor,
       printing_minor: parts.printingMinor,
       shipping_minor: parts.shippingMinor,
@@ -92,7 +95,7 @@ export default async function handler(req, res) {
         product_and_shipping_minor: summed.totalMinor,
         product_cost_minor: summed.itemsMinor ?? null,
         shipping_cost_minor: summed.shippingMinor ?? null,
-        markup: MARKUP,
+        markup: typeMarkup,
       },
     });
   } catch (e) {
