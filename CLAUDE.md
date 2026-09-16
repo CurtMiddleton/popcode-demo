@@ -1680,3 +1680,36 @@ At the end of the session the user said to flip it on — "i'm the only one orde
 - **Insert orientation unconfirmed** — settle it from the first real order's proof image.
 - **Two pre-existing horizontal-overflow bugs found and NOT fixed** (both confirmed identical before/after my changes, so neither is a regression): `order.html` scrolls sideways ~16px on phones (`.detail` grid children need `min-width: 0` — grid items default to `min-width: auto`); `manage.html` scrolls sideways at ~768px tablet width. Offered both, user hasn't picked them up.
 - Small-size pricing (shipping-dominated) still open as a business decision.
+
+### 2026-09-16 — HubSpot subscription audit: cancel, but you're locked in until Feb 2027 (no code changes)
+
+**No code changed. No PR. Branch `claude/epic-keller-ghh72v` (fast-forwarded to `main` first — it was 4 commits behind a parallel session's pricing work and had nothing unique on it).** User forwarded a HubSpot invoice: *"still being charged for hubspot from the early popcode days — I should cancel right? can we use hubspot for something? or just throwing money away?"*
+
+**THE ACTION ITEM THAT OUTLIVES THIS SESSION: auto-renewal was NOT yet confirmed cancelled when the session ended. If it isn't turned off before Feb 14, 2027, the account auto-renews for another ~$683.** Verify, and check the Amex ending 1008 isn't charged on Feb 15, 2027.
+
+**The bill (Hub ID 22484647, Popcode, Inc., invoice #823932561):**
+- Starter Customer Platform, **4 core seats** — 1 base at $20.00 + 3 Additional Core Seats ($60.00 list − $27.51 "Price Migration Discount" = $32.49)
+- **$52.49/mo + $4.41 tax = $56.90/mo ≈ $682.80/yr**
+- Commitment term **Feb 15, 2026 → Feb 14, 2027**, billed monthly, Amex ending 1008
+
+**Verified nothing depends on it.** `grep -ril "hubspot\|hs-scripts\|hsforms\|hubapi\|hs-analytics"` across the repo → **zero hits**. Every external domain the site loads is sentry-cdn, Google Fonts, jsdelivr, clideo, supabase.com, popcodeapp.com, popcode.app. No tracking script, no embedded forms, no API calls. **Cancelling breaks nothing in prod.**
+
+**Recommendation: cancel.** Everything HubSpot Starter sells is already covered — transactional + broadcast email by Resend (`popcode.app` DKIM/SPF-verified since 2026-04-22), beta feedback by our own widget → Supabase → `analytics.html`, marketing site static on Vercel, and there is no B2B sales motion to run a CRM for (~35 accounts, mostly friends and family).
+
+**THE CONSTRAINT THAT CHANGES THE ADVICE — it's an annual commitment, and "Billed Monthly" is only the payment schedule.** HubSpot's own docs: **mid-contract cancellations AND mid-contract downgrades are both not permitted.** So:
+- **4 remaining bills are unavoidable** (Oct 15, Nov 15, Dec 15, Jan 15) = **$227.60**. Sunk.
+- The only money actually saveable is the **$682.80 renewal year** starting Feb 15, 2027.
+- Corollary: the **"Remove unassigned seats"** button visible on the Subscriptions page is a red herring — a seat reduction is a mid-contract downgrade, so it takes effect at renewal at best, and is redundant once auto-renewal is off.
+
+**The cancellation path (needs Super Admin or billing admin):** account name (top right) → **Account & Billing** → **Subscriptions** → scroll **below** the "Committed Terms" block to an **"Auto-Renewal Terms"** section → **Cancel auto-renewal** → select **every** product (Starter Customer Platform *and* the 3 Additional Core Seats — anything left ticked renews) → reason → confirm. HubSpot emails a notice of non-renewal to the billing admin; keep it as proof. Fully reversible ("Turn auto-renewal on") any time before the term ends.
+
+**Where the free plan went (the user's actual question — "I don't see the free plan"):** the Customer Platform pricing page shows only Starter / Professional / Enterprise because **it's the upgrade surface shown to a logged-in Starter customer** ("View account details", "Buy seats"). HubSpot never sells you a downgrade. **Free is not a purchasable bundle — it's what the portal falls back to.** The tell is right in the Starter column: "*Free tools*, plus:".
+- **Free Tools** = $0, permanent, not a trial: **1,000 contacts** (identical to the allowance being paid for now), **2 users max** (note: this account has 4 seats), 2,000 email sends/mo with HubSpot branding, 1 deal pipeline, forms, live chat, basic dashboards.
+- After the term ends the portal **auto-downgrades** to it — Hub ID, contacts, companies and deals all survive.
+- Export contacts to CSV anyway before anything (Contacts → Export, all properties).
+
+**Also worth knowing:** HubSpot now advertises Starter from **$7/seat/mo** while this account pays **$20/seat**. The "Price Migration Discount" is protecting an above-market legacy rate, not a bargain — which is the exact psychology that keeps the subscription alive. A discount on a product nobody opens is still $683/yr.
+
+**Pattern worth naming:** this is the same shape as the AWS audit (2026-04-17) and the leftover `identification` Supabase branch — a service from an earlier era of the project, nothing in the codebase referencing it, discovered only via a bill. **Related still-open item from 2026-09-02: the orphaned Stripe webhook endpoints** (`api.popcodeapp.com/api/v1/checkout/webhook`, `api.stg.popcode.deploy-cd.com/...`) from that same dead pre-static backend — user still needs to delete those in the Stripe dashboard (test + live). Same era, same cleanup.
+
+**Sandbox gotcha:** no `pdftotext`, no `pypdf`/`PyPDF2`/`pdfplumber` preinstalled. `pip install pymupdf` works and is the way to read a PDF here (`import pymupdf` — `fitz` still works but warns it's deprecated). The Read tool reports "PDF file read" without putting the text in context, so extract it explicitly.
