@@ -72,13 +72,13 @@
          at runtime, see alignHeroToNav) and is set flush right; the stage beside
          it is deliberately unbounded so the artwork can bleed off the page. */
       .hero-inner {
-        padding-left: var(--hero-pad, 394px);
+        padding-left: var(--hero-pad, 80px);
         /* The copy column is sized to the longest word the odometer can show —
            "calendars", 406px at 100px CooperBT. Any narrower and .odo's
            overflow:hidden clips it from the left, because the text is flush
            right. Shrink the font and this can shrink with it. */
         display: grid; grid-template-columns: minmax(0, 430px) minmax(0, 1fr);
-        align-items: center; gap: 44px;
+        align-items: center; gap: 130px;
       }
       .hero-copy { text-align: right; }
       h1.headline {
@@ -98,7 +98,7 @@
         display: block; height: var(--slot); overflow: hidden;
         margin: calc((var(--hl-lh) * 1em - var(--slot)) / 2) 0;
       }
-      .odo-track { display: block; transition: transform .52s cubic-bezier(.16,.84,.26,1); }
+      .odo-track { display: block; transition: transform .85s cubic-bezier(.16,.84,.26,1); }
       .odo-word { display: block; height: var(--slot); line-height: var(--slot); white-space: nowrap; }
       @media (prefers-reduced-motion: reduce) { .odo-track { transition: none; } }
       .sub { font-size: 16px; line-height: 1.55; color: rgba(255,255,255,0.93); margin: 0 0 28px auto; max-width: 30em; }
@@ -109,23 +109,28 @@
       .hero .btn-ghost { background: #fff; border-color: #fff; color: var(--ink); }
 
       /* ── Hero stage: the printed thing, and the phone playing it ──────── */
-      .stage { position: relative; min-height: 520px; }
+      /* A definite height, because the art is sized against it. */
+      .stage { position: relative; height: var(--stage-h, 620px); }
       /* The art runs off the right edge on purpose — it reads as a real object
          on a table rather than a product shot pasted into a column. */
       .art {
         position: absolute; left: 0; top: 50%;
-        /* Set per scene: the album is a wide spread, the framed pieces are
-           portrait, and one width can't flatter both. */
-        width: var(--art-w, 100%); max-width: none;
-        transform: translate(0, -50%) rotate(-7deg);
+        /* Sized by HEIGHT, not width. The set mixes a wide spread with portrait
+           frames, and a shared width makes one of them tiny and the other spill
+           off the top; a shared height lands them all at the same visual weight. */
+        height: var(--art-h, 90%); width: auto; max-width: none;
+        /* Most pieces sit at a slight angle, as they would on a table; --art-rot
+           lets one stand square when that suits it better. */
+        transform: translate(0, -50%) rotate(var(--art-rot, -7deg));
         transform-origin: center;
         filter: drop-shadow(0 34px 60px rgba(20, 10, 60, .34));
-        opacity: 1; transition: opacity .5s ease, transform .7s cubic-bezier(.2,.85,.3,1);
+        opacity: 1; transition: opacity .8s ease;
       }
-      /* Slides in from the right as each word lands. */
-      .art.entering { opacity: 0; transform: translate(16%, -50%) rotate(-7deg); }
+      /* One picture leaves before the next arrives — they never cross-dissolve
+         into each other, which on two busy photographs reads as a smear. */
+      .art.fading { opacity: 0; }
       @media (prefers-reduced-motion: reduce) {
-        .art, .art.entering { transition: none; opacity: 1; transform: translate(0, -50%) rotate(-7deg); }
+        .art { transition: none; opacity: 1; }
       }
 
       /* The phone sits still. It used to be draggable; it isn't any more, so the
@@ -150,7 +155,7 @@
       .phone-home {
         position: absolute; inset: 0; display: flex; flex-direction: column;
         align-items: center; justify-content: center; gap: 14px;
-        transition: opacity .45s ease;
+        transition: opacity .7s ease;
       }
       .phone-home img { width: 58%; display: block; }
       .phone-home-tag { font-family: var(--serif); font-size: 15px; line-height: 1.3; text-align: center; color: rgba(255,255,255,.92); }
@@ -158,7 +163,7 @@
         background: #fff; color: #7c3aed; border: 0; border-radius: 999px;
         font-family: var(--sans); font-size: 13px; font-weight: 700; padding: 10px 20px;
       }
-      .phone-media { position: absolute; inset: 0; opacity: 0; transition: opacity .45s ease; }
+      .phone-media { position: absolute; inset: 0; opacity: 0; transition: opacity .7s ease; }
       .phone-media video, .phone-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
       .phone.playing .phone-home { opacity: 0; }
       .phone.playing .phone-media { opacity: 1; }
@@ -167,7 +172,7 @@
         display: flex; align-items: center; gap: 7px; z-index: 5;
         background: rgba(20,14,40,.72); color: #fff; border-radius: 999px;
         font-family: var(--sans); font-size: 11px; font-weight: 600; padding: 7px 13px;
-        white-space: nowrap; opacity: 0; transition: opacity .4s ease;
+        white-space: nowrap; opacity: 0; transition: opacity .6s ease;
       }
       .phone.playing .phone-chip { opacity: 1; }
       .phone-chip svg { width: 8px; height: 9px; flex-shrink: 0; }
@@ -192,12 +197,13 @@
 
       @media (max-width: 1240px) {
         h1.headline { font-size: 82px; }
-        .hero-inner { grid-template-columns: minmax(0, 355px) minmax(0, 1fr); gap: 34px; }
+        .stage { --stage-h: 540px; }
+        .hero-inner { grid-template-columns: minmax(0, 355px) minmax(0, 1fr); gap: 90px; }
         .phone { width: 200px; height: 404px; border-radius: 38px; }
       }
       @media (max-width: 1040px) {
         h1.headline { font-size: 68px; }
-        .hero-inner { grid-template-columns: minmax(0, 296px) minmax(0, 1fr); gap: 26px; }
+        .hero-inner { grid-template-columns: minmax(0, 296px) minmax(0, 1fr); gap: 60px; }
       }
       @media (max-width: 860px) {
         /* Stacked: the sentence first, then the thing it describes. Flush right
@@ -208,7 +214,7 @@
         .sub { margin-left: auto; margin-right: auto; }
         .hero-cta { justify-content: center; flex-wrap: wrap; }
         h1.headline { font-size: 60px; }
-        .stage { min-height: 420px; margin-top: 18px; }
+        .stage { --stage-h: 420px; margin-top: 18px; }
         .art { left: -10%; width: 120%; }
         .phone { left: 50%; margin-left: -100px; width: 200px; height: 404px; }
         .hero-curve { height: 120px; }
@@ -216,7 +222,7 @@
       @media (max-width: 560px) {
         .hero-inner { padding-left: 20px; padding-right: 20px; }
         h1.headline { font-size: 44px; }
-        .stage { min-height: 330px; }
+        .stage { --stage-h: 330px; }
         .phone { width: 158px; height: 320px; border-radius: 30px; margin-left: -79px; padding: 8px; }
         .phone-screen { border-radius: 24px; }
         .phone-notch { width: 60px; height: 17px; }
@@ -660,15 +666,17 @@
       // watermarked. `video` is optional: without one the phone shows the
       // picture instead of playing it, so a missing clip degrades quietly.
       var POPCODE_SCENES = {
-        albums:    { img: '/assets/mockups/scenes/Album.webp', alt: 'An open photo album', w: '142%',
-                     video: '/video/Album.mp4', chip: 'Dad tells the story',
+        albums:    { img: '/assets/mockups/scenes/Album.webp', alt: 'An open photo album', h: '86%',
+                     video: '/video/Album.mp4', videoFallback: '/video/demo.mp4', chip: 'Dad tells the story',
                      fallback: 'https://images.unsplash.com/photo-1766366622533-7f12737f6af8?auto=format&fit=crop&w=1200&q=80' },
-        calendars: { img: '/assets/mockups/scenes/calendar.webp', alt: 'A wall calendar', w: '68%',
-                     video: '/video/calendar.mp4', chip: 'Her birthday, that year' },
-        photos:    { img: '/assets/sample-photo.jpg', alt: 'A printed photograph', w: '104%', chip: 'The whole afternoon' },
-        prints:    { img: '/assets/mockups/scenes/print.webp', alt: 'A framed print', w: '68%', chip: 'The first dance' },
-        exhibits:  { img: '/assets/mockups/scenes/exhibit.webp', alt: 'A painting in an ornate frame', w: '80%', chip: 'The artist, on this piece' },
-        murals:    { img: 'https://images.unsplash.com/photo-1759352642380-8340b846c45d?auto=format&fit=crop&w=1200&q=80', alt: 'A painted wall mural', w: '124%', chip: 'How it got painted' },
+        calendars: { img: '/assets/mockups/scenes/calendar.webp', alt: 'A wall calendar', h: '100%',
+                     video: '/video/calendar.mp4', videoFallback: '/video/demo.mp4', chip: 'Her birthday, that year' },
+        photos:    { img: '/assets/sample-photo.jpg', alt: 'A printed photograph', h: '86%', chip: 'The whole afternoon' },
+        prints:    { img: '/assets/mockups/scenes/print.webp', alt: 'A framed print', h: '100%', chip: 'The first dance' },
+        // Hangs square rather than tilted — an ornate frame on a wall reads wrong
+        // at an angle in a way a print on a table doesn't.
+        exhibits:  { img: '/assets/mockups/scenes/exhibit.webp', alt: 'A painting in an ornate frame', h: '94%',
+                     rot: '0deg', chip: 'The artist, on this piece' },
         anything:  { img: '/assets/sample-photo.jpg', alt: 'A printed photograph', w: '104%', chip: 'The whole afternoon' }
       };
 
@@ -681,7 +689,10 @@
         var chipText = document.getElementById('phone-chip-text');
         if (!art || !phone) return;
         var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        var handOver = null;
+        // Matches the .art opacity transition — the swap has to happen while the
+        // old picture is invisible, or you see it change.
+        var FADE_OUT = 800;
+        var handOver = null, swapIn = null;
 
         function setArt(src, alt, fallback) {
           var next = new Image();
@@ -700,19 +711,26 @@
         function play(scene) {
           media.innerHTML = '';
           if (scene.video) {
-            var v = document.createElement('video');
-            v.muted = true; v.loop = true; v.playsInline = true; v.autoplay = true;
-            v.setAttribute('playsinline', ''); v.setAttribute('muted', '');
-            // No clip yet (or a format this browser won't take) — show the thing
-            // itself rather than a black rectangle.
-            v.onerror = function () { media.innerHTML = ''; showStill(scene); };
-            v.src = scene.video;
-            media.appendChild(v);
-            v.play().catch(function () {});
+            mount(scene, scene.video, scene.videoFallback);
           } else {
             showStill(scene);
           }
           phone.classList.add('playing');
+        }
+
+        // Tries a clip; on a missing file or a format this browser won't take,
+        // tries the stand-in, then gives up to the still. Never a black rectangle.
+        function mount(scene, src, next) {
+          var v = document.createElement('video');
+          v.muted = true; v.loop = true; v.playsInline = true; v.autoplay = true;
+          v.setAttribute('playsinline', ''); v.setAttribute('muted', '');
+          v.onerror = function () {
+            media.innerHTML = '';
+            if (next) mount(scene, next, null); else showStill(scene);
+          };
+          v.src = src;
+          media.appendChild(v);
+          v.play().catch(function () {});
         }
 
         function showStill(scene) {
@@ -726,19 +744,24 @@
           var scene = POPCODE_SCENES[word];
           if (!scene) return;
           if (chipText) chipText.textContent = scene.chip || 'Dad tells the story';
-          art.style.setProperty('--art-w', scene.w || '100%');
+          art.style.setProperty('--art-h', scene.h || '90%');
           clearTimeout(handOver);
+          clearTimeout(swapIn);
 
-          if (still) { setArt(scene.img, scene.alt, scene.fallback); play(scene); return; }
+          if (still) {
+            art.style.setProperty('--art-rot', scene.rot || '-7deg');
+            setArt(scene.img, scene.alt, scene.fallback); play(scene); return;
+          }
 
-          // Back to the start screen, slide the new thing in, then hand over.
+          // Out, swap, in — then, after a beat to take it in, the phone plays it.
           phone.classList.remove('playing');
-          art.classList.add('entering');
-          setTimeout(function () {
+          art.classList.add('fading');
+          swapIn = setTimeout(function () {
+            art.style.setProperty('--art-rot', scene.rot || '-7deg');
             setArt(scene.img, scene.alt, scene.fallback);
-            art.classList.remove('entering');
-          }, 60);
-          handOver = setTimeout(function () { play(scene); }, 760);
+            art.classList.remove('fading');
+          }, FADE_OUT);
+          handOver = setTimeout(function () { play(scene); }, 2000);
         };
 
         // Under reduced motion the reel never runs, so nothing else would ever
@@ -763,7 +786,7 @@
         // Ends on "anything" — the reel rolls through the specifics and resolves
         // to the word the sentence rests on. Each word shows the thing it names
         // on the stage alongside, so headline and picture stay in step.
-        var words = ['albums', 'calendars', 'photos', 'prints', 'exhibits', 'murals', 'anything'];
+        var words = ['albums', 'calendars', 'photos', 'prints', 'exhibits', 'anything'];
         track.innerHTML = words.map(function (w) {
           return '<span class="odo-word">' + w + '</span>';
         }).join('');
@@ -783,7 +806,7 @@
           if (window.popcodeShowScene) window.popcodeShowScene(words[i]);
           // Holds on "anything" — it's the tagline, so it doesn't loop away.
           if (i >= words.length - 1) clearInterval(t);
-        }, 2000);
+        }, 4000);
       })();
 
       // The hero copy lines up with the first nav item. nav.js owns that x and
@@ -792,14 +815,12 @@
       (function () {
         function alignHeroToNav() {
           var hero = document.querySelector('.hero');
-          var link = document.querySelector('.site-header .nav-inline a');
+          var brand = document.querySelector('.site-header .brand');
           if (!hero) return;
-          // Below nav.js's own breakpoint the inline nav is hidden; the CSS
+          // Below nav.js's own breakpoint the header re-lays itself; the CSS
           // fallback takes over there.
-          if (!link || !link.offsetParent) { hero.style.removeProperty('--hero-pad'); return; }
-          var cs = getComputedStyle(link);
-          var x = link.getBoundingClientRect().left + parseFloat(cs.paddingLeft || 0);
-          hero.style.setProperty('--hero-pad', Math.round(x) + 'px');
+          if (!brand || !brand.offsetParent) { hero.style.removeProperty('--hero-pad'); return; }
+          hero.style.setProperty('--hero-pad', Math.round(brand.getBoundingClientRect().left) + 'px');
         }
         window.addEventListener('resize', alignHeroToNav);
         // nav.js is deferred and injects the header itself, so wait for it.
