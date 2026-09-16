@@ -110,13 +110,14 @@ export default async function handler(req, res) {
     // Deleting the account on a failed purge would strand the files forever.
     const filesRemoved = slugs.length ? await purgeSlugStorage(admin, slugs) : 0;
 
-    // Anything still keyed to this user that won't cascade.
+    // Anything still keyed to this user that won't cascade. Both are
+    // best-effort: leftover cart state or stale analytics must never block
+    // an erasure request, and the content itself is already gone by here.
     const { error: cartError } = await admin
       .from('cart_items').delete().eq('user_id', user.id);
-    if (cartError) throw new Error('Could not clear cart: ' + cartError.message);
+    if (cartError) console.warn('cart_items delete warning:', cartError.message);
 
     // Analytics: keep the aggregate counts, drop the link to the person.
-    // Best-effort — stale analytics must not block an erasure request.
     const { error: eventsError } = await admin
       .from('scan_events').update({ user_id: null }).eq('user_id', user.id);
     if (eventsError) console.warn('scan_events anonymise warning:', eventsError.message);
