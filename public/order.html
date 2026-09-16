@@ -198,7 +198,7 @@
               </div>
             </div>
             <div class="detail-price" id="detail-price">From —</div>
-            <div class="detail-price-note" id="detail-price-note">per print, incl. shipping &amp; handling</div>
+            <div class="detail-price-note" id="detail-price-note">plus shipping</div>
             <ul class="specs" id="detail-specs"></ul>
             <button class="primary-btn" id="create-btn">Choose a photo</button>
           </div>
@@ -227,7 +227,7 @@
             <h2 id="review-name">Product</h2>
             <div class="tagline" id="review-sub"></div>
             <div class="detail-price" id="review-price">—</div>
-            <div class="detail-price-note">per print, incl. shipping &amp; handling</div>
+            <div class="detail-price-note">per print, plus shipping at cost</div>
             <ul class="specs" id="review-specs"></ul>
             <button class="primary-btn" id="addcart-btn">Add to cart</button>
             <button class="secondary-btn" id="order-btn">Buy this one now</button>
@@ -332,7 +332,6 @@
       // Client mirror of lib/print/catalog.mjs (ids/sizes/aspect must stay in sync).
       const PRODUCTS = {
         print: [
-          { id: 'fap-4x6',   size: '4×6"',   aspect: 4 / 6 },
           { id: 'fap-5x7',   size: '5×7"',   aspect: 5 / 7 },
           { id: 'fap-6x6',   size: '6×6"',   aspect: 1 },
           { id: 'fap-8x8',   size: '8×8"',   aspect: 1 },
@@ -1263,14 +1262,17 @@
         document.getElementById('create-btn').textContent = has ? 'Continue' : 'Choose a photo';
         document.getElementById('change-photo-btn').style.display = has ? '' : 'none';
       }
+      // The advertised price is the PRODUCT only. Shipping depends on where it's
+      // going and is passed through at cost, so it joins as its own line at
+      // checkout rather than inflating the number on the shelf.
       async function refreshDetailPrice() {
         const el = document.getElementById('detail-price');
         const note = document.getElementById('detail-price-note');
-        el.textContent = 'From …'; note.textContent = 'per print, incl. shipping & handling';
+        el.textContent = 'From …'; note.textContent = 'plus shipping';
         try {
           const d = await quoteFor(state.productType, orderVariantId());
-          el.textContent = 'From ' + formatMoney(d.total_minor, d.currency);
-          note.textContent = 'per print, incl. shipping & handling';
+          el.textContent = 'From ' + formatMoney(d.printing_minor, d.currency);
+          note.textContent = 'per print, plus shipping at cost';
         } catch (e) { el.textContent = '—'; note.textContent = 'Pricing unavailable: ' + e.message; }
       }
       document.getElementById('orientation-toggle').addEventListener('click', e => {
@@ -1335,7 +1337,7 @@
         // price
         const pe = document.getElementById('review-price');
         pe.textContent = '…';
-        try { const d = await quoteFor(state.productType, orderVariantId()); pe.textContent = formatMoney(d.total_minor, d.currency); }
+        try { const d = await quoteFor(state.productType, orderVariantId()); pe.textContent = formatMoney(d.printing_minor, d.currency); }
         catch (e) { pe.textContent = '—'; }
       }
       document.getElementById('review-back').addEventListener('click', () => showStep('detail'));
@@ -1500,7 +1502,7 @@
             shipping: document.getElementById('shipping').value,
           });
           priceEl.textContent = formatMoney(d.total_minor, d.currency);
-          noteEl.textContent = 'Incl. product, shipping & handling';
+          noteEl.textContent = `${formatMoney(d.printing_minor, d.currency)} print + ${formatMoney(d.shipping_minor, d.currency)} shipping at cost`;
           payBtn.disabled = false;
         } catch (e) {
           priceEl.textContent = '—';

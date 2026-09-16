@@ -2832,8 +2832,8 @@
       // "From $X" on the intro screen. Books are priced per page with the first
       // batch included in the base, so the starting price is the SMALLEST book
       // you can build — /api/prodigi-quote defaults a book with no pageCount to
-      // variant.minPages and reports the count it used. US/Standard matches what
-      // submitBookOrder() actually charges, so the number isn't a teaser.
+      // variant.minPages and reports the count it used. This is the PRODUCT
+      // price; shipping is passed through at cost and joins at checkout.
       // A size change fires a new quote, hence the sequence guard.
       let introPriceSeq = 0;
       function formatMoney(minor, currency) {
@@ -2860,10 +2860,10 @@
           const d = await resp.json();
           if (seq !== introPriceSeq) return; // a newer size superseded this quote
           if (!resp.ok || typeof d.total_minor !== 'number') throw new Error('no price');
-          el.textContent = 'From ' + formatMoney(d.total_minor, d.currency);
+          el.textContent = 'From ' + formatMoney(d.printing_minor, d.currency);
           note.textContent = d.page_count
-            ? `for a ${d.page_count}-page book, incl. shipping & handling. More pages cost more.`
-            : 'incl. shipping & handling';
+            ? `for a ${d.page_count}-page book, plus shipping. More pages cost more.`
+            : 'plus shipping';
         } catch (_) {
           if (seq !== introPriceSeq) return;
           el.textContent = 'From \u2014';

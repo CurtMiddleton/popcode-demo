@@ -2126,8 +2126,8 @@
       }
 
       // "From $X" on the intro screen. A calendar is a single fixed-size,
-      // fixed-page product, so this is the whole price — US/Standard matches
-      // what the checkout sheet actually charges.
+      // fixed-page product, so this is simply its product price; shipping is
+      // passed through at cost and joins at checkout.
       function formatMoney(minor, currency) {
         // Prices are rounded to whole dollars server-side, so drop the .00.
         const whole = minor % 100 === 0;
@@ -2150,8 +2150,8 @@
           });
           const d = await resp.json();
           if (!resp.ok || typeof d.total_minor !== 'number') throw new Error('no price');
-          el.textContent = 'From ' + formatMoney(d.total_minor, d.currency);
-          note.textContent = 'per calendar, incl. shipping & handling';
+          el.textContent = 'From ' + formatMoney(d.printing_minor, d.currency);
+          note.textContent = 'per calendar, plus shipping';
         } catch (_) {
           el.textContent = 'From \u2014';
           note.textContent = 'Pricing is unavailable right now \u2014 you\u2019ll see the full price before you pay.';

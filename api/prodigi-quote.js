@@ -2,7 +2,13 @@
 //
 // Body: { productType, variantId, copies, destinationCountryCode, shippingMethod,
 //         pageCount }
-// 200  { quote_cost_minor, markup, total_minor, currency, page_count, breakdown }
+// 200  { quote_cost_minor, markup, total_minor, printing_minor, shipping_minor,
+//        currency, page_count, breakdown }
+//
+// `printing_minor` is the marked-up PRODUCT price and `shipping_minor` the
+// carrier cost passed through; they sum to `total_minor`. The shop's "From $X"
+// shows printing_minor alone (shipping isn't knowable before an address), and
+// checkout shows both lines.
 //
 // `pageCount` only applies to page-priced photo books. Omit it and a book is
 // priced at its SMALLEST buildable size (variant.minPages) — that is the
@@ -33,7 +39,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing productType, variantId or destinationCountryCode' });
     }
 
-    const { findVariant, priceFromQuote, providerFor } = await import('../lib/print/catalog.mjs');
+    const { findVariant, priceParts, providerFor } = await import('../lib/print/catalog.mjs');
     const variant = findVariant(productType, variantId);
     if (!variant) return res.status(400).json({ error: 'Unknown product' });
 
@@ -73,14 +79,21 @@ export default async function handler(req, res) {
     }
     if (!summed) return res.status(502).json({ error: 'Could not price this product/destination', unservable: true });
 
-    const total_minor = priceFromQuote(summed.totalMinor, MARKUP);
+    const parts = priceParts(summed, MARKUP);
     res.status(200).json({
       quote_cost_minor: summed.totalMinor,
       markup: MARKUP,
-      total_minor,
+      total_minor: parts.totalMinor,
+      printing_minor: parts.printingMinor,
+      shipping_minor: parts.shippingMinor,
       currency: summed.currency,
       page_count: pages,
-      breakdown: { product_and_shipping_minor: summed.totalMinor, markup: MARKUP },
+      breakdown: {
+        product_and_shipping_minor: summed.totalMinor,
+        product_cost_minor: summed.itemsMinor ?? null,
+        shipping_cost_minor: summed.shippingMinor ?? null,
+        markup: MARKUP,
+      },
     });
   } catch (e) {
     console.error('prodigi-quote error:', e);

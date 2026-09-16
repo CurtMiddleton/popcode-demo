@@ -20,13 +20,15 @@
 // only reads quotes; it places no orders.
 //
 // Two things the table cannot show, worth remembering when reading it:
-//  - Customer price is rounded UP to a whole unit (see priceFromQuote), so the
-//    effective markup is always a little above the multiplier, most on cheap items.
+//  - Markup applies to the PRODUCT only; shipping is passed through at cost (see
+//    priceParts). "customer price" is the two added together, each rounded UP to
+//    a whole unit, so effective markup on the goods runs a little above the
+//    multiplier and the blended markup on the whole order runs below it.
 //  - These are BUY-ONE-NOW prices: one item, one shipping charge. In the cart a
 //    group of items from the same provider is quoted as ONE shipment, so two
 //    prints together cost less than twice one print.
 
-import { PRODUCTS, priceFromQuote, providerFor } from '../lib/print/catalog.mjs';
+import { PRODUCTS, priceParts, providerFor } from '../lib/print/catalog.mjs';
 import { getProvider } from '../lib/print/providers/index.mjs';
 
 const arg = (name, dflt) => {
@@ -69,7 +71,9 @@ for (const type of types) {
       row.shipMinor = q.shippingMinor ?? null;
       row.itemMinor = q.itemsMinor ?? (row.shipMinor == null ? null : q.totalMinor - row.shipMinor);
       row.costMinor = q.totalMinor;
-      row.priceMinor = priceFromQuote(q.totalMinor, MARKUP);
+      const parts = priceParts(q, MARKUP);
+      row.printingMinor = parts.printingMinor;
+      row.priceMinor = parts.totalMinor;
       row.marginMinor = row.priceMinor - q.totalMinor;
       // Printify prices shipping from a full address, so a country-only quote is
       // product-only. Say so rather than letting it read as a total.
@@ -83,7 +87,7 @@ for (const type of types) {
 }
 
 if (CSV) {
-  console.log('type,variant_id,sku,pages,currency,product_cost,shipping_cost,total_cost,customer_price,margin,markup_effective,note');
+  console.log('type,variant_id,sku,pages,currency,product_cost,shipping_cost,total_cost,customer_printing,customer_shipping,customer_price,margin,markup_effective,note');
   for (const r of rows) {
     const eff = r.costMinor ? (r.priceMinor / r.costMinor).toFixed(3) : '';
     console.log([
@@ -91,6 +95,8 @@ if (CSV) {
       r.itemMinor != null ? (r.itemMinor / 100).toFixed(2) : '',
       r.shipMinor != null ? (r.shipMinor / 100).toFixed(2) : '',
       r.costMinor != null ? (r.costMinor / 100).toFixed(2) : '',
+      r.printingMinor != null ? (r.printingMinor / 100).toFixed(2) : '',
+      r.shipMinor != null ? (r.shipMinor / 100).toFixed(2) : '',
       r.priceMinor != null ? (r.priceMinor / 100).toFixed(2) : '',
       r.marginMinor != null ? (r.marginMinor / 100).toFixed(2) : '',
       eff,
