@@ -81,8 +81,11 @@
         gap: 40px; align-items: center;
       }
       h1.headline {
-        font-family: var(--serif); font-weight: 400; font-size: 100px; line-height: 1.02;
-        letter-spacing: -0.02em; margin: 0 0 24px; color: #fff;
+        /* --hl-lh is shared with the odometer below, which has to offset itself
+           by exactly this much. Change it here and the odometer follows. */
+        --hl-lh: 0.94;
+        font-family: var(--serif); font-weight: 400; font-size: 100px; line-height: var(--hl-lh);
+        letter-spacing: -0.02em; margin: 0 0 26px; color: #fff;
       }
       .hl-line { display: block; }
       /* Odometer. Every word occupies a slot exactly as tall as the mask, so the
@@ -92,7 +95,7 @@
       .odo {
         --slot: 1.18em;
         display: block; height: var(--slot); overflow: hidden;
-        margin: calc((1.02em - var(--slot)) / 2) 0;
+        margin: calc((var(--hl-lh) * 1em - var(--slot)) / 2) 0;
       }
       .odo-track { display: block; transition: transform .52s cubic-bezier(.16,.84,.26,1); }
       .odo-word { display: block; height: var(--slot); line-height: var(--slot); white-space: nowrap; }
@@ -762,7 +765,10 @@
       // every URL checked for a 200 and for the free licence, not Unsplash+,
       // whose hotlinked files come back watermarked.
       var POPCODE_SCENES = {
-        albums:    { img: 'https://images.unsplash.com/photo-1766366622533-7f12737f6af8?auto=format&fit=crop&w=700&q=80', alt: 'An open photo album' },
+        // Curt's own photo-book shot. Until that file lands the Unsplash
+        // scrapbook stands in, so the frame is never empty on the preview.
+        albums:    { img: '/assets/scenes/albums.jpg', alt: 'An open photo album',
+                     fallback: 'https://images.unsplash.com/photo-1766366622533-7f12737f6af8?auto=format&fit=crop&w=700&q=80' },
         calendars: { img: 'https://images.unsplash.com/photo-1610888662651-05dbdec7cfae?auto=format&fit=crop&w=700&q=80', alt: 'A wall calendar' },
         photos:    { img: '/assets/sample-photo.jpg', alt: 'A printed photograph' },
         prints:    { img: '/assets/mockups/framed.jpg', alt: 'A framed print' },
@@ -791,14 +797,22 @@
               if (el.alt !== undefined && el.id === 'demo-photo') el.alt = scene.alt;
               el.style.opacity = '';
             };
-            // A picture that never loads shouldn't leave the frame blank.
-            next.onerror = function () { el.style.opacity = ''; };
+            // A picture that never loads shouldn't leave the frame blank: try
+            // the stand-in, and failing that leave whatever is already there.
+            next.onerror = function () {
+              if (!scene.fallback) { el.style.opacity = ''; return; }
+              var alt = new Image();
+              alt.onload = function () { el.src = scene.fallback; el.style.opacity = ''; };
+              alt.onerror = function () { el.style.opacity = ''; };
+              alt.src = scene.fallback;
+            };
             next.src = scene.img;
           });
         };
         // Warm the next few so the swap doesn't land on an empty frame.
         Object.keys(POPCODE_SCENES).forEach(function (k) {
           var im = new Image(); im.src = POPCODE_SCENES[k].img;
+          if (POPCODE_SCENES[k].fallback) { var f = new Image(); f.src = POPCODE_SCENES[k].fallback; }
         });
       })();
 
@@ -833,7 +847,7 @@
           if (window.popcodeShowScene) window.popcodeShowScene(words[i]);
           // Holds on "anything" — it's the tagline, so it doesn't loop away.
           if (i >= words.length - 1) clearInterval(t);
-        }, 1150);
+        }, 2000);
       })();
 
       // The hero copy lines up with the first nav item. nav.js owns that x and
