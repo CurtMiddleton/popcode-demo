@@ -1,7 +1,13 @@
 // POST /api/prodigi-quote — live price for the order UI (display only).
 //
-// Body: { productType, variantId, copies, destinationCountryCode, shippingMethod }
-// 200  { quote_cost_minor, markup, total_minor, currency, breakdown }
+// Body: { productType, variantId, copies, destinationCountryCode, shippingMethod,
+//         pageCount }
+// 200  { quote_cost_minor, markup, total_minor, currency, page_count, breakdown }
+//
+// `pageCount` only applies to page-priced photo books. Omit it and a book is
+// priced at its SMALLEST buildable size (variant.minPages) — that is the
+// "From $X" the product pages show before a book has any pages in it. The
+// count actually used comes back as `page_count` so the UI can label it.
 //
 // No asset URL is needed: Prodigi prices by SKU + destination + method. This is
 // advisory — api/create-checkout.js re-quotes server-side before charging, so a
@@ -22,7 +28,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   try {
-    const { productType, variantId, copies, destinationCountryCode, shippingMethod, address } = req.body || {};
+    const { productType, variantId, copies, destinationCountryCode, shippingMethod, address, pageCount } = req.body || {};
     if (!productType || !variantId || !destinationCountryCode) {
       return res.status(400).json({ error: 'Missing productType, variantId or destinationCountryCode' });
     }
@@ -30,6 +36,23 @@ export default async function handler(req, res) {
     const { findVariant, priceFromQuote, providerFor } = await import('../lib/print/catalog.mjs');
     const variant = findVariant(productType, variantId);
     if (!variant) return res.status(400).json({ error: 'Unknown product' });
+
+    // Page-priced books: Prodigi needs a page count to quote at all, so a
+    // request that omits one is priced at the minimum book. Same validation as
+    // lib/print/cart.mjs (even, within the variant's bounds) so a display quote
+    // can never promise a price checkout would refuse to honour.
+    let pages = null;
+    if (variant.isBook) {
+      if (pageCount == null || pageCount === '') {
+        pages = variant.minPages || null;
+      } else {
+        pages = parseInt(pageCount, 10);
+        if (!Number.isInteger(pages) || pages % 2 !== 0 ||
+            pages < (variant.minPages || 2) || pages > (variant.maxPages || 1000)) {
+          return res.status(400).json({ error: 'Invalid pageCount' });
+        }
+      }
+    }
 
     const { getProvider } = await import('../lib/print/providers/index.mjs');
     const provider = getProvider(providerFor(productType));
@@ -41,7 +64,7 @@ export default async function handler(req, res) {
       try {
         // `address` is optional and only used by providers that price shipping by
         // full address (e.g. Printify); Prodigi ignores it and prices by country.
-        summed = await provider.quote({ variant, copies, destinationCountryCode, address, shippingMethod });
+        summed = await provider.quote({ variant, copies, pageCount: pages, destinationCountryCode, address, shippingMethod });
       } catch (err) {
         // Unservable routes are a normal answer, not a failure — don't retry.
         if (err.unservable) return res.status(502).json({ error: 'Could not price this product/destination', unservable: true });
@@ -56,6 +79,7 @@ export default async function handler(req, res) {
       markup: MARKUP,
       total_minor,
       currency: summed.currency,
+      page_count: pages,
       breakdown: { product_and_shipping_minor: summed.totalMinor, markup: MARKUP },
     });
   } catch (e) {

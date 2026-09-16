@@ -120,6 +120,10 @@
       .bi-size strong { display: block; font-size: 14px; font-weight: 700; color: #1a1a1a; }
       .bi-size em { display: block; font-style: normal; font-size: 12px; color: #8a857d; margin-top: 1px; }
       .bi-cta:hover { opacity: 0.94; }
+      /* Starting price — same type as order.html's .detail-price so a book
+         reads like every other product in the Shop. */
+      .bi-price { font-size: 20px; font-weight: 600; color: #1a1a1a; margin: 0 0 4px; font-family: 'Inter', sans-serif; }
+      .bi-price-note { color: #888; font-size: 12px; margin-bottom: 22px; font-family: 'Inter', sans-serif; }
 
       .field-label { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
       input.text-input {
@@ -724,6 +728,8 @@
             <button class="bi-size active" data-size="a4-landscape"><span class="bs-shape landscape"></span><span><strong>A4 Landscape</strong><em>11.7 × 8.3"</em></span></button>
             <button class="bi-size" data-size="square-8x8"><span class="bs-shape square"></span><span><strong>8×8" Square</strong><em>8.3 × 8.3"</em></span></button>
           </div>
+          <div class="bi-price" id="bi-price">From &mdash;</div>
+          <div class="bi-price-note" id="bi-price-note">Getting price&hellip;</div>
           <button class="bi-cta" id="start-book-btn">Design a Book</button>
         </div>
       </div>
@@ -883,11 +889,13 @@
             }).catch(() => {});
           }
           renderIntroBook();
+          refreshIntroPrice();
           // Size chips on the intro — applies immediately (builder re-renders on start).
           document.querySelectorAll('#bi-sizes .bi-size').forEach(chip => chip.addEventListener('click', () => {
             document.querySelectorAll('#bi-sizes .bi-size').forEach(x => x.classList.toggle('active', x === chip));
             applyBookSize(chip.dataset.size);
             renderIntroBook();
+            refreshIntroPrice();
           }));
           const startBtn = document.getElementById('start-book-btn');
           if (startBtn) startBtn.addEventListener('click', () => {
@@ -2820,6 +2828,48 @@
       // pages carry the baked scan badge, so a printed page stays scannable.
       // Catalog variant follows the selected size (see BOOK_SIZES).
       const bookVariantId = () => currentBookSize().variantId;
+
+      // "From $X" on the intro screen. Books are priced per page with the first
+      // batch included in the base, so the starting price is the SMALLEST book
+      // you can build — /api/prodigi-quote defaults a book with no pageCount to
+      // variant.minPages and reports the count it used. US/Standard matches what
+      // submitBookOrder() actually charges, so the number isn't a teaser.
+      // A size change fires a new quote, hence the sequence guard.
+      let introPriceSeq = 0;
+      function formatMoney(minor, currency) {
+        // Prices are rounded to whole dollars server-side, so drop the .00.
+        const whole = minor % 100 === 0;
+        try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD', minimumFractionDigits: whole ? 0 : 2 }).format(minor / 100); }
+        catch (_) { return (currency || 'USD') + ' ' + (minor / 100).toFixed(whole ? 0 : 2); }
+      }
+      async function refreshIntroPrice() {
+        const el = document.getElementById('bi-price');
+        const note = document.getElementById('bi-price-note');
+        if (!el || !note) return;
+        const seq = ++introPriceSeq;
+        el.textContent = 'From \u2014';
+        note.textContent = 'Getting price\u2026';
+        try {
+          const resp = await fetch('/api/prodigi-quote', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              productType: 'book', variantId: bookVariantId(), copies: 1,
+              destinationCountryCode: 'US', shippingMethod: 'Standard',
+            }),
+          });
+          const d = await resp.json();
+          if (seq !== introPriceSeq) return; // a newer size superseded this quote
+          if (!resp.ok || typeof d.total_minor !== 'number') throw new Error('no price');
+          el.textContent = 'From ' + formatMoney(d.total_minor, d.currency);
+          note.textContent = d.page_count
+            ? `for a ${d.page_count}-page book, incl. shipping & handling. More pages cost more.`
+            : 'incl. shipping & handling';
+        } catch (_) {
+          if (seq !== introPriceSeq) return;
+          el.textContent = 'From \u2014';
+          note.textContent = 'Pricing is unavailable right now \u2014 you\u2019ll see the full price before you pay.';
+        }
+      }
 
       // Confirm before padding a short book up to the layflat minimum, so the
       // extra blank pages aren't a surprise. Resolves true = continue.

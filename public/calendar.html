@@ -107,6 +107,10 @@
       .bi-year.active { border-color: #1a1a1a; }
       .bi-cta { width: 100%; max-width: 340px; padding: 16px; border: none; border-radius: 16px; font-size: 16px; font-weight: 700; color: #fff; font-family: 'Inter', sans-serif; cursor: pointer; background: #1a1a1a; }
       .bi-cta:hover { opacity: 0.94; }
+      /* Starting price — same type as order.html's .detail-price so a calendar
+         reads like every other product in the Shop. */
+      .bi-price { font-size: 20px; font-weight: 600; color: #1a1a1a; margin: 0 0 4px; font-family: 'Inter', sans-serif; }
+      .bi-price-note { color: #888; font-size: 12px; margin-bottom: 22px; font-family: 'Inter', sans-serif; }
 
       .field-label { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
       input.text-input {
@@ -460,6 +464,8 @@
           </ul>
           <div class="bi-year-label">Calendar year</div>
           <div class="bi-years" id="bi-years"></div>
+          <div class="bi-price" id="bi-price">From &mdash;</div>
+          <div class="bi-price-note" id="bi-price-note">Getting price&hellip;</div>
           <button class="bi-cta" id="start-cal-btn">Design a Calendar</button>
         </div>
       </div>
@@ -2119,6 +2125,39 @@
         });
       }
 
+      // "From $X" on the intro screen. A calendar is a single fixed-size,
+      // fixed-page product, so this is the whole price — US/Standard matches
+      // what the checkout sheet actually charges.
+      function formatMoney(minor, currency) {
+        // Prices are rounded to whole dollars server-side, so drop the .00.
+        const whole = minor % 100 === 0;
+        try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD', minimumFractionDigits: whole ? 0 : 2 }).format(minor / 100); }
+        catch (_) { return (currency || 'USD') + ' ' + (minor / 100).toFixed(whole ? 0 : 2); }
+      }
+      async function refreshIntroPrice() {
+        const el = document.getElementById('bi-price');
+        const note = document.getElementById('bi-price-note');
+        if (!el || !note) return;
+        el.textContent = 'From \u2014';
+        note.textContent = 'Getting price\u2026';
+        try {
+          const resp = await fetch('/api/prodigi-quote', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              productType: 'calendar', variantId: 'cal-a4-undated', copies: 1,
+              destinationCountryCode: 'US', shippingMethod: 'Standard',
+            }),
+          });
+          const d = await resp.json();
+          if (!resp.ok || typeof d.total_minor !== 'number') throw new Error('no price');
+          el.textContent = 'From ' + formatMoney(d.total_minor, d.currency);
+          note.textContent = 'per calendar, incl. shipping & handling';
+        } catch (_) {
+          el.textContent = 'From \u2014';
+          note.textContent = 'Pricing is unavailable right now \u2014 you\u2019ll see the full price before you pay.';
+        }
+      }
+
       // ── Boot ────────────────────────────────────────────────────
       db.auth.getSession().then(({ data }) => {
         if (!data.session) { window.location.href = '/auth.html'; return; }
@@ -2140,6 +2179,7 @@
           setChrome(false);
           renderIntroYears();
           buildIntroMock();
+          refreshIntroPrice();
           document.getElementById('start-cal-btn').addEventListener('click', () => {
             introEl.style.display = 'none';
             builderEl.style.display = '';
