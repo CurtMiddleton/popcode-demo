@@ -69,22 +69,36 @@
         color: #fff;
         padding: 56px 0 64px;
       }
-      .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+      /* The copy starts where the first nav item's text starts. nav.js pins the
+         logo a fixed distance from the viewport edge, so that x doesn't move as
+         the window resizes — but a centred .wrap does, which is why this hero
+         is full-width with a measured left pad instead. --hero-pad is set from
+         the real nav link at runtime (see alignHeroToNav); the fallback here is
+         what desktop nav.js currently works out to. */
+      .hero-inner {
+        padding-left: var(--hero-pad, 394px); padding-right: 28px;
+        display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 520px);
+        gap: 40px; align-items: center;
+      }
       h1.headline {
-        font-family: var(--serif); font-weight: 400; font-size: 100px; line-height: 1.18;
+        font-family: var(--serif); font-weight: 400; font-size: 100px; line-height: 1.02;
         letter-spacing: -0.02em; margin: 0 0 24px; color: #fff;
       }
       .hl-line { display: block; }
-      /* Odometer. The slot is exactly one line tall and every word occupies one
-         slot, so the roll can never clip a descender or let a neighbour peek —
-         change the height here and you must change .odo-word to match. */
-      .odo { display: block; height: 1.18em; overflow: hidden; }
+      /* Odometer. Every word occupies a slot exactly as tall as the mask, so the
+         roll can never clip a descender or let the next word peek. The slot has
+         to stay taller than the tight 1.02 line spacing to clear descenders, so
+         it's pulled back into line with negative margins — keep the two in step. */
+      .odo {
+        --slot: 1.18em;
+        display: block; height: var(--slot); overflow: hidden;
+        margin: calc((1.02em - var(--slot)) / 2) 0;
+      }
       .odo-track { display: block; transition: transform .52s cubic-bezier(.16,.84,.26,1); }
-      .odo-word { display: block; height: 1.18em; line-height: 1.18em; white-space: nowrap; }
+      .odo-word { display: block; height: var(--slot); line-height: var(--slot); white-space: nowrap; }
       @media (prefers-reduced-motion: reduce) { .odo-track { transition: none; } }
-      .sub { font-size: 18px; line-height: 1.55; color: rgba(255,255,255,0.93); margin: 0 0 28px; max-width: 24em; }
+      .sub { font-size: 16px; line-height: 1.55; color: rgba(255,255,255,0.93); margin: 0 0 28px; max-width: 26em; }
       .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-      .hero-note { font-size: 13.5px; color: rgba(255,255,255,0.78); margin-top: 18px; }
       /* On the gradient the outlined button reads as white-on-white, so it fills. */
       .hero .btn-ghost { background: #fff; border-color: #fff; color: var(--ink); }
       .stage { position: relative; display: grid; place-items: center; }
@@ -123,6 +137,7 @@
         box-shadow: 0 24px 60px rgba(20, 10, 60, 0.35);
         transform: rotate(-3deg);
       }
+      .demo-photo, .demo-view-img, .demo-live img { transition: opacity .3s ease; }
       .demo-frame img.demo-photo {
         display: block; width: 100%; aspect-ratio: 4/5; object-fit: cover; border-radius: 2px;
       }
@@ -274,12 +289,14 @@
       }
       @media (max-width: 940px) {
         .hero { padding: 40px 0 52px; }
-        .hero-grid { grid-template-columns: 1fr; gap: 24px; }
+        .hero-inner { grid-template-columns: 1fr; gap: 24px; }
         h1.headline { font-size: 66px; }
         /* Stacked now, so the full width is available again. */
         .demo-wrap { --demo-s: 1; }
       }
+      @media (max-width: 760px) { .hero-inner { padding-left: 28px; } }
       @media (max-width: 620px) { .demo-wrap { --demo-s: .78; } }
+      @media (max-width: 560px) { .hero-inner { padding-left: 20px; padding-right: 20px; } }
       @media (max-width: 460px) { .demo-wrap { --demo-s: .64; } }
       /* Smallest phones: "calendar" at 46px is wider than the gutter allows. */
       @media (max-width: 380px) {
@@ -288,7 +305,6 @@
       }
       @media (max-width: 560px) {
         h1.headline { font-size: 46px; }
-        .sub { font-size: 17px; }
       }
 
       /* ── Code entry ─────────────────────────────────────────── */
@@ -424,7 +440,7 @@
 
     <!-- ── Hero ─────────────────────────────────────────────── -->
     <section class="hero">
-      <div class="wrap hero-grid">
+      <div class="hero-inner">
         <div>
           <h1 class="headline" aria-label="Make anything play.">
             <span class="hl-line" aria-hidden="true">Make</span>
@@ -436,7 +452,6 @@
             <a class="btn btn-dark" href="/create.html">Create a Popcode</a>
             <a class="btn btn-ghost" href="/shop.html">Shop things that play</a>
           </div>
-          <p class="hero-note">Free while we're in beta. No QR code on your picture — the picture <em>is</em> the trigger.</p>
         </div>
 
         <div class="stage">
@@ -742,6 +757,51 @@
 
       document.getElementById('yr').textContent = new Date().getFullYear();
 
+      // The headline names a thing; the demo shows that thing. Local files where
+      // the repo has one, Unsplash (as elsewhere in the app) where it doesn't —
+      // every URL checked for a 200 and for the free licence, not Unsplash+,
+      // whose hotlinked files come back watermarked.
+      var POPCODE_SCENES = {
+        albums:    { img: 'https://images.unsplash.com/photo-1766366622533-7f12737f6af8?auto=format&fit=crop&w=700&q=80', alt: 'An open photo album' },
+        calendars: { img: 'https://images.unsplash.com/photo-1610888662651-05dbdec7cfae?auto=format&fit=crop&w=700&q=80', alt: 'A wall calendar' },
+        photos:    { img: '/assets/sample-photo.jpg', alt: 'A printed photograph' },
+        prints:    { img: '/assets/mockups/framed.jpg', alt: 'A framed print' },
+        exhibits:  { img: 'https://images.unsplash.com/photo-1560828343-a0b3d8864d1b?auto=format&fit=crop&w=700&q=80', alt: 'A painting in an ornate frame' },
+        murals:    { img: 'https://images.unsplash.com/photo-1759352642380-8340b846c45d?auto=format&fit=crop&w=700&q=80', alt: 'A painted wall mural' },
+        anything:  { img: '/assets/sample-photo.jpg', alt: 'A printed photograph' }
+      };
+
+      // Swaps the picture in the frame, in the phone's camera view and in the
+      // playing layer together — they're the same picture seen three ways, so
+      // letting them drift apart would break the whole illusion.
+      (function () {
+        var targets = ['demo-photo', 'demo-view-img'];
+        window.popcodeShowScene = function (word) {
+          var scene = POPCODE_SCENES[word];
+          if (!scene) return;
+          var els = targets.map(function (id) { return document.getElementById(id); });
+          var live = document.querySelector('#demo-live img');
+          if (live) els.push(live);
+          els.forEach(function (el) {
+            if (!el || el.getAttribute('src') === scene.img) return;
+            el.style.opacity = '0';
+            var next = new Image();
+            next.onload = function () {
+              el.src = scene.img;
+              if (el.alt !== undefined && el.id === 'demo-photo') el.alt = scene.alt;
+              el.style.opacity = '';
+            };
+            // A picture that never loads shouldn't leave the frame blank.
+            next.onerror = function () { el.style.opacity = ''; };
+            next.src = scene.img;
+          });
+        };
+        // Warm the next few so the swap doesn't land on an empty frame.
+        Object.keys(POPCODE_SCENES).forEach(function (k) {
+          var im = new Image(); im.src = POPCODE_SCENES[k].img;
+        });
+      })();
+
       // Odometer headline. "anything" is the word already in the HTML, so with no
       // JS — or for anyone who prefers less motion — the sentence reads correctly
       // and never moves. The roll only ever layers on top of a finished sentence.
@@ -751,8 +811,9 @@
         if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
         // Ends on "anything" — the reel rolls through the specifics and resolves
-        // to the word the sentence rests on.
-        var words = ['album', 'calendar', 'photo', 'exhibit', 'mural', 'anything'];
+        // to the word the sentence rests on. Each word shows the thing it names
+        // in the demo alongside, so the headline and the picture stay in step.
+        var words = ['albums', 'calendars', 'photos', 'prints', 'exhibits', 'murals', 'anything'];
         track.innerHTML = words.map(function (w) {
           return '<span class="odo-word">' + w + '</span>';
         }).join('');
@@ -764,13 +825,38 @@
           if (!animate) track.offsetHeight; // flush, so the next move animates
         }
         show(0, false);
+        if (window.popcodeShowScene) window.popcodeShowScene(words[0]);
 
         var t = setInterval(function () {
           i++;
           show(i, true);
+          if (window.popcodeShowScene) window.popcodeShowScene(words[i]);
           // Holds on "anything" — it's the tagline, so it doesn't loop away.
           if (i >= words.length - 1) clearInterval(t);
         }, 1150);
+      })();
+
+      // The hero copy lines up with the first nav item. nav.js owns that x and
+      // works it out from the logo width, so measure it rather than duplicating
+      // its arithmetic here and having the two drift apart.
+      (function () {
+        function alignHeroToNav() {
+          var hero = document.querySelector('.hero');
+          var link = document.querySelector('.site-header .nav-inline a');
+          if (!hero) return;
+          // Below nav.js's own breakpoint the inline nav is hidden; the CSS
+          // fallback takes over there.
+          if (!link || !link.offsetParent) { hero.style.removeProperty('--hero-pad'); return; }
+          var cs = getComputedStyle(link);
+          var x = link.getBoundingClientRect().left + parseFloat(cs.paddingLeft || 0);
+          hero.style.setProperty('--hero-pad', Math.round(x) + 'px');
+        }
+        window.addEventListener('resize', alignHeroToNav);
+        // nav.js is deferred and injects the header itself, so wait for it.
+        if (document.readyState === 'complete') alignHeroToNav();
+        else window.addEventListener('load', alignHeroToNav);
+        // Fonts change the logo's width, which moves the nav.
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(alignHeroToNav);
       })();
 
       // Hero demo: the phone glides over the print and the picture plays. Ported
@@ -912,11 +998,13 @@
         }
 
         function init() {
+          var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          if (still && window.popcodeShowScene) window.popcodeShowScene('anything');
           var sp = startPos();
           px = sp.x; py = sp.y;
           render();
           var cap = document.getElementById('demo-caption');
-          if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          if (still) {
             // No glide: park the phone on the picture already playing.
             var tp = targetPos();
             px = tp.x; py = tp.y;
