@@ -123,7 +123,10 @@
            lets one stand square when that suits it better. */
         transform: translate(0, -50%) rotate(var(--art-rot, -7deg));
         transform-origin: center;
-        filter: drop-shadow(0 34px 60px rgba(20, 10, 60, .34));
+        /* No CSS shadow. filter: drop-shadow traces the alpha silhouette, and
+           these cut-outs are 94–98% opaque rectangles, so it rendered as a hard
+           offset block behind each one — on top of the soft shadow already baked
+           into the artwork. The baked one is the real one. */
         opacity: 1; transition: opacity .8s ease;
       }
       /* One picture leaves before the next arrives — they never cross-dissolve
@@ -163,7 +166,31 @@
         background: #fff; color: #7c3aed; border: 0; border-radius: 999px;
         font-family: var(--sans); font-size: 13px; font-weight: 700; padding: 10px 20px;
       }
-      .phone-media { position: absolute; inset: 0; opacity: 0; transition: opacity .7s ease; }
+      .phone-media { position: absolute; inset: 0; opacity: 0; transition: opacity .7s ease; background: #000; }
+      /* A landscape clip in a full-height portrait screen keeps only a strip of
+         the middle. A square window gives back most of the frame width, at the
+         cost of black above and below — the trade a phone always makes. */
+      .phone-media.square { display: flex; align-items: center; }
+      .phone-media.square video { height: auto; aspect-ratio: 1 / 1; }
+
+      /* Audio: the picture, a voice moving across it, and what's being said. */
+      .pm-audio { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; }
+      .pm-audio .pm-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+      .pm-scrim { position: absolute; inset: 0; background: linear-gradient(to top, rgba(8,4,24,.92) 0%, rgba(8,4,24,.55) 38%, rgba(8,4,24,0) 62%); }
+      .pm-wave { position: relative; display: flex; align-items: center; justify-content: center; gap: 3px; height: 34px; margin-bottom: 10px; }
+      .pm-wave i {
+        display: block; width: 3px; border-radius: 2px; background: rgba(255,255,255,.95);
+        animation: pmbar 1.15s ease-in-out infinite;
+      }
+      @keyframes pmbar { 0%, 100% { height: 5px } 50% { height: 26px } }
+      @media (prefers-reduced-motion: reduce) { .pm-wave i { animation: none; height: 14px; } }
+      /* Caption, set like the CC track it stands for. */
+      .pm-cc {
+        position: relative; margin: 0 12px 16px; padding: 7px 10px; border-radius: 6px;
+        background: rgba(0,0,0,.66); color: #fff; text-align: center;
+        font-family: var(--sans); font-size: 11px; font-weight: 500; line-height: 1.35;
+        transition: opacity .35s ease;
+      }
       .phone-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
       /* The clips are landscape and the screen is portrait, so filling it keeps
          roughly the middle third of the frame. That's deliberate — it reads as
@@ -175,15 +202,6 @@
       }
       .phone.playing .phone-home { opacity: 0; }
       .phone.playing .phone-media { opacity: 1; }
-      .phone-chip {
-        position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
-        display: flex; align-items: center; gap: 7px; z-index: 5;
-        background: rgba(20,14,40,.72); color: #fff; border-radius: 999px;
-        font-family: var(--sans); font-size: 11px; font-weight: 600; padding: 7px 13px;
-        white-space: nowrap; opacity: 0; transition: opacity .6s ease;
-      }
-      .phone.playing .phone-chip { opacity: 1; }
-      .phone-chip svg { width: 8px; height: 9px; flex-shrink: 0; }
 
       /* The curve the hero sits on. Its fill is the page colour, so it reads as
          the page rising into the gradient rather than a shape drawn on top. */
@@ -394,10 +412,6 @@
               </div>
               <div class="phone-media" id="phone-media"></div>
               <div class="phone-notch"></div>
-              <div class="phone-chip" id="phone-chip">
-                <svg viewBox="0 0 11 12" fill="none"><path d="M0 0.7C0 0.15 0.6 -0.18 1.07 0.11L10.4 5.4C10.86 5.68 10.86 6.32 10.4 6.6L1.07 11.89C0.6 12.18 0 11.85 0 11.3V0.7Z" fill="white"/></svg>
-                <span id="phone-chip-text">Dad tells the story</span>
-              </div>
             </div>
           </div>
         </div>
@@ -673,19 +687,25 @@
       // for the free licence, not Unsplash+, whose hotlinked files come back
       // watermarked. `video` is optional: without one the phone shows the
       // picture instead of playing it, so a missing clip degrades quietly.
-      var POPCODE_SCENES = {
+      var POPCODE_SCENES = window.POPCODE_SCENES = {
         albums:    { img: '/assets/mockups/scenes/Album.webp', alt: 'An open photo album', h: '86%',
-                     video: '/video/Album.mp4', chip: 'Dad tells the story',
+                     video: '/video/Album.mp4', dwell: 5500,
                      fallback: 'https://images.unsplash.com/photo-1766366622533-7f12737f6af8?auto=format&fit=crop&w=1200&q=80' },
         // Calendar, print and exhibit hang square: things on a wall read wrong at
         // an angle in a way a book lying open on a table doesn't.
         calendars: { img: '/assets/mockups/scenes/calendar.webp', alt: 'A wall calendar', h: '100%', rot: '0deg',
-                     video: '/video/calendar.mp4', chip: 'Her birthday, that year' },
-        photos:    { img: '/assets/sample-photo.jpg', alt: 'A printed photograph', h: '86%', chip: 'The whole afternoon' },
-        prints:    { img: '/assets/mockups/scenes/print.webp', alt: 'A framed print', h: '100%', rot: '0deg', chip: 'The first dance' },
-        exhibits:  { img: '/assets/mockups/scenes/exhibit.webp', alt: 'A painting in an ornate frame', h: '94%',
-                     rot: '0deg', chip: 'The artist, on this piece' },
-        anything:  { img: '/assets/sample-photo.jpg', alt: 'A printed photograph', w: '104%', chip: 'The whole afternoon' }
+                     video: '/video/calendar.mp4', mediaShape: 'square', dwell: 5500 },
+        // Audio, not video — half of what people make is a voice over an old
+        // picture, and these two are where that reads truest.
+        prints:    { img: '/assets/mockups/scenes/print.webp', alt: 'A framed print', h: '100%', rot: '0deg',
+                     dwell: 6000,
+                     audio: ['This is us coming down the aisle —',
+                             "we couldn't believe how many people showed up."] },
+        exhibits:  { img: '/assets/mockups/scenes/exhibit.webp', alt: 'A painting in an ornate frame', h: '94%', rot: '0deg',
+                     dwell: 6000,
+                     audio: ['She sat for this over four afternoons.',
+                             'I kept the eyes blank — she said that was the truest part.'] },
+        anything:  { img: '/assets/sample-photo.jpg', alt: 'A printed photograph', h: '86%' }
       };
 
       // One scene at a time: the art slides in, the phone shows the Popcode start
@@ -694,13 +714,12 @@
         var art = document.getElementById('scene-art');
         var phone = document.getElementById('phone');
         var media = document.getElementById('phone-media');
-        var chipText = document.getElementById('phone-chip-text');
         if (!art || !phone) return;
         var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         // Matches the .art opacity transition — the swap has to happen while the
         // old picture is invisible, or you see it change.
         var FADE_OUT = 800;
-        var handOver = null, swapIn = null;
+        var handOver = null, swapIn = null, captions = null;
 
         function setArt(src, alt, fallback) {
           var next = new Image();
@@ -718,7 +737,10 @@
 
         function play(scene) {
           media.innerHTML = '';
-          if (scene.video) {
+          media.classList.toggle('square', scene.mediaShape === 'square');
+          if (scene.audio) {
+            mountAudio(scene);
+          } else if (scene.video) {
             mount(scene, scene.video, scene.videoFallback);
           } else {
             showStill(scene);
@@ -742,6 +764,8 @@
           v.play().catch(function () {});
         }
 
+        // No clip for this scene (or none that would play): show the thing
+        // itself, so the screen is never an empty rectangle.
         function showStill(scene) {
           var im = document.createElement('img');
           im.src = art.currentSrc || art.src;
@@ -749,16 +773,43 @@
           media.appendChild(im);
         }
 
+        // A voice playing over a still picture: the artwork, a moving waveform,
+        // and the words, one line at a time, the way a caption track runs.
+        function mountAudio(scene) {
+          var wrap = document.createElement('div');
+          wrap.className = 'pm-audio';
+          var bars = '';
+          for (var i = 0; i < 13; i++) {
+            bars += '<i style="animation-delay:' + (i * 0.08).toFixed(2) + 's"></i>';
+          }
+          wrap.innerHTML =
+            '<img class="pm-art" alt="" src="' + (art.currentSrc || art.src) + '">' +
+            '<div class="pm-scrim"></div>' +
+            '<div class="pm-wave" aria-hidden="true">' + bars + '</div>' +
+            '<div class="pm-cc"></div>';
+          media.appendChild(wrap);
+          var cc = wrap.querySelector('.pm-cc');
+          var lines = scene.audio, n = 0;
+          cc.textContent = lines[0];
+          if (lines.length > 1) {
+            captions = setInterval(function () {
+              n = (n + 1) % lines.length;
+              cc.style.opacity = '0';
+              setTimeout(function () { cc.textContent = lines[n]; cc.style.opacity = ''; }, 350);
+            }, 2200);
+          }
+        }
+
         window.popcodeShowScene = function (word) {
           var scene = POPCODE_SCENES[word];
           if (!scene) return;
-          if (chipText) chipText.textContent = scene.chip || 'Dad tells the story';
-          art.style.setProperty('--art-h', scene.h || '90%');
           clearTimeout(handOver);
           clearTimeout(swapIn);
+          clearInterval(captions);
 
           if (still) {
             art.style.setProperty('--art-rot', scene.rot || '-7deg');
+            art.style.setProperty('--art-h', scene.h || '90%');
             setArt(scene.img, scene.alt, scene.fallback); play(scene); return;
           }
 
@@ -767,10 +818,11 @@
           art.classList.add('fading');
           swapIn = setTimeout(function () {
             art.style.setProperty('--art-rot', scene.rot || '-7deg');
+            art.style.setProperty('--art-h', scene.h || '90%');
             setArt(scene.img, scene.alt, scene.fallback);
             art.classList.remove('fading');
           }, FADE_OUT);
-          handOver = setTimeout(function () { play(scene); }, 2000);
+          handOver = setTimeout(function () { play(scene); }, 1500);
         };
 
         // Under reduced motion the reel never runs, so nothing else would ever
@@ -795,7 +847,7 @@
         // Ends on "anything" — the reel rolls through the specifics and resolves
         // to the word the sentence rests on. Each word shows the thing it names
         // on the stage alongside, so headline and picture stay in step.
-        var words = ['albums', 'calendars', 'photos', 'prints', 'exhibits', 'anything'];
+        var words = ['albums', 'calendars', 'prints', 'exhibits', 'anything'];
         track.innerHTML = words.map(function (w) {
           return '<span class="odo-word">' + w + '</span>';
         }).join('');
@@ -809,13 +861,21 @@
         show(0, false);
         if (window.popcodeShowScene) window.popcodeShowScene(words[0]);
 
-        var t = setInterval(function () {
+        // Each word holds for as long as its scene needs — a clip or a spoken
+        // line wants longer than a still — so this schedules the next one
+        // itself rather than running on a fixed interval.
+        function dwellFor(word) {
+          var sc = window.POPCODE_SCENES && window.POPCODE_SCENES[word];
+          return (sc && sc.dwell) || 4000;
+        }
+        function next() {
           i++;
           show(i, true);
           if (window.popcodeShowScene) window.popcodeShowScene(words[i]);
           // Holds on "anything" — it's the tagline, so it doesn't loop away.
-          if (i >= words.length - 1) clearInterval(t);
-        }, 4000);
+          if (i < words.length - 1) setTimeout(next, dwellFor(words[i]));
+        }
+        setTimeout(next, dwellFor(words[0]));
       })();
 
       // The hero copy lines up with the first nav item. nav.js owns that x and
