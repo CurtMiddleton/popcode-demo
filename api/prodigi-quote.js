@@ -53,10 +53,8 @@ export default async function handler(req, res) {
         pages = variant.minPages || null;
       } else {
         pages = parseInt(pageCount, 10);
-        // TEMPORARY PROBE — range check relaxed to find Prodigi's real page
-        // limits. Display-only: every order path goes through cart.normalizeLines
-        // which is unchanged and still enforces the variant's range. REVERT.
-        if (!Number.isInteger(pages) || pages % 2 !== 0 || pages < 2 || pages > 1000) {
+        if (!Number.isInteger(pages) || pages % 2 !== 0 ||
+            pages < (variant.minPages || 2) || pages > (variant.maxPages || 1000)) {
           return res.status(400).json({ error: 'Invalid pageCount' });
         }
       }
