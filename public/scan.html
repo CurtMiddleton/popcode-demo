@@ -71,6 +71,7 @@
 
       #start-screen {
         display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0;
+        overflow: hidden;
         background: linear-gradient(160deg, #5bc8f5 0%, #7c3aed 100%);
         flex-direction: column; align-items: center;
         justify-content: center; gap: 0; z-index: 9999;
@@ -96,16 +97,56 @@
       }
       /* Exactly half way between the logo's bottom edge and the top of the
          Create button — the average of those two offsets from the top. */
-      #start-btn {
+      /* The tap target is the mark on a disc, sitting where the Scan pill used
+         to. Soft filled halos swell out of it while the screen is idle, one a
+         second; they stack, and the overlap is what reads as concentric bands. */
+      #start-tap {
         position: absolute; left: 50%;
         top: calc(((50% - var(--logo-lift)) + (100% - var(--cta-bottom) - var(--cta-h))) / 2);
         transform: translate(-50%, -50%);
-        width: var(--splash-w); max-width: var(--splash-max);
-        padding: 20px 24px; font-size: 24px; border-radius: 999px;
-        border: none; background: white; color: #6b3fa0;
-        font-family: 'DM Sans', sans-serif; font-weight: bold; cursor: pointer;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        display: flex; flex-direction: column; align-items: center; gap: 22px;
       }
+      #start-btn {
+        position: relative; width: 141px; height: 141px;
+        border: none; background: none; padding: 0; border-radius: 50%;
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
+      }
+      #start-btn:focus-visible { outline: 3px solid #fff; outline-offset: 6px; }
+      #start-caption {
+        color: #fff; font-family: 'DM Sans', sans-serif;
+        font-size: 19px; font-weight: 700; letter-spacing: -0.01em;
+      }
+      .pop-disc { position: absolute; inset: 0; border-radius: 50%; background: #4b3cba; }
+      /* pointer-events matters here: at full travel a halo is wider than the
+         phone and it lives inside the button, so without this the whole screen
+         would be inside the tap target. */
+      .pop-halo {
+        position: absolute; inset: 0; border-radius: 50%;
+        background: #fff; opacity: 0; pointer-events: none;
+      }
+      @keyframes pop-swell {
+        0%   { transform: scale(1);   opacity: 0; }
+        6%   {                        opacity: 0.17; }
+        74%  {                        opacity: 0.17; }
+        100% { transform: scale(5.6); opacity: 0; }
+      }
+      @keyframes pop-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+      @keyframes pop-spinin  { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+      #start-btn .pop-halo { animation: pop-swell 5s linear 1s infinite; }
+      #start-btn .h2 { animation-delay: 2s; }
+      #start-btn .h3 { animation-delay: 3s; }
+      #start-btn .h4 { animation-delay: 4s; }
+      #start-btn .h5 { animation-delay: 5s; }
+      #start-btn .pop-disc { animation: pop-breathe 2.6s ease-in-out 1s infinite; }
+      #start-btn .pop-mark { animation: pop-spinin 1.05s cubic-bezier(.45,.05,.2,1) both; }
+
+      /* One mark, two places: the start disc and the scanner overlay. */
+      .pop-mark {
+        position: relative; width: 132px; height: 132px;
+        filter: drop-shadow(0 2px 14px rgba(0,0,0,0.34));
+      }
+      .pop-mark use { fill: #fff; }
+      .pop-mark .p { transform-origin: 150.6px 150.6px; transform-box: view-box; }
       #cta-group {
         position: absolute; bottom: 12%; left: 0; right: 0;
         display: flex; flex-direction: column; align-items: center; gap: 16px;
@@ -257,22 +298,51 @@
       }
 
       #scanner { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 999; pointer-events: none; }
-      .corner {
-        position: absolute; width: 36px; height: 36px;
-        border-color: white; border-style: solid; opacity: 0;
-        transition: border-color 0.3s ease, top 0.5s ease, left 0.5s ease,
-                    right 0.5s ease, bottom 0.5s ease, width 0.5s ease,
-                    height 0.5s ease, filter 0.3s ease, opacity 0.3s ease;
+      /* Scanning: one P orbits with whole P's fading out behind it — the mark
+         searching, and never resolving. Replaces the four corner brackets. */
+      #scan-mark {
+        position: absolute; left: 50%; top: 50%;
+        margin: -66px 0 0 -66px; width: 132px; height: 132px;
       }
-      .corner.tl { top: 50%; left: 50%; margin-top: -24px; margin-left: -24px; border-width: 4px 0 0 4px; }
-      .corner.tr { top: 50%; right: 50%; margin-top: -24px; margin-right: -24px; border-width: 4px 4px 0 0; }
-      .corner.bl { bottom: 50%; left: 50%; margin-bottom: -24px; margin-left: -24px; border-width: 0 0 4px 4px; }
-      .corner.br { bottom: 50%; right: 50%; margin-bottom: -24px; margin-right: -24px; border-width: 0 4px 4px 0; }
-      .corner.expanded { border-color: #a78bfa; filter: drop-shadow(0 0 10px #a78bfa); width: 50px; height: 50px; opacity: 1; }
-      .corner.expanded.tl { top: 24px; left: 24px; margin: 0; border-width: 6px 0 0 6px; }
-      .corner.expanded.tr { top: 24px; right: 24px; margin: 0; border-width: 6px 6px 0 0; }
-      .corner.expanded.bl { bottom: 24px; left: 24px; margin: 0; border-width: 0 0 6px 6px; }
-      .corner.expanded.br { bottom: 24px; right: 24px; margin: 0; border-width: 0 6px 6px 0; }
+      @keyframes pop-comet {
+        0% { opacity: 0; } 6% { opacity: 1; } 46% { opacity: 0.5; }
+        72% { opacity: 0; } 100% { opacity: 0; }
+      }
+      /* The capture phase is this flow's other searching state: the camera is
+         open and frames are going to /api/identify. Same mark, same orbit. */
+      #cap-mark {
+        position: absolute; left: 50%; top: 50%;
+        margin: -66px 0 0 -66px; width: 132px; height: 132px; pointer-events: none;
+      }
+      #scan-mark .p, #cap-mark .p {
+        opacity: 0; animation: pop-comet 1.4s linear infinite;
+        animation-delay: calc(var(--i) * 0.175s);
+      }
+      /* On a hit the orbit lands, the mark completes, and it blooms white — the
+         bloom IS the hand-off to the video. Timed to finish inside the 900ms
+         hold below, so the mark is gone exactly as the video screen takes over. */
+      @keyframes pop-land {
+        0%   { opacity: 0; transform: rotate(-38deg) scale(0.86); }
+        55%  { opacity: 1; transform: rotate(6deg)   scale(1.04); }
+        100% { opacity: 1; transform: rotate(0)      scale(1); }
+      }
+      @keyframes pop-bloom {
+        0%   { transform: scale(1);  opacity: 1; }
+        100% { transform: scale(11); opacity: 0; }
+      }
+      #scan-mark.found .p {
+        opacity: 0; animation: pop-land 0.26s cubic-bezier(.32,1.42,.5,1) forwards;
+        animation-delay: calc(var(--i) * 0.035s);
+      }
+      #scan-mark.found { animation: pop-bloom 0.36s cubic-bezier(.35,0,.7,1) 0.52s forwards; }
+
+      @media (prefers-reduced-motion: reduce) {
+        #start-btn .pop-halo, #start-btn .pop-disc, #start-btn .pop-mark,
+        #scan-mark, #scan-mark .p, #cap-mark .p {
+          animation: none !important; opacity: 1 !important; transform: none !important;
+        }
+        #start-btn .pop-halo { opacity: 0 !important; }
+      }
 
       #fullscreen-video { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 9000; background: black; }
       #fullscreen-video video { width: 100%; height: 100%; object-fit: cover; }
@@ -453,6 +523,13 @@
     </style>
   </head>
   <body>
+    <!-- One whole letter P: bowl, counter, stem. Eight of them rotated 45 degrees
+         apart reproduce the mark, which is what lets it animate letter by letter.
+         fill-rule must be nonzero: under evenodd the stem cancels against the bowl
+         and punches a wedge out of the letter. -->
+    <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+      <defs><path id="pop-p" fill-rule="nonzero" d="M90.6,150.6a60.0,60.0 0 1,0 120.0,0a60.0,60.0 0 1,0 -120.0,0ZM129.1,150.6a21.5,21.5 0 1,1 43.0,0a21.5,21.5 0 1,1 -43.0,0ZM96.1,150.6L96.1,237.1A16.75,16.75 0 0,0 129.6,237.1L129.6,150.6Z"/></defs>
+    </svg>
     <div id="orientation-lock">
       <svg class="phone-ill" viewBox="0 0 80 140" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="6" y="4" width="68" height="132" rx="14" ry="14"/>
@@ -469,7 +546,23 @@
     </div>
     <div id="start-screen">
       <img class="splash-logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
-      <button id="start-btn">Scan image</button>
+      <div id="start-tap">
+        <button id="start-btn" aria-label="Tap to scan">
+          <span class="pop-halo h1"></span><span class="pop-halo h2"></span><span class="pop-halo h3"></span><span class="pop-halo h4"></span><span class="pop-halo h5"></span>
+          <span class="pop-disc"></span>
+          <svg class="pop-mark" viewBox="0 0 302 302" aria-hidden="true">
+          <g transform="rotate(0 150.6 150.6)"><use href="#pop-p"/></g>
+          <g transform="rotate(45 150.6 150.6)"><use href="#pop-p"/></g>
+          <g transform="rotate(90 150.6 150.6)"><use href="#pop-p"/></g>
+          <g transform="rotate(135 150.6 150.6)"><use href="#pop-p"/></g>
+          <g transform="rotate(180 150.6 150.6)"><use href="#pop-p"/></g>
+          <g transform="rotate(225 150.6 150.6)"><use href="#pop-p"/></g>
+          <g transform="rotate(270 150.6 150.6)"><use href="#pop-p"/></g>
+          <g transform="rotate(315 150.6 150.6)"><use href="#pop-p"/></g>
+          </svg>
+        </button>
+        <div id="start-caption">Tap to scan</div>
+      </div>
       <div id="cta-group">
         <a id="create-btn" href="/create.html">Create your own Popcode</a>
         <a id="signin-link" href="/manage.html">Already have an account? <span style="text-decoration:underline;">Sign in</span></a>
@@ -504,6 +597,16 @@
     <div id="capture-screen">
       <video id="cap-video" playsinline webkit-playsinline muted autoplay></video>
       <canvas id="cap-canvas" style="display:none"></canvas>
+      <svg id="cap-mark" class="pop-mark" viewBox="0 0 302 302" aria-hidden="true">
+        <g transform="rotate(0 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 0;"/></g>
+        <g transform="rotate(45 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 1;"/></g>
+        <g transform="rotate(90 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 2;"/></g>
+        <g transform="rotate(135 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 3;"/></g>
+        <g transform="rotate(180 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 4;"/></g>
+        <g transform="rotate(225 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 5;"/></g>
+        <g transform="rotate(270 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 6;"/></g>
+        <g transform="rotate(315 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 7;"/></g>
+      </svg>
       <div id="cap-status"></div>
       <button id="cap-btn" type="button">Scan now</button>
     </div>
@@ -524,10 +627,16 @@
     <div id="scan-hint">Point your camera at a Popcoded photo</div>
     <button id="reload-hint">Having trouble? Tap to reload</button>
     <div id="scanner">
-      <div class="corner tl"></div>
-      <div class="corner tr"></div>
-      <div class="corner bl"></div>
-      <div class="corner br"></div>
+      <svg id="scan-mark" class="pop-mark" viewBox="0 0 302 302" aria-hidden="true">
+        <g transform="rotate(0 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 0;"/></g>
+        <g transform="rotate(45 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 1;"/></g>
+        <g transform="rotate(90 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 2;"/></g>
+        <g transform="rotate(135 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 3;"/></g>
+        <g transform="rotate(180 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 4;"/></g>
+        <g transform="rotate(225 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 5;"/></g>
+        <g transform="rotate(270 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 6;"/></g>
+        <g transform="rotate(315 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 7;"/></g>
+      </svg>
     </div>
 
 <div id="fade-overlay"></div>
@@ -676,7 +785,7 @@
             if (triggerTimer) {
               clearTimeout(triggerTimer);
               triggerTimer = null;
-              document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+              document.getElementById('scan-mark').classList.remove('found');
             }
           });
           scene.appendChild(target);
@@ -1083,7 +1192,7 @@
         audioPlayer.classList.remove('visible');
         try { apAudio.pause(); apAudio.removeAttribute('src'); apAudio.load(); } catch(e) {}
         scanner.style.display = 'block';
-        document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+        document.getElementById('scan-mark').classList.remove('found');
         const hint = document.getElementById('scan-hint');
         hint.textContent = msg;
         hint.style.display = 'block';
@@ -1108,7 +1217,7 @@
         mediaActive = true;
         clearReloadHint();
         document.getElementById('scan-hint').style.display = 'none';
-        document.querySelectorAll('.corner').forEach(c => c.classList.add('expanded'));
+        document.getElementById('scan-mark').classList.add('found');
         triggerTimer = setTimeout(() => {
           triggerTimer = null;
           // Stop MindAR's camera before playing the video. On iOS 16 Safari,
@@ -1285,7 +1394,7 @@
         mediaActive = true;
         clearReloadHint();
         document.getElementById('scan-hint').style.display = 'none';
-        document.querySelectorAll('.corner').forEach(c => c.classList.add('expanded'));
+        document.getElementById('scan-mark').classList.add('found');
         triggerTimer = setTimeout(() => {
           triggerTimer = null;
           // Same media-session conflict as video — release the camera first.
@@ -1431,7 +1540,7 @@
         scanner.style.display = 'none';
         document.getElementById('scan-hint').style.display = 'none';
         document.getElementById('home-btn').style.display = 'none';
-        document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+        document.getElementById('scan-mark').classList.remove('found');
 
         // Show the regular start screen — user can tap "Scan image" to scan
         // the same image again or any new one.
@@ -1449,7 +1558,7 @@
           fullScreen.style.display = 'none';
           fullVid.src = '';
           closeBtn.style.display = 'none';
-          document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+          document.getElementById('scan-mark').classList.remove('found');
           showStartScreen();
           fade.style.opacity = '0';
           setTimeout(() => fade.style.display = 'none', 1000);
