@@ -14,6 +14,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/postcard-render.js"></script>
     <script src="/config.js"></script>
+    <script src="/audio-wav.js"></script>
     <script src="/activity.js"></script>
     <script src="/unsplash-samples.js"></script>
     <script src="/countries.js"></script>
@@ -137,6 +138,90 @@
       .price-row { display:flex; justify-content:space-between; align-items:baseline; margin-top:12px; }
       .price { font-size:32px; font-weight:600; }
       .price-note { color:#888; font-size:12px; }
+
+      /* Row of secondary actions under the product preview (Change / Adjust photo). */
+      .preview-actions { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:14px; }
+      .preview-actions .change-photo-btn { margin:0; align-self:auto; }
+
+      /* ── Edit Photo modal (Popsa-style crop/zoom/reposition) — ported from book.html ── */
+      .ep-overlay { display:none; position:fixed; inset:0; z-index:700; background:rgba(0,0,0,0.5); align-items:flex-end; justify-content:center; padding:0; }
+      .ep-overlay.visible { display:flex; }
+      @media (min-width:620px){ .ep-overlay { align-items:center; padding:24px; } }
+      .ep-sheet { background:#fff; width:100%; max-width:520px; border-radius:22px 22px 0 0; padding:18px 22px calc(22px + env(safe-area-inset-bottom)); box-shadow:0 -8px 40px rgba(0,0,0,0.2); max-height:94vh; overflow-y:auto; }
+      @media (min-width:620px){ .ep-sheet { border-radius:22px; } }
+      @media (min-width:720px){ .ep-sheet { max-width:960px; } }
+      .ep-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+      .ep-head h2 { font-size:20px; font-weight:700; font-family:'Inter',sans-serif; }
+      .ep-x { border:none; background:transparent; cursor:pointer; color:#444; padding:4px; display:flex; }
+      .ep-x:hover { color:#000; }
+      .ep-grid { display:flex; flex-direction:column; gap:18px; }
+      @media (min-width:720px){ .ep-grid { flex-direction:row; align-items:flex-start; } .ep-preview { flex:1 1 0; min-width:0; } .ep-side { flex:0 0 340px; } }
+      .ep-stage { position:relative; width:100%; aspect-ratio:4 / 3; max-height:56vh; margin:0 auto; overflow:hidden; background:#f4f3f0; border-radius:10px; touch-action:none; cursor:grab; }
+      .ep-stage:active { cursor:grabbing; }
+      .ep-img { position:absolute; object-fit:cover; transform-origin:center center; user-select:none; -webkit-user-drag:none; will-change:transform; z-index:1; }
+      .ep-img.fit { object-fit:contain; }
+      .ep-window { position:absolute; z-index:2; pointer-events:none; box-shadow:0 0 0 3000px rgba(247,246,242,0.66); border:1.5px solid rgba(255,255,255,0.92); outline:1px solid rgba(0,0,0,0.14); }
+      .ep-thirds { position:absolute; inset:0; display:none; pointer-events:none; background-image:linear-gradient(rgba(255,255,255,0.55) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.55) 1px, transparent 1px); background-size:33.333% 33.333%; }
+      .ep-hint { text-align:center; font-size:12px; color:#999; margin-top:8px; }
+      .ep-quality { display:flex; align-items:center; justify-content:space-between; background:#f2f0ea; border-radius:12px; padding:14px 16px; font-weight:700; color:#444; margin-bottom:12px; }
+      .ep-quality b { font-size:18px; color:#1a1a1a; }
+      .ep-quality.good { background:#eaf7ee; } .ep-quality.good b { color:#1a7f45; }
+      .ep-quality.warn { background:#fdecec; } .ep-quality.warn b { color:#d33; }
+      .ep-stat { display:flex; align-items:center; justify-content:space-between; padding:9px 4px; border-bottom:1px solid #f2f0ea; font-weight:600; color:#777; font-size:15px; }
+      .ep-stat b { color:#1a1a1a; }
+      .ep-btns { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-top:16px; }
+      .ep-btn { display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 2px; border:1px solid #e6e3db; border-radius:12px; background:#fff; cursor:pointer; font-family:'Inter',sans-serif; font-size:11.5px; font-weight:600; color:#1a1a1a; }
+      .ep-btn:hover { background:#faf9f5; }
+      .ep-btn.active { border-color:#7657FC; background:#f3f0ff; color:#5b3fd6; }
+      .ep-btn.ep-danger { color:#d33; } .ep-btn.ep-danger:hover { background:#fdecec; }
+      .ep-foot { display:flex; justify-content:flex-end; gap:10px; margin-top:22px; }
+      .ep-foot button { padding:12px 28px; border-radius:14px; font-size:15px; font-weight:700; font-family:'Inter',sans-serif; cursor:pointer; border:none; }
+      .ep-foot .ep-cancel { background:#f0eeea; color:#1a1a1a; }
+      .ep-foot .ep-do { background:#1a1a1a; color:#fff; }
+      .ep-toast { position:fixed; bottom:40px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.82); color:#fff; padding:10px 22px; border-radius:24px; font-size:14px; font-weight:600; opacity:0; pointer-events:none; transition:opacity .3s; z-index:800; white-space:nowrap; }
+      .ep-toast.show { opacity:1; }
+
+      /* ── Popcode CTA near the product (the headline feature, front and centre) ── */
+      .popcode-cta { display:inline-flex; align-items:center; gap:9px; margin:12px auto 0; padding:11px 20px 11px 14px; border:1.5px solid #d9d2fb; border-radius:999px; background:linear-gradient(135deg,#f3f0ff,#eef4ff); color:#4b34c7; font-family:'Inter',sans-serif; font-size:14px; font-weight:700; cursor:pointer; box-shadow:0 1px 6px rgba(118,87,252,0.12); }
+      .popcode-cta:hover { border-color:#b9a9f7; }
+      .popcode-cta .pc-sym { width:26px; height:26px; border-radius:50%; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.15); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+      .popcode-cta .pc-sym img { width:17px; height:17px; display:block; }
+      .popcode-cta.has-media { border-color:#b9a9f7; }
+
+      /* ── Popcode editor sheet (ported from the book maker) ── */
+      .ep-sheet h2 { font-size:20px; font-weight:700; font-family:'Inter',sans-serif; margin-bottom:4px; }
+      .ep-sheet .sheet-sub { font-size:13px; color:#888; margin-bottom:18px; line-height:1.5; }
+      .pop-media-toggle { display:inline-flex; background:#ececec; border-radius:999px; padding:3px; margin-bottom:16px; }
+      .pop-media-toggle button { background:transparent; border:none; padding:8px 20px; font-size:13px; font-weight:700; color:#666; border-radius:999px; cursor:pointer; font-family:'Inter',sans-serif; }
+      .pop-media-toggle button.active { background:#fff; color:#1a1a1a; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+      .drop-zone { border:2px dashed #d6d2c8; border-radius:14px; padding:26px 16px; text-align:center; cursor:pointer; position:relative; background:#faf9f5; transition:border-color .12s, background .12s; }
+      .drop-zone:hover { border-color:#7657FC; background:#f6f3ff; }
+      .drop-zone input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; }
+      .drop-zone .dz-icon { width:46px; height:46px; margin:0 auto 10px; }
+      .drop-zone .dz-title { font-size:14px; font-weight:700; color:#1a1a1a; }
+      .drop-zone .dz-sub { font-size:12px; color:#999; margin-top:3px; }
+      .media-preview { display:none; margin-top:4px; }
+      .media-preview.show { display:block; }
+      .media-preview video { width:100%; border-radius:12px; max-height:260px; background:#000; }
+      .compress-status { font-size:12px; color:#555; font-weight:600; margin-top:10px; }
+      .compress-bar-wrap { background:#e8e8e8; border-radius:99px; height:5px; margin-top:6px; overflow:hidden; }
+      .compress-bar { height:100%; background:#1a1a1a; border-radius:99px; width:0%; transition:width .2s; }
+      .warn-banner { background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:10px 12px; font-size:12px; color:#555; line-height:1.5; margin-top:10px; }
+      .warn-banner a { color:#1a1a1a; font-weight:700; }
+      .mini-btn { border:1px solid #e0ded8; background:#fff; color:#1a1a1a; border-radius:999px; padding:7px 13px; font-size:12px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; display:inline-flex; align-items:center; gap:5px; }
+      .audio-panel { text-align:center; padding:10px 0 4px; }
+      .audio-rec-btn { background:#1a1a1a; color:#fff; border:none; border-radius:999px; padding:13px 26px; font-size:15px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; }
+      .audio-rec-btn.stop { background:#dc2626; }
+      .audio-time { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; margin:14px 0; color:#1a1a1a; }
+      .rec-dot { display:inline-block; width:10px; height:10px; border-radius:50%; background:#dc2626; margin-right:8px; vertical-align:middle; animation:rec-pulse 1s infinite; }
+      @keyframes rec-pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+      .audio-player-row { display:flex; align-items:center; justify-content:center; gap:14px; margin:12px 0; }
+      .audio-play-btn { width:56px; height:56px; border-radius:50%; background:#1a1a1a; border:none; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+      .pc-actions { display:flex; gap:12px; margin-top:22px; }
+      .pc-actions button { flex:1; padding:14px; border-radius:14px; font-size:15px; font-weight:700; font-family:'Inter',sans-serif; cursor:pointer; border:none; }
+      .pc-actions .pc-secondary { background:#f0eeea; color:#1a1a1a; }
+      .pc-actions .pc-primary { background:#1a1a1a; color:#fff; }
+      .pc-actions .pc-primary:disabled { opacity:0.4; cursor:not-allowed; }
     </style>
   </head>
   <body>
@@ -174,7 +259,16 @@
         <div class="detail">
           <div class="detail-left">
             <div class="detail-preview" id="detail-preview"><div class="detail-stage"><canvas id="detail-canvas" width="400" height="400"></canvas></div></div>
-            <button type="button" class="change-photo-btn" id="change-photo-btn" style="display:none;">Change photo</button>
+            <div class="preview-actions" id="detail-photo-actions" style="display:none;">
+              <button type="button" class="change-photo-btn" id="adjust-photo-btn">Adjust photo</button>
+              <button type="button" class="change-photo-btn" id="change-photo-btn">Change photo</button>
+            </div>
+            <div class="preview-actions" id="detail-popcode-row" style="display:none;">
+              <button type="button" class="popcode-cta" id="detail-popcode-cta">
+                <span class="pc-sym"><img src="/assets/popcode_icon.svg" alt=""/></span>
+                <span id="detail-popcode-label">Add Popcode</span>
+              </button>
+            </div>
             <div class="view-row" id="view-row"></div>
           </div>
           <div class="detail-info">
@@ -222,6 +316,15 @@
         <div class="detail">
           <div class="detail-left">
             <div class="detail-preview"><div class="detail-stage"><canvas id="review-canvas" width="400" height="400"></canvas></div></div>
+            <div class="preview-actions">
+              <button type="button" class="change-photo-btn" id="review-adjust-btn">Adjust photo</button>
+            </div>
+            <div class="preview-actions" id="review-popcode-row" style="display:none;">
+              <button type="button" class="popcode-cta" id="review-popcode-cta">
+                <span class="pc-sym"><img src="/assets/popcode_icon.svg" alt=""/></span>
+                <span id="review-popcode-label">Add Popcode</span>
+              </button>
+            </div>
           </div>
           <div class="detail-info">
             <h2 id="review-name">Product</h2>
@@ -425,7 +528,7 @@
       let currentUser = null;
       let collection = null;
       let photos = [];
-      let state = { step: 'detail', productType: null, variantId: null, frameColor: 'black', mounted: false, orientation: 'portrait', scale: 0.06, selectedPhoto: null, scene: 'plain', galleryIndex: 0 };
+      let state = { step: 'detail', productType: null, variantId: null, frameColor: 'black', mounted: false, orientation: 'portrait', scale: 0.06, selectedPhoto: null, scene: 'plain', galleryIndex: 0, photoAdjust: { fit: 'fill', scale: 1, ox: 0, oy: 0, rot: 0 } };
 
       // Frame colours per product (mirrors the server catalog: one variant per
       // size × colour, where black keeps the bare size id).
@@ -515,11 +618,66 @@
         ctx.putImageData(imgd, 0, 0);
       }
 
+      // ---- crop / zoom / reposition model (ported from book.html Edit Photo) ------
+      // A photo is drawn at its cover/contain-fit size, centered in the crop box,
+      // then panned by a fraction of the box and scaled/rotated. Same math used by
+      // the Edit Photo stage (layoutEp) and the print/preview bake below, so what you
+      // position in the editor is exactly what the product shows and prints.
+      const DEFAULT_ADJUST = () => ({ fit: 'fill', scale: 1, ox: 0, oy: 0, rot: 0 });
+      function normalizeAdjust(a) {
+        const d = DEFAULT_ADJUST();
+        if (!a || typeof a !== 'object') return d;
+        return {
+          fit: a.fit === 'fit' ? 'fit' : 'fill',
+          scale: Math.max(1, Math.min(3, +a.scale || 1)),
+          ox: Math.max(-80, Math.min(80, +a.ox || 0)),
+          oy: Math.max(-80, Math.min(80, +a.oy || 0)),
+          rot: ((Math.round((+a.rot || 0) / 90) * 90) % 360 + 360) % 360,
+        };
+      }
+      function printQuality(w, h, scale) {
+        if (!w || !h) return 10;
+        const eff = Math.min(w, h) / (scale || 1);
+        return Math.max(1, Math.min(10, Math.round(eff / 170)));
+      }
+      // Clamp the pan so the photo always covers the crop box (no background bleed).
+      function clampPan(a, boxW, boxH, iw, ih) {
+        if (!iw || !ih || !boxW || !boxH) return a;
+        if (a.fit === 'fit') { a.ox = 0; a.oy = 0; return a; }
+        const fitScale = Math.max(boxW / iw, boxH / ih);
+        const rotated = (a.rot % 180) !== 0;
+        const imgW = (rotated ? ih : iw) * fitScale * a.scale;
+        const imgH = (rotated ? iw : ih) * fitScale * a.scale;
+        const maxOx = Math.max(0, (imgW - boxW) / (2 * boxW) * 100);
+        const maxOy = Math.max(0, (imgH - boxH) / (2 * boxH) * 100);
+        a.ox = Math.max(-maxOx, Math.min(maxOx, a.ox));
+        a.oy = Math.max(-maxOy, Math.min(maxOy, a.oy));
+        return a;
+      }
+      // Canvas bake: draw `img` into rect (x,y,w,h) honoring crop/zoom/rotate. At the
+      // default adjust this is exactly a center-crop, so un-edited photos are unchanged.
+      function drawPhotoAdjusted(ctx, img, adjust, x, y, w, h) {
+        const a = normalizeAdjust(adjust);
+        const iw = img.naturalWidth, ih = img.naturalHeight;
+        if (!iw || !ih) return;
+        clampPan(a, w, h, iw, ih);
+        const fitScale = a.fit === 'fit' ? Math.min(w / iw, h / ih) : Math.max(w / iw, h / ih);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+        ctx.translate(x + w / 2 + (a.ox / 100) * w, y + h / 2 + (a.oy / 100) * h);
+        ctx.scale(a.scale, a.scale);
+        ctx.rotate(a.rot * Math.PI / 180);
+        const dw = iw * fitScale, dh = ih * fitScale;
+        ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
+      }
+
       // ---- badge compositor (inlined; never depends on a separate file) ----
       async function compositeBadgedImage(photoUrl, opts) {
         opts = opts || {};
         var scale = typeof opts.scale === 'number' ? opts.scale : 0.06;
         var aspect = (typeof opts.aspect === 'number' && opts.aspect > 0) ? opts.aspect : null;
+        var adjust = opts.adjust || null;
         var previewCanvas = opts.previewCanvas || null;
         var img = new Image(); img.crossOrigin = 'anonymous';
         await new Promise(function (res, rej) { img.onload = res; img.onerror = rej; img.src = photoUrl; });
@@ -541,7 +699,8 @@
           previewCanvas.width = pw; previewCanvas.height = ph;
           var pc = previewCanvas.getContext('2d');
           pc.clearRect(0, 0, pw, ph);
-          pc.drawImage(img, sx, sy, cropW, cropH, 0, 0, pw, ph);
+          if (adjust) drawPhotoAdjusted(pc, img, adjust, 0, 0, pw, ph);
+          else pc.drawImage(img, sx, sy, cropW, cropH, 0, 0, pw, ph);
           var pbS = Math.round(Math.min(pw, ph) * scale), pbp = Math.round(Math.min(pw, ph) * 0.025);
           pc.drawImage(iconImg, pw - pbS - pbp, ph - pbS - pbp, pbS, pbS);
           if (!returnDataUrl) return null;
@@ -552,7 +711,8 @@
         var c = document.createElement('canvas');
         c.width = cropW; c.height = cropH;
         var ctx = c.getContext('2d');
-        ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+        if (adjust) drawPhotoAdjusted(ctx, img, adjust, 0, 0, cropW, cropH);
+        else ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
         // Brighten/pop the photo for print before the badge goes on top.
         var corr = opts.correction || correctionByKey(ACTIVE_CORRECTION);
         applyCorrection(ctx, cropW, cropH, corr);
@@ -736,6 +896,7 @@
           state.mounted = /^cfpm-/.test(savedVid);
           state.orientation = pc.orientation || 'portrait';
           state.scale = pc.scale || 0.06;
+          state.photoAdjust = normalizeAdjust(pc.adjust);
           renderSizeChips(); renderFrameChips(); renderMountChips(); updateOrientationVisibility();
           document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b.dataset.orientation === state.orientation));
           if (edit) { editingDesign = { id: col.id, slug }; renderDetailPreview(); refreshDetailPrice(); }
@@ -761,14 +922,21 @@
             const ids = src.map(c => c.id);
             const byId = {}; src.forEach(c => { byId[c.id] = c; });
             const { data: items } = await db.from('collection_items')
-              .select('collection_id, photo_url, target_index').in('collection_id', ids).order('target_index');
+              .select('collection_id, photo_url, target_index, media_type, video_url, audio_url').in('collection_id', ids).order('target_index');
             const seen = new Set();
             (items || []).forEach(it => {
               if (!it.photo_url || it.target_index == null) return;
               const key = it.collection_id + ':' + it.target_index;
               if (seen.has(key)) return; seen.add(key);
               const c = byId[it.collection_id];
-              photos.push({ url: it.photo_url, target_index: it.target_index, slug: c.slug, collectionId: c.id, name: c.name || c.slug });
+              photos.push({
+                url: it.photo_url, target_index: it.target_index, slug: c.slug, collectionId: c.id, name: c.name || c.slug,
+                // A tray photo is a real Popcode target, so its linked media can be
+                // edited here (fromTray gates the Popcode CTA). media_type/video_url/
+                // audio_url reflect what currently plays when it's scanned.
+                fromTray: true, media_type: it.media_type || (it.video_url ? 'video' : (it.audio_url ? 'audio' : 'video')),
+                video_url: it.video_url || null, audio_url: it.audio_url || null,
+              });
             });
           }
         } catch (e) { photos = []; }
@@ -975,7 +1143,7 @@
         }
       }
       async function badgedImg(src, aspect) {
-        const url = await compositeBadgedImage(src, { scale: state.scale, aspect });
+        const url = await compositeBadgedImage(src, { scale: state.scale, aspect, adjust: state.selectedPhoto ? state.photoAdjust : null });
         const img = new Image();
         await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
         return img;
@@ -1241,6 +1409,7 @@
         const art = await getArtImage(aspect);
         renderProductOnly(cv, art, aspect);
         updateDetailCta();
+        renderPopcodeCta();
       }
       // Repaint main preview + the 4 view thumbnails from an already-loaded art image
       // (scene switching reuses this — no re-compositing).
@@ -1260,7 +1429,7 @@
       function updateDetailCta() {
         const has = !!state.selectedPhoto;
         document.getElementById('create-btn').textContent = has ? 'Continue' : 'Choose a photo';
-        document.getElementById('change-photo-btn').style.display = has ? '' : 'none';
+        document.getElementById('detail-photo-actions').style.display = has ? '' : 'none';
       }
       // The advertised price is the PRODUCT only. Shipping depends on where it's
       // going and is passed through at cost, so it joins as its own line at
@@ -1287,6 +1456,475 @@
         if (state.selectedPhoto) goReview(); else openPhotoStep();
       });
       document.getElementById('change-photo-btn').addEventListener('click', openPhotoStep);
+      document.getElementById('adjust-photo-btn').addEventListener('click', openAdjustPhoto);
+      document.getElementById('review-adjust-btn').addEventListener('click', openAdjustPhoto);
+
+      // ── Edit Photo (Popsa-style crop / zoom / reposition / rotate) ───────────
+      // The whole photo shows; the area outside the crop window is ghosted so you can
+      // see what you're panning into. Same geometry as drawPhotoAdjusted (the print
+      // bake), so what you position here is exactly what the product prints.
+      let editPhotoState = null;
+      const EP_IC_X = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      function epIcon(name) {
+        const o = 'width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+        const P = {
+          fill: '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>',
+          fit: '<polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="10" y1="14" x2="3" y2="21"/>',
+          grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+          rotate: '<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',
+          reset: '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>',
+          change: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
+          zin: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>',
+          zout: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>',
+        };
+        return `<svg ${o}>${P[name] || ''}</svg>`;
+      }
+      function epToast(msg) {
+        const t = document.getElementById('ep-toast');
+        t.textContent = msg; t.classList.add('show');
+        clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 1600);
+      }
+      function openAdjustPhoto() {
+        if (!state.selectedPhoto) return;
+        const aspect = currentAspect() || 1;
+        editPhotoState = { photo: state.selectedPhoto, a: { ...normalizeAdjust(state.photoAdjust) }, gridOn: false, ar: aspect + ' / 1' };
+        renderEditPhoto();
+        const m = document.getElementById('ep-modal');
+        m.classList.add('visible'); m.setAttribute('aria-hidden', 'false');
+      }
+      function closeAdjustPhoto() {
+        const m = document.getElementById('ep-modal');
+        m.classList.remove('visible'); m.setAttribute('aria-hidden', 'true'); m.innerHTML = '';
+        editPhotoState = null;
+      }
+      function epSave() {
+        if (!editPhotoState) return;
+        state.photoAdjust = normalizeAdjust(editPhotoState.a);
+        closeAdjustPhoto();
+        if (state.step === 'review') {
+          const aspect = currentAspect();
+          getArtImage(aspect).then(art => renderProductOnly(document.getElementById('review-canvas'), art, aspect));
+        } else renderDetailPreview();
+        epToast('Photo updated');
+      }
+      function renderEditPhoto() {
+        const s = editPhotoState;
+        const source = s.photo.name || 'Popcode photo';
+        const btn = (act, label) => `<button class="ep-btn" data-act="${act}">${epIcon(act)}<span>${label}</span></button>`;
+        document.getElementById('ep-modal').innerHTML = `
+          <div class="ep-sheet">
+            <div class="ep-head"><h2>Adjust photo</h2><button class="ep-x" id="ep-close" aria-label="Close">${EP_IC_X}</button></div>
+            <div class="ep-grid">
+              <div class="ep-preview">
+                <div class="ep-stage" id="ep-stage">
+                  <img class="ep-img" id="ep-img" src="${s.photo.url}" draggable="false" crossorigin="anonymous"/>
+                  <div class="ep-window" id="ep-window"><div class="ep-thirds" id="ep-thirds"></div></div>
+                </div>
+                <div class="ep-hint">Drag the photo to reposition — the faded area is the rest of your photo</div>
+              </div>
+              <div class="ep-side">
+                <div class="ep-quality" id="ep-quality"><span>Print Quality</span><b id="ep-q">—</b></div>
+                <div class="ep-stat"><span>Scale</span><b id="ep-scale">100%</b></div>
+                <div class="ep-stat"><span>Dimensions</span><b id="ep-dims">—</b></div>
+                <div class="ep-stat"><span>Source</span><b>${source}</b></div>
+                <div class="ep-btns">
+                  ${btn('fill', 'Fill')}${btn('fit', 'Fit')}${btn('grid', 'Grid')}${btn('rotate', 'Rotate')}
+                  ${btn('zin', 'Zoom In')}${btn('zout', 'Zoom Out')}${btn('reset', 'Reset')}${btn('change', 'Change')}
+                </div>
+              </div>
+            </div>
+            <div class="ep-foot"><button class="ep-cancel" id="ep-cancel">Cancel</button><button class="ep-do" id="ep-save">Done</button></div>
+          </div>`;
+        const img = document.getElementById('ep-img');
+        const setDims = (w, h) => { s.photo.iw = w; s.photo.ih = h; if (!s.photo.ow) { s.photo.ow = w; s.photo.oh = h; } updateEp(); };
+        if (img.complete && img.naturalWidth) setDims(img.naturalWidth, img.naturalHeight);
+        else img.addEventListener('load', () => setDims(img.naturalWidth, img.naturalHeight));
+        document.getElementById('ep-close').addEventListener('click', closeAdjustPhoto);
+        document.getElementById('ep-cancel').addEventListener('click', closeAdjustPhoto);
+        document.getElementById('ep-save').addEventListener('click', epSave);
+        document.querySelectorAll('#ep-modal .ep-btn').forEach(b => b.addEventListener('click', () => epAction(b.dataset.act)));
+        enableEpPan();
+        layoutEp();
+        requestAnimationFrame(layoutEp);
+        updateEp();
+      }
+      function layoutEp() {
+        const stage = document.getElementById('ep-stage'), win = document.getElementById('ep-window'), img = document.getElementById('ep-img');
+        if (!stage || !win || !img || !editPhotoState) return;
+        const s = editPhotoState;
+        const SW = stage.clientWidth, SH = stage.clientHeight;
+        if (!SW || !SH) return;
+        const m = String(s.ar || '1 / 1').split('/');
+        const arNum = (parseFloat(m[0]) || 1) / (parseFloat(m[1]) || 1);
+        const pad = 0.86;
+        let ww, wh;
+        if (SW / SH > arNum) { wh = SH * pad; ww = wh * arNum; } else { ww = SW * pad; wh = ww / arNum; }
+        const wx = (SW - ww) / 2, wy = (SH - wh) / 2;
+        win.style.left = wx + 'px'; win.style.top = wy + 'px'; win.style.width = ww + 'px'; win.style.height = wh + 'px';
+        s._ww = ww; s._wh = wh; s._wcx = wx + ww / 2; s._wcy = wy + wh / 2;
+        const iw = img.naturalWidth || s.photo.iw, ih = img.naturalHeight || s.photo.ih;
+        if (iw && ih) {
+          const a = s.a;
+          clampPan(a, ww, wh, iw, ih);
+          const fitScale = a.fit === 'fit' ? Math.min(ww / iw, wh / ih) : Math.max(ww / iw, wh / ih);
+          const imgW = iw * fitScale, imgH = ih * fitScale;
+          img.style.width = imgW + 'px'; img.style.height = imgH + 'px';
+          img.style.left = (s._wcx - imgW / 2) + 'px'; img.style.top = (s._wcy - imgH / 2) + 'px';
+        }
+        applyEpTransform();
+      }
+      function applyEpTransform() {
+        const img = document.getElementById('ep-img'), s = editPhotoState; if (!img || !s || !s._ww) return;
+        const a = s.a;
+        img.style.transform = `translate(${a.ox / 100 * s._ww}px, ${a.oy / 100 * s._wh}px) scale(${a.scale}) rotate(${a.rot}deg)`;
+        img.classList.toggle('fit', a.fit === 'fit');
+      }
+      window.addEventListener('resize', () => { if (document.getElementById('ep-stage')) layoutEp(); });
+      function updateEp() {
+        const s = editPhotoState, a = s.a;
+        const img = document.getElementById('ep-img'); if (!img) return;
+        layoutEp();
+        document.getElementById('ep-scale').textContent = Math.round(a.scale * 100) + '%';
+        const w = s.photo.ow || s.photo.iw, h = s.photo.oh || s.photo.ih;
+        document.getElementById('ep-dims').textContent = w ? `${w} × ${h}` : '—';
+        const q = printQuality(w, h, a.scale);
+        const qbox = document.getElementById('ep-quality');
+        document.getElementById('ep-q').textContent = q + '/10';
+        qbox.classList.toggle('good', q >= 8); qbox.classList.toggle('warn', q <= 4);
+        document.getElementById('ep-thirds').style.display = s.gridOn ? 'block' : 'none';
+        const set = (act, on) => { const el = document.querySelector(`#ep-modal .ep-btn[data-act="${act}"]`); if (el) el.classList.toggle('active', on); };
+        set('fill', a.fit === 'fill'); set('fit', a.fit === 'fit'); set('grid', s.gridOn);
+      }
+      function epAction(act) {
+        const s = editPhotoState, a = s.a;
+        if (act === 'fill') a.fit = 'fill';
+        else if (act === 'fit') a.fit = 'fit';
+        else if (act === 'grid') s.gridOn = !s.gridOn;
+        else if (act === 'rotate') a.rot = (a.rot + 90) % 360;
+        else if (act === 'zin') a.scale = Math.min(3, Math.round((a.scale + 0.1) * 10) / 10);
+        else if (act === 'zout') a.scale = Math.max(1, Math.round((a.scale - 0.1) * 10) / 10);
+        else if (act === 'reset') { editPhotoState.a = DEFAULT_ADJUST(); editPhotoState.gridOn = false; updateEp(); return; }
+        else if (act === 'change') { closeAdjustPhoto(); openPhotoStep(); return; }
+        updateEp();
+      }
+      function enableEpPan() {
+        const stage = document.getElementById('ep-stage'), win = document.getElementById('ep-window'); if (!stage || !win) return;
+        stage.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          const a = editPhotoState.a;
+          const rect = win.getBoundingClientRect();
+          const sx = e.clientX, sy = e.clientY, ox0 = a.ox, oy0 = a.oy;
+          const move = (ev) => {
+            a.ox = Math.max(-80, Math.min(80, ox0 + (ev.clientX - sx) / rect.width * 100));
+            a.oy = Math.max(-80, Math.min(80, oy0 + (ev.clientY - sy) / rect.height * 100));
+            updateEp();
+          };
+          const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); };
+          document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+        });
+      }
+
+      // ── Add / edit Popcode (the headline feature, front and centre) ──────────
+      // The Shop photo is a real Popcode target from one of the user's projects, so
+      // linking/replacing its video or audio here just uploads the file and updates
+      // that photo's collection_items row — the printed photo already scans, this is
+      // what plays. No .mind recompile (the image/target set is unchanged).
+      const MAX_VIDEO_MB = 200;
+      function formatMB(bytes) { return (bytes / (1024 * 1024)).toFixed(1) + ' MB'; }
+      let popEditState = null;
+      let recorder = null; // active audio recorder
+
+      // Does the current photo already play something when scanned?
+      function photoHasExistingMedia(p) { return !!(p && (p.video_url || p.audio_url)); }
+      function renderPopcodeCta() {
+        const has = !!state.selectedPhoto && !!state.selectedPhoto.fromTray;
+        const hasMedia = has && photoHasExistingMedia(state.selectedPhoto);
+        [['detail-popcode-row', 'detail-popcode-label', 'detail-popcode-cta'], ['review-popcode-row', 'review-popcode-label', 'review-popcode-cta']].forEach(([row, label, cta]) => {
+          const r = document.getElementById(row); if (!r) return;
+          r.style.display = has ? '' : 'none';
+          const l = document.getElementById(label); if (l) l.textContent = hasMedia ? 'Edit Popcode' : 'Add Popcode';
+          const c = document.getElementById(cta); if (c) c.classList.toggle('has-media', hasMedia);
+        });
+      }
+      function openPcSheet(html) {
+        const m = document.getElementById('pc-modal');
+        m.innerHTML = '<div class="ep-sheet"><div class="sheet-grip" style="width:38px;height:4px;border-radius:99px;background:#e0ded8;margin:0 auto 14px"></div>' + html + '</div>';
+        m.classList.add('visible'); m.setAttribute('aria-hidden', 'false');
+        // Bind the backdrop-close once, lazily — #pc-modal lives after this <script>,
+        // so it can't be referenced at parse time.
+        if (!m._bound) { m._bound = true; m.addEventListener('click', (e) => { if (e.target.id === 'pc-modal') closePcSheet(); }); }
+      }
+      function closePcSheet() {
+        const m = document.getElementById('pc-modal');
+        m.classList.remove('visible'); m.setAttribute('aria-hidden', 'true'); m.innerHTML = '';
+        if (recorder) { try { if (recorder.timerId) clearInterval(recorder.timerId); recorder.mediaRecorder.stop(); } catch (e) {} recorder = null; }
+      }
+      document.getElementById('detail-popcode-cta').addEventListener('click', openPopcodeSheet);
+      document.getElementById('review-popcode-cta').addEventListener('click', openPopcodeSheet);
+
+      function openPopcodeSheet() {
+        const photo = state.selectedPhoto;
+        if (!photo || !photo.fromTray) { epToast('Pick one of your Popcode photos first.'); return; }
+        popEditState = {
+          mediaType: photo.media_type || 'video',
+          video: null, audio: null,
+          existingVideoUrl: photo.video_url || null, existingAudioUrl: photo.audio_url || null,
+        };
+        renderPopcodeSheet();
+      }
+      function popEditHasMedia(s) {
+        return s.mediaType === 'video' ? !!(s.video || s.existingVideoUrl) : !!(s.audio || s.existingAudioUrl);
+      }
+      function renderPopcodeSheet() {
+        const s = popEditState;
+        const hasExisting = photoHasExistingMedia(state.selectedPhoto);
+        const hasMedia = popEditHasMedia(s);
+        openPcSheet(`
+          <h2>${hasExisting ? 'Edit' : 'Add a'} Popcode</h2>
+          <p class="sheet-sub">Link a video or audio clip. When someone scans this printed photo, it plays automatically.</p>
+          <div class="pop-media-toggle">
+            <button data-mode="video" class="${s.mediaType === 'video' ? 'active' : ''}">Video</button>
+            <button data-mode="audio" class="${s.mediaType === 'audio' ? 'active' : ''}">Audio</button>
+          </div>
+          <div id="pop-body"></div>
+          <div class="pc-actions">
+            <button class="pc-secondary" id="pop-cancel">Cancel</button>
+            <button class="pc-primary" id="pop-save" ${hasMedia ? '' : 'disabled'}>Save Popcode</button>
+          </div>`);
+        document.querySelectorAll('#pc-modal .pop-media-toggle button').forEach(b => {
+          b.addEventListener('click', () => { s.mediaType = b.dataset.mode; renderPopcodeSheet(); });
+        });
+        document.getElementById('pop-save').addEventListener('click', savePopcode);
+        document.getElementById('pop-cancel').addEventListener('click', closePcSheet);
+        renderPopBody();
+      }
+      function renderPopBody() {
+        const s = popEditState;
+        const body = document.getElementById('pop-body');
+        if (s.mediaType === 'video') {
+          if (s.video || s.existingVideoUrl) {
+            const src = s.video ? URL.createObjectURL(s.video) : s.existingVideoUrl;
+            const caption = s.video ? `${s.video.name || 'video'} · ${formatMB(s.video.size)}` : 'Current video';
+            body.innerHTML = `
+              <div class="media-preview show">
+                <video src="${src}" controls playsinline muted></video>
+                <div class="compress-status">${caption}</div>
+                <button class="mini-btn" id="pop-video-change" style="margin-top:10px">Choose a different video</button>
+              </div>`;
+            document.getElementById('pop-video-change').addEventListener('click', () => { s.video = null; s.existingVideoUrl = null; renderPopBody(); syncPopSave(); });
+          } else {
+            body.innerHTML = `
+              <div class="drop-zone">
+                <input type="file" accept="video/*" id="pop-video-input"/>
+                <img class="dz-icon" src="/assets/video.png" alt=""/>
+                <div class="dz-title">Choose a video</div>
+                <div class="dz-sub">Up to ${MAX_VIDEO_MB} MB · large files can be compressed</div>
+              </div>
+              <div id="pop-video-msg"></div>`;
+            document.getElementById('pop-video-input').addEventListener('change', (e) => handleVideoPick(e.target));
+          }
+        } else {
+          if (s.audio || s.existingAudioUrl) {
+            const src = s.audio ? URL.createObjectURL(s.audio) : s.existingAudioUrl;
+            body.innerHTML = `
+              <div class="audio-panel">
+                <div class="audio-player-row">
+                  <button class="audio-play-btn" id="pop-audio-play"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+                  <div class="audio-time" id="pop-audio-dur" style="margin:0">0:00</div>
+                </div>
+                <audio id="pop-audio-el" src="${src}" preload="metadata"></audio>
+                <button class="mini-btn" id="pop-audio-rerec">${s.audio ? 'Re-record' : 'Record a new clip'}</button>
+                ${s.audio ? `<div class="compress-status">${formatMB(s.audio.size)}</div>` : '<div class="compress-status">Current audio</div>'}
+              </div>`;
+            wireAudioPreview();
+            document.getElementById('pop-audio-rerec').addEventListener('click', () => { s.audio = null; s.existingAudioUrl = null; renderPopBody(); syncPopSave(); });
+          } else {
+            body.innerHTML = `
+              <div class="audio-panel">
+                <div class="audio-time" id="pop-audio-elapsed">0:00</div>
+                <button class="audio-rec-btn" id="pop-audio-rec">● Record</button>
+                <div class="dz-sub" style="margin-top:12px">Tap record and speak. Tap again to stop.</div>
+              </div>`;
+            document.getElementById('pop-audio-rec').addEventListener('click', toggleRecord);
+          }
+        }
+        syncPopSave();
+      }
+      function syncPopSave() {
+        const btn = document.getElementById('pop-save');
+        if (btn) btn.disabled = !popEditHasMedia(popEditState);
+      }
+      async function savePopcode() {
+        const s = popEditState;
+        if (!popEditHasMedia(s)) return;
+        const photo = state.selectedPhoto;
+        if (!photo || !photo.collectionId) { epToast('Could not find this photo’s project.'); return; }
+        const btn = document.getElementById('pop-save');
+        btn.disabled = true; btn.textContent = 'Saving…';
+        try {
+          const isVideo = s.mediaType === 'video';
+          const ti = photo.target_index;
+          const patch = { media_type: s.mediaType };
+          if (isVideo && s.video) {
+            const vPath = `${photo.slug}/video_${ti}.mp4`;
+            const up = await db.storage.from('experiences').upload(vPath, s.video, { contentType: s.video.type || 'video/mp4', upsert: true });
+            if (up.error) throw new Error(up.error.message);
+            patch.video_url = db.storage.from('experiences').getPublicUrl(vPath).data.publicUrl + `?v=${Date.now()}`;
+          } else if (!isVideo && s.audio) {
+            const ext = (s.audio.name && s.audio.name.split('.').pop()) || 'wav';
+            const aPath = `${photo.slug}/audio_${ti}.${ext}`;
+            const up = await db.storage.from('experiences').upload(aPath, s.audio, { contentType: s.audio.type || 'audio/wav', upsert: true });
+            if (up.error) throw new Error(up.error.message);
+            patch.audio_url = db.storage.from('experiences').getPublicUrl(aPath).data.publicUrl + `?v=${Date.now()}`;
+            patch.transcript = null; // audio changed — old transcript is stale
+          }
+          const { data: upd, error } = await db.from('collection_items').update(patch)
+            .eq('collection_id', photo.collectionId).eq('target_index', ti).select();
+          if (error) throw error;
+          if (!upd || !upd.length) throw new Error('could not find this photo to update');
+          photo.media_type = s.mediaType;
+          if (patch.video_url) photo.video_url = patch.video_url;
+          if (patch.audio_url) photo.audio_url = patch.audio_url;
+          closePcSheet();
+          renderPopcodeCta();
+          epToast('Popcode saved');
+        } catch (e) {
+          btn.disabled = false; btn.textContent = 'Save Popcode';
+          epToast('Could not save — ' + (e.message || 'try again'));
+          if (window.Sentry) Sentry.captureException(e);
+        }
+      }
+
+      // Video pick + optional compress (ported from the book maker) --------------
+      function canCompressVideo() {
+        try {
+          const canvas = document.createElement('canvas');
+          if (typeof canvas.captureStream !== 'function') return false;
+          if (typeof MediaRecorder === 'undefined') return false;
+          return ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].some(t => MediaRecorder.isTypeSupported(t));
+        } catch (e) { return false; }
+      }
+      function compressVideo(file, onProgress) {
+        const types = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+        const mimeType = types.find(t => MediaRecorder.isTypeSupported(t));
+        return new Promise((resolve, reject) => {
+          const video = document.createElement('video');
+          const srcUrl = URL.createObjectURL(file);
+          video.src = srcUrl; video.muted = true; video.playsInline = true;
+          video.onloadedmetadata = () => {
+            const MAX_DIM = 1280;
+            const scale = Math.min(1, MAX_DIM / Math.max(video.videoWidth || 1, video.videoHeight || 1));
+            const w = Math.max(2, Math.round(video.videoWidth * scale / 2) * 2);
+            const h = Math.max(2, Math.round(video.videoHeight * scale / 2) * 2);
+            const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            const stream = canvas.captureStream(30);
+            const rec = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2500000 });
+            const chunks = [];
+            rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+            rec.onstop = () => { URL.revokeObjectURL(srcUrl); resolve(new Blob(chunks, { type: mimeType.split(';')[0] })); };
+            rec.onerror = e => { URL.revokeObjectURL(srcUrl); reject(e.error || new Error('Compression error')); };
+            let animId;
+            const draw = () => { if (!video.ended && !video.paused) { ctx.drawImage(video, 0, 0, w, h); onProgress && onProgress(video.currentTime / (video.duration || 1)); animId = requestAnimationFrame(draw); } };
+            video.onended = () => { cancelAnimationFrame(animId); rec.stop(); };
+            rec.start(200);
+            video.play().then(draw).catch(reject);
+          };
+          video.onerror = () => reject(new Error('Could not load video for compression'));
+          video.load();
+        });
+      }
+      async function handleVideoPick(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const sizeMB = file.size / (1024 * 1024);
+        const msg = document.getElementById('pop-video-msg');
+        if (sizeMB > MAX_VIDEO_MB) {
+          if (canCompressVideo()) {
+            if (!confirm(`This video is ${sizeMB.toFixed(1)} MB — over the ${MAX_VIDEO_MB} MB limit.\n\nCompress it now? This can take a minute.`)) { input.value = ''; return; }
+            msg.innerHTML = `<div class="compress-status">Compressing… 0%</div><div class="compress-bar-wrap"><div class="compress-bar" id="cbar"></div></div>`;
+            let compressed;
+            try {
+              compressed = await compressVideo(file, p => {
+                document.getElementById('cbar').style.width = Math.round(p * 100) + '%';
+                msg.querySelector('.compress-status').textContent = `Compressing… ${Math.round(p * 100)}%`;
+              });
+            } catch (e) { compressed = null; }
+            const cMB = compressed ? compressed.size / (1024 * 1024) : Infinity;
+            if (compressed && cMB <= MAX_VIDEO_MB) {
+              popEditState.video = new File([compressed], (file.name || 'video').replace(/\.[^.]+$/, '.webm'), { type: compressed.type });
+              renderPopBody(); syncPopSave();
+            } else {
+              msg.innerHTML = `<div class="warn-banner">Still too large${cMB < Infinity ? ' (' + cMB.toFixed(0) + ' MB)' : ''}. Compress further at <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a>, then choose it again.</div>`;
+              input.value = '';
+            }
+          } else {
+            msg.innerHTML = `<div class="warn-banner">${sizeMB.toFixed(1)} MB — over the ${MAX_VIDEO_MB} MB limit. Compress free at <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a>, then choose it again.</div>`;
+            input.value = '';
+          }
+          return;
+        }
+        popEditState.video = file;
+        renderPopBody(); syncPopSave();
+      }
+
+      // Audio record (ported from the book maker) --------------------------------
+      function pickAudioMime() {
+        const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/ogg;codecs=opus'];
+        if (typeof MediaRecorder === 'undefined') return null;
+        for (const c of candidates) if (MediaRecorder.isTypeSupported(c)) {
+          const ext = c.startsWith('audio/webm') ? 'webm' : c.startsWith('audio/mp4') ? 'm4a' : c.startsWith('audio/ogg') ? 'ogg' : 'webm';
+          return { mime: c, ext };
+        }
+        return { mime: '', ext: 'webm' };
+      }
+      async function toggleRecord() {
+        if (recorder) {
+          if (recorder.timerId) clearInterval(recorder.timerId);
+          try { recorder.mediaRecorder.stop(); } catch (e) {}
+          return;
+        }
+        const pick = pickAudioMime();
+        if (!pick) { alert('Audio recording is not supported in this browser.'); return; }
+        let stream;
+        try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+        catch (e) { alert('Microphone access was denied. Enable it in your browser settings and try again.'); return; }
+        const mr = new MediaRecorder(stream, pick.mime ? { mimeType: pick.mime } : {});
+        const chunks = [];
+        mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+        mr.onstop = async () => {
+          const blob = new Blob(chunks, { type: pick.mime || mr.mimeType || 'audio/webm' });
+          stream.getTracks().forEach(t => t.stop());
+          recorder = null;
+          const norm = window.normalizeAudio ? await window.normalizeAudio(blob, pick.ext) : { blob, ext: pick.ext };
+          popEditState.audio = new File([norm.blob], `audio.${norm.ext}`, { type: norm.blob.type });
+          renderPopBody(); syncPopSave();
+        };
+        mr.start();
+        recorder = { mediaRecorder: mr, chunks, stream, ext: pick.ext, startTs: Date.now(), timerId: null };
+        const recBtn = document.getElementById('pop-audio-rec');
+        if (recBtn) { recBtn.textContent = '■ Stop'; recBtn.classList.add('stop'); }
+        recorder.timerId = setInterval(() => {
+          const sec = Math.floor((Date.now() - recorder.startTs) / 1000);
+          const el = document.getElementById('pop-audio-elapsed');
+          if (el) el.innerHTML = `<span class="rec-dot"></span>${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+        }, 250);
+      }
+      function wireAudioPreview() {
+        const audio = document.getElementById('pop-audio-el');
+        const btn = document.getElementById('pop-audio-play');
+        const dur = document.getElementById('pop-audio-dur');
+        if (!audio || !btn) return;
+        const play = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+        const pause = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+        const fmt = sec => (sec && isFinite(sec)) ? `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}` : '0:00';
+        audio.addEventListener('loadedmetadata', () => dur.textContent = fmt(audio.duration));
+        audio.addEventListener('play', () => btn.innerHTML = pause);
+        audio.addEventListener('pause', () => btn.innerHTML = play);
+        audio.addEventListener('timeupdate', () => { if (!audio.paused) dur.textContent = fmt(audio.currentTime); });
+        audio.addEventListener('ended', () => { dur.textContent = fmt(audio.duration); btn.innerHTML = play; });
+        btn.addEventListener('click', () => { if (audio.paused) audio.play(); else audio.pause(); });
+      }
 
       // ---- choose a photo (tray of the user's Popcode photos) ----
       function openPhotoStep() { renderTray(); showStep('photo'); }
@@ -1304,7 +1942,7 @@
           cell.className = 'photo-cell' + (state.selectedPhoto && state.selectedPhoto.url === p.url ? ' selected' : '');
           const cv = document.createElement('canvas'); cv.width = 200; cv.height = 200;
           cell.appendChild(cv);
-          cell.onclick = () => { state.selectedPhoto = p; renderDetailPreview(); showStep('detail'); };
+          cell.onclick = () => { state.selectedPhoto = p; state.photoAdjust = DEFAULT_ADJUST(); renderDetailPreview(); showStep('detail'); };
           grid.appendChild(cell);
           compositeBadgedImage(p.url, { scale: state.scale, aspect: 1, previewCanvas: cv, returnDataUrl: false }).catch(() => {});
         });
@@ -1329,6 +1967,7 @@
         const sb = document.getElementById('save-btn'); sb.disabled = false; sb.textContent = 'Save design';
         const ab = document.getElementById('addcart-btn'); ab.disabled = false; ab.textContent = 'Add to cart';
         showStep('review');
+        renderPopcodeCta();
         // aspect-true product with the chosen photo composited in
         const aspect = currentAspect();
         const art = await getArtImage(aspect);
@@ -1362,6 +2001,7 @@
           const printConfig = {
             productType: state.productType, variantId: orderVariantId(), orientation: state.orientation,
             scale: state.scale, photoUrl: state.selectedPhoto.url,
+            adjust: normalizeAdjust(state.photoAdjust),
             sourceSlug: state.selectedPhoto.slug, sourceTargetIndex: state.selectedPhoto.target_index,
           };
           if (editingDesign) {
@@ -1403,7 +2043,7 @@
         const calibrate = qs.get('calibrate');
         const dataUrl = calibrate
           ? await buildCalibrationSheet(photo.url, currentAspect())
-          : await compositeBadgedImage(photo.url, { scale: state.scale, aspect: currentAspect() });
+          : await compositeBadgedImage(photo.url, { scale: state.scale, aspect: currentAspect(), adjust: state.photoAdjust });
         const blob = dataUrlToBlob(dataUrl);
         const scalePct = Math.round(state.scale * 100);
         const path = photo.slug + '/print-' + photo.target_index + '-' + state.orientation
@@ -1602,5 +2242,10 @@
       }
       function clearError() { document.getElementById('error-banner').style.display = 'none'; }
     </script>
+    <!-- Edit Photo modal (crop / zoom / reposition / rotate) -->
+    <div class="ep-overlay" id="ep-modal" aria-hidden="true"></div>
+    <!-- Add/Edit Popcode modal (link the video or audio that plays when scanned) -->
+    <div class="ep-overlay" id="pc-modal" aria-hidden="true"></div>
+    <div class="ep-toast" id="ep-toast"></div>
   </body>
 </html>
