@@ -153,6 +153,9 @@
     { href: '/manage.html?tab=designs', label: 'My Designs', nav: 'designs', match: function (p, s) { return p === '/manage.html' && s.indexOf('designs') !== -1; } },
     { href: '/shop.html', label: 'Shop', nav: 'shop', match: function (p) { return p === '/shop.html' || p === '/order.html'; } },
     { href: '/views.html', label: 'Past Views', match: function (p) { return p === '/views.html'; } },
+    // .html is deliberate: vercel.json rewrites any lowercase 3-30 character
+    // path to the viewer, so a bare /pricing would be read as a slug.
+    { href: '/pricing.html', label: 'Pricing', match: function (p) { return p === '/pricing.html'; } },
     { href: '/howto.html', label: 'How It Works', match: function (p) { return p === '/howto.html'; } },
   ];
   var path = location.pathname;
