@@ -474,6 +474,74 @@
       @media (max-width: 900px) { .steps { grid-template-columns: 1fr 1fr; } }
       @media (max-width: 520px) { .steps { grid-template-columns: 1fr; } }
 
+      /* ── Moments carousel ───────────────────────────────────────
+         Scroll-snap does the work: native momentum and swipe on touch, and
+         the buttons and dots just scroll the track. No drag handling, so
+         there's nothing to get wrong on a phone. */
+      #moments { overflow: hidden; }
+      .mid { text-align: center; }
+      h2.mid, .lede.mid { margin-left: auto; margin-right: auto; }
+      .lede.mid { max-width: 34em; }
+      .carousel { position: relative; margin-top: 44px; }
+      .track {
+        display: flex; gap: 26px; overflow-x: auto; scroll-snap-type: x mandatory;
+        /* The gutter is half the viewport minus half a card, so the first and
+           last cards can still reach the centre. */
+        padding: 10px calc(50% - 168px) 30px;
+        scrollbar-width: none; outline: none;
+      }
+      .track::-webkit-scrollbar { display: none; }
+      .moment {
+        position: relative; flex: 0 0 336px; height: 448px; border-radius: 22px;
+        overflow: hidden; scroll-snap-align: center; isolation: isolate;
+        transform: scale(.88); opacity: .55;
+        transition: transform .45s cubic-bezier(.22,.7,.3,1), opacity .45s ease;
+        box-shadow: 0 18px 44px rgba(20,16,40,.16);
+      }
+      .moment.on { transform: scale(1); opacity: 1; }
+      .moment img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .moment-scrim {
+        position: absolute; inset: 0;
+        background: linear-gradient(to top, rgba(10,6,26,.88) 0%, rgba(10,6,26,.34) 42%, rgba(10,6,26,.04) 68%);
+      }
+      .moment-icon {
+        position: absolute; top: 16px; left: 16px; width: 38px; height: 38px; border-radius: 12px;
+        display: grid; place-items: center; color: #fff;
+        background: rgba(255,255,255,.18); backdrop-filter: blur(8px);
+      }
+      .moment-icon svg { width: 19px; height: 19px; fill: none; stroke: currentColor;
+                         stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+      .moment-text { position: absolute; left: 24px; right: 24px; bottom: 22px; color: #fff; }
+      .moment-text h3 { font-family: var(--serif); font-weight: 400; font-size: 32px; margin: 0 0 4px;
+                        letter-spacing: -0.01em; }
+      .moment-text p { font-size: 14.5px; line-height: 1.45; margin: 0; color: rgba(255,255,255,.88); }
+      .cbtn {
+        position: absolute; top: 50%; transform: translateY(-50%); z-index: 2;
+        width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--line);
+        background: rgba(255,255,255,.94); color: var(--ink); cursor: pointer;
+        display: grid; place-items: center; box-shadow: 0 6px 20px rgba(20,16,40,.12);
+      }
+      .cbtn svg { width: 20px; height: 20px; }
+      .cbtn.prev { left: max(16px, calc(50% - 560px)); }
+      .cbtn.next { right: max(16px, calc(50% - 560px)); }
+      .cbtn:hover { background: #fff; }
+      .dots { display: flex; justify-content: center; gap: 8px; margin-top: 6px; }
+      .dots button {
+        width: 8px; height: 8px; padding: 0; border: 0; border-radius: 50%;
+        background: #d6d2ca; cursor: pointer; transition: background .25s, width .25s;
+      }
+      .dots button[aria-current="true"] { background: var(--ink); width: 22px; border-radius: 999px; }
+      @media (max-width: 720px) {
+        .track { gap: 16px; padding: 10px calc(50% - 132px) 26px; }
+        .moment { flex-basis: 264px; height: 352px; }
+        .moment-text h3 { font-size: 26px; }
+        .cbtn { display: none; }   /* swipe is the interaction on touch */
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .track { scroll-behavior: auto; }
+        .moment { transition: none; }
+      }
+
       /* ── Pricing ────────────────────────────────────────────── */
       .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
       .plan { background: #fff; border: 1px solid var(--line); border-radius: 22px; padding: 34px;
@@ -682,28 +750,107 @@
     <!-- ── How it works ─────────────────────────────────────── -->
     <section id="how">
       <div class="wrap">
-        <p class="eyebrow">How it works</p>
-        <h2>Four steps, and one of them is the address.</h2>
-        <p class="lede">There is no app to download and nothing for the person receiving it to sign up for. They do need to know where to go — so we print that on the piece.</p>
+        <p class="eyebrow mid">How it works</p>
+        <h2 class="mid">Three steps to magic.</h2>
+        <p class="lede mid">No app to download. Anyone with a phone can scan and watch.</p>
 
         <div class="steps">
           <div class="step">
-            <h3>Upload your video or voice</h3>
-            <p>Anything from your phone. Or record a narration straight into the browser.</p>
+            <h3>Upload your photo + video</h3>
+            <p>Pick a printed photo and the video you'd like it to play when scanned.</p>
           </div>
           <div class="step">
-            <h3>Print with us, or add Popcode to something you own</h3>
-            <p>Order a printed piece, or download your picture with the Popcode symbol on it and print it anywhere.</p>
+            <h3>Share your unique link</h3>
+            <p>Popcode gives you a short link to share with anyone who'll see the photo.</p>
           </div>
           <div class="step">
-            <h3>We print the address on the piece</h3>
-            <p>Short, and yours — <code>popcode.app/maya</code>.</p>
-          </div>
-          <div class="step">
-            <h3>They open it and scan the picture</h3>
-            <p>The camera opens in the browser, they point it at the picture, and it plays.</p>
+            <h3>Anyone scans the photo</h3>
+            <p>They open the link, point their camera, and the moment plays.</p>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- ── Moments. A carousel rather than a grid: there are seven of these
+         and a grid of seven either wraps badly or asks the reader to take
+         them all in at once. ── -->
+    <section id="moments">
+      <div class="wrap">
+        <p class="eyebrow mid">For every kind of memory</p>
+        <h2 class="mid">Made for the moments<br>that matter most.</h2>
+        <p class="lede mid">Photos freeze a moment &mdash; Popcode brings it back to life.</p>
+      </div>
+
+      <div class="carousel" id="moments-carousel">
+        <div class="track" id="moments-track" tabindex="0" role="group"
+             aria-label="Kinds of memory. Use the left and right arrow keys.">
+          <article class="moment" data-i="0">
+            <img src="/assets/moments/weddings.webp" alt="Weddings" loading="lazy" width="720" height="960"/>
+            <div class="moment-scrim"></div>
+            <div class="moment-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+            <div class="moment-text">
+              <h3>Weddings</h3>
+              <p>First dances and forever moments.</p>
+            </div>
+          </article>
+          <article class="moment" data-i="1">
+            <img src="/assets/moments/family.webp" alt="Family Albums" loading="lazy" width="720" height="960"/>
+            <div class="moment-scrim"></div>
+            <div class="moment-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+            <div class="moment-text">
+              <h3>Family Albums</h3>
+              <p>Every page, every memory, alive.</p>
+            </div>
+          </article>
+          <article class="moment" data-i="2">
+            <img src="/assets/moments/birthdays.webp" alt="Birthdays" loading="lazy" width="720" height="960"/>
+            <div class="moment-scrim"></div>
+            <div class="moment-icon"><svg viewBox="0 0 24 24"><path d="M20 21V10H4v11"/><path d="M2 10h20"/><path d="M12 10V6"/><path d="M9 6c0-1.5 1.5-3 3-3s3 1.5 3 3"/></svg></div>
+            <div class="moment-text">
+              <h3>Birthdays</h3>
+              <p>The wish, not just the cake.</p>
+            </div>
+          </article>
+          <article class="moment" data-i="3">
+            <img src="/assets/moments/recipes.webp" alt="Recipes" loading="lazy" width="720" height="960"/>
+            <div class="moment-scrim"></div>
+            <div class="moment-icon"><svg viewBox="0 0 24 24"><path d="M3 11h18l-1 9H4l-1-9z"/><path d="M5 11V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/><path d="M9 5V3"/><path d="M12 5V3"/><path d="M15 5V3"/></svg></div>
+            <div class="moment-text">
+              <h3>Recipes</h3>
+              <p>Watch them show how it's done.</p>
+            </div>
+          </article>
+          <article class="moment" data-i="4">
+            <img src="/assets/moments/memoriam.webp" alt="In Memoriam" loading="lazy" width="720" height="960"/>
+            <div class="moment-scrim"></div>
+            <div class="moment-icon"><svg viewBox="0 0 24 24"><path d="M12 2c1 3 3 5 3 8a3 3 0 0 1-6 0c0-3 2-5 3-8z"/><path d="M5 22h14"/><path d="M8 18h8"/></svg></div>
+            <div class="moment-text">
+              <h3>In Memoriam</h3>
+              <p>Their voice. Their smile. Forever near.</p>
+            </div>
+          </article>
+          <article class="moment" data-i="5">
+            <img src="/assets/moments/travel.webp" alt="Travel" loading="lazy" width="720" height="960"/>
+            <div class="moment-scrim"></div>
+            <div class="moment-icon"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></div>
+            <div class="moment-text">
+              <h3>Travel</h3>
+              <p>Relive the trip back home.</p>
+            </div>
+          </article>
+          <article class="moment" data-i="6">
+            <img src="/assets/moments/graduations.webp" alt="Graduations" loading="lazy" width="720" height="960"/>
+            <div class="moment-scrim"></div>
+            <div class="moment-icon"><svg viewBox="0 0 24 24"><path d="M22 10L12 4 2 10l10 6 10-6z"/><path d="M6 12v5c0 2 3 3 6 3s6-1 6-3v-5"/></svg></div>
+            <div class="moment-text">
+              <h3>Graduations</h3>
+              <p>Their walk, their pride, your tears.</p>
+            </div>
+          </article>
+        </div>
+        <button class="cbtn prev" id="moments-prev" type="button" aria-label="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 5 8 12 15 19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="cbtn next" id="moments-next" type="button" aria-label="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 5 16 12 9 19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <div class="dots" id="moments-dots"></div>
       </div>
     </section>
 
@@ -853,6 +1000,84 @@
           err.style.display = 'none';
           window.location.href = '/' + code;
         });
+      })();
+
+      // Moments carousel. The track is a scroll-snap container, so scrolling it
+      // IS the state — the buttons, dots and autoplay all just scroll it, and
+      // whatever lands nearest the centre is the active card. Nothing to keep
+      // in sync, and a swipe on a phone behaves the same as a click.
+      (function () {
+        var track = document.getElementById('moments-track');
+        if (!track) return;
+        var cards = [].slice.call(track.querySelectorAll('.moment'));
+        var dotsWrap = document.getElementById('moments-dots');
+        var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var timer = null, current = -1;
+
+        var dots = cards.map(function (_, i) {
+          var d = document.createElement('button');
+          d.type = 'button';
+          d.setAttribute('aria-label', 'Show ' + cards[i].querySelector('h3').textContent);
+          d.addEventListener('click', function () { go(i); rest(); });
+          dotsWrap.appendChild(d);
+          return d;
+        });
+
+        function centreOf(el) { var r = el.getBoundingClientRect(); return r.left + r.width / 2; }
+
+        function mark() {
+          var mid = track.getBoundingClientRect().left + track.clientWidth / 2;
+          var best = 0, bestD = Infinity;
+          cards.forEach(function (c, i) {
+            var d = Math.abs(centreOf(c) - mid);
+            if (d < bestD) { bestD = d; best = i; }
+          });
+          if (best === current) return;
+          current = best;
+          cards.forEach(function (c, i) { c.classList.toggle('on', i === best); });
+          dots.forEach(function (d, i) {
+            if (i === best) d.setAttribute('aria-current', 'true'); else d.removeAttribute('aria-current');
+          });
+        }
+
+        function go(i) {
+          i = (i + cards.length) % cards.length;
+          var c = cards[i];
+          track.scrollTo({ left: c.offsetLeft - (track.clientWidth - c.offsetWidth) / 2,
+                           behavior: reduce ? 'auto' : 'smooth' });
+        }
+
+        var ticking = false;
+        track.addEventListener('scroll', function () {
+          if (ticking) return;
+          ticking = true;
+          requestAnimationFrame(function () { mark(); ticking = false; });
+        }, { passive: true });
+        window.addEventListener('resize', mark);
+
+        document.getElementById('moments-prev').addEventListener('click', function () { go(current - 1); rest(); });
+        document.getElementById('moments-next').addEventListener('click', function () { go(current + 1); rest(); });
+        track.addEventListener('keydown', function (e) {
+          if (e.key === 'ArrowRight') { e.preventDefault(); go(current + 1); rest(); }
+          if (e.key === 'ArrowLeft')  { e.preventDefault(); go(current - 1); rest(); }
+        });
+
+        // Autoplay, but only while it's on screen and nobody's touching it —
+        // a carousel that moves under your finger, or off screen, is a bug.
+        function play() { if (!reduce && !timer) timer = setInterval(function () { go(current + 1); }, 4200); }
+        function stop() { clearInterval(timer); timer = null; }
+        function rest() { stop(); play(); }
+        ['mouseenter', 'focusin', 'touchstart', 'pointerdown'].forEach(function (ev) {
+          track.addEventListener(ev, stop, { passive: true });
+        });
+        ['mouseleave', 'focusout'].forEach(function (ev) { track.addEventListener(ev, play); });
+        if (window.IntersectionObserver) {
+          new IntersectionObserver(function (es) {
+            es[0].isIntersecting ? play() : stop();
+          }, { threshold: 0.25 }).observe(track);
+        } else { play(); }
+
+        go(0); mark();
       })();
 
       document.getElementById('yr').textContent = new Date().getFullYear();
