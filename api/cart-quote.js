@@ -57,7 +57,9 @@ export default async function handler(req, res) {
       printing_minor: priced.printingMinor,
       shipping_minor: priced.shippingMinor,
       currency: priced.currency,
-      markup: MARKUP,
+      // Per-type markups mean there is no single rate; report the one this order
+      // actually achieved on its goods. MARKUP is now only a fallback.
+      markup: priced.effectiveMarkup ?? MARKUP,
       // One group = one parcel, so the UI can say "ships in 2 parcels" honestly.
       shipments: priced.groups.length,
       groups: priced.groups.map((g) => ({

@@ -189,7 +189,9 @@ export default async function handler(req, res) {
           shipping_method: shippingMethod || 'Standard',
           currency: group.currency,
           quote_cost_minor: group.costMinor,
-          markup: MARKUP,
+          // Per-type markup means MARKUP is only a fallback — record the rate
+          // this group was actually priced at.
+          markup: group.effectiveMarkup ?? MARKUP,
           total_charged_minor: group.totalMinor,
         })
         .select('id')

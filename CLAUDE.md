@@ -1768,3 +1768,101 @@ At the end of the session the user said to flip it on — "i'm the only one orde
 - **Insert orientation unconfirmed** — settle it from the first real order's proof image.
 - **Two pre-existing horizontal-overflow bugs found and NOT fixed** (both confirmed identical before/after my changes, so neither is a regression): `order.html` scrolls sideways ~16px on phones (`.detail` grid children need `min-width: 0` — grid items default to `min-width: auto`); `manage.html` scrolls sideways at ~768px tablet width. Offered both, user hasn't picked them up.
 - Small-size pricing (shipping-dominated) still open as a business decision.
+
+### 2026-09-17 — Scan screen rebuilt around the animated mark; and the decision to stay on slugs
+
+**Branch `claude/exciting-wright-3piri0`. Four commits, each fast-forwarded to `main` and verified live on prod: `ebce03b`, `57a4751`, `dbeae61`, `ae62541`.** No PRs. No schema, env or RLS change. Files: `public/view.html`, `public/scan.html`, `public/desktop-note.js`.
+
+#### THE STRATEGIC OUTCOME (the reason this session mattered)
+
+**Decision: stay on the slug model. Leave the CLIP/handle work where it is — built, merged, live, and dormant. Revisit only on a specific trigger.** This came out of the user asking, plainly, what the handle model actually buys and whether slugs scale. The answer is worth not re-deriving:
+
+- **Slugs scale better, not worse.** Identification cost per scan is zero forever regardless of user count; accuracy can't degrade as a library grows (the match set is scoped to one project's ~20 photos *by construction*, and the FK can't be wrong); no third-party runtime dependency; no viewer camera frames leaving the device. The `.mind` file grows per *project*, not per account.
+- **The handle model doesn't fix a scaling problem, it fixes a convenience one** — "recipient doesn't need to know which Popcode they're holding" — and charges latency, per-scan inference cost, and a shrinking accuracy margin for it. Phase 4's own numbers: real matches 0.62–0.72 vs a noise ceiling of 0.595, a **0.025 margin** that narrows as a creator's library grows. And the Replicate cold start (5–6s on first scan) was never solved.
+- **The benefit it sounds like it has, it doesn't.** "Lost the insert card" isn't rescued by a handle — you'd have to know the handle too. It only helps someone who has already scanned something of that creator's.
+- **You already solved the URL-on-the-object problem twice**: back covers on books/calendars, companion inserts on flat and wall art. The handle model's headline benefit aims at a gap the print pipeline closed.
+- **Running both is the worst option** — two scan entrances, two URL shapes to explain, a print-time decision about which to print, and doubled surface on the most fragile code in the app. The drift is already demonstrated: `scan.html` sat on the old pill and brackets for months while `view.html` moved on.
+- **Cheaper alternative that gets most of the benefit:** a creator landing page at `popcode.app/u/{handle}` that just lists their projects — "which one are you holding?". One memorable address per creator, no inference, no latency, no per-scan cost, no accuracy margin, nothing leaving the phone. Costs one tap. Roughly a day against weeks.
+- **What would change the answer:** a white-label/brand deal where "one address for the whole campaign" is the actual sale (the Mission to Ghana shape — `popcode.app/ghana` on everything). That's a revenue reason. Absent that, the CLIP work isn't wasted, it's **banked**.
+
+#### CLIP/handle: exactly what state it's in (verified, not from notes)
+
+Worth writing down because it's easy to over- or under-estimate:
+
+- **It is genuinely live in prod.** `POST /api/identify` with `{"handle":"zzznotreal"}` → `{"matched":false,"reason":"unknown_handle"}`. With `Curt` it sails past the creator lookup **and** past the `new_identification_enabled` gate and reaches Replicate (failed only because the probe frame was a deliberately truncated JPEG). So @Curt is flag-enabled and the pipeline runs end to end.
+- **But nothing feeds it.** `grep` over `create.html` / `edit.html` / `book.html` / `manage.html` → **zero** references to `pop_images` or `/api/identify`. The index is written by exactly one thing: `scripts/seed-identification.mjs`, run by hand from a terminal. No handle field on signup, no UI anywhere, no embedding on save.
+- **Population: two books (Max, Addie), seeded by hand in June, reachable only by Curt.** A project created today doesn't join. `manage.html` only ever generates `popcode.app/{slug}`.
+- **ROUTING LANDMINE if handles are ever opened up.** `vercel.json` rewrites are ordered, and rule 2 is `/:slug([a-z0-9][a-z0-9-]{2,29})` → `view.html`. That matches **any all-lowercase 3–30 char path**. So a creator who picks the handle `sarah` is routed to the viewer, which looks up a collection with that slug, finds nothing, and shows **"Experience not found."** `Curt` only works because of the capital C. Handles are currently disambiguated from slugs *by capitalisation and length* — fine for a one-person experiment, unshippable as a feature. A real resolver is prerequisite work.
+
+#### What shipped to prod
+
+The viewer's scan screen is now built around the animated Popcode mark, on **both** `view.html` (slug flow) and `scan.html` (handle flow) so they can't drift again:
+
+- **Start screen**: the white "Scan image" pill is replaced by the mark on a **141px `#4b3cba` disc** (mark 132px) with a **"Tap to scan"** caption, sitting where the pill was. Five soft **filled** white halos swell out of it (`pop-swell`, scale 1 → 5.6, 5s, one a second, opacity .17). They **stack** — that overlap is what reads as wide concentric bands, Shazam-style. Thin stroked rings cannot produce this; that was a wrong turn. The disc also breathes (1 → 1.04), and the mark turns **once, 360°** on arrival before settling into the pulse.
+- **Tapping leaves the mark exactly where it is** and everything around it falls away — wordmark, caption, disc. The mark is inside the button and never moves, which is why the disc is a separate layer behind it rather than the button's background.
+- **Scanning**: the **comet** — one P orbits with whole P's fading out behind it, never resolving. `pop-comet`, 1.4s, `--i * .175s` stagger.
+- **Found**: **resolve + bloom.** The eight P's land (`pop-land`, .26s, `--i * .035s`), the mark completes, then it opens out in white (`pop-bloom`, scale 1 → 11, .36s at .52s delay). **The bloom IS the hand-off to the video**, not something before it — timed to finish at ~880ms, inside the existing **900ms hold**, so the mark is gone exactly as the video screen takes over.
+- **`scan.html` extra**: its **capture phase** (camera open, frames going to `/api/identify`, before any MindAR scene exists) got the same orbiting mark (`#cap-mark`), so the mark searches continuously from first tap through to match.
+- The four corner brackets, and the "Point your camera at a Popcoded photo" copy, are gone. `#scan-hint` survives for **error messages only**, with `#scan-hint:empty { display: none }` so a blank one can't render as an empty pill.
+
+**Design exploration lives in two artifacts** (not in the repo — this is why they were unfindable at the start of the session):
+- **Popcode Mark Animation** — https://claude.ai/artifact/7iFeHa4Qa2NmofYSZwAvge (the original: the eight-P construction, four motion options, the difference-blend proof)
+- **Popcode Scan Screen — Comet** — https://claude.ai/artifact/HJPtEo8ZzkWSU9He4jRvg1 (a Design canvas: interactive tap-through, three success beats, purple options, arrival options, pulse options)
+
+#### THE BUG WORTH NOT RELEARNING: MindAR ships three overlays and all three default to "yes"
+
+This cost **three deploys**, because the overlays are stacked and each one only becomes visible when the thing in front of it is removed.
+
+- `uiScanning` — a white **bracket frame** over the camera (`.scanning .inner`, corner gradients + a scanline). **Our four `.corner` divs were a second set on top of it**, invisible at `opacity: 0` until a match expanded them. Removing ours just uncovered MindAR's, which is why "the brackets are still there" after the first fix.
+- `uiLoading` — a **120px `#222` ring with a white top segment, spinning, dead centre**. Our mark sits dead centre too, so it read as a deliberate dark disc *behind* the mark. Found only because the user screenshotted it.
+- `uiError` — would draw its own error message **on top of `#error-screen`**.
+
+Fix is one string: `uiScanning: no; uiLoading: no; uiError: no;` in the `mindar-image` attribute (the bundle checks `!== "no"`). **`arError` is emitted directly (`this.el.emit("arError", …)`), independent of `uiError`**, so our error listener is unaffected — checked before disabling. Verified with the camera actually started (`--use-fake-device-for-media-stream`): `.mindar-ui-overlay` / `-loading` / `-scanning` / `-error` all **zero**. The only MindAR chrome left is the compatibility notice (no `getUserMedia` at all), deliberately kept.
+
+**Method lesson:** I twice told the user prod was clean because `grep -c 'class="corner'` returned 0. The grep was accurate and the conclusion was wrong — I was verifying *our markup* rather than *what renders*. When UI comes from a 1.7MB vendored bundle, only a screenshot or a DOM count of the library's own classes settles it. **Grep your own source to check your own change; count rendered elements to check the screen.**
+
+#### THE OTHER REAL BUG: the tap button would have been dead on every desktop visit
+
+`desktop-note.js` mounts its "open this on your phone" panel with `container.insertBefore(el, slot)` where `slot = container.querySelector('#start-btn')`. Wrapping the button with its caption in `#start-tap` made the button a **grandchild** of `#start-screen`, and `insertBefore` **throws** on a node that isn't a direct child. The throw happened inside `showStartScreen()` — **one line before `addEventListener('click', handleStartTap)`** — so the handler never attached. The button would have looked perfect and done nothing.
+
+It only fires when `canScan()` is false, so a phone would have been fine and this would have hidden until someone opened a link at a desk. `mount()` now climbs to whichever ancestor is the child. **Caught only because the headless test runs in a no-coarse-pointer environment, i.e. the desktop path by default.** Test the desktop path deliberately; `?desktopnote=1` / `=0` force it either way.
+
+Second, subtler: the note's hide rule was `.popcode-desktop #start-btn`. Retargeting it to `#start-tap` alone would have **regressed `scan.html`**, which still has a bare `#start-btn` — its button would have stayed visible next to a note telling you to use your phone. Both selectors are in the rule now.
+
+#### THE MARK ITSELF: `fill-rule` must be nonzero, not evenodd
+
+The user spotted "a little triangle" in the rotating P and guessed correctly that the letter was broken into pieces. It was a genuine path bug, inherited from the original artifact.
+
+The P is three subpaths — bowl (r60), counter (r21.5), stem (a capsule). Under **`fill-rule="evenodd"` the stem cancels against the bowl where they overlap and punches a wedge out of the letter.** Eight stacked P's hide it completely; it only shows when one P is alone mid-orbit, which is exactly what the comet does.
+
+Fix: `fill-rule="nonzero"` **and** reverse the counter circle's arcs (`sweep 0 → 1`) so it still punches through as a hole. Bowl and stem are both counter-clockwise, so nonzero unions them; the counter is now clockwise, so it subtracts. Verified by rendering old vs new side by side — the wedge is unmistakable.
+
+**Caveat carried into prod:** this P is **reconstructed by measuring the lockup, not exported from it — a 99.3% match**, with the residual in how the stem meets the bowl. It has to be the P-based version to animate letter by letter. **If the P is ever exported as its own SVG it's a single `d` attribute swap** (`#pop-p` in both files, plus both artifacts) and the end frame becomes exact.
+
+#### Smaller decisions worth keeping
+
+- **Disc `#4b3cba`.** The old `#6C30DE` was the same red-leaning hue as the gradient's endpoint, so disc and background fought at the same angle; pulling it bluer separates them and the darker value gives the white mark more contrast. **Only the disc changed — the gradient is untouched**, deliberately: `linear-gradient(160deg, #5bc8f5, #7c3aed)` is also `#loading` and the same family drives the badge gradient printed on every photo. Changing the disc is a one-screen decision; changing the gradient is a brand decision that reaches physical products already in people's hands.
+- **`pointer-events: none` on the halos is load-bearing.** They live inside the button and a transformed child is hit-tested where it's *drawn* — at full travel a halo is wider than the phone, so without it the entire screen becomes one tap target.
+- The bands pass behind "Tap to scan" (caption is 93px from the disc centre, bands travel ~390px). Accepted; the lever if it ever reads thin is per-band opacity (.17), not size.
+- The mark carries `drop-shadow(0 2px 14px rgba(0,0,0,.34))` instead of a scrim — invisible on the gradient, keeps white legible over a bright photo.
+- **None of the iOS media-session handling was touched**: stop-before-play, the 250ms settle, the frozen-frame watchdog, the rescan path, the 900ms hold. Deliberate.
+
+#### Testing recipe (worked well, reuse it)
+
+`playwright-core` in the **scratchpad only** (`node_modules` is tracked in this repo), chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, `cd public && python3 -m http.server <port>`. `page.route` to stub `sentry-init.js`, `@supabase/supabase-js@2`, `/api/collection*` and `**/*.mind`. Add `--use-fake-device-for-media-stream` when you need MindAR to actually start.
+
+- **Always `node --check` every inline `<script>` after editing view/scan** (extract with a regex) — the 2026-04-12 white-screen SyntaxError is still the worst failure mode in this file.
+- A-Frame **parses the `mindar-image` attribute into an object**, so `getAttribute('mindar-image')` returns an object, not a string. Read `.uiScanning` etc.
+- "Offset is outside the bounds of the DataView" after tapping = MindAR failing to parse a stub `.mind`. Expected, not a regression.
+- Headless has no camera, so tapping Scan ends at `arError` → "Experience not found". To screenshot the scanning/found states, show `#scanner` and toggle `#scan-mark.found` directly instead of going through the real flow.
+- **Don't chain `sleep` in Bash** — it's blocked. Use `run_in_background: true` with an `until` loop for deploy polling.
+- A failed `sed` in a `cmd && cmd` chain silently skips the rest. Bit me once.
+
+#### Still open / next
+
+- **`scan.html` is effectively Curt-only** — restyling it was consistency housekeeping, not user-facing work. Said so at the time.
+- The **99.3% P** — swap in the real artwork when it's exported.
+- **Both artifacts still carry the old evenodd path** in their own copies of the mark; the Design canvas was fixed, the original *Popcode Mark Animation* page was **not** — its difference-blend "99.3%" reading was partly measuring the wedge. Offered, not taken.
+- The `/u/{handle}` **menu page** idea above, if the "one address per creator" itch returns without the CLIP cost.
+- MindAR's **compatibility overlay** is still on (deliberate).
+- Unchanged from previous sessions: the two horizontal-overflow bugs (`order.html` ~16px on phones, `manage.html` at ~768px), small-size print pricing, companion insert orientation.

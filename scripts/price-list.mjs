@@ -28,7 +28,7 @@
 //    group of items from the same provider is quoted as ONE shipment, so two
 //    prints together cost less than twice one print.
 
-import { PRODUCTS, priceParts, providerFor } from '../lib/print/catalog.mjs';
+import { PRODUCTS, markupFor, priceParts, providerFor } from '../lib/print/catalog.mjs';
 import { getProvider } from '../lib/print/providers/index.mjs';
 
 const arg = (name, dflt) => {
@@ -71,7 +71,7 @@ for (const type of types) {
       row.shipMinor = q.shippingMinor ?? null;
       row.itemMinor = q.itemsMinor ?? (row.shipMinor == null ? null : q.totalMinor - row.shipMinor);
       row.costMinor = q.totalMinor;
-      const parts = priceParts(q, MARKUP);
+      const parts = priceParts(q, markupFor(type, MARKUP));
       row.printingMinor = parts.printingMinor;
       row.priceMinor = parts.totalMinor;
       row.marginMinor = row.priceMinor - q.totalMinor;
@@ -104,7 +104,8 @@ if (CSV) {
     ].map((v) => (/[",]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v)).join(','));
   }
 } else {
-  console.log(`\nShop price list — to ${COUNTRY}, ${SHIPPING} shipping, 1 copy, markup ×${MARKUP}`);
+  console.log(`\nShop price list — to ${COUNTRY}, ${SHIPPING} shipping, 1 copy`);
+  console.log(`Markup per type: ${types.map((t) => `${t} ×${markupFor(t, MARKUP)}`).join(', ')}`);
   console.log(`Prodigi: ${(process.env.PRODIGI_BASE_URL || 'https://api.sandbox.prodigi.com').trim()}\n`);
   let lastType = null;
   for (const r of rows) {
