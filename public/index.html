@@ -485,10 +485,10 @@
             <span class="odo" id="odo" aria-hidden="true"><span class="odo-track" id="odo-track"><span class="odo-word">anything</span></span></span>
             <span class="hl-line" aria-hidden="true">play.</span>
           </h1>
-          <p class="sub">Video or voice, playing right from the printed thing. One short web address — no app, no account, no download.</p>
+          <p class="sub">No app. No QR code. Scan the picture itself, and video or voice plays instantly.</p>
           <div class="hero-cta">
             <a class="btn btn-dark" href="/create.html">Create a Popcode</a>
-            <a class="btn btn-ghost" href="/shop.html">Shop things that play</a>
+            <a class="btn btn-ghost" href="/shop.html">Shop books and prints</a>
           </div>
         </div>
 
@@ -823,6 +823,9 @@
         // largest piece in the reel.
         anything:  { img: '/assets/mockups/scenes/anything.webp', alt: 'A framed photograph of an elephant',
                      h: '116%', rot: '0deg', x: '-11%', video: '/video/anything.mp4',
+                     // 1500 to hand over to the phone plus the clip's own 7s, so
+                     // the reel doesn't cut away mid-elephant on its way round.
+                     dwell: 8500,
                      fallback: '/assets/sample-photo.jpg' }
       };
 
@@ -987,18 +990,25 @@
         if (!track) return;
         if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-        // Ends on "anything" — the reel rolls through the specifics and resolves
-        // to the word the sentence rests on. Each word shows the thing it names
-        // on the stage alongside, so headline and picture stay in step.
+        // Rolls through the specifics, resolves on "anything", then comes round
+        // again. Each word shows the thing it names on the stage alongside, so
+        // headline and picture stay in step.
         var words = ['albums', 'calendars', 'prints', 'exhibits', 'anything'];
-        track.innerHTML = words.map(function (w) {
+        // One extra slot holding a second copy of the first word. The reel rolls
+        // onto it like any other, then snaps back to the real slot 0 with the
+        // transition off — identical pixels, so the reset can't be seen and the
+        // roll only ever travels one way. Rewinding through four words to get
+        // back to the top would read as a mistake.
+        var slots = words.concat(words[0]);
+        var ROLL = 850; // must match .odo-track's transition duration
+        track.innerHTML = slots.map(function (w) {
           return '<span class="odo-word">' + w + '</span>';
         }).join('');
 
         var i = 0;
         function show(n, animate) {
           track.style.transition = animate ? '' : 'none';
-          track.style.transform = 'translateY(' + (-n * 100 / words.length) + '%)';
+          track.style.transform = 'translateY(' + (-n * 100 / slots.length) + '%)';
           if (!animate) track.offsetHeight; // flush, so the next move animates
         }
         show(0, false);
@@ -1014,9 +1024,14 @@
         function next() {
           i++;
           show(i, true);
-          if (window.popcodeShowScene) window.popcodeShowScene(words[i]);
-          // Holds on "anything" — it's the tagline, so it doesn't loop away.
-          if (i < words.length - 1) setTimeout(next, dwellFor(words[i]));
+          var word = slots[i];
+          if (window.popcodeShowScene) window.popcodeShowScene(word);
+          if (i === words.length) {
+            // Landed on the duplicate. Once the roll has finished, drop back to
+            // the real first slot without animating — same word, same pixels.
+            setTimeout(function () { i = 0; show(0, false); }, ROLL);
+          }
+          setTimeout(next, dwellFor(word));
         }
         setTimeout(next, dwellFor(words[0]));
       })();
