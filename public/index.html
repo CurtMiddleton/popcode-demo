@@ -64,7 +64,11 @@
       body .site-header::after { display: none; }
 
       .hero {
-        position: relative; overflow: hidden;
+        /* clip, not hidden: the artwork runs off the right edge on purpose and
+           must not scroll the page, but the phone overhangs the bottom and its
+           shadow has to fall onto the cream below. `hidden` forces both axes to
+           clip; `clip` on one axis leaves the other free. */
+        position: relative; overflow-x: clip;
         background: linear-gradient(160deg, #5bc8f5 0%, #7c3aed 100%);
         color: #fff; padding: 64px 0 210px;
       }
@@ -361,23 +365,30 @@
         .phone-notch { width: 60px; height: 17px; }
       }
 
-      /* ── Code entry ─────────────────────────────────────────── */
-      .codebar { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
-                 background: #fff; margin-top: 76px; }
-      .codebar .inner { display: flex; align-items: center; gap: 20px; padding-block: 26px; flex-wrap: wrap; }
-      .codebar .lbl { font-family: var(--serif); font-size: 25px; }
-      .codebar form { display: flex; gap: 10px; margin-left: auto; flex-wrap: wrap; }
+      /* ── Link entry ─────────────────────────────────────────────
+         Sits on the cream just under the hero curve, left-aligned with the
+         rest of the page. No rule above or below: it's a quiet way back in for
+         someone holding a printed piece, not a band across the page. */
+      .codebar { margin-top: 4px; padding-block: 8px 24px; }
+      .codebar .lbl { font-family: var(--serif); font-size: 25px; margin-bottom: 16px; }
+      .codebar form { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+      /* The domain is text, not part of the field — so the box holds only what
+         you type, and the pair reads as the address that's printed on the piece. */
+      .code-prefix { font-family: var(--sans); font-size: 18px; color: #6b6558; white-space: nowrap; }
+      .code-input {
+        font-family: var(--sans); font-size: 18px; padding: 13px 18px; width: 260px;
+        border: 1.5px solid var(--line); border-radius: 14px; outline: none; background: #fff;
+      }
+      .code-input:focus { border-color: #7657FC; }
+      .code-go {
+        width: 62px; height: 62px; padding: 0; border-radius: 50%; flex-shrink: 0;
+        display: inline-flex; align-items: center; justify-content: center;
+      }
+      .code-err { color: #c92a2a; font-size: 13.5px; width: 100%; margin: 0; display: none; }
       @media (max-width: 620px) {
-        .codebar .inner { gap: 14px; }
-        .codebar form { margin-left: 0; width: 100%; }
+        .codebar .lbl { font-size: 22px; }
         .code-input { flex: 1; width: auto; min-width: 0; }
       }
-      .code-input {
-        font-family: var(--sans); font-size: 16px; padding: 13px 18px; width: 250px;
-        border: 1.5px solid var(--line); border-radius: 999px; outline: none; background: #fbfaf8;
-      }
-      .code-input:focus { border-color: #7657FC; background: #fff; }
-      .code-err { color: #c92a2a; font-size: 13.5px; width: 100%; margin: 0; display: none; }
 
       /* ── Sections ───────────────────────────────────────────── */
       section { padding: 92px 0; }
@@ -551,16 +562,19 @@
       </svg>
     </section>
 
-    <!-- ── Code entry (load-bearing: printed pieces carry a code) ── -->
+    <!-- ── Link entry. Load-bearing: every printed piece carries the
+         address, and this is how someone who typed only the memorable half
+         of it still reaches their picture. ── -->
     <div class="codebar">
-      <div class="wrap inner">
-        <div class="lbl">Got a code? Open it here.</div>
+      <div class="wrap">
+        <div class="lbl">Have a Popcode link? Open it here.</div>
         <form id="code-form">
-          <input class="code-input" id="code-input" type="text" placeholder="e.g. maxchapterone" maxlength="30"
-                 aria-label="Popcode"
+          <span class="code-prefix" aria-hidden="true">popcode.app/</span>
+          <input class="code-input" id="code-input" type="text" placeholder="enter here" maxlength="30"
+                 aria-label="The end of your Popcode link, after popcode.app/"
                  autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
-          <button class="btn btn-dark" type="submit">Go</button>
-          <p class="code-err" id="code-error">Please enter a code.</p>
+          <button class="btn btn-dark code-go" type="submit">Go</button>
+          <p class="code-err" id="code-error">Please enter a link.</p>
         </form>
       </div>
     </div>
@@ -799,9 +813,25 @@
         var form = document.getElementById('code-form');
         var input = document.getElementById('code-input');
         var err = document.getElementById('code-error');
+        // Someone may type just the tail, or paste the whole address off the
+        // back of a book — "popcode.app/maya", "https://popcode.app/maya".
+        // normalize() only strips punctuation, so without this the domain ends
+        // up inside the slug and every pasted link 404s.
+        function tail(raw) {
+          var v = String(raw == null ? '' : raw).trim()
+            .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
+            .replace(/[?#].*$/, '');
+          var parts = v.split('/').filter(Boolean);
+          // Drop our own host if it's there, rather than trusting the last
+          // segment — otherwise a bare "popcode.app/" reads as the slug
+          // "popcodeapp" and lands on Experience not found instead of the
+          // please-enter-a-link message.
+          if (parts.length && /^(www\.)?popcode\.app$/i.test(parts[0])) parts.shift();
+          return parts.length ? parts[parts.length - 1] : '';
+        }
         form.addEventListener('submit', function (e) {
           e.preventDefault();
-          var code = PopcodeSlug.normalize(input.value);
+          var code = PopcodeSlug.normalize(tail(input.value));
           if (!code) { err.style.display = 'block'; return; }
           err.style.display = 'none';
           window.location.href = '/' + code;
