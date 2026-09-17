@@ -37,6 +37,9 @@
     st.textContent =
       // Both hosts are white text over something dark — the gradient splash and
       // the scrimmed white-label cover — so one treatment serves both.
+      // #start-tap is view.html's disc + caption group; #start-btn on its own
+      // is scan.html, which still has a bare button.
+      '.popcode-desktop #start-tap,' +
       '.popcode-desktop #start-btn,' +
       '.popcode-desktop #wl-cover .wl-scan-btn { display: none !important; }' +
       // The cover's CTA column is sized for a single pill button; the note
@@ -156,8 +159,15 @@
     if (!container || canScan()) return;
     document.body.classList.add('popcode-desktop');
     var el = build();
-    var slot = container.querySelector('.wl-scan-btn') || container.querySelector('#start-btn');
-    if (slot) container.insertBefore(el, slot);
+    var slot = container.querySelector('.wl-scan-btn') ||
+               container.querySelector('#start-tap') ||
+               container.querySelector('#start-btn');
+    // The slot can sit inside a wrapper (the splash groups its disc with the
+    // "Tap to scan" caption), and insertBefore throws on a node that isn't a
+    // direct child — which would take the rest of the start-up path with it,
+    // including the tap handler. Climb to whichever ancestor is the child.
+    while (slot && slot.parentNode && slot.parentNode !== container) slot = slot.parentNode;
+    if (slot && slot.parentNode === container) container.insertBefore(el, slot);
     else container.appendChild(el);
   }
 
