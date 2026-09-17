@@ -9,11 +9,13 @@
       integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
       crossorigin="anonymous"></script>
     <script src="/sentry-init.js"></script>
-    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
     <title>Popcode — Shop</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/postcard-render.js"></script>
     <script src="/config.js"></script>
     <script src="/audio-wav.js"></script>
+    <script src="/activity.js"></script>
     <script src="/unsplash-samples.js"></script>
     <script src="/countries.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
@@ -40,7 +42,9 @@
       .card { background:#fff; border-radius:22px; padding:30px; margin-bottom:26px; box-shadow:0 2px 12px rgba(0,0,0,0.05); }
       .card h2 { font-size:17px; font-weight:600; margin-bottom:20px; }
       label { display:block; font-size:13px; font-weight:500; margin:18px 0 8px; color:#333; }
-      select, input { width:100%; padding:11px 12px; border:1.5px solid #e3e1db; border-radius:12px; font-size:15px; font-family:'Inter',sans-serif; background:#fff; }
+      /* 16px is a floor, not a style choice: iOS Safari zooms the page when
+         you focus a field below it, cropping the form mid-entry. */
+      select, input { width:100%; padding:11px 12px; border:1.5px solid #e3e1db; border-radius:12px; font-size:16px; font-family:'Inter',sans-serif; background:#fff; }
       select:focus, input:focus { outline:none; border-color:#7657FC; }
       .row { display:flex; gap:12px; flex-wrap:wrap; }
       .row > div { flex:1; min-width:140px; }
@@ -239,7 +243,7 @@
 
     <div class="wrap">
       <h1>Shop</h1>
-      <div class="sub" id="project-name">Pick a size and a photo — we’ll print it with a small Popcode badge so people know they can scan the photo to bring it to life.</div>
+      <div class="sub" id="project-name">Pick a size and a photo — we’ll print it with a small Popcode symbol so people know they can scan the photo to bring it to life.</div>
 
       <div id="cancel-banner" class="banner cancel" style="display:none;">Checkout cancelled — your order wasn't placed. Adjust anything and try again.</div>
       <div id="error-banner" class="banner error" style="display:none;"></div>
@@ -288,7 +292,7 @@
               </div>
             </div>
             <div class="detail-price" id="detail-price">From —</div>
-            <div class="detail-price-note" id="detail-price-note">per print, incl. shipping &amp; handling</div>
+            <div class="detail-price-note" id="detail-price-note">plus shipping</div>
             <ul class="specs" id="detail-specs"></ul>
             <button class="primary-btn" id="create-btn">Choose a photo</button>
           </div>
@@ -326,10 +330,11 @@
             <h2 id="review-name">Product</h2>
             <div class="tagline" id="review-sub"></div>
             <div class="detail-price" id="review-price">—</div>
-            <div class="detail-price-note">per print, incl. shipping &amp; handling</div>
+            <div class="detail-price-note">per print, plus shipping at cost</div>
             <ul class="specs" id="review-specs"></ul>
-            <button class="primary-btn" id="order-btn">Order</button>
-            <button class="secondary-btn" id="save-btn">Save to My Designs</button>
+            <button class="primary-btn" id="addcart-btn">Add to cart</button>
+            <button class="secondary-btn" id="order-btn">Buy this one now</button>
+            <button class="secondary-btn" id="save-btn">Save design</button>
             <div class="save-msg" id="save-msg"></div>
           </div>
         </div>
@@ -349,13 +354,13 @@
 
         <div class="card">
           <h2>Your photo</h2>
-          <p class="muted">We add a badge so the printed photo can be scanned by the Popcode app.</p>
+          <p class="muted">We add the Popcode symbol so people know the printed photo can be scanned.</p>
           <div style="display:flex;align-items:center;gap:16px;margin-top:14px;flex-wrap:wrap;">
             <canvas id="chosen-thumb" width="200" height="200" style="width:88px;height:88px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.14);"></canvas>
             <button class="linkback" id="change-photo" style="margin:0;">Change photo</button>
           </div>
           <div style="margin:20px 0 2px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <span style="font-size:13px;font-weight:700;">Badge size</span>
+            <span style="font-size:13px;font-weight:700;">Symbol size</span>
             <div class="badge-size-toggle" id="badge-size-toggle">
               <button type="button" class="badge-size-btn active" data-scale="0.06">Small</button>
               <button type="button" class="badge-size-btn" data-scale="0.09">Medium</button>
@@ -421,6 +426,8 @@
 
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      // /cart.js (injected by nav.js) reuses this client instead of making its own.
+      window.__popcodeCartDb = db;
       const qs = new URLSearchParams(location.search);
       const slug = qs.get('id');
       if (qs.get('cancelled')) document.getElementById('cancel-banner').style.display = 'block';
@@ -428,6 +435,9 @@
       // Client mirror of lib/print/catalog.mjs (ids/sizes/aspect must stay in sync).
       const PRODUCTS = {
         print: [
+          { id: 'fap-5x7',   size: '5×7"',   aspect: 5 / 7 },
+          { id: 'fap-6x6',   size: '6×6"',   aspect: 1 },
+          { id: 'fap-8x8',   size: '8×8"',   aspect: 1 },
           { id: 'fap-8x10',  size: '8×10"',  aspect: 8 / 10 },
           { id: 'fap-10x10', size: '10×10"', aspect: 1 },
           { id: 'fap-11x14', size: '11×14"', aspect: 11 / 14 },
@@ -448,6 +458,8 @@
           { id: 'can-16x24', size: '16×24"', aspect: 16 / 24 },
         ],
         framed: [
+          { id: 'cfp-5x7',   size: '5×7"',   aspect: 5 / 7 },
+          { id: 'cfp-8x8',   size: '8×8"',   aspect: 1 },
           { id: 'cfp-8x10',  size: '8×10"',  aspect: 8 / 10 },
           { id: 'cfp-11x14', size: '11×14"', aspect: 11 / 14 },
           { id: 'cfp-12x16', size: '12×16"', aspect: 12 / 16 },
@@ -670,7 +682,7 @@
         var img = new Image(); img.crossOrigin = 'anonymous';
         await new Promise(function (res, rej) { img.onload = res; img.onerror = rej; img.src = photoUrl; });
         var iconImg = new Image();
-        await new Promise(function (res, rej) { iconImg.onload = res; iconImg.onerror = rej; iconImg.src = '/assets/popcode_icon.svg'; });
+        await new Promise(function (res, rej) { iconImg.onload = res; iconImg.onerror = rej; iconImg.src = '/assets/popcode_symbol_color.svg'; });
         var returnDataUrl = opts.returnDataUrl !== false; // previews pass false
         var sw = img.naturalWidth, sh = img.naturalHeight;
         var cropW = sw, cropH = sh, sx = 0, sy = 0;
@@ -1419,14 +1431,17 @@
         document.getElementById('create-btn').textContent = has ? 'Continue' : 'Choose a photo';
         document.getElementById('detail-photo-actions').style.display = has ? '' : 'none';
       }
+      // The advertised price is the PRODUCT only. Shipping depends on where it's
+      // going and is passed through at cost, so it joins as its own line at
+      // checkout rather than inflating the number on the shelf.
       async function refreshDetailPrice() {
         const el = document.getElementById('detail-price');
         const note = document.getElementById('detail-price-note');
-        el.textContent = 'From …'; note.textContent = 'per print, incl. shipping & handling';
+        el.textContent = 'From …'; note.textContent = 'plus shipping';
         try {
           const d = await quoteFor(state.productType, orderVariantId());
-          el.textContent = 'From ' + formatMoney(d.total_minor, d.currency);
-          note.textContent = 'per print, incl. shipping & handling';
+          el.textContent = 'From ' + formatMoney(d.printing_minor, d.currency);
+          note.textContent = 'per print, plus shipping at cost';
         } catch (e) { el.textContent = '—'; note.textContent = 'Pricing unavailable: ' + e.message; }
       }
       document.getElementById('orientation-toggle').addEventListener('click', e => {
@@ -1949,7 +1964,8 @@
         document.getElementById('review-sub').textContent = v.size + ' · ' + (baseAspect() !== 1 ? (state.orientation === 'landscape' ? 'Landscape' : 'Portrait') : 'Square');
         document.getElementById('review-specs').innerHTML = meta.specs.map(s => '<li>' + s + '</li>').join('');
         const sm = document.getElementById('save-msg'); sm.textContent = ''; sm.classList.remove('err');
-        const sb = document.getElementById('save-btn'); sb.disabled = false; sb.textContent = 'Save to My Designs';
+        const sb = document.getElementById('save-btn'); sb.disabled = false; sb.textContent = 'Save design';
+        const ab = document.getElementById('addcart-btn'); ab.disabled = false; ab.textContent = 'Add to cart';
         showStep('review');
         renderPopcodeCta();
         // aspect-true product with the chosen photo composited in
@@ -1960,7 +1976,7 @@
         // price
         const pe = document.getElementById('review-price');
         pe.textContent = '…';
-        try { const d = await quoteFor(state.productType, orderVariantId()); pe.textContent = formatMoney(d.total_minor, d.currency); }
+        try { const d = await quoteFor(state.productType, orderVariantId()); pe.textContent = formatMoney(d.printing_minor, d.currency); }
         catch (e) { pe.textContent = '—'; }
       }
       document.getElementById('review-back').addEventListener('click', () => showStep('detail'));
@@ -2007,12 +2023,73 @@
               .select().single();
             if (error) throw error;
             await db.from('collection_items').insert({ collection_id: col.id, target_index: 0, photo_url: state.selectedPhoto.url });
+            logActivity('save_design', { slug, user_id: currentUser.id });
             btn.textContent = 'Saved ✓';
             msg.textContent = 'Saved to My Designs.';
           }
         } catch (e) {
-          btn.disabled = false; btn.textContent = 'Save to My Designs';
+          btn.disabled = false; btn.textContent = 'Save design';
           msg.textContent = 'Could not save — ' + (e.message || 'try again'); msg.classList.add('err');
+          if (window.Sentry) Sentry.captureException(e);
+        }
+      }
+
+      // Render the badge-composited print file at the chosen size/orientation and
+      // upload it to the public experiences bucket. Both "Add to cart" and
+      // "Buy this one now" go through here, so a cart line and an express order
+      // always print exactly the same file.
+      async function buildPrintAsset() {
+        const photo = state.selectedPhoto;
+        const calibrate = qs.get('calibrate');
+        const dataUrl = calibrate
+          ? await buildCalibrationSheet(photo.url, currentAspect())
+          : await compositeBadgedImage(photo.url, { scale: state.scale, aspect: currentAspect(), adjust: state.photoAdjust });
+        const blob = dataUrlToBlob(dataUrl);
+        const scalePct = Math.round(state.scale * 100);
+        const path = photo.slug + '/print-' + photo.target_index + '-' + state.orientation
+          + (calibrate ? '-calib' : '-badge' + scalePct) + '.jpg';
+        const up = await db.storage.from('experiences').upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
+        if (up.error) throw new Error('Could not prepare the print image: ' + up.error.message);
+        return db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+      }
+
+      // ---- add to cart ----
+      document.getElementById('addcart-btn').addEventListener('click', addToCart);
+
+      async function addToCart() {
+        const btn = document.getElementById('addcart-btn');
+        const msg = document.getElementById('save-msg');
+        msg.classList.remove('err'); msg.textContent = '';
+        const photo = state.selectedPhoto;
+        if (!photo) { msg.textContent = 'Pick a photo first.'; msg.classList.add('err'); return; }
+        btn.disabled = true; btn.textContent = 'Adding…';
+        try {
+          const v = variantOf(state.productType, state.variantId);
+          const meta = CATEGORY_META[state.productType];
+          const fcl = frameColorsFor(state.productType);
+          const fcn = fcl ? fcl.find(c => c.id === state.frameColor) : null;
+          // The print file is built NOW, while this page still has the photo and
+          // the chosen crop — the cart can't re-render it later.
+          const publicUrl = await buildPrintAsset();
+          await PopcodeCart.add({
+            collectionId: photo.collectionId,
+            productType: state.productType,
+            variantId: orderVariantId(),
+            copies: 1,
+            assetUrls: [{ target_index: photo.target_index, print_area: 'default', url: publicUrl }],
+            title: meta.name + ' · ' + v.size + (fcn && fcn.id !== 'black' ? ' ' + fcn.name : ''),
+            thumbUrl: photo.url,
+            options: {
+              sizeLabel: v.size,
+              orientationLabel: baseAspect() !== 1 ? (state.orientation === 'landscape' ? 'Landscape' : 'Portrait') : 'Square',
+              orientation: state.orientation, scale: state.scale, frameColor: state.frameColor,
+            },
+          });
+          btn.textContent = 'Added to cart ✓';
+          msg.innerHTML = 'Added. <a class="linkback" href="/cart.html" style="margin:0">View cart &rarr;</a>';
+        } catch (e) {
+          btn.disabled = false; btn.textContent = 'Add to cart';
+          msg.textContent = 'Could not add to cart — ' + (e.message || 'try again'); msg.classList.add('err');
           if (window.Sentry) Sentry.captureException(e);
         }
       }
@@ -2065,7 +2142,7 @@
             shipping: document.getElementById('shipping').value,
           });
           priceEl.textContent = formatMoney(d.total_minor, d.currency);
-          noteEl.textContent = 'Incl. product, shipping & handling';
+          noteEl.textContent = `${formatMoney(d.printing_minor, d.currency)} print + ${formatMoney(d.shipping_minor, d.currency)} shipping at cost`;
           payBtn.disabled = false;
         } catch (e) {
           priceEl.textContent = '—';
@@ -2115,20 +2192,27 @@
         const payBtn = document.getElementById('pay-btn');
         payBtn.disabled = true; payBtn.textContent = 'Preparing…';
         try {
-          const calibrate = qs.get('calibrate');
-          const dataUrl = calibrate
-            ? await buildCalibrationSheet(photo.url, currentAspect())
-            : await compositeBadgedImage(photo.url, { scale: state.scale, aspect: currentAspect(), adjust: state.photoAdjust });
-          const blob = dataUrlToBlob(dataUrl);
-          const scalePct = Math.round(state.scale * 100);
-          const path = photo.slug + '/print-' + photo.target_index + '-' + state.orientation
-            + (calibrate ? '-calib' : '-badge' + scalePct) + '.jpg';
-          const up = await db.storage.from('experiences').upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
-          if (up.error) throw new Error('Could not prepare the print image: ' + up.error.message);
-          const publicUrl = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+          const publicUrl = await buildPrintAsset();
 
           const { data: sess } = await db.auth.getSession();
           const token = sess?.session?.access_token;
+          // Put the companion card artwork in place first. This page checks
+          // out directly, so without this a buy-now order would name artwork
+          // that was never uploaded. Best-effort: a missing card must not stop
+          // the sale, and create-checkout verifies the file before using it.
+          try {
+            const slug = state.selectedPhoto && state.selectedPhoto.slug;
+            if (slug && window.PopcodePostcard) {
+              const insert = await window.PopcodePostcard.buildInsert(slug);
+              await db.storage.from('experiences').upload(
+                `${slug}/companion-card.png`, insert,
+                { contentType: 'image/png', upsert: true },
+              );
+            }
+          } catch (e) {
+            if (window.Sentry) try { Sentry.captureException(e); } catch (_) {}
+          }
+
           const resp = await fetch('/api/create-checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },

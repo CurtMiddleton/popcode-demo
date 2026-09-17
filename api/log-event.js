@@ -2,7 +2,15 @@ import { createClient } from '@supabase/supabase-js';
 import { Sentry } from './_sentry.js';
 
 const SUPABASE_URL = 'https://mrwpkhsluzokytpvmwqk.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yd3BraHNsdXpva3l0cHZtd3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTA2MDksImV4cCI6MjA5MTE2NjYwOX0.YMfuRpKvcmfoJ75Gxhf7ekoCaeDfR0Dsz_9Beg5ULAI';
+
+// This runs server-side, so it has no reason to write as anon. Using the
+// service key here is what makes it possible to revoke anon INSERT on
+// scan_events — without that, anyone holding the public key (i.e. anyone) can
+// post arbitrary analytics rows. Falls back to anon so logging degrades rather
+// than breaks if the service key is missing from an environment; revoke the
+// anon grant only once you've confirmed it's set everywhere.
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 
 export default async function handler(req, res) {
   // Allow CORS from popcode.app
@@ -14,7 +22,15 @@ export default async function handler(req, res) {
 
   try {
     const { slug, event_type, target_index, device_type, browser, user_agent, user_id } = req.body;
-    if (!slug || !event_type) return res.status(400).json({ error: 'Missing fields' });
+    // Account-level events (signup) belong to a person, not a project, so slug
+    // is optional. Everything project-scoped still has to name one.
+    // A montage is rendered before the project exists (and may be abandoned),
+    // so it is logged against the account rather than a slug.
+    const ACCOUNT_EVENTS = ['signup', 'create_montage'];
+    if (!event_type) return res.status(400).json({ error: 'Missing fields' });
+    if (!slug && !ACCOUNT_EVENTS.includes(event_type)) {
+      return res.status(400).json({ error: 'Missing fields' });
+    }
 
     // IP address — use x-forwarded-for (Vercel sets this)
     const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
@@ -28,7 +44,7 @@ export default async function handler(req, res) {
 
     const db = createClient(SUPABASE_URL, SUPABASE_KEY);
     const { error } = await db.from('scan_events').insert({
-      slug,
+      slug:         slug         ?? null,
       event_type,
       target_index: target_index ?? null,
       device_type:  device_type  ?? null,

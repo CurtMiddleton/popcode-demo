@@ -9,7 +9,7 @@
       integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
       crossorigin="anonymous"></script>
     <script src="/sentry-init.js"></script>
-    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
     <meta property="og:title" content="Popcode">
     <meta property="og:description" content="Bring your photos to life with AR video">
@@ -19,6 +19,7 @@
     <title>Popcode — Sign In</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/activity.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <style>
       @font-face {
@@ -171,9 +172,20 @@
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+      // Where to land after signing in. A page that bounced you here (e.g. the
+      // cart) passes ?next=/cart.html so you continue where you left off rather
+      // than being dumped on My Popcodes. Only a same-origin ABSOLUTE PATH is
+      // accepted — "//evil.com" and "https://evil.com" are rejected, so this
+      // can't be turned into an open redirect.
+      function landingPage() {
+        const next = new URLSearchParams(location.search).get('next');
+        if (next && /^\/[^/\\]/.test(next)) return next;
+        return '/manage.html';
+      }
+
       // Redirect if already signed in
       db.auth.getSession().then(({ data }) => {
-        if (data.session) window.location.href = '/manage.html';
+        if (data.session) window.location.href = landingPage();
       });
 
       let mode = 'signin'; // 'signin' | 'signup' | 'forgot'
@@ -271,8 +283,12 @@
 
         let error;
         if (mode === 'signup') {
-          ({ error } = await db.auth.signUp({ email, password, options: { data: { full_name: name } } }));
+          let signUpData;
+          ({ data: signUpData, error } = await db.auth.signUp({ email, password, options: { data: { full_name: name } } }));
           if (!error) {
+            // signUp returns the user even while the confirmation is pending,
+            // so the top of the funnel is captured whether or not they confirm.
+            logActivity('signup', { user_id: signUpData && signUpData.user && signUpData.user.id });
             showError('Check your email for a confirmation link, then sign in.');
             btn.disabled = false;
             btn.textContent = 'Create Account';
@@ -287,7 +303,7 @@
           btn.disabled = false;
           btn.textContent = mode === 'signup' ? 'Create Account' : 'Sign In';
         } else {
-          window.location.href = '/manage.html';
+          window.location.href = landingPage();
         }
       });
 

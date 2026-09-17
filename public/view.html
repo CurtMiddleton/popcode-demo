@@ -9,7 +9,7 @@
       integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
       crossorigin="anonymous"></script>
     <script src="/sentry-init.js"></script>
-    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
     <meta property="og:title" content="Popcode">
     <meta property="og:description" content="Bring your photos to life with AR video">
@@ -22,13 +22,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
-    <!-- Vendored A-Frame 1.4.2 — see public/vendor/aframe/1.4.2/PROVENANCE.md. Was a CDN URL. -->
+    <script src="/slug.js"></script>
+    <script src="/desktop-note.js"></script>
+    <!-- Vendored A-Frame 1.4.2 — see docs/vendor/aframe/1.4.2/PROVENANCE.md. Was a CDN URL. -->
     <script src="/vendor/aframe/1.4.2/aframe.min.js"></script>
     <!-- Vendored MindAR 1.2.2 — PATCHED build (stop()/start() lifecycle fix).
          Identical to stock 1.2.2 except an anchor-visibility reset in start();
          a no-op on first scan, so safe as the default. The clean-rescan path
          that uses it is gated behind ?rescan=clean until iOS-verified.
-         See public/vendor/mindar/1.2.2-popcode.1/PROVENANCE.md. -->
+         See docs/vendor/mindar/1.2.2-popcode.1/PROVENANCE.md. -->
     <script src="/vendor/mindar/1.2.2-popcode.1/mindar-image-aframe.prod.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
@@ -69,29 +71,82 @@
 
       #start-screen {
         display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0;
+        overflow: hidden;
         background: linear-gradient(160deg, #5bc8f5 0%, #7c3aed 100%);
         flex-direction: column; align-items: center;
         justify-content: center; gap: 0; z-index: 9999;
         font-family: 'DM Sans', sans-serif;
         padding-bottom: 60px;
+        /* The logo and the Scan button share one width so they read as a pair.
+           Both carry the same max-width too, so they can never drift apart on a
+           narrow phone. */
+        --splash-w: 286px;
+        --splash-max: calc(100vw - 48px);
+        /* The three splash anchors. --cta-h is the measured height of the
+           Create + Sign-in group, and only changes if that group's type or
+           padding does. The button's position is DERIVED from these, so nudging
+           the logo or the CTA keeps the button centred between them. */
+        --logo-lift: 92px;
+        --cta-bottom: 12%;
+        --cta-h: 80px;
       }
-      #start-screen img.splash-logo { height: 100px; margin-bottom: 10px; }
-      #tagline {
-        font-family: 'CooperBT', serif;
-        font-weight: 300;
-        font-size: 32px;
-        color: white;
-        line-height: 1.125;
-        text-align: center;
-        opacity: 0.92;
-        margin-bottom: 70px;
+      /* Pinned on its own, independent of the button. */
+      #start-screen img.splash-logo {
+        position: absolute; bottom: calc(50% + var(--logo-lift));
+        width: var(--splash-w); max-width: var(--splash-max); height: auto;
+      }
+      /* Exactly half way between the logo's bottom edge and the top of the
+         Create button — the average of those two offsets from the top. */
+      /* The tap target is the mark on a disc, sitting where the Scan pill used
+         to. Soft filled halos swell out of it while the screen is idle, one a
+         second; they stack, and the overlap is what reads as concentric bands. */
+      #start-tap {
+        position: absolute; left: 50%;
+        top: calc(((50% - var(--logo-lift)) + (100% - var(--cta-bottom) - var(--cta-h))) / 2);
+        transform: translate(-50%, -50%);
+        display: flex; flex-direction: column; align-items: center; gap: 22px;
       }
       #start-btn {
-        padding: 20px 48px; font-size: 20px; border-radius: 999px;
-        border: none; background: white; color: #6b3fa0;
-        font-family: 'DM Sans', sans-serif; font-weight: bold; cursor: pointer;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        position: relative; width: 141px; height: 141px;
+        border: none; background: none; padding: 0; border-radius: 50%;
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
       }
+      #start-btn:focus-visible { outline: 3px solid #fff; outline-offset: 6px; }
+      #start-caption {
+        color: #fff; font-family: 'DM Sans', sans-serif;
+        font-size: 19px; font-weight: 700; letter-spacing: -0.01em;
+      }
+      .pop-disc { position: absolute; inset: 0; border-radius: 50%; background: #4b3cba; }
+      /* pointer-events matters here: at full travel a halo is wider than the
+         phone and it lives inside the button, so without this the whole screen
+         would be inside the tap target. */
+      .pop-halo {
+        position: absolute; inset: 0; border-radius: 50%;
+        background: #fff; opacity: 0; pointer-events: none;
+      }
+      @keyframes pop-swell {
+        0%   { transform: scale(1);   opacity: 0; }
+        6%   {                        opacity: 0.17; }
+        74%  {                        opacity: 0.17; }
+        100% { transform: scale(5.6); opacity: 0; }
+      }
+      @keyframes pop-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+      @keyframes pop-spinin  { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+      #start-btn .pop-halo { animation: pop-swell 5s linear 1s infinite; }
+      #start-btn .h2 { animation-delay: 2s; }
+      #start-btn .h3 { animation-delay: 3s; }
+      #start-btn .h4 { animation-delay: 4s; }
+      #start-btn .h5 { animation-delay: 5s; }
+      #start-btn .pop-disc { animation: pop-breathe 2.6s ease-in-out 1s infinite; }
+      #start-btn .pop-mark { animation: pop-spinin 1.05s cubic-bezier(.45,.05,.2,1) both; }
+
+      /* One mark, two places: the start disc and the scanner overlay. */
+      .pop-mark {
+        position: relative; width: 132px; height: 132px;
+        filter: drop-shadow(0 2px 14px rgba(0,0,0,0.34));
+      }
+      .pop-mark use { fill: #fff; }
+      .pop-mark .p { transform-origin: 150.6px 150.6px; transform-box: view-box; }
       #cta-group {
         position: absolute; bottom: 12%; left: 0; right: 0;
         display: flex; flex-direction: column; align-items: center; gap: 16px;
@@ -243,22 +298,45 @@
       }
 
       #scanner { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 999; pointer-events: none; }
-      .corner {
-        position: absolute; width: 36px; height: 36px;
-        border-color: white; border-style: solid; opacity: 0;
-        transition: border-color 0.3s ease, top 0.5s ease, left 0.5s ease,
-                    right 0.5s ease, bottom 0.5s ease, width 0.5s ease,
-                    height 0.5s ease, filter 0.3s ease, opacity 0.3s ease;
+      /* Scanning: one P orbits with whole P's fading out behind it — the mark
+         searching, and never resolving. Replaces the four corner brackets. */
+      #scan-mark {
+        position: absolute; left: 50%; top: 50%;
+        margin: -66px 0 0 -66px; width: 132px; height: 132px;
       }
-      .corner.tl { top: 50%; left: 50%; margin-top: -24px; margin-left: -24px; border-width: 4px 0 0 4px; }
-      .corner.tr { top: 50%; right: 50%; margin-top: -24px; margin-right: -24px; border-width: 4px 4px 0 0; }
-      .corner.bl { bottom: 50%; left: 50%; margin-bottom: -24px; margin-left: -24px; border-width: 0 0 4px 4px; }
-      .corner.br { bottom: 50%; right: 50%; margin-bottom: -24px; margin-right: -24px; border-width: 0 4px 4px 0; }
-      .corner.expanded { border-color: #a78bfa; filter: drop-shadow(0 0 10px #a78bfa); width: 50px; height: 50px; opacity: 1; }
-      .corner.expanded.tl { top: 24px; left: 24px; margin: 0; border-width: 6px 0 0 6px; }
-      .corner.expanded.tr { top: 24px; right: 24px; margin: 0; border-width: 6px 6px 0 0; }
-      .corner.expanded.bl { bottom: 24px; left: 24px; margin: 0; border-width: 0 0 6px 6px; }
-      .corner.expanded.br { bottom: 24px; right: 24px; margin: 0; border-width: 0 6px 6px 0; }
+      @keyframes pop-comet {
+        0% { opacity: 0; } 6% { opacity: 1; } 46% { opacity: 0.5; }
+        72% { opacity: 0; } 100% { opacity: 0; }
+      }
+      #scan-mark .p {
+        opacity: 0; animation: pop-comet 1.4s linear infinite;
+        animation-delay: calc(var(--i) * 0.175s);
+      }
+      /* On a hit the orbit lands, the mark completes, and it blooms white — the
+         bloom IS the hand-off to the video. Timed to finish inside the 900ms
+         hold below, so the mark is gone exactly as the video screen takes over. */
+      @keyframes pop-land {
+        0%   { opacity: 0; transform: rotate(-38deg) scale(0.86); }
+        55%  { opacity: 1; transform: rotate(6deg)   scale(1.04); }
+        100% { opacity: 1; transform: rotate(0)      scale(1); }
+      }
+      @keyframes pop-bloom {
+        0%   { transform: scale(1);  opacity: 1; }
+        100% { transform: scale(11); opacity: 0; }
+      }
+      #scan-mark.found .p {
+        opacity: 0; animation: pop-land 0.26s cubic-bezier(.32,1.42,.5,1) forwards;
+        animation-delay: calc(var(--i) * 0.035s);
+      }
+      #scan-mark.found { animation: pop-bloom 0.36s cubic-bezier(.35,0,.7,1) 0.52s forwards; }
+
+      @media (prefers-reduced-motion: reduce) {
+        #start-btn .pop-halo, #start-btn .pop-disc, #start-btn .pop-mark,
+        #scan-mark, #scan-mark .p {
+          animation: none !important; opacity: 1 !important; transform: none !important;
+        }
+        #start-btn .pop-halo { opacity: 0 !important; }
+      }
 
       #fullscreen-video { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 9000; background: black; }
       #fullscreen-video video { width: 100%; height: 100%; object-fit: cover; }
@@ -358,6 +436,8 @@
         display: none; align-items: center; justify-content: center;
         cursor: pointer; text-decoration: none;
       }
+      /* The hint is only for errors now; empty means gone, not an empty pill. */
+      #scan-hint:empty { display: none; }
       #scan-hint {
         display: none; position: fixed; bottom: 48px; left: 50%;
         transform: translateX(-50%);
@@ -426,6 +506,13 @@
     </style>
   </head>
   <body>
+    <!-- One whole letter P: bowl, counter, stem. Eight of them rotated 45 degrees
+         apart reproduce the mark, which is what lets it animate letter by letter.
+         fill-rule must be nonzero: under evenodd the stem cancels against the bowl
+         and punches a wedge out of the letter. -->
+    <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+      <defs><path id="pop-p" fill-rule="nonzero" d="M90.6,150.6a60.0,60.0 0 1,0 120.0,0a60.0,60.0 0 1,0 -120.0,0ZM129.1,150.6a21.5,21.5 0 1,1 43.0,0a21.5,21.5 0 1,1 -43.0,0ZM96.1,150.6L96.1,237.1A16.75,16.75 0 0,0 129.6,237.1L129.6,150.6Z"/></defs>
+    </svg>
     <div id="orientation-lock">
       <svg class="phone-ill" viewBox="0 0 80 140" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="6" y="4" width="68" height="132" rx="14" ry="14"/>
@@ -442,8 +529,23 @@
     </div>
     <div id="start-screen">
       <img class="splash-logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
-      <div id="tagline">Your Stories.<br>Brought to Life.</div>
-      <button id="start-btn">Tap to Scan</button>
+      <div id="start-tap">
+        <button id="start-btn" aria-label="Tap to scan">
+          <span class="pop-halo h1"></span><span class="pop-halo h2"></span><span class="pop-halo h3"></span><span class="pop-halo h4"></span><span class="pop-halo h5"></span>
+          <span class="pop-disc"></span>
+          <svg class="pop-mark" viewBox="0 0 302 302" aria-hidden="true">
+          <g transform="rotate(0 150.6 150.6)"><use href="#pop-p"/></g>
+          <g transform="rotate(45 150.6 150.6)"><use href="#pop-p"/></g>
+          <g transform="rotate(90 150.6 150.6)"><use href="#pop-p"/></g>
+          <g transform="rotate(135 150.6 150.6)"><use href="#pop-p"/></g>
+          <g transform="rotate(180 150.6 150.6)"><use href="#pop-p"/></g>
+          <g transform="rotate(225 150.6 150.6)"><use href="#pop-p"/></g>
+          <g transform="rotate(270 150.6 150.6)"><use href="#pop-p"/></g>
+          <g transform="rotate(315 150.6 150.6)"><use href="#pop-p"/></g>
+          </svg>
+        </button>
+        <div id="start-caption">Tap to scan</div>
+      </div>
       <div id="cta-group">
         <a id="create-btn" href="/create.html">Create your own Popcode</a>
         <a id="signin-link" href="/manage.html">Already have an account? <span style="text-decoration:underline;">Sign in</span></a>
@@ -461,7 +563,7 @@
           <div class="wl-subtitle"></div>
         </div>
         <div class="wl-cta">
-          <button class="wl-scan-btn" id="wl-scan-btn">Tap to scan</button>
+          <button class="wl-scan-btn" id="wl-scan-btn">Scan image</button>
           <div class="wl-code-block">
             <div class="wl-code-label">Have a code? Enter it here.</div>
             <form class="wl-code-row" id="wl-code-form">
@@ -478,13 +580,19 @@
     <div id="error-screen"><h2>Experience not found</h2><p>This link may be invalid or expired.</p></div>
 
     <button id="home-btn">&#8592;</button>
-    <div id="scan-hint">Point your camera at a Popcoded photo</div>
+    <div id="scan-hint"></div>
     <button id="reload-hint">Having trouble? Tap to reload</button>
     <div id="scanner">
-      <div class="corner tl"></div>
-      <div class="corner tr"></div>
-      <div class="corner bl"></div>
-      <div class="corner br"></div>
+      <svg id="scan-mark" class="pop-mark" viewBox="0 0 302 302" aria-hidden="true">
+        <g transform="rotate(0 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 0;"/></g>
+        <g transform="rotate(45 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 1;"/></g>
+        <g transform="rotate(90 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 2;"/></g>
+        <g transform="rotate(135 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 3;"/></g>
+        <g transform="rotate(180 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 4;"/></g>
+        <g transform="rotate(225 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 5;"/></g>
+        <g transform="rotate(270 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 6;"/></g>
+        <g transform="rotate(315 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 7;"/></g>
+      </svg>
     </div>
 
 <div id="fade-overlay"></div>
@@ -518,7 +626,16 @@
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
       const params = new URLSearchParams(location.search);
-      const id = params.get('id') || location.pathname.replace(/^\/|\/$/g, '');
+      const fromPath = location.pathname.replace(/^\/|\/$/g, '');
+      const id = params.get('id') || fromPath;
+
+      // Slugs are always stored lowercase, but links get typed by hand now that
+      // they read as words — phone keyboards autocapitalise, and a title written
+      // on a printed card is usually in title case. Send /MaxChapterOne to
+      // /maxchapterone rather than leaving it at a dead end.
+      if (!params.get('id') && fromPath && fromPath !== fromPath.toLowerCase()) {
+        location.replace('/' + fromPath.toLowerCase());
+      }
 
       // ── Analytics ────────────────────────────────────────────────────────────
       function getDeviceInfo() {
@@ -533,6 +650,26 @@
                         /Firefox/.test(ua) ? 'Firefox' : 'Other';
         return { device, browser };
       }
+      // MindAR throws away the real getUserMedia rejection: its arError carries
+      // only { error: 'VIDEO_FAIL' }, so a viewer refusing camera access and a
+      // camera that broke for some other reason arrive here identical. Wrapping
+      // getUserMedia keeps the DOMException around long enough for the arError
+      // handler to tell them apart. It is a pass-through — the original promise
+      // is returned and the rejection re-thrown — so MindAR behaves exactly as
+      // before. Deliberately NOT a pre-flight getUserMedia call of our own:
+      // opening a second camera stream is the root of the iOS media-session
+      // problems this viewer spent a long time fixing.
+      let lastCameraError = null;
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const nativeGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+        navigator.mediaDevices.getUserMedia = function (constraints) {
+          return nativeGetUserMedia(constraints).then(
+            stream => { lastCameraError = null; return stream; },
+            err => { lastCameraError = err; throw err; }
+          );
+        };
+      }
+
       async function logEvent(eventType, targetIndex = null) {
         if (!id) return;
         try {
@@ -560,14 +697,14 @@
 
       // Code-entry form: wired up independently of loadCollection so it works
       // even when the page hits an error path. Vercel rewrites /{slug} to
-      // view.html?id={slug} for slugs matching [a-z0-9]{6,10}.
+      // view.html?id={slug} for slugs matching [a-z0-9][a-z0-9-]{2,29}.
       const codeForm = document.getElementById('wl-code-form');
       if (codeForm) {
         codeForm.addEventListener('submit', (e) => {
           e.preventDefault();
           const input = document.getElementById('wl-code-input');
           const raw = (input && input.value) || '';
-          const code = raw.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+          const code = PopcodeSlug.normalize(raw);
           if (!code) return;
           const currentSlug = location.pathname.replace(/^\//, '').toLowerCase();
           if (code === currentSlug) { location.reload(); return; }
@@ -599,7 +736,14 @@
         }
 
         const scene = document.createElement('a-scene');
-        scene.setAttribute('mindar-image', `imageTargetSrc: ${mindUrl}; autoStart: false; warmupTolerance: 2; missTolerance: 10;`);
+        // MindAR ships three overlays of its own and all three default to "yes".
+        // uiScanning is the white bracket frame; uiLoading is a 120px dark
+        // spinner ring drawn dead centre, which sat right behind our mark;
+        // uiError would stack on top of our own error screen. The mark is the
+        // scanning state and #error-screen is the error state, so none of them
+        // are wanted. arError is emitted independently of uiError, so the
+        // listener below still fires.
+        scene.setAttribute('mindar-image', `imageTargetSrc: ${mindUrl}; autoStart: false; warmupTolerance: 2; missTolerance: 10; uiScanning: no; uiLoading: no; uiError: no;`);
         scene.setAttribute('embedded', '');
         scene.setAttribute('vr-mode-ui', 'enabled: false');
         scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
@@ -623,7 +767,7 @@
             if (triggerTimer) {
               clearTimeout(triggerTimer);
               triggerTimer = null;
-              document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+              document.getElementById('scan-mark').classList.remove('found');
             }
           });
           scene.appendChild(target);
@@ -634,6 +778,12 @@
 
         scene.addEventListener('arError', () => {
           if (cleanRescanActive) return; // a clean-rescan attempt will handle its own fallback
+          // NotAllowedError is the viewer refusing camera access (or having
+          // refused it before) — a different problem, and a different fix, from
+          // a camera that failed to start.
+          logEvent(lastCameraError && lastCameraError.name === 'NotAllowedError'
+            ? 'camera_denied'
+            : 'camera_error');
           document.getElementById('loading').style.display = 'none';
           showError();
         });
@@ -641,38 +791,40 @@
         return scene;
       }
 
+      // Reads through /api/collection rather than querying Supabase directly.
+      // The anon key can no longer SELECT the content tables (see
+      // supabase/migrations/2026-09-04-lock-content-tables.sql) — the endpoint
+      // uses the service key server-side and returns only the player's fields.
       async function loadCollection(id) {
         let mindUrl, mediaMap = {};
 
-        const { data: col } = await db.from('collections').select('*').eq('slug', id).single();
+        let col = null;
+        try {
+          const resp = await fetch('/api/collection?slug=' + encodeURIComponent(id));
+          if (resp.ok) col = await resp.json();
+        } catch (e) { /* fall through to the error screen */ }
 
-        if (col) {
-          // Save to recent views localStorage
-          try {
-            const views = JSON.parse(localStorage.getItem('popcode_views') || '{}');
-            views[id] = { name: col.name || id, last_viewed: new Date().toISOString() };
-            localStorage.setItem('popcode_views', JSON.stringify(views));
-          } catch(e) {}
-          mindUrl = col.mind_file_url;
-          applyCoverConfig(col.cover_config);
-          const { data: items } = await db.from('collection_items')
-            .select('*').eq('collection_id', col.id).order('target_index');
-          (items || []).forEach(item => {
-            mediaMap[item.target_index] = {
-              type: item.media_type === 'audio' ? 'audio' : 'video',
-              videoUrl: item.video_url || null,
-              audioUrl: item.audio_url || null,
-              transcript: item.transcript || null,
-              photoUrl: item.photo_url || null
-            };
-          });
-          if (!mindUrl || Object.keys(mediaMap).length === 0) { showError(); return; }
-        } else {
-          const { data: exp } = await db.from('experiences').select('*').eq('slug', id).single();
-          if (!exp) { showError(); return; }
-          mindUrl = exp.mind_file_url;
-          mediaMap[0] = { type: 'video', videoUrl: exp.video_url, audioUrl: null, transcript: null, photoUrl: null };
-        }
+        if (!col) { showError(); return; }
+
+        // Save to recent views localStorage
+        try {
+          const views = JSON.parse(localStorage.getItem('popcode_views') || '{}');
+          views[id] = { name: col.name || id, last_viewed: new Date().toISOString() };
+          localStorage.setItem('popcode_views', JSON.stringify(views));
+        } catch(e) {}
+
+        mindUrl = col.mind_file_url;
+        applyCoverConfig(col.cover_config);
+        (col.items || []).forEach(item => {
+          mediaMap[item.target_index] = {
+            type: item.media_type === 'audio' ? 'audio' : 'video',
+            videoUrl: item.video_url || null,
+            audioUrl: item.audio_url || null,
+            transcript: item.transcript || null,
+            photoUrl: item.photo_url || null
+          };
+        });
+        if (!mindUrl || Object.keys(mediaMap).length === 0) { showError(); return; }
 
         // Save for scene rebuilds on rescan
         savedMindUrl = mindUrl;
@@ -690,10 +842,17 @@
 
       function handleStartTap() {
         hideStartScreen();
+        // Fires on every camera start, first scan and rescans alike. scan_open
+        // only records the page loading, which happens whether or not anyone
+        // taps; without this step the gap between "opened the link" and "found
+        // a photo" mixes viewers who never started the camera in with genuine
+        // match failures. Read it as a funnel step by counting sessions that
+        // have at least one scan_start, not by counting the events.
+        logEvent('scan_start');
         document.getElementById('scanner').style.display = 'block';
         document.getElementById('home-btn').style.display = 'flex';
         const hint = document.getElementById('scan-hint');
-        hint.textContent = 'Point your camera at a Popcoded photo';
+        hint.textContent = '';
         hint.style.display = 'block';
 
         // Returning from a closed video/audio. Default path is a clean MindAR
@@ -721,7 +880,7 @@
             const onReady = () => {
               cleanRescanActive = false;
               arScene.removeEventListener('arError', fallBack);
-              hint.textContent = 'Point your camera at a Popcoded photo';
+              hint.textContent = '';
             };
             arScene.addEventListener('arError', fallBack, { once: true });
             arScene.addEventListener('arReady', onReady, { once: true });
@@ -750,7 +909,7 @@
             if (mindar && typeof mindar.start === 'function') {
               try { mindar.start(); } catch (e) {}
             }
-            hint.textContent = 'Point your camera at a Popcoded photo';
+            hint.textContent = '';
             startReloadHintTimer();
           }, { once: true });
         }, 500);
@@ -813,9 +972,13 @@
         if (coverConfig) {
           document.getElementById('start-screen').style.display = 'none';
           document.getElementById('wl-cover').style.display = 'block';
+          // A device with no camera to point at a print gets told so here,
+          // instead of finding out by tapping Scan and meeting its own webcam.
+          PopcodeDesktopNote.mount(document.querySelector('#wl-cover .wl-cta'));
         } else {
           document.getElementById('wl-cover').style.display = 'none';
           document.getElementById('start-screen').style.display = 'flex';
+          PopcodeDesktopNote.mount(document.getElementById('start-screen'));
         }
       }
       function hideStartScreen() {
@@ -865,11 +1028,11 @@
         audioPlayer.classList.remove('visible');
         try { apAudio.pause(); apAudio.removeAttribute('src'); apAudio.load(); } catch(e) {}
         scanner.style.display = 'block';
-        document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+        document.getElementById('scan-mark').classList.remove('found');
         const hint = document.getElementById('scan-hint');
         hint.textContent = msg;
         hint.style.display = 'block';
-        setTimeout(() => { hint.textContent = 'Point your camera at a Popcoded photo'; }, 4000);
+        setTimeout(() => { hint.textContent = ''; }, 4000);
       }
       // Backward-compat alias used by older code paths
       const showVideoError = showMediaError;
@@ -890,7 +1053,7 @@
         mediaActive = true;
         clearReloadHint();
         document.getElementById('scan-hint').style.display = 'none';
-        document.querySelectorAll('.corner').forEach(c => c.classList.add('expanded'));
+        document.getElementById('scan-mark').classList.add('found');
         triggerTimer = setTimeout(() => {
           triggerTimer = null;
           // Stop MindAR's camera before playing the video. On iOS 16 Safari,
@@ -1029,7 +1192,7 @@
         mediaActive = true;
         clearReloadHint();
         document.getElementById('scan-hint').style.display = 'none';
-        document.querySelectorAll('.corner').forEach(c => c.classList.add('expanded'));
+        document.getElementById('scan-mark').classList.add('found');
         triggerTimer = setTimeout(() => {
           triggerTimer = null;
           // Same media-session conflict as video — release the camera first.
@@ -1182,9 +1345,9 @@
         scanner.style.display = 'none';
         document.getElementById('scan-hint').style.display = 'none';
         document.getElementById('home-btn').style.display = 'none';
-        document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+        document.getElementById('scan-mark').classList.remove('found');
 
-        // Show the regular start screen — user can tap "Tap to Scan" to scan
+        // Show the regular start screen — user can tap "Scan image" to scan
         // the same image again or any new one.
         showStartScreen();
       }
@@ -1200,7 +1363,7 @@
           fullScreen.style.display = 'none';
           fullVid.src = '';
           closeBtn.style.display = 'none';
-          document.querySelectorAll('.corner').forEach(c => c.classList.remove('expanded'));
+          document.getElementById('scan-mark').classList.remove('found');
           showStartScreen();
           fade.style.opacity = '0';
           setTimeout(() => fade.style.display = 'none', 1000);

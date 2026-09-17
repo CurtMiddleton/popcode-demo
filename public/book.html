@@ -9,7 +9,7 @@
       integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
       crossorigin="anonymous"></script>
     <script src="/sentry-init.js"></script>
-    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
     <meta property="og:title" content="Popcode — Design a Book">
     <meta property="og:description" content="Design a photo book where any page can come to life with video.">
@@ -18,6 +18,9 @@
     <title>Popcode — Design a Book</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/activity.js"></script>
+    <script src="/slug.js"></script>
+    <script src="/postcard-render.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
     <script src="/countries.js"></script>
@@ -117,6 +120,10 @@
       .bi-size strong { display: block; font-size: 14px; font-weight: 700; color: #1a1a1a; }
       .bi-size em { display: block; font-style: normal; font-size: 12px; color: #8a857d; margin-top: 1px; }
       .bi-cta:hover { opacity: 0.94; }
+      /* Starting price — same type as order.html's .detail-price so a book
+         reads like every other product in the Shop. */
+      .bi-price { font-size: 20px; font-weight: 600; color: #1a1a1a; margin: 0 0 4px; font-family: 'Inter', sans-serif; }
+      .bi-price-note { color: #888; font-size: 12px; margin-bottom: 22px; font-family: 'Inter', sans-serif; }
 
       .field-label { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
       input.text-input {
@@ -461,6 +468,15 @@
       }
       .create-btn:hover { background: #000; }
       .create-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      /* Save design: leave the maker without finishing. Sits left of the primary. */
+      .save-btn {
+        border: 1.5px solid #ddd9d1; background: #fff; color: #1a1a1a; border-radius: 30px; padding: 14px 22px;
+        font-size: 15px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; white-space: nowrap;
+        margin-left: auto;
+      }
+      .save-btn:hover { background: #faf9f5; }
+      .save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      .save-btn + .create-btn { margin-left: 0; }
       .create-btn.ready { box-shadow: 0 0 0 0 rgba(118,87,252,0.5); animation: pulse-ring 1.8s ease-out infinite; }
       @keyframes pulse-ring {
         0% { box-shadow: 0 0 0 0 rgba(118,87,252,0.45); }
@@ -715,6 +731,8 @@
             <button class="bi-size active" data-size="a4-landscape"><span class="bs-shape landscape"></span><span><strong>A4 Landscape</strong><em>11.7 × 8.3"</em></span></button>
             <button class="bi-size" data-size="square-8x8"><span class="bs-shape square"></span><span><strong>8×8" Square</strong><em>8.3 × 8.3"</em></span></button>
           </div>
+          <div class="bi-price" id="bi-price">From &mdash;</div>
+          <div class="bi-price-note" id="bi-price-note">Getting price&hellip;</div>
           <button class="bi-cta" id="start-book-btn">Design a Book</button>
         </div>
       </div>
@@ -724,7 +742,7 @@
       <h1>Design a Book</h1>
       <p class="subtitle">Design a photo book, then bring any page to life — link a photo to a video and it plays when someone scans the printed page.</p>
 
-      <div class="field-label">Book title</div>
+      <div class="field-label">Book title <span style="color:#999;font-weight:500">(required)</span></div>
       <input class="text-input" id="title-input" type="text" placeholder="e.g. Our 2026 Year" autocomplete="off"/>
 
       <div class="field-label">Popcode link <span style="color:#999;font-weight:500">(where scans open)</span></div>
@@ -732,7 +750,7 @@
         <span class="slug-prefix">popcode.app/</span>
         <input class="text-input" id="slug-input" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="yourlink"/>
       </div>
-      <div class="slug-note" id="slug-note">6–10 lowercase letters or numbers. The link is locked once your book is created, so printed pages keep working.</div>
+      <div class="slug-note" id="slug-note">Fills in from your book title. The link is locked once your book is created, so printed pages keep working.</div>
 
       <!-- Photo tray -->
       <div class="tray-card">
@@ -786,6 +804,7 @@
     <div class="create-bar">
       <div class="create-bar-inner">
         <div class="create-summary" id="create-summary">Add photos to begin.</div>
+        <button class="save-btn" id="save-design-btn" disabled>Save design</button>
         <button class="create-btn" id="create-btn" disabled>Create Book</button>
       </div>
     </div>
@@ -821,7 +840,8 @@
         <p>Popcoded pages will play their video when scanned. Share the link or view your book.</p>
         <div class="result-url" id="result-url"></div>
         <div class="result-actions">
-          <a class="r-primary" id="result-view" target="_blank" rel="noopener">View book</a>
+          <button class="r-primary" id="result-cart">Add to cart</button>
+          <a class="r-secondary" id="result-view" target="_blank" rel="noopener">View book</a>
           <button class="r-secondary" id="result-copy">Copy link</button>
           <a class="r-secondary" href="/manage.html?tab=designs">Back to My Designs</a>
         </div>
@@ -835,6 +855,8 @@
 
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      // /cart.js (injected by nav.js) reuses this client instead of making its own.
+      window.__popcodeCartDb = db;
 
       let currentUser = null;
       let editingCollection = null;  // set when opened with ?id=slug (edit mode)
@@ -873,12 +895,19 @@
               introStage.appendChild(cv);
             }).catch(() => {});
           }
+          // Drop any size we can't actually sell right now (see BOOK_SIZES).
+          document.querySelectorAll('#bi-sizes .bi-size').forEach(chip => {
+            const size = BOOK_SIZES[chip.dataset.size];
+            if (size && size.unavailable) chip.remove();
+          });
           renderIntroBook();
+          refreshIntroPrice();
           // Size chips on the intro — applies immediately (builder re-renders on start).
           document.querySelectorAll('#bi-sizes .bi-size').forEach(chip => chip.addEventListener('click', () => {
             document.querySelectorAll('#bi-sizes .bi-size').forEach(x => x.classList.toggle('active', x === chip));
             applyBookSize(chip.dataset.size);
             renderIntroBook();
+            refreshIntroPrice();
           }));
           const startBtn = document.getElementById('start-book-btn');
           if (startBtn) startBtn.addEventListener('click', () => {
@@ -1104,7 +1133,12 @@
       // variant follow the selected size. Persisted in book_layout.size.
       const BOOK_SIZES = {
         'a4-landscape': { id: 'a4-landscape', variantId: 'book-a4l-layflat',  label: 'A4 Landscape', dims: '11.7 × 8.3"', wIn: 11.6929, hIn: 8.2677, ar: '117 / 83' },
-        'square-8x8':   { id: 'square-8x8',   variantId: 'book-21sq-layflat', label: '8×8" Square',  dims: '8.3 × 8.3"',  wIn: 8.2677,  hIn: 8.2677, ar: '1 / 1' },
+        // `unavailable` — Prodigi won't quote this size's SKU (it was a guess and
+        // it's wrong; see lib/print/catalog.mjs). Kept here so an already-saved
+        // square book still opens and renders at the right shape, but hidden
+        // from both size pickers so nobody starts a new one that can't be
+        // ordered. Delete the flag once the real SKU is in the catalog.
+        'square-8x8':   { id: 'square-8x8',   variantId: 'book-21sq-layflat', label: '8×8" Square',  dims: '8.3 × 8.3"',  wIn: 8.2677,  hIn: 8.2677, ar: '1 / 1', unavailable: true },
       };
       let bookSize = 'a4-landscape';
       const currentBookSize = () => BOOK_SIZES[bookSize] || BOOK_SIZES['a4-landscape'];
@@ -1335,24 +1369,25 @@
       // ── Popcode link (custom slug) ──────────────────────────────
       // Editable until the book is first created; locked afterwards so the
       // link on printed badged pages never breaks. Must match the site's slug
-      // routing pattern: 6–10 lowercase letters/digits.
+      // routing pattern: 3–30 lowercase letters, digits and hyphens.
       const slugInput = document.getElementById('slug-input');
-      slugInput.value = randomSlug();
-      slugInput.addEventListener('input', () => {
-        const clean = slugInput.value.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10);
-        if (clean !== slugInput.value) slugInput.value = clean;
-        syncSlugNote();
+      // Starts empty and fills in from the title — a random code here was only
+      // ever something the creator would want to replace.
+      const slugField = PopcodeSlug.attach({
+        db,
+        nameInput: document.getElementById('title-input'),
+        nameLabel: 'title',
+        slugInput,
+        note: document.getElementById('slug-note'),
+        classes: { base: 'slug-note', err: 'bad' },
+        onChange: () => updateSummary()
       });
-      const chosenSlug = () => (slugInput.value || '').trim();
-      const slugValid = () => /^[a-z0-9]{6,10}$/.test(chosenSlug());
-      function syncSlugNote() {
-        const n = document.getElementById('slug-note');
-        if (slugInput.disabled) { n.textContent = 'This book’s link — locked so printed pages keep working.'; n.classList.remove('bad'); return; }
-        const ok = slugValid();
-        n.textContent = ok ? `Scans will open popcode.app/${chosenSlug()}` : '6–10 lowercase letters or numbers.';
-        n.classList.toggle('bad', !ok && chosenSlug().length > 0);
+      const chosenSlug = () => slugField.get();
+      const slugValid = () => PopcodeSlug.validate(chosenSlug()).ok;
+      function syncSlugNote() { slugField.refresh(); }
+      function lockSlug(slug) {
+        slugField.lock(slug, 'This book’s link — locked so printed pages keep working.');
       }
-      function lockSlug(slug) { slugInput.value = slug; slugInput.disabled = true; syncSlugNote(); }
 
       // ── Rendering ───────────────────────────────────────────────
       function render() { ensureBookEndpapers(); renderTray(); renderPages(); updateSummary(); requestAnimationFrame(() => { sizeSlotBadges(); layoutAllSlotPhotos(); }); }
@@ -1404,7 +1439,7 @@
           el.style.backgroundImage = `url('${p.url}')`;
           el.innerHTML = `
             <div class="tray-x" data-del="${p.id}">&times;</div>
-            ${photoHasMedia(p) ? '<div class="pop-dot"><img src="/assets/popcode_icon.svg" style="width:11px;height:11px"/></div>' : ''}`;
+            ${photoHasMedia(p) ? '<div class="pop-dot"><img src="/assets/popcode_symbol_color.svg" style="width:11px;height:11px"/></div>' : ''}`;
           el.querySelector('.tray-x').addEventListener('click', (e) => { e.stopPropagation(); deletePhoto(p.id); });
           enablePhotoDrag(el, p, { onTap: () => {
             selectedTrayId = (selectedTrayId === p.id) ? null : p.id;
@@ -1657,7 +1692,7 @@
         const brand = (rev) => `<div class="bc-brand${rev ? ' bc-brand-rev' : ''}">
           <img class="bc-logo" style="width:${inCqw(1.25)}" src="/assets/Popcode_logo${rev ? '.rev' : ''}.png" alt="Popcode"/>
           <div class="bc-inst" style="font-size:${textSz};line-height:${lead}">Go to <b>popcode.app/${escapeHtml(slug)}</b> on your phone.<br>Scan photos with the Popcode symbol.</div>
-          <img class="bc-symbol" style="width:${inCqw(0.4)}" src="/assets/popcode-symbol${rev ? '.rev' : ''}.png" alt=""/>
+          <img class="bc-symbol" style="width:${inCqw(0.4)}" src="/assets/popcode_symbol_color.svg" alt=""/>
         </div>`;
         const pick = !url ? `<div class="cv-pick" data-cv="bpick"><span class="cv-pick-btn">${IC_PHOTO_PH}</span></div>` : '';
         if (backCover.mode === 'fullbleed') {
@@ -2047,7 +2082,7 @@
             const badge = document.createElement('div');
             badge.className = 'slot-badge';
             badge.title = photo.popcode.mediaType === 'audio' ? 'Popcode — plays audio when scanned' : 'Popcode — plays video when scanned';
-            badge.innerHTML = `<img src="/assets/popcode_icon.svg" alt=""/>`;
+            badge.innerHTML = `<img src="/assets/popcode_symbol_color.svg" alt=""/>`;
             slot.appendChild(badge);
           }
         } else {
@@ -2390,9 +2425,13 @@
         openSheet(`
           <h2>Options</h2>
           <p class="sheet-sub">Edit your book’s title, cover, fonts and more.</p>
-          <div class="menu-row" data-act="order" style="background:#f0eefe">
+          <div class="menu-row" data-act="cart" style="background:#f0eefe">
+            <div class="menu-ic" style="background:#1a1a1a;color:#fff"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></div>
+            <div><div>Add to cart</div><div class="menu-sub">Layflat · ${escapeHtml(currentBookSize().label)} · ships with the rest of your order</div></div>
+          </div>
+          <div class="menu-row" data-act="order">
             <div class="menu-ic" style="background:#1a1a1a;color:#fff"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>
-            <div><div>Order a printed book</div><div class="menu-sub">Layflat · ${escapeHtml(currentBookSize().label)} · printed &amp; shipped</div></div>
+            <div><div>Order this one now</div><div class="menu-sub">Skip the cart and check out with just this</div></div>
           </div>
           <div class="menu-row" data-act="size">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3 9 15"/><path d="M21 8V3h-5"/><rect x="3" y="12" width="9" height="9" rx="1"/></svg></div>
@@ -2432,6 +2471,7 @@
             <div><div>Proof: PDF pages</div><div class="menu-sub">Admin · print one page per sheet to PDF</div></div>
           </div>` : ''}
         `);
+        document.querySelector('#sheet [data-act="cart"]').addEventListener('click', addBookToCart);
         document.querySelector('#sheet [data-act="order"]').addEventListener('click', orderPrintedBook);
         document.querySelector('#sheet [data-act="title"]').addEventListener('click', () => {
           closeSheet();
@@ -2454,7 +2494,7 @@
       // Book size picker — photos keep their crops; pages just re-flow to the
       // new aspect ratio, so switching mid-design is safe.
       function openBookSizeSheet() {
-        const rows = Object.values(BOOK_SIZES).map(s => `
+        const rows = Object.values(BOOK_SIZES).filter(s => !s.unavailable).map(s => `
           <div class="menu-row" data-size="${s.id}"${s.id === bookSize ? ' style="background:#f0eefe"' : ''}>
             <div class="menu-ic"><span style="display:block;background:#1a1a1a;border-radius:2px;width:${s.wIn > s.hIn ? 22 : 17}px;height:${s.wIn > s.hIn ? 15.6 : 17}px"></span></div>
             <div><div>${escapeHtml(s.label)}</div><div class="menu-sub">${escapeHtml(s.dims)} · layflat hardcover</div></div>
@@ -2499,9 +2539,7 @@
       function duplicateBook() {
         editingCollection = null; // so the next Create saves a brand-new book
         // A copy gets its own (editable) Popcode link.
-        slugInput.disabled = false;
-        slugInput.value = randomSlug();
-        syncSlugNote();
+        slugField.unlock();
         const inp = document.getElementById('title-input');
         inp.value = ((inp.value || cover.title || 'Untitled').trim()) + ' (copy)';
         document.querySelector('.wrap h1').textContent = 'Design a Book';
@@ -2603,6 +2641,9 @@
                 + 'background-image:url("' + badgePng + '");background-size:contain;background-repeat:no-repeat;background-position:center;';
               slot.appendChild(b);
             });
+            unit.querySelectorAll('.bc-symbol').forEach(sym => {
+              sym.src = badgePng;         // html2canvas can't render an external SVG
+            });
             unit.querySelectorAll('.slot, .bc-inset').forEach(el => {
               const r = el.getBoundingClientRect();
               el.style.width = r.width + 'px';
@@ -2665,12 +2706,16 @@
       // badge baked into the bottom-right of each linked slot (same asset/corner
       // as order.html) so a printed page signals it's scannable.
       // Returns { blob, pageCount } — never downloads.
-      const PRINT_A4L = { dpi: 300, minPages: 24, maxPages: 122, badgeScale: 0.09 };
+      // minPages/maxPages are Prodigi's real limits for the layflat book, probed
+      // against the live quote API (16 refused, 18 quotes, 122 quotes, 124
+      // refused). Keep in step with lib/print/catalog.mjs — padding a book past
+      // the true minimum just sells blank pages at $1.06 per two.
+      const PRINT_A4L = { dpi: 300, minPages: 18, maxPages: 122, badgeScale: 0.09 };
 
       // Rasterize the Popcode badge SVG (viewBox-only, no intrinsic size) to a
       // PNG data-URL so html2canvas renders it (it drops external SVG <img>s).
       async function rasterizeBadge() {
-        let svg = await (await fetch('/assets/popcode_icon.svg')).text();
+        let svg = await (await fetch('/assets/popcode_symbol_color.svg')).text();
         if (!/<svg[^>]*\bwidth=/.test(svg)) svg = svg.replace('<svg ', '<svg width="302" height="302" ');
         const img = new Image();
         img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
@@ -2740,6 +2785,9 @@
               + 'width:' + size + 'px;height:' + size + 'px;pointer-events:none;'
               + 'background-image:url("' + badgePng + '");background-size:contain;background-repeat:no-repeat;background-position:center;';
             slot.appendChild(b);
+          });
+          unit.querySelectorAll('.bc-symbol').forEach(sym => {
+            sym.src = badgePng;         // html2canvas can't render an external SVG
           });
           unit.querySelectorAll('.slot, .bc-inset').forEach(el => { const r = el.getBoundingClientRect(); el.style.width = r.width + 'px'; el.style.height = r.height + 'px'; el.style.aspectRatio = 'auto'; });
           unit.querySelectorAll('.slot-img, .cv-photo-img, .bc-img').forEach(img => {
@@ -2840,6 +2888,48 @@
       // Catalog variant follows the selected size (see BOOK_SIZES).
       const bookVariantId = () => currentBookSize().variantId;
 
+      // "From $X" on the intro screen. Books are priced per page with the first
+      // batch included in the base, so the starting price is the SMALLEST book
+      // you can build — /api/prodigi-quote defaults a book with no pageCount to
+      // variant.minPages and reports the count it used. This is the PRODUCT
+      // price; shipping is passed through at cost and joins at checkout.
+      // A size change fires a new quote, hence the sequence guard.
+      let introPriceSeq = 0;
+      function formatMoney(minor, currency) {
+        // Prices are rounded to whole dollars server-side, so drop the .00.
+        const whole = minor % 100 === 0;
+        try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD', minimumFractionDigits: whole ? 0 : 2 }).format(minor / 100); }
+        catch (_) { return (currency || 'USD') + ' ' + (minor / 100).toFixed(whole ? 0 : 2); }
+      }
+      async function refreshIntroPrice() {
+        const el = document.getElementById('bi-price');
+        const note = document.getElementById('bi-price-note');
+        if (!el || !note) return;
+        const seq = ++introPriceSeq;
+        el.textContent = 'From \u2014';
+        note.textContent = 'Getting price\u2026';
+        try {
+          const resp = await fetch('/api/prodigi-quote', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              productType: 'book', variantId: bookVariantId(), copies: 1,
+              destinationCountryCode: 'US', shippingMethod: 'Standard',
+            }),
+          });
+          const d = await resp.json();
+          if (seq !== introPriceSeq) return; // a newer size superseded this quote
+          if (!resp.ok || typeof d.total_minor !== 'number') throw new Error('no price');
+          el.textContent = 'From ' + formatMoney(d.printing_minor, d.currency);
+          note.textContent = d.page_count
+            ? `for a ${d.page_count}-page book, plus shipping. More pages cost more.`
+            : 'plus shipping';
+        } catch (_) {
+          if (seq !== introPriceSeq) return;
+          el.textContent = 'From \u2014';
+          note.textContent = 'Pricing is unavailable right now \u2014 you\u2019ll see the full price before you pay.';
+        }
+      }
+
       // Confirm before padding a short book up to the layflat minimum, so the
       // extra blank pages aren't a surprise. Resolves true = continue.
       function confirmBookPadding(total, blanks) {
@@ -2858,13 +2948,17 @@
         });
       }
 
-      async function orderPrintedBook() {
+      // Shared prep for both "add to cart" and "order now". The print PDF can only
+      // be rendered here, where the book's DOM lives — so it is built and uploaded
+      // now, and a cart line carries its URL and page count.
+      // Returns { pdfUrl, pageCount } or null (the reason is already toasted).
+      async function buildBookPrintAsset(verb) {
         if (!editingCollection || !editingCollection.id || !editingCollection.slug) {
           closeSheet();
-          showToast('Save your book first, then order a printed copy.');
-          return;
+          showToast(`Save your book first, then ${verb}.`);
+          return null;
         }
-        if (!placedIds().size) { showToast('Add photos to your book first.'); return; }
+        if (!placedIds().size) { showToast('Add photos to your book first.'); return null; }
         // Warn if the book will be padded up to the layflat minimum.
         const contentCount = pages.filter(pg => pg.layout !== 'blank').length;
         const projected = 1 + contentCount + 1; // cover + content + back
@@ -2872,25 +2966,59 @@
           let target = Math.max(PRINT_A4L.minPages, projected);
           if (target % 2 !== 0) target += 1;
           const blanks = target - projected;
-          if (blanks > 0 && !(await confirmBookPadding(target, blanks))) return;
+          if (blanks > 0 && !(await confirmBookPadding(target, blanks))) return null;
         }
         closeSheet();
-        let pdfUrl, pageCount;
         try {
           showToast('Building your print file…');
           const out = await buildBookPrintPdf();
-          pageCount = out.pageCount;
           const path = `${editingCollection.slug}/print/book_${Date.now()}.pdf`;
           const { error } = await db.storage.from('experiences').upload(path, out.blob, { contentType: 'application/pdf', upsert: true });
           if (error) throw new Error('Upload failed: ' + error.message);
-          pdfUrl = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+          return { pdfUrl: db.storage.from('experiences').getPublicUrl(path).data.publicUrl, pageCount: out.pageCount };
         } catch (err) {
           console.error(err);
           if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
           showToast('Could not build the print file: ' + (err.message || 'error'));
-          return;
+          return null;
         }
-        openBookAddressSheet(pdfUrl, pageCount);
+      }
+
+      // A blob: object URL dies with this page, so it can never be a cart thumbnail.
+      const durableUrl = (u) => (typeof u === 'string' && /^https?:/i.test(u) ? u : null);
+
+      // Add this book to the cart, so it can ship alongside other designs.
+      async function addBookToCart() {
+        document.getElementById('result').classList.remove('visible');
+        const built = await buildBookPrintAsset('add it to your cart');
+        if (!built) return;
+        try {
+          const size = currentBookSize();
+          // book.html's cover holds the photo object itself (not a tray id).
+          const coverPhoto = cover && cover.photo ? cover.photo : null;
+          await PopcodeCart.add({
+            collectionId: editingCollection.id,
+            productType: 'book',
+            variantId: bookVariantId(),
+            copies: 1,
+            pageCount: built.pageCount,
+            assetUrls: [{ url: built.pdfUrl, print_area: 'default' }],
+            title: `${(editingCollection.name || 'Photo book')} — layflat photo book`,
+            thumbUrl: durableUrl(coverPhoto && (coverPhoto.existingUrl || coverPhoto.url)),
+            options: { sizeLabel: `Layflat · ${size.label}`, orientationLabel: `${built.pageCount} pages` },
+          });
+          showToast('Added to your cart.');
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast(err.message || 'Could not add to cart.');
+        }
+      }
+
+      async function orderPrintedBook() {
+        const built = await buildBookPrintAsset('order a printed copy');
+        if (!built) return;
+        openBookAddressSheet(built.pdfUrl, built.pageCount);
       }
 
       function openBookAddressSheet(pdfUrl, pageCount) {
@@ -2984,6 +3112,23 @@
             }
           } catch (e) { /* best-effort: interior-only if the spine step fails */ }
 
+          // Put the companion card artwork in place before checkout, so the
+          // server has something to point Prodigi at. Best-effort by design:
+          // a missing card must never block a sale, and create-checkout
+          // HEAD-checks the file before naming it.
+          try {
+            const cardSlug = editingCollection && editingCollection.slug;
+            if (cardSlug && window.PopcodePostcard) {
+              const insert = await window.PopcodePostcard.buildInsert(cardSlug);
+              await db.storage.from('experiences').upload(
+                `${cardSlug}/companion-card.png`, insert,
+                { contentType: 'image/png', upsert: true },
+              );
+            }
+          } catch (e) {
+            if (window.Sentry) try { Sentry.captureException(e); } catch (_) {}
+          }
+
           const resp = await fetch('/api/create-checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -3030,6 +3175,13 @@
         const ready = pageCount > 0 && placedCount > 0;
         btn.disabled = !ready;
         btn.classList.toggle('ready', ready);
+        const saveBtn = document.getElementById('save-design-btn');
+        if (saveBtn) {
+          saveBtn.disabled = !ready;
+          // Once the book exists the primary IS a save, so the extra button
+          // would just be a duplicate — it earns its place on a new design.
+          saveBtn.style.display = editingCollection ? 'none' : '';
+        }
       }
 
       // ── Slot interactions (tap-to-place / tap-to-swap / menu) ────
@@ -3093,7 +3245,7 @@
           <h2>Photo options</h2>
           <p class="sheet-sub">${hasPop ? 'This photo is a Popcode — it plays its ' + (photo.popcode.mediaType === 'audio' ? 'audio' : 'video') + ' when scanned.' : 'Link a video or audio and this page will come to life when scanned.'}</p>
           <div class="menu-row" data-act="popcode">
-            <div class="menu-ic"><img src="/assets/popcode_icon.svg" style="width:20px;height:20px"/></div>
+            <div class="menu-ic"><img src="/assets/popcode_symbol_color.svg" style="width:20px;height:20px"/></div>
             <div><div>${hasPop ? 'Edit Popcode' : 'Add a Popcode'}</div><div class="menu-sub">${hasPop ? 'Change or remove the linked media' : 'Link a video or audio recording'}</div></div>
           </div>
           <div class="menu-row" data-act="edit">
@@ -3886,9 +4038,16 @@
         return img;
       }
 
-      document.getElementById('create-btn').addEventListener('click', saveBook);
+      document.getElementById('create-btn').addEventListener('click', () => saveBook());
+      // Save design: same save, but it leaves you in the editor instead of
+      // finishing on the result screen — so you can stop and come back later.
+      document.getElementById('save-design-btn').addEventListener('click', async () => {
+        document.getElementById('save-design-btn').disabled = true;
+        try { await saveBook({ quiet: true }); } finally { updateSummary(); }
+      });
 
-      async function saveBook() {
+      async function saveBook(opts) {
+        const quiet = !!(opts && opts.quiet);
         const placed = placedIds();
         if (!placed.size) { showToast('Place at least one photo on a page first.'); return; }
         if (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler) {
@@ -3908,9 +4067,18 @@
         }
 
         const editing = !!editingCollection;
-        if (!editing && !slugValid()) {
-          showToast('Pick your Popcode link first — 6–10 lowercase letters or numbers.');
+        // The title is what the link is built from, so it can't be skipped.
+        if (!editing && !(document.getElementById('title-input').value || '').trim()) {
+          showToast('Give your book a title — it becomes its link.');
+          document.getElementById('title-input').focus();
+          return;
+        }
+        // Re-check the link here, not just on keystroke — someone else may have
+        // claimed it while this page sat open.
+        if (!editing && !(await slugField.ensureFree())) {
+          showToast('That link isn’t available — pick another.');
           slugInput.focus();
+          slugInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
           return;
         }
         document.getElementById('create-btn').disabled = true;
@@ -4080,6 +4248,7 @@
               .select().single();
             if (colErr) throw new Error('Could not save the book: ' + colErr.message);
             collectionId = col.id;
+            logActivity('create_book', { slug, user_id: currentUser.id });
           }
 
           // 6. Insert popcoded collection_items.
@@ -4089,6 +4258,12 @@
 
           setProgress('Done!', 100);
           lockSlug(slug); // the link is fixed from the first save onwards
+          if (quiet) {
+            document.getElementById('progress').classList.remove('visible');
+            showToast('Design saved — you can close this and come back any time.');
+            updateSummary();
+            return;
+          }
           showResult(slug, editing);
         } catch (err) {
           console.error(err);
@@ -4106,6 +4281,7 @@
         document.getElementById('result-copy').onclick = () => {
           navigator.clipboard.writeText(viewUrl).then(() => showToast('Link copied!')).catch(() => prompt('Copy this link:', viewUrl));
         };
+        document.getElementById('result-cart').onclick = addBookToCart;
         document.getElementById('result').classList.add('visible');
       }
 

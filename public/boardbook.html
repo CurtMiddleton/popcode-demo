@@ -8,7 +8,7 @@
       integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
       crossorigin="anonymous"></script>
     <script src="/sentry-init.js"></script>
-    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
     <meta property="og:title" content="Popcode — Design a Board Book">
     <meta property="og:description" content="Design a baby board book where every page comes to life with video when scanned.">
@@ -16,6 +16,8 @@
     <title>Popcode — Design a Board Book</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/activity.js"></script>
+    <script src="/slug.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
     <!-- Board book only needs MINDAR.IMAGE.Compiler (compile popcoded photos into a
@@ -31,29 +33,35 @@
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@400;500;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+      /* Filson Rounded — self-hosted, same faces the photo book loads. */
+      @font-face { font-family: 'FilsonPro'; src: url('/assets/fonts/FilsonProMedium/font.woff2') format('woff2'), url('/assets/fonts/FilsonProMedium/font.woff') format('woff'); font-weight: 400 500; font-display: swap; }
+      @font-face { font-family: 'FilsonPro'; src: url('/assets/fonts/FilsonProBold/font.woff2') format('woff2'), url('/assets/fonts/FilsonProBold/font.woff') format('woff'); font-weight: 600 700; font-display: swap; }
+    </style>
     <style>
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body { margin: 0; font-family: 'Inter', system-ui, sans-serif; color: #1a1a1a; background: #f7f6f2; }
       a { color: inherit; }
-      .wrap { max-width: 1000px; margin: 0 auto; padding: 20px 16px 140px; }
-      h1 { font-family: 'CooperBT', Georgia, serif; font-size: 30px; margin: 8px 0 4px; }
-      .sub { color: #666; font-size: 15px; margin: 0 0 20px; }
+      .wrap { max-width: 1000px; margin: 0 auto; padding: 80px 20px 140px; }
+      h1 { font-size: 44px; font-weight: 400; font-family: 'CooperBT', serif; letter-spacing: 0; line-height: 1.05; margin: 0 0 6px; }
+      @media (max-width: 680px) { h1 { font-size: 36px; } }
+      .sub { font-size: 16px; color: #656565; line-height: 1.5; margin: 0 0 26px; }
 
       /* Mobile nav drawer (base; nav.js appends the full-screen styles last). */
       #nav-overlay { display: none; position: fixed; inset: 0; z-index: 200; }
       #nav-overlay.open { display: block; }
 
       /* Interim details screen (mirrors book.html / the other Shop products). */
-      #intro { width: 100%; max-width: 1040px; margin: 0 auto; padding: 40px 28px 60px; }
-      @media (max-width: 680px) { #intro { padding: 28px 22px 40px; } }
+      #intro { width: 100%; max-width: 1040px; margin: 0 auto; padding: 80px 28px 60px; }
+      @media (max-width: 680px) { #intro { padding: 48px 22px 40px; } }
       .bi-back { display: inline-block; color: #7657FC; font-weight: 600; font-size: 14px; text-decoration: none; margin-bottom: 22px; }
       .bi-detail { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
       @media (max-width: 680px) { .bi-detail { grid-template-columns: 1fr; gap: 28px; } }
       .bi-preview { background: #fff; border: 1px solid #eee; border-radius: 24px; padding: 30px; box-shadow: 0 2px 14px rgba(0,0,0,0.06); }
       .bi-stage { background: #f2f2f2; border-radius: 16px; padding: 36px; display: flex; align-items: center; justify-content: center; min-height: 360px; }
       .bi-stage img { max-width: 100%; max-height: 340px; display: block; }
-      .bi-info h1 { margin: 0 0 6px; font-family: 'CooperBT', Georgia, serif; font-size: 40px; }
+      .bi-info h1 { margin-bottom: 6px; }
       .bi-tagline { color: #8a857d; font-size: 15px; margin-bottom: 18px; }
       .bi-desc { color: #555; font-size: 16px; line-height: 1.6; margin-bottom: 24px; }
       .bi-specs { list-style: none; padding: 0; margin: 0 0 30px; }
@@ -69,6 +77,10 @@
       .bi-size em { display: block; font-style: normal; font-size: 12px; color: #8a857d; margin-top: 1px; }
       .bi-cta { width: 100%; max-width: 340px; padding: 16px; border: none; border-radius: 16px; font-size: 16px; font-weight: 700; color: #fff; font-family: 'Inter', sans-serif; cursor: pointer; background: #1a1a1a; }
       .bi-cta:hover { opacity: 0.94; }
+      /* Starting price — same type as order.html's .detail-price so a board book
+         reads like every other product in the Shop. */
+      .bi-price { font-size: 20px; font-weight: 600; color: #1a1a1a; margin: 0 0 4px; font-family: 'Inter', sans-serif; }
+      .bi-price-note { color: #888; font-size: 12px; margin-bottom: 22px; font-family: 'Inter', sans-serif; }
       .btn-primary { background: #1a1a1a; color: #fff; border: none; border-radius: 999px; padding: 15px 30px; font-size: 16px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; }
       .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
       .btn-secondary { background: #fff; color: #1a1a1a; border: 1.5px solid #ddd; border-radius: 999px; padding: 13px 26px; font-size: 15px; font-weight: 600; cursor: pointer; }
@@ -77,9 +89,10 @@
       .field { margin-bottom: 18px; }
       .field label { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
       .slug-row { display: flex; align-items: center; background: #fff; border: 1.5px solid #e3e1db; border-radius: 12px; overflow: hidden; max-width: 420px; }
-      .slug-row .prefix { padding: 12px 4px 12px 14px; color: #999; font-size: 15px; }
-      .slug-row input { border: none; outline: none; padding: 12px 12px 12px 0; font-size: 15px; flex: 1; font-family: 'Inter', sans-serif; }
-      .text-input { width: 100%; max-width: 420px; border: 1.5px solid #e3e1db; border-radius: 12px; padding: 12px 14px; font-size: 15px; font-family: 'Inter', sans-serif; outline: none; }
+      /* 16px floor on anything focusable — below it iOS zooms on focus. */
+      .slug-row .prefix { padding: 12px 4px 12px 14px; color: #999; font-size: 16px; }
+      .slug-row input { border: none; outline: none; padding: 12px 12px 12px 0; font-size: 16px; flex: 1; font-family: 'Inter', sans-serif; }
+      .text-input { width: 100%; max-width: 420px; border: 1.5px solid #e3e1db; border-radius: 12px; padding: 12px 14px; font-size: 16px; font-family: 'Inter', sans-serif; outline: none; }
       .note { font-size: 13px; color: #888; margin-top: 6px; }
       .note.bad { color: #d33; }
 
@@ -139,6 +152,16 @@
       .slot .cover-scrim { position: absolute; left: 0; right: 0; bottom: 0; height: 55%; background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.6)); pointer-events: none; }
       .slot .cover-title { position: absolute; left: 8%; right: 8%; bottom: 8%; color: #fff; font-family: 'CooperBT', Georgia, serif; font-size: 9cqw; line-height: 1.08; text-shadow: 0 2px 10px rgba(0,0,0,0.45); pointer-events: none; }
       .slot .cover-title .cover-sub { display: block; font-size: 5cqw; font-weight: 400; opacity: 0.92; margin-top: 2cqw; }
+      /* Page text — sits above the photo (or straight on the page colour). Sized in
+         cqw so the builder preview and the printed page agree. */
+      .page-text {
+        position: absolute; inset: 0; z-index: 2; pointer-events: none;
+        display: flex; justify-content: center; padding: 10%;
+        text-align: center; line-height: 1.25; white-space: pre-wrap; overflow-wrap: break-word;
+      }
+      .page-text > span { display: block; width: 100%; }
+      /* Over a photo the copy needs a little help; on a flat colour it does not. */
+      .page-text.on-photo { text-shadow: 0 2px 12px rgba(0,0,0,0.45); }
       .slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
       .slot .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #b7b2a8; font-size: 13px; text-align: center; padding: 8px; }
       /* Scan badge on a popcoded page (the real Popcode mark, like the printed page). */
@@ -227,6 +250,38 @@
       .seg button.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
       .drop { border: 2px dashed #c9c4ba; border-radius: 12px; padding: 24px; text-align: center; color: #777; cursor: pointer; }
       .drop.has { border-style: solid; border-color: #2dc0c5; color: #1a1a1a; }
+      /* Colour spectrum — a grid of swatches plus a custom picker for anything else. */
+      .swatches { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; max-width: 330px; }
+      .sw { aspect-ratio: 1 / 1; border-radius: 7px; border: 1.5px solid rgba(0,0,0,0.14); padding: 0; cursor: pointer; display: block; }
+      .sw.active { outline: 2.5px solid #1a1a1a; outline-offset: 2px; }
+      .sw-custom { position: relative; overflow: hidden; background: conic-gradient(#f2857a, #f8a94e, #edc521, #93cc79, #2dc0c5, #6d93ef, #a87ede, #dda2c6, #f2857a); }
+      .sw-custom input { position: absolute; inset: -20%; width: 140%; height: 140%; opacity: 0; cursor: pointer; border: none; padding: 0; }
+      .text-area { width: 100%; border: 1.5px solid #e3e1db; border-radius: 12px; padding: 12px 14px; font-size: 15px; font-family: 'Inter', sans-serif; outline: none; resize: vertical; min-height: 74px; }
+      /* Font picker — a native <select> can't render each option in its own face,
+         and this list will grow, so it's a small dropdown of its own. */
+      .picker { position: relative; max-width: 330px; }
+      .picker-btn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #f0efec; border: none; border-radius: 12px; padding: 13px 14px; font-size: 17px; color: #1a1a1a; text-align: left; cursor: pointer; }
+      .picker-btn .chev { flex: none; opacity: 0.45; }
+      .picker-menu { position: absolute; left: 0; top: calc(100% + 6px); z-index: 5; width: 100%; max-height: 304px; overflow-y: auto; background: #fff; border-radius: 12px; padding: 6px; box-shadow: 0 10px 34px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.07); }
+      .picker-menu button { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; background: none; border: none; border-radius: 9px; padding: 11px 12px; font-size: 18px; color: #1a1a1a; text-align: left; cursor: pointer; }
+      .picker-menu button:hover { background: #f5f3ef; }
+      .picker-menu button.active { background: #f0efec; }
+      .picker-menu .tick { flex: none; opacity: 0; }
+      .picker-menu button.active .tick { opacity: 1; }
+      /* Size — a preset menu you can override by typing an exact point size. */
+      .size-row { display: flex; gap: 10px; align-items: stretch; max-width: 330px; }
+      .size-row select { flex: 1; min-width: 0; -webkit-appearance: none; appearance: none; background: #f0efec url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E") no-repeat right 14px center; border: none; border-radius: 12px; padding: 13px 34px 13px 14px; font-size: 16px; font-family: 'Inter', sans-serif; color: #1a1a1a; cursor: pointer; }
+      .num-field { display: flex; align-items: center; gap: 5px; width: 104px; background: #f0efec; border-radius: 12px; padding: 0 14px; }
+      .num-field input { width: 100%; min-width: 0; border: none; background: none; outline: none; padding: 13px 0; font-size: 16px; font-family: 'Inter', sans-serif; color: #1a1a1a; }
+      .num-field .unit { color: #8a8a86; font-size: 14px; }
+      /* A tall sheet has to be reachable — without this the Done button can sit
+         off the bottom of a phone screen. */
+      .sheet.sheet-scroll { max-height: 92vh; overflow-y: auto; }
+      /* Live preview of the page being written, at the real page's square aspect.
+         Sticky, so it stays visible while you work down through the colours. */
+      .tx-eyebrow { display: block; font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
+      .tx-sticky { position: sticky; top: 0; z-index: 2; background: #fff; padding: 4px 0 14px; margin-bottom: 4px; }
+      .tx-preview { width: 100%; max-width: 168px; margin: 0 auto; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; position: relative; container-type: inline-size; background-size: cover; background-position: center; box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
       .sheet-actions { display: flex; gap: 10px; margin-top: 18px; }
       /* Popcode sheet (video + audio) — ported from book.html */
       .mini-btn { border: 1px solid #e0ded8; background: #fff; color: #1a1a1a; border-radius: 999px; padding: 7px 13px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; }
@@ -304,6 +359,8 @@
           </ul>
           <div class="bi-size-label">Size</div>
           <div class="bi-sizes"><button class="bi-size active" type="button"><span class="bs-shape square"></span><span><strong>6×6″ Square</strong><em>Chipboard board book</em></span></button></div>
+          <div class="bi-price" id="bi-price">From &mdash;</div>
+          <div class="bi-price-note" id="bi-price-note">Getting price&hellip;</div>
           <button class="bi-cta" id="start-btn">Design a Board Book</button>
         </div>
       </div>
@@ -315,7 +372,7 @@
       <p class="sub">Add a photo to each page, then link a video to the pages you want to come alive.</p>
 
       <div class="field">
-        <label for="title-input">Book title <span style="color:#aaa;font-weight:400">(optional)</span></label>
+        <label for="title-input">Book title <span style="color:#aaa;font-weight:400">(required)</span></label>
         <input id="title-input" class="text-input" type="text" placeholder="e.g. Baby's First Year"/>
       </div>
       <div class="field">
@@ -324,7 +381,7 @@
           <span class="prefix">popcode.app/</span>
           <input id="slug-input" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="yourlink"/>
         </div>
-        <div class="note" id="slug-note">6–10 lowercase letters or numbers.</div>
+        <div class="note" id="slug-note">Fills in from your book title.</div>
       </div>
 
       <div class="photos-panel">
@@ -370,6 +427,8 @@
         </div>
         <div class="field"><label for="o-country">Country</label><select class="text-input" id="o-country" style="max-width:none"></select></div>
         <button class="btn-primary" id="order-btn" style="width:100%;margin-top:6px;">Continue to payment</button>
+        <button class="save-btn" id="cart-btn" style="width:100%;margin-top:10px;">Add to cart</button>
+        <p style="color:#888;font-size:12.5px;line-height:1.5;margin-top:10px;">Adding it to your cart lets you order it with your other designs in one go.</p>
         <div class="note" id="order-note" style="text-align:center;margin-top:10px;"></div>
       </div>
     </div>
@@ -390,9 +449,20 @@
       </button>
     </div>
 
+    <style>
+      /* Save design: leave the maker without finishing. Sits left of the primary. */
+      .save-btn {
+        border: 1.5px solid #ddd9d1; background: #fff; color: #1a1a1a; border-radius: 30px; padding: 13px 20px;
+        font-size: 15px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; white-space: nowrap;
+      }
+      .save-btn:hover { background: #faf9f5; }
+      .save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    </style>
+
     <!-- Create bar -->
     <div class="create-bar hidden" id="create-bar">
       <span class="summary" id="summary">Add photos to begin.</span>
+      <button class="save-btn" id="save-design-btn" disabled>Save design</button>
       <button class="btn-primary create-btn" id="create-btn" disabled>Create Board Book</button>
     </div>
 
@@ -410,6 +480,8 @@
 
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      // /cart.js (injected by nav.js) reuses this client instead of making its own.
+      window.__popcodeCartDb = db;
       let currentUser = null;
       // Ordering the printed board book is gated to admins until the live
       // Stripe→Printify chain is validated with one real order; everyone can still
@@ -451,20 +523,90 @@
       const PX_COVER = [3863, 1875];      // wraparound: back | spine | front
       const PX_SPREAD = [3675, 1875];     // two facing 6×6 pages
       // Cover text + font (editable, like the photo book cover).
+      // Same six faces the photo book offers, so a family's books match.
       const COVER_FONTS = [
         { id: 'cooper', name: 'Cooper', stack: "'CooperBT', Georgia, serif" },
-        { id: 'cormorant', name: 'Cormorant', stack: "'Cormorant Garamond', Georgia, serif" },
         { id: 'dmsans', name: 'DM Sans', stack: "'DM Sans', sans-serif" },
         { id: 'inter', name: 'Inter', stack: "'Inter', sans-serif" },
+        { id: 'filson', name: 'Filson Rounded', stack: "'FilsonPro', 'Nunito', sans-serif" },
+        { id: 'cormorant', name: 'Cormorant Garamond', stack: "'Cormorant Garamond', Georgia, serif" },
+        { id: 'libre', name: 'Libre Baskerville', stack: "'Libre Baskerville', Georgia, serif" },
       ];
       const coverFontStack = (id) => (COVER_FONTS.find(f => f.id === id) || COVER_FONTS[0]).stack;
+      // Page text sets its own weight. Only use a weight we actually load a face
+      // for — asking for 700 where there is none gets a synthesised fake bold.
+      const TEXT_WEIGHT = { cooper: 400, cormorant: 600, dmsans: 700, inter: 700, filson: 700, libre: 700 };
+      const textWeight = (id) => TEXT_WEIGHT[id] || 400;
       let cover = { title: '', subtitle: '', font: 'cooper' };
+
+      // ── Page text ──────────────────────────────────────────────────
+      // A page can carry a line of text as well as (or instead of) a photo. With no
+      // photo the text sits on a flat colour; with one, the photo is the background.
+      // Six rows of nine: neutrals, warm, then round the hues. Any other colour is a
+      // tap away on the custom swatch, so this is a starting point, not a limit.
+      const PAGE_COLORS = [
+        '#ffffff', '#f6f2ea', '#e7e0d2', '#cfc7b6', '#a9a091', '#7a7266', '#4c463d', '#2a2722', '#000000',
+        '#fde4de', '#f9b8ad', '#f2857a', '#e2503f', '#c22d1e', '#9a1f13', '#f7d9ea', '#e492c2', '#c8438f',
+        '#ffe9c9', '#ffd08f', '#f8a94e', '#e77e22', '#c05f10', '#fdf3bd', '#f8e26a', '#edc521', '#c39c00',
+        '#e2f0d4', '#bfe0a7', '#93cc79', '#62ab58', '#3f8347', '#2c6136', '#d9efe4', '#9bd8bf', '#4fb391',
+        '#d4eff4', '#a3dfe9', '#58c9d6', '#2dc0c5', '#1a8b96', '#dbe4fb', '#a9bef5', '#6d93ef', '#2f56b0',
+        '#e9dcf8', '#cbb0ee', '#a87ede', '#8354c6', '#603a94', '#3f2769', '#f2d6e6', '#dda2c6', '#b35d92',
+      ];
+      // Text size is stored in points on the printed page. A board book page is 6″
+      // across, so 432pt of width — everything renders as a fraction of that, which
+      // is why the builder (cqw) and the print pixels agree at any size.
+      const PAGE_WIDTH_PT = 6 * 72;
+      const MIN_PT = 8, MAX_PT = 140, DEFAULT_PT = 35;
+      const TEXT_PRESETS = [
+        { id: 'sm', name: 'Small', pt: 24 },
+        { id: 'md', name: 'Medium', pt: DEFAULT_PT },
+        { id: 'lg', name: 'Large', pt: 50 },
+        { id: 'xl', name: 'Huge', pt: 69 },
+      ];
+      // Books saved before sizes were points still carry 'sm'/'md'/'lg'/'xl'.
+      function normalizeSizePt(v) {
+        const preset = TEXT_PRESETS.find(z => z.id === v);
+        if (preset) return preset.pt;
+        const n = Math.round(+v);
+        return Number.isFinite(n) && n > 0 ? Math.max(MIN_PT, Math.min(MAX_PT, n)) : DEFAULT_PT;
+      }
+      const TEXT_PLACES = [
+        { id: 'top', name: 'Top', css: 'flex-start' },
+        { id: 'middle', name: 'Middle', css: 'center' },
+        { id: 'bottom', name: 'Bottom', css: 'flex-end' },
+      ];
+      const DEFAULT_TEXT = () => ({ text: '', font: 'filson', color: '#ffffff', bg: '#62ab58', size: DEFAULT_PT, place: 'middle' });
+      const HEX = /^#[0-9a-f]{6}$/i;
+      function normalizeText(t) {
+        if (!t || typeof t !== 'object') return null;
+        const d = DEFAULT_TEXT();
+        return {
+          text: String(t.text == null ? '' : t.text).slice(0, 300),
+          font: COVER_FONTS.some(f => f.id === t.font) ? t.font : d.font,
+          color: HEX.test(t.color || '') ? t.color.toLowerCase() : d.color,
+          bg: HEX.test(t.bg || '') ? t.bg.toLowerCase() : d.bg,
+          size: normalizeSizePt(t.size),
+          place: TEXT_PLACES.some(z => z.id === t.place) ? t.place : d.place,
+        };
+      }
+      const textSizePct = (pt) => normalizeSizePt(pt) / PAGE_WIDTH_PT * 100;
+      const textPlaceCss = (id) => (TEXT_PLACES.find(z => z.id === id) || TEXT_PLACES[1]).css;
+      // Inset from the bottom, as a fraction of the page width. Bottom-set text on a
+      // popcoded page has to clear the scan badge (5% pad + 11% mark).
+      const textPadBottom = (place, popcoded) => (place === 'bottom' && popcoded) ? 0.19 : 0.10;
+      const pagePopcoded = (pos) => photoHasMedia(photos.get(slots[pos]));
+      // A page counts as a text page once it actually says something — an empty
+      // string is just a colour, which is not worth printing a page for.
+      function pageText(pos) { const t = texts[pos]; return t && t.text.trim() ? t : null; }
+      // The flat colour only shows through where there is no photo covering it.
+      function pageBg(pos) { const t = texts[pos]; return t && t.text.trim() ? t.bg : null; }
 
       // photos: id -> { id, file, url, popcode|null }
       //   popcode: { mediaType:'video', video:File }
       const photos = new Map();
       const slots = {};                 // position -> photoId | null
-      POSITIONS.forEach(p => { slots[p] = null; });
+      const texts = {};                 // position -> { text, font, color, bg, size, place } | null
+      POSITIONS.forEach(p => { slots[p] = null; texts[p] = null; });
       let selectedTrayId = null;        // tray photo awaiting placement
       let idSeq = 0;
       const uid = () => 'p' + (idSeq++) + Date.now().toString(36);
@@ -518,21 +660,26 @@
             idByUrl[url] = id;
             return id;
           };
-          POSITIONS.forEach(p => { slots[p] = null; });
+          POSITIONS.forEach(p => { slots[p] = null; texts[p] = null; });
           (col.book_layout.slots || []).forEach(s => {
-            if (!s || !s.position || !s.photo_url) return;
-            if (!POSITIONS.includes(s.position)) return;
+            if (!s || !s.position || !POSITIONS.includes(s.position)) return;
+            if (s.text) texts[s.position] = normalizeText(s.text);
+            if (!s.photo_url) return;
             // The stored photo is already square-cropped (adjust baked in), so it
             // loads with an identity adjust — the editor treats it as the source.
             slots[s.position] = getPhotoId(s.photo_url);
           });
+          // Baseline of the saved text, so editing the words on a scannable page
+          // rebuilds the target that the camera has to match.
+          editingCollection._textByPos = {};
+          POSITIONS.forEach(pos => { editingCollection._textByPos[pos] = JSON.stringify(pageText(pos)); });
 
           // Restore cover text/font.
           const c = col.book_layout.cover;
           if (c) cover = { title: c.title || '', subtitle: c.subtitle || '', font: COVER_FONTS.some(f => f.id === c.font) ? c.font : 'cooper' };
 
           document.getElementById('title-input').value = col.name || '';
-          slugInput.value = col.slug; slugInput.disabled = true; syncSlugNote();
+          slugField.lock(col.slug, 'This book’s link — locked so printed pages keep working.');
           document.getElementById('create-btn').textContent = 'Save Changes';
           const h1 = document.querySelector('#builder .page-top-bar h1, #builder h1'); if (h1) h1.textContent = 'Edit Board Book';
 
@@ -555,6 +702,32 @@
         const stage = document.getElementById('intro-mock');
         if (!stage || !window.boardbookMockup) return;
         window.boardbookMockup(stage, window.unsplashBaby ? window.unsplashBaby(800) : '', { title: "Baby’s First Book" });
+      })();
+
+      // "From $X" on the intro — the product price, like every other product.
+      // Board books are fulfilled by Printify, which prices shipping only from a
+      // full address, so their shipping simply isn't knowable until the checkout
+      // sheet has one (see quoteOrder below, which re-quotes all-in there).
+      (function introPrice() {
+        // Edit mode skips the intro entirely, so don't spend a quote on it.
+        if (new URLSearchParams(location.search).get('id')) return;
+        const el = document.getElementById('bi-price');
+        const note = document.getElementById('bi-price-note');
+        if (!el || !note) return;
+        fetch('/api/prodigi-quote', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productType: 'boardbook', variantId: 'bb-6x6', copies: 1,
+            destinationCountryCode: 'US', shippingMethod: 'Standard',
+          }),
+        }).then(r => r.json().then(d => ({ ok: r.ok, d }))).then(({ ok, d }) => {
+          if (!ok || typeof d.total_minor !== 'number') throw new Error('no price');
+          el.textContent = 'From ' + formatMoney(d.printing_minor, d.currency);
+          note.textContent = 'per book, plus shipping \u2014 your total is shown before you pay';
+        }).catch(() => {
+          el.textContent = 'From \u2014';
+          note.textContent = 'Pricing is unavailable right now \u2014 you\u2019ll see the full price before you pay.';
+        });
       })();
 
       document.getElementById('start-btn').addEventListener('click', () => {
@@ -625,19 +798,24 @@
       function escapeHtml(s) { const d = document.createElement('div'); d.appendChild(document.createTextNode(s == null ? '' : String(s))); return d.innerHTML; }
       function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2200); }
       const slugInput = document.getElementById('slug-input');
-      const chosenSlug = () => (slugInput.value || '').trim().toLowerCase();
-      const slugValid = () => /^[a-z0-9]{6,10}$/.test(chosenSlug());
-      // Auto-generate a link (editable), like the photo book — so a user can create
-      // without having to invent one, but can still customize it.
-      function randomSlug() { return Math.random().toString(36).substring(2, 10); }
-      slugInput.value = randomSlug();
-      function syncSlugNote() {
-        const n = document.getElementById('slug-note'); const ok = slugValid();
-        n.textContent = ok ? `Scans will open popcode.app/${chosenSlug()}` : '6–10 lowercase letters or numbers.';
-        n.classList.toggle('bad', !ok && chosenSlug().length > 0);
-      }
-      syncSlugNote();
-      slugInput.addEventListener('input', () => { slugInput.value = slugInput.value.toLowerCase().replace(/[^a-z0-9]/g, ''); syncSlugNote(); updateSummary(); });
+      // The link tracks the book title as it's typed, so "Baby's First Year"
+      // becomes popcode.app/babysfirstyear. Editing the link by hand takes it
+      // off the title. Shared logic lives in slug.js.
+      function randomSlug() { return PopcodeSlug.randomSlug(); }
+      // Starts empty and fills in from the title — a random code here was only
+      // ever something the creator would want to replace.
+      const slugField = PopcodeSlug.attach({
+        db,
+        nameInput: document.getElementById('title-input'),
+        nameLabel: 'title',
+        slugInput,
+        note: document.getElementById('slug-note'),
+        classes: { base: 'note', err: 'bad' },
+        onChange: () => updateSummary()
+      });
+      const chosenSlug = () => slugField.get();
+      const slugValid = () => PopcodeSlug.validate(chosenSlug()).ok;
+      function syncSlugNote() { slugField.refresh(); }
       document.getElementById('title-input').addEventListener('input', (e) => { cover.title = e.target.value; renderSlots(); });   // live cover title
 
       function photoHasMedia(p) { return !!(p && p.popcode && (p.popcode.video || p.popcode.audio || p.popcode.existingVideoUrl || p.popcode.existingAudioUrl)); }
@@ -835,19 +1013,78 @@
         const ctx = c.getContext('2d');
         ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size);
         drawPhotoAdjusted(ctx, img, photo.adjust, 0, 0, size, size);
-        if (withBadge) { try { const b = await loadImg('/assets/popcode_icon.svg'); const bs = Math.round(size * 0.13), pad = Math.round(size * 0.05); ctx.drawImage(b, size - bs - pad, size - bs - pad, bs, bs); } catch (_) {} }
+        if (withBadge) { try { const b = await loadImg('/assets/popcode_symbol_color.svg'); const bs = Math.round(size * 0.13), pad = Math.round(size * 0.05); ctx.drawImage(b, size - bs - pad, size - bs - pad, bs, bs); } catch (_) {} }
         return c;
       }
+      // Wrap to `maxW`, honouring the line breaks someone typed and breaking a word
+      // that is too long to fit on its own — matching the preview's overflow-wrap.
+      function wrapTextLines(ctx, text, maxW) {
+        const out = [];
+        String(text).split('\n').forEach(para => {
+          const words = para.split(/\s+/).filter(Boolean);
+          if (!words.length) { out.push(''); return; }
+          let line = '';
+          const push = (w) => {
+            if (ctx.measureText(w).width <= maxW) { out.push(w); return; }
+            let chunk = '';
+            for (const ch of w) {
+              if (chunk && ctx.measureText(chunk + ch).width > maxW) { out.push(chunk); chunk = ch; }
+              else chunk += ch;
+            }
+            if (chunk) out.push(chunk);
+          };
+          for (const wd of words) {
+            const t = line ? line + ' ' + wd : wd;
+            if (ctx.measureText(t).width > maxW && line) { push(line); line = wd; } else line = t;
+          }
+          if (line) push(line);
+        });
+        return out;
+      }
+      // Draw a page's text into rect (x,y,w,h) — the canvas twin of .page-text, using
+      // the same 10% inset, 1.25 line height and width-relative size, so the builder
+      // preview, the printed page and the AR target all agree.
+      function drawPageText(ctx, pos, x, y, w, h, overPhoto) {
+        const t = pageText(pos); if (!t) return;
+        const fs = w * textSizePct(t.size) / 100, lh = fs * 1.25;
+        const pad = w * 0.10, padB = w * textPadBottom(t.place, pagePopcoded(pos));
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+        ctx.font = `${textWeight(t.font)} ${fs}px ${coverFontStack(t.font)}`;
+        ctx.fillStyle = t.color;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        if (overPhoto) { ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = fs * 0.5; ctx.shadowOffsetY = fs * 0.08; }
+        const lines = wrapTextLines(ctx, t.text, w - pad * 2);
+        const block = lines.length * lh;
+        let cy = t.place === 'top' ? y + pad + lh / 2
+               : t.place === 'bottom' ? y + h - padB - block + lh / 2
+               : y + h / 2 - block / 2 + lh / 2;
+        for (const ln of lines) { ctx.fillText(ln, x + w / 2, cy); cy += lh; }
+        ctx.restore();
+      }
+      // Canvas silently substitutes a fallback for a webfont the page has not used
+      // yet, and document.fonts.ready won't help because nothing has asked for it.
+      // So ask for each face this book actually needs, then wait.
+      async function ensureTextFonts() {
+        const need = new Set();
+        POSITIONS.forEach(pos => { const t = pageText(pos); if (t) need.add(`${textWeight(t.font)} 40px ${coverFontStack(t.font)}`); });
+        if (cover.title || cover.subtitle) need.add(`400 40px ${coverFontStack(cover.font)}`);
+        await Promise.all([...need].map(f => document.fonts.load(f).catch(() => {})));
+        try { await document.fonts.ready; } catch (_) {}
+      }
       // AR compile target = the square-cropped page (no badge; matches what's printed).
-      async function loadCompileImage(photo) {
+      // Any text on the page is baked in, because that is what the camera will see.
+      async function loadCompileImage(pos) {
+        const photo = photos.get(slots[pos]);
         const c = await squareCanvas(photo, MAX_COMPILE_DIM, false);
+        drawPageText(c.getContext('2d'), pos, 0, 0, c.width, c.height, true);
         const r = new Image();
         await new Promise((res, rej) => { r.onload = res; r.onerror = rej; r.src = c.toDataURL('image/jpeg', 0.92); });
         return r;
       }
 
       // ── Add photos ─────────────────────────────────────────────────
-      let pendingCoverPick = false;   // set when "Add a cover photo" opens the picker
+      let pendingPickPos = null;      // page a freshly picked photo should land on ('cover', 'page_3'…)
       const photoInput = document.getElementById('photo-input');
       photoInput.addEventListener('change', async () => {
         const files = [...photoInput.files]; photoInput.value = '';
@@ -860,7 +1097,7 @@
             newIds.push(id);
           } catch (_) { showToast('Could not read a photo.'); }
         }
-        if (pendingCoverPick && newIds.length) { slots['cover'] = newIds[0]; pendingCoverPick = false; }
+        if (pendingPickPos && newIds.length) { slots[pendingPickPos] = newIds[0]; pendingPickPos = null; }
         render();
       });
       document.getElementById('addphotos-btn').addEventListener('click', () => photoInput.click());
@@ -872,7 +1109,7 @@
         if (!queue.length) { showToast('All photos are already placed.'); return; }
         for (const pos of POSITIONS) {
           if (!queue.length) break;
-          if (!slots[pos]) slots[pos] = queue.shift();
+          if (!slots[pos] && !pageText(pos)) slots[pos] = queue.shift();
         }
         render();
       }
@@ -900,7 +1137,7 @@
           const t = document.createElement('div');
           t.className = 'tray-thumb' + (selectedTrayId === p.id ? ' selected' : '') + (placed.has(p.id) ? ' placed' : '');
           t.style.backgroundImage = `url('${p.url}')`;
-          if (photoHasMedia(p)) { const d = document.createElement('img'); d.className = 'pop'; d.src = '/assets/popcode_icon.svg'; t.appendChild(d); }
+          if (photoHasMedia(p)) { const d = document.createElement('img'); d.className = 'pop'; d.src = '/assets/popcode_symbol_color.svg'; t.appendChild(d); }
           // Tap selects for tap-to-place; drag drops the photo straight onto a page.
           enablePhotoDrag(t, p, { onTap: () => { selectedTrayId = selectedTrayId === p.id ? null : p.id; renderTray(); } });
           tray.appendChild(t);
@@ -920,6 +1157,7 @@
         if (pos === 'blank') return `<div class="half"><div class="slot-label">Blank Page</div><div class="slot square blank-page"></div></div>`;
         const pid = slots[pos]; const p = pid ? photos.get(pid) : null;
         const isCover = pos === 'cover';
+        const t = pageText(pos);
         let overlay = '';
         if (isCover) {
           if (cover.title || cover.subtitle) {
@@ -929,13 +1167,22 @@
             overlay = `${p ? '<div class="cover-scrim"></div>' : ''}<div class="cover-title placeholder${p ? '' : ' on-empty'}" style="font-family:${coverFontStack(cover.font)}">Your Title</div>`;
           }
         }
+        // A text page is never "empty" — its colour is the page, so it should not
+        // show the add-a-photo frame icon.
         return `<div class="half"><div class="slot-label">${positionLabel(pos)}</div>
-          <div class="slot square${p ? '' : ' empty'}${pos === swapSource ? ' swap-source' : ''}" data-pos="${pos}">
+          <div class="slot square${p || t ? '' : ' empty'}${pos === swapSource ? ' swap-source' : ''}" data-pos="${pos}"${t ? ` style="background:${t.bg}"` : ''}>
             ${p ? `<img class="slot-img" src="${p.url}" crossorigin="anonymous" draggable="false" data-adj='${JSON.stringify(normalizeAdjust(p.adjust))}'/>` : ''}
+            ${pageTextHTML(pos, !!p)}
             ${overlay}
-            ${photoHasMedia(p) ? `<img class="pc-badge" src="/assets/popcode_icon.svg" title="Popcode — plays ${p.popcode.mediaType === 'audio' ? 'audio' : 'video'} when scanned"/>` : ''}
+            ${photoHasMedia(p) ? `<img class="pc-badge" src="/assets/popcode_symbol_color.svg" title="Popcode — plays ${p.popcode.mediaType === 'audio' ? 'audio' : 'video'} when scanned"/>` : ''}
           </div></div>`;
       }
+      // The text overlay, used by both the page preview and the editor's live preview.
+      function textOverlayHTML(t, hasPhoto, popcoded, body, extra) {
+        if (!t) return '';
+        return `<div class="page-text${hasPhoto ? ' on-photo' : ''}" style="${extra || ''}padding-bottom:${textPadBottom(t.place, popcoded) * 100}%;align-items:${textPlaceCss(t.place)};color:${t.color};font-family:${coverFontStack(t.font)};font-weight:${textWeight(t.font)};font-size:${textSizePct(t.size)}cqw"><span>${escapeHtml(body == null ? t.text : body)}</span></div>`;
+      }
+      const pageTextHTML = (pos, hasPhoto) => textOverlayHTML(pageText(pos), hasPhoto, pagePopcoded(pos));
       function renderSlots() {
         const grid = document.getElementById('slots');
         grid.innerHTML = '';
@@ -951,13 +1198,19 @@
         });
       }
 
+      // Exchange two pages whole — photo and words together.
+      function swapPages(a, b) {
+        const ps = slots[a]; slots[a] = slots[b]; slots[b] = ps;
+        const ts = texts[a]; texts[a] = texts[b]; texts[b] = ts;
+      }
+
       let justDragged = false;   // set briefly after a drag so the trailing click is ignored
       let swapSource = null;      // page position chosen via "Move / swap", awaiting a target tap
       function onSlotTap(pos) {
         if (justDragged) return;
         // Move / swap: second tap exchanges the two slots (works into an empty page too).
         if (swapSource) {
-          if (pos !== swapSource) { const tmp = slots[pos]; slots[pos] = slots[swapSource]; slots[swapSource] = tmp; }
+          if (pos !== swapSource) swapPages(pos, swapSource);
           swapSource = null; render(); return;
         }
         if (selectedTrayId) {
@@ -969,8 +1222,7 @@
           return;
         }
         if (pos === 'cover') openCoverMenu();
-        else if (slots[pos]) openSlotMenu(pos);
-        else showToast('Tap a photo above first, then tap a page.');
+        else openSlotMenu(pos);
       }
 
       // ── Cover menu + text editor (title / subtitle / font) ─────────
@@ -990,7 +1242,7 @@
           const act = row.dataset.act;
           if (act === 'text') { openCoverTextSheet(); }
           else if (act === 'edit') { closeSheet(); openEditPhoto('cover'); }
-          else if (act === 'photo') { closeSheet(); selectedTrayId = null; pendingCoverPick = true; document.getElementById('photo-input').click(); }
+          else if (act === 'photo') { closeSheet(); selectedTrayId = null; pendingPickPos = 'cover'; document.getElementById('photo-input').click(); }
           else if (act === 'popcode') { closeSheet(); openPopcodeSheet('cover'); }
           else if (act === 'remove') { slots['cover'] = null; closeSheet(); render(); }
         }));
@@ -1031,19 +1283,33 @@
         swap: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>',
         replace: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
         remove: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+        text: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>',
+        photo: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>',
       };
+      // One menu for any page: what it offers depends on whether the page already
+      // holds a photo, text, both, or nothing yet.
       function openSlotMenu(pos) {
-        const p = photos.get(slots[pos]);
-        if (!p) return;
+        const p = photos.get(slots[pos]) || null;
         const has = photoHasMedia(p);
-        openSheet(`
-          <h2>Photo options</h2>
-          <p class="sheet-sub">${has ? 'This photo is a Popcode — it plays its ' + (p.popcode.mediaType === 'audio' ? 'audio' : 'video') + ' when scanned.' : 'Link a video or audio and this page will come to life when scanned.'}</p>
-          <div class="menu-row" data-act="popcode"><div class="menu-ic"><img src="/assets/popcode_icon.svg" style="width:20px;height:20px"/></div><div><div>${has ? 'Edit Popcode' : 'Add a Popcode'}</div><div class="menu-sub">${has ? 'Change or remove the linked media' : 'Link a video or audio recording'}</div></div></div>
+        const t = pageText(pos);
+        const sub = p
+          ? (has ? 'This photo is a Popcode — it plays its ' + (p.popcode.mediaType === 'audio' ? 'audio' : 'video') + ' when scanned.'
+                 : 'Link a video or audio and this page will come to life when scanned.')
+          : (t ? 'A text page. Add a photo and it becomes the background.'
+               : 'Put a photo here, or make this a page of text.');
+        const photoRows = p ? `
+          <div class="menu-row" data-act="popcode"><div class="menu-ic"><img src="/assets/popcode_symbol_color.svg" style="width:20px;height:20px"/></div><div><div>${has ? 'Edit Popcode' : 'Add a Popcode'}</div><div class="menu-sub">${has ? 'Change or remove the linked media' : 'Link a video or audio recording'}</div></div></div>
           <div class="menu-row" data-act="edit"><div class="menu-ic">${MENU_IC.edit}</div><div><div>Edit photo</div><div class="menu-sub">Fill / fit, zoom, reposition, rotate</div></div></div>
           <div class="menu-row" data-act="swap"><div class="menu-ic">${MENU_IC.swap}</div><div><div>Move / swap</div><div class="menu-sub">Then tap another page to swap places</div></div></div>
-          <div class="menu-row" data-act="replace"><div class="menu-ic">${MENU_IC.replace}</div><div><div>Replace photo</div><div class="menu-sub">Upload a different image here</div></div></div>
-          <div class="menu-row destructive" data-act="remove"><div class="menu-ic">${MENU_IC.remove}</div><div><div>Remove from page</div><div class="menu-sub">Sends the photo back to your tray</div></div></div>
+          <div class="menu-row" data-act="replace"><div class="menu-ic">${MENU_IC.replace}</div><div><div>Replace photo</div><div class="menu-sub">Upload a different image here</div></div></div>`
+          : `<div class="menu-row" data-act="addphoto"><div class="menu-ic">${MENU_IC.photo}</div><div><div>${t ? 'Use a photo as the background' : 'Add a photo'}</div><div class="menu-sub">${t ? 'Your text stays on top of it' : 'Upload an image for this page'}</div></div></div>`;
+        openSheet(`
+          <h2>${positionLabel(pos)}</h2>
+          <p class="sheet-sub">${sub}</p>
+          ${photoRows}
+          <div class="menu-row" data-act="text"><div class="menu-ic">${MENU_IC.text}</div><div><div>${t ? 'Edit text' : 'Add text'}</div><div class="menu-sub">${t ? 'Wording, type, size and colours' : 'Type, size and background colour'}</div></div></div>
+          ${p ? `<div class="menu-row destructive" data-act="remove"><div class="menu-ic">${MENU_IC.remove}</div><div><div>Remove photo from page</div><div class="menu-sub">Sends the photo back to your tray</div></div></div>` : ''}
+          ${t ? `<div class="menu-row destructive" data-act="rmtext"><div class="menu-ic">${MENU_IC.remove}</div><div><div>Remove text</div><div class="menu-sub">Leaves the page${p ? ' as just the photo' : ' empty'}</div></div></div>` : ''}
         `);
         sheet.querySelectorAll('.menu-row').forEach(row => row.addEventListener('click', () => {
           const act = row.dataset.act;
@@ -1051,9 +1317,137 @@
           else if (act === 'edit') { closeSheet(); openEditPhoto(pos); }
           else if (act === 'swap') { swapSource = pos; closeSheet(); showToast('Now tap another page to swap.'); render(); }
           else if (act === 'replace') { closeSheet(); replaceSlotPhoto(pos); }
+          else if (act === 'addphoto') { closeSheet(); selectedTrayId = null; pendingPickPos = pos; document.getElementById('photo-input').click(); }
+          else if (act === 'text') { openTextSheet(pos); }
           else if (act === 'remove') { slots[pos] = null; closeSheet(); render(); }
+          else if (act === 'rmtext') { texts[pos] = null; closeSheet(); render(); }
         }));
       }
+      // ── Page text editor ───────────────────────────────────────────
+      // A spectrum of swatches plus a custom picker, so the palette is a starting
+      // point rather than the whole choice.
+      function swatchesHTML(id, selected) {
+        const known = PAGE_COLORS.includes(selected);
+        return `<div class="swatches" id="${id}">
+          ${PAGE_COLORS.map(c => `<button type="button" class="sw${c === selected ? ' active' : ''}" data-c="${c}" style="background:${c}" aria-label="${c}"></button>`).join('')}
+          <label class="sw sw-custom${known ? '' : ' active'}" title="Any other colour"><input type="color" value="${selected}"/></label>
+        </div>`;
+      }
+      const CHEV = '<svg class="chev" width="12" height="8" viewBox="0 0 12 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 1.5 6 6.5 11 1.5"/></svg>';
+      const TICK = '<svg class="tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      const fontName = (id) => (COVER_FONTS.find(f => f.id === id) || COVER_FONTS[0]).name;
+      let txState = null;   // working copy; the page only changes when you tap Done
+      function openTextSheet(pos) {
+        const photo = photos.get(slots[pos]) || null;
+        txState = Object.assign(DEFAULT_TEXT(), normalizeText(texts[pos]) || {});
+        const fontStyle = (id) => `font-family:${coverFontStack(id)};font-weight:${textWeight(id)}`;
+        openSheet(`
+          <span class="tx-eyebrow">${positionLabel(pos)}</span>
+          <h2 style="margin-bottom:16px">Text</h2>
+          <div class="tx-sticky"><div class="tx-preview" id="tx-preview"></div></div>
+          <div class="field"><label for="tx-text">Text</label><textarea class="text-area" id="tx-text" maxlength="300">${escapeHtml(txState.text)}</textarea></div>
+          <div class="field"><label>Type</label>
+            <div class="picker" id="tx-font">
+              <button type="button" class="picker-btn" id="tx-font-btn" aria-haspopup="listbox" aria-expanded="false"><span style="${fontStyle(txState.font)}">${fontName(txState.font)}</span>${CHEV}</button>
+              <div class="picker-menu" id="tx-font-menu" role="listbox" hidden>
+                ${COVER_FONTS.map(f => `<button type="button" role="option" data-v="${f.id}" class="${txState.font === f.id ? 'active' : ''}"><span style="${fontStyle(f.id)}">${f.name}</span>${TICK}</button>`).join('')}
+              </div>
+            </div>
+          </div>
+          <div class="field"><label for="tx-size-pt">Size</label>
+            <div class="size-row">
+              <select id="tx-size-preset">${TEXT_PRESETS.map(z => `<option value="${z.pt}">${z.name} — ${z.pt} pt</option>`).join('')}<option value="">Custom</option></select>
+              <div class="num-field"><input id="tx-size-pt" type="number" inputmode="numeric" min="${MIN_PT}" max="${MAX_PT}" step="1" value="${txState.size}"/><span class="unit">pt</span></div>
+            </div>
+          </div>
+          <div class="field"><label>Position</label><div class="seg" id="tx-place">${TEXT_PLACES.map(z => `<button type="button" data-v="${z.id}" class="${txState.place === z.id ? 'active' : ''}">${z.name}</button>`).join('')}</div></div>
+          ${photo ? '' : `<div class="field"><label>Background colour</label>${swatchesHTML('tx-bg', txState.bg)}</div>`}
+          <div class="field"><label>Text colour</label>${swatchesHTML('tx-color', txState.color)}</div>
+          <div class="sheet-actions">
+            <button class="btn-secondary" id="tx-cancel" style="flex:1">Cancel</button>
+            <button class="btn-primary" id="tx-done" style="flex:1">Done</button>
+          </div>
+        `);
+        sheet.classList.add('sheet-scroll');
+
+        const prev = document.getElementById('tx-preview');
+        function syncPreview() {
+          prev.style.background = photo ? 'transparent' : txState.bg;
+          const body = txState.text.trim() ? txState.text : 'Your words here';
+          const faded = txState.text.trim() ? '' : 'opacity:0.55;';
+          prev.innerHTML = `${photo ? `<img class="slot-img" src="${photo.url}" draggable="false" data-adj='${JSON.stringify(normalizeAdjust(photo.adjust))}'/>` : ''}
+            ${textOverlayHTML(txState, !!photo, photoHasMedia(photo), body, faded)}`;
+          const img = prev.querySelector('.slot-img');
+          if (img) { const go = () => layoutPhotoInSlot(prev, img); img.complete ? go() : img.addEventListener('load', go, { once: true }); }
+        }
+        syncPreview();
+
+        document.getElementById('tx-text').addEventListener('input', e => { txState.text = e.target.value; syncPreview(); });
+
+        // Font picker
+        const fBtn = document.getElementById('tx-font-btn'), fMenu = document.getElementById('tx-font-menu');
+        const onDocClick = (e) => { if (!e.target.closest('#tx-font')) closeFontMenu(); };
+        const closeFontMenu = () => {
+          fMenu.hidden = true; fBtn.setAttribute('aria-expanded', 'false');
+          document.removeEventListener('click', onDocClick);
+        };
+        fBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          if (fMenu.hidden) {
+            fMenu.hidden = false; fBtn.setAttribute('aria-expanded', 'true');
+            fMenu.querySelector('button.active')?.scrollIntoView({ block: 'nearest' });
+            document.addEventListener('click', onDocClick);
+          } else closeFontMenu();
+        });
+        fMenu.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+          txState.font = b.dataset.v;
+          fMenu.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+          fBtn.querySelector('span').outerHTML = `<span style="${fontStyle(txState.font)}">${fontName(txState.font)}</span>`;
+          closeFontMenu(); syncPreview();
+        }));
+
+        // Size — presets and an exact point size, each keeping the other honest.
+        const sPreset = document.getElementById('tx-size-preset'), sPt = document.getElementById('tx-size-pt');
+        const matchPreset = () => { sPreset.value = TEXT_PRESETS.some(z => z.pt === txState.size) ? String(txState.size) : ''; };
+        matchPreset();
+        sPreset.addEventListener('change', () => {
+          if (!sPreset.value) { matchPreset(); return; }        // "Custom" is a label, not a choice
+          txState.size = +sPreset.value; sPt.value = txState.size; syncPreview();
+        });
+        // Commit on blur too, so a half-typed number can't stick as the saved size.
+        const readPt = () => { txState.size = normalizeSizePt(sPt.value); matchPreset(); syncPreview(); };
+        sPt.addEventListener('input', () => { if (sPt.value !== '') readPt(); });
+        sPt.addEventListener('blur', () => { readPt(); sPt.value = txState.size; });
+
+        [['tx-place', 'place']].forEach(([id, key]) => {
+          const grp = document.getElementById(id);
+          grp.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+            txState[key] = b.dataset.v;
+            grp.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+            syncPreview();
+          }));
+        });
+        [['tx-color', 'color'], ['tx-bg', 'bg']].forEach(([id, key]) => {
+          const grp = document.getElementById(id);
+          if (!grp) return;
+          const mark = (val) => {
+            grp.querySelectorAll('.sw[data-c]').forEach(x => x.classList.toggle('active', x.dataset.c === val));
+            grp.querySelector('.sw-custom').classList.toggle('active', !PAGE_COLORS.includes(val));
+          };
+          grp.querySelectorAll('.sw[data-c]').forEach(b => b.addEventListener('click', () => { txState[key] = b.dataset.c; mark(txState[key]); syncPreview(); }));
+          grp.querySelector('.sw-custom input').addEventListener('input', e => { txState[key] = e.target.value.toLowerCase(); mark(txState[key]); syncPreview(); });
+        });
+
+        document.getElementById('tx-cancel').addEventListener('click', () => { closeFontMenu(); txState = null; closeSheet(); });
+        document.getElementById('tx-done').addEventListener('click', () => {
+          closeFontMenu();
+          txState.size = normalizeSizePt(sPt.value);
+          // Clearing the words is how you take the text off a page.
+          texts[pos] = txState.text.trim() ? normalizeText(txState) : null;
+          txState = null; closeSheet(); render();
+        });
+      }
+
       // Replace the photo in a slot with a freshly picked image (keeps the popcode).
       function replaceSlotPhoto(pos) {
         const p = photos.get(slots[pos]); if (!p) return;
@@ -1449,7 +1843,7 @@
             let dropPos = null;
             if (under && under !== slot && under.dataset.pos) {
               const tPos = under.dataset.pos;
-              const tmp = slots[tPos]; slots[tPos] = slots[pos]; slots[pos] = tmp;
+              swapPages(tPos, pos);
               dropPos = tPos;
             }
             justDragged = true; setTimeout(() => { justDragged = false; }, 0);
@@ -1513,12 +1907,20 @@
         // prompt, matching book.html — no scary inline warnings here.
         const ready = placed > 0 && slugValid();
         const sumEl = document.getElementById('summary');
-        if (!placed) sumEl.textContent = 'Add photos to begin.';
-        else sumEl.innerHTML = `<strong>${PAGE_COUNT}</strong> pages · <strong>${placed}</strong> placed · <strong>${popcoded}</strong> popcoded`;
+        let written = 0; POSITIONS.forEach(pos => { if (pageText(pos)) written++; });
+        if (!placed) sumEl.textContent = written ? 'Add a photo to at least one page to begin.' : 'Add photos to begin.';
+        else sumEl.innerHTML = `<strong>${PAGE_COUNT}</strong> pages · <strong>${placed}</strong> placed${written ? ` · <strong>${written}</strong> with text` : ''} · <strong>${popcoded}</strong> popcoded`;
         sumEl.classList.remove('warn');
         const btn = document.getElementById('create-btn');
         btn.disabled = !ready;
         btn.classList.toggle('ready', ready);
+        const saveBtn = document.getElementById('save-design-btn');
+        if (saveBtn) {
+          saveBtn.disabled = !ready;
+          // Once the board book exists the primary IS a save, so the extra
+          // button would just be a duplicate.
+          saveBtn.style.display = editingCollection ? 'none' : '';
+        }
       }
 
       // ── Save (compile .mind + collection + items) ──────────────────
@@ -1529,8 +1931,15 @@
       }
       function yieldToPaint() { return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); }
 
-      document.getElementById('create-btn').addEventListener('click', saveBoardBook);
-      async function saveBoardBook() {
+      document.getElementById('create-btn').addEventListener('click', () => saveBoardBook());
+      // Save design: same save, but it leaves you in the editor instead of
+      // finishing on the result screen — so you can stop and come back later.
+      document.getElementById('save-design-btn').addEventListener('click', async () => {
+        document.getElementById('save-design-btn').disabled = true;
+        try { await saveBoardBook({ quiet: true }); } finally { updateSummary(); }
+      });
+      async function saveBoardBook(opts) {
+        const quiet = !!(opts && opts.quiet);
         const placed = placedIds();
         if (!placed.size) { showToast('Place at least one photo first.'); return; }
         if (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler) {
@@ -1539,9 +1948,22 @@
         // Popcoded pages (in board order) → AR targets + collection_items.
         const popcodedPos = POSITIONS.filter(pos => photoHasMedia(photos.get(slots[pos])));
         if (!popcodedPos.length) { alert('Add a Popcode (video or audio) to at least one page so it comes to life when scanned.'); return; }
-        if (!slugValid()) { showToast('Pick your Popcode link — 6–10 lowercase letters or numbers.'); slugInput.focus(); return; }
-
         const editing = !!editingCollection;
+        // The title is what the link is built from, so it can't be skipped.
+        if (!editing && !(document.getElementById('title-input').value || '').trim()) {
+          showToast('Give your book a title — it becomes its link.');
+          document.getElementById('title-input').focus();
+          return;
+        }
+        // Re-check the link here, not just on keystroke — someone else may have
+        // claimed it while this page sat open.
+        if (!editing && !(await slugField.ensureFree())) {
+          showToast('That link isn’t available — pick another.');
+          slugInput.focus();
+          slugInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          return;
+        }
+
         const slug = editing ? editingCollection.slug : chosenSlug();
         const title = document.getElementById('title-input').value.trim() || null;
         const bucket = 'experiences';
@@ -1587,7 +2009,9 @@
           const popcodedUrls = popcodedPos.map(pos => (photoUrlByPos[pos] || '').split('?')[0]);
           const baseUrls = (editing && editingCollection._mindTargetUrls || []).map(u => (u || '').split('?')[0]);
           const setUnchanged = popcodedUrls.length === baseUrls.length && popcodedUrls.every((u, i) => u === baseUrls[i]);
-          const anyPopRecropped = popcodedPos.some(pos => recroppedPos.has(pos));
+          const baseText = (editing && editingCollection._textByPos) || {};
+          const textChanged = (pos) => JSON.stringify(pageText(pos)) !== (baseText[pos] || 'null');
+          const anyPopRecropped = popcodedPos.some(pos => recroppedPos.has(pos) || textChanged(pos));
           let mindUrl;
           if (editing && setUnchanged && !anyPopRecropped) {
             mindUrl = editingCollection.mind_file_url;   // reuse the existing target
@@ -1596,7 +2020,9 @@
             setProgress('Making your pages scannable… (this can take a minute)', 34);
             await yieldToPaint();
             const imgs = [];
-            for (const pos of popcodedPos) imgs.push(await loadCompileImage(photos.get(slots[pos])));
+            // Wait for the chosen faces, or a fallback font gets baked into the target.
+            await ensureTextFonts();
+            for (const pos of popcodedPos) imgs.push(await loadCompileImage(pos));
             const compiler = new MINDAR.IMAGE.Compiler();
             await compiler.compileImageTargets(imgs, (prog) => setProgress(`Making your pages scannable… ${Math.round(prog)}%`, 34 + prog * 0.26));
             const buffer = await compiler.exportData();
@@ -1648,6 +2074,7 @@
               photo_url: photoUrlByPos[pos] || null,
               target_index: pos in targetIndexByPos ? targetIndexByPos[pos] : null,
               adjust: slots[pos] ? normalizeAdjust((photos.get(slots[pos]) || {}).adjust) : null,
+              text: pageText(pos),
             })),
           };
 
@@ -1665,17 +2092,27 @@
             if (iErr) throw new Error('Saved, but linking media failed: ' + iErr.message);
             editingCollection.mind_file_url = mindUrl;
             editingCollection._mindTargetUrls = popcodedUrls;
+            editingCollection._textByPos = {};
+            POSITIONS.forEach(pos => { editingCollection._textByPos[pos] = JSON.stringify(pageText(pos)); });
           } else {
             const { data: col, error: colErr } = await db.from('collections')
               .insert({ slug, name: title, mind_file_url: mindUrl, user_id: currentUser.id, kind: 'boardbook', book_layout: bookLayout })
               .select().single();
             if (colErr) throw new Error('Could not save: ' + colErr.message);
             collectionId = col.id;
+            logActivity('create_boardbook', { slug, user_id: currentUser.id });
             const { error: iErr } = await db.from('collection_items').insert(itemRows.map(r => ({ ...r, collection_id: collectionId })));
             if (iErr) throw new Error('Saved, but linking media failed: ' + iErr.message);
           }
 
           setProgress('Done!', 100);
+          if (quiet) {
+            savedSlug = slug; savedCollectionId = collectionId;
+            document.getElementById('progress').classList.remove('visible');
+            showToast('Design saved — you can close this and come back any time.');
+            updateSummary();
+            return;
+          }
           showResult(slug, collectionId);
         } catch (err) {
           console.error(err);
@@ -1718,19 +2155,79 @@
         sel.innerHTML = COUNTRY_OPTIONS.map(([c, n]) => `<option value="${c}">${n}</option>`).join('');
       })();
 
+      // Build the 11 Printify print images (cover wrap + 10 two-page spreads) and
+      // upload them. Shared by "add to cart" and "order now" — the images can only
+      // be rendered here, from the live board, so a cart line stores their URLs.
+      async function buildBoardBookPrintAssets() {
+        // Same reason as the compile step: never print a fallback face.
+        await ensureTextFonts();
+        const bucket = 'experiences';
+        const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+        const assetUrls = [];
+        const jobs = [{ pos: 'cover', make: compositeCoverWrap }].concat(
+          PRINT_SPREADS.map(sp => ({ pos: sp.pos, make: () => compositeSpread(sp) })));
+        for (const job of jobs) {
+          const blob = await job.make();
+          const path = `${savedSlug}/board/print_${job.pos}.jpg`;
+          const { error } = await db.storage.from(bucket).upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+          if (error) throw new Error('Could not prepare a page: ' + error.message);
+          assetUrls.push({ url: pub(path), print_area: job.pos });
+        }
+        return assetUrls;
+      }
+
+      // Add this board book to the cart. Board books are made by a different
+      // printer than the rest of the shop, so they arrive in their own parcel —
+      // the cart says so and the shipping for it is already in the total.
+      async function addBoardBookToCart() {
+        if (!savedSlug || !savedCollectionId) { showToast('Save your board book first.'); return; }
+        const btn = document.getElementById('cart-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Preparing your book…'; }
+        try {
+          const assetUrls = await buildBoardBookPrintAssets();
+          const coverId = slots['cover'] || slots[POSITIONS[0]];
+          const coverPhoto = coverId ? photos.get(coverId) : null;
+          const thumb = coverPhoto && (coverPhoto.existingUrl || coverPhoto.url);
+          await PopcodeCart.add({
+            collectionId: savedCollectionId,
+            productType: 'boardbook',
+            variantId: 'bb-6x6',
+            copies: 1,
+            assetUrls,
+            title: `${(editingCollection && editingCollection.name) || 'Board book'} — 6×6″ board book`,
+            // A blob: object URL dies with this page, so it can never be a thumbnail.
+            thumbUrl: (typeof thumb === 'string' && /^https?:/i.test(thumb)) ? thumb : null,
+            options: { sizeLabel: '6×6″ board book', orientationLabel: `${PAGE_COUNT} pages` },
+          });
+          showToast('Added to your cart.');
+          if (btn) btn.textContent = 'Added to cart ✓';
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast(err.message || 'Could not add to cart.');
+          if (btn) { btn.disabled = false; btn.textContent = 'Add to cart'; }
+        }
+      }
+
       function loadImg(src) {
         return new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
       }
       // Draw a page's photo cover-fit into rect (x,0,w,h) of ctx, clipped, with the
       // scan badge bottom-right if the page is popcoded. Blank (white) if empty.
       async function drawPageInto(ctx, pos, x, w, h) {
-        const pid = slots[pos]; if (!pid) return;
-        const photo = photos.get(pid);
-        const img = await loadPhotoImg(photo);
+        const pid = slots[pos];
+        const photo = pid ? photos.get(pid) : null;
+        const bg = pageBg(pos);
+        if (!photo && !bg) return;                       // nothing here — prints white
         ctx.save();
-        drawPhotoAdjusted(ctx, img, photo.adjust, x, 0, w, h);
-        if (photoHasMedia(photo)) {
-          try { const b = await loadImg('/assets/popcode_icon.svg'); const bs = Math.round(Math.min(w, h) * 0.11), pad = Math.round(Math.min(w, h) * 0.05); ctx.drawImage(b, x + w - bs - pad, h - bs - pad, bs, bs); } catch (_) {}
+        if (bg) { ctx.fillStyle = bg; ctx.fillRect(x, 0, w, h); }
+        if (photo) {
+          const img = await loadPhotoImg(photo);
+          drawPhotoAdjusted(ctx, img, photo.adjust, x, 0, w, h);
+        }
+        drawPageText(ctx, pos, x, 0, w, h, !!photo);
+        if (photo && photoHasMedia(photo)) {
+          try { const b = await loadImg('/assets/popcode_symbol_color.svg'); const bs = Math.round(Math.min(w, h) * 0.11), pad = Math.round(Math.min(w, h) * 0.05); ctx.drawImage(b, x + w - bs - pad, h - bs - pad, bs, bs); } catch (_) {}
         }
         ctx.restore();
       }
@@ -1829,6 +2326,7 @@
       document.getElementById('o-country').addEventListener('change', quoteOrder);
 
       document.getElementById('order-btn').addEventListener('click', placeOrder);
+      document.getElementById('cart-btn').addEventListener('click', addBoardBookToCart);
       async function placeOrder() {
         const note = document.getElementById('order-note'); note.classList.remove('bad'); note.textContent = '';
         const recipient = {
@@ -1849,19 +2347,7 @@
         const btn = document.getElementById('order-btn');
         btn.disabled = true; btn.textContent = 'Preparing your book…';
         try {
-          const bucket = 'experiences';
-          const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
-          const assetUrls = [];
-          // Build the 11 Printify print images: cover wrap + 10 spreads (page pairs).
-          const jobs = [{ pos: 'cover', make: compositeCoverWrap }].concat(
-            PRINT_SPREADS.map(sp => ({ pos: sp.pos, make: () => compositeSpread(sp) })));
-          for (const job of jobs) {
-            const blob = await job.make();
-            const path = `${savedSlug}/board/print_${job.pos}.jpg`;
-            const { error } = await db.storage.from(bucket).upload(path, blob, { contentType: 'image/jpeg', upsert: true });
-            if (error) throw new Error('Could not prepare a page: ' + error.message);
-            assetUrls.push({ url: pub(path), print_area: job.pos });
-          }
+          const assetUrls = await buildBoardBookPrintAssets();
           btn.textContent = 'Going to checkout…';
           const { data: { session } } = await db.auth.getSession();
           const resp = await fetch('/api/create-checkout', {

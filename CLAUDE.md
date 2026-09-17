@@ -17,8 +17,8 @@ User-facing copy calls them **"Projects"** (renamed from "Collections" on 2026-0
 ## Stack
 - Frontend: Vanilla HTML/CSS/JS (no framework)
 - AR: MindAR (`mind-ar@1.2.2`) + A-Frame (`1.4.2`)
-  - **MindAR is VENDORED** (self-hosted, not CDN) at `public/vendor/mindar/1.2.2/mindar-image-aframe.prod.js`. Loaded by `view.html`, `create.html`, `edit.html`. Pinned to upstream commit `1ad668d` (npm 1.2.2). Rebuild/upgrade/rollback steps + integrity hashes live in `public/vendor/mindar/1.2.2/PROVENANCE.md`. See 2026-06-06 session note.
-  - **A-Frame is also VENDORED** at `public/vendor/aframe/1.4.2/aframe.min.js` (loaded by view.html only). Pinned to upstream commit `8692d8a` (npm 1.4.2). Details + the caveat about its optional remote-loading features in `public/vendor/aframe/1.4.2/PROVENANCE.md`.
+  - **MindAR is VENDORED** (self-hosted, not CDN) at `public/vendor/mindar/1.2.2/mindar-image-aframe.prod.js`. Loaded by `view.html`, `create.html`, `edit.html`. Pinned to upstream commit `1ad668d` (npm 1.2.2). Rebuild/upgrade/rollback steps + integrity hashes live in `docs/vendor/mindar/1.2.2/PROVENANCE.md` (moved out of `public/` 2026-09-04 so it isn't web-served). See 2026-06-06 session note.
+  - **A-Frame is also VENDORED** at `public/vendor/aframe/1.4.2/aframe.min.js` (loaded by view.html only). Pinned to upstream commit `8692d8a` (npm 1.4.2). Details + the caveat about its optional remote-loading features in `docs/vendor/aframe/1.4.2/PROVENANCE.md`.
 - Backend/DB/Storage: Supabase (anon key, no auth currently)
 - Hosting: Vercel (static, `public/` folder)
 - Short URLs: popcode.app
@@ -78,6 +78,13 @@ The entry should include:
 After writing the entry, commit CLAUDE.md with a message like `Add session notes for YYYY-MM-DD` and push to the current branch. Do not open a PR just for session notes unless the user asks.
 
 **At the start of every session**, read `## Session history` (at least the most recent 2–3 entries) before doing anything else — that's how context persists across sessions in this repo.
+
+## Queued briefs
+
+- **`docs/postcard-brief.md`** — the companion postcard that ships with flat/wall
+  print orders (prints, framed, canvas, framed canvas, acrylic, tiles). Copy and
+  headline are settled; the Prodigi card SKU, card size and per-order-vs-per-design
+  question are open. Nothing built yet.
 
 ## Session history
 
@@ -1380,3 +1387,394 @@ Shipped in several commits:
 - Port the branded back-cover panel to the **calendar** and **board book** back covers (this session did the photo book only).
 - Postcard product (Prodigi greeting-card SKU) for the single/wall shop items.
 - Board-book ordering is still admin-gated; drop the gate when ready.
+
+### 2026-09-02 (later) — International print ordering: 8 → 231 destinations, phone field, customs note, unservable-route handling
+
+**Branch `claude/intl-printed-orders-7e8vs6`, PR #62, merged to `main` as `97b70ee` — live in prod.** Started as the question "what do I need to do to allow customers outside the US to order printed products?" Answer: less than expected on the server, more than expected on the front end.
+
+**The key finding: the backend was already country-agnostic.** `prodigi-quote.js`, `create-checkout.js` and `finalize-order.js` all pass `destinationCountryCode` straight through, `stateOrCounty` was already optional server-side, and `cleanRecipient()` already stripped empty address fields. Nothing server-side limited us to the US. The blocker was purely the hardcoded 8-option `<select>` in `order.html:272` plus the free-text 2-letter code boxes in `book.html` / `calendar.html` (which defaulted to `US` and required the customer to know their own ISO code).
+
+**What shipped:**
+- **`public/countries.js`** (NEW) — shared destination list + `popcodeFillCountrySelect(el, selected)` / `popcodeCountryName(code)`. Generated from `/usr/share/iso-codes/json/iso_3166-1.json` (available in the sandbox — no npm package needed). Flat alphabetical, US preselected. Loaded via `<script src="/countries.js">` in order/book/calendar.
+- **Phone field** on all three surfaces (`#r-phone`, `#bo-phone`), optional, carried as `recipient.phoneNumber`. Prodigi's docs: *"While recipient email and phoneNumber are technically optional, it's highly recommended you include these if you have international orders."*
+- **Customs/VAT disclosure** shown only for non-US destinations (`#intl-note`, `#bo-intl`).
+- **`cleanRecipient()` now prunes blank TOP-LEVEL strings, not just blank address fields.** An unfilled phone would have sent `phoneNumber: ""` and hit the exact `MustNotBeEmptyOrWhitespace` error that empty `line2` hit on 2026-06-27. Same bug class, one level up.
+- **Prodigi quote failures are now classified.** A 4xx means "this SKU / destination / shipping-method combo isn't servable" — deterministic. Previously it was retried 3×, logged to Sentry as an outage, and returned as a raw 500 with the Prodigi error string pasted into the price note. Now `prodigiQuote()` sets `err.unservable` on 4xx, both retry loops bail immediately, and the customer sees *"We can't ship this size to Japan. Try another size, or a different shipping speed."* before payment. Matters far more at 231 countries than at 8.
+
+**THE COLLISION — a parallel session shipped the same feature mid-PR.** While #62 was open, another session (Opus 4.8, on the user's Mac) pushed `ba11dd0 "broaden Ship-to country list from 8 to 126 destinations"` straight to `main`: 126 hardcoded `<option>` tags in `order.html` only. Same goal, narrower reach — no shared list, no book/calendar, no phone, no customs note, no server-side handling. Resolution: one clean conflict in the `<select>` block, resolved in favour of this branch's `countries.js`.
+
+**That collision caught a real mistake in my list, which is the lesson worth keeping.** Diffing the two lists showed theirs had 4 codes mine lacked: `LB`, `VE`, `XK`, `ZW`. My first cut excluded 24 countries as "sanctioned" — but most of those (Zimbabwe, Lebanon, Haiti, Myanmar, Somalia, Sudan, Iraq, Nicaragua, DRC…) are under **targeted** sanctions, which restrict *named individuals and entities*, not ordinary retail shipping. Excluding whole countries over those just turns away legitimate customers, and taking my list wholesale would have **silently removed destinations that had already shipped to prod**. Narrowed the exclusion to comprehensive embargoes / no-payment-or-carrier-route only: **`CU, IR, KP, SY, RU, BY`**, plus uninhabited territories, plus **Kosovo added manually as `XK`** (a user-assigned code, so it isn't in ISO 3166-1 proper). Final: **231 destinations, a strict superset of what main already shipped.**
+
+**Verified on the real preview by the user: Japan, Brazil, South Africa and India all quoted successfully.** That was the one thing headless testing couldn't prove (the quote endpoint was mocked), and it's the premise the whole feature rests on.
+
+**Still-open decisions (NOT bugs, deliberately deferred):**
+- **Postcode is still REQUIRED on every address** (client + server). Blocks the handful of countries with no postal system (Hong Kong, UAE, parts of Ireland). Deliberate: `/api/prodigi-quote` only takes a *country code*, so a postcode Prodigi rejects surfaces **after payment** as `prodigi_failed`. Relaxing it safely means validating the full address pre-charge.
+- **International customers are charged in USD**, because Prodigi quotes in your *merchant account* currency, not the destination's. Prodigi's quote API accepts a `currencyCode` override. If you ever use it, note `priceFromQuote()` rounds to whole units of 100 minor — wrong for zero-decimal currencies (JPY).
+- **Markup still applies to shipping** (1.4× on product + shipping). Now live for 231 countries, so a small item to a distant country will look very expensive. The safe lever (already noted 2026-06-28): mark up product only, pass shipping at cost.
+- Shipping methods stay hardcoded (`Budget`/`Standard`/`Express` in order.html; `Standard` for books/calendars). Prodigi also has `StandardPlus`/`Overnight`, and availability varies by destination — an unavailable one now fails *gracefully* rather than being filtered out up front.
+- Prodigi variants carry a `shipsTo` array that `lib/print/catalog.mjs` doesn't model, so unservable size/country pairs are discovered at quote time rather than hidden from the UI.
+
+**Gotchas worth not relearning:**
+- **`/usr/share/iso-codes/json/iso_3166-1.json` exists in the sandbox** — 249 entries with `alpha_2`, `name`, `common_name`. Prefer `common_name` when present ("South Korea" not "Korea, Republic of"). No network or npm package needed.
+- **Don't post-process generated JS with a blanket `.replace("'", '"')`** — it detonates on "Côte d'Ivoire". Use `json.dumps()` per value for correct escaping.
+- **`git push` printing `remote: …/pull/new/<branch>` does NOT mean a PR exists.** It's GitHub's hint on first push of a new branch. The user reasonably read it as "the PR is already open" — it wasn't, which is also why no Vercel preview existed and they were still looking at prod's 8-country list. If someone says "the list is limited", **check whether they're looking at prod or a preview before debugging anything.**
+- **This sandbox's git/GitHub clock is skewed ~2 weeks behind.** My commits and the PR's `created_at` were stamped `2026-08-19` while the repo's real history (from the user's Macs) ran to `2026-09-02`. I initially trusted the git timestamps over the environment date and got the entry heading wrong. **Trust the environment date + the repo's own recent commit dates from the user's machines; do NOT trust this sandbox's clock.**
+- Testing pattern (unchanged, still works): `playwright-core` installed **in the scratchpad only** (`node_modules` is tracked in this repo), chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, `cd public && python3 -m http.server 8099`, `page.route` to stub supabase-js / abort Sentry + Google Fonts. `order.html`'s shipping form lives on a hidden step — walk the parent chain from `#country` setting `style.display=''` to reveal it. **Avoid `pkill -f "http.server"`** — it killed the shell (exit 144); use `nohup … &` and just leave the old one.
+
+**Parallel-Macs collisions are now a pattern, not an anomaly** — this is the fifth (2026-04-17, 2026-04-22, 2026-08-18, and twice today: `ba11dd0` mid-PR, then `7af09ce` session notes landing while I was writing mine). **`git fetch origin main` before starting AND before pushing**, on every machine.
+
+### 2026-09-04 — Security audit: anon key had full read/write on the content tables (fixed, shipped to prod)
+
+**Branch `claude/popcode-image-recognition-safety-i1pwp7`, commit `635dd44`, fast-forwarded to `main`. No PR. Migration RUN in prod the same session. Storage half still OPEN — see "unfinished" at the bottom.**
+
+Started as a product question ("is it risky to launch on MindAR alone instead of the CLIP/Replicate identification gating?"), turned into a real security finding. Short answer to the original question: **MindAR-only is the LOWER-risk launch.** The identification layer was never a safety gate — in slug-world the scope is the URL (a foreign key, can't go wrong); in handle-world it's a cosine similarity search that can pick the wrong book within a creator. Slug-only has strictly fewer failure modes. Also cheaper, no Replicate cold-start, and no viewer camera frames leaving the device. The CLIP work isn't wasted, it's just answering a question we haven't been forced to ask.
+
+#### THE FINDING — anon could read AND write `collections` / `collection_items`
+
+The anon key in `public/config.js` (public by design, served to every visitor) had far more than read.
+
+**The probe technique worth reusing — a CONTROL TEST, not a single request.** An anon `INSERT {}` into `collections` returned `23502` (null value in "slug"), while the same insert into `print_orders` / `pop_images` / `cart_items` returned `42501` "new row violates row-level security policy". Different error = different layer. The locked tables were rejected by the *policy*; collections got *through* the policy and was only stopped by a column constraint. **Never conclude from one endpoint's error alone — compare against a table you know is locked.**
+
+Also: **an UPDATE probe with a non-matching filter is USELESS.** A denied update and a permitted-but-zero-row update both return 204. I ran that first and it proved nothing. (The definitive no-op-write test got blocked by the sandbox classifier, so UPDATE/DELETE were never conclusively confirmed — the policies were rebuilt from scratch anyway.)
+
+**Why it mattered more here than for a normal web app: we ship physical objects.** `view.html` builds its media map as `mediaMap[item.target_index] = {...}`, so a *second* `collection_items` row with an existing target_index silently overrides what plays. Insert alone was enough to repoint the video behind an already-printed book. You cannot recall a printed book. (Sanity check on the mechanism: `9xyx1ryb` legitimately returns **78 items for 21 real pages** — the known duplicate-target_index data issue. Duplicates genuinely occur and last-one-wins is genuinely how it resolves.)
+
+**Reads were unfiltered too.** `GET /rest/v1/collections?select=*` with no filter returned all **45** collections (names, slugs, `user_id`, full `book_layout` photo manifest); `collection_items` returned all **294** media URLs. PostgREST cannot require a filter — "anon may read this table" means "anon may read the whole table". Default cap is 1000 rows, so at this scale one request really did get everything.
+
+**Correctly locked already (good news):** `print_orders` (shipping addresses), `cart_items`, `beta_feedback`, `scan_events`, `creators`, `pop_images`, `identify_events` all returned 0 rows to anon. The sensitive PII was fine. This was purely a content-tables problem — a leftover from the original "anon key, no auth currently" design that the app grew around.
+
+Also confirmed clean while in there: **zero `innerHTML` in view.html or scan.html** (all DB text via `textContent`), vendored+SRI'd MindAR/A-Frame, and every admin endpoint (`update-print-order`, `retry-print-order`, `delete-account`) properly Bearer-token + email gated. The player wrapper itself was never the problem.
+
+#### WHAT SHIPPED
+
+- **`supabase/migrations/2026-09-04-lock-content-tables.sql`** — DO-block drops every existing policy on `collections`/`collection_items`/`experiences` (they were hand-made in the dashboard, names not in git), then rebuilds owner-scoped: `user_id = auth.uid()` for writes, owner-or-admin for reads. `collection_items` inherits ownership via an `exists` subquery on its parent (+ indexes). `experiences` gets RLS on with **no** client policies. New `is_popcode_admin()` helper lists BOTH admin emails.
+- **`api/collection.js`** — `GET /api/collection?slug=` , service key, returns ONLY `slug, name, kind, mind_file_url, cover_config, items[]`. Never `user_id`, never `book_layout`. Legacy `experiences` fallback included. Slug regex rejects anything malformed. 60s CDN window.
+- **Two SECURITY DEFINER RPCs** for the reads that legitimately cross ownership — both require an explicit candidate list (capped) so neither can enumerate:
+  - `popcode_slugs_taken(text[])` — slug availability. Granted to **anon too**, because `scan.html`'s `resolveMiscasedSlug` calls it unauthenticated.
+  - `popcode_view_cards(text[])` — Past Views name + first photo. A viewer's scanned list is by definition other people's projects.
+- **Wiring:** `view.html` → endpoint; `slug.js` `takenSet()` → RPC; `views.html` `attachThumbs()` + name lookup → RPC; `log-event.js` prefers service key (falls back to anon) so anon INSERT on `scan_events` can be revoked later.
+
+**Callers checked so the policies wouldn't break anything:** analytics.html's unfiltered admin read (covered by the admin exception), cart/shop/design/order/manage (all own-rows), `manage.html:474`'s orphan-claim (**0 rows have NULL user_id**, so it's a silent no-op — verified before relying on it). **Behavior change worth knowing: `edit.html` previously let any signed-in user open another user's slug; now it returns nothing. That's a fix, not a regression.**
+
+#### THE DEPLOY-ORDERING MISTAKE (my error — don't repeat it)
+
+Correct rule: **code first, SQL second** (SQL-first breaks the public viewer, since prod's `view.html` still read the DB directly). Vercel swaps deployments atomically, so there's no broken-viewer window — while the endpoint 404s, the OLD build is still serving.
+
+**What I got wrong:** I told the user to verify "Past Views thumbnails" and "create-a-link suggestions" *before* running the SQL. Both call the new RPCs, which don't exist until the SQL runs. So in the gap: thumbnails went blank, and **creating a project was blocked** with *"Couldn't check that link right now — try again"* (slug.js's catch — it fails safely, no crash, no duplicate slugs). Names still rendered because `views.html` falls back to localStorage. Diagnosed by calling the RPCs directly → `PGRST202 "Could not find the function ... in the schema cache"`.
+**Lesson: when a deploy splits across code and DB, enumerate which features are down IN THE GAP and keep the gap to minutes.** Only the scan test is valid before the SQL.
+
+#### VERIFICATION (all run from outside, against prod)
+
+| | Before | After |
+|---|---|---|
+| Read all collections | 45 rows | `[]` / `*/0` |
+| Read all collection_items | 294 rows | 0 |
+| Read experiences | 2 rows | 0 |
+| Anon `INSERT {}` | `23502` (allowed) | `42501` (blocked) |
+
+Endpoint: returns correct data, **no `user_id`, no `book_layout`**, 404 on unknown slug, 400 on `../../etc/passwd`, legacy fallback works. `popcode_slugs_taken` correctly reports taken/free. `popcode_view_cards` returns name + thumb. 101-slug request refused. User confirmed on a real iPhone: **scan works, video plays.**
+
+#### STORAGE WAS THE WORST OF IT — found, fixed and verified the same session (rated wrong twice first)
+
+**I first called this a minor follow-up, then "anon can list". Both were wrong.** The live policy turned out to be:
+`"Allow all on experiences"  cmd: ALL  roles: {public}  qual: (bucket_id = 'experiences')`. In Postgres `public` means EVERYONE including anon, and `ALL` covers INSERT/UPDATE/DELETE. **So the public key could upload, overwrite and delete any file in the bucket** — worse than the database hole, because overwriting `{slug}/video_0.mp4` repoints every printed copy of that book directly (no duplicate-row trick), deleting `{slug}/target.mind` stops it scanning, and deleted files are actually gone. The conclusive evidence is the policy text itself (`ALL` + `public`), not a probe. **A correction worth carrying forward: I first cited "a DELETE of a non-existent path returns `NoSuchKey`, not a permission error" as proof anon could delete. That was an over-read — the Storage API looks the object up BEFORE RLS decides, so a missing path returns `NoSuchKey` either way. It still returns `NoSuchKey` today, with anon writes provably blocked.** The valid write test is an anonymous UPLOAD to a junk path: accepted before, `403 "new row violates row-level security policy"` after.
+
+**Fix written: `supabase/migrations/2026-09-04-lock-storage-bucket.sql`** — drops the wide-open policy, replaces it with four scoped to `authenticated`. Public playback is unaffected because Supabase serves a public bucket's `/object/public/...` URLs **without consulting RLS**; what goes away is the `/object/list/...` API and every anonymous write. **No deploy ordering needed** — no shipped code depends on it. Verified every upload (create/edit/book/boardbook/calendar/design/order) and every list (analytics cost panel, manage delete, edit rename) happens while signed in.
+
+**Known limit, deliberately not fixed:** this closes anonymous access, not cross-account access — any signed-in user can still write to any `{slug}/` folder. Scoping per owner needs a CODE change first: `create.html` uploads files (~1141-1185) **before** inserting the collections row (~1199), so a policy joining `name -> collections.slug -> user_id` would block project creation outright. Reserve the row before the uploads, then tighten.
+
+**THE METHOD LESSON, three times over this session:** I twice under-rated storage because I accepted a status code (`http 200`) and then a partial read instead of looking at the actual policy definition. **`select policyname, cmd, roles, qual from pg_policies where schemaname='storage' and tablename='objects'` is the ground truth — read it FIRST, before probing behaviour.** The probes tell you what happened; the policy tells you what's allowed.
+
+**RAN IN PROD AND VERIFIED THE SAME SESSION.** Operator pasted it in the Supabase SQL editor; "Success. No rows returned". Verified from outside with only the public key:
+
+| | Before | After |
+|---|---|---|
+| anon list bucket | 52 project folders | `[]` |
+| anon list one folder | photo_0.jpg / target.mind / video_0.mp4 | `[]` |
+| anon upload to a junk path | accepted | `403` "new row violates row-level security policy" |
+| public photo, NO key | 200 | 200, 2.0 MB (unchanged, as intended) |
+| public `.mind`, NO key | 200 | 200, 9.6 MB (unchanged, as intended) |
+
+User then confirmed on their side: **creating a project (upload), scanning a book (playback), and the Analytics cost panel (admin bucket listing) all still work.** So the four authenticated policies cover every real code path.
+
+**The superseded intermediate reading** (kept because the mistake is the lesson): I first reported this as "anon can LIST the bucket" — a read-only enumeration problem — because I called the list endpoint, got `http 200`, and never read the body. The body would have shown all 52 folders. And listing was only the symptom; `cmd: ALL` + `roles: {public}` was the disease.
+
+**STILL OPEN after today (both deliberate, neither anonymous-facing):**
+
+1. **Cross-account storage writes.** The fix above closes ANONYMOUS access, not cross-account: any signed-in user can still write to any `{slug}/` folder. Scoping per owner needs a CODE change first — `create.html` uploads the files (~1141-1185) BEFORE inserting the collections row (~1199), so a policy joining `name -> collections.slug -> user_id` would block project creation outright. Reserve the row before the uploads, then tighten.
+2. **Fake analytics (genuinely low):** anon can INSERT `scan_events` → fake analytics rows. `log-event.js` already prefers the service key; revoke the anon grant once that's confirmed live in every Vercel env. Both items are written up as commented instructions at the bottom of the migration file (everything after `commit;` is comments only — safe to paste the whole file).
+
+#### LATE ADDITION — vendor docs taken off the public web
+
+Asked whether a coder can tell we use MindAR, and whether hiding it is worth anything. **Yes, completely visible, and no, don't try:** the `<script src>` says `/vendor/mindar/1.2.2-popcode.1/...`, the DOM carries `mindar-image` / `mindar-image-system` / `mindar-image-target`, and MindAR + A-Frame are MIT — the licence *requires* keeping the copyright notice, so stripping it to conceal the dependency would be a violation. Obfuscation buys hours against anyone who cares, makes our own iOS debugging worse, and the moat was never the tracker (`npm install mind-ar` is an afternoon; the print pipeline, the builders, and the accumulated media-session fixes are not).
+
+**But four internal docs were being web-served** (all returned 200): both `PROVENANCE.md` files, A-Frame's, and `stop-start-fix.patch` — our literal source diff — plus `assets/music/README.md`. They name the exact pinned upstream commit, which is the one genuinely useful piece of reconnaissance in there. Moved to `docs/`, mirroring the old paths (commit `7a2faa8`); verified 404 after deploy while the bundles still serve at their recorded byte counts (mindar 1,734,013). **`LICENSE` files deliberately stay under `public/`** — MIT text, correct to ship. Source comments in create/edit/scan/view and the Stack section now point at `docs/`; session-history entries keep the old paths since they were accurate when written.
+
+**General rule this exposes: `public/` IS the web root.** Any `.md`, `.patch` or note dropped next to an asset gets published. Keep engineering docs in `docs/`.
+
+#### GOTCHAS
+
+- **A Supabase key's project ref is in the JWT**, but a Vercel "Sensitive" var can't be revealed to check it. Instead just hit the endpoint on the preview — JSON back = right key.
+- **Emergency rollback** if a policy change breaks the viewer (restores read only, still safer than before):
+  `create policy emergency_anon_read on public.collections for select to anon using (true);` (+ same for `collection_items`).
+- **GitHub raw link for pasting SQL:** `raw.githubusercontent.com/CurtMiddleton/popcode-demo/main/<path>`. A bare `github.com/...` URL pasted into GitHub's file-finder is read as a *path inside the branch you're viewing* → confusing 404 naming the feature branch.
+- Testing `view.html` headless (this worked well): playwright-core in the **scratchpad only** (`node_modules` is tracked in this repo), chromium `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, `cd public && python3 -m http.server`, `page.route` to stub `@supabase/supabase-js` + abort sentry/fonts, and **stub `/api/collection` to test the happy path, a 404 and a 500** — all three must reach the right screen, never an infinite spinner.
+- Foreground `sleep` is blocked in this sandbox; use a backgrounded `until` loop to wait for a deploy.
+
+### 2026-09-09 — Analytics: creator-side activity logging, Content tab + contact sheet, all-time funnel (all shipped to prod)
+
+**Branch `main`, three commits pushed straight to prod: `8de7a87`, `83d2eeb`, `f8159a9`.** No PRs. One migration, already run in prod (see below). Started as a security question about a viewer in Egypt, turned into the analytics work the dashboard had been missing.
+
+#### Part 0 — the "unauthorized user in Egypt?" scare (NOT a breach; keep this reasoning)
+
+User saw `16th Birthday` — created by **Zoe Wietbrock** in Munich — being viewed from **Giza, Egypt**, tagged with Zoe's name, and asked whether someone had her account. Answer: **no, it was Zoe's own iPhone on a trip.** How that was established, because the same question will recur:
+
+- **The `USER` column in the Activity Log is NOT the project owner.** `view.html:551` reads the *viewer's own* Supabase session (`db.auth.getSession()`) and posts `user_id` to `/api/log-event`; analytics joins that to `auth.users`. So a stranger with the link shows `—`; a name means that browser was holding that person's session. Proof it isn't the owner: several `16th Birthday` rows show `—`.
+- Decisive evidence it was one travelling phone, from `select ... from scan_events where user_id = '<zoe>' group by country, city, ip, user_agent`:
+  - **Same device across an OS update.** Munich Aug 17 = `Version/26.6`; Munich Aug 21 and BOTH Egypt sessions = `Version/26.6.1`. Everything else byte-identical (`OS 18_7`, WebKit `605.1.15`, `Mobile/15E148`).
+  - **A network handover mid-session.** Giza IP `41.33.246.187` last event `18:30:11`, Cairo IP `156.187.0.143` first event `18:30:19` — **8 seconds apart**, and Giza/Cairo are one metro area. Two people cannot produce that.
+  - German IPs `46.142.174.30` / `46.142.175.3` are the same /23 = one ISP handing out rotating addresses.
+- **Do NOT read the `MODEL` column as device identity** — `parseModel()` maps iOS 18+ → "iPhone 16+", a coarse OS bucket. Matching models prove nothing.
+- Blast radius if it HAD been real: being signed in buys nothing on the viewer (link-based sharing, `view.html` gates nothing on auth). The exposure is the account — `manage.html`/`edit.html` are RLS'd by `user_id`.
+- **Decision: did NOT build session revocation.** No payment data on these accounts; worst case is someone editing their own projects. Trigger to build it = first paying customer, or a real reported compromise.
+- Gotcha that wasted a round trip: the first diagnostic query returned "Success. No rows returned" because the user pasted `'<16th-birthday-slug>'` **literally**. The dashboard shows project *names*, not slugs. Give queries that need no substitution (key off a known IP, or join `collections` on `name ilike`).
+
+#### Part 1 — creator-side activity logging (`8de7a87`)
+
+The dashboard only ever saw **consumption** (scan_events written solely by view.html), so it could not answer *"did this signup ever make anything?"* — the metric that matters most for a beta.
+
+- **NEW `public/activity.js`** (65 lines) — `window.logActivity(eventType, { slug, user_id })`. Posts to the existing `/api/log-event`. `keepalive: true` (create.html redirects right after saving). Fire-and-forget, swallows its own errors — logging must never break a save the user waited 30s for. Callers pass their **own** `user_id`, so the file holds no Supabase client and couples to nothing.
+- **Event types:** `signup`, `create_project`, `create_book`, `create_boardbook`, `create_calendar`, `create_montage`, `save_design`.
+- **Call sites:** `auth.html:291` (signUp — captures `data.user.id`, which exists even while email confirmation is pending), `create.html:1205` (project), `create.html:1653` (montage), `book.html:4123`, `boardbook.html:1688`, `calendar.html:1704`, `order.html:1375` (save design). **All three makers log only in the INSERT branch, not the update branch** — deliberate, so "Created" doesn't fill with edits. Consequence: **editing a design/book logs nothing.** Add `edit_*` events if that's ever wanted.
+- **Reused `scan_events` rather than a new table.** Free session grouping, geo, device parsing, and the Activity Log renders it with no new plumbing. Cost: the table name is now a misnomer (mild, next to `collections` meaning Projects).
+- **MIGRATION (RUN IN PROD, confirmed `is_nullable = YES`):** `supabase/migrations/2026-09-09-activity-events.sql` → `alter table public.scan_events alter column slug drop not null;`. Needed because `signup` and `create_montage` fire before any project row exists. `api/log-event.js` has `ACCOUNT_EVENTS = ['signup','create_montage']` — those may omit a slug; everything else still must supply one. **The `get_events_with_users` RPC did NOT need recreating** — only a null constraint was relaxed, no column added (contrast the 2026-04-15 lesson).
+
+#### Part 2 — Activity Log fixes (same commit)
+
+- **`User` → `Signed in as`.** Deviated from the user's suggested "Viewer (signed in)" *because* creation events now share the stream — half the rows are creators, so "Viewer" would be wrong exactly on the new rows.
+- **Location trail**: a session that moves now renders `Giza → Cairo` (first 3 places, then `→ …`) instead of only the first city, which hid the movement that caused the whole scare.
+- **Session keying rewritten** (`buildSessions`, analytics.html:594). Anonymous events now key on **user_agent**, not IP, and an event whose **IP changed** only joins the session within **2 minutes** (a real handover is seconds); unchanged IP keeps the 30-min window. Fixes both directions of the old IP key: one anon visitor whose IP rotated was split in two, and two people behind one household connection were merged into one.
+- `eventCategory()` (analytics.html:538) maps event_type → `created` / `viewed` / `ordered`; drives the new **All / Created / Viewed / Ordered** filter pills. `projectCell()` (:534) renders account-level (null-slug) events as **"Account"**.
+
+#### Part 3 — Content tab + contact sheet (`83d2eeb`)
+
+- **Library + Projects merged into one `Content` tab** (8 tabs → 7). Trick used: two separate `.tab-body` elements both carry `data-tab="content"`, and `showTab` reveals every matching one — so the static `#library-section` (outside `#main-content`) and the by-photo body (inside it) display together without moving any DOM. `RANGE_TABS` now `['activity','overview','content']`.
+- **Contact sheet** — clicking a project opens a grid of every photo with the media it triggers (`Video` / `Audio` / **`No media`**) plus its scan count, instead of dropping into the first video. `lbMode` is `'sheet'` or `'single'`; `lbApplyMode()` (analytics.html ~1745) switches, `lbRenderSheet()` (:1776) draws it. Opening from a **By Photo thumbnail still jumps straight to that photo** (`openLightbox(slug, targetIndex)` sets single mode when the index matches). **Escape steps single → sheet** before closing, so browsing a project doesn't mean reopening it after every photo. Per-photo counts come from a new `cachedTargetCounts` keyed `'slug|target_index'`, populated in `renderByVideo` from `get_target_scan_counts`.
+- **User feedback mid-build: tiles were too small to recognise a photo.** Fixed to `minmax(240px, 1fr)`, `aspect-ratio: 4/3`, **`object-fit: contain`** (the old square `cover` crop was cutting the top and bottom off every portrait shot — fatal for a sheet whose job is showing what a viewer aims a camera at). The media tag moved from floating over the image into the caption row, because on portrait photos it sat on empty letterbox.
+
+#### Part 4 — REGRESSION I introduced in Part 1, fixed in Part 3 (watch for this shape)
+
+Putting creation events in `scan_events` silently polluted two view-only metrics, and they were live in prod for a while:
+- **By Project** grew a row for every project the moment it was *created* (all zeros) plus one **literally named `null`** for account-level events with no slug.
+- **Unique Visitors** counted creators who had never opened a scanner.
+
+Both now early-return unless `eventCategory(e.event_type) === 'viewed'`. **Lesson: when you add a new event class to a shared table, audit every aggregate that iterates the whole event array** — the ones filtering on an explicit `event_type` were fine; the ones grouping by `slug` or mapping `ip_address` were not.
+
+#### Part 5 — all-time funnel (`f8159a9`)
+
+`Overview` now opens with a five-stage funnel counting **accounts**: Signed up → Made something → Got scanned → Media played → Ordered a print, each with count-of-total and **drop-off vs the previous stage** (amber under 50%). `renderFunnel()` at analytics.html:1545.
+
+- **Deliberately ALL-TIME while the rest of Overview stays range-scoped**, with a note on the page saying so. A lifetime question answered over a rolling 30 days would score an account that joined in March and built something yesterday as a failure.
+- **It works retroactively** — stages derive from `cachedUsers` (`get_all_users`, max_rows 1000), `cachedCols`, and `cachedPrints`, all of which have full history. It did NOT need the new events, so it shows real numbers on the existing ~35 accounts immediately.
+- `ensureAllEvents()` (:1508) pulls all-time events once (`get_events_with_users` with `days_back: 0`, falling back to `fetchAllRows('scan_events', …)`), promise-cached.
+- **`#funnel-wrap` lives inside `#main-content`, which `loadAnalytics` rebuilds on every range change**, so `loadFunnel()` is called again at the end of that rebuild (cheap — all inputs are promise-cached). Same hazard applies to anything else added inside `#main-content`.
+- "Ordered a print" matches orders to accounts by **`buyer_email`**, so an order placed under a different email than the account's won't attribute. Only `PAID_PLUS` statuses count (a `pending` order is correctly excluded).
+
+#### Gotchas / lessons
+
+- **After deploying, an already-open tab runs the OLD JavaScript.** User saved a design, it didn't log, and it looked like a bug — a hard refresh fixed it. Check this FIRST for any "my new client-side event didn't fire" report; verify the deploy actually landed by `curl`ing prod for the new string rather than trusting timing.
+- **This machine is NOT the Linux sandbox.** `/opt/pw-browsers` and a scratchpad `playwright-core` do **not** exist here. Use the **Browser pane** (`preview_start` with a `.claude/launch.json` entry) instead. Recipe that worked: copy `analytics.html` into the scratchpad, swap the supabase-js CDN tag for a local `stub.js`, strip `sentry-init.js` / `nav.js` / `beta-feedback.js` / `config.js`, and inject dummy `#logout-btn` + `#user-greeting` (nav.js normally provides them). **Remove the temp launch config afterwards** — it points at a scratchpad path.
+- The stub's `config.js` replacement must define **`SUPABASE_URL` / `SUPABASE_KEY`** as bare `const`s (those exact names), not `window.*`.
+- **An instant-resolving stub session exposes latent TDZ** the real network hides: `loadPrints()` runs before `let cachedPrints` initialises. Added a 60ms delay in the stub's `getSession` to test realistically. **That fragility is still in prod code** — untouched, currently masked by the network round-trip. Same class as the scan.html TDZ in the 2026-06-12 notes.
+- Pure logic (session grouping, categories) is far better tested in **node** by extracting the real functions with a brace-matching script than by driving the DOM — 10 assertions ran in a second, including the negative cases (10-min IP change must split; two UAs on one IP must stay separate).
+- **PIL is available on this Mac** (11.3.0). Generating deliberately mixed-aspect test photos with visible borders and TOP/BOTTOM labels is what made the contact-sheet cropping bug obvious at a glance.
+- Console noise in the stub harness that is NOT real: `nav-btn` null (stripped nav.js), `fonts.googleapis.com`, and 404s for fake media URLs.
+
+#### Still open / next
+
+- **People** and **Business** tab merges from the agreed IA (Accounts gaining per-person made/received/ordered; Prints + Cost combined to show margin). Tidying, not new information.
+- `analytics.html` is still gated to **`curtmid@gmail.com` only** (`ADMIN_EMAIL`, ~line 418) — signing in as `curt@theworkshop.works` bounces to manage.html. One-line fix, offered twice, not yet taken.
+- Consider `edit_project` / `edit_design` events if edits should be visible.
+- Fix the `cachedPrints` TDZ properly.
+- No backfill: creation events only exist from 2026-09-09 onward. The **funnel** is unaffected (it reads accounts/collections/orders), but the Activity Log's "Created" filter will look empty for anything older.
+
+### 2026-09-15 — Companion postcard → branded insert, shipping as its own line, smaller print sizes, two mobile-layout bugs
+
+**Branch `claude/eloquent-turing-7vwk8u`. Fast-forward merges to `main` across the session: `08bfba8`, `1e8f3fc`, `933320d`, `35723df`, `cc87dd5` (plus `3c4d8fe` = PR #66, the emergency disable). All live in prod.** Long session: built the companion postcard from `docs/postcard-brief.md`, detoured through mobile layout forensics, and ended with the insert switched on for every Prodigi product. One prod-money bug found and killed, one code review that caught six real defects, and two mobile bugs that had been shipping for a while.
+
+#### THE $76 BUG (the important one — PR #66, merged first)
+The companion postcard was originally a **second line item** (`GLOBAL-POST-MOH-6X4-BLA`). A real order quoted **$76**. Cause: **that card SKU is fulfilled in the UK/EU while the prints were fulfilled in the US**, so Prodigi split the order into two shipments and charged a second transatlantic parcel — for a postcard. Prodigi groups a shipment by `labCode`; **two SKUs in one order are only one parcel if the same lab makes both.** Disabled immediately (PR #66) before anything else.
+
+**The rebuild: the card is no longer a line item at all.** Prodigi supports per-order **branding** (`branding: { postcard: { url } }`) — the fulfilling lab prints and inserts the card *in the same box*. No second SKU, no second parcel, no line on the quote. This is the right shape for anything that ships *with* a product.
+- `COMPANION_INSERT_FOR` = the set of product types that get one. Started as the wall-art set (print/framed/framedcanvas/canvas/acrylic/tile); **later in the session the user extended it to books and calendars too** — see "Turned on" below.
+- `companionInsertCollectionId(lines)` → a single collection id or null; `companionInsertPath(slug)` → `{slug}/companion-card.png`; `companionInsertBranding(url)`.
+- **`COMPANION_INSERT.enabled` was `false` for most of the session**, then flipped on at the end — see "Turned on" below.
+- **Migration `supabase/migrations/2026-09-14-print-orders-branding.sql`** — `alter table print_orders add column if not exists branding jsonb;`. **RUN IN PROD this session.**
+- **DEPLOY ORDER MATTERS AND IS THE OPPOSITE OF THE 2026-09-04 CASE: SQL FIRST, THEN MERGE.** `create-checkout` puts `branding` in the `print_orders` insert **unconditionally** (`api/create-checkout.js:179`) — it's in the payload as `null` even with the feature disabled. PostgREST rejects the whole insert if the column is missing, so merging first takes **checkout down for every customer**. The feature flag does not protect you. Adding a nullable column nothing reads yet is completely safe, so SQL-first has no window at all.
+
+#### `public/postcard-render.js` (NEW) — one module for design AND export
+Deliberate departure from the repo's inline-duplication idiom, and worth keeping: the artboard (`postcard.html`) and the checkout upload **must not drift**, because a drifted card prints wrong on a physical object. Verified byte-identical to the pre-extraction export before committing. Exports `window.PopcodePostcard = { buildInsert, CARD, COPY, PRINT, FACES, buildCard, setBaselines, renderFace, buildAssets, buildProofPdf, downloadFace, artGradient }`.
+- **A6 LANDSCAPE, 148 × 105mm, `bleedIn: 0`** — pre-cut stock, the file edge IS the card edge. Prodigi states the size in *portrait* notation ("A6, 105 × 148mm") and I built portrait from it first; the user caught it ("the postcard needs to be landscape like tyhe design"). **ORIENTATION IS STILL UNCONFIRMED — check the proof image on the first real order and flip if Prodigi rotates or crops it.**
+- `setBaselines()` measures the font's baseline offset with a zero-size inline-block probe, because **CSS positions a line box, not a baseline**, and the artwork's geometry is baseline-relative.
+- Verified against the approved PDF at 300 DPI: mean difference 1.57/255, every element within 0.96pt.
+
+#### Shipping as its own line at checkout (user asked: "so the customer knows what they are paying for")
+`quoteCart` now returns `{ groups, totalMinor, currency, shippingMinor, printingMinor }`, `sumQuoteMinor` returns `{ totalMinor, itemsMinor, shippingMinor, currency }`, and `cart.html` shows the split. Shipping is rounded to whole dollars and clamped so it can never exceed the total minus $1.
+
+#### `/code-review high` over the branch — SIX findings, all real, all fixed (`08bfba8`)
+Ran it before merging because the branch touches the quote path, and that's the thing that takes checkout down when it's wrong. Worth noting **every one was a genuine defect** — this is the review that earned its keep:
+1. **`renderFace(FACES[i], slug)`** — the signature had changed to `(slug)` when the card went single-sided, so the proof PDF printed the literal string `popcode.app/front`.
+2. **Proof PDF still `orientation: 'portrait'`** after the landscape flip. jsPDF reorders the format array to match the orientation, so it cropped ~a third off the right edge.
+3. **`branding.postcard.url` named without checking the file exists.** The upload is best-effort, and **Prodigi fetches that URL server-side — a 404 becomes a failed order AFTER the customer has paid.** Now HEAD-checked in `create-checkout` (same guard `create-montage.js` uses on a soundtrack URL); missing artwork just means no card.
+4. **`order.html` never uploaded the insert at all** — it checks out directly, so a buy-now order could only ever have named a missing file. (My own miss: I added the upload to `cart.html` and forgot the second path.) Also fixed a wrong state reference there: `state.sourceSlug` → `state.selectedPhoto && state.selectedPhoto.slug`.
+5. **Printify groups reported no shipping**, so a mixed cart showed the whole carrier cost as printing and "Shipping $0.00" — directly undercutting the line-item split. `printify.mjs` now tracks and returns `shippingMinor`. Verified end-to-end: Prodigi + Printify cart → Printing $65.00 / Shipping $21.00 / Total $86.00, both carriers' shipping in the shipping line, parts summing to the total.
+6. Stale contradictory comment in `cart-quote.js`.
+
+**Near-misses from earlier in the same session, worth remembering as a class:**
+- An `@import` regex `[^;]+;` **broke on the semicolons inside a Google Fonts URL** and silently killed CooperBT. Caught by comparing glyph widths, not by looking. Fixed with `/@import\s+url\([^)]*\)\s*;/g`.
+- The artifact inliner used `String.replace` with a **string** replacement, so `$` was special and mangled the module's `${}`. Use a **function** replacement.
+- `assertFaceRendered` sampled the card *centre*, which is background in landscape but white type in portrait — it rejected a good render. Now samples corners + a 5×5 grid (layout-independent).
+- I deleted `PRODUCT_PROVIDER`/`providerFor` during a catalogue rewrite and restored them; and `cart-quote.js` was still calling the removed `withCompanionCards`, which would have thrown on **every** quote.
+
+#### Smaller print sizes (`1e8f3fc`) — and the SKU that doesn't exist
+Smallest print and framed print were both 8×10. Added **prints 4×6, 5×7, 6×6, 8×8** and **frames 5×7, 8×8** (each in the existing black/white/natural).
+- **All verified with `scripts/verify-prodigi-sku.mjs` before going live.** 6 of 7 resolved. **`GLOBAL-CFP-6x6` returned 404 — there is no 6×6 classic frame**, even though the bare 6×6 print exists. Removed, with a comment so nobody re-adds it for symmetry.
+- Verification also settled two things previously marked as guesses in the code: frame colours come back as `black | brown | dark grey | gold | light grey | natural | silver | white` (our lowercase trio was already right), and **the CFP SKU carries its own glaze and mount**, so no extra attribute is needed.
+- **Keep `lib/print/catalog.mjs` and the client mirror in `order.html` in sync.** I wrote a throwaway cross-check (extract the mirror with a regex, `eval` it, compare every id + aspect against the server catalogue, and flag server variants with no UI entry) — run something like it after any catalogue edit. Gotcha: strip the trailing `;` before `eval`, or you get `Unexpected token ';'`.
+- **Pricing caveat told to the user, unresolved:** markup is 1.4× on product **and** shipping, so a 5×7 costing ~$3 to make lands at **$12–$21** depending on shipping. The small sizes are not yet the cheap entry point they look like. The lever that never risks eating cost is still the one from 2026-06-28: mark up product only, pass shipping at cost.
+
+#### iOS zoom-on-focus, app-wide (`8814860`)
+**iOS Safari zooms the page whenever you focus an input whose computed font-size is under 16px.** `create.html` and `auth.html` were already fixed; everything else was still 15px — **including every field of the checkout address form**, which zooms field-by-field as you tab through an address. Raised to 16px in `order.html`, `cart.html`, `boardbook.html`, `account.html`, `reset.html`, with a comment at each saying *why* (15px otherwise reads as a free style choice and will get "tidied" back). Verified by measuring the computed font-size of every visible input across thirteen pages, and confirmed the 1px bump adds no horizontal overflow at 320/390.
+
+#### manage.html: delete button dropping to its own row (`933320d`)
+User reported "my popcodes now 2 lines and trash icon dropping". **I initially blamed Safari page zoom and was wrong** — they checked, it read 100%, and it still broke. The real cause: the layout fitted at 430px and ran a few pixels over below that, so it looked fine on a Pro Max and broke on every smaller iPhone. Three narrow misses:
+- The `@media (max-width: 600px)` rule **GREW** the Shop button (height 36→40, padding 18→20, font 14→15) and it kept a `margin-left` the flex gap already provided. Height is worth keeping for the thumb; the width is what overflowed.
+- `.card-actions` was a flat wrap container with `margin-left: auto` on delete, so once the row overflowed **delete was the item that wrapped**, and the auto margin parked it alone at the right.
+- Heading + "+ New Popcode" came within ~1px of the available width at 390.
+
+**The structural fix is the part that matters: the other five buttons are now wrapped in `.card-actions-main`, so `.card-actions` has exactly two flex children.** The group wraps internally if it must and delete stays beside it, vertically centred — it cannot be stranded at any width. Also narrowed the 28px side gutter to 20px below 390px, which buys back the width without shrinking a tap target. Result, measured at 320/344/360/375/390/402/414/430/600/1100: **one row from 375px up (was 414px), heading on one line from 360px up (was 390px).**
+
+**CSS gotcha that cost a round trip:** the gutter override lost to `.collections-list { padding: 0 28px }` declared *further down the file*. Media queries add no specificity — **an equally specific rule only wins from later in the source**, so that block is deliberately parked at the end of the `<style>`, with a comment saying so.
+
+#### Turned on, and widened to every Prodigi product (`35723df`, `cc87dd5`)
+At the end of the session the user said to flip it on — "i'm the only one ordering" — so the first real order is the proof rather than a staging step.
+
+- **`enabled: true`.** Low blast radius by construction: an insert is not part of the quote and the fulfilling lab puts it in the same box, so it cannot repeat the line item's second-parcel mistake or move a price. `create-checkout` HEAD-checks the artwork first, so a slug whose card never uploaded ships without one instead of failing after payment.
+- **Then extended to books and calendars.** The user's reasoning: a back cover is easy to miss, the card costs nothing extra, so reinforce the URL everywhere. `COMPANION_INSERT_FOR` is now print/framed/framedcanvas/canvas/acrylic/tile/**book**/**calendar**.
+- **Adding them to the set was NOT sufficient, and this is the trap.** `book.html` and `calendar.html` check out directly and did not load `postcard-render.js`, so no card would ever have been built or uploaded — and the HEAD guard would have silently shipped them cardless with no error anywhere. Both now load the renderer and upload before checkout, best-effort, matching `cart.html` / `order.html`. **Any future checkout surface needs the same two things: the script tag AND the upload.**
+- **`boardbook` is deliberately EXCLUDED and must stay that way.** It is the one Printify product, and `providers/printify.mjs` ignores `branding` entirely — there is no insert mechanism on that side. Listing it would generate and upload a card nobody prints. If board books should carry the URL it has to go into the artwork the builder produces. A comment at the set says so.
+- Before putting the renderer on two more pages I checked it couldn't leak: every rule in its injected CSS is `.pc-*` scoped and its two `@font-face` families (CooperBT, FilsonPro) are ones both pages already load. Smoke-tested book/calendar/cart/order — renderer present, nothing visible added, zero page errors.
+- **Verification limit worth knowing:** `lib/print/catalog.mjs` is a server module, never served to a browser, and `create-checkout` needs auth — so the flag state cannot be confirmed by fetching prod. **The first real order is the check:** the `print_orders` row should carry `branding = {"postcard":{"url":"…/companion-card.png"}}`, and the Prodigi proof image settles the orientation question.
+
+#### LESSONS
+- **A `200` on a path that already existed proves nothing about your deploy.** I checked `/postcard-render.js` after merging, got 200, and nearly called it done — prod was serving the *old* copy of that file from the earlier disable PR. **Poll for a string that only exists in the new build** (I used the changed `popcode-insert-` filename). Byte-count comparison against `git show <sha>:<path>` is the quick way to tell which commit prod is actually on.
+- **When a user says a page looks wrong on their phone, measure before theorising.** I burned a chunk of this session on a zoom hypothesis. What actually settled it: fetch prod's copy of the page, `diff` it against local (byte-identical → the page isn't the variable), then sweep viewport widths 320→430 in headless Chromium measuring `scrollWidth` vs `clientWidth` and the computed geometry of the specific elements. The breakpoint falls out immediately.
+- **Trust the user's observation over your own model.** They said 100% and it was still breaking; they were right and I was wrong.
+- **Fonts matter in headless layout tests.** Blocking Google Fonts changes wrap points and will make a marginal-fit bug invisible. `fonts.googleapis.com` and `fonts.gstatic.com` are **reachable from this sandbox** (200), and CooperBT/Inter are base64 `@font-face` in **`public/assets/fonts.css`** served locally — so don't block fonts when measuring layout.
+- **Verify every new Prodigi SKU.** One of seven was fictitious, and a bad SKU now surfaces as *"we can't ship this size to X"* (from the 2026-09-02 unservable classification) — misleading rather than obviously broken.
+
+#### STATE AT END OF SESSION
+- `main` = `cc87dd5` (then `39e20c8`/later for these notes). Branch and main identical.
+- **`COMPANION_INSERT.enabled = true`**, for print/framed/framedcanvas/canvas/acrylic/tile/book/calendar. Board books excluded (Printify has no insert mechanism).
+- **No real order has carried a card yet** — the first one proves the whole chain (upload → HEAD check → Prodigi branding) and settles orientation.
+- **Insert orientation unconfirmed** — settle it from the first real order's proof image.
+- **Two pre-existing horizontal-overflow bugs found and NOT fixed** (both confirmed identical before/after my changes, so neither is a regression): `order.html` scrolls sideways ~16px on phones (`.detail` grid children need `min-width: 0` — grid items default to `min-width: auto`); `manage.html` scrolls sideways at ~768px tablet width. Offered both, user hasn't picked them up.
+- Small-size pricing (shipping-dominated) still open as a business decision.
+
+### 2026-09-17 — Scan screen rebuilt around the animated mark; and the decision to stay on slugs
+
+**Branch `claude/exciting-wright-3piri0`. Four commits, each fast-forwarded to `main` and verified live on prod: `ebce03b`, `57a4751`, `dbeae61`, `ae62541`.** No PRs. No schema, env or RLS change. Files: `public/view.html`, `public/scan.html`, `public/desktop-note.js`.
+
+#### THE STRATEGIC OUTCOME (the reason this session mattered)
+
+**Decision: stay on the slug model. Leave the CLIP/handle work where it is — built, merged, live, and dormant. Revisit only on a specific trigger.** This came out of the user asking, plainly, what the handle model actually buys and whether slugs scale. The answer is worth not re-deriving:
+
+- **Slugs scale better, not worse.** Identification cost per scan is zero forever regardless of user count; accuracy can't degrade as a library grows (the match set is scoped to one project's ~20 photos *by construction*, and the FK can't be wrong); no third-party runtime dependency; no viewer camera frames leaving the device. The `.mind` file grows per *project*, not per account.
+- **The handle model doesn't fix a scaling problem, it fixes a convenience one** — "recipient doesn't need to know which Popcode they're holding" — and charges latency, per-scan inference cost, and a shrinking accuracy margin for it. Phase 4's own numbers: real matches 0.62–0.72 vs a noise ceiling of 0.595, a **0.025 margin** that narrows as a creator's library grows. And the Replicate cold start (5–6s on first scan) was never solved.
+- **The benefit it sounds like it has, it doesn't.** "Lost the insert card" isn't rescued by a handle — you'd have to know the handle too. It only helps someone who has already scanned something of that creator's.
+- **You already solved the URL-on-the-object problem twice**: back covers on books/calendars, companion inserts on flat and wall art. The handle model's headline benefit aims at a gap the print pipeline closed.
+- **Running both is the worst option** — two scan entrances, two URL shapes to explain, a print-time decision about which to print, and doubled surface on the most fragile code in the app. The drift is already demonstrated: `scan.html` sat on the old pill and brackets for months while `view.html` moved on.
+- **Cheaper alternative that gets most of the benefit:** a creator landing page at `popcode.app/u/{handle}` that just lists their projects — "which one are you holding?". One memorable address per creator, no inference, no latency, no per-scan cost, no accuracy margin, nothing leaving the phone. Costs one tap. Roughly a day against weeks.
+- **What would change the answer:** a white-label/brand deal where "one address for the whole campaign" is the actual sale (the Mission to Ghana shape — `popcode.app/ghana` on everything). That's a revenue reason. Absent that, the CLIP work isn't wasted, it's **banked**.
+
+#### CLIP/handle: exactly what state it's in (verified, not from notes)
+
+Worth writing down because it's easy to over- or under-estimate:
+
+- **It is genuinely live in prod.** `POST /api/identify` with `{"handle":"zzznotreal"}` → `{"matched":false,"reason":"unknown_handle"}`. With `Curt` it sails past the creator lookup **and** past the `new_identification_enabled` gate and reaches Replicate (failed only because the probe frame was a deliberately truncated JPEG). So @Curt is flag-enabled and the pipeline runs end to end.
+- **But nothing feeds it.** `grep` over `create.html` / `edit.html` / `book.html` / `manage.html` → **zero** references to `pop_images` or `/api/identify`. The index is written by exactly one thing: `scripts/seed-identification.mjs`, run by hand from a terminal. No handle field on signup, no UI anywhere, no embedding on save.
+- **Population: two books (Max, Addie), seeded by hand in June, reachable only by Curt.** A project created today doesn't join. `manage.html` only ever generates `popcode.app/{slug}`.
+- **ROUTING LANDMINE if handles are ever opened up.** `vercel.json` rewrites are ordered, and rule 2 is `/:slug([a-z0-9][a-z0-9-]{2,29})` → `view.html`. That matches **any all-lowercase 3–30 char path**. So a creator who picks the handle `sarah` is routed to the viewer, which looks up a collection with that slug, finds nothing, and shows **"Experience not found."** `Curt` only works because of the capital C. Handles are currently disambiguated from slugs *by capitalisation and length* — fine for a one-person experiment, unshippable as a feature. A real resolver is prerequisite work.
+
+#### What shipped to prod
+
+The viewer's scan screen is now built around the animated Popcode mark, on **both** `view.html` (slug flow) and `scan.html` (handle flow) so they can't drift again:
+
+- **Start screen**: the white "Scan image" pill is replaced by the mark on a **141px `#4b3cba` disc** (mark 132px) with a **"Tap to scan"** caption, sitting where the pill was. Five soft **filled** white halos swell out of it (`pop-swell`, scale 1 → 5.6, 5s, one a second, opacity .17). They **stack** — that overlap is what reads as wide concentric bands, Shazam-style. Thin stroked rings cannot produce this; that was a wrong turn. The disc also breathes (1 → 1.04), and the mark turns **once, 360°** on arrival before settling into the pulse.
+- **Tapping leaves the mark exactly where it is** and everything around it falls away — wordmark, caption, disc. The mark is inside the button and never moves, which is why the disc is a separate layer behind it rather than the button's background.
+- **Scanning**: the **comet** — one P orbits with whole P's fading out behind it, never resolving. `pop-comet`, 1.4s, `--i * .175s` stagger.
+- **Found**: **resolve + bloom.** The eight P's land (`pop-land`, .26s, `--i * .035s`), the mark completes, then it opens out in white (`pop-bloom`, scale 1 → 11, .36s at .52s delay). **The bloom IS the hand-off to the video**, not something before it — timed to finish at ~880ms, inside the existing **900ms hold**, so the mark is gone exactly as the video screen takes over.
+- **`scan.html` extra**: its **capture phase** (camera open, frames going to `/api/identify`, before any MindAR scene exists) got the same orbiting mark (`#cap-mark`), so the mark searches continuously from first tap through to match.
+- The four corner brackets, and the "Point your camera at a Popcoded photo" copy, are gone. `#scan-hint` survives for **error messages only**, with `#scan-hint:empty { display: none }` so a blank one can't render as an empty pill.
+
+**Design exploration lives in two artifacts** (not in the repo — this is why they were unfindable at the start of the session):
+- **Popcode Mark Animation** — https://claude.ai/artifact/7iFeHa4Qa2NmofYSZwAvge (the original: the eight-P construction, four motion options, the difference-blend proof)
+- **Popcode Scan Screen — Comet** — https://claude.ai/artifact/HJPtEo8ZzkWSU9He4jRvg1 (a Design canvas: interactive tap-through, three success beats, purple options, arrival options, pulse options)
+
+#### THE BUG WORTH NOT RELEARNING: MindAR ships three overlays and all three default to "yes"
+
+This cost **three deploys**, because the overlays are stacked and each one only becomes visible when the thing in front of it is removed.
+
+- `uiScanning` — a white **bracket frame** over the camera (`.scanning .inner`, corner gradients + a scanline). **Our four `.corner` divs were a second set on top of it**, invisible at `opacity: 0` until a match expanded them. Removing ours just uncovered MindAR's, which is why "the brackets are still there" after the first fix.
+- `uiLoading` — a **120px `#222` ring with a white top segment, spinning, dead centre**. Our mark sits dead centre too, so it read as a deliberate dark disc *behind* the mark. Found only because the user screenshotted it.
+- `uiError` — would draw its own error message **on top of `#error-screen`**.
+
+Fix is one string: `uiScanning: no; uiLoading: no; uiError: no;` in the `mindar-image` attribute (the bundle checks `!== "no"`). **`arError` is emitted directly (`this.el.emit("arError", …)`), independent of `uiError`**, so our error listener is unaffected — checked before disabling. Verified with the camera actually started (`--use-fake-device-for-media-stream`): `.mindar-ui-overlay` / `-loading` / `-scanning` / `-error` all **zero**. The only MindAR chrome left is the compatibility notice (no `getUserMedia` at all), deliberately kept.
+
+**Method lesson:** I twice told the user prod was clean because `grep -c 'class="corner'` returned 0. The grep was accurate and the conclusion was wrong — I was verifying *our markup* rather than *what renders*. When UI comes from a 1.7MB vendored bundle, only a screenshot or a DOM count of the library's own classes settles it. **Grep your own source to check your own change; count rendered elements to check the screen.**
+
+#### THE OTHER REAL BUG: the tap button would have been dead on every desktop visit
+
+`desktop-note.js` mounts its "open this on your phone" panel with `container.insertBefore(el, slot)` where `slot = container.querySelector('#start-btn')`. Wrapping the button with its caption in `#start-tap` made the button a **grandchild** of `#start-screen`, and `insertBefore` **throws** on a node that isn't a direct child. The throw happened inside `showStartScreen()` — **one line before `addEventListener('click', handleStartTap)`** — so the handler never attached. The button would have looked perfect and done nothing.
+
+It only fires when `canScan()` is false, so a phone would have been fine and this would have hidden until someone opened a link at a desk. `mount()` now climbs to whichever ancestor is the child. **Caught only because the headless test runs in a no-coarse-pointer environment, i.e. the desktop path by default.** Test the desktop path deliberately; `?desktopnote=1` / `=0` force it either way.
+
+Second, subtler: the note's hide rule was `.popcode-desktop #start-btn`. Retargeting it to `#start-tap` alone would have **regressed `scan.html`**, which still has a bare `#start-btn` — its button would have stayed visible next to a note telling you to use your phone. Both selectors are in the rule now.
+
+#### THE MARK ITSELF: `fill-rule` must be nonzero, not evenodd
+
+The user spotted "a little triangle" in the rotating P and guessed correctly that the letter was broken into pieces. It was a genuine path bug, inherited from the original artifact.
+
+The P is three subpaths — bowl (r60), counter (r21.5), stem (a capsule). Under **`fill-rule="evenodd"` the stem cancels against the bowl where they overlap and punches a wedge out of the letter.** Eight stacked P's hide it completely; it only shows when one P is alone mid-orbit, which is exactly what the comet does.
+
+Fix: `fill-rule="nonzero"` **and** reverse the counter circle's arcs (`sweep 0 → 1`) so it still punches through as a hole. Bowl and stem are both counter-clockwise, so nonzero unions them; the counter is now clockwise, so it subtracts. Verified by rendering old vs new side by side — the wedge is unmistakable.
+
+**Caveat carried into prod:** this P is **reconstructed by measuring the lockup, not exported from it — a 99.3% match**, with the residual in how the stem meets the bowl. It has to be the P-based version to animate letter by letter. **If the P is ever exported as its own SVG it's a single `d` attribute swap** (`#pop-p` in both files, plus both artifacts) and the end frame becomes exact.
+
+#### Smaller decisions worth keeping
+
+- **Disc `#4b3cba`.** The old `#6C30DE` was the same red-leaning hue as the gradient's endpoint, so disc and background fought at the same angle; pulling it bluer separates them and the darker value gives the white mark more contrast. **Only the disc changed — the gradient is untouched**, deliberately: `linear-gradient(160deg, #5bc8f5, #7c3aed)` is also `#loading` and the same family drives the badge gradient printed on every photo. Changing the disc is a one-screen decision; changing the gradient is a brand decision that reaches physical products already in people's hands.
+- **`pointer-events: none` on the halos is load-bearing.** They live inside the button and a transformed child is hit-tested where it's *drawn* — at full travel a halo is wider than the phone, so without it the entire screen becomes one tap target.
+- The bands pass behind "Tap to scan" (caption is 93px from the disc centre, bands travel ~390px). Accepted; the lever if it ever reads thin is per-band opacity (.17), not size.
+- The mark carries `drop-shadow(0 2px 14px rgba(0,0,0,.34))` instead of a scrim — invisible on the gradient, keeps white legible over a bright photo.
+- **None of the iOS media-session handling was touched**: stop-before-play, the 250ms settle, the frozen-frame watchdog, the rescan path, the 900ms hold. Deliberate.
+
+#### Testing recipe (worked well, reuse it)
+
+`playwright-core` in the **scratchpad only** (`node_modules` is tracked in this repo), chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, `cd public && python3 -m http.server <port>`. `page.route` to stub `sentry-init.js`, `@supabase/supabase-js@2`, `/api/collection*` and `**/*.mind`. Add `--use-fake-device-for-media-stream` when you need MindAR to actually start.
+
+- **Always `node --check` every inline `<script>` after editing view/scan** (extract with a regex) — the 2026-04-12 white-screen SyntaxError is still the worst failure mode in this file.
+- A-Frame **parses the `mindar-image` attribute into an object**, so `getAttribute('mindar-image')` returns an object, not a string. Read `.uiScanning` etc.
+- "Offset is outside the bounds of the DataView" after tapping = MindAR failing to parse a stub `.mind`. Expected, not a regression.
+- Headless has no camera, so tapping Scan ends at `arError` → "Experience not found". To screenshot the scanning/found states, show `#scanner` and toggle `#scan-mark.found` directly instead of going through the real flow.
+- **Don't chain `sleep` in Bash** — it's blocked. Use `run_in_background: true` with an `until` loop for deploy polling.
+- A failed `sed` in a `cmd && cmd` chain silently skips the rest. Bit me once.
+
+#### Still open / next
+
+- **`scan.html` is effectively Curt-only** — restyling it was consistency housekeeping, not user-facing work. Said so at the time.
+- The **99.3% P** — swap in the real artwork when it's exported.
+- **Both artifacts still carry the old evenodd path** in their own copies of the mark; the Design canvas was fixed, the original *Popcode Mark Animation* page was **not** — its difference-blend "99.3%" reading was partly measuring the wedge. Offered, not taken.
+- The `/u/{handle}` **menu page** idea above, if the "one address per creator" itch returns without the CLIP cost.
+- MindAR's **compatibility overlay** is still on (deliberate).
+- Unchanged from previous sessions: the two horizontal-overflow bugs (`order.html` ~16px on phones, `manage.html` at ~768px), small-size print pricing, companion insert orientation.

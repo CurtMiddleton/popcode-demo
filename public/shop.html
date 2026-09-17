@@ -9,7 +9,7 @@
       integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
       crossorigin="anonymous"></script>
     <script src="/sentry-init.js"></script>
-    <link rel="icon" href="/assets/popcode_icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
     <title>Popcode — Shop</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -205,6 +205,11 @@
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       let currentUser = null, popcodes = [];
 
+      // Arriving from a Popcode's Shop button (manage.html) carries its slug, so
+      // whichever photo product you pick opens with that Popcode already chosen
+      // instead of making you find it again.
+      const fromSlug = new URLSearchParams(location.search).get('id');
+
       // Products. Photo Book is the hero (builds from scratch → book.html).
       // The print products need a photo, so they open a picker of the user's
       // Popcodes → order.html with the chosen category pre-selected. Photo-product
@@ -275,7 +280,9 @@
           const card = document.createElement('div');
           card.className = 'cat-card';
           const badge = p.badge ? `<span class="cat-badge">${p.badge}</span>` : '';
-          const cta = p.kind === 'build' ? 'See more details' : 'See more details and pricing';
+          // Every product's detail page now carries a starting price, books and
+          // calendars included — so every card can promise one.
+          const cta = 'See more details and pricing';
           card.innerHTML =
             `<div class="cat-thumb"></div>` +
             `<div class="cat-name">${p.name}${badge}</div>` +
@@ -301,10 +308,14 @@
       }
 
       function chooseProduct(p) {
+        // Books, calendars and board books are built from scratch in their own
+        // maker, so there is no single photo to carry over.
         if (p.kind === 'build') { window.location.href = p.href || '/book.html'; return; }
         // Product-first funnel: go straight to the details screen; the photo is
-        // chosen there (order.html) after picking a size.
-        window.location.href = '/order.html?type=' + encodeURIComponent(p.type);
+        // chosen there (order.html) after picking a size — unless we already know
+        // which Popcode you came from.
+        window.location.href = '/order.html?type=' + encodeURIComponent(p.type)
+          + (fromSlug ? '&id=' + encodeURIComponent(fromSlug) : '');
       }
 
       async function loadPopcodes() {
