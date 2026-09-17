@@ -436,6 +436,8 @@
         display: none; align-items: center; justify-content: center;
         cursor: pointer; text-decoration: none;
       }
+      /* The hint is only for errors now; empty means gone, not an empty pill. */
+      #scan-hint:empty { display: none; }
       #scan-hint {
         display: none; position: fixed; bottom: 48px; left: 50%;
         transform: translateX(-50%);
@@ -578,7 +580,7 @@
     <div id="error-screen"><h2>Experience not found</h2><p>This link may be invalid or expired.</p></div>
 
     <button id="home-btn">&#8592;</button>
-    <div id="scan-hint">Point your camera at a Popcoded photo</div>
+    <div id="scan-hint"></div>
     <button id="reload-hint">Having trouble? Tap to reload</button>
     <div id="scanner">
       <svg id="scan-mark" class="pop-mark" viewBox="0 0 302 302" aria-hidden="true">
@@ -734,7 +736,10 @@
         }
 
         const scene = document.createElement('a-scene');
-        scene.setAttribute('mindar-image', `imageTargetSrc: ${mindUrl}; autoStart: false; warmupTolerance: 2; missTolerance: 10;`);
+        // uiScanning: no turns off MindAR's own scanning overlay — the white
+        // bracket frame it draws over the camera. The orbiting mark is our
+        // scanning state now; the library's frame was a second one on top.
+        scene.setAttribute('mindar-image', `imageTargetSrc: ${mindUrl}; autoStart: false; warmupTolerance: 2; missTolerance: 10; uiScanning: no;`);
         scene.setAttribute('embedded', '');
         scene.setAttribute('vr-mode-ui', 'enabled: false');
         scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
@@ -843,7 +848,7 @@
         document.getElementById('scanner').style.display = 'block';
         document.getElementById('home-btn').style.display = 'flex';
         const hint = document.getElementById('scan-hint');
-        hint.textContent = 'Point your camera at a Popcoded photo';
+        hint.textContent = '';
         hint.style.display = 'block';
 
         // Returning from a closed video/audio. Default path is a clean MindAR
@@ -871,7 +876,7 @@
             const onReady = () => {
               cleanRescanActive = false;
               arScene.removeEventListener('arError', fallBack);
-              hint.textContent = 'Point your camera at a Popcoded photo';
+              hint.textContent = '';
             };
             arScene.addEventListener('arError', fallBack, { once: true });
             arScene.addEventListener('arReady', onReady, { once: true });
@@ -900,7 +905,7 @@
             if (mindar && typeof mindar.start === 'function') {
               try { mindar.start(); } catch (e) {}
             }
-            hint.textContent = 'Point your camera at a Popcoded photo';
+            hint.textContent = '';
             startReloadHintTimer();
           }, { once: true });
         }, 500);
@@ -1023,7 +1028,7 @@
         const hint = document.getElementById('scan-hint');
         hint.textContent = msg;
         hint.style.display = 'block';
-        setTimeout(() => { hint.textContent = 'Point your camera at a Popcoded photo'; }, 4000);
+        setTimeout(() => { hint.textContent = ''; }, 4000);
       }
       // Backward-compat alias used by older code paths
       const showVideoError = showMediaError;
