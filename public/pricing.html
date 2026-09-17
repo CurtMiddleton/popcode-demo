@@ -450,8 +450,6 @@
           'memorial cards', 'scrapbooks'
         ];
         var STEP = 175;   // between words
-        var HOLD = 4200;  // on the finished sentence
-        var CLEAR = 700;  // everything faded out before it runs again
 
         var list = document.getElementById('rot-list');
         var tail = document.getElementById('rot-tail');
@@ -467,41 +465,27 @@
           return el;
         });
 
-        var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (reduce) {
+        function showAll() {
           els.forEach(function (e) { e.classList.add('on'); });
           tail.classList.add('on');
-          return;
         }
 
-        var timers = [];
-        function run() {
-          els.forEach(function (e, n) {
-            timers.push(setTimeout(function () { e.classList.add('on'); }, n * STEP));
-          });
-          var done = els.length * STEP;
-          timers.push(setTimeout(function () { tail.classList.add('on'); }, done));
-          timers.push(setTimeout(function () {
-            els.forEach(function (e) { e.classList.remove('on'); });
-            tail.classList.remove('on');
-          }, done + HOLD));
-          timers.push(setTimeout(run, done + HOLD + CLEAR));
-        }
+        var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduce) { showAll(); return; }
 
-        // A tab in the background throws the timers out of step, so drop them
-        // and start the sentence again from the top when it comes back.
-        document.addEventListener('visibilitychange', function () {
-          if (document.hidden) {
-            timers.forEach(clearTimeout);
-            timers = [];
-            els.forEach(function (e) { e.classList.remove('on'); });
-            tail.classList.remove('on');
-          } else {
-            run();
-          }
+        // Builds once and stays. Someone who arrives mid-build or scrolls back
+        // up should find a finished sentence, not a line that keeps clearing
+        // itself while they are reading it.
+        els.forEach(function (e, n) {
+          setTimeout(function () { e.classList.add('on'); }, n * STEP);
         });
+        setTimeout(function () { tail.classList.add('on'); }, els.length * STEP);
 
-        run();
+        // A backgrounded tab throws the timers out of step and can leave the
+        // sentence half-built, so complete it on the way back.
+        document.addEventListener('visibilitychange', function () {
+          if (!document.hidden) showAll();
+        });
       })();
     </script>
   </body>
