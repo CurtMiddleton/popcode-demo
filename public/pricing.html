@@ -8,6 +8,8 @@
       integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
       crossorigin="anonymous"></script>
     <script src="/sentry-init.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
     <script src="/nav.js" defer></script>
     <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
@@ -79,6 +81,9 @@
       .half-head h2 { text-align: center; }
       .half-head p { font-size: 16.5px; line-height: 1.6; color: var(--muted); margin: 0; }
 
+      .quota-note { text-align: center; font-size: 15px; margin: -18px auto 26px; max-width: 40em; }
+      .quota-note.good { color: #2f7d4f; }
+      .quota-note.bad { color: #b4232a; }
       .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; align-items: stretch; }
       @media (max-width: 860px) { .plans { grid-template-columns: 1fr; max-width: 420px; margin-inline: auto; } }
 
@@ -363,6 +368,8 @@
           <p class="one-line">Popcodes on anything you buy from the Popcode Shop are always free and unlimited. Packs are only for things you already own.</p>
         </div>
 
+        <p id="quota-note" class="quota-note" hidden></p>
+
         <div class="plans">
           <div class="plan">
             <h3>Free</h3>
@@ -388,7 +395,7 @@
               <li>Replace what a photo plays, any time</li>
               <li>5 years of hosting on each</li>
             </ul>
-            <a class="btn btn-dark" href="/create.html">Get 25</a>
+            <button class="btn btn-dark" type="button" data-pack="pack25">Get 25</button>
           </div>
 
           <div class="plan">
@@ -401,7 +408,7 @@
               <li>Replace what a photo plays, any time</li>
               <li>5 years of hosting on each</li>
             </ul>
-            <a class="btn btn-ghost" href="/create.html">Get 100</a>
+            <button class="btn btn-ghost" type="button" data-pack="pack100">Get 100</button>
           </div>
         </div>
 
@@ -546,6 +553,101 @@
     <script src="/beta-feedback.js"></script>
     <script>
       document.getElementById('yr').textContent = new Date().getFullYear();
+
+      // ── Packs ────────────────────────────────────────────────────────────
+      (function () {
+        var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        var note = document.getElementById('quota-note');
+
+        function say(msg, kind) {
+          note.textContent = msg;
+          note.className = 'quota-note' + (kind ? ' ' + kind : '');
+          note.hidden = false;
+        }
+
+        async function session() {
+          var r = await db.auth.getSession();
+          return r.data && r.data.session ? r.data.session : null;
+        }
+
+        // How many are left, for someone already signed in. Quiet on failure —
+        // this is a nicety, and the page has to read correctly without it.
+        async function showQuota() {
+          try {
+            var r = await db.rpc('popcode_quota');
+            if (r.error || !r.data || !r.data.length) return;
+            var q = r.data[0];
+            say(q.remaining > 0
+              ? 'You have ' + q.remaining + ' of ' + q.allowance + ' Popcodes left.'
+              : 'You have used all ' + q.allowance + ' of your Popcodes.',
+              q.remaining > 0 ? '' : 'bad');
+          } catch (e) { /* not signed in, or the quota is not deployed yet */ }
+        }
+
+        // Coming back from Stripe: grant the credits, then say what landed.
+        async function finalize(sessionId) {
+          var s = await session();
+          if (!s) {
+            say('Signing you in to finish that purchase…');
+            location.href = '/auth.html?next=' + encodeURIComponent(location.pathname + location.search);
+            return;
+          }
+          say('Finishing your purchase…');
+          try {
+            var res = await fetch('/api/finalize-credits', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.access_token },
+              body: JSON.stringify({ sessionId: sessionId }),
+            });
+            var out = await res.json();
+            if (!res.ok) throw new Error(out.error || 'Could not finish that purchase');
+            if (out.status === 'granted') {
+              say(out.credits + ' Popcodes added to your account.', 'good');
+              // Drop the session id so a refresh does not look like a new purchase.
+              history.replaceState(null, '', location.pathname);
+              setTimeout(showQuota, 2500);
+            } else {
+              say('Payment is still going through. Refresh in a moment.');
+            }
+          } catch (e) {
+            say(e.message, 'bad');
+          }
+        }
+
+        async function buy(packId, btn) {
+          var s = await session();
+          if (!s) {
+            // No account yet is the common case here, so land on sign-up and
+            // come back to this page afterwards.
+            location.href = '/auth.html?mode=signup&next=' + encodeURIComponent('/pricing.html');
+            return;
+          }
+          var label = btn.textContent;
+          btn.disabled = true;
+          btn.textContent = 'One moment…';
+          try {
+            var res = await fetch('/api/buy-credits', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.access_token },
+              body: JSON.stringify({ packId: packId }),
+            });
+            var out = await res.json();
+            if (!res.ok || !out.url) throw new Error(out.error || 'Could not start checkout');
+            location.href = out.url;
+          } catch (e) {
+            btn.disabled = false;
+            btn.textContent = label;
+            say(e.message, 'bad');
+          }
+        }
+
+        document.querySelectorAll('[data-pack]').forEach(function (btn) {
+          btn.addEventListener('click', function () { buy(btn.dataset.pack, btn); });
+        });
+
+        var back = new URLSearchParams(location.search).get('credits_session');
+        if (back) finalize(back); else showQuota();
+      })();
 
       // The line builds itself: twenty things people already own arrive one at
       // a time, then the tail. Every word is rendered up front at opacity 0 —

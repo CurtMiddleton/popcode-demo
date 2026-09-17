@@ -234,7 +234,28 @@
     if (out) out.addEventListener('click', signOut);
   })();
 
+  // Pages that predate the shared nav carry their own #nav-overlay markup and
+  // this only enhances it. The marketing pages (index, pricing) have none, so
+  // the hamburger had nothing to open — build one from the same `items` list
+  // rather than pasting the markup into each page and letting it drift.
+  function buildDrawer() {
+    var overlay = document.createElement('div');
+    overlay.id = 'nav-overlay';
+    var links = items.map(function (it) {
+      return '<a class="nav-link" href="' + it.href + '">' + it.label + '</a>';
+    }).join('');
+    overlay.innerHTML =
+      '<div id="nav-drawer-bg"></div>' +
+      '<div id="nav-drawer">' +
+        links +
+        '<a class="nav-link" href="/account.html">' + IC_ACCOUNT + 'My Account</a>' +
+        '<a class="nav-link external" href="https://popcodeapp.com" target="_blank" rel="noopener">popcodeapp.com &#8599;</a>' +
+      '</div>';
+    document.body.appendChild(overlay);
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
+    if (!document.getElementById('nav-overlay')) buildDrawer();
     var btn = document.getElementById('nav-btn');
     var overlay = document.getElementById('nav-overlay');
     var drawer = document.getElementById('nav-drawer');

@@ -436,7 +436,9 @@
       let currentUser = null;
       db.auth.getSession().then(({ data }) => {
         if (!data.session) {
-          window.location.href = '/auth.html';
+          // Nobody lands here by accident — they clicked Create a Popcode — so
+          // assume no account yet and return them here once they have one.
+          window.location.href = '/auth.html?mode=signup&next=%2Fcreate.html';
         } else {
           currentUser = data.session.user;
           const uName = data.session.user?.user_metadata?.full_name?.split(' ')[0] || data.session.user?.email?.split('@')[0] || '';
@@ -1062,6 +1064,26 @@
           return;
         }
 
+        // Check the quota BEFORE the upload, not after: the pages compile and
+        // upload for a minute or more, and a database error at the end of that
+        // is a miserable way to find out. A trigger enforces this server-side
+        // regardless — this is only so we can say it kindly and early.
+        try {
+          const q = await db.rpc('popcode_quota');
+          if (!q.error && q.data && q.data.length) {
+            const { remaining, allowance } = q.data[0];
+            if (readyPairs.length > remaining) {
+              alert(
+                remaining === 0
+                  ? `You have used all ${allowance} of your Popcodes. Grab a pack and this will go straight through.`
+                  : `This project has ${readyPairs.length} Popcodes and you have ${remaining} left of ${allowance}.`
+              );
+              window.location.href = '/pricing.html';
+              return;
+            }
+          }
+        } catch (e) { /* quota not deployed, or offline — the trigger still holds */ }
+
         const createBtn = document.getElementById('create-btn');
 
         // Resolve the link: whatever's shown, re-validated and re-checked here
@@ -1220,6 +1242,13 @@
           const { error: itemsError } = await db.from('collection_items').insert(items);
           if (itemsError) throw itemsError;
         } catch (err) {
+          // The quota trigger raises with this marker; everything else is a
+          // genuine database failure and should read as one.
+          if (/POPCODE_QUOTA_EXCEEDED/.test(err.message || '')) {
+            showError('You have used all your Popcodes. Grab a pack and your pages will save — nothing you have uploaded is lost.');
+            setTimeout(() => { window.location.href = '/pricing.html'; }, 2600);
+            return;
+          }
           showError('Step 6 failed (saving page items) — ' + (err.message || 'Database error. The project was created but page items could not be saved.'));
           return;
         }

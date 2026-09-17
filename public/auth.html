@@ -188,7 +188,10 @@
         if (data.session) window.location.href = landingPage();
       });
 
-      let mode = 'signin'; // 'signin' | 'signup' | 'forgot'
+      // 'signin' | 'signup' | 'forgot'. ?mode=signup lets the places that
+      // assume you do not have an account yet — Create a Popcode, buying a pack
+      // — land on the sign-up form rather than making you find the toggle.
+      let mode = new URLSearchParams(location.search).get('mode') === 'signup' ? 'signup' : 'signin';
 
       function setMode(newMode) {
         mode = newMode;
@@ -217,6 +220,12 @@
         hideError();
         document.getElementById('success-msg').style.display = 'none';
       }
+
+      // The markup is the sign-in form, and setMode is what turns it into the
+      // others — so ?mode=signup has to be applied, not just recorded. Without
+      // this the page would show Sign In while the code believed it was on
+      // sign-up, and the name and terms it validates would both be hidden.
+      if (mode !== 'signin') setMode(mode);
 
       document.getElementById('toggle-link').addEventListener('click', () => {
         setMode(mode === 'signin' ? 'signup' : 'signin');
