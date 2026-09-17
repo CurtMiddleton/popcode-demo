@@ -145,23 +145,128 @@
       .foot-base { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 40px; padding-top: 22px;
                    border-top: 1px solid var(--line); font-size: 13.5px; color: var(--faint); }
       .foot-base a { text-decoration: none; color: inherit; }
+
+      /* ── Gradient head. Same gradient, same curve, same idea as the home
+           page's hero: the cream page rises into the colour rather than the
+           colour being a band laid on top. ── */
+      /* nav.js draws a soft gray shelf below the header. Over the gradient that
+         reads as a white smear, so it is off here — and it needs the body
+         selector's extra specificity, because nav.js appends its sheet after
+         this one. */
+      body .site-header::after { display: none; }
+
+      .p-hero {
+        position: relative; overflow-x: clip;
+        background: linear-gradient(160deg, #5bc8f5 0%, #7c3aed 100%);
+        color: #fff; padding: 76px 0 188px; text-align: center;
+      }
+      .p-hero .eyebrow { color: #fff; opacity: .92; }
+      .p-hero .sub {
+        font-size: 17.5px; line-height: 1.6; color: rgba(255,255,255,.92);
+        max-width: 33em; margin: 30px auto 0;
+      }
+      .hero-curve {
+        position: absolute; left: -2%; bottom: -1px; width: 104%; height: 190px;
+        z-index: 2; display: block; pointer-events: none;
+      }
+      @media (max-width: 640px) { .hero-curve { height: 120px; } .p-hero { padding: 54px 0 130px; } }
+
+      /* The rotating line. "For" and "you already have" are white and fixed;
+         the thing in the middle cycles. ── */
+      .rot {
+        font-family: var(--serif); font-weight: 400; font-size: 52px; line-height: 1.16;
+        letter-spacing: -0.02em; margin: 0; color: #fff; max-width: 21em;
+        margin-inline: auto; text-wrap: balance;
+      }
+      @media (max-width: 900px) { .rot { font-size: 38px; } }
+      @media (max-width: 560px) { .rot { font-size: 29px; } }
+      /* Measured: the widest sentence ("memorial cards") needs 458px at 29px,
+         and the column runs out at about 500px of viewport. Below that it has
+         to wrap, so reserve two lines rather than let the whole hero grow and
+         shrink each time a long word comes round. Above it every word fits on
+         one line, so no reserve is needed and none is set. */
+      @media (max-width: 500px) { .rot { min-height: calc(2 * 1.16em); } }
+      /* Words are stacked absolutely so a descender can never be clipped and
+         only one is ever visible; the slot's width is set in JS to whichever is
+         showing, and eases, so the sentence closes around it instead of
+         snapping. */
+      /* Height 0, deliberately. A 1em inline-block sitting on the baseline is
+         taller than the ascent of the text around it, so it inflated whichever
+         line it landed on and the headline changed height word by word. With no
+         height it adds nothing to the line box and only its width matters —
+         which is all this is for. The words inside are absolute, so they need
+         the baseline offset below to sit back on the line. */
+      .odo {
+        position: relative; display: inline-block; vertical-align: baseline;
+        height: 0; width: 0; overflow: visible;
+        transition: width .45s cubic-bezier(.16,.84,.26,1);
+      }
+      /* The word is absolutely positioned, so a long one sticks out to the
+         right of a slot that is still widening and lands on top of "you
+         already have". Fading OUT is quick and fading IN is held back, so the
+         slot is most of the way to its new width before anything is visible in
+         it. Keep the in-delay above the width easing's halfway point. */
+      .odo-word {
+        position: absolute; left: 0; bottom: -0.231em; white-space: nowrap;
+        line-height: 1; color: #c4e8ff; opacity: 0; transform: translateY(.24em);
+        transition: opacity .16s ease, transform .16s ease;
+      }
+      .odo-word.on {
+        opacity: .78; transform: none;
+        transition: opacity .34s ease .2s, transform .46s cubic-bezier(.16,.84,.26,1) .2s;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .odo, .odo-word { transition: none; }
+      }
+
+      /* ── Galleries, carried over from the home page so the two pages tell it
+           the same way. ── */
+      .venue {
+        position: relative; background: #e4e0d6; border-radius: 24px;
+        display: grid; grid-template-columns: 205px 1fr; align-items: center;
+        gap: 44px; padding: 52px 56px 52px 0; margin-left: 40px;
+      }
+      .venue-art { position: relative; margin: -34px 0 -34px -68px; }
+      .venue-art .art { width: 100%; height: auto; display: block;
+                        filter: drop-shadow(0 22px 40px rgba(20,16,40,.22)); }
+      .venue-phone {
+        position: absolute; left: -16%; bottom: -8%; width: 40%;
+        background: #16121f; border-radius: 22px; padding: 5px;
+        box-shadow: 0 18px 38px rgba(10,5,40,.34);
+      }
+      .venue-phone video { width: 100%; aspect-ratio: 1 / 2.05; object-fit: cover;
+                           border-radius: 18px; display: block; background: #000; }
+      .venue-body { min-width: 0; }
+      .venue h3 { font-family: var(--serif); font-weight: 400; font-size: 34px;
+                  line-height: 1.12; margin: 0 0 12px; letter-spacing: -0.015em; }
+      .venue p { margin: 0 0 26px; color: #56514a; font-size: 16px; line-height: 1.6; }
+      .venue-body .btn { display: block; width: fit-content; margin-inline: auto; }
+      @media (max-width: 900px) {
+        .venue { grid-template-columns: 1fr; gap: 26px; padding: 0 28px 38px;
+                 margin-left: 0; text-align: center; }
+        .venue-art { margin: -34px auto 0; width: 62%; }
+        .venue p { margin-left: auto; margin-right: auto; }
+      }
     </style>
   </head>
   <body>
 
-    <section class="p-head">
+    <section class="p-hero">
       <div class="wrap">
         <p class="eyebrow">Pricing</p>
-        <h1>Your first five<br>are free.</h1>
-        <p class="lede">Popcodes on anything you buy from Popcode are always free and unlimited. Packs are only for things you already own.</p>
+        <h1 class="rot">For <span class="odo" id="odo"></span> you already have</h1>
+        <p class="sub">Popcodes on anything you buy from Popcode are always free and unlimited. Packs are only for things you already own.</p>
       </div>
+      <svg class="hero-curve" viewBox="0 0 1200 190" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0 96 C 260 8, 700 -18, 1200 52 L1200 190 L0 190 Z" fill="#f7f6f3"/>
+      </svg>
     </section>
 
     <!-- ── Metered half ─────────────────────────────────────── -->
-    <section style="padding-top: 56px;">
+    <section style="padding-top: 8px;">
       <div class="wrap">
         <div class="half-head">
-          <h2>For photos, prints and paintings you already have</h2>
+          <h2 style="font-size:46px;">Your first five are free.</h2>
           <p>Every Popcode you make includes five years of hosting. One-time purchases &mdash; no subscription.</p>
         </div>
 
@@ -257,13 +362,22 @@
       </div>
     </section>
 
-    <!-- ── Galleries ────────────────────────────────────────── -->
-    <section style="background:#fff; border-top:1px solid var(--line); padding: 72px 0;">
+    <!-- ── Galleries. The same treatment as the home page — the painting,
+         the curator on the phone — so the two pages tell it identically. ── -->
+    <section style="background:#fff; border-top:1px solid var(--line); padding: 78px 0 86px;">
       <div class="wrap">
-        <div class="venues">
-          <h2 style="text-align:center;">Galleries and museums</h2>
-          <p>Narrated tours with no app to download and no hardware to hand out. Visitors point their own phone at the work and hear the curator &mdash; or watch them, if you would rather. Priced per exhibition or as an annual licence.</p>
-          <a class="btn btn-ghost" href="mailto:info@popcodeapp.com?subject=Popcode%20for%20galleries">Talk to us</a>
+        <div class="venue">
+          <div class="venue-art">
+            <img class="art" src="/assets/mockups/scenes/exhibit.webp" alt="A painting in an ornate frame"/>
+            <div class="venue-phone">
+              <video src="/video/exhibit.mp4" muted loop playsinline autoplay preload="metadata"></video>
+            </div>
+          </div>
+          <div class="venue-body">
+            <h3>Narrated tours, without the app or the hardware</h3>
+            <p>Galleries, museums and open studios: visitors point their phone at the work itself and hear you talk about it &mdash; your recorded voice on its own, or video. No handsets to clean, no app to install, no QR code beside the frame. Priced per exhibition or as an annual licence, and we're taking on a small number of pilot spaces now.</p>
+            <a class="btn btn-dark" href="mailto:info@popcodeapp.com?subject=Popcode%20for%20galleries">Talk to us</a>
+          </div>
         </div>
       </div>
     </section>
@@ -296,6 +410,47 @@
     <script src="/beta-feedback.js"></script>
     <script>
       document.getElementById('yr').textContent = new Date().getFullYear();
+
+      // Twenty things people already own that a Popcode can live on. One shows
+      // at a time; the slot's width follows it so the sentence closes up
+      // around each word instead of the tail jumping.
+      (function () {
+        var WORDS = [
+          'photos', 'prints', 'paintings', 'posters', 'albums', 'mugs',
+          't-shirts', 'postcards', 'greeting cards', 'record sleeves',
+          'recipe cards', 'business cards', 'invitations', 'baby books',
+          'fridge magnets', 'luggage tags', 'gig posters', 'book jackets',
+          'memorial cards', 'scrapbooks'
+        ];
+        var slot = document.getElementById('odo');
+        if (!slot) return;
+
+        var els = WORDS.map(function (w, n) {
+          var el = document.createElement('span');
+          el.className = 'odo-word' + (n === 0 ? ' on' : '');
+          el.textContent = w;
+          slot.appendChild(el);
+          return el;
+        });
+
+        var i = 0;
+        // The words are absolutely positioned, so they contribute no width —
+        // measure the element itself and drive the slot from that.
+        function fit() { slot.style.width = Math.ceil(els[i].getBoundingClientRect().width) + 'px'; }
+
+        // Fonts land after first paint and every glyph width changes with them,
+        // so measure again once they are in rather than sizing to a fallback.
+        fit();
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+        window.addEventListener('resize', fit);
+
+        setInterval(function () {
+          els[i].classList.remove('on');
+          i = (i + 1) % els.length;
+          els[i].classList.add('on');
+          fit();
+        }, 2000);
+      })();
     </script>
   </body>
 </html>
