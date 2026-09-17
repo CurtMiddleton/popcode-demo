@@ -617,9 +617,11 @@
         async function buy(packId, btn) {
           var s = await session();
           if (!s) {
-            // No account yet is the common case here, so land on sign-up and
-            // come back to this page afterwards.
-            location.href = '/auth.html?mode=signup&next=' + encodeURIComponent('/pricing.html');
+            // No account yet is the common case here, so land on sign-up — and
+            // carry the pack through, because clicking Get 25 IS the choice and
+            // making them find it again after signing up loses it.
+            location.href = '/auth.html?mode=signup&next=' +
+              encodeURIComponent('/pricing.html?pack=' + packId);
             return;
           }
           var label = btn.textContent;
@@ -645,8 +647,22 @@
           btn.addEventListener('click', function () { buy(btn.dataset.pack, btn); });
         });
 
-        var back = new URLSearchParams(location.search).get('credits_session');
-        if (back) finalize(back); else showQuota();
+        var params = new URLSearchParams(location.search);
+        var back = params.get('credits_session');
+        var wanted = params.get('pack');
+        if (back) {
+          finalize(back);
+        } else if (wanted && document.querySelector('[data-pack="' + wanted + '"]')) {
+          // Straight back from signing up with a pack already chosen: pick up
+          // where they left off rather than dropping them on the page again.
+          var btn = document.querySelector('[data-pack="' + wanted + '"]');
+          history.replaceState(null, '', location.pathname);
+          session().then(function (s) {
+            if (s) buy(wanted, btn); else showQuota();
+          });
+        } else {
+          showQuota();
+        }
       })();
 
       // The line builds itself: twenty things people already own arrive one at
