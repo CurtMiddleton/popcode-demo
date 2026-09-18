@@ -405,6 +405,7 @@
       .vadd button:disabled { opacity:0.5; cursor:default; }
       .verr { font-size:13px; color:#cc3333; margin-top:6px; }
       .verr.ok { color:#1f8a4c; }
+      .vrowmsg { margin-top:4px; }
       .verr:empty { display:none; }
       .vbtn.sent { background:#e3f4ea; color:#1f8a4c; }
       .vhelp { font-size:12px; color:#999; margin-top:6px; line-height:1.45; }
@@ -1426,11 +1427,13 @@
           const lastT = theirs.length ? Math.max(...theirs.map(e => new Date(e.created_at).getTime())) : null;
           const row = document.createElement('div');
           row.className = 'vrow';
+          row.dataset.code = r.code;
           row.innerHTML = `
             <div class="vavatar">${escapeHtml((r.name.trim()[0] || '?').toUpperCase())}</div>
             <div class="vmain">
               <div class="vname">${escapeHtml(r.name)}</div>
               <div class="vstatus ${s ? (finished(s) ? 'done' : '') : 'waiting'}">${s ? escapeHtml('Opened ' + relTime(new Date(lastT).toISOString()) + ' · ' + statusText(s)) : 'Hasn’t opened it yet'}</div>
+              <div class="verr vrowmsg"></div>
             </div>
             <div class="vacts">
               <button class="vbtn" data-act="send">Send</button>
@@ -1523,14 +1526,14 @@
         renderViews();
         // Not straight into the share sheet: iOS only opens it from a tap, and
         // the insert above used up that tap. Send is one tap away on the row.
-        panelMsg(`${row.name} added. Tap Send next to their name to share their link.`, true);
+        rowMsg(row.code, 'Added. Tap Send to share their link.', true);
       }
 
       async function removeRecipient(col, r) {
         if (!(await popcodeConfirm('Their link will still open the Popcode, but views on it will show as anonymous.', { title: `Remove ${r.name}?`, confirmText: 'Remove', cancelText: 'Keep', danger: true }))) return;
         const { data, error } = await db.from('share_recipients').delete().eq('id', r.id).select('id');
         if (error || !data || !data.length) {
-          panelMsg('Couldn’t remove ' + r.name + '. Try again.');
+          rowMsg(r.code, 'Couldn’t remove. Try again.');
           return;
         }
         recipientsByCol[col.id] = (recipientsByCol[col.id] || []).filter(x => x.id !== r.id);
@@ -1541,6 +1544,16 @@
 
       // Confirmations and errors go inside the panel, under the Add box. A
       // toast lands at the bottom of the page, where it's easy to miss.
+      // A message about one person sits under that person's row.
+      function rowMsg(code, text, ok) {
+        document.querySelectorAll('#views-body .vrowmsg').forEach(el => { el.textContent = ''; });
+        const row = document.querySelector(`#views-body .vrow[data-code="${code}"]`);
+        const el = row && row.querySelector('.vrowmsg');
+        if (!el) return panelMsg(text, ok);
+        el.textContent = text;
+        el.classList.toggle('ok', !!ok);
+      }
+
       function panelMsg(text, ok) {
         const el = document.getElementById('vadd-err');
         if (!el) return;
@@ -1561,7 +1574,7 @@
         } catch (e) { if (e && e.name === 'AbortError') return; }
         try {
           await navigator.clipboard.writeText(url);
-          panelMsg(`Link for ${r.name} copied. Paste it into a text or email to them.`, true);
+          rowMsg(r.code, 'Link copied. Paste it into a text or email to them.', true);
           if (btn) {
             btn.textContent = 'Copied ✓'; btn.classList.add('sent');
             setTimeout(() => { btn.textContent = 'Send'; btn.classList.remove('sent'); }, 2500);
