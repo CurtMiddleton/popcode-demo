@@ -855,10 +855,23 @@
 
       let currentUser = null;
       let editingCollection = null;  // set when opened with ?id=slug (edit mode)
+      // Signed-out visitors can browse; the first step that needs an account
+      // sends them to sign up and back here afterwards (auth.html honours ?next).
+      function goSignUp() {
+        window.location.href = '/auth.html?mode=signup&next=' + encodeURIComponent(location.pathname + location.search);
+      }
+      // The intro (preview, sizes, price) is open to everyone; starting the
+      // builder is what needs an account. Capture phase, so this runs before
+      // the button's own handler.
+      document.addEventListener('click', (e) => {
+        if (!currentUser && e.target.closest('#start-book-btn')) {
+          e.preventDefault(); e.stopImmediatePropagation(); goSignUp();
+        }
+      }, true);
       db.auth.getSession().then(({ data }) => {
-        if (!data.session) { window.location.href = '/auth.html'; return; }
-        currentUser = data.session.user;
-        const uName = data.session.user?.user_metadata?.full_name?.split(' ')[0] || data.session.user?.email?.split('@')[0] || '';
+        if (!data.session && new URLSearchParams(location.search).get('id')) { goSignUp(); return; }
+        currentUser = data.session ? data.session.user : null;
+        const uName = currentUser?.user_metadata?.full_name?.split(' ')[0] || currentUser?.email?.split('@')[0] || '';
         if (uName) document.getElementById('user-greeting').textContent = 'Hi, ' + uName + '!';
         const editId = new URLSearchParams(location.search).get('id');
         // New book → show the interim details screen first; editing skips it.

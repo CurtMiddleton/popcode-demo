@@ -853,9 +853,23 @@
         catch (_) { return (currency || 'USD') + ' ' + (minor / 100).toFixed(whole ? 0 : 2); }
       }
 
+      // Signed-out visitors can browse; the first step that needs an account
+      // sends them to sign up and back here afterwards (auth.html honours ?next).
+      function goSignUp() {
+        window.location.href = '/auth.html?mode=signup&next=' + encodeURIComponent(location.pathname + location.search);
+      }
+
       // ---- boot ----
       db.auth.getSession().then(async ({ data }) => {
-        if (!data.session) { window.location.href = '/auth.html'; return; }
+        // Signed out: show the product, sizes and price with the sample photo.
+        // Choosing a photo is the first thing that needs an account.
+        if (!data.session) {
+          if (qs.get('design') || qs.get('cartItem')) { goSignUp(); return; }
+          document.getElementById('loading').style.display = 'none';
+          const t = qs.get('type');
+          openCategory(CATEGORIES.includes(t) ? t : 'print');
+          return;
+        }
         currentUser = data.session.user;
         const uName = currentUser?.user_metadata?.full_name?.split(' ')[0] || currentUser?.email?.split('@')[0] || '';
         if (uName) document.getElementById('user-greeting').textContent = 'Hi, ' + uName + '!';
@@ -1964,7 +1978,7 @@
       }
 
       // ---- choose a photo (tray of the user's Popcode photos) ----
-      function openPhotoStep() { renderTray(); showStep('photo'); }
+      function openPhotoStep() { if (!currentUser) { goSignUp(); return; } renderTray(); showStep('photo'); }
       function renderTray() {
         const grid = document.getElementById('tray-grid');
         grid.innerHTML = '';

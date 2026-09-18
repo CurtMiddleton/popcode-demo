@@ -2200,9 +2200,22 @@
       }
 
       // ── Boot ────────────────────────────────────────────────────
+      // Signed-out visitors can browse; the first step that needs an account
+      // sends them to sign up and back here afterwards (auth.html honours ?next).
+      function goSignUp() {
+        window.location.href = '/auth.html?mode=signup&next=' + encodeURIComponent(location.pathname + location.search);
+      }
+      // The intro (preview, sizes, price) is open to everyone; starting the
+      // builder is what needs an account. Capture phase, so this runs before
+      // the button's own handler.
+      document.addEventListener('click', (e) => {
+        if (!currentUser && e.target.closest('#start-cal-btn')) {
+          e.preventDefault(); e.stopImmediatePropagation(); goSignUp();
+        }
+      }, true);
       db.auth.getSession().then(({ data }) => {
-        if (!data.session) { window.location.href = '/auth.html'; return; }
-        currentUser = data.session.user;
+        if (!data.session && new URLSearchParams(location.search).get('id')) { goSignUp(); return; }
+        currentUser = data.session ? data.session.user : null;
         const uName = currentUser?.user_metadata?.full_name?.split(' ')[0] || currentUser?.email?.split('@')[0] || '';
         const greet = document.getElementById('user-greeting');
         if (uName && greet) greet.textContent = 'Hi, ' + uName + '!';
