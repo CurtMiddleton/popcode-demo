@@ -274,6 +274,20 @@
       .confirm-actions { display:flex; gap:10px; }
       .confirm-cancel-btn { flex:1; padding:12px; border-radius:24px; border:none; background:#eeeeee; color:#333; font-size:14px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; }
       .confirm-delete-btn { flex:1; padding:12px; border-radius:24px; border:none; background:#e53935; color:white; font-size:14px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; }
+
+      /* Out of Popcodes. Running out mid-idea is the moment this matters most,
+         so it gets a proper sheet rather than a browser alert. */
+      .quota-box { background:#fff; border-radius:24px; padding:0; max-width:380px; width:100%; overflow:hidden; box-shadow:0 18px 48px rgba(0,0,0,0.22); }
+      .quota-top { background:linear-gradient(135deg,#7657FC,#589AF9); padding:26px 26px 22px; text-align:center; color:#fff; }
+      .quota-mark { width:52px; height:52px; margin:0 auto 12px; display:block; }
+      .quota-mark use { fill:#fff; }
+      .quota-top h3 { font-family:'CooperBT',Georgia,serif; font-weight:400; font-size:26px; line-height:1.15; margin:0; letter-spacing:-0.01em; }
+      .quota-body { padding:22px 26px 26px; }
+      .quota-body p { font-size:15px; color:#444; line-height:1.55; margin:0 0 20px; text-align:center; }
+      .quota-actions { display:flex; flex-direction:column; gap:10px; }
+      .quota-go { padding:14px; border-radius:26px; border:none; background:#1a1a1a; color:#fff; font-size:15px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; text-decoration:none; text-align:center; display:block; }
+      .quota-back { padding:12px; border-radius:26px; border:none; background:transparent; color:#777; font-size:14px; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; }
+      .quota-back:hover { color:#1a1a1a; }
       .add-page-btn { width: 100%; max-width: 420px; padding: 16px; border-radius: 30px; border: none; background: #eeeeee; color: #333333; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 16px; transition: background 0.2s; font-family: 'Inter', sans-serif; }
       .add-page-btn:hover { background: #e0e0e0; }
       .create-btn { width: 100%; max-width: 420px; padding: 16px; border-radius: 30px; border: none; background: #1a1a1a; color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: opacity 0.3s, box-shadow 0.3s; font-family: 'Inter', sans-serif; opacity: 0.6; }
@@ -392,6 +406,28 @@
       <div class="field-hint" id="code-hint">Your link fills in from the name above. Tap Edit to customize it.</div>
 
       <div class="pages" id="pages"></div>
+
+      <div class="confirm-overlay" id="quota-overlay">
+        <div class="quota-box">
+          <div class="quota-top">
+            <svg class="quota-mark" viewBox="0 0 302 302" aria-hidden="true">
+              <defs><path id="quota-p" fill-rule="nonzero" d="M90.6,150.6a60.0,60.0 0 1,0 120.0,0a60.0,60.0 0 1,0 -120.0,0ZM129.1,150.6a21.5,21.5 0 1,1 43.0,0a21.5,21.5 0 1,1 -43.0,0ZM96.1,150.6L96.1,237.1A16.75,16.75 0 0,0 129.6,237.1L129.6,150.6Z"/></defs>
+              <g transform="rotate(0 150.6 150.6)"><use href="#quota-p"/></g><g transform="rotate(45 150.6 150.6)"><use href="#quota-p"/></g>
+              <g transform="rotate(90 150.6 150.6)"><use href="#quota-p"/></g><g transform="rotate(135 150.6 150.6)"><use href="#quota-p"/></g>
+              <g transform="rotate(180 150.6 150.6)"><use href="#quota-p"/></g><g transform="rotate(225 150.6 150.6)"><use href="#quota-p"/></g>
+              <g transform="rotate(270 150.6 150.6)"><use href="#quota-p"/></g><g transform="rotate(315 150.6 150.6)"><use href="#quota-p"/></g>
+            </svg>
+            <h3 id="quota-title">You're out of Popcodes</h3>
+          </div>
+          <div class="quota-body">
+            <p id="quota-msg"></p>
+            <div class="quota-actions">
+              <a class="quota-go" href="/pricing.html">See pricing</a>
+              <button class="quota-back" type="button" id="quota-back">Not right now</button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div class="confirm-overlay" id="confirm-overlay">
         <div class="confirm-box">
@@ -1027,6 +1063,28 @@
         return { open: () => toggle(true) };
       })();
 
+      // Running out mid-idea is the moment this matters most, so it gets a real
+      // sheet rather than a browser alert — and a way back into the page, since
+      // nothing they have uploaded is lost.
+      function showQuotaSheet(remaining, allowance, needed, afterUpload) {
+        const title = document.getElementById('quota-title');
+        const msg = document.getElementById('quota-msg');
+        if (remaining > 0) {
+          title.textContent = 'Not quite enough Popcodes';
+          msg.textContent = `This project has ${needed} Popcodes and you have ${remaining} left of ${allowance}. `
+            + 'Grab a pack and it will go straight through.';
+        } else {
+          title.textContent = "You're out of Popcodes";
+          msg.textContent = `Sorry — you have used all ${allowance || 5} of your free Popcodes. `
+            + 'Grab a pack and this will go straight through.'
+            + (afterUpload ? ' Nothing you have uploaded is lost.' : '');
+        }
+        document.getElementById('quota-overlay').classList.add('visible');
+      }
+      document.getElementById('quota-back').addEventListener('click', () => {
+        document.getElementById('quota-overlay').classList.remove('visible');
+      });
+
       document.getElementById('create-btn').addEventListener('click', async () => {
         // The name is what the link is built from, so there's no Popcode
         // without one.
@@ -1073,12 +1131,7 @@
           if (!q.error && q.data && q.data.length) {
             const { remaining, allowance } = q.data[0];
             if (readyPairs.length > remaining) {
-              alert(
-                remaining === 0
-                  ? `You have used all ${allowance} of your Popcodes. Grab a pack and this will go straight through.`
-                  : `This project has ${readyPairs.length} Popcodes and you have ${remaining} left of ${allowance}.`
-              );
-              window.location.href = '/pricing.html';
+              showQuotaSheet(remaining, allowance, readyPairs.length);
               return;
             }
           }
@@ -1245,8 +1298,7 @@
           // The quota trigger raises with this marker; everything else is a
           // genuine database failure and should read as one.
           if (/POPCODE_QUOTA_EXCEEDED/.test(err.message || '')) {
-            showError('You have used all your Popcodes. Grab a pack and your pages will save — nothing you have uploaded is lost.');
-            setTimeout(() => { window.location.href = '/pricing.html'; }, 2600);
+            showQuotaSheet(0, null, null, true);
             return;
           }
           showError('Step 6 failed (saving page items) — ' + (err.message || 'Database error. The project was created but page items could not be saved.'));
