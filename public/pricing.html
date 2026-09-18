@@ -577,10 +577,15 @@
             var r = await db.rpc('popcode_quota');
             if (r.error || !r.data || !r.data.length) return;
             var q = r.data[0];
-            say(q.remaining > 0
+            var note = q.remaining > 0
               ? 'You have ' + q.remaining + ' of ' + q.allowance + ' Popcodes left.'
-              : 'You have used all ' + q.allowance + ' of your Popcodes.',
-              q.remaining > 0 ? '' : 'bad');
+              : 'You have used all ' + q.allowance + ' of your Popcodes.';
+            // Only worth naming when it actually happened, and it explains why
+            // the allowance is bigger than the packs alone would give.
+            if (q.from_purchases > 0) {
+              note += ' ' + q.from_purchases + ' of those came free with things you printed with us.';
+            }
+            say(note, q.remaining > 0 ? '' : 'bad');
           } catch (e) { /* not signed in, or the quota is not deployed yet */ }
         }
 

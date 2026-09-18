@@ -83,7 +83,7 @@ export default async function handler(req, res) {
     // has no atomic add. The claim above is what makes this safe: only one
     // caller ever reaches here for a given order.
     const { data: existing } = await admin
-      .from('popcode_credits').select('purchased, granted').eq('user_id', user.id).maybeSingle();
+      .from('popcode_credits').select('purchased, granted, from_purchases').eq('user_id', user.id).maybeSingle();
     const purchased = (existing?.purchased || 0) + order.credits;
     const { error: upsertError } = await admin
       .from('popcode_credits')
@@ -103,7 +103,7 @@ export default async function handler(req, res) {
       status: 'granted',
       credits: order.credits,
       purchased,
-      allowance: 5 + purchased + (existing?.granted || 0),
+      allowance: 5 + purchased + (existing?.granted || 0) + (existing?.from_purchases || 0),
     });
   } catch (e) {
     Sentry.captureException(e);
