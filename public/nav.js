@@ -100,10 +100,16 @@
   .site-header .account-menu .aq-divider { height: 1px; background: #eceae5; margin: 2px 6px 4px; }
   .site-header .account-menu svg { width: 18px; height: 18px; flex-shrink: 0; color: #1a1a1a; }
   @media (max-width: 1040px) { .site-header .nav-inline { margin-left: 40px; } }
-  @media (max-width: 760px) {
-    /* Mobile: align the logo to the content margin (28px, where the page's h1
-       sits) instead of the desktop 80px offset, and mirror it on the right so
-       the hamburger sits the same distance from the edge. */
+  /* 959, not 760: the header's own content — logo + five links + cart/profile —
+     needs about 938px, so between 761 and 959 the inline nav did not fit and the
+     whole header (width:100vw, flex, children at min-content) pushed the page
+     sideways: 142px of horizontal scroll at 768, 10px still at 900. Every page
+     that loads this file had it. Nothing is lost by collapsing earlier — the
+     drawer's bottom cluster already carries cart, account and log out. */
+  @media (max-width: 959px) {
+    /* Below this the logo aligns to the content margin (28px, where the page's
+       h1 sits) instead of the desktop 80px offset, mirrored on the right so the
+       hamburger sits the same distance from the edge. */
     .site-header { padding: 0 28px; gap: 0; }
     .site-header .nav-inline { display: none; }
     .site-header .cart-btn, .site-header .profile-btn, .site-header .account-wrap { display: none; }
