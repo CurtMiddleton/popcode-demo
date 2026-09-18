@@ -56,7 +56,7 @@
       .vfr-head { display: flex; align-items: center; justify-content: space-between; padding: 30px 24px 14px; }
       .vfr-title { font-size: 32px; font-weight: 400; color: #1a1a1a; font-family: 'CooperBT', Georgia, serif; }
       .vfr-close {
-        background: #f3f2ef; border: none; color: #1a1a1a; width: 36px; height: 36px;
+        background: #f3f3f3; border: none; color: #1a1a1a; width: 36px; height: 36px;
         border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;
       }
       .vfr-close:hover { background: #ecebe5; }
@@ -75,7 +75,7 @@
       }
       .vfr-steps { display: flex; justify-content: center; gap: 10px; margin: 16px 0 4px; }
       .vfr-step {
-        background: #f3f2ef; border: none; border-radius: 999px; padding: 8px 16px;
+        background: #f3f3f3; border: none; border-radius: 999px; padding: 8px 16px;
         font-size: 12px; font-weight: 700; color: #1a1a1a; cursor: pointer; font-family: 'Inter', sans-serif;
       }
       .vfr-step:hover { background: #ecebe5; }
@@ -100,12 +100,12 @@
         padding: 15px 12px; border-radius: 14px; cursor: pointer;
         font-family: 'Inter', sans-serif; text-align: left;
       }
-      .ism-row:hover { background: #f7f6f2; }
+      .ism-row:hover { background: #f9f9f9; }
       .ism-row:active { background: #f0efea; }
       .ism-row input { display: none; }
       .ism-icon {
         flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%;
-        background: #f3f2ef; color: #1a1a1a;
+        background: #f3f3f3; color: #1a1a1a;
         display: flex; align-items: center; justify-content: center;
       }
       .ism-icon svg { width: 22px; height: 22px; }

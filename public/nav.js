@@ -91,8 +91,8 @@
     width: 32px; height: 32px; border-radius: 50%; background: none; border: none;
     cursor: pointer; text-decoration: none; color: #1a1a1a; transition: background 0.15s;
   }
-  .site-header .hicon:hover { background: #f3f2ef; }
-  .site-header .hicon.profile-btn { background: #f0eeea; }
+  .site-header .hicon:hover { background: #f3f3f3; }
+  .site-header .hicon.profile-btn { background: #efefef; }
   .site-header .hicon.profile-btn:hover, .site-header .account-wrap.open .hicon.profile-btn { background: #e7e4dd; }
   .site-header .hamburger { display: none; }
   .site-header .cart-btn { position: relative; }
@@ -125,7 +125,7 @@
     color: #1a1a1a; text-decoration: none; text-align: left; cursor: pointer;
     white-space: nowrap;
   }
-  .site-header .account-menu a:hover, .site-header .account-menu button:hover { background: #f3f2ef; }
+  .site-header .account-menu a:hover, .site-header .account-menu button:hover { background: #f3f3f3; }
   /* Popcodes left, above the actions. A count, not a meter: a bar implies a
      thing filling up, and at one of five that read as "nearly full" when it
      meant the opposite. Hidden until the quota answers. */
@@ -133,11 +133,11 @@
   .site-header .account-quota.on { display: block; }
   .site-header .account-quota .aq-pill {
     display: inline-block; font-family: 'Inter', sans-serif; font-size: 13px;
-    font-weight: 600; color: #1a1a1a; background: #f0eeea; border-radius: 99px;
+    font-weight: 600; color: #1a1a1a; background: #efefef; border-radius: 99px;
     padding: 6px 12px; white-space: nowrap;
   }
   .site-header .account-quota.empty .aq-pill { background: #fdeceb; color: #b4232a; }
-  .site-header .account-menu .aq-divider { height: 1px; background: #eceae5; margin: 2px 6px 4px; }
+  .site-header .account-menu .aq-divider { height: 1px; background: #ececec; margin: 2px 6px 4px; }
   .site-header .account-menu svg { width: 18px; height: 18px; flex-shrink: 0; color: #1a1a1a; }
   @media (max-width: 1040px) { .site-header .nav-inline { margin-left: 40px; } }
   /* 959, not 760: the header's own content — logo + five links + cart/profile —
@@ -181,7 +181,7 @@
   .nav-drawer-head .brand { margin-left: 0; }
   .nav-drawer-head .brand img { height: 35px; display: block; }
   .nav-drawer-close { background: none; border: none; cursor: pointer; padding: 8px; color: #1a1a1a; line-height: 0; border-radius: 8px; }
-  .nav-drawer-close:hover { background: #f3f2ef; }
+  .nav-drawer-close:hover { background: #f3f3f3; }
   #nav-overlay #nav-drawer .nav-link {
     display: flex; align-items: center; gap: 16px; padding: 15px 20px 15px 28px;
     font-size: 18px; font-weight: 600; color: #1a1a1a; text-decoration: none;
