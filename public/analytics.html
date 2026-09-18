@@ -994,9 +994,14 @@
 
         wrap.innerHTML = '<div class="loading-msg"><div class="spinner"></div>Loading accounts…</div>';
         try {
-          const { data, error } = await db.rpc('get_all_users', { max_rows: 35 });
+          // 1000, not 35: the tally above the table counts every account, and a
+          // cap would have made it quietly report the cap instead of the truth.
+          const { data, error } = await db.rpc('get_all_users', { max_rows: 1000 });
           if (error) throw error;
           cachedAccounts = data || [];
+          // Same list the Library and the funnel want — prime their cache so the
+          // RPC is not called twice on a page load.
+          if (!usersPromise) { cachedUsers = cachedAccounts; usersPromise = Promise.resolve(cachedUsers); }
           // Plan and Popcodes need the credit ledger and the collection rows.
           // Both are shared promises, and loadThumbs is already in flight for
           // the funnel, so this costs one extra query on the whole page.
