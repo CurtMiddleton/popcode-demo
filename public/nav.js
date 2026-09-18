@@ -86,6 +86,16 @@
     white-space: nowrap;
   }
   .site-header .account-menu a:hover, .site-header .account-menu button:hover { background: #f3f2ef; }
+  /* Popcodes left, above the actions. Hidden until the quota answers, so a
+     failed read leaves the menu exactly as it was. */
+  .site-header .account-quota { display: none; padding: 10px 11px 11px; }
+  .site-header .account-quota.on { display: block; }
+  .site-header .account-quota .aq-line { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; color: #6f6f6f; white-space: nowrap; margin-bottom: 7px; }
+  .site-header .account-quota .aq-line strong { color: #1a1a1a; }
+  .site-header .account-quota .aq-meter { height: 6px; border-radius: 99px; background: #eceae5; overflow: hidden; }
+  .site-header .account-quota .aq-meter span { display: block; height: 100%; width: 0; border-radius: 99px; background: linear-gradient(135deg,#7657FC,#589AF9); }
+  .site-header .account-quota.empty .aq-meter span { background: #e0574f; }
+  .site-header .account-menu .aq-divider { height: 1px; background: #eceae5; margin: 2px 6px 4px; }
   .site-header .account-menu svg { width: 18px; height: 18px; flex-shrink: 0; color: #1a1a1a; }
   @media (max-width: 1040px) { .site-header .nav-inline { margin-left: 40px; } }
   @media (max-width: 760px) {
@@ -182,6 +192,11 @@
         '<div class="account-wrap" id="account-wrap">' +
           '<button type="button" class="hicon profile-btn" id="account-btn" title="My Account" aria-label="My Account" aria-haspopup="true" aria-expanded="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>' +
           '<div class="account-menu" id="account-menu" role="menu">' +
+            '<div class="account-quota" id="account-quota">' +
+              '<div class="aq-line" id="aq-line"></div>' +
+              '<div class="aq-meter"><span id="aq-fill"></span></div>' +
+            '</div>' +
+            '<div class="aq-divider" id="aq-divider" style="display:none;"></div>' +
             '<a href="/account.html" role="menuitem">' + IC_ACCOUNT + 'My Account</a>' +
             '<button type="button" role="menuitem" id="account-logout">' + IC_LOGOUT + 'Log Out</button>' +
           '</div>' +
@@ -195,6 +210,38 @@
 
   if (document.body) document.body.insertAdjacentHTML('afterbegin', header);
 
+
+  // Popcodes left, in the avatar menu. Best-effort and quiet: signed out, or
+  // the quota not deployed, leaves the menu exactly as it was.
+  function loadAccountQuota() {
+    if (!window.supabase || typeof SUPABASE_URL === 'undefined') return;
+    var db;
+    try { db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch (e) { return; }
+    db.auth.getSession().then(function (r) {
+      if (!r || !r.data || !r.data.session) return;
+      return db.rpc('popcode_quota').then(function (q) {
+        if (q.error || !q.data || !q.data.length) return;
+        var d = q.data[0];
+        var box = document.getElementById('account-quota');
+        var line = document.getElementById('aq-line');
+        var fill = document.getElementById('aq-fill');
+        var div = document.getElementById('aq-divider');
+        if (!box || !line || !fill) return;
+        // Admins report headroom rather than a limit; showing that number raw
+        // would be nonsense.
+        if (d.allowance > 1000000) {
+          line.innerHTML = '<strong>' + d.used + '</strong> Popcodes made';
+          fill.style.width = '100%';
+        } else {
+          line.innerHTML = '<strong>' + d.remaining + '</strong> of ' + d.allowance + ' Popcodes left';
+          fill.style.width = Math.round((d.used / Math.max(d.allowance, 1)) * 100) + '%';
+          if (d.remaining === 0) box.classList.add('empty');
+        }
+        box.classList.add('on');
+        if (div) div.style.display = '';
+      });
+    }).catch(function () { /* quiet on purpose */ });
+  }
 
   function signOut() {
     try {
@@ -232,6 +279,7 @@
     });
     var out = document.getElementById('account-logout');
     if (out) out.addEventListener('click', signOut);
+    loadAccountQuota();
   })();
 
   // Pages that predate the shared nav carry their own #nav-overlay markup and

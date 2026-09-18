@@ -67,6 +67,16 @@
         background: white; border-radius: 20px;
         padding: 28px 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
       }
+      .quota-row { display: flex; align-items: center; gap: 18px; margin: 4px 0 14px; }
+      .quota-figure { display: flex; align-items: baseline; gap: 7px; flex-shrink: 0; }
+      .quota-figure strong { font-family: 'CooperBT', Georgia, serif; font-weight: 400; font-size: 40px; line-height: 1; letter-spacing: -0.02em; }
+      .quota-figure span { font-size: 14px; color: #8a8a8a; font-weight: 600; }
+      .quota-meter { flex: 1; height: 8px; border-radius: 99px; background: #eceae5; overflow: hidden; }
+      .quota-meter span { display: block; height: 100%; width: 0; border-radius: 99px; background: linear-gradient(135deg,#7657FC,#589AF9); transition: width .5s ease; }
+      /* Nothing left is the one state worth colouring differently. */
+      .quota-card-empty .quota-meter span { background: #e0574f; }
+      .quota-sub { font-size: 14px; color: #6f6f6f; line-height: 1.55; margin: 0 0 16px; }
+      .quota-link { display: inline-block; font-size: 14px; font-weight: 700; color: #1a1a1a; text-decoration: none; border-bottom: 2px solid #1a1a1a; padding-bottom: 1px; }
       .card-title { font-size: 16px; font-weight: 700; margin-bottom: 20px; }
       /* Admin shortcut card: hidden until beta-feedback.js clears the inline
          display:none for the admin, then this makes it a flex row. */
@@ -201,6 +211,18 @@
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="9 18 15 12 9 6"/></svg>
       </a>
 
+      <!-- Popcodes left. Hidden until the quota answers, so a failed read shows
+           nothing rather than a card full of dashes. -->
+      <div class="card" id="quota-card" style="display:none;">
+        <div class="card-title">Your Popcodes</div>
+        <div class="quota-row">
+          <div class="quota-figure"><strong id="quota-left">–</strong><span id="quota-left-label">left</span></div>
+          <div class="quota-meter"><span id="quota-fill"></span></div>
+        </div>
+        <p class="quota-sub" id="quota-sub"></p>
+        <a class="quota-link" href="/pricing.html" id="quota-link">Get more Popcodes</a>
+      </div>
+
       <!-- Profile -->
       <div class="card">
         <div class="card-title">Profile</div>
@@ -262,7 +284,46 @@
         if (uName) { const g = document.getElementById('user-greeting'); if (g) g.textContent = 'Hi, ' + uName + '!'; }
         document.getElementById('email-input').value = user.email || '';
         document.getElementById('name-input').value = user.user_metadata?.full_name || '';
+        showQuota();
       });
+
+      // Popcodes left. Quiet on failure: a card of dashes is worse than no card,
+      // and nothing else on this page depends on it.
+      async function showQuota() {
+        try {
+          const { data, error } = await db.rpc('popcode_quota');
+          if (error || !data || !data.length) return;
+          const q = data[0];
+          const card = document.getElementById('quota-card');
+          // Admins report headroom rather than a limit, so show it as what it is
+          // instead of a number with ten digits in it.
+          const unlimited = q.allowance > 1000000;
+
+          if (unlimited) {
+            document.getElementById('quota-left').textContent = '∞';
+            document.getElementById('quota-left-label').textContent = '';
+            document.getElementById('quota-fill').style.width = '100%';
+            document.getElementById('quota-sub').textContent =
+              `You've made ${q.used} ${q.used === 1 ? 'Popcode' : 'Popcodes'}. This account has no limit.`;
+            document.getElementById('quota-link').style.display = 'none';
+          } else {
+            document.getElementById('quota-left').textContent = q.remaining;
+            document.getElementById('quota-left-label').textContent =
+              `of ${q.allowance} left`;
+            document.getElementById('quota-fill').style.width =
+              Math.round((q.used / Math.max(q.allowance, 1)) * 100) + '%';
+            if (q.remaining === 0) card.classList.add('quota-card-empty');
+
+            let sub = `You've made ${q.used} of ${q.allowance}.`;
+            if (q.from_purchases > 0) {
+              sub += ` ${q.from_purchases} came free with things you printed with us.`;
+            }
+            if (q.remaining === 0) sub += ' Grab a pack to keep going.';
+            document.getElementById('quota-sub').textContent = sub;
+          }
+          card.style.display = '';
+        } catch (e) { /* quota not deployed, or offline */ }
+      }
 
       document.getElementById('logout-btn').addEventListener('click', async () => {
         await db.auth.signOut(); window.location.href = '/auth.html';
