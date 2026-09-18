@@ -22,6 +22,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/dialog.js"></script>
     <script src="/slug.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/image-source.js"></script>
@@ -853,7 +854,7 @@
           currentUser = data.session.user;
           const uName = data.session.user?.user_metadata?.full_name?.split(' ')[0] || data.session.user?.email?.split('@')[0] || '';
           if (uName) { const g = document.getElementById('user-greeting'); if (g) g.textContent = 'Hi, ' + uName + '!'; }
-          if (!slug) { alert('No project specified.'); window.location.href = '/manage.html'; return; }
+          if (!slug) { popcodeDialog({ message: 'No project specified.' }).then(() => { window.location.href = '/manage.html'; }); return; }
           loadCollection();
         }
       });
@@ -1339,7 +1340,7 @@
         collectionLoaded = true;
 
         const { data: col } = await db.from('collections').select('*').eq('slug', slug).single();
-        if (!col) { alert('Project not found.'); window.location.href = '/manage.html'; return; }
+        if (!col) { popcodeDialog({ message: 'Project not found.' }).then(() => { window.location.href = '/manage.html'; }); return; }
         collectionId = col.id;
         document.getElementById('name-input').value = col.name || '';
         document.getElementById('code-input').value = slug;
@@ -1499,7 +1500,7 @@
           const sizeMB = file.size / (1024 * 1024);
           if (sizeMB > MAX_VIDEO_MB) {
             if (canCompressVideo()) {
-              const go = confirm(`This video is ${sizeMB.toFixed(1)} MB — over the ${MAX_VIDEO_MB} MB limit.\n\nWould you like to compress it?\n\nTap OK to compress, or Cancel to choose a different video.`);
+              const go = await popcodeConfirm(`It's ${sizeMB.toFixed(1)} MB, and the limit is ${MAX_VIDEO_MB} MB. We can compress it for you — it may take a few minutes.`, { title: 'This video is too big', confirmText: 'Compress it', cancelText: 'Choose another video' });
               if (!go) return;
               const badge = document.getElementById(`video-badge-${key}`);
               badge.textContent = 'Compressing…';
@@ -2046,7 +2047,7 @@
         if (sizeMB > limitMB) {
           if (type === 'video') {
             if (canCompressVideo()) {
-              const go = confirm(`This video is ${sizeMB.toFixed(1)} MB — over the ${limitMB} MB limit.\n\nWould you like to compress it? It may take a few minutes.\n\nTap OK to compress, or Cancel to choose a different video.`);
+              const go = await popcodeConfirm(`It's ${sizeMB.toFixed(1)} MB, and the limit is ${limitMB} MB. We can compress it for you — it may take a few minutes.`, { title: 'This video is too big', confirmText: 'Compress it', cancelText: 'Choose another video' });
               if (!go) { clearInput(); return; }
               const msgEl = document.getElementById(`video-msg-new-${n}`);
               const btn = document.getElementById(`video-btn-new-${n}`);

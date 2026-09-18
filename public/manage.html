@@ -19,6 +19,7 @@
     <title>Popcode — My Popcodes</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/dialog.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -748,7 +749,7 @@
         card.querySelector('.share-opt-copy').addEventListener('click', function(e) {
           e.stopPropagation();
           const url = this.dataset.url;
-          navigator.clipboard.writeText(url).then(() => { showToast('Link copied!'); }).catch(() => { prompt('Copy this link:', url); });
+          navigator.clipboard.writeText(url).then(() => { showToast('Link copied!'); }).catch(() => { popcodeCopyLink(url); });
           this.closest('.share-popup').classList.remove('visible');
         });
 
@@ -807,7 +808,7 @@
         if (copyOpt) copyOpt.addEventListener('click', function (e) {
           e.stopPropagation();
           const url = this.dataset.url;
-          navigator.clipboard.writeText(url).then(() => showToast('Link copied!')).catch(() => prompt('Copy this link:', url));
+          navigator.clipboard.writeText(url).then(() => showToast('Link copied!')).catch(() => popcodeCopyLink(url));
           this.closest('.share-popup').classList.remove('visible');
         });
         const emailOpt = card.querySelector('.share-opt-email');
@@ -850,7 +851,7 @@
           if (navigator.share) { await navigator.share({ title, url }); return; }
         } catch (_) { return; }
         try { await navigator.clipboard.writeText(url); showToast('Link copied!'); }
-        catch (_) { prompt('Copy this link:', url); }
+        catch (_) { popcodeCopyLink(url); }
       }
 
       // A design (product) card for My Designs — a Popsa-style light-gray tile: the
@@ -1514,7 +1515,7 @@
       }
 
       async function removeRecipient(col, r) {
-        if (!confirm(`Remove ${r.name}? Their link will still open the Popcode, but views on it will show as anonymous.`)) return;
+        if (!(await popcodeConfirm('Their link will still open the Popcode, but views on it will show as anonymous.', { title: `Remove ${r.name}?`, confirmText: 'Remove', cancelText: 'Keep', danger: true }))) return;
         const { data, error } = await db.from('share_recipients').delete().eq('id', r.id).select('id');
         if (error || !data || !data.length) { showToast('Couldn’t remove — try again'); return; }
         recipientsByCol[col.id] = (recipientsByCol[col.id] || []).filter(x => x.id !== r.id);
@@ -1535,7 +1536,7 @@
           }
         } catch (e) { if (e && e.name === 'AbortError') return; }
         try { await navigator.clipboard.writeText(url); showToast(`Link for ${r.name} copied!`); }
-        catch (_) { prompt(`Link for ${r.name}:`, url); }
+        catch (_) { popcodeCopyLink(url, `Link for ${r.name}`); }
       }
 
       function escapeHtml(str) {

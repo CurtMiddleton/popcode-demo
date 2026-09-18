@@ -16,6 +16,7 @@
     <title>Popcode — Design a Board Book</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/dialog.js"></script>
     <script src="/undo.js"></script>
     <script src="/activity.js"></script>
     <script src="/slug.js"></script>
@@ -695,7 +696,7 @@
             .select('id, slug, name, kind, book_layout, mind_file_url, user_id')
             .eq('slug', slug).eq('user_id', currentUser.id).maybeSingle();
           if (error) throw error;
-          if (!col) { alert('Board book not found.'); window.location.href = '/manage.html'; return; }
+          if (!col) { popcodeDialog({ message: 'Board book not found.' }).then(() => { window.location.href = '/manage.html'; }); return; }
           if (col.kind !== 'boardbook' || !col.book_layout) {
             alert('This project is not a board book, so it can’t be opened here.');
             window.location.href = '/manage.html'; return;
@@ -899,14 +900,14 @@
           sync();
         });
         sheet.querySelector('[data-act="done"]').addEventListener('click', closeSheet);
-        delBtn.addEventListener('click', () => {
+        delBtn.addEventListener('click', async () => {
           const ids = [...picked];
           const onPages = ids.filter(id => placed.has(id)).length;
           const withPop = ids.filter(id => photoHasMedia(photos.get(id))).length;
           const lines = [`Delete ${ids.length} photo${ids.length === 1 ? '' : 's'}?`];
           if (onPages) lines.push(`${onPages} ${onPages === 1 ? 'is' : 'are'} on a page and will be taken off it.`);
           if (withPop) lines.push(`${withPop} ${withPop === 1 ? 'has' : 'have'} a Popcode — its video or audio link goes too.`);
-          if (!confirm(lines.join('\n\n'))) return;
+          if (!(await popcodeConfirm(lines.slice(1).join('\n\n'), { title: lines[0], confirmText: 'Delete', cancelText: 'Keep them', danger: true }))) return;
           deletePhotos(ids);
           closeSheet();
           showToast(`Deleted ${ids.length} photo${ids.length === 1 ? '' : 's'}. Save to keep the change.`);
@@ -1726,7 +1727,7 @@
         const sizeMB = file.size / (1024 * 1024); const msg = document.getElementById('pop-video-msg');
         if (sizeMB > MAX_VIDEO_MB) {
           if (canCompressVideo()) {
-            if (!confirm(`This video is ${sizeMB.toFixed(1)} MB — over the ${MAX_VIDEO_MB} MB limit.\n\nCompress it now? This can take a minute.`)) { input.value = ''; return; }
+            if (!(await popcodeConfirm(`It's ${sizeMB.toFixed(1)} MB, and the limit is ${MAX_VIDEO_MB} MB. We can compress it for you — it can take a minute.`, { title: 'This video is too big', confirmText: 'Compress it', cancelText: 'Choose another video' }))) { input.value = ''; return; }
             msg.innerHTML = `<div class="compress-status">Compressing… 0%</div><div class="compress-bar-wrap"><div class="compress-bar" id="cbar"></div></div>`;
             let compressed; try { compressed = await compressVideo(file, p => { document.getElementById('cbar').style.width = Math.round(p * 100) + '%'; msg.querySelector('.compress-status').textContent = `Compressing… ${Math.round(p * 100)}%`; }); } catch (e) { compressed = null; }
             const cMB = compressed ? compressed.size / (1024 * 1024) : Infinity;
@@ -2096,7 +2097,12 @@
         }
         // Popcoded pages (in board order) → AR targets + collection_items.
         const popcodedPos = POSITIONS.filter(pos => photoHasMedia(photos.get(slots[pos])));
-        if (!popcodedPos.length) { alert('Add a Popcode (video or audio) to at least one page so it comes to life when scanned.'); return; }
+        // Finishing needs at least one Popcode (otherwise nothing scans); saving
+        // a draft doesn't — lay it out first, link videos later.
+        if (!popcodedPos.length && !quiet) {
+          popcodeDialog({ title: 'No Popcodes yet', message: 'Add a video or audio to at least one page so it comes to life when it’s scanned.', confirmText: 'Got it' });
+          return;
+        }
         const editing = !!editingCollection;
         // The title is what the link is built from, so it can't be skipped.
         if (!editing && !(document.getElementById('title-input').value || '').trim()) {
@@ -2190,7 +2196,9 @@
           const textChanged = (pos) => JSON.stringify(pageText(pos)) !== (baseText[pos] || 'null');
           const anyPopRecropped = popcodedPos.some(pos => recroppedPos.has(pos) || textChanged(pos));
           let mindUrl;
-          if (editing && setUnchanged && !anyPopRecropped) {
+          if (!popcodedPos.length) {
+            mindUrl = '';   // draft with nothing linked: no targets to compile (column is NOT NULL)
+          } else if (editing && setUnchanged && !anyPopRecropped) {
             mindUrl = editingCollection.mind_file_url;   // reuse the existing target
             setProgress('Saving your board book…', 60);
           } else {
@@ -2266,7 +2274,9 @@
             if (uErr) throw new Error('Could not save: ' + uErr.message);
             collectionId = editingCollection.id;
             await db.from('collection_items').delete().eq('collection_id', collectionId);
-            const { error: iErr } = await db.from('collection_items').insert(itemRows.map(r => ({ ...r, collection_id: collectionId })));
+            const { error: iErr } = itemRows.length
+              ? await db.from('collection_items').insert(itemRows.map(r => ({ ...r, collection_id: collectionId })))
+              : { error: null };
             if (iErr) throw new Error('Saved, but linking media failed: ' + iErr.message);
             editingCollection.mind_file_url = mindUrl;
             editingCollection._mindTargetUrls = popcodedUrls;
@@ -2279,7 +2289,9 @@
             if (colErr) throw new Error('Could not save: ' + colErr.message);
             collectionId = col.id;
             logActivity('create_boardbook', { slug, user_id: currentUser.id });
-            const { error: iErr } = await db.from('collection_items').insert(itemRows.map(r => ({ ...r, collection_id: collectionId })));
+            const { error: iErr } = itemRows.length
+              ? await db.from('collection_items').insert(itemRows.map(r => ({ ...r, collection_id: collectionId })))
+              : { error: null };
             if (iErr) throw new Error('Saved, but linking media failed: ' + iErr.message);
             // From here on this is an edit of the saved book, so a second
             // "Save design" updates it instead of trying to create it again.
