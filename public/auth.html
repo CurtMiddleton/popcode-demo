@@ -39,46 +39,74 @@
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
         min-height: 100vh;
-        background: #f9f9f9;
+        background: #f7f6f2;
         font-family: 'Inter', sans-serif;
         font-weight: 400;
         color: #1a1a1a;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 0 0 40px; overflow-x: hidden;
+        overflow-x: hidden;
       }
       h1, h2, h3 { font-family: 'CooperBT', serif; font-weight: 400; }
-      .site-header {
-        width: 100vw;
-        background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%);
-        padding: 24px 24px 40px;
-        min-height: 200px;
-        display: flex;
-        align-items: flex-end;
-        justify-content: center;
-        position: relative;
-        margin-bottom: 32px;
-        align-self: stretch;
+
+      /* Split screen: the homepage hero carried through on the left, the form
+         on the right, so arriving from the homepage feels like the same place. */
+      .auth-shell { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); min-height: 100vh; }
+      .brand-panel {
+        position: sticky; top: 0; height: 100vh; overflow: hidden;
+        background: linear-gradient(160deg, #5bc8f5 0%, #7c3aed 100%);
+        color: #fff; display: flex; flex-direction: column;
+        padding: 36px clamp(32px, 5vw, 72px) 0;
       }
-      .logo-text {
-        font-family: 'CooperBT', serif;
-        font-weight: 700;
-        font-size: 36px;
-        color: white;
-        letter-spacing: -0.02em;
+      .bp-logo img { height: 40px; display: block; }
+      .bp-copy { margin-top: clamp(28px, 7vh, 80px); max-width: 460px; position: relative; z-index: 2; }
+      .bp-title { font-size: clamp(44px, 5.4vw, 76px); line-height: .98; letter-spacing: -0.02em; }
+      .bp-sub { margin-top: 18px; font-size: 18px; line-height: 1.5; opacity: .92; max-width: 400px; }
+      .bp-stage { position: relative; flex: 1; min-height: 0; margin-top: 28px; }
+      .bp-art {
+        position: absolute; right: -6%; bottom: -4%; height: 92%; max-height: 560px; width: auto;
+        filter: drop-shadow(0 30px 50px rgba(20, 8, 60, .35));
+      }
+      .bp-phone {
+        position: absolute; left: 14%; bottom: 4%; z-index: 2;
+        height: min(78%, 440px); aspect-ratio: 236 / 476;
+        background: #16121f; border-radius: 13% / 6.4%; padding: 3.2%;
+        box-shadow: 0 40px 80px rgba(10, 5, 40, .5);
+      }
+      .bp-screen { position: relative; width: 100%; height: 100%; border-radius: 11% / 5.4%; overflow: hidden; background: #1a1430; }
+      .bp-screen video { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .bp-notch { position: absolute; left: 50%; top: 2.2%; transform: translateX(-50%); width: 36%; height: 4.6%; border-radius: 12px; background: #16121f; }
+      .bp-curve { display: none; }
+
+      .form-side { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px 24px; }
+      @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+      .card { animation: rise .5s ease both; }
+      .bp-copy { animation: rise .6s ease both; }
+      .bp-phone { animation: rise .8s .15s ease both; }
+      @media (prefers-reduced-motion: reduce) { .card, .bp-copy, .bp-phone { animation: none; } }
+
+      /* Phones: the panel becomes the homepage's gradient band and curve, with
+         no stage, so the form is still above the fold. */
+      @media (max-width: 860px) {
+        .auth-shell { grid-template-columns: 1fr; }
+        .brand-panel { position: relative; height: auto; padding: 24px 24px 84px; }
+        .bp-logo img { height: 32px; }
+        .bp-copy { margin-top: 26px; }
+        .bp-title { font-size: 44px; }
+        .bp-sub { font-size: 16px; margin-top: 12px; }
+        .bp-stage { display: none; }
+        .bp-curve { display: block; position: absolute; left: 0; right: 0; bottom: -1px; width: 100%; height: 70px; }
+        .form-side { justify-content: flex-start; padding: 0 20px 24px; margin-top: -44px; position: relative; z-index: 2; }
       }
       label { font-family: 'Inter', sans-serif; }
       .card {
-        width: calc(100% - 48px);
-        max-width: 360px;
+        width: 100%;
+        max-width: 400px;
         background: white;
-        border-radius: 20px;
-        padding: 32px 28px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-        border: 1px solid #e8e8e8;
+        border-radius: 24px;
+        padding: 36px 32px;
+        box-shadow: 0 20px 60px rgba(40, 20, 90, 0.10), 0 2px 8px rgba(0,0,0,0.04);
+        border: 1px solid #ecebe6;
       }
-      h1 { font-size: 22px; font-weight: 700; margin-bottom: 24px; text-align: center; color: #1a1a1a; }
+      h1 { font-size: 30px; margin-bottom: 24px; text-align: center; color: #1a1a1a; letter-spacing: -0.01em; }
       .field { margin-bottom: 16px; }
       label { font-size: 13px; font-weight: 700; color: #555; display: block; margin-bottom: 6px; }
       input[type="text"], input[type="email"], input[type="password"] {
@@ -132,9 +160,25 @@
     </style>
   </head>
   <body>
-    <header class="site-header">
-      <img src="/assets/Popcode_logo.rev.svg" alt="Popcode" style="height:80px;"/>
-    </header>
+    <div class="auth-shell">
+    <aside class="brand-panel">
+      <a class="bp-logo" href="/"><img src="/assets/Popcode_logo.rev.svg" alt="Popcode"/></a>
+      <div class="bp-copy">
+        <h2 class="bp-title" id="bp-title">Welcome back.</h2>
+        <p class="bp-sub" id="bp-sub">Sign in to make, share and order the things that play.</p>
+      </div>
+      <div class="bp-stage" aria-hidden="true">
+        <img class="bp-art" src="/assets/mockups/scenes/exhibit.webp" alt=""/>
+        <div class="bp-phone"><div class="bp-screen">
+          <video src="/video/exhibit.mp4" poster="/assets/mockups/scenes/exhibit.webp" muted loop playsinline autoplay preload="metadata"></video>
+          <div class="bp-notch"></div>
+        </div></div>
+      </div>
+      <svg class="bp-curve" viewBox="0 0 1200 190" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0 96 C 260 8, 700 -18, 1200 52 L1200 190 L0 190 Z" fill="#f7f6f2"/>
+      </svg>
+    </aside>
+    <main class="form-side">
     <div class="card">
       <h1 id="form-title">Sign In</h1>
       <div class="error-msg" id="error-msg"></div>
@@ -168,6 +212,8 @@
     <footer>
       <a href="/terms.html">Terms</a> <span style="color:#ccc">·</span> <a href="/privacy.html">Privacy</a>
     </footer>
+    </main>
+    </div>
 
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -200,6 +246,13 @@
         const titles = { signin: 'Sign In', signup: 'Create Account', forgot: 'Reset Password' };
         const submitText = { signin: 'Sign In', signup: 'Create Account', forgot: 'Send Reset Link' };
         document.getElementById('form-title').textContent = titles[mode];
+        const side = {
+          signin: ['Welcome back.', 'Sign in to make, share and order the things that play.'],
+          signup: ['Make anything play.', 'Point a phone at a photo, a print or a painting and video or voice plays from it. Your first five Popcodes are free.'],
+          forgot: ['It happens.', 'Enter your email and we\'ll send you a link to set a new password.'],
+        }[mode];
+        document.getElementById('bp-title').textContent = side[0];
+        document.getElementById('bp-sub').textContent = side[1];
         document.getElementById('submit-btn').textContent = submitText[mode];
         document.getElementById('name-field').style.display = isSignUp ? 'block' : 'none';
         document.getElementById('password').closest('.field').style.display = isForgot ? 'none' : 'block';
