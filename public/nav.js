@@ -20,7 +20,47 @@
     document.head.appendChild(cartScript);
   }
 
+  // Signed in or not, decided NOW from the token supabase-js keeps in
+  // localStorage (sb-<ref>-auth-token), so the header never flashes the wrong
+  // items. getSession() below confirms it and flips the class if it was stale.
+  function storedSession() {
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (/^sb-.*-auth-token$/.test(k) && localStorage.getItem(k)) return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+  function setSignedOut(out) { document.documentElement.classList.toggle('pc-signed-out', !!out); }
+  setSignedOut(!storedSession());
+
   var css = `
+  /* Signed out: nothing that belongs to an account — My Popcodes, My Designs,
+     Past Views, cart, avatar, log out — and a Create account button instead.
+     Matched by href so it also covers pages that ship their own drawer. */
+  html.pc-signed-out .site-header .nav-inline a[href^="/manage.html"],
+  html.pc-signed-out .site-header .nav-inline a[href="/views.html"],
+  html.pc-signed-out #nav-drawer a[href^="/manage.html"],
+  html.pc-signed-out #nav-drawer a[href="/views.html"],
+  html.pc-signed-out #nav-drawer a[href="/account.html"],
+  html.pc-signed-out #nav-drawer a[href="/cart.html"],
+  html.pc-signed-out #nav-drawer .nav-logout,
+  html.pc-signed-out .site-header .cart-btn,
+  html.pc-signed-out .site-header .account-wrap { display: none !important; }
+  .site-header .join-btn, #nav-drawer .nav-guest { display: none !important; }
+  html.pc-signed-out .site-header .join-btn { display: inline-flex !important; }
+  html.pc-signed-out #nav-drawer .nav-guest { display: flex !important; }
+  .site-header .join-btn {
+    align-items: center; height: 40px; padding: 0 20px; border-radius: 999px;
+    background: #1a1a1a; color: #fff; text-decoration: none; white-space: nowrap;
+    font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; transition: opacity .15s;
+  }
+  .site-header .join-btn:hover { opacity: .85; }
+  @media (max-width: 959px) { .site-header .join-btn { height: 36px; padding: 0 13px; margin-left: auto; font-size: 13px; }
+    html.pc-signed-out .site-header .hamburger { margin-left: 10px; } }
+  @media (max-width: 374px) { html.pc-signed-out .site-header .join-btn { display: none !important; } }
+
   .site-header {
     position: sticky; top: 0; z-index: 50; width: 100vw;
     background: #ffffff;
@@ -196,6 +236,7 @@
       '<a href="/" class="brand"><img src="/assets/Popcode_logo.png" alt="Popcode"/></a>' +
       '<nav class="nav-inline">' + nav + '</nav>' +
       '<div class="header-right">' +
+        '<a class="join-btn" href="/auth.html?mode=signup">Create account</a>' +
         '<a class="hicon cart-btn" href="/cart.html" title="Cart" aria-label="Cart"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></a>' +
         '<div class="account-wrap" id="account-wrap">' +
           '<button type="button" class="hicon profile-btn" id="account-btn" title="My Account" aria-label="My Account" aria-haspopup="true" aria-expanded="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>' +
@@ -225,7 +266,9 @@
     var db;
     try { db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch (e) { return; }
     db.auth.getSession().then(function (r) {
-      if (!r || !r.data || !r.data.session) return;
+      var signedIn = !!(r && r.data && r.data.session);
+      setSignedOut(!signedIn);
+      if (!signedIn) return;
       return db.rpc('popcode_quota').then(function (q) {
         if (q.error || !q.data || !q.data.length) return;
         var d = q.data[0];
@@ -347,6 +390,13 @@
       logout.innerHTML = IC_LOGOUT + 'Log Out';
       logout.addEventListener('click', signOut);
       bottom.appendChild(logout);
+      // Signed out, the bottom cluster is a way in rather than a way out.
+      [['/auth.html?mode=signup', 'Create account'], ['/auth.html', 'Sign in']].forEach(function (g) {
+        var a = document.createElement('a');
+        a.className = 'nav-link nav-guest'; a.href = g[0];
+        a.innerHTML = IC_ACCOUNT + g[1];
+        bottom.appendChild(a);
+      });
       var external = drawer.querySelector('.nav-link.external');
       if (external) bottom.appendChild(external);
       // Drop the now-orphaned divider that used to precede the external link.
