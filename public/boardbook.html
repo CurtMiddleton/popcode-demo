@@ -35,7 +35,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@400;500;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     <style>
-      /* Filson Rounded — self-hosted, same faces the photo book loads. */
+      /* Filson Pro — self-hosted, same faces the photo book loads. */
       @font-face { font-family: 'FilsonPro'; src: url('/assets/fonts/FilsonProMedium/font.woff2') format('woff2'), url('/assets/fonts/FilsonProMedium/font.woff') format('woff'); font-weight: 400 500; font-display: swap; }
       @font-face { font-family: 'FilsonPro'; src: url('/assets/fonts/FilsonProBold/font.woff2') format('woff2'), url('/assets/fonts/FilsonProBold/font.woff') format('woff'); font-weight: 600 700; font-display: swap; }
     </style>
@@ -196,6 +196,15 @@
       .menu-ic { flex: 0 0 auto; width: 28px; display: flex; align-items: center; justify-content: center; color: #555; }
       .menu-sub { font-size: 12px; color: #999; font-weight: 400; }
       .menu-row.destructive { color: #d33; }
+      /* Font picker cards — the same sheet the photo book and calendar use. */
+      .font-list { display: flex; flex-direction: column; gap: 12px; }
+      .font-card { border: 2px solid #eceae4; border-radius: 14px; padding: 16px 16px 18px; cursor: pointer; background: #fff; transition: border-color 0.12s, background 0.12s; }
+      .font-card:hover { background: #faf9f5; }
+      .font-card.active { border-color: #7657FC; background: #f4f1ff; }
+      .font-card-name { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 700; color: #666; text-align: center; margin-bottom: 12px; }
+      .font-card.active .font-card-name { color: #5b3fd6; }
+      .font-card-prev { text-align: center; color: #2a2a2a; line-height: 1.55; font-size: 19px; }
+      .font-card-prev div { word-spacing: 2px; }
       /* Edit Photo modal (Popsa-style) */
       @media (min-width: 720px) { .sheet.sheet-wide { max-width: 960px; } }
       .ep-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
@@ -529,7 +538,7 @@
         { id: 'cooper', name: 'Cooper', stack: "'CooperBT', Georgia, serif" },
         { id: 'dmsans', name: 'DM Sans', stack: "'DM Sans', sans-serif" },
         { id: 'inter', name: 'Inter', stack: "'Inter', sans-serif" },
-        { id: 'filson', name: 'Filson Rounded', stack: "'FilsonPro', 'Nunito', sans-serif" },
+        { id: 'filson', name: 'Filson Pro', stack: "'FilsonPro', 'Nunito', sans-serif" },
         { id: 'cormorant', name: 'Cormorant Garamond', stack: "'Cormorant Garamond', Georgia, serif" },
         { id: 'libre', name: 'Libre Baskerville', stack: "'Libre Baskerville', Georgia, serif" },
       ];
@@ -1229,16 +1238,17 @@
         openSheet(`
           <h2>Front cover</h2>
           <p class="sheet-sub">Add a cover photo and a title — like the photo book.</p>
-          <div class="menu-row" data-act="text">Edit cover text &amp; font</div>
-          <div class="menu-row" data-act="photo">${has ? 'Change the cover photo' : 'Add a cover photo'}</div>
-          ${has ? '<div class="menu-row" data-act="edit">Adjust cover photo — crop, zoom, rotate</div>' : ''}
-          ${has && photoHasMedia(photos.get(slots['cover'])) ? '<div class="menu-row" data-act="popcode">Edit the cover Popcode</div>'
-            : has ? '<div class="menu-row" data-act="popcode">Add a Popcode to the cover</div>' : ''}
-          ${has ? '<div class="menu-row danger" data-act="remove">Remove the cover photo</div>' : ''}
+          <div class="menu-row" data-act="text"><div class="menu-ic">${MENU_IC.text}</div><div><div>Edit cover text</div><div class="menu-sub">${escapeHtml([cover.title, cover.subtitle].filter(Boolean).join(' · ')) || 'Title and subtitle / date'}</div></div></div>
+          <div class="menu-row" data-act="font"><div class="menu-ic"><span style="font-family:Georgia,serif;font-size:19px;line-height:1">Aa</span></div><div><div>Change font</div><div class="menu-sub">${escapeHtml((COVER_FONTS.find(f => f.id === cover.font) || COVER_FONTS[0]).name)}</div></div></div>
+          <div class="menu-row" data-act="photo"><div class="menu-ic">${has ? MENU_IC.replace : MENU_IC.photo}</div><div><div>${has ? 'Change the cover photo' : 'Add a cover photo'}</div><div class="menu-sub">Upload an image for the cover</div></div></div>
+          ${has ? `<div class="menu-row" data-act="edit"><div class="menu-ic">${MENU_IC.edit}</div><div><div>Adjust cover photo</div><div class="menu-sub">Fill / fit, zoom, reposition, rotate</div></div></div>` : ''}
+          ${has ? `<div class="menu-row" data-act="popcode"><div class="menu-ic"><img src="/assets/popcode_symbol_color.svg" style="width:20px;height:20px"/></div><div><div>${photoHasMedia(photos.get(slots['cover'])) ? 'Edit the cover Popcode' : 'Add a Popcode to the cover'}</div><div class="menu-sub">${photoHasMedia(photos.get(slots['cover'])) ? 'Change or remove the linked media' : 'Link a video or audio recording'}</div></div></div>` : ''}
+          ${has ? `<div class="menu-row destructive" data-act="remove"><div class="menu-ic">${MENU_IC.remove}</div><div><div>Remove the cover photo</div><div class="menu-sub">Sends the photo back to your tray</div></div></div>` : ''}
         `);
         sheet.querySelectorAll('.menu-row').forEach(row => row.addEventListener('click', () => {
           const act = row.dataset.act;
           if (act === 'text') { openCoverTextSheet(); }
+          else if (act === 'font') { openFontSheet(); }
           else if (act === 'edit') { closeSheet(); openEditPhoto('cover'); }
           else if (act === 'photo') { closeSheet(); selectedTrayId = null; pendingPickPos = 'cover'; document.getElementById('photo-input').click(); }
           else if (act === 'popcode') { closeSheet(); openPopcodeSheet('cover'); }
@@ -1250,7 +1260,6 @@
           <h2>Cover text</h2>
           <div class="field"><label for="cv-title">Title</label><input class="text-input" id="cv-title" style="max-width:none" value="${escapeHtml(cover.title)}" placeholder="e.g. Baby's First Year"/></div>
           <div class="field"><label for="cv-sub">Subtitle / date <span style="color:#aaa;font-weight:400">(optional)</span></label><input class="text-input" id="cv-sub" style="max-width:none" value="${escapeHtml(cover.subtitle)}" placeholder="e.g. 2026"/></div>
-          <div class="field"><label>Font</label><div class="seg" id="cv-fonts">${COVER_FONTS.map(f => `<button type="button" data-font="${f.id}" class="${cover.font === f.id ? 'active' : ''}" style="font-family:${f.stack}">${f.name}</button>`).join('')}</div></div>
           <div class="sheet-actions"><button class="btn-primary" id="cv-done">Done</button></div>
         `);
         const sync = () => {
@@ -1261,12 +1270,31 @@
         };
         document.getElementById('cv-title').addEventListener('input', sync);
         document.getElementById('cv-sub').addEventListener('input', sync);
-        sheet.querySelectorAll('#cv-fonts button').forEach(b => b.addEventListener('click', () => {
-          cover.font = b.dataset.font;
-          sheet.querySelectorAll('#cv-fonts button').forEach(x => x.classList.toggle('active', x === b));
-          renderSlots();
-        }));
         document.getElementById('cv-done').addEventListener('click', () => { closeSheet(); render(); });
+      }
+      // Font picker — the same cards and choices as the photo book and calendar.
+      function openFontSheet() {
+        const cards = COVER_FONTS.map(f => `
+          <div class="font-card${cover.font === f.id ? ' active' : ''}" data-font="${f.id}">
+            <div class="font-card-name">${escapeHtml(f.name)}</div>
+            <div class="font-card-prev" style="font-family:${f.stack}">
+              <div>ABCDEFGHIJKLM NOPQRSTUVWXYZ</div>
+              <div>abcdefghijklm nopqrstuvwxyz</div>
+              <div>1234567890</div>
+            </div>
+          </div>`).join('');
+        openSheet(`
+          <div class="ep-head"><h2>Fonts</h2><button class="ep-x" id="font-close" aria-label="Close">${IC_X}</button></div>
+          <p class="sheet-sub">Styles the title and subtitle on your cover.</p>
+          <div class="font-list">${cards}</div>
+        `);
+        document.getElementById('font-close').addEventListener('click', closeSheet);
+        sheet.querySelectorAll('.font-card').forEach(c => c.addEventListener('click', () => {
+          cover.font = c.dataset.font;
+          sheet.querySelectorAll('.font-card').forEach(x => x.classList.toggle('active', x === c));
+          renderSlots();
+          setTimeout(closeSheet, 180);
+        }));
       }
 
       // ── Slot menu ──────────────────────────────────────────────────
