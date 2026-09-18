@@ -48,7 +48,16 @@
   html.pc-signed-out #nav-drawer .nav-logout,
   html.pc-signed-out .site-header .cart-btn,
   html.pc-signed-out .site-header .account-wrap { display: none !important; }
-  .site-header .join-btn, #nav-drawer .nav-guest { display: none !important; }
+  .site-header .join-btn, .site-header .login-link, #nav-drawer .nav-guest { display: none !important; }
+  html.pc-signed-out .site-header .login-link { display: inline-flex !important; }
+  .site-header .login-link {
+    align-items: center; height: 40px; padding: 0 14px; margin-right: 4px; border-radius: 999px;
+    color: #1a1a1a; text-decoration: none; white-space: nowrap;
+    font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; transition: background .15s;
+  }
+  .site-header .login-link:hover { background: #f3f3f3; }
+  /* Phones: no room beside the logo — the drawer carries Sign in. */
+  @media (max-width: 959px) { html.pc-signed-out .site-header .login-link { display: none !important; } }
   html.pc-signed-out .site-header .join-btn { display: inline-flex !important; }
   html.pc-signed-out #nav-drawer .nav-guest { display: flex !important; }
   .site-header .join-btn {
@@ -236,6 +245,7 @@
       '<a href="/" class="brand"><img src="/assets/Popcode_logo.png" alt="Popcode"/></a>' +
       '<nav class="nav-inline">' + nav + '</nav>' +
       '<div class="header-right">' +
+        '<a class="login-link" href="/auth.html">Log in</a>' +
         '<a class="join-btn" href="/auth.html?mode=signup">Create account</a>' +
         '<a class="hicon cart-btn" href="/cart.html" title="Cart" aria-label="Cart"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></a>' +
         '<div class="account-wrap" id="account-wrap">' +
