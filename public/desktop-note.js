@@ -42,6 +42,12 @@
       '.popcode-desktop #start-tap,' +
       '.popcode-desktop #start-btn,' +
       '.popcode-desktop #wl-cover .wl-scan-btn { display: none !important; }' +
+      // The splash logo is absolutely positioned against the vertical centre,
+      // which is fine above a small disc but puts it straight behind this
+      // panel. Put it back in flow so the note sits under it, as a caption to
+      // the mark rather than on top of it.
+      '.popcode-desktop #start-screen img.splash-logo {' +
+      '  position: static; margin: 0 0 30px; }' +
       // The cover's CTA column is sized for a single pill button; the note
       // needs room to set its lines without wrapping into a tower.
       '.popcode-desktop #wl-cover .wl-cta { max-width: 330px; }' +

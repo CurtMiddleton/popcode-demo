@@ -86,15 +86,17 @@
     white-space: nowrap;
   }
   .site-header .account-menu a:hover, .site-header .account-menu button:hover { background: #f3f2ef; }
-  /* Popcodes left, above the actions. Hidden until the quota answers, so a
-     failed read leaves the menu exactly as it was. */
-  .site-header .account-quota { display: none; padding: 10px 11px 11px; }
+  /* Popcodes left, above the actions. A count, not a meter: a bar implies a
+     thing filling up, and at one of five that read as "nearly full" when it
+     meant the opposite. Hidden until the quota answers. */
+  .site-header .account-quota { display: none; padding: 9px 11px 10px; }
   .site-header .account-quota.on { display: block; }
-  .site-header .account-quota .aq-line { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; color: #6f6f6f; white-space: nowrap; margin-bottom: 7px; }
-  .site-header .account-quota .aq-line strong { color: #1a1a1a; }
-  .site-header .account-quota .aq-meter { height: 6px; border-radius: 99px; background: #eceae5; overflow: hidden; }
-  .site-header .account-quota .aq-meter span { display: block; height: 100%; width: 0; border-radius: 99px; background: linear-gradient(135deg,#7657FC,#589AF9); }
-  .site-header .account-quota.empty .aq-meter span { background: #e0574f; }
+  .site-header .account-quota .aq-pill {
+    display: inline-block; font-family: 'Inter', sans-serif; font-size: 13px;
+    font-weight: 600; color: #1a1a1a; background: #f0eeea; border-radius: 99px;
+    padding: 6px 12px; white-space: nowrap;
+  }
+  .site-header .account-quota.empty .aq-pill { background: #fdeceb; color: #b4232a; }
   .site-header .account-menu .aq-divider { height: 1px; background: #eceae5; margin: 2px 6px 4px; }
   .site-header .account-menu svg { width: 18px; height: 18px; flex-shrink: 0; color: #1a1a1a; }
   @media (max-width: 1040px) { .site-header .nav-inline { margin-left: 40px; } }
@@ -193,8 +195,7 @@
           '<button type="button" class="hicon profile-btn" id="account-btn" title="My Account" aria-label="My Account" aria-haspopup="true" aria-expanded="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>' +
           '<div class="account-menu" id="account-menu" role="menu">' +
             '<div class="account-quota" id="account-quota">' +
-              '<div class="aq-line" id="aq-line"></div>' +
-              '<div class="aq-meter"><span id="aq-fill"></span></div>' +
+              '<span class="aq-pill" id="aq-pill"></span>' +
             '</div>' +
             '<div class="aq-divider" id="aq-divider" style="display:none;"></div>' +
             '<a href="/account.html" role="menuitem">' + IC_ACCOUNT + 'My Account</a>' +
@@ -223,18 +224,15 @@
         if (q.error || !q.data || !q.data.length) return;
         var d = q.data[0];
         var box = document.getElementById('account-quota');
-        var line = document.getElementById('aq-line');
-        var fill = document.getElementById('aq-fill');
+        var pill = document.getElementById('aq-pill');
         var div = document.getElementById('aq-divider');
-        if (!box || !line || !fill) return;
+        if (!box || !pill) return;
         // Admins report headroom rather than a limit; showing that number raw
         // would be nonsense.
         if (d.allowance > 1000000) {
-          line.innerHTML = '<strong>' + d.used + '</strong> Popcodes made';
-          fill.style.width = '100%';
+          pill.textContent = d.used + (d.used === 1 ? ' Popcode made' : ' Popcodes made');
         } else {
-          line.innerHTML = '<strong>' + d.remaining + '</strong> of ' + d.allowance + ' Popcodes left';
-          fill.style.width = Math.round((d.used / Math.max(d.allowance, 1)) * 100) + '%';
+          pill.textContent = d.remaining + ' of ' + d.allowance + ' Popcodes left';
           if (d.remaining === 0) box.classList.add('empty');
         }
         box.classList.add('on');
