@@ -21,7 +21,8 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   try {
-    const { slug, event_type, target_index, device_type, browser, user_agent, user_id } = req.body;
+    const { slug, event_type, target_index, device_type, browser, user_agent, user_id,
+            recipient_code, progress_pct } = req.body;
     // Account-level events (signup) belong to a person, not a project, so slug
     // is optional. Everything project-scoped still has to name one.
     // A montage is rendered before the project exists (and may be abandoned),
@@ -55,6 +56,13 @@ export default async function handler(req, res) {
       region,
       city,
       user_id:      user_id      ?? null,
+      // Personal-link code (?r=) and how far into the media a viewer got.
+      // Added only when present, so a plain view writes exactly the columns
+      // it always did.
+      ...(typeof recipient_code === 'string' && /^[a-z0-9]{6,16}$/.test(recipient_code)
+        ? { recipient_code } : {}),
+      ...(Number.isFinite(progress_pct)
+        ? { progress_pct: Math.max(0, Math.min(100, Math.round(progress_pct))) } : {}),
     });
 
     if (error) throw error;

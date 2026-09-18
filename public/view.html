@@ -163,6 +163,11 @@
         font-family: 'DM Sans', sans-serif; text-decoration: none;
       }
       #signin-link:hover { color: white; }
+      #view-notice {
+        position: absolute; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); left: 24px; right: 24px;
+        margin: 0; text-align: center; font-size: 12px; color: rgba(255,255,255,0.55);
+        font-family: 'DM Sans', sans-serif;
+      }
 
       /* ── White-label cover ─────────────────────────────────────────────── */
       #wl-cover {
@@ -550,6 +555,7 @@
         <a id="create-btn" href="/create.html">Create your own Popcode</a>
         <a id="signin-link" href="/manage.html">Already have an account? <span style="text-decoration:underline;">Sign in</span></a>
       </div>
+      <p id="view-notice">Whoever shared this can see when it’s viewed.</p>
     </div>
 
     <div id="wl-cover" data-variant="consumer" data-cta-mode="tap">
@@ -634,7 +640,7 @@
       // on a printed card is usually in title case. Send /MaxChapterOne to
       // /maxchapterone rather than leaving it at a dead end.
       if (!params.get('id') && fromPath && fromPath !== fromPath.toLowerCase()) {
-        location.replace('/' + fromPath.toLowerCase());
+        location.replace('/' + fromPath.toLowerCase() + location.search); // keep ?r=
       }
 
       // ── Analytics ────────────────────────────────────────────────────────────
@@ -670,7 +676,13 @@
         };
       }
 
-      async function logEvent(eventType, targetIndex = null) {
+      // Personal link: popcode.app/{slug}?r={code}. The creator named whoever
+      // they sent this link to, so views on it show up under that name on
+      // My Popcodes. Anything malformed is ignored and the view is anonymous.
+      const recipientCode = (/^[a-z0-9]{6,16}$/.test((params.get('r') || '').toLowerCase()))
+        ? params.get('r').toLowerCase() : null;
+
+      async function logEvent(eventType, targetIndex = null, progressPct = null) {
         if (!id) return;
         try {
           const { device, browser } = getDeviceInfo();
@@ -683,8 +695,12 @@
               target_index: targetIndex,
               device_type: device, browser,
               user_agent: navigator.userAgent,
-              user_id: session?.user?.id ?? null
-            })
+              user_id: session?.user?.id ?? null,
+              recipient_code: recipientCode,
+              progress_pct: progressPct
+            }),
+            // Progress is often reported as the page is being left.
+            keepalive: true
           });
         } catch(e) {} // never let analytics break the app
       }
@@ -692,6 +708,20 @@
       // Target index of the photo currently showing, so play/complete events can
       // be attributed to a specific asset (analytics "By Photo" per-asset metrics).
       let currentTargetIndex = null;
+
+      // How far a viewer got when they closed the media without finishing it,
+      // so the creator sees "stopped at 40%" rather than just "didn't finish".
+      // Armed when media starts; finishing (*_complete) or reporting disarms it.
+      let progressPending = false;
+      function reportProgress() {
+        if (!progressPending) return;
+        const el = audioPlayer.classList.contains('visible') ? apAudio : fullVid;
+        const d = el.duration, t = el.currentTime;
+        if (!isFinite(d) || d <= 0 || !(t > 0)) return;
+        progressPending = false;
+        logEvent('media_progress', currentTargetIndex, Math.min(99, Math.floor((t / d) * 100)));
+      }
+      window.addEventListener('pagehide', () => { try { if (mediaActive) reportProgress(); } catch (e) {} });
 
       if (!id) { showError(); } else { loadCollection(id); }
 
@@ -1051,6 +1081,7 @@
       function triggerVideo(url) {
         if (!url) { showMediaError('No video found for this photo'); return; }
         mediaActive = true;
+        progressPending = true;
         clearReloadHint();
         document.getElementById('scan-hint').style.display = 'none';
         document.getElementById('scan-mark').classList.add('found');
@@ -1190,6 +1221,7 @@
 
       function triggerAudio(media) {
         mediaActive = true;
+        progressPending = true;
         clearReloadHint();
         document.getElementById('scan-hint').style.display = 'none';
         document.getElementById('scan-mark').classList.add('found');
@@ -1266,6 +1298,7 @@
         }
       });
       apAudio.addEventListener('ended', () => {
+        progressPending = false;
         logEvent('audio_complete', currentTargetIndex);
         apPlay.textContent = '▶';
         apResetUi();
@@ -1328,6 +1361,7 @@
       });
 
       function returnToScanner() {
+        reportProgress(); // before the media is torn down below
         mediaActive = false;
         if (triggerTimer) { clearTimeout(triggerTimer); triggerTimer = null; }
         clearReloadHint();
@@ -1353,6 +1387,7 @@
       }
 
       fullVid.addEventListener('ended', () => {
+        progressPending = false;
         logEvent('video_complete', currentTargetIndex);
         hideTapToPlay();
         const fade = document.getElementById('fade-overlay');

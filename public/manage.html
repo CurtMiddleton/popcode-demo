@@ -367,6 +367,45 @@
       .btn-cancel { background: #f0eeea; color: #1a1a1a; }
       .btn-confirm-delete { background: #1a1a1a; color: white; }
 
+      /* Views: summary line on each card + the views sheet */
+      .card-views { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 0; border: none; background: none; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; color: #5b4fd6; cursor: pointer; text-align: left; }
+      .card-views:hover { text-decoration: underline; }
+      .card-views.none { color: #999; font-weight: 500; }
+      .card-views svg { width: 15px; height: 15px; flex-shrink: 0; }
+      @media (min-width: 960px) { .card-views { font-size: 14px; margin-top: 14px; } }
+
+      #views-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9500; align-items:center; justify-content:center; padding:20px; }
+      #views-modal.visible { display:flex; }
+      .views-box { background:#fff; border-radius:24px; padding:26px 24px 20px; max-width:520px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 12px 48px rgba(0,0,0,0.22); font-family:'Inter',sans-serif; }
+      .views-box h2 { font-family:'CooperBT',serif; font-weight:400; font-size:24px; line-height:1.15; margin:0 36px 4px 0; color:#1a1a1a; }
+      .views-sub { font-size:13px; color:#888; margin-bottom:18px; }
+      .views-close { float:right; background:none; border:none; font-size:24px; cursor:pointer; color:#aaa; margin-top:-4px; }
+      .views-h3 { font-size:11px; font-weight:700; color:#999; text-transform:uppercase; letter-spacing:0.06em; margin:18px 0 8px; }
+      .views-h3 span { font-weight:500; text-transform:none; letter-spacing:0; color:#aaa; }
+      .vrow { display:flex; align-items:flex-start; gap:12px; padding:11px 0; border-top:1px solid #f0eeea; }
+      .vrow:first-of-type { border-top:none; }
+      .vavatar { width:34px; height:34px; border-radius:50%; background:#efedf9; color:#5b4fd6; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0; }
+      .vavatar.anon { background:#f0eeea; color:#999; }
+      .vavatar svg { width:16px; height:16px; }
+      .vmain { flex:1; min-width:0; }
+      .vname { font-size:15px; font-weight:600; color:#1a1a1a; }
+      .vmeta { font-size:12px; color:#999; margin-top:2px; }
+      .vstatus { font-size:13px; color:#444; margin-top:3px; }
+      .vstatus.done { color:#1f8a4c; }
+      .vstatus.waiting { color:#999; }
+      .vacts { display:flex; gap:6px; flex-shrink:0; }
+      .vbtn { border:none; background:#eeeeee; color:#333; border-radius:16px; padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; }
+      .vbtn:hover { background:#e0e0e0; }
+      .vbtn.x { background:none; color:#aaa; padding:6px 6px; font-size:16px; line-height:1; }
+      .vbtn.x:hover { color:#cc3333; background:none; }
+      .vadd { display:flex; gap:8px; margin-top:6px; }
+      .vadd input { flex:1; min-width:0; border:1px solid #e2dfd8; border-radius:12px; padding:10px 12px; font-size:16px; font-family:'Inter',sans-serif; }
+      .vadd button { border:none; background:#1a1a1a; color:#fff; border-radius:12px; padding:0 16px; font-size:14px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; }
+      .vadd button:disabled { opacity:0.5; cursor:default; }
+      .vhelp { font-size:12px; color:#999; margin-top:6px; line-height:1.45; }
+      .vempty { font-size:14px; color:#999; padding:10px 0; }
+      .vmore { border:none; background:none; color:#5b4fd6; font-weight:600; font-size:13px; cursor:pointer; padding:10px 0 0; font-family:'Inter',sans-serif; }
+
       /* Nav overlay */
       #nav-overlay { display:none; position:fixed; inset:0; z-index:200; }
       #nav-overlay.open { display:block; }
@@ -453,6 +492,15 @@
         <div class="download-grid" id="download-grid">
           <div style="color:#aaa;font-size:14px;text-align:center;padding:20px">Loading photos...</div>
         </div>
+      </div>
+    </div>
+
+    <div id="views-modal">
+      <div class="views-box" role="dialog" aria-modal="true" aria-labelledby="views-title">
+        <button class="views-close" id="views-close-btn" aria-label="Close">&times;</button>
+        <h2 id="views-title">Views</h2>
+        <div class="views-sub" id="views-sub"></div>
+        <div id="views-body"></div>
       </div>
     </div>
 
@@ -561,6 +609,7 @@
             }
           });
 
+          await loadViewData(ids);
           renderActiveTab();
 
         } catch (err) {
@@ -646,6 +695,7 @@
             <div class="card-info">
               ${kindPill ? `<div class="pop-pill product">${escapeHtml(kindPill)}</div>` : isCollection ? '<div class="pop-pill">Collection</div>' : ''}
               <div class="card-title">${escapeHtml(title)}</div>
+              ${viewsLineHtml(col)}
               <div class="card-meta">Created ${formatDate(col.created_at)} &nbsp;/&nbsp; ${isBook ? 'photo book' : isCalendar ? 'photo calendar' : isProduct ? PRODUCT_LABEL[col.kind].toLowerCase() : pageCount + ' image' + (pageCount !== 1 ? 's' : '')}</div>
               <div class="card-id" style="position:relative;">ID: <strong>${escapeHtml(col.slug)}</strong>
               <div class="share-popup" id="share-popup-${escapeHtml(col.slug)}">
@@ -661,6 +711,10 @@
                 <button class="share-option share-opt-message" data-url="${escapeHtml(viewUrl)}" data-title="${escapeHtml(title)}">
                   <span class="share-option-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
                   Message
+                </button>
+                <button class="share-option share-opt-people" data-id="${escapeHtml(col.id)}">
+                  <span class="share-option-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></span>
+                  Send to specific people
                 </button>
               </div>
               </div>
@@ -713,6 +767,14 @@
           window.location.href = 'sms:?&body=' + encodeURIComponent('"' + title + '" is ready to scan with Popcode! ' + url);
           this.closest('.share-popup').classList.remove('visible');
         });
+
+        card.querySelector('.share-opt-people').addEventListener('click', function(e) {
+          e.stopPropagation();
+          this.closest('.share-popup').classList.remove('visible');
+          openViews(col, true);
+        });
+        const viewsBtn = card.querySelector('.card-views');
+        if (viewsBtn) viewsBtn.addEventListener('click', function() { openViews(col, false); });
 
         card.querySelector('.btn-delete').addEventListener('click', function() {
           const slug = this.dataset.slug;
@@ -1188,6 +1250,292 @@
           btn.setAttribute('title', 'Delete');
           alert('Delete failed: ' + err.message);
         }
+      }
+
+      // ── Views ───────────────────────────────────────────────────────────────
+      // Who has viewed each Popcode. Events come from get_my_view_events (own
+      // projects only, the creator's own views excluded). Personal links are
+      // share_recipients rows: popcode.app/{slug}?r={code}, named by the creator.
+      // Both loads are best-effort — if either fails the cards render without a
+      // views line rather than the whole page failing.
+      let viewEventsBySlug = {}, recipientsByCol = {};
+      const SESSION_GAP_MS = 30 * 60 * 1000;
+
+      async function loadViewData(ids) {
+        viewEventsBySlug = {}; recipientsByCol = {};
+        try {
+          const { data, error } = await db.rpc('get_my_view_events', { max_rows: 20000 });
+          if (error) throw error;
+          (data || []).forEach(e => { (viewEventsBySlug[e.slug] = viewEventsBySlug[e.slug] || []).push(e); });
+        } catch (e) { console.warn('views unavailable', e); }
+        try {
+          if (!ids.length) return;
+          const { data, error } = await db.from('share_recipients')
+            .select('id, collection_id, code, name, created_at')
+            .in('collection_id', ids).order('created_at');
+          if (error) throw error;
+          (data || []).forEach(r => { (recipientsByCol[r.collection_id] = recipientsByCol[r.collection_id] || []).push(r); });
+        } catch (e) { console.warn('recipients unavailable', e); }
+      }
+
+      // Who an event belongs to: a personal link beats a signed-in name beats
+      // the anonymous device fingerprint (hash of IP + browser, per project).
+      function viewerKey(e) {
+        if (e.recipient_name) return 'r:' + e.recipient_code;
+        if (e.viewer_name) return 'u:' + e.viewer_name;
+        return 'a:' + e.viewer_key;
+      }
+
+      // Split a project's events into views: one viewer, no gap over 30 min.
+      function buildViews(events) {
+        const sorted = (events || []).slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        const open = {}, views = [];
+        sorted.forEach(e => {
+          const k = viewerKey(e), t = new Date(e.created_at).getTime();
+          let v = open[k];
+          if (!v || t - v.lastT > SESSION_GAP_MS) {
+            v = open[k] = { key: k, events: [], firstT: t, lastT: t };
+            views.push(v);
+          }
+          v.events.push(e); v.lastT = t;
+        });
+        views.forEach(v => Object.assign(v, summarize(v.events)));
+        return views.sort((a, b) => b.lastT - a.lastT);
+      }
+
+      function summarize(events) {
+        const played = new Set(), done = new Set(), stopped = {};
+        let found = false, started = false, video = false;
+        let place = null, device = null, name = null, isRecipient = false;
+        events.forEach(e => {
+          const ti = e.target_index;
+          switch (e.event_type) {
+            case 'scan_start': started = true; break;
+            case 'target_found': found = true; break;
+            case 'video_play': case 'video_play_tap': video = true; played.add(ti); break;
+            case 'audio_play': played.add(ti); break;
+            case 'video_complete': video = true; played.add(ti); done.add(ti); break;
+            case 'audio_complete': played.add(ti); done.add(ti); break;
+            case 'media_progress':
+              played.add(ti);
+              if (e.progress_pct != null) stopped[ti] = Math.max(stopped[ti] || 0, e.progress_pct);
+              break;
+          }
+          if (!place && e.city) place = placeLabel(e);
+          if (!device && e.user_agent) device = deviceLabel(e);
+          if (e.recipient_name) { name = e.recipient_name; isRecipient = true; }
+          else if (!name && e.viewer_name) name = e.viewer_name;
+        });
+        const stops = [...played].filter(ti => !done.has(ti) && stopped[ti] != null).map(ti => stopped[ti]);
+        return { played: played.size, done: done.size, stops, found, started, video, place, device, name, isRecipient };
+      }
+
+      // One line on what happened, e.g. "Watched all 3 to the end" or
+      // "Watched 1 of 2 to the end · stopped one at 40%".
+      function statusText(v) {
+        if (!v.played) return v.found ? 'Scanned a photo, didn’t play it' : v.started ? 'Opened the camera' : 'Opened the link';
+        const verb = v.video ? 'Watched' : 'Listened to';
+        const stopTxt = v.stops.length === 1 ? 'stopped at ' + v.stops[0] + '%'
+          : v.stops.length ? 'stopped at ' + v.stops.map(p => p + '%').join(', ') : 'didn’t finish';
+        if (v.done === v.played) return v.played === 1 ? verb + ' it to the end' : verb + ' all ' + v.played + ' to the end';
+        if (v.played === 1) return stopTxt.charAt(0).toUpperCase() + stopTxt.slice(1);
+        return verb + ' ' + v.done + ' of ' + v.played + ' to the end · ' + stopTxt;
+      }
+      const finished = v => v.played > 0 && v.done === v.played;
+
+      let regionNames = null;
+      try { regionNames = new Intl.DisplayNames(['en'], { type: 'region' }); } catch (_) {}
+      function placeLabel(e) {
+        if (!e.city) return null;
+        if (e.country === 'US' && e.region) return e.city + ', ' + e.region;
+        let c = e.country || '';
+        try { if (regionNames && c) c = regionNames.of(c); } catch (_) {}
+        return c ? e.city + ', ' + c : e.city;
+      }
+      function deviceLabel(e) {
+        const ua = e.user_agent || '';
+        if (/iPad/.test(ua)) return 'iPad';
+        if (/iPhone/.test(ua)) return 'iPhone';
+        if (/Android/.test(ua)) return /Mobile/.test(ua) ? 'Android phone' : 'Android tablet';
+        if (/Macintosh/.test(ua)) return 'Mac';
+        if (/Windows/.test(ua)) return 'Windows PC';
+        return e.device_type || null;
+      }
+
+      function viewsLineHtml(col) {
+        const views = buildViews(viewEventsBySlug[col.slug]);
+        const eye = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+        if (!views.length) return `<button class="card-views none" type="button">${eye}No views yet</button>`;
+        const n = views.length, f = views.filter(finished).length;
+        return `<button class="card-views" type="button">${eye}${n} view${n === 1 ? '' : 's'}${f ? ' · ' + f + ' to the end' : ''}</button>`;
+      }
+
+      function personalLink(col, code) { return `https://popcode.app/${col.slug}?r=${code}`; }
+      function newCode() {
+        const abc = 'abcdefghijkmnpqrstuvwxyz23456789', b = new Uint8Array(8);
+        crypto.getRandomValues(b);
+        return Array.from(b, x => abc[x % abc.length]).join('');
+      }
+
+      let viewsCol = null, viewsShowAll = false;
+      function openViews(col, focusAdd) {
+        viewsCol = col; viewsShowAll = false;
+        const coverTitle = col.cover_config && col.cover_config.enabled && col.cover_config.title;
+        document.getElementById('views-title').textContent = coverTitle || col.name || 'Untitled';
+        renderViews();
+        document.getElementById('views-modal').classList.add('visible');
+        document.body.style.overflow = 'hidden';
+        if (focusAdd) setTimeout(() => document.getElementById('vadd-name')?.focus(), 50);
+      }
+      function closeViews() {
+        document.getElementById('views-modal').classList.remove('visible');
+        document.body.style.overflow = '';
+        viewsCol = null;
+        renderActiveTab(); // refresh the card's views line
+      }
+      document.getElementById('views-close-btn').addEventListener('click', closeViews);
+      document.getElementById('views-modal').addEventListener('click', e => { if (e.target.id === 'views-modal') closeViews(); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape' && viewsCol) closeViews(); });
+
+      function renderViews() {
+        const col = viewsCol; if (!col) return;
+        const events = viewEventsBySlug[col.slug] || [];
+        const views = buildViews(events);
+        const recips = recipientsByCol[col.id] || [];
+        const f = views.filter(finished).length;
+        document.getElementById('views-sub').textContent = views.length
+          ? `${views.length} view${views.length === 1 ? '' : 's'} · ${f} to the end`
+          : 'No views yet';
+
+        const body = document.getElementById('views-body');
+        body.innerHTML = '';
+
+        // Personal links
+        const h = document.createElement('div');
+        h.className = 'views-h3';
+        h.innerHTML = 'Sent to <span>— give someone their own link to see when they open it</span>';
+        body.appendChild(h);
+        recips.forEach(r => {
+          const theirs = events.filter(e => e.recipient_code === r.code);
+          const s = theirs.length ? summarize(theirs) : null;
+          const lastT = theirs.length ? Math.max(...theirs.map(e => new Date(e.created_at).getTime())) : null;
+          const row = document.createElement('div');
+          row.className = 'vrow';
+          row.innerHTML = `
+            <div class="vavatar">${escapeHtml((r.name.trim()[0] || '?').toUpperCase())}</div>
+            <div class="vmain">
+              <div class="vname">${escapeHtml(r.name)}</div>
+              <div class="vstatus ${s ? (finished(s) ? 'done' : '') : 'waiting'}">${s ? escapeHtml('Opened ' + relTime(new Date(lastT).toISOString()) + ' · ' + statusText(s)) : 'Hasn’t opened it yet'}</div>
+            </div>
+            <div class="vacts">
+              <button class="vbtn" data-act="send">Send</button>
+              <button class="vbtn x" data-act="remove" title="Remove">&times;</button>
+            </div>`;
+          row.querySelector('[data-act="send"]').addEventListener('click', () => sendPersonal(col, r));
+          row.querySelector('[data-act="remove"]').addEventListener('click', () => removeRecipient(col, r));
+          body.appendChild(row);
+        });
+        const add = document.createElement('div');
+        add.innerHTML = `
+          <form class="vadd" id="vadd-form">
+            <input id="vadd-name" type="text" maxlength="60" placeholder="Name, e.g. Mom" autocomplete="off"/>
+            <button type="submit">Add</button>
+          </form>
+          <div class="vhelp">Each person gets their own link. If they forward it, those views show under their name too.</div>`;
+        body.appendChild(add);
+        add.querySelector('#vadd-form').addEventListener('submit', ev => { ev.preventDefault(); addRecipient(col); });
+        add.querySelector('#vadd-name').addEventListener('keydown', ev => {
+          if (ev.key === 'Enter' && !ev.isComposing) { ev.preventDefault(); addRecipient(col); }
+        });
+
+        // Every view
+        const h2 = document.createElement('div');
+        h2.className = 'views-h3';
+        h2.textContent = 'All views';
+        body.appendChild(h2);
+        if (!views.length) {
+          const p = document.createElement('div');
+          p.className = 'vempty';
+          p.textContent = 'Nobody has opened this yet. Views show up here as soon as someone does.';
+          body.appendChild(p);
+          return;
+        }
+        const LIMIT = 30;
+        (viewsShowAll ? views : views.slice(0, LIMIT)).forEach(v => {
+          const who = v.name || ('Someone' + (v.place ? ' in ' + v.place : ''));
+          const meta = [v.name && v.place, v.device, relTime(new Date(v.lastT).toISOString())].filter(Boolean).join(' · ');
+          const row = document.createElement('div');
+          row.className = 'vrow';
+          row.innerHTML = `
+            <div class="vavatar ${v.name ? '' : 'anon'}">${v.name ? escapeHtml((v.name.trim()[0] || '?').toUpperCase())
+              : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'}</div>
+            <div class="vmain">
+              <div class="vname">${escapeHtml(who)}</div>
+              <div class="vmeta">${escapeHtml(meta)}</div>
+              <div class="vstatus ${finished(v) ? 'done' : ''}">${escapeHtml(statusText(v))}</div>
+            </div>`;
+          body.appendChild(row);
+        });
+        if (!viewsShowAll && views.length > LIMIT) {
+          const more = document.createElement('button');
+          more.className = 'vmore';
+          more.textContent = `Show all ${views.length} views`;
+          more.addEventListener('click', () => { viewsShowAll = true; renderViews(); });
+          body.appendChild(more);
+        }
+        const note = document.createElement('div');
+        note.className = 'vhelp';
+        note.style.marginTop = '14px';
+        note.textContent = 'Places are approximate — they come from the viewer’s internet connection. Your own views aren’t counted.';
+        body.appendChild(note);
+      }
+
+      async function addRecipient(col) {
+        const input = document.getElementById('vadd-name');
+        const btn = document.querySelector('#vadd-form button');
+        const name = (input.value || '').trim();
+        if (!name) { input.focus(); return; }
+        btn.disabled = true;
+        let row = null, err = null;
+        for (let i = 0; i < 3 && !row; i++) {
+          const { data, error } = await db.from('share_recipients')
+            .insert({ collection_id: col.id, code: newCode(), name })
+            .select('id, collection_id, code, name, created_at').single();
+          row = data; err = error;
+          if (error && error.code !== '23505') break; // only retry a code collision
+        }
+        btn.disabled = false;
+        if (!row) { showToast('Couldn’t add that person — try again'); console.error(err); return; }
+        (recipientsByCol[col.id] = recipientsByCol[col.id] || []).push(row);
+        renderViews();
+        // Not straight into the share sheet: iOS only opens it from a tap, and
+        // the insert above used up that tap. Send is one tap away on the row.
+        showToast(`Added — tap Send to share their link`);
+      }
+
+      async function removeRecipient(col, r) {
+        if (!confirm(`Remove ${r.name}? Their link will still open the Popcode, but views on it will show as anonymous.`)) return;
+        const { data, error } = await db.from('share_recipients').delete().eq('id', r.id).select('id');
+        if (error || !data || !data.length) { showToast('Couldn’t remove — try again'); return; }
+        recipientsByCol[col.id] = (recipientsByCol[col.id] || []).filter(x => x.id !== r.id);
+        viewEventsBySlug[col.slug] = (viewEventsBySlug[col.slug] || []).map(e =>
+          e.recipient_code === r.code ? Object.assign({}, e, { recipient_code: null, recipient_name: null }) : e);
+        renderViews();
+      }
+
+      // Native share sheet on phones (Messages, Mail, WhatsApp…); copy elsewhere.
+      async function sendPersonal(col, r) {
+        const coverTitle = col.cover_config && col.cover_config.enabled && col.cover_config.title;
+        const title = coverTitle || col.name || 'Untitled';
+        const url = personalLink(col, r.code);
+        const text = `"${title}" is ready to scan with Popcode!`;
+        try {
+          if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+            await navigator.share({ title, text, url }); return;
+          }
+        } catch (e) { if (e && e.name === 'AbortError') return; }
+        try { await navigator.clipboard.writeText(url); showToast(`Link for ${r.name} copied!`); }
+        catch (_) { prompt(`Link for ${r.name}:`, url); }
       }
 
       function escapeHtml(str) {
