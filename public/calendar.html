@@ -69,7 +69,7 @@
       }
       #nav-overlay.open #nav-drawer { opacity:1; transform:translateY(0) scale(1); }
       .nav-link { display:flex; align-items:center; gap:14px; padding:11px 20px; font-size:15px; font-weight:500; color:#1a1a1a; text-decoration:none; font-family:'Inter',sans-serif; }
-      .nav-link:hover { background:#f5f4f0; }
+      .nav-link:hover { background:#f4f4f4; }
       .nav-link svg { flex-shrink:0; color:#555; }
       .nav-link.external { color:#666; font-size:14px; }
       .nav-divider { height:1px; background:#ececec; margin:8px 0; }
@@ -252,7 +252,7 @@
         font-size: 15px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; white-space: nowrap;
         margin-left: auto;
       }
-      .save-btn:hover { background: #faf9f5; }
+      .save-btn:hover { background: #fafafa; }
       .save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
       /* With a Save button present the primary no longer needs the auto margin. */
       .save-btn + .create-btn { margin-left: 0; }
@@ -292,7 +292,7 @@
       .ep-x { border: none; background: transparent; cursor: pointer; color: #444; padding: 4px; display: flex; }
       .menu-row { display: flex; align-items: center; gap: 14px; padding: 15px 6px; cursor: pointer; border-bottom: 1px solid #f2f0ea; font-size: 16px; font-weight: 600; color: #1a1a1a; }
       .menu-row:last-child { border-bottom: none; }
-      .menu-row:hover { background: #faf9f5; }
+      .menu-row:hover { background: #fafafa; }
       .menu-row .menu-ic { width: 40px; height: 40px; border-radius: 50%; background: #f2f0ea; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #555; }
       .menu-row.destructive { color: #d33; }
       .menu-row.destructive .menu-ic { background: #fdecec; color: #d33; }
@@ -310,7 +310,7 @@
       /* Popcode editor (video upload + audio record) — ported from book.html */
       .sheet-actions { display: flex; gap: 12px; margin-top: 22px; }
       .sheet-actions button { flex: 1; padding: 14px; border-radius: 14px; font-size: 15px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; border: none; }
-      .btn-secondary { background: #f0eeea; color: #1a1a1a; }
+      .btn-secondary { background: #efefef; color: #1a1a1a; }
       .btn-primary { background: #1a1a1a; color: white; }
       .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
       .btn-danger-ghost { background: white; color: #d33; border: 1px solid #f0cccc !important; }
@@ -318,8 +318,8 @@
       .pop-media-toggle button { background: transparent; border: none; padding: 8px 20px; font-size: 13px; font-weight: 700; color: #666; border-radius: 999px; cursor: pointer; font-family: 'Inter', sans-serif; }
       .pop-media-toggle button.active { background: white; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
       .drop-zone {
-        border: 2px dashed #d6d2c8; border-radius: 14px; padding: 26px 16px; text-align: center; cursor: pointer;
-        position: relative; background: #faf9f5; transition: border-color 0.12s, background 0.12s;
+        border: 2px dashed #d6d6d6; border-radius: 14px; padding: 26px 16px; text-align: center; cursor: pointer;
+        position: relative; background: #fafafa; transition: border-color 0.12s, background 0.12s;
       }
       .drop-zone:hover { border-color: #7657FC; background: #f6f3ff; }
       .drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
@@ -346,7 +346,7 @@
       /* Font picker (Change font) — same cards as the book maker */
       .font-list { display: flex; flex-direction: column; gap: 12px; }
       .font-card { border: 2px solid #eceae4; border-radius: 14px; padding: 16px 16px 18px; cursor: pointer; background: #fff; transition: border-color 0.12s, background 0.12s; }
-      .font-card:hover { background: #faf9f5; }
+      .font-card:hover { background: #fafafa; }
       .font-card.active { border-color: #7657FC; background: #f4f1ff; }
       .font-card-name { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 700; color: #666; text-align: center; margin-bottom: 12px; }
       .font-card.active .font-card-name { color: #5b3fd6; }
@@ -1635,6 +1635,10 @@
           const referenced = new Set();
           months.forEach(m => { if (m.photoId) referenced.add(m.photoId); });
           if (cover.photoId) referenced.add(cover.photoId);
+          // Photos still in the tray are saved too, so a design saved half-way
+          // comes back with every photo that was added.
+          const trayIds = [...photos.keys()].filter(id => !referenced.has(id));
+          trayIds.forEach(id => referenced.add(id));
           const urlById = {};
           let done = 0;
           for (const id of referenced) {
@@ -1723,6 +1727,8 @@
               font: calFont,
               cover: { title, photo_url: cover.photoId ? urlById[cover.photoId] || null : null },
               months: months.map(m => ({ photo_url: m.photoId ? urlById[m.photoId] || null : null })),
+              // Photos added but not placed on a month yet (restored on reopen).
+              tray: trayIds.map(id => urlById[id]).filter(Boolean),
             },
           };
 
@@ -2117,6 +2123,7 @@
           months = (cal.months || []).slice(0, 12).map(m => ({ photoId: getPhotoId(m && m.photo_url) }));
           while (months.length < 12) months.push({ photoId: null });
           cover = { photoId: getPhotoId(cal.cover && cal.cover.photo_url) };
+          (cal.tray || []).forEach(url => getPhotoId(url));
           document.getElementById('title-input').value = (cal.cover && cal.cover.title) || col.name || '';
           lockSlug(col.slug);
           document.querySelector('.wrap h1').textContent = 'Edit Calendar';
