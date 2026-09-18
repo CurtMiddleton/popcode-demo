@@ -1090,11 +1090,18 @@
         'p3':   { group: '3', name: 'Three portrait',  count: 3, o: 'port', dir: 'row', sz: 62 },
         'l3s':  { group: '3', name: 'Three landscape', count: 3, o: 'land', dir: 'row', sz: 30 },
         'l3lr': { group: '3', name: 'Big + two',       count: 3, special: 'lr' },
+        // One photo across a whole spread. 'sp' sits on the LEFT page and holds
+        // the photo; its partner 'spr' on the RIGHT page has no slots and draws
+        // the other half of the same photo. repairSpreads() undoes a pair that
+        // ends up anywhere but left/right of one spread.
+        'sp':  { group: 'spread', name: 'Across both pages', count: 1, mode: 'bleed', spread: true },
+        'spr': { count: 0, spreadRight: true },
       };
       const LAYOUT_GROUPS = [
         { title: '1 Photo',  keys: ['l1', 'l1s', 'l1b', 'p1', 'p1b'] },
         { title: '2 Photos', keys: ['l2', 'l2b', 'l2v', 'p2', 'p2s', 'l2s'] },
         { title: '3 Photos', keys: ['p3', 'l3s', 'l3lr'] },
+        { title: 'Across 2 pages', keys: ['sp'] },
       ];
       const DEFAULT_MULTI_2 = 'l2';   // auto-fill: facing page with 2 photos
       const DEFAULT_MULTI_3 = 'p3';   // auto-fill: facing page with 3 photos
@@ -1503,6 +1510,57 @@
         pages.push(blankPage()); // inside front cover — always
         pages.push(...content);
         pages.push(blankPage()); // inside back cover — always, on the right of the last spread
+        repairSpreads(pages);
+      }
+
+      // ── Photo across both pages ─────────────────────────────────────────
+      // A spread is pages[even] (left) + pages[even+1] (right); index 0 is the
+      // blank inside-front cover. An 'sp' must be on a left page with its 'spr'
+      // right beside it — anything else (a page moved, deleted, reordered) turns
+      // the pair back into ordinary pages rather than leaving half a photo.
+      function repairSpreads(list) {
+        for (let i = 0; i < list.length; i++) {
+          const pg = list[i];
+          if (pg.layout === 'sp' && !(i % 2 === 0 && list[i + 1] && list[i + 1].layout === 'spr')) {
+            pg.layout = 'l1b'; pg.slots = [pg.slots[0] || null];
+          } else if (pg.layout === 'spr' && !(i % 2 === 1 && list[i - 1] && list[i - 1].layout === 'sp')) {
+            pg.layout = 'l1'; pg.slots = [null];
+          }
+        }
+      }
+      // The two pages of a spread-photo, or just [pg] for an ordinary page.
+      function spreadUnit(list, pg) {
+        const i = list.indexOf(pg);
+        if (pg.layout === 'sp' && list[i + 1] && list[i + 1].layout === 'spr') return [pg, list[i + 1]];
+        if (pg.layout === 'spr' && list[i - 1] && list[i - 1].layout === 'sp') return [list[i - 1], pg];
+        return [pg];
+      }
+      function makeSpread(pg) {
+        const i = pages.indexOf(pg);
+        const li = i % 2 === 0 ? i : i - 1;
+        const L = pages[li], R = pages[li + 1];
+        if (!L || !R || L.layout === 'blank' || R.layout === 'blank') {
+          popcodeDialog({
+            title: 'This page faces a blank page',
+            message: 'A photo across both pages needs two facing pages. This one sits opposite a blank endpaper — try it on another spread, or add a spread first.',
+            confirmText: 'Got it',
+          });
+          return false;
+        }
+        // Keep the photo that was already there, preferring the page you tapped.
+        const photoId = pg.slots.find(Boolean) || L.slots.find(Boolean) || R.slots.find(Boolean)
+          || (unplacedPhotos()[0] && unplacedPhotos()[0].id) || null;
+        L.layout = 'sp'; L.slots = [photoId];
+        R.layout = 'spr'; R.slots = [];   // every other photo on the pair goes back to the tray
+        return true;
+      }
+      // Split a spread-photo back into two ordinary pages (the photo stays, full
+      // bleed, on the left page).
+      function breakSpread(pg) {
+        const [L, R] = spreadUnit(pages, pg);
+        if (!R) return;
+        L.layout = 'l1b'; L.slots = [L.slots[0] || null];
+        R.layout = 'l1'; R.slots = [null];
       }
 
       document.getElementById('select-photos-btn').addEventListener('click', () => openSelectPhotos());
@@ -2080,14 +2138,18 @@
       }
       function layoutPhotoInSlot(slot, img) {
         const a = readAdj(img);
-        const W = slot.clientWidth, H = slot.clientHeight;
+        // A two-page photo is laid out in a box both pages wide; the right half
+        // then shifts left by one page so each page shows its own half.
+        const part = img.dataset.spread;
+        const half = slot.clientWidth;
+        const W = part ? half * 2 : half, H = slot.clientHeight;
         const iw = img.naturalWidth, ih = img.naturalHeight;
         if (!W || !H || !iw || !ih) return false;
         clampPan(a, W, H, iw, ih);
         const fitScale = a.fit === 'fit' ? Math.min(W / iw, H / ih) : Math.max(W / iw, H / ih);
         const imgW = iw * fitScale, imgH = ih * fitScale;
         img.style.width = imgW + 'px'; img.style.height = imgH + 'px';
-        img.style.left = ((W - imgW) / 2 + a.ox / 100 * W) + 'px';
+        img.style.left = ((W - imgW) / 2 + a.ox / 100 * W - (part === 'r' ? half : 0)) + 'px';
         img.style.top = ((H - imgH) / 2 + a.oy / 100 * H) + 'px';
         img.style.transform = `scale(${a.scale}) rotate(${a.rot}deg)`;
         return true;
@@ -2131,7 +2193,10 @@
         c.height = Math.max(1, Math.round(r.height * S));
         let data;
         try {
-          drawPhotoAdjusted(c.getContext('2d'), img, readAdj(img), 0, 0, c.width, c.height);
+          // Two-page photo: draw into a box two pages wide, offset for the right half.
+          const part = img.dataset.spread;
+          if (part) drawPhotoAdjusted(c.getContext('2d'), img, readAdj(img), part === 'r' ? -c.width : 0, 0, c.width * 2, c.height);
+          else drawPhotoAdjusted(c.getContext('2d'), img, readAdj(img), 0, 0, c.width, c.height);
           data = c.toDataURL('image/jpeg', 0.92);
         } catch (e) { return null; }
         const div = document.createElement('div');
@@ -2139,11 +2204,12 @@
         return div;
       }
 
-      function mkSlot(pg, slotIdx) {
+      function mkSlot(pg, slotIdx, spreadPart) {
         const slot = document.createElement('div');
         slot.className = 'slot';
         slot.dataset.pageId = pg.id;
         slot.dataset.slotIdx = slotIdx;
+        if (spreadPart) slot.dataset.spread = spreadPart;   // 'l' | 'r': which half of a two-page photo
         const photo = pg.slots[slotIdx] ? photos.get(pg.slots[slotIdx]) : null;
         if (photo) {
           const a = photo.adjust || DEFAULT_ADJUST();
@@ -2153,9 +2219,11 @@
           img.src = photo.url;
           img.draggable = false;
           img.dataset.adj = JSON.stringify(normalizeAdjust(a));
+          if (spreadPart) img.dataset.spread = spreadPart;
           img.addEventListener('load', () => layoutPhotoInSlot(slot, img));
           slot.appendChild(img);
-          if (photoHasMedia(photo)) {
+          // A two-page photo shows its Popcode badge once, lower-right of the spread.
+          if (photoHasMedia(photo) && spreadPart !== 'l') {
             const badge = document.createElement('div');
             badge.className = 'slot-badge';
             badge.title = photo.popcode.mediaType === 'audio' ? 'Popcode — plays audio when scanned' : 'Popcode — plays video when scanned';
@@ -2178,6 +2246,21 @@
         const L = LAYOUTS[pg.layout] || LAYOUTS.l1;
         const grid = document.createElement('div');
         grid.className = 'page-grid';
+        // Photo across both pages: each half is a full-bleed slot showing its
+        // half of the same photo. Both halves act on the LEFT page's slot.
+        if (L.spread || L.spreadRight) {
+          grid.style.cssText = 'inset:0;display:flex;';
+          let owner = pg;
+          if (L.spreadRight) {
+            const list = (typeof rpPages !== 'undefined' && rpPages && rpPages.includes(pg)) ? rpPages : pages;
+            owner = list[list.indexOf(pg) - 1];
+            if (!owner || owner.layout !== 'sp') return grid;   // mid-rearrange; repaired on save
+          }
+          const s = mkSlot(owner, 0, L.spread ? 'l' : 'r');
+          s.style.cssText += 'width:100%;height:100%;';
+          grid.appendChild(s);
+          return grid;
+        }
         const geo = layoutGeometry(L);
         if (geo.special === 'lr') {
           // Portrait hero on the left + two smaller landscape photos stacked right.
@@ -2228,6 +2311,17 @@
           row.addEventListener('click', () => {
             const act = row.dataset.act;
             const i = pages.indexOf(pg);
+            const unit = spreadUnit(pages, pg);
+            if (unit.length === 2) {
+              // A photo across both pages moves and deletes as one spread.
+              const li = pages.indexOf(unit[0]);
+              if (act === 'up' && li - 2 >= 2) { pages.splice(li, 2); pages.splice(li - 2, 0, ...unit); }
+              else if (act === 'down' && li + 3 < pages.length - 1) { pages.splice(li, 2); pages.splice(li + 2, 0, ...unit); }
+              else if (act === 'clear') { breakSpread(pg); pg.layout = 'blank'; pg.slots = []; }
+              else if (act === 'delete') { pages.splice(li, 2); }
+              closeSheet(); render();
+              return;
+            }
             // Don't reorder across the blank inside-cover (keep it at index 0).
             if (act === 'up' && i > 0 && pages[i - 1].layout !== 'blank') { [pages[i - 1], pages[i]] = [pages[i], pages[i - 1]]; }
             else if (act === 'down' && i < pages.length - 1 && pages[i + 1].layout !== 'blank') { [pages[i + 1], pages[i]] = [pages[i], pages[i + 1]]; }
@@ -2523,11 +2617,16 @@
             if (overHalf) {
               const tid = overHalf.dataset.pgid;
               if (tid && tid !== pg.id) {
-                const from = rpPages.findIndex(p => p.id === pg.id);
-                const to = rpPages.findIndex(p => p.id === tid);
-                if (from > -1 && to > -1 && from !== to) {
-                  rpPages.splice(from, 1);
-                  rpPages.splice(to, 0, pg);
+                const unit = spreadUnit(rpPages, pg);
+                const target = rpPages.find(p => p.id === tid);
+                if (target && !unit.includes(target)) {
+                  // A two-page photo moves as a pair and lands on a left page.
+                  const from = rpPages.indexOf(unit[0]);
+                  const tUnit = spreadUnit(rpPages, target);
+                  rpPages.splice(from, unit.length);
+                  let ins = rpPages.indexOf(tUnit[0]) + (from <= rpPages.indexOf(tUnit[0]) ? tUnit.length : 0);
+                  if (unit.length === 2 && ins % 2 === 1) ins = Math.max(2, ins - 1);
+                  rpPages.splice(ins, 0, ...unit);
                   renderRearrange();
                 }
               }
@@ -3448,7 +3547,11 @@
         // Match the crop frame to the slot's real aspect ratio on the page.
         let ar = '4 / 3';
         const liveSlot = [...document.querySelectorAll('.slot')].find(s => s.dataset.pageId === pg.id && +s.dataset.slotIdx === slotIdx);
-        if (liveSlot) { const r = liveSlot.getBoundingClientRect(); if (r.width && r.height) ar = `${r.width} / ${r.height}`; }
+        if (liveSlot) {
+          const r = liveSlot.getBoundingClientRect();
+          // A two-page photo crops to the whole spread, not one page.
+          if (r.width && r.height) ar = `${pg.layout === 'sp' ? r.width * 2 : r.width} / ${r.height}`;
+        }
         startEditPhoto(photo, ar, {
           save: (a) => { photo.adjust = normalizeAdjust(a); closeSheet(); render(); showToast('Photo updated'); },
           remove: () => { pg.slots[slotIdx] = null; closeSheet(); render(); },
@@ -3637,6 +3740,11 @@
       // The inner geometry markup for a layout preview tile (gray cells).
       function previewHTML(key) {
         const L = LAYOUTS[key];
+        if (L.spread) {
+          // One photo running across the fold.
+          return `<div class="lp-grid" style="inset:0;display:flex;"><div class="lp-cell" style="width:100%;height:100%;"></div>
+            <div style="position:absolute;top:0;bottom:0;left:50%;border-left:1.5px dashed rgba(255,255,255,.9)"></div></div>`;
+        }
         const geo = layoutGeometry(L);
         if (geo.special === 'lr') {
           return `<div class="lp-grid" style="inset:0;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:4%;padding:6% 5%;">
@@ -3651,7 +3759,7 @@
       function openLayoutSheet(pg) {
         const groups = LAYOUT_GROUPS.map(g => {
           const tiles = g.keys.map(key =>
-            `<div class="layout-opt ${pg.layout === key ? 'active' : ''}" data-layout="${key}">
+            `<div class="layout-opt ${(pg.layout === key || (key === 'sp' && pg.layout === 'spr')) ? 'active' : ''}" data-layout="${key}">
               <div class="layout-preview">${previewHTML(key)}</div>
             </div>`).join('');
           return `<div class="lp-section-title">${g.title}</div><div class="layout-grid">${tiles}</div>`;
@@ -3665,6 +3773,9 @@
       // Change a page's layout, preserving photos. Extra photos (when shrinking)
       // go back to the tray; new empty slots (when growing) pull from unplaced.
       function applyLayout(pg, key) {
+        if (key === 'sp') { if (makeSpread(pg)) render(); return; }
+        // Leaving a spread: split the pair first, then lay out this page as asked.
+        if (pg.layout === 'sp' || pg.layout === 'spr') breakSpread(pg);
         const n = slotCount(key);
         const kept = pg.slots.filter(Boolean).slice(0, n);
         const newSlots = new Array(n).fill(null);
