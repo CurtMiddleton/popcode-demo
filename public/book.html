@@ -395,6 +395,13 @@
       .cvtpl-mini { position: relative; width: 100%; aspect-ratio: var(--book-ar, 117 / 83); container-type: inline-size; border-radius: 6px; overflow: hidden; border: 2px solid #eceae4; }
       .cvtpl.active .cvtpl-mini { border-color: #7657FC; }
       .cvtpl-name { font-size: 11px; font-weight: 700; text-align: center; color: #666; margin-top: 5px; }
+      /* The other fields in this sheet get their spacing from .text-input's own
+         margins; this one has no text input, so it carries its own. */
+      .cv-tint-field { margin-top: 22px; }
+      .cv-slider-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+      .cv-slider-row input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: #7657FC; cursor: pointer; }
+      .cv-slider-val { flex: 0 0 auto; min-width: 42px; text-align: right; font-size: 13px; font-weight: 700;
+                       color: #666; font-variant-numeric: tabular-nums; }
       .cover-photo-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
       .cover-photo-prev { width: 64px; height: 46px; border-radius: 8px; background-size: cover; background-position: center; flex: 0 0 auto; }
 
@@ -1044,7 +1051,7 @@
             style: COVER_STYLES.some(s => s.id === c.style) ? c.style : 'A',
             font: COVER_FONTS.some(f => f.id === c.font) ? c.font : 'cormorant',
             eyebrow: c.eyebrow || '', title: c.title || '', subtitle: c.subtitle || '',
-            tint: typeof c.tint === 'number' ? c.tint : 0.28,
+            tint: typeof c.tint === 'number' ? c.tint : DEFAULT_COVER_TINT,
             photo: c.photo_url ? { file: null, url: c.photo_url, existingUrl: c.photo_url, source: 'Saved', adjust: normalizeAdjust(c.photo_adjust) } : null,
           };
 
@@ -1190,7 +1197,11 @@
       const photos = new Map();
       let pages = [];
       // Front-cover config (Bashō model). photo: { file, url, existingUrl } | null.
-      let cover = { style: 'A', font: 'cormorant', eyebrow: '', title: '', subtitle: '', tint: 0.28, photo: null };
+      // How dark the shade behind the cover title is, 0–1, adjustable per book
+      // from Edit title. Deliberately light: it only has to lift the type off
+      // the photograph, not tone the picture down.
+      const DEFAULT_COVER_TINT = 0.18;
+      let cover = { style: 'A', font: 'cormorant', eyebrow: '', title: '', subtitle: '', tint: DEFAULT_COVER_TINT, photo: null };
       // Back-cover config: full-bleed or inset (landscape/portrait/square), with
       // the Popcode logo + popcode.app centered underneath (Bashō style).
       let backCover = { mode: 'inset', shape: 'landscape', photo: null };
@@ -1972,15 +1983,37 @@
       // cover and the spine.
       function openCoverTitleSheet(e) {
         if (e && e.stopPropagation) e.stopPropagation();
+        const tintPct = Math.round((typeof cover.tint === 'number' ? cover.tint : DEFAULT_COVER_TINT) * 100);
+        const tintField = cover.style !== 'A' ? '' : `
+          <div class="field cv-tint-field">
+            <label for="cv-tint">Photo darkening <span style="color:#aaa;font-weight:400">(behind the title)</span></label>
+            <div class="cv-slider-row">
+              <input type="range" id="cv-tint" min="0" max="60" step="1" value="${tintPct}"/>
+              <span class="cv-slider-val" id="cv-tint-val">${tintPct}%</span>
+            </div>
+            <div class="note" style="margin-top:6px">Only the bottom of the cover is shaded, so the title stays readable without dulling the photograph. Turn it down to nothing on a dark picture.</div>
+          </div>`;
         openSheet(`
           <h2>Edit title</h2>
           <div class="cover-preview" id="cover-preview"></div>
           <div class="field"><label for="cv-eyebrow">Eyebrow <span style="color:#aaa;font-weight:400">(small line above)</span></label><input class="text-input" id="cv-eyebrow" style="max-width:none" value="${escapeHtml(cover.eyebrow || '')}" placeholder="e.g. Summer Safari"/></div>
           <div class="field"><label for="cv-title">Title</label><input class="text-input" id="cv-title" style="max-width:none" value="${escapeHtml(cover.title || '')}" placeholder="e.g. Rwanda &amp; South Africa"/></div>
           <div class="field"><label for="cv-date">Dates / year</label><input class="text-input" id="cv-date" style="max-width:none" value="${escapeHtml(cover.subtitle || '')}" placeholder="e.g. July 14–24, 2024"/><div class="note" style="margin-top:6px">Include the year (e.g. 2024) to show it on the cover and spine.</div></div>
+          ${tintField}
           <div class="sheet-actions"><button class="btn-primary" id="cover-done">Done</button></div>
         `);
         refreshCoverPreview(false);
+        // Only the Overlay style puts type straight onto the photo, so it's the
+        // only one with anything to darken.
+        const tintEl = document.getElementById('cv-tint');
+        if (tintEl) {
+          const out = document.getElementById('cv-tint-val');
+          tintEl.addEventListener('input', () => {
+            cover.tint = (+tintEl.value) / 100;
+            out.textContent = tintEl.value + '%';
+            refreshCoverPreview(false);
+          });
+        }
         const sync = () => {
           cover.eyebrow = document.getElementById('cv-eyebrow').value;
           cover.title = document.getElementById('cv-title').value;
@@ -2021,7 +2054,7 @@
           </div>` : ''}
           <div class="menu-row" data-act="title">
             <div class="menu-ic">${IC_TEXT}</div>
-            <div><div>Edit title</div><div class="menu-sub">Headline, title and date</div></div>
+            <div><div>Edit title</div><div class="menu-sub">${cover.style === 'A' ? 'Headline, title, date and shading' : 'Headline, title and date'}</div></div>
           </div>
           ${cover.photo ? `<div class="menu-row destructive" data-act="remove">
             <div class="menu-ic">${IC_TRASH}</div>
