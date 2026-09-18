@@ -341,6 +341,18 @@
       .back-btn:hover { background: #e0e0e0; }
       .confirm-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:300; align-items:center; justify-content:center; padding:24px; }
       .confirm-overlay.visible { display:flex; }
+      .quota-box { background:#fff; border-radius:24px; padding:0; max-width:380px; width:100%; overflow:hidden; box-shadow:0 18px 48px rgba(0,0,0,0.22); }
+      .quota-top { background:linear-gradient(135deg,#7657FC,#589AF9); padding:26px 26px 22px; text-align:center; color:#fff; }
+      .quota-mark { width:52px; height:52px; margin:0 auto 12px; display:block; }
+      .quota-mark use { fill:#fff; }
+      .quota-top h3 { font-family:'CooperBT',Georgia,serif; font-weight:400; font-size:26px; line-height:1.15; margin:0; letter-spacing:-0.01em; }
+      .quota-body { padding:22px 26px 26px; }
+      .quota-body p { font-size:15px; color:#444; line-height:1.55; margin:0 0 20px; text-align:center; }
+      .quota-actions { display:flex; flex-direction:column; gap:10px; }
+      .quota-go { padding:14px; border-radius:26px; border:none; background:#1a1a1a; color:#fff; font-size:15px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; text-decoration:none; text-align:center; display:block; }
+      .quota-back { padding:12px; border-radius:26px; border:none; background:transparent; color:#777; font-size:14px; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; }
+      .quota-back:hover { color:#1a1a1a; }
+      .quota-shop { text-align:center; font-size:14px; font-weight:600; color:#1a1a1a; text-decoration:underline; text-underline-offset:3px; padding:6px; }
       .confirm-box { background:white; border-radius:20px; padding:28px 24px; max-width:340px; width:100%; box-shadow:0 8px 32px rgba(0,0,0,0.18); }
       .confirm-box p { font-size:15px; color:#333; line-height:1.5; margin-bottom:20px; }
       .confirm-actions { display:flex; gap:10px; }
@@ -557,6 +569,28 @@
 
         <div class="pages" id="pages"></div>
 
+      <div class="confirm-overlay" id="quota-overlay">
+        <div class="quota-box">
+          <div class="quota-top">
+            <svg class="quota-mark" viewBox="0 0 302 302" aria-hidden="true">
+              <defs><path id="quota-p" fill-rule="nonzero" d="M90.6,150.6a60.0,60.0 0 1,0 120.0,0a60.0,60.0 0 1,0 -120.0,0ZM129.1,150.6a21.5,21.5 0 1,1 43.0,0a21.5,21.5 0 1,1 -43.0,0ZM96.1,150.6L96.1,237.1A16.75,16.75 0 0,0 129.6,237.1L129.6,150.6Z"/></defs>
+              <g transform="rotate(0 150.6 150.6)"><use href="#quota-p"/></g><g transform="rotate(45 150.6 150.6)"><use href="#quota-p"/></g>
+              <g transform="rotate(90 150.6 150.6)"><use href="#quota-p"/></g><g transform="rotate(135 150.6 150.6)"><use href="#quota-p"/></g>
+              <g transform="rotate(180 150.6 150.6)"><use href="#quota-p"/></g><g transform="rotate(225 150.6 150.6)"><use href="#quota-p"/></g>
+              <g transform="rotate(270 150.6 150.6)"><use href="#quota-p"/></g><g transform="rotate(315 150.6 150.6)"><use href="#quota-p"/></g>
+            </svg>
+            <h3 id="quota-title">You're out of Popcodes</h3>
+          </div>
+          <div class="quota-body">
+            <p id="quota-msg"></p>
+            <div class="quota-actions">
+              <a class="quota-go" href="/pricing.html">See packs</a>
+              <a class="quota-shop" href="/shop.html">Browse the Shop</a>
+              <button class="quota-back" type="button" id="quota-back">Not right now</button>
+            </div>
+          </div>
+        </div>
+      </div>
         <div class="confirm-overlay" id="confirm-overlay">
           <div class="confirm-box">
             <p id="confirm-msg"></p>
@@ -1858,7 +1892,55 @@
         if (h) h.textContent = labels.length === 1 ? 'Edit Popcode' : 'Edit Popcodes';
       }
 
-      document.getElementById('add-page-btn').addEventListener('click', addNewPage);
+      // ── Popcode allowance ─────────────────────────────────────────────────
+      // Same sheet and wording as create.html. Pages already in this project are
+      // already counted; a save only uses Popcodes for NEW pages, and deleting
+      // an existing page gives one back. Checked when adding a page and before
+      // saving — the database trigger still enforces it regardless.
+      let quota = null;   // { remaining, allowance } — null = unknown, don't block
+      async function loadQuota() {
+        try {
+          const q = await db.rpc('popcode_quota');
+          if (!q.error && q.data && q.data.length) quota = q.data[0];
+        } catch (e) { /* quota not deployed, or offline */ }
+        return quota;
+      }
+      const capped = () => quota && quota.allowance <= 1000000;   // admins report huge headroom
+      const roomForNew = () => quota.remaining + deletedExistingIds.size;
+      const newPagesOnForm = () => Object.keys(newPairs).length;
+
+      function showQuotaSheet(room, allowance, needed) {
+        const title = document.getElementById('quota-title');
+        const msg = document.getElementById('quota-msg');
+        const free = (allowance || 5) <= 5 ? 'free ' : '';
+        const packs = 'A pack adds more: 25 for $29 or 100 for $99, with no subscription.';
+        if (room > 0) {
+          const s = room === 1 ? '' : 's';
+          title.textContent = 'Not quite enough Popcodes';
+          msg.textContent = (needed > room
+              ? `You're adding ${needed} new photos and you have ${room} ${free}Popcode${s} left. Remove ${needed - room}, or add more. `
+              : `You have ${room} ${free}Popcode${s} left, so that's as many new photos as you can add for now. `)
+            + packs;
+        } else {
+          title.textContent = "You're out of Popcodes";
+          msg.textContent = `You've used all ${allowance || 5} of your ${free}Popcodes, so you can't add new photos. `
+            + `You can still change the ones already here. ${packs} `
+            + 'And Popcodes on anything you order from the Popcode Shop are always free.';
+        }
+        document.getElementById('quota-overlay').classList.add('visible');
+      }
+      document.getElementById('quota-back').addEventListener('click', () => {
+        document.getElementById('quota-overlay').classList.remove('visible');
+      });
+
+      document.getElementById('add-page-btn').addEventListener('click', async () => {
+        await loadQuota();   // fresh each time: pages may have been made elsewhere
+        if (capped() && newPagesOnForm() + 1 > roomForNew()) {
+          showQuotaSheet(roomForNew(), quota.allowance, 0);
+          return;
+        }
+        addNewPage();
+      });
 
       // ── File handling (mirrors create.html) ───────────────────────────────────
       function formatFileSize(bytes) {
@@ -2135,6 +2217,15 @@
         if (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler) {
           alert('MindAR compiler not loaded yet. Please wait a moment and try again.');
           return;
+        }
+
+        // Before the minute of compiling and uploading, not after it.
+        if (readyNew.length) {
+          await loadQuota();
+          if (capped() && readyNew.length > roomForNew()) {
+            showQuotaSheet(roomForNew(), quota.allowance, readyNew.length);
+            return;
+          }
         }
 
         document.getElementById('save-btn').disabled = true;
