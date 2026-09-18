@@ -67,7 +67,7 @@ export const THANKS_HTML = `<!DOCTYPE html>
             <tr>
               <td align="center" style="padding:24px 16px;">
                 <p style="margin:0; font-size:12px; line-height:1.55; color:#999999;">
-                  Popcode &mdash; <a href="https://popcodeapp.com" style="color:#999999; text-decoration:underline;">popcodeapp.com</a>
+                  Popcode &mdash; <a href="https://popcode.app" style="color:#999999; text-decoration:underline;">popcode.app</a>
                 </p>
               </td>
             </tr>

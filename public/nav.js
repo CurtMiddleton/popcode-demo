@@ -297,7 +297,6 @@
       '<div id="nav-drawer">' +
         links +
         '<a class="nav-link" href="/account.html">' + IC_ACCOUNT + 'My Account</a>' +
-        '<a class="nav-link external" href="https://popcodeapp.com" target="_blank" rel="noopener">popcodeapp.com &#8599;</a>' +
       '</div>';
     document.body.appendChild(overlay);
   }
