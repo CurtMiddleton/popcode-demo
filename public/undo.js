@@ -9,10 +9,16 @@
 //   const history = PopcodeUndo({ capture, restore, signature, onChange });
 //   history.note();   // after any render
 //   history.reset();  // once the design is loaded — the starting point
+//   history.markSaved();  // after a successful save
+//
+// It also tracks unsaved work: the design's signature as of the last save (or
+// load) against its signature now. While they differ, leaving the page asks
+// first — undoing back to the saved state counts as no changes.
 (function () {
   window.PopcodeUndo = function (opts) {
     const LIMIT = 80;
     let past = [], future = [], cur = null, curSig = null, timer = null, restoring = false;
+    let savedSig = null;   // signature at the last save/load; null until known
     const sig = (s) => JSON.stringify(opts.signature(s));
     const changed = () => opts.onChange && opts.onChange(past.length > 0, future.length > 0);
 
@@ -20,7 +26,7 @@
       timer = null;
       const s = opts.capture();
       const g = sig(s);
-      if (cur === null) { cur = s; curSig = g; return; }
+      if (cur === null) { cur = s; curSig = g; if (savedSig === null) savedSig = g; return; }
       if (g === curSig) { cur = s; return; }   // nothing the user would see changed
       past.push(cur);
       if (past.length > LIMIT) past.shift();
@@ -59,8 +65,22 @@
       clearTimeout(timer); timer = null;
       past = []; future = [];
       cur = opts.capture(); curSig = sig(cur);
+      savedSig = curSig;   // a freshly loaded design has nothing unsaved
       changed();
     }
+    function markSaved() { savedSig = sig(opts.capture()); }
+    function isDirty() {
+      if (savedSig === null) return false;
+      try { return sig(opts.capture()) !== savedSig; } catch (e) { return false; }
+    }
+    // Closing the tab, reloading, or following any link with unsaved work
+    // gets the browser's "Leave site?" prompt (its wording is fixed by the
+    // browser and can't be customised).
+    window.addEventListener('beforeunload', (e) => {
+      if (!isDirty()) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
 
     // ⌘Z / Ctrl+Z undo, ⇧⌘Z / Ctrl+Y redo. Text fields keep their own undo.
     document.addEventListener('keydown', (e) => {
@@ -74,7 +94,7 @@
       if (k === 'y' || e.shiftKey) redo(); else undo();
     });
 
-    return { note, undo, redo, reset, flush };
+    return { note, undo, redo, reset, flush, markSaved, isDirty };
   };
 
   // Shallow copy of a photo, deep enough that later edits to its crop or

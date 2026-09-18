@@ -1217,7 +1217,9 @@
         }),
         signature: (s) => ({
           p: s.photos.map(([id, p]) => [id, PopcodeUndo.photoSig(p)]),
-          pages: s.pages.map(pg => [pg.id, pg.layout, pg.slots]),
+          // Blank endpapers are rebuilt with fresh ids on every render, so they
+          // count by position only — otherwise every render looked like a change.
+          pages: s.pages.map(pg => pg.layout === 'blank' ? 'blank' : [pg.id, pg.layout, pg.slots]),
           cover: Object.assign({}, s.cover, { photo: PopcodeUndo.photoSig(s.cover.photo) }),
           backCover: Object.assign({}, s.backCover, { photo: PopcodeUndo.photoSig(s.backCover.photo) }),
           size: s.bookSize,
@@ -4519,6 +4521,7 @@
           }
 
           setProgress('Done!', 100);
+          undoStack.markSaved();   // clears the unsaved-changes warning
           lockSlug(slug); // the link is fixed from the first save onwards
           // From here on this is an edit of the saved book, so the next save
           // updates it (and reuses the .mind if the targets didn't change)
