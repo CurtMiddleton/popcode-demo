@@ -111,6 +111,7 @@
       .ps-amber { background: #fff4e0; color: #b8860b; }
       .ps-red   { background: #ffe8e8; color: #c92a2a; }
       .ps-gray  { background: #f0f0f0; color: #888; }
+      .ps-purple{ background: #ede9fe; color: #7657FC; }
       .retry-btn { padding: 4px 12px; border-radius: 14px; border: 1px solid #f0c9c9; background: #fff; font-size: 11px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; color: #c92a2a; white-space: nowrap; }
       .retry-btn:hover { background: #fff5f5; }
       .retry-btn:disabled { opacity: 0.5; cursor: default; }
@@ -446,6 +447,9 @@
       let cachedSlugId = null;   // { slug: collectionId }
       let cachedCols = null;     // [{ id, slug, name, user_id, created_at, kind }]
       let cachedUsers = null;    // [{ id, email, full_name, ... }] for owner lookup
+      let cachedCredits = null;  // { userId: { purchased, granted, from_purchases } }
+      let creditsError = false;  // true if popcode_credits could not be read
+      let cachedPopcodes = null; // { userId: popcodes made } — matches popcode_used() in SQL
       let librarySearch = '';
 
       const ADMIN_EMAIL = 'curtmid@gmail.com';
@@ -993,6 +997,13 @@
           const { data, error } = await db.rpc('get_all_users', { max_rows: 35 });
           if (error) throw error;
           cachedAccounts = data || [];
+          // Plan and Popcodes need the credit ledger and the collection rows.
+          // Both are shared promises, and loadThumbs is already in flight for
+          // the funnel, so this costs one extra query on the whole page.
+          await Promise.all([
+            loadCredits(),
+            loadThumbs().catch(() => {}),
+          ]);
           renderAccounts();
         } catch (e) {
           console.error('loadAccounts error:', e);
@@ -1001,6 +1012,60 @@
             '<br><span style="font-size:11px;color:#aaa">If this says the RPC does not exist, run the <code>get_all_users</code> SQL in your Supabase dashboard (see session notes).</span></div>';
         }
       }
+
+      // The credit ledger. Read straight from the table rather than through an
+      // RPC: popcode_credits already has an admin SELECT policy, so there is no
+      // new SQL to run. A failure here must not take the whole table down, so it
+      // is recorded and the Plan column says so instead of quietly calling
+      // everyone free.
+      let creditsPromise = null;
+      function loadCredits() {
+        if (creditsPromise) return creditsPromise;
+        creditsPromise = (async () => {
+          try {
+            const rows = await fetchAllRows('popcode_credits', 'user_id, purchased, granted, from_purchases');
+            const m = {};
+            (rows || []).forEach(r => { m[r.user_id] = r; });
+            cachedCredits = m;
+            creditsError = false;
+          } catch (e) {
+            console.warn('loadCredits error', e);
+            cachedCredits = {};
+            creditsError = true;
+            creditsPromise = null;   // let a later render retry
+          }
+        })();
+        return creditsPromise;
+      }
+
+      // Who the database itself exempts from the cap. is_popcode_admin() lists
+      // both addresses, so this is the truth about who has no limit — not
+      // ADMIN_EMAIL, which only gates who may open this page.
+      const UNCAPPED = new Set(['curtmid@gmail.com', 'curt@theworkshop.works']);
+
+      // There is no subscription in Popcode: an account is free until it buys a
+      // pack, gets Popcodes back from a Shop order, or is comped by hand. Studio
+      // is a conversation ("Talk to us" on the pricing page), not a purchase, so
+      // no account can carry it yet.
+      function planFor(u) {
+        const email = (u.email || '').toLowerCase();
+        if (UNCAPPED.has(email)) {
+          return { key: 'admin', label: 'Admin', cls: 'ps-purple', extra: Infinity };
+        }
+        if (creditsError) return { key: 'unknown', label: '—', cls: 'ps-gray', extra: 0 };
+        const c = (cachedCredits && cachedCredits[u.id]) || {};
+        const p = c.purchased || 0, g = c.granted || 0, f = c.from_purchases || 0;
+        const extra = p + g + f;
+        if (p > 0) return { key: 'pack', label: 'Pack · ' + p, cls: 'ps-green', extra: extra,
+                            title: p + ' bought' + (f ? ', ' + f + ' from the Shop' : '') + (g ? ', ' + g + ' comped' : '') };
+        if (f > 0) return { key: 'shop', label: 'Shop · ' + f, cls: 'ps-blue', extra: extra,
+                            title: f + ' credited back by Shop orders' + (g ? ', ' + g + ' comped' : '') };
+        if (g > 0) return { key: 'comp', label: 'Comp · ' + g, cls: 'ps-amber', extra: extra,
+                            title: g + ' comped by hand' };
+        return { key: 'free', label: 'Free', cls: 'ps-gray', extra: 0 };
+      }
+
+      const FREE_ALLOWANCE = 5;   // mirrors popcode_free_allowance() in SQL
 
       function renderAccounts() {
         const wrap = document.getElementById('accounts-wrap');
@@ -1012,14 +1077,39 @@
 
         const users = cachedAccounts;
         const visibleCount = accountsExpanded ? users.length : Math.min(10, users.length);
-        const hiddenCount = users.length - visibleCount;
+
+        const tally = { pack: 0, shop: 0, comp: 0, free: 0, admin: 0, unknown: 0 };
+        let madeTotal = 0;
+        users.forEach(function (u) {
+          tally[planFor(u).key] += 1;
+          madeTotal += (cachedPopcodes && cachedPopcodes[u.id]) || 0;
+        });
 
         const rowHtml = function(u) {
           const nameDisplay = u.full_name || '—';
+          const plan = planFor(u);
+          const made = (cachedPopcodes && cachedPopcodes[u.id]) || 0;
+
+          let quota;
+          if (plan.key === 'admin') {
+            quota = made + ' <span class="muted">of ∞</span>';
+          } else if (plan.key === 'unknown') {
+            quota = String(made);
+          } else {
+            const allowance = FREE_ALLOWANCE + plan.extra;
+            const spent = made >= allowance;
+            quota = '<span' + (spent ? ' style="color:#c92a2a;font-weight:700"' : '') + '>' +
+              made + ' of ' + allowance + '</span>';
+          }
+
           return '<tr>' +
             '<td class="muted" style="white-space:nowrap">' + formatDate(u.created_at) + '</td>' +
             '<td style="font-weight:600">' + escapeHtml(nameDisplay) + '</td>' +
             '<td class="muted">' + escapeHtml(u.email || '—') + '</td>' +
+            '<td><span class="badge ' + plan.cls + '"' +
+              (plan.title ? ' title="' + escapeHtml(plan.title) + '"' : '') + '>' +
+              escapeHtml(plan.label) + '</span></td>' +
+            '<td class="muted" style="text-align:right;white-space:nowrap">' + quota + '</td>' +
             '<td class="muted" style="text-align:right">' + (u.project_count || 0) + '</td>' +
             '</tr>';
         };
@@ -1030,17 +1120,43 @@
           const label = accountsExpanded
             ? 'Show fewer ▲'
             : 'Show ' + (users.length - 10) + ' more ▼';
-          tbody += '<tr class="accounts-toggle-row"><td colspan="4">' +
+          tbody += '<tr class="accounts-toggle-row"><td colspan="6">' +
             '<button class="accounts-toggle" id="accounts-toggle-btn">' + label + '</button>' +
             '</td></tr>';
         }
 
+        // With no ledger the plan breakdown would read as a row of honest-looking
+        // zeros, so it is left out entirely and the warning below says why.
+        const parts = [users.length + ' account' + (users.length === 1 ? '' : 's')];
+        if (!creditsError) {
+          parts.push(
+            tally.pack + ' on a pack',
+            tally.shop + ' with Shop credits',
+            tally.comp + ' comped',
+            tally.free + ' on the free five'
+          );
+        }
+        parts.push(madeTotal + ' Popcodes made');
+        const summary =
+          '<div class="muted" style="font-size:12px;margin:0 0 10px">' +
+            escapeHtml(parts.join(' · ')) +
+          '</div>' +
+          (creditsError
+            ? '<div class="muted" style="font-size:11px;color:#c92a2a;margin:0 0 10px">' +
+              'Could not read the credit ledger, so Plan is blank. Check that ' +
+              '<code>popcode_credits</code> exists and this account is an admin in ' +
+              '<code>is_popcode_admin()</code>.</div>'
+            : '');
+
         wrap.innerHTML =
+          summary +
           '<table>' +
             '<thead><tr>' +
               '<th>Created</th>' +
               '<th>Name</th>' +
               '<th>Email</th>' +
+              '<th>Plan</th>' +
+              '<th style="text-align:right">Popcodes</th>' +
               '<th style="text-align:right">Projects</th>' +
             '</tr></thead>' +
             '<tbody>' + tbody + '</tbody>' +
@@ -1364,6 +1480,25 @@
                 video: it.video_url || '', audio: it.audio_url || '',
               };
             }
+          });
+
+          // Popcodes made, per account. Same rule as popcode_used() in SQL: one
+          // per distinct (collection, photo) that has a video or audio behind
+          // it, so legacy duplicate rows collapse and photo-only rows never
+          // count. Kept separate from cachedThumbs, which keeps whichever row it
+          // saw first and would miss media on a later duplicate.
+          const ownerOf = {};
+          cachedCols.forEach(c => { ownerOf[c.id] = c.user_id; });
+          const counted = {};
+          cachedPopcodes = {};
+          (items || []).forEach(it => {
+            if (!it.video_url && !it.audio_url) return;
+            const key = it.collection_id + '|' + it.target_index;
+            if (counted[key]) return;
+            counted[key] = 1;
+            const uid = ownerOf[it.collection_id];
+            if (!uid) return;
+            cachedPopcodes[uid] = (cachedPopcodes[uid] || 0) + 1;
           });
         } catch (e) {
           // Let a later tab click retry instead of caching the empty result.
