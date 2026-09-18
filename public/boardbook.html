@@ -133,8 +133,6 @@
       .spread-row.pair .half:last-child .slot.square::after { left: 0; background: linear-gradient(90deg, rgba(0,0,0,0.13) 0%, rgba(0,0,0,0) 100%); }
       .empty-half { background: transparent; }   /* the gap beside the cover — nothing drawn */
       .slot-card { background: transparent; }
-      /* Blank inside-cover page: a white page (prints white), like the photo book. */
-      .slot.blank-page { background: #fff; cursor: default; box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
       /* Empty page slot — flat #ededed with a centered picture-frame icon (Popsa-style),
          mirroring the photo book (no "tap a photo" text). */
       .slot.empty {
@@ -491,22 +489,27 @@
       // book: front cover on the right, then Page 1 on the right (facing the inside
       // cover), then facing pairs (2·3, 4·5 …), ending with Page 18 on the left. That
       // maps to Printify's fixed 10 two-page "spread" openings + the wraparound cover.
-      // 18 printable content pages (the inside front/back covers are the blank halves).
+      // 18 content pages, plus the inside front and inside back covers — Printify
+      // prints those too (the outer halves of spread 1 and spread 10).
       const PAGE_COUNT = 18;
-      const POSITIONS = ['cover', ...Array.from({ length: PAGE_COUNT }, (_, i) => 'page_' + (i + 1))];
-      const positionLabel = (pos) => pos === 'cover' ? 'Front Cover' : 'Page ' + pos.split('_')[1];
-      // How the builder lays the book out visually — one opening per row, null = a
-      // blank half (inside cover). Row 1 = cover on the right.
+      // The inside covers go at the END so existing books keep their target_index
+      // order (the .mind is compiled in POSITIONS order) and Auto-fill fills the
+      // numbered pages first.
+      const POSITIONS = ['cover', ...Array.from({ length: PAGE_COUNT }, (_, i) => 'page_' + (i + 1)), 'inside_front', 'inside_back'];
+      const POSITION_LABELS = { cover: 'Front Cover', inside_front: 'Inside Front Cover', inside_back: 'Inside Back Cover' };
+      const positionLabel = (pos) => POSITION_LABELS[pos] || 'Page ' + pos.split('_')[1];
+      // How the builder lays the book out visually — one opening per row, null = an
+      // empty gap (beside the cover). Row 1 = cover on the right.
       const SPREAD_ROWS = [
         [null, 'cover'],
-        ['blank', 'page_1'],
+        ['inside_front', 'page_1'],
         ['page_2', 'page_3'], ['page_4', 'page_5'], ['page_6', 'page_7'], ['page_8', 'page_9'],
         ['page_10', 'page_11'], ['page_12', 'page_13'], ['page_14', 'page_15'], ['page_16', 'page_17'],
-        ['page_18', 'blank'],
+        ['page_18', 'inside_back'],
       ];
-      // Printify's 10 print openings (each = left | right page; null → blank half) + cover.
+      // Printify's 10 print openings (each = left | right page) + cover.
       const PRINT_SPREADS = [
-        { pos: 'spread_1', left: null, right: 'page_1' },
+        { pos: 'spread_1', left: 'inside_front', right: 'page_1' },
         { pos: 'spread_2', left: 'page_2', right: 'page_3' },
         { pos: 'spread_3', left: 'page_4', right: 'page_5' },
         { pos: 'spread_4', left: 'page_6', right: 'page_7' },
@@ -515,7 +518,7 @@
         { pos: 'spread_7', left: 'page_12', right: 'page_13' },
         { pos: 'spread_8', left: 'page_14', right: 'page_15' },
         { pos: 'spread_9', left: 'page_16', right: 'page_17' },
-        { pos: 'spread_10', left: 'page_18', right: null },
+        { pos: 'spread_10', left: 'page_18', right: 'inside_back' },
       ];
       // Print pixels (from the Printify variant placeholders).
       const PX_COVER = [3863, 1875];      // wraparound: back | spine | front
@@ -1148,11 +1151,8 @@
 
       // One book opening (row) = two facing pages.
       //   null    → an empty gap (the space beside the cover), nothing drawn.
-      //   'blank' → a visible blank page (inside front / back cover), prints white,
-      //             shown as a labelled white page like the photo book.
       function slotHalfHTML(pos) {
         if (pos === null) return '<div class="half empty-half"></div>';
-        if (pos === 'blank') return `<div class="half"><div class="slot-label">Blank Page</div><div class="slot square blank-page"></div></div>`;
         const pid = slots[pos]; const p = pid ? photos.get(pid) : null;
         const isCover = pos === 'cover';
         const t = pageText(pos);
