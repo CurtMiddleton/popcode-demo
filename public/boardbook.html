@@ -679,6 +679,8 @@
             // loads with an identity adjust — the editor treats it as the source.
             slots[s.position] = getPhotoId(s.photo_url);
           });
+          // Photos that were added but not placed on a page yet.
+          (col.book_layout.tray || []).forEach(url => { if (url) getPhotoId(url); });
           // Baseline of the saved text, so editing the words on a scannable page
           // rebuilds the target that the camera has to match.
           editingCollection._textByPos = {};
@@ -2008,13 +2010,41 @@
           //    unchanged existing photos reuse their stored URL. `recropped` tracks
           //    which popcoded photos changed pixels (→ needs a recompile).
           setProgress('Uploading photos…', 6);
+          // 0. Photos still in the tray (not on a page yet) are saved too, so a
+          //    design saved half-way comes back with every photo the user added.
+          //    Done BEFORE the page uploads: a photo taken off a page still points
+          //    at that page's file, which step 1 may be about to overwrite.
+          const placedNow = placedIds();
+          const trayPhotos = [...photos.values()].filter(p => !placedNow.has(p.id));
+          const trayUrls = [];
+          for (let i = 0; i < trayPhotos.length; i++) {
+            const p = trayPhotos[i];
+            if (p.existingUrl && p.existingUrl.includes('/board/tray-')) { trayUrls.push(p.existingUrl); continue; }
+            let blob = p.file;
+            if (!blob) {
+              const img = await loadPhotoImg(p);
+              const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+              c.getContext('2d').drawImage(img, 0, 0);
+              blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.9));
+            }
+            const path = `${slug}/board/tray-${p.id}.jpg`;
+            const { error } = await db.storage.from(bucket).upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
+            if (error) throw new Error('Photo upload failed: ' + error.message);
+            p.existingUrl = pub(path);
+            trayUrls.push(p.existingUrl);
+            setProgress(`Saving your photos… ${i + 1}/${trayPhotos.length}`, 6);
+          }
           const photoUrlByPos = {};
           const recroppedPos = new Set();
           const filledPos = POSITIONS.filter(pos => slots[pos]);
           let done = 0;
           for (const pos of filledPos) {
             const p = photos.get(slots[pos]);
-            const needsUpload = !!p.file || !p.existingUrl || !isIdentityAdjust(p.adjust);
+            // Reuse the stored file only when it is this page's own — a photo moved
+            // here from another page (or the tray) points at a file that page can
+            // overwrite, and a tray file isn't square-cropped.
+            const needsUpload = !!p.file || !p.existingUrl || !isIdentityAdjust(p.adjust)
+              || !p.existingUrl.split('?')[0].endsWith(`/board/${pos}.jpg`);
             if (needsUpload) {
               const sqCanvas = await squareCanvas(p, 1400, false);
               const blob = await new Promise(r => sqCanvas.toBlob(r, 'image/jpeg', 0.9));
@@ -2102,6 +2132,7 @@
               adjust: slots[pos] ? normalizeAdjust((photos.get(slots[pos]) || {}).adjust) : null,
               text: pageText(pos),
             })),
+            tray: trayUrls,
           };
 
           // 5. Save the collection (kind:'boardbook') + popcoded items.
@@ -2129,6 +2160,12 @@
             logActivity('create_boardbook', { slug, user_id: currentUser.id });
             const { error: iErr } = await db.from('collection_items').insert(itemRows.map(r => ({ ...r, collection_id: collectionId })));
             if (iErr) throw new Error('Saved, but linking media failed: ' + iErr.message);
+            // From here on this is an edit of the saved book, so a second
+            // "Save design" updates it instead of trying to create it again.
+            editingCollection = { id: collectionId, slug, mind_file_url: mindUrl, _mindTargetUrls: popcodedUrls, _textByPos: {} };
+            POSITIONS.forEach(pos => { editingCollection._textByPos[pos] = JSON.stringify(pageText(pos)); });
+            slugField.lock(slug, 'This book’s link — locked so printed pages keep working.');
+            document.getElementById('create-btn').textContent = 'Save Changes';
           }
 
           setProgress('Done!', 100);
