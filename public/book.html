@@ -2497,6 +2497,8 @@
       function attachRpDrag(half, pg) {
         const canvas = half.querySelector('.page-canvas');
         half.addEventListener('pointerdown', (e) => {
+          // Mouse: stop Safari starting a text selection that paints the whole page blue as you drag. Clicks still fire.
+          if (e.pointerType === 'mouse') e.preventDefault();
           e.preventDefault();
           const sx = e.clientX, sy = e.clientY;
           const rect = canvas.getBoundingClientRect();
@@ -3983,6 +3985,8 @@
       function enableSlotDrag(slot, pg, slotIdx) {
         if (!pg.slots[slotIdx]) return; // only draggable when filled
         slot.addEventListener('pointerdown', (e) => {
+          // Mouse: stop Safari starting a text selection that paints the whole page blue as you drag. Clicks still fire.
+          if (e.pointerType === 'mouse') e.preventDefault();
           if (selectedTrayId || swapSource) return; // placement/swap modes own taps
           const startX = e.clientX, startY = e.clientY;
           const photo = photos.get(pg.slots[slotIdx]);
@@ -4048,6 +4052,8 @@
       // the Photos sheet so the pages behind become droppable).
       function enablePhotoDrag(el, photo, opts = {}) {
         el.addEventListener('pointerdown', (e) => {
+          // Mouse: stop Safari starting a text selection that paints the whole page blue as you drag. Clicks still fire.
+          if (e.pointerType === 'mouse') e.preventDefault();
           if (e.target.closest('.tray-x')) return; // the delete button owns its taps
           const startX = e.clientX, startY = e.clientY;
           let dragging = false, moved = false, ghost = null, holdTimer = null;
@@ -4057,7 +4063,7 @@
             dragging = true;
             el.classList.add('dragging');
             ghost = makeCircleGhost(photo.url, x, y);
-            document.body.style.userSelect = 'none';
+            document.body.style.userSelect = document.body.style.webkitUserSelect = 'none'; try { window.getSelection().removeAllRanges(); } catch (_) {}
             if (opts.onDragStart) opts.onDragStart();
           };
           // Mouse: pick up only after a brief press-and-hold (or a move), so a
@@ -4082,7 +4088,7 @@
             document.removeEventListener('pointercancel', end);
             if (ghost) ghost.remove();
             el.classList.remove('dragging');
-            document.body.style.userSelect = '';
+            document.body.style.userSelect = document.body.style.webkitUserSelect = '';
             document.querySelectorAll('.place-target').forEach(s => s.classList.remove('place-target'));
             // Released without moving (or never started) → treat as a tap.
             if (!moved || ev.type === 'pointercancel') { if (opts.onTap) opts.onTap(); return; }

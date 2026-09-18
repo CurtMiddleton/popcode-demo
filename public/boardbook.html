@@ -1963,6 +1963,8 @@
       function enableSlotDrag(slot, pos) {
         if (!slots[pos]) return;
         slot.addEventListener('pointerdown', (e) => {
+          // Mouse: stop Safari starting a text selection that paints the whole page blue as you drag. Clicks still fire.
+          if (e.pointerType === 'mouse') e.preventDefault();
           if (selectedTrayId) return;
           const startX = e.clientX, startY = e.clientY;
           const photo = photos.get(slots[pos]);
@@ -2006,6 +2008,8 @@
       // Drag a tray/photos-sheet thumbnail onto a page slot.
       function enablePhotoDrag(el, photo, opts = {}) {
         el.addEventListener('pointerdown', (e) => {
+          // Mouse: stop Safari starting a text selection that paints the whole page blue as you drag. Clicks still fire.
+          if (e.pointerType === 'mouse') e.preventDefault();
           if (e.target.closest('.tray-x')) return;
           const startX = e.clientX, startY = e.clientY;
           let dragging = false, moved = false, ghost = null, holdTimer = null;
@@ -2013,7 +2017,7 @@
             if (dragging) return;
             clearTimeout(holdTimer); dragging = true;
             el.classList.add('dragging'); ghost = makeCircleGhost(photo.url, x, y);
-            document.body.style.userSelect = 'none';
+            document.body.style.userSelect = document.body.style.webkitUserSelect = 'none'; try { window.getSelection().removeAllRanges(); } catch (_) {}
             if (opts.onDragStart) opts.onDragStart();
           };
           if (e.pointerType === 'mouse') holdTimer = setTimeout(() => startDrag(startX, startY), 200);
@@ -2029,7 +2033,7 @@
             clearTimeout(holdTimer);
             document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', end); document.removeEventListener('pointercancel', end);
             if (ghost) ghost.remove();
-            el.classList.remove('dragging'); document.body.style.userSelect = '';
+            el.classList.remove('dragging'); document.body.style.userSelect = document.body.style.webkitUserSelect = '';
             document.querySelectorAll('.slot.place-target').forEach(s => s.classList.remove('place-target'));
             if (!moved || ev.type === 'pointercancel') { if (opts.onTap) opts.onTap(); return; }
             const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot[data-pos]');
