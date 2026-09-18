@@ -1008,6 +1008,7 @@
           await Promise.all([
             loadCredits(),
             loadThumbs().catch(() => {}),
+            loadOptIns(),
           ]);
           renderAccounts();
         } catch (e) {
@@ -1041,6 +1042,23 @@
           }
         })();
         return creditsPromise;
+      }
+
+      // Marketing opt-ins live in auth.users' metadata, which only this admin
+      // RPC can read. Missing RPC (migration not run yet) → null, and the column
+      // shows a dash rather than a wall of "No".
+      let cachedOptIns = null;
+      async function loadOptIns() {
+        try {
+          const { data, error } = await db.rpc('get_marketing_opt_ins');
+          if (error) throw error;
+          const m = {};
+          (data || []).forEach(r => { m[r.user_id] = r; });
+          cachedOptIns = m;
+        } catch (e) {
+          console.warn('get_marketing_opt_ins unavailable', e);
+          cachedOptIns = null;
+        }
       }
 
       // Who the database itself exempts from the cap. is_popcode_admin() lists
@@ -1090,6 +1108,16 @@
           madeTotal += (cachedPopcodes && cachedPopcodes[u.id]) || 0;
         });
 
+        const optInCell = function(u) {
+          if (!cachedOptIns) return '<span class="muted">—</span>';
+          const r = cachedOptIns[u.id];
+          if (r && r.opted_in) return '<span class="badge ps-green" title="' +
+            escapeHtml(r.opted_in_at ? 'Since ' + formatDate(r.opted_in_at) : 'Opted in') + '">Yes</span>';
+          return '<span class="muted">No</span>';
+        };
+        const optInTotal = cachedOptIns
+          ? users.filter(u => cachedOptIns[u.id] && cachedOptIns[u.id].opted_in).length : null;
+
         const rowHtml = function(u) {
           const nameDisplay = u.full_name || '—';
           const plan = planFor(u);
@@ -1116,6 +1144,7 @@
               escapeHtml(plan.label) + '</span></td>' +
             '<td class="muted" style="text-align:right;white-space:nowrap">' + quota + '</td>' +
             '<td class="muted" style="text-align:right">' + (u.project_count || 0) + '</td>' +
+            '<td style="text-align:center">' + optInCell(u) + '</td>' +
             '</tr>';
         };
 
@@ -1125,7 +1154,7 @@
           const label = accountsExpanded
             ? 'Show fewer ▲'
             : 'Show ' + (users.length - 10) + ' more ▼';
-          tbody += '<tr class="accounts-toggle-row"><td colspan="6">' +
+          tbody += '<tr class="accounts-toggle-row"><td colspan="7">' +
             '<button class="accounts-toggle" id="accounts-toggle-btn">' + label + '</button>' +
             '</td></tr>';
         }
@@ -1142,6 +1171,7 @@
           );
         }
         parts.push(madeTotal + ' Popcodes made');
+        if (optInTotal !== null) parts.push(optInTotal + ' on the email list');
         const summary =
           '<div class="muted" style="font-size:12px;margin:0 0 10px">' +
             escapeHtml(parts.join(' · ')) +
@@ -1163,6 +1193,7 @@
               '<th>Plan</th>' +
               '<th style="text-align:right">Popcodes</th>' +
               '<th style="text-align:right">Projects</th>' +
+              '<th style="text-align:center" title="Agreed to tips and news emails">Emails</th>' +
             '</tr></thead>' +
             '<tbody>' + tbody + '</tbody>' +
           '</table>';

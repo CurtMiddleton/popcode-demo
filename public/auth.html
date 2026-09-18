@@ -189,6 +189,12 @@
         <input type="checkbox" id="terms-checkbox"/>
         <label for="terms-checkbox">I agree to the <a href="/terms.html" target="_blank">Terms &amp; Conditions</a> and <a href="/privacy.html" target="_blank">Privacy Policy</a>.</label>
       </div>
+      <!-- Marketing consent: optional, separate from the terms, and never
+           pre-ticked — all three are what make it valid consent in the EU/UK. -->
+      <div class="terms-field" id="marketing-field" style="display:none;">
+        <input type="checkbox" id="marketing-checkbox"/>
+        <label for="marketing-checkbox">Send me tips, ideas and news from Popcode. Unsubscribe anytime.</label>
+      </div>
       <button class="submit-btn" id="submit-btn">Sign In</button>
       <div class="toggle">
         <span id="toggle-text">Don't have an account?</span>
@@ -246,6 +252,8 @@
         document.getElementById('password').closest('.field').style.display = isForgot ? 'none' : 'block';
         document.getElementById('forgot-wrap').style.display = mode === 'signin' ? 'block' : 'none';
         document.getElementById('terms-field').style.display = isSignUp ? 'flex' : 'none';
+        document.getElementById('marketing-field').style.display = isSignUp ? 'flex' : 'none';
+        if (!isSignUp) document.getElementById('marketing-checkbox').checked = false;
         if (!isSignUp) document.getElementById('terms-checkbox').checked = false;
         document.getElementById('password').autocomplete = isSignUp ? 'new-password' : 'current-password';
         if (isForgot) {
@@ -339,7 +347,12 @@
         let error;
         if (mode === 'signup') {
           let signUpData;
-          ({ data: signUpData, error } = await db.auth.signUp({ email, password, options: { data: { full_name: name } } }));
+          // The consent time is stored with the answer: it's the record of
+          // when they agreed if anyone ever asks.
+          const optIn = document.getElementById('marketing-checkbox').checked;
+          const meta = { full_name: name, marketing_opt_in: optIn };
+          if (optIn) meta.marketing_opt_in_at = new Date().toISOString();
+          ({ data: signUpData, error } = await db.auth.signUp({ email, password, options: { data: meta } }));
           if (!error) {
             // signUp returns the user even while the confirmation is pending,
             // so the top of the funnel is captured whether or not they confirm.

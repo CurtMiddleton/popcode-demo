@@ -100,6 +100,9 @@
       }
       .save-btn:disabled { opacity: 0.5; cursor: default; }
       .msg { font-size: 13px; margin-top: 10px; min-height: 18px; }
+      .pref-row { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; font-size: 15px; line-height: 1.45; color: #1a1a1a; }
+      .pref-row input { width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0; accent-color: #7657FC; cursor: pointer; }
+      .pref-sub { font-size: 13px; color: #888; }
       .msg.success { color: #2b8a3e; }
       .msg.error { color: #c92a2a; }
       .danger-zone { border: 1.5px solid #ffd0d0; }
@@ -245,6 +248,16 @@
         <div class="msg" id="password-msg"></div>
       </div>
 
+      <!-- Email preferences -->
+      <div class="card">
+        <div class="card-title">Email</div>
+        <label class="pref-row" for="marketing-toggle">
+          <input type="checkbox" id="marketing-toggle"/>
+          <span>Send me tips, ideas and news from Popcode.<br><span class="pref-sub">We'll still email you about your account and orders either way.</span></span>
+        </label>
+        <div class="msg" id="marketing-msg"></div>
+      </div>
+
       <!-- Danger Zone -->
       <div class="card danger-zone">
         <div class="card-title">Danger Zone</div>
@@ -276,6 +289,7 @@
         if (uName) { const g = document.getElementById('user-greeting'); if (g) g.textContent = 'Hi, ' + uName + '!'; }
         document.getElementById('email-input').value = user.email || '';
         document.getElementById('name-input').value = user.user_metadata?.full_name || '';
+        document.getElementById('marketing-toggle').checked = user.user_metadata?.marketing_opt_in === true;
         showQuota();
       });
 
@@ -333,6 +347,26 @@
         } else {
           msg.className = 'msg success'; msg.textContent = 'Saved!';
           setTimeout(() => { msg.textContent = ''; }, 2000);
+        }
+      });
+
+      // Marketing emails — saves on change. Opting in stamps the time (the
+      // consent record); opting out stamps that too, so the history is clear.
+      document.getElementById('marketing-toggle').addEventListener('change', async (e) => {
+        const box = e.target, msg = document.getElementById('marketing-msg');
+        const on = box.checked, now = new Date().toISOString();
+        box.disabled = true;
+        msg.className = 'msg'; msg.textContent = 'Saving...';
+        const data = on ? { marketing_opt_in: true, marketing_opt_in_at: now }
+                        : { marketing_opt_in: false, marketing_opt_out_at: now };
+        const { error } = await db.auth.updateUser({ data });
+        box.disabled = false;
+        if (error) {
+          box.checked = !on;
+          msg.className = 'msg error'; msg.textContent = error.message;
+        } else {
+          msg.className = 'msg success'; msg.textContent = on ? "You're on the list." : "You're off the list.";
+          setTimeout(() => { msg.textContent = ''; }, 2500);
         }
       });
 
