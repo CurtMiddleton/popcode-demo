@@ -16,6 +16,7 @@
     <title>Popcode — Design a Board Book</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/undo.js"></script>
     <script src="/activity.js"></script>
     <script src="/slug.js"></script>
     <script src="/audio-wav.js"></script>
@@ -219,6 +220,12 @@
       .font-card.active .font-card-name { color: #5b3fd6; }
       .font-card-prev { text-align: center; color: #2a2a2a; line-height: 1.55; font-size: 19px; }
       .font-card-prev div { word-spacing: 2px; }
+      /* Undo / redo sit at the start of the dock, set off by a hairline. */
+      .dock-btn.dock-hist { min-width: 56px; }
+      .dock-btn:disabled { opacity: 0.3; cursor: default; background: transparent; }
+      .dock-sep { width: 1px; background: #ebe9e4; margin: 8px 3px; flex: 0 0 auto; }
+      /* Phones: undo / redo drop their labels (the arrows are universal) so the dock fits. */
+      @media (max-width: 480px) { .dock-btn { min-width: 0; padding: 8px 9px 7px; } .dock-btn.dock-hist { min-width: 0; padding: 8px 6px 7px; font-size: 0; gap: 0; justify-content: center; } }
       /* Edit Photo modal (Popsa-style) */
       @media (min-width: 720px) { .sheet.sheet-wide { max-width: 960px; } }
       .ep-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
@@ -455,6 +462,15 @@
 
     <!-- Floating quick-action dock (Photos / Cover), like the photo book -->
     <div class="dock hidden" id="dock">
+      <button class="dock-btn dock-hist" id="dock-undo" disabled aria-label="Undo" title="Undo (⌘Z)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+        Undo
+      </button>
+      <button class="dock-btn dock-hist" id="dock-redo" disabled aria-label="Redo" title="Redo (⇧⌘Z)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
+        Redo
+      </button>
+      <span class="dock-sep"></span>
       <button class="dock-btn" id="dock-photos">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
         Photos
@@ -631,6 +647,32 @@
       const photos = new Map();
       const slots = {};                 // position -> photoId | null
       const texts = {};                 // position -> { text, font, color, bg, size, place } | null
+      // ── Undo / redo (see /undo.js) ─────────────────────────────────
+      // Every change to the design (photos, pages, text, cover) is a step; a
+      // burst of edits in quick succession collapses into one.
+      const undoStack = PopcodeUndo({
+        capture: () => ({
+          photos: [...photos].map(([id, p]) => [id, PopcodeUndo.clonePhoto(p)]),
+          slots: Object.assign({}, slots),
+          texts: JSON.parse(JSON.stringify(texts)),
+          cover: Object.assign({}, cover),
+        }),
+        signature: (s) => ({ p: s.photos.map(([id, p]) => [id, PopcodeUndo.photoSig(p)]), slots: s.slots, texts: s.texts, cover: s.cover }),
+        restore: (s) => {
+          PopcodeUndo.restorePhotos(photos, s.photos);
+          Object.keys(slots).forEach(k => { slots[k] = null; }); Object.assign(slots, s.slots);
+          Object.keys(texts).forEach(k => { texts[k] = null; }); Object.assign(texts, JSON.parse(JSON.stringify(s.texts)));
+          cover = Object.assign({}, s.cover);
+          selectedTrayId = null; swapSource = null;
+          render();
+        },
+        enabled: () => !document.getElementById('sheet-bg').classList.contains('open'),
+        onChange: (canUndo, canRedo) => { undoBtn.disabled = !canUndo; redoBtn.disabled = !canRedo; },
+      });
+      const undoBtn = document.getElementById('dock-undo'), redoBtn = document.getElementById('dock-redo');
+      undoBtn.addEventListener('click', () => { if (undoStack.undo()) showToast('Undone'); });
+      redoBtn.addEventListener('click', () => { if (undoStack.redo()) showToast('Redone'); });
+
       POSITIONS.forEach(p => { slots[p] = null; texts[p] = null; });
       let selectedTrayId = null;        // tray photo awaiting placement
       let idSeq = 0;
@@ -716,6 +758,7 @@
           document.getElementById('create-bar').classList.remove('hidden');
           document.getElementById('dock').classList.remove('hidden');
           render();
+          undoStack.reset();   // the loaded book is where undo starts
         } catch (err) {
           console.error(err);
           if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
@@ -877,7 +920,6 @@
         if (swapSource && !slots[swapSource]) swapSource = null;
         gone.forEach(id => {
           const p = photos.get(id);
-          if (p && p.file && p.url && p.url.startsWith('blob:')) { try { URL.revokeObjectURL(p.url); } catch (_) {} }
           photos.delete(id);
         });
         render();
@@ -1273,6 +1315,7 @@
       }
       const pageTextHTML = (pos, hasPhoto) => textOverlayHTML(pageText(pos), hasPhoto, pagePopcoded(pos));
       function renderSlots() {
+        undoStack.note();
         const grid = document.getElementById('slots');
         grid.innerHTML = '';
         SPREAD_ROWS.forEach(([l, r]) => {
@@ -1564,7 +1607,6 @@
           const f = inp.files[0]; if (!f) return;
           let out; try { out = await optimizePhoto(f); } catch (_) { out = null; }
           if (!out) { showToast('That photo could not be read — try another.'); return; }
-          if (p.file) URL.revokeObjectURL(p.url);
           p.file = out; p.url = URL.createObjectURL(out); p.existingUrl = null; p.adjust = DEFAULT_ADJUST(); p.ow = 0; p.oh = 0; p.source = 'Device';
           render();
         });
@@ -1864,7 +1906,6 @@
           let out; try { out = await optimizePhoto(f); } catch (_) { out = null; }
           if (!out) { showToast('That photo could not be read — try another.'); return; }
           const photo = editPhotoState.photo;
-          if (photo.file) URL.revokeObjectURL(photo.url);
           photo.file = out; photo.url = URL.createObjectURL(out); photo.iw = 0; photo.ih = 0; photo.ow = 0; photo.oh = 0; photo.source = 'Device';
           editPhotoState.a = DEFAULT_ADJUST(); editPhotoState.gridOn = false;
           renderEditPhoto();

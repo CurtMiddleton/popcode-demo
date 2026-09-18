@@ -18,6 +18,7 @@
     <title>Popcode — Design a Calendar</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/undo.js"></script>
     <script src="/activity.js"></script>
     <script src="/slug.js"></script>
     <script src="/postcard-render.js"></script>
@@ -275,6 +276,12 @@
       .dock-btn:hover { background: #f2f0ea; }
       .dock-btn svg { width: 24px; height: 24px; }
 
+      /* Undo / redo sit at the start of the dock, set off by a hairline. */
+      .dock-btn.dock-hist { min-width: 56px; }
+      .dock-btn:disabled { opacity: 0.3; cursor: default; background: transparent; }
+      .dock-sep { width: 1px; background: #ebe9e4; margin: 8px 3px; flex: 0 0 auto; }
+      /* Phones: undo / redo drop their labels (the arrows are universal) so the dock fits. */
+      @media (max-width: 480px) { .dock-btn { min-width: 0; padding: 8px 9px 7px; } .dock-btn.dock-hist { min-width: 0; padding: 8px 6px 7px; font-size: 0; gap: 0; justify-content: center; } }
       /* ── Modal sheet (shared) ──────────────────────────────────── */
       .overlay { display: none; position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,0.5); align-items: flex-end; justify-content: center; padding: 0; }
       .overlay.visible { display: flex; }
@@ -525,6 +532,15 @@
 
     <!-- Floating quick-action dock -->
     <div class="dock" id="dock">
+      <button class="dock-btn dock-hist" id="dock-undo" disabled aria-label="Undo" title="Undo (⌘Z)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+        Undo
+      </button>
+      <button class="dock-btn dock-hist" id="dock-redo" disabled aria-label="Redo" title="Redo (⇧⌘Z)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
+        Redo
+      </button>
+      <span class="dock-sep"></span>
       <button class="dock-btn" id="dock-photos">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
         Photos
@@ -631,6 +647,33 @@
         calFont = CAL_FONTS.some(f => f.id === id) ? id : 'filson';
         document.documentElement.style.setProperty('--cal-font', calFontStack());
       }
+
+      // ── Undo / redo (see /undo.js) ─────────────────────────────────
+      // Every change to the design (photos, months, cover, year, font) is a
+      // step; a burst of edits in quick succession collapses into one.
+      const undoStack = PopcodeUndo({
+        capture: () => ({
+          photos: [...photos].map(([id, p]) => [id, PopcodeUndo.clonePhoto(p)]),
+          months: months.map(m => Object.assign({}, m)),
+          cover: Object.assign({}, cover),
+          calYear, holidaysOn, calFont,
+        }),
+        signature: (s) => ({ p: s.photos.map(([id, p]) => [id, PopcodeUndo.photoSig(p)]), m: s.months, c: s.cover, y: s.calYear, h: s.holidaysOn, f: s.calFont }),
+        restore: (s) => {
+          PopcodeUndo.restorePhotos(photos, s.photos);
+          months = s.months.map(m => Object.assign({}, m));
+          cover = Object.assign({}, s.cover);
+          calYear = s.calYear; holidaysOn = s.holidaysOn;
+          applyCalFont(s.calFont);
+          selectedTrayId = null;
+          render();
+        },
+        enabled: () => !document.getElementById('overlay').classList.contains('visible'),
+        onChange: (canUndo, canRedo) => { undoBtn.disabled = !canUndo; redoBtn.disabled = !canRedo; },
+      });
+      const undoBtn = document.getElementById('dock-undo'), redoBtn = document.getElementById('dock-redo');
+      undoBtn.addEventListener('click', () => { if (undoStack.undo()) showToast('Undone'); });
+      redoBtn.addEventListener('click', () => { if (undoStack.redo()) showToast('Redone'); });
 
       // ── Helpers ─────────────────────────────────────────────────
       function escapeHtml(str) { const d = document.createElement('div'); d.appendChild(document.createTextNode(str == null ? '' : String(str))); return d.innerHTML; }
@@ -837,7 +880,7 @@
         months.forEach(mm => { if (gone.has(mm.photoId)) mm.photoId = null; });
         if (gone.has(cover.photoId)) cover.photoId = null;
         if (gone.has(selectedTrayId)) selectedTrayId = null;
-        gone.forEach(id => { const p = photos.get(id); if (p && p.file && p.url) URL.revokeObjectURL(p.url); photos.delete(id); });
+        gone.forEach(id => { photos.delete(id); });
         render();
       }
       // Select mode: every photo (placed ones labelled), tap to pick, delete in bulk.
@@ -885,6 +928,7 @@
       document.getElementById('select-photos-btn').addEventListener('click', () => openSelectPhotos());
 
       function renderMonths() {
+        undoStack.note();
         const host = document.getElementById('months');
         host.innerHTML = '';
 
@@ -2198,6 +2242,7 @@
           lockSlug(col.slug);
           document.querySelector('.wrap h1').textContent = 'Edit Calendar';
           render();
+          undoStack.reset();   // the loaded calendar is where undo starts
           if (new URLSearchParams(location.search).get('order') === '1') orderPrintedCalendar();
         } catch (err) {
           console.error(err);

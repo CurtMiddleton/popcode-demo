@@ -18,6 +18,7 @@
     <title>Popcode — Design a Book</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/undo.js"></script>
     <script src="/activity.js"></script>
     <script src="/slug.js"></script>
     <script src="/postcard-render.js"></script>
@@ -506,6 +507,12 @@
       .dock-btn:active { background: #e8e5dd; }
       .dock-btn svg { width: 24px; height: 24px; }
 
+      /* Undo / redo sit at the start of the dock, set off by a hairline. */
+      .dock-btn.dock-hist { min-width: 56px; }
+      .dock-btn:disabled { opacity: 0.3; cursor: default; background: transparent; }
+      .dock-sep { width: 1px; background: #ebe9e4; margin: 8px 3px; flex: 0 0 auto; }
+      /* Phones: undo / redo drop their labels (the arrows are universal) so the dock fits. */
+      @media (max-width: 480px) { .dock-btn { min-width: 0; padding: 8px 9px 7px; } .dock-btn.dock-hist { min-width: 0; padding: 8px 6px 7px; font-size: 0; gap: 0; justify-content: center; } }
       /* Photos sheet grid */
       .photos-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 6px; }
       @media (min-width: 620px) { .photos-grid { grid-template-columns: repeat(6, 1fr); } }
@@ -793,6 +800,15 @@
 
     <!-- Floating quick-action dock -->
     <div class="dock" id="dock">
+      <button class="dock-btn dock-hist" id="dock-undo" disabled aria-label="Undo" title="Undo (⌘Z)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+        Undo
+      </button>
+      <button class="dock-btn dock-hist" id="dock-redo" disabled aria-label="Redo" title="Redo (⇧⌘Z)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
+        Redo
+      </button>
+      <span class="dock-sep"></span>
       <button class="dock-btn" id="dock-photos">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
         Photos
@@ -1030,6 +1046,7 @@
           document.querySelector('.wrap h1').textContent = 'Edit Book';
           document.getElementById('create-btn').textContent = 'Save Changes';
           render();
+          undoStack.reset();   // the loaded book is where undo starts
           // "Shop" deep-link from My Designs opens straight into the order flow.
           if (new URLSearchParams(location.search).get('order') === '1') orderPrintedBook();
         } catch (err) {
@@ -1178,6 +1195,41 @@
       let swapSource = null;         // {pageId, slotIdx} first tap of a swap
       let justDragged = false;       // suppresses the click that trails a photo drag
       let idSeq = 0;
+      // ── Undo / redo (see /undo.js) ─────────────────────────────────
+      // Every change to the design (photos, pages, covers, size) is a step; a
+      // burst of edits in quick succession collapses into one.
+      const cloneCover = (c) => Object.assign({}, c, { photo: PopcodeUndo.clonePhoto(c.photo) });
+      const undoStack = PopcodeUndo({
+        capture: () => ({
+          photos: [...photos].map(([id, p]) => [id, PopcodeUndo.clonePhoto(p)]),
+          pages: pages.map(pg => Object.assign({}, pg, { slots: [...pg.slots] })),
+          cover: cloneCover(cover),
+          backCover: cloneCover(backCover),
+          bookSize,
+        }),
+        signature: (s) => ({
+          p: s.photos.map(([id, p]) => [id, PopcodeUndo.photoSig(p)]),
+          pages: s.pages.map(pg => [pg.id, pg.layout, pg.slots]),
+          cover: Object.assign({}, s.cover, { photo: PopcodeUndo.photoSig(s.cover.photo) }),
+          backCover: Object.assign({}, s.backCover, { photo: PopcodeUndo.photoSig(s.backCover.photo) }),
+          size: s.bookSize,
+        }),
+        restore: (s) => {
+          PopcodeUndo.restorePhotos(photos, s.photos);
+          pages = s.pages.map(pg => Object.assign({}, pg, { slots: [...pg.slots] }));
+          cover = cloneCover(s.cover);
+          backCover = cloneCover(s.backCover);
+          selectedTrayId = null; swapSource = null;
+          applyBookSize(s.bookSize, false);
+          render();
+        },
+        enabled: () => !document.getElementById('overlay').classList.contains('visible'),
+        onChange: (canUndo, canRedo) => { undoBtn.disabled = !canUndo; redoBtn.disabled = !canRedo; },
+      });
+      const undoBtn = document.getElementById('dock-undo'), redoBtn = document.getElementById('dock-redo');
+      undoBtn.addEventListener('click', () => { if (undoStack.undo()) showToast('Undone'); });
+      redoBtn.addEventListener('click', () => { if (undoStack.redo()) showToast('Redone'); });
+
       const uid = (p) => `${p}_${(idSeq++).toString(36)}${Math.floor(performance.now()).toString(36)}`;
 
       // ── Helpers ─────────────────────────────────────────────────
@@ -1483,6 +1535,7 @@
       // Render: the front cover stands alone (right), then interior spreads —
       // the first opening is [blank inside-cover | Page 1], then Page 2 | Page 3…
       function renderPages() {
+        undoStack.note();
         const container = document.getElementById('pages');
         container.innerHTML = '';
         renderCoverRow(container);
@@ -1870,7 +1923,6 @@
             else if (act === 'crop') { openCoverPhotoEdit(); }
             else if (act === 'title') { openCoverTitleSheet(); }
             else if (act === 'remove') {
-              if (cover.photo && cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
               cover.photo = null; closeSheet(); render();
             }
           });
@@ -1884,7 +1936,6 @@
           const f = inp.files[0]; if (!f) return;
           const out = await optimizePhoto(f);
           if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
-          if (cover.photo && cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
           cover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() };
           (after || render)();
         });
@@ -1899,7 +1950,6 @@
           const f = inp.files[0]; if (!f) return;
           const out = await optimizePhoto(f);
           if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
-          if (backCover.photo && backCover.photo.file) URL.revokeObjectURL(backCover.photo.url);
           backCover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() };
           (after || render)();
         });
@@ -1918,9 +1968,8 @@
         startEditPhoto(backCover.photo, bookAr(), {
           back: () => openBackCoverMenu(),
           save: (adj) => { backCover.photo.adjust = normalizeAdjust(adj); render(); openBackCoverMenu(); showToast('Back cover photo updated'); },
-          remove: () => { if (backCover.photo.file) URL.revokeObjectURL(backCover.photo.url); backCover.photo = null; render(); openBackCoverMenu(); },
+          remove: () => { backCover.photo = null; render(); openBackCoverMenu(); },
           replace: (out) => {
-            if (backCover.photo.file) URL.revokeObjectURL(backCover.photo.url);
             backCover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() };
             return backCover.photo;
           },
@@ -1976,7 +2025,6 @@
             if (act === 'photo') { closeSheet(); chooseBackCoverPhoto(render); }
             else if (act === 'crop') { openBackCoverPhotoEdit(); }
             else if (act === 'remove') {
-              if (backCover.photo && backCover.photo.file) URL.revokeObjectURL(backCover.photo.url);
               backCover.photo = null; closeSheet(); render();
             }
           });
@@ -3365,7 +3413,6 @@
           if (!f) return;
           const out = await optimizePhoto(f);
           if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
-          if (photo.file) URL.revokeObjectURL(photo.url);
           photo.file = out.file; photo.url = URL.createObjectURL(out.file); photo.existingUrl = null; // re-upload on save
           photo.ow = out.ow; photo.oh = out.oh; photo.source = 'Device'; photo.adjust = DEFAULT_ADJUST();
           render();
@@ -3403,7 +3450,6 @@
           save: (a) => { photo.adjust = normalizeAdjust(a); closeSheet(); render(); showToast('Photo updated'); },
           remove: () => { pg.slots[slotIdx] = null; closeSheet(); render(); },
           replace: (out) => {
-            if (photo.file) URL.revokeObjectURL(photo.url);
             photo.file = out.file; photo.url = URL.createObjectURL(out.file); photo.existingUrl = null;
             photo.ow = out.ow; photo.oh = out.oh; photo.iw = 0; photo.ih = 0; photo.source = 'Device';
             return photo;
@@ -3419,11 +3465,9 @@
           back: () => openCoverMenu(),   // Cancel/close returns to the cover menu
           save: (a) => { cover.photo.adjust = normalizeAdjust(a); render(); openCoverMenu(); showToast('Cover photo updated'); },
           remove: () => {
-            if (cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
             cover.photo = null; render(); openCoverMenu();
           },
           replace: (out) => {
-            if (cover.photo.file && !cover.photo.shared) URL.revokeObjectURL(cover.photo.url);
             cover.photo = { file: out.file, url: URL.createObjectURL(out.file), existingUrl: null, ow: out.ow, oh: out.oh, source: 'Device', adjust: DEFAULT_ADJUST() };
             return cover.photo;
           },
@@ -3578,7 +3622,6 @@
 
       function deletePhoto(id) {
         const p = photos.get(id);
-        if (p) URL.revokeObjectURL(p.url);
         photos.delete(id);
         pages.forEach(pg => pg.slots = pg.slots.map(s => s === id ? null : s));
         if (selectedTrayId === id) selectedTrayId = null;
