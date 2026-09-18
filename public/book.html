@@ -2167,8 +2167,9 @@
       // mutated in place. Fill mode only; fit mode is centered (no pan).
       function clampPan(a, boxW, boxH, iw, ih) {
         if (!iw || !ih || !boxW || !boxH) return a;
-        if (a.fit === 'fit') { a.ox = 0; a.oy = 0; return a; }
-        const fitScale = Math.max(boxW / iw, boxH / ih);
+        // Fit shows the whole photo, so it starts centred — but once zoomed in
+        // past the frame it can be dragged like Fill (it used to stay pinned).
+        const fitScale = a.fit === 'fit' ? Math.min(boxW / iw, boxH / ih) : Math.max(boxW / iw, boxH / ih);
         const rotated = (a.rot % 180) !== 0;
         const imgW = (rotated ? ih : iw) * fitScale * a.scale;
         const imgH = (rotated ? iw : ih) * fitScale * a.scale;
