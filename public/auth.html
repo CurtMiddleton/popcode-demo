@@ -142,6 +142,14 @@
         border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px;
         line-height: 1.5; color: #cc3333;
       }
+      /* A notice can carry a hint line and a resend button (lost-email help). */
+      .notice-hint { display: block; margin-top: 6px; font-size: 12px; opacity: .85; }
+      .notice-btn {
+        display: inline-block; margin-top: 10px; padding: 7px 14px; border-radius: 999px;
+        border: 1px solid currentColor; background: #fff; color: inherit; cursor: pointer;
+        font: 600 13px 'Inter', sans-serif;
+      }
+      .notice-btn:disabled { opacity: .55; cursor: default; }
       .success-msg {
         display: none; background: #f0fff4; border: 1px solid #bbf7d0;
         border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px;
@@ -295,6 +303,90 @@
         document.getElementById('error-msg').style.display = 'none';
       }
 
+      // ── Lost-email help ──────────────────────────────────────────────────
+      // Confirmation and reset emails can land in spam or get held by a strict
+      // mail server. Every "we emailed you" message says where it comes from and
+      // offers a resend, so nobody is stuck with no way forward.
+      const FROM_HINT = 'It can take a minute. Check your spam folder, and look for an email from info@popcodeapp.com.';
+      const RESEND_WAIT = 60;   // seconds; Supabase refuses faster repeats anyway
+
+      // el: #error-msg or #success-msg. Built with textContent — the email is
+      // user input and never goes through innerHTML.
+      function showNotice(el, text, opts) {
+        opts = opts || {};
+        el.textContent = text;
+        if (opts.hint) {
+          const h = document.createElement('span');
+          h.className = 'notice-hint'; h.textContent = opts.hint;
+          el.appendChild(h);
+        }
+        if (opts.resend) {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'notice-btn';
+          el.appendChild(b);
+          wireResend(b, opts.resend.label, opts.resend.send, opts.resend.coolFirst);
+        }
+        el.style.display = 'block';
+        // It can sit below the button, off-screen on a laptop — bring it into view.
+        try { el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
+      }
+      function showSuccess(text, opts) { hideError(); showNotice(document.getElementById('success-msg'), text, opts); }
+      function showErrorNotice(text, opts) {
+        document.getElementById('success-msg').style.display = 'none';
+        showNotice(document.getElementById('error-msg'), text, opts);
+      }
+
+      // A resend button with a countdown. coolFirst: an email was only just
+      // sent, so start in the waiting state.
+      function wireResend(btn, label, send, coolFirst) {
+        let timer = null;
+        function cool() {
+          let left = RESEND_WAIT;
+          btn.disabled = true;
+          btn.textContent = label + ' (' + left + 's)';
+          timer = setInterval(() => {
+            left -= 1;
+            if (left <= 0) { clearInterval(timer); btn.disabled = false; btn.textContent = label; }
+            else btn.textContent = label + ' (' + left + 's)';
+          }, 1000);
+        }
+        btn.textContent = label;
+        if (coolFirst) cool();
+        btn.addEventListener('click', async () => {
+          btn.disabled = true; btn.textContent = 'Sending…';
+          const { error } = await send();
+          if (error) { btn.disabled = false; btn.textContent = label; alert(friendlyError(error)); return; }
+          cool();
+        });
+      }
+
+      function resendConfirmation(email) {
+        return db.auth.resend({ type: 'signup', email,
+          options: { emailRedirectTo: window.location.origin + landingPage() } });
+      }
+      function sendReset(email) {
+        return db.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/reset.html' });
+      }
+
+      // Supabase's raw messages, in plain words.
+      function isUnconfirmed(error) {
+        return error && (error.code === 'email_not_confirmed' || /not confirmed/i.test(error.message || ''));
+      }
+      function friendlyError(error) {
+        const m = (error && error.message) || '';
+        if (error && (error.code === 'invalid_credentials' || /invalid login credentials/i.test(m)))
+          return "That email and password don't match. Check them, or use Forgot password.";
+        if ((error && error.status === 429) || /rate limit|too many|security purposes/i.test(m))
+          return 'Too many attempts in a short time. Wait a minute, then try again.';
+        if (/already registered|already been registered|user already exists/i.test(m))
+          return 'There is already an account with that email. Sign in instead, or use Forgot password.';
+        if (/password should be at least/i.test(m))
+          return 'Your password needs to be at least 6 characters.';
+        if (/invalid.*email|email.*invalid|unable to validate email/i.test(m))
+          return "That doesn't look like a valid email address.";
+        return m || 'Something went wrong. Please try again.';
+      }
+
       document.getElementById('submit-btn').addEventListener('click', async () => {
         const email = document.getElementById('email').value.trim();
         const password = document.getElementById('password').value;
@@ -309,17 +401,17 @@
           const btn = document.getElementById('submit-btn');
           btn.disabled = true;
           btn.textContent = 'Sending...';
-          const { error } = await db.auth.resetPasswordForEmail(email, {
-            redirectTo: window.location.origin + '/reset.html'
-          });
+          const { error } = await sendReset(email);
           btn.disabled = false;
           btn.textContent = 'Send Reset Link';
           if (error) {
-            showError(error.message);
+            showErrorNotice(friendlyError(error));
           } else {
-            const s = document.getElementById('success-msg');
-            s.textContent = 'Reset link sent — check your email.';
-            s.style.display = 'block';
+            // Worded so it doesn't reveal whether the address has an account.
+            showSuccess('If there’s an account for ' + email + ', a reset link is on its way.', {
+              hint: FROM_HINT,
+              resend: { label: 'Resend email', send: () => sendReset(email), coolFirst: true },
+            });
           }
           return;
         }
@@ -358,7 +450,10 @@
             // signUp returns the user even while the confirmation is pending,
             // so the top of the funnel is captured whether or not they confirm.
             logActivity('signup', { user_id: signUpData && signUpData.user && signUpData.user.id });
-            showError('Check your email for a confirmation link, then sign in.');
+            showSuccess('Almost there. We sent a confirmation link to ' + email + '. Tap it, then sign in.', {
+              hint: FROM_HINT,
+              resend: { label: 'Resend email', send: () => resendConfirmation(email), coolFirst: true },
+            });
             btn.disabled = false;
             btn.textContent = 'Create Account';
             return;
@@ -368,7 +463,14 @@
         }
 
         if (error) {
-          showError(error.message);
+          if (isUnconfirmed(error)) {
+            showErrorNotice('Please confirm your email first. We sent a link to ' + email + ' when you signed up.', {
+              hint: FROM_HINT,
+              resend: { label: 'Resend confirmation email', send: () => resendConfirmation(email) },
+            });
+          } else {
+            showErrorNotice(friendlyError(error));
+          }
           btn.disabled = false;
           btn.textContent = mode === 'signup' ? 'Create Account' : 'Sign In';
         } else {
