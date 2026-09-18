@@ -1866,3 +1866,108 @@ Fix: `fill-rule="nonzero"` **and** reverse the counter circle's arcs (`sweep 0 �
 - The `/u/{handle}` **menu page** idea above, if the "one address per creator" itch returns without the CLIP cost.
 - MindAR's **compatibility overlay** is still on (deliberate).
 - Unchanged from previous sessions: the two horizontal-overflow bugs (`order.html` ~16px on phones, `manage.html` at ~768px), small-size print pricing, companion insert orientation.
+
+### 2026-09-18 — popcodeapp.com retired for real, analytics tiers, Shop hero, pricing subhead
+
+**Branch `claude/relaxed-mendel-7mrnck`, all fast-forwarded to `main` and live: `39626b5`, `3d14422`, `a18028c`, `eff64c3`, `85d318e`.** No PRs. No migrations. The headline is that the popcodeapp.com cutover, queued since the 09-01 homepage session, is **done end to end** — and the two hours it took were almost entirely one browser bug.
+
+#### popcodeapp.com → popcode.app (COMPLETE, verified from outside)
+
+```
+popcodeapp.com      → 307 → https://popcode.app/   ✓
+www.popcodeapp.com  → 307 → https://popcode.app/   ✓
+```
+
+What was done, in order: deleted the **`popcode-marketing`** Vercel project (releases both hosts; Squarespace registration and all email DNS untouched) → in `popcode-demo` → **Domains** → **Add Existing** → `popcodeapp.com` with **"Include apex and www variants" ticked** (one dialog covers www, no second pass) → **Redirect to Another Domain**, **307**, → `popcode.app` → both rows then demanded `_vercel` TXT verification → fixed the DNS at Squarespace → Refresh → green.
+
+**Destination is `popcode.app/`, not `/create.html`** (the user's first instinct). Reason: `create.html:474` bounces anyone not signed in straight to `/auth.html?mode=signup`, so a cold visitor typing the old marketing domain would land on a signup form with nothing explaining the product. `popcode.app/` is now a full marketing page, so it serves the same intent and explains first.
+
+**307 not 308, deliberately** — matches the existing `www.popcode.app → popcode.app` row, and a temporary redirect isn't cached hard so it stays easy to undo. Switching to **308** is the proper end state for a retired domain (consolidates link equity) once it's been stable a while. One dropdown in the Domains row.
+
+**Where Domains lives now:** Vercel moved it out of Project Settings. It's a top-level item in the project's left sidebar (below Environment Variables), NOT under Settings → the Settings sidebar has no Domains entry at all. The **Find box / `F`** at the top-left of the sidebar is the reliable way to get there.
+
+#### THE LESSON OF THE DAY — a browser silently mangled a form field
+
+Entering the two `_vercel` TXT values took ~10 attempts in Safari and **worked first try in Chrome**. Symptoms, all of which looked like Squarespace bugs and weren't:
+
+- Pasting `vc-domain-verify=www.popcodeapp.com,<token>` landed as `vc-domain-verify=www.popcodeapp.-` — truncated at the same point every time.
+- Typing the rest "reverted"; SAVE greyed out.
+- One save produced a **fused** value: `…,ecf4fa6f9f4d7b1fe6a4com,be0e624a794585a9d550` (new token spliced into the old one's tail).
+- Another produced a **doubled** token: `…,ecf4fa6f9f4d7b1fe6a4fa6f9f4d7b1fe6a4`.
+
+The tell was the red spell-check underlines on the field — something (Grammarly-class extension, or Safari itself) was hooking the input. **When a form field won't take a value, change browsers before changing anything else.** That should have been attempt two, not attempt ten.
+
+Two secondary red herrings inside that, both mine:
+- **The trailing `-` was not a hyphen, it was the text cursor.** I twice advised "delete the trailing hyphen and type the tail" — on a field that already held the correct value, which is what produced the doubled token.
+- **The field scrolls, it does not truncate.** A fixed-width input with the caret at the end hides the start (`omain-verify=…`). Zooming the browser out (⌘−) makes the whole value visible and is the way to audit what's actually in there.
+
+#### `_vercel` verification specifics (for if this ever recurs)
+
+- Verification tokens are **issued per project**. Moving a domain between Vercel projects invalidates the old `vc-domain-verify=` values — the published ones were popcode-marketing's. Adding alongside vs replacing doesn't matter; replacing is tidier.
+- Shape is strict: `vc-domain-verify=<host>,<exactly 20 hex>`. One comma, ends on a hex char. Both of the failures above would have been caught by that check alone.
+- Apex and www get **different tokens**. Pasting the apex token into both is the obvious trap.
+- Final live values (apex / www): `ecf4fa6f9f4d7b1fe6a4` / `b308b296c2a0558a0cbd`.
+
+#### Dangling `api.popcodeapp.com` removed
+
+Deleted the `api` CNAME (→ `popcode-prd-fargate-alb-1740653356.us-east-1.elb.amazonaws.com`) and its `_5b30f2b4…` → `…acm-validations.aws` sibling. The ALB was **already gone** (the ELB hostname returns NODATA, HTTP refuses), so the CNAME was dangling today, not at some future AWS-closure date. Zero references in the repo (`api.popcodeapp`, `amazonaws`, `elb`, `fargate` all clean).
+
+**Correction to my own framing**: I'd called this a subdomain-takeover risk on the S3 model. It's weaker — an **ELB hostname carries an AWS-assigned identifier an attacker can't pick**, unlike an S3 bucket name. Still right to delete, but housekeeping rather than a hole.
+
+#### Stripe orphan webhook — STILL OPEN, user-side
+
+Recurs every few sessions. Stripe keeps its endpoint list **in the Stripe account, not in the repo**. One still points at `https://api.popcodeapp.com/api/v1/checkout/webhook` (and variants at `api.stg.popcode.deploy-cd.com`), from the pre-static backend. Stripe POSTs, fails, emails. **Nothing is broken** — the live endpoint is `popcode.app/api/stripe-webhook`, and even that is only a backup since `api/finalize-order.js` fulfils from the success page. Fix: Stripe → Developers → Webhooks → delete the `api.popcodeapp.com` endpoint, **in live mode and in the sandbox**. Today's DNS deletion only changes the error from "can't connect" to "can't resolve".
+
+#### analytics.html — Plan + Popcodes per account (`39626b5`, `3d14422`)
+
+Question asked: "which tier do account holders have?" Answer: **there is no tier** — Stripe is `mode: 'payment'` only, no subscription, no plan column anywhere. So the Accounts table now shows what an account has *bought*:
+
+| Badge | Meaning |
+|---|---|
+| `Admin` | in `is_popcode_admin()` — uncapped |
+| `Pack · N` | `popcode_credits.purchased` |
+| `Shop · N` | `from_purchases` (credits refunded by a print order) |
+| `Comp · N` | `granted` by hand |
+| `Free` | the five |
+
+Plus a **Popcodes** column (`used of allowance`, red at the cap) and a tally line above the table.
+
+- **No new SQL.** `popcode_credits` already carries an admin SELECT policy from the credits migration, so it's read directly with `fetchAllRows`. The used-count is derived in `loadThumbsOnce` from the `collection_items` rows already fetched, applying `popcode_used()`'s exact rule — one per distinct `(collection_id, target_index)` with video or audio, so legacy duplicates collapse and photo-only rows never count. Verified against a stub covering all three cases.
+- **`UNCAPPED` uses `is_popcode_admin()`'s two emails, not `ADMIN_EMAIL`** — the DB decides who is exempt; `ADMIN_EMAIL` only gates who may open the page.
+- Ledger read failure sets `creditsError`: Plan shows `—` and the plan breakdown is **dropped from the tally**, because a row of zeros reads as "13 free accounts" rather than "table missing".
+- `get_all_users` for the table went **35 → 1000** (a capped fetch would have made the new tally report the cap as the total) and primes the shared `cachedUsers`/`usersPromise` so the funnel doesn't re-query.
+- **Regression class to watch**: putting creation events into `scan_events` on 09-09 silently polluted view-only aggregates. Same shape here — when a table gains a new reader, audit everything that iterates it.
+
+#### shop.html — gradient hero (`a18028c`, `85d318e`)
+
+Same treatment as home/pricing: one gradient (`135deg #5bc8f5 → #7c3aed`), one curve cut out of it in the page colour (`#f9f9f9`), grid pulled up into the band the arch leaves (`.wrap.shop-body { margin-top: -110px }`). The **o is the Popcode symbol** and turns once on arrival — `1.05s cubic-bezier(.45,.05,.2,1)`, the same gesture as `pop-spinin` on the scan screen. `prefers-reduced-motion` honoured.
+
+**The user's screenshot was a mockup, not the live page** — repo and prod both had a plain `<h1>Shop</h1>`. Classic "phantom parallel build" (see 2026-09-02). Confirmed by fetching prod before building.
+
+Type measured against the mockup with PIL rather than eyeballed, and that mattered — the first pass was wrong in both directions:
+- Mark ink **0.61em**, centred **0.25em above the baseline** (CooperBT's lowercase `o` inks 0.52em × 0.52em, so the symbol slightly overshoots the x-height and baseline evenly).
+- **viewBox tightened to the pinwheel's own bbox — `46.1 46.1 209 209`** — so the CSS box *is* the ink. Before that I was sizing a shape that filled 69% of its box, which is why a nominally larger mark looked small. The arms are inscribed in a circle half the box wide, so the spin never clips (verified on a mid-spin frame).
+- Gaps solved from CooperBT's side bearings (h rsb .010em, p lsb .008em) against the title's -.02em tracking. Rendered result matches the mockup: **h→mark 5px, mark→p 3px, mark 61px**.
+- Symbol source is `assets/popcode_symbol_k.svg`'s inner white path (the bare pinwheel, no disc) — NOT `popcode_icon.svg` (the dot-spiral).
+
+Then per the user: hero aligned to **"My Popcodes" in the nav (x=382)** rather than the card grid, title **90px**, subtitle cap **620 → 760px** (the sentence renders ~604px, so 620 left 16px of slack and any font-rendering difference stranded `photos.` on its own line). The nav edge is constant at ≥1280 and starts moving below that, so the hero falls back to the centred column there. **Consequence to expect: the hero sits right of the cards by an amount that varies with window width** (~154px at 1440, ~79px at 1590).
+
+**Bug worth remembering: `nav.js` appends its stylesheet at runtime.** Its `.site-header::after` grey shelf painted as a white smear across the gradient, and deleting the duplicate rule from shop.html's own CSS did nothing — equal specificity, later source order wins. Fixed with `body .site-header::after { display: none }`.
+
+**Pre-existing, NOT from this work:** shop.html scrolls sideways ~142px at 768px (the inline nav not collapsing). Verified identical on the pre-change file at 768/820/900. Same bug as the noted manage.html one. Offered a single nav-breakpoint fix for both; not taken yet.
+
+#### pricing.html subhead (`eff64c3`)
+
+New copy, packs first: *"Packs are only for adding Popcodes to things you already own. / Popcodes are always free and unlimited on anything you buy from the Popcode Shop."* It needs **1193px at 16px against a 1084px column**, so one line would mean ~14.5px — fine-print territory. Broken at the sentence instead (a `<br>` hidden below 800px), which reads deliberate. `.one-line` renamed `.half-sub` since it no longer is.
+
+#### Sandbox/method gotchas
+
+- **A 70-byte response from prod through this sandbox's proxy is a truncated transfer, not a stale deploy.** It cost a round of "is it live?" confusion — a grep for a new string returns 0 on a truncated body exactly as it would on an old build. **Check `size_download` before concluding anything about a deploy.**
+- **No `dig` in this sandbox.** Use DoH: `curl -H 'accept: application/dns-json' "https://dns.google/resolve?name=X&type=TXT"` (and `cloudflare-dns.com/dns-query` as a second opinion). **`TTL` equal to the record's full TTL (14400 here) means the resolver fetched fresh from the authoritative nameservers**, so it distinguishes "not saved" from "not propagated".
+- **One DoH query returned stale values once**, which nearly had me report a reverted zone. Query both resolvers before raising an alarm.
+- popcodeapp.com's nameservers are **Google Cloud DNS** (`ns-cloud-d*.googledomains.com`) — the Google Domains estate Squarespace took over. Propagation is fast.
+- **Two Squarespace domains look nearly identical in the DNS UI.** Caught the user editing `popcode.app`'s zone believing it was popcodeapp.com. The apex A record is `216.198.79.1` on both; the **www CNAME is the discriminator** (`9a47defac2c58f6f…` = popcode.app, `3251ad73b6f1c89…` = popcodeapp.com).
+
+#### DO NOT TOUCH in popcodeapp.com's zone
+
+Email lives here and none of it was affected: MX → Google Workspace, `@` TXT SPF (`include:_spf.google.com`), `google._domainkey`, `_dmarc`, and **Resend on its own names — `resend._domainkey` (DKIM) and `send` TXT (`v=spf1 include:amazonses.com ~all`)**. That last pair is why the apex SPF is Google-only and still correct. Every signup confirmation and password reset depends on them. Also keep the two `gv-….googlehosted.com` CNAMEs (Google site verification).
