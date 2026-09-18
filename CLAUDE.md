@@ -1981,3 +1981,48 @@ New copy, packs first: *"Packs are only for adding Popcodes to things you alread
 #### DO NOT TOUCH in popcodeapp.com's zone
 
 Email lives here and none of it was affected: MX → Google Workspace, `@` TXT SPF (`include:_spf.google.com`), `google._domainkey`, `_dmarc`, and **Resend on its own names — `resend._domainkey` (DKIM) and `send` TXT (`v=spf1 include:amazonses.com ~all`)**. That last pair is why the apex SPF is Google-only and still correct. Every signup confirmation and password reset depends on them. Also keep the two `gv-….googlehosted.com` CNAMEs (Google site verification).
+
+### 2026-09-18 (later) — A prod Sentry error on buy-credits, and horizontal scroll fixed across every page
+
+Same branch (`claude/relaxed-mendel-7mrnck`), fast-forwarded to `main`: **`b9f728a`**. Two things after the popcodeapp.com cutover.
+
+#### The Sentry error: `POST /api/buy-credits` — `credit_orders` not in the schema cache
+
+Production, 7:41 a.m. EDT. `Could not open the order: Could not find the table 'public.credit_orders' in the schema cache` at `api/buy-credits.js:83`.
+
+**Already resolved by the time it was looked at**, verified from outside with only the public key:
+
+```
+collections / popcode_credits / credit_orders / print_orders  → [] 200   (all in the schema cache; RLS returning zero rows)
+POST /api/buy-credits   → 401 Unauthorized        (NOT "Checkout backend not configured" —
+                                                   so STRIPE_SECRET_KEY + SUPABASE_SERVICE_ROLE_KEY
+                                                   are present in Production scope)
+rpc/popcode_quota       → P0001 "Not signed in"   (the quota function is live)
+```
+
+**No money moved and there was nothing to reconcile.** The insert that failed is at `:53-66` and throws at `:83`; `new Stripe(...)` is at `:68` and `checkout.sessions.create` at `:70`. So the failure happened *before* Stripe was constructed — no session, no charge, and no orphan `credit_orders` row either, since the insert is what failed. Worth keeping as a shape: **write the local row before opening the payment session, and a DB failure can't leave money in flight.**
+
+**Cause: a gap between the code going live and the SQL being run** (or the minute before PostgREST reloaded). Can't distinguish the two after the fact. **This is the second instance of the pattern flagged on 2026-09-15 for the `branding` column** — when a deploy splits across code and DB, the code will happily reach a table that isn't there yet. For credits the right order was SQL first, then merge; for anything that only *reads* a new table, code first. The rule is: whichever side fails soft goes first.
+
+**Still unproven:** no real pack purchase has ever completed. Stripe redirect → `finalize-credits` → credits landing on `popcode_credits.purchased` → the nav pill updating is deployed and Postgres-tested but never exercised with money. When it is: check the `credit_orders` row reaches `granted` and that `purchased` moved.
+
+#### Horizontal scroll — the nav bug was on EVERY page, not two (`b9f728a`)
+
+Both were logged as "two pre-existing bugs" (2026-09-15, 2026-09-17). A proper sweep — 10 pages × 15 widths, 320→1280 — showed the first one was universal.
+
+**1. `nav.js`, every page that loads it.** Overflow at **768px → 142px, 820 → 90, 900 → 10**; clean at ≤700 (nav collapsed) and ≥960. The header is `width: 100vw` and flex, so its children sit at min-content and the *header* pushes the page sideways. Logo + five links + cart/profile needs about **938px**, but the inline nav only collapsed at `max-width: 760px` — a 200px band where it could not fit. **Breakpoint moved 760 → 959.**
+- Nothing is lost by collapsing earlier: the drawer's bottom cluster already carries cart, account and log out. Verified the drawer opens and contains all three at 390 / 768 / 900 / 959, and that 960+ still shows the inline nav and cart icon.
+- The same media query also moves the logo to the 28px content margin, so tablets now get that too — deliberate, one visual jump rather than two.
+
+**2. `order.html` on phones under 414px.** 320 → 86px, 360 → 46, 375 → 31, 390 → 16. `.detail` is a grid, and **a track's floor is its items' min-content**: `.detail-info` reports **378px** of it, so the single column stayed 378 wide inside a 264px container. Fixed with **`minmax(0,1fr)`** on both the two-column and the one-column rule.
+
+**The 378 was a phantom, and proving that is what made the fix honest rather than a clip:** forcing `.detail-info` to 264px reflowed everything inside with **not one child overflowing**. So the content was always happy at the narrower width — the track just refused to shrink to it. `min-width: 0` on the items would do the same; the track form is more targeted.
+
+**Result: all ten pages clean at all fifteen widths**, where six of those widths previously overflowed on all ten.
+
+#### Method lessons from this one
+
+- **A spot-check on two pages made a global bug look local.** Both bugs had been sitting in the notes for weeks as "manage.html and order.html". Sweeping every page that shares a component is cheap and was the whole finding.
+- **Measuring each child's min-content was misleading** — every child of `.detail-info` came back under 300px while the parent claimed 378, because `el.style.width = 'min-content'` doesn't measure a flex item the way the grid algorithm does. What settled it: **squeeze the container to the target width and ask what overflows.** Nothing did. That distinguishes "this content needs 378px" (would need real reflow work) from "this track won't go below 378px" (one property).
+- Sweep harness is `sweep.mjs` in the scratchpad: for each page/width, `document.documentElement.scrollWidth - clientWidth`, plus the first four visible elements whose `right` exceeds `clientWidth` — naming the culprits is what points straight at the cause.
+- **`node sweep.mjs | tail -30` in a background task shows nothing until it exits** (tail buffers to EOF). Don't read an empty output file as "still clean so far".
