@@ -2026,3 +2026,59 @@ Both were logged as "two pre-existing bugs" (2026-09-15, 2026-09-17). A proper s
 - **Measuring each child's min-content was misleading** — every child of `.detail-info` came back under 300px while the parent claimed 378, because `el.style.width = 'min-content'` doesn't measure a flex item the way the grid algorithm does. What settled it: **squeeze the container to the target width and ask what overflows.** Nothing did. That distinguishes "this content needs 378px" (would need real reflow work) from "this track won't go below 378px" (one property).
 - Sweep harness is `sweep.mjs` in the scratchpad: for each page/width, `document.documentElement.scrollWidth - clientWidth`, plus the first four visible elements whose `right` exceeds `clientWidth` — naming the culprits is what points straight at the cause.
 - **`node sweep.mjs | tail -30` in a background task shows nothing until it exits** (tail buffers to EOF). Don't read an empty output file as "still clean so far".
+
+### 2026-09-18 (evening) — Cart edit fix, welcome page rebuilt, signed-out nav + browsable shop, email opt-in, symmetric arches, off the sand
+
+**All straight to `main`, no PRs, all live.** Worked from branch `claude/viewer-insights`, pushing `HEAD:main` each time — that branch also holds someone's **uncommitted viewer-insights work** (`api/log-event.js`, `public/manage.html`, `public/view.html`, `supabase/migrations/2026-09-18-viewer-insights.sql`) which was deliberately never staged. Commits: `a52ad03` `ebdddfa` `80dd437` `c6f8e42` `1c99ebc` `4e53043` `fd8b83b` `524fe28` `e19345f` `9e28380` `80c1c7b` `6dac76e` `6da3b11`.
+
+#### Cart "Edit design" opened the generic product page (`a52ad03`)
+A single-image cart line's `collection_id` is the **source photo's project**, not a saved design — so `order.html?design=<that slug>&edit=1` found no `book_layout.print` and fell through to the blank product page. Now `cart.html editHref()` → `order.html?cartItem=<row id>`; `loadCartItem()` restores product / size / frame colour / mount / orientation / scale / crop and the photo (matched back to the tray by collection + target_index, thumbnail as fallback). `PopcodeCart.update(id, item)` added to `cart.js`; the button reads **Update cart** and replaces the line in place (quantity kept), then returns to the cart. Crop (`adjust`) is now saved in cart-line `options` — lines added before this reopen with the default crop.
+
+#### Welcome / auth page — rebuilt several times, final state
+User rejected a split-screen with painting + phone video ("no imagery or videos"). Final `public/auth.html`:
+- Loads the **shared `nav.js`** (same white header as every page).
+- **Shop-style gradient arch** (`135deg #5bc8f5 → #7c3aed`), headline **"Welcome.<br>Or welcome back."** 46px, `line-height: 1.0`, **flush left at 382px** (the nav's first link, same rule as `shop.html`; centred column below 1280). Subhead 16px white, one line on desktop: "Sign in to make, share and order all things Popcode. Or **create a new account**." (link switches to signup). Hero padding `36px 0 230px` so the text clears the arch peak by ~53px.
+- **No card** — form sits straight on `#f9f9f9`. **Sign in / Create account segmented switch** (`#mode-tabs`) replaces the bottom toggle link; the card `h1` only shows for Reset Password; the bottom `.toggle` only shows in forgot mode ("← Back to sign in").
+- Phones: fields/button **300px** wide (`.form-side .card { max-width: 300px }` — needs the extra specificity because the base `.card` rule comes later in the file).
+- `nav.js` shelf (`.site-header::after`) hidden on this page — it smears on the gradient (same fix as shop).
+
+#### Signed-out nav (`4e53043`, `nav.js`)
+Signed out = **Shop / Pricing / How It Works** + a black **Create account** button (→ `/auth.html?mode=signup`) where cart + avatar were. Drawer's bottom cluster becomes Create account / Sign in. Mechanism worth knowing:
+- `html.pc-signed-out` is set **synchronously** from localStorage (`/^sb-.*-auth-token$/`, the supabase-js v2 key) so the header never flashes the wrong items, then **confirmed by `getSession()`** inside `loadAccountQuota()` which flips it if stale.
+- Private items are hidden **by href** (`a[href^="/manage.html"]`, `/views.html`, `/account.html`, `/cart.html`, `.nav-logout`), so it also covers pages that ship their own legacy `#nav-overlay` drawer.
+- Button hides below **375px** (it touches the logo at 360); lives in the drawer there.
+
+#### Signed-out visitors can browse the shop (`fd8b83b`)
+`shop.html`, `order.html` and the **book/calendar intro screens** no longer bounce to `/auth.html`. They show products, sizes, sample previews and prices (`/api/prodigi-quote` needs no auth). The first account-requiring step calls `goSignUp()` → `/auth.html?mode=signup&next=<current path+query>`: order.html's `openPhotoStep()` (Choose a photo), and a **capture-phase document click listener** on `#start-book-btn` / `#start-cal-btn`. `?design=` / `?cartItem=` / book-calendar `?id=` still require sign-in first. **Board book stays fully gated** (no intro screen; ordering still admin-only). `auth.html` signUp now passes `emailRedirectTo: origin + landingPage()` so the **confirmation email returns them to that product** (covered by the existing `https://popcode.app/**` allow list). book.html's `uName` line used `data.session.user` — would have crashed signed-out; switched to `currentUser?.`.
+
+#### Marketing email opt-in (`1c99ebc`) — MIGRATION RUN IN PROD
+- Signup: optional, **unticked**, separate checkbox "Send me tips, ideas and news from Popcode. Unsubscribe anytime." (EU/UK consent needs all three). Stored in **`user_metadata`**: `marketing_opt_in`, `marketing_opt_in_at` (the consent record); account page opt-out stamps `marketing_opt_out_at`.
+- `account.html`: new **Email** card, saves on change via `db.auth.updateUser({ data })`.
+- `analytics.html` Accounts: **Emails** column (Yes + date on hover) and "N on the email list" in the tally, via new admin-only RPC **`get_marketing_opt_ins()`** (`supabase/migrations/2026-09-18-marketing-opt-ins.sql`, security definer, `is_popcode_admin()`-gated, no table change). User ran it: "Success. No rows returned". The migration file has a comment with the SQL to **export the opted-in list** for Resend.
+- `privacy.html` said "We don't currently send marketing email" — rewritten; Last updated → September 18, 2026.
+- Not done: Resend Broadcasts setup; the ~35 existing accounts are all "No" — recommended a personal one-off "want tips?" email rather than adding them.
+
+#### Arches — symmetric everywhere, gentler on phones (`9e28380`, `80c1c7b`)
+- The shared hero curve was `M0 96 C 260 8, 700 -18, 1200 52` — **left end 96, right end 52**, so the right side ended higher. Now **`M0 96 C 320 -16, 880 -16, 1200 96`**: both ends 96, peak centred and exactly as high as before (12 units), so no pull-up offsets had to move on desktop. In `index.html`, `shop.html`, `pricing.html`, `auth.html`.
+- Phones: curve **120px → 60px** tall (a 120px curve on a 390px screen read as a hill). Every page pulls content up into the curve, so those shrank too: shop `.shop-body` −60→−36 & hero bottom 150→110; pricing `.p-body` −34 at ≤640 & hero bottom 146→106; auth bottom 96 & form −16; home `.codebar` **0 on phones** (`body .codebar` — the base rule is later in the file). Measured home: link-bar text 36px below the curve's lowest gradient point.
+- If the curve ever changes again: page-colour fill must match the page (`#f9f9f9`), and every `margin-top: -Npx` pull-up is tuned to the curve's height.
+
+#### Off the sand (`524fe28`, `6da3b11`)
+User: "we don't use that sand color anymore." Page backgrounds now **`#f9f9f9`** everywhere (home `--bg`, pricing `--bg`, board book body, all curve fills). Then a site-wide swap of warm UI greys for neutral ones of the same lightness (85 swaps, 15 pages + `nav.js` + `image-source.js`): `f7f6f2→f9f9f9, f7f6f3→f7f7f7, f5f4f0→f4f4f4, faf9f5→fafafa, f2f0eb→f1f1f1, f0eeea→efefef, f3f2ef→f3f3f3, ebe8e1→ebebeb, f1f0ec→f1f1f1, e3e0d8→e3e3e3, d6d2c8→d6d6d6, eceae5→ececec`. **Deliberately kept** (product colours, not UI): the white frame swatch `#f7f6f3` and mount white `#faf9f6` in `order.html`, the unused shelf scene `#efece7`, and anything in `postcard*` (print output). Checked no swap touched canvas `fillStyle` or print/proof CSS.
+
+#### Smaller
+- Pricing: Studio title 32 → **42px** (`80dd437`).
+
+#### GOTCHAS FROM THIS SESSION
+- **Another Claude session was committing in the SAME working folder at the same time.** Its commit `cb4b301` (book/calendar "saving keeps photos that aren't placed yet") swept up my uncommitted colour swaps in `book.html` / `calendar.html` because they were on disk. Harmless here, but: **stage explicit file paths, commit promptly, and check `git log -3` before assuming your diff is still yours.** It also left untracked `public/zz-book.html`, `zz-calendar.html`, `zz-stub.js` — not mine, not committed. (Note: files in `public/` are web-served if ever committed.)
+- **The preview server on :8099 belongs to another session** (`launch.json` `popcode-static`, cwd in another session's scratchpad `.../scratchpad/site`). That dir is **symlinks into `public/`**, so it serves current code — but files created after Sep 14 (e.g. `pricing.html`) aren't linked and 404. Run your own: `cd public && python3 -m http.server 8123` (background), navigate to `localhost:8123`. `lsof -p <pid> | grep cwd` is how this was found.
+- **User's phone screenshots were cached**, twice showing already-fixed layouts. Tell them to reload before iterating on a "still broken" report.
+- **CSS source order bit three times**: a phone override placed *before* the base rule loses (`.card`, `.codebar`). Raise specificity (`.form-side .card`, `body .codebar`) or put overrides at the end.
+- Browser-pane screenshots of a **scrolled** page come back blank (known); measure with `getBoundingClientRect` instead.
+- Local auth testing is real Supabase (config.js is live), so signed-out tests are genuine; the pricing API 501s on the static server (expected, not a bug).
+
+#### Open / next
+- Cyan hairline under the arch in the user's desktop screenshots — didn't reproduce, drawn over the phone, so probably a screen-ruler tool on their Mac. Asked; unanswered.
+- Resend Broadcasts + first newsletter; outreach to existing accounts for opt-in.
+- Board book has no signed-out intro screen.
+- Ideas offered, not built: remember last-used auth tab per device; Continue with Google/Apple; show/hide password eye.
