@@ -518,6 +518,21 @@
       .pg-pop { position: absolute; right: 4px; bottom: 4px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; }
       .pg-pop img { width: 13px; height: 13px; display: block; }
       .menu-row.disabled { opacity: 0.4; pointer-events: none; }
+      /* Select mode: tap photos to pick several, then delete them in one go. */
+      .pg-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 16px 0 4px; }
+      .sheet .pg-head p.sheet-sub { margin: 0; }
+      .link-btn { background: none; border: none; padding: 4px 0; font: 600 14px 'Inter', sans-serif; color: #5b3fd6; cursor: pointer; white-space: nowrap; }
+      .pg-thumb.sel-mode:hover { transform: none; box-shadow: none; }
+      .pg-thumb .sel-dot { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; background: rgba(0,0,0,0.25); box-shadow: 0 1px 3px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; }
+      .pg-thumb.picked { box-shadow: 0 0 0 3px #7657FC; }
+      .pg-thumb.picked .sel-dot { background: #7657FC; border-color: #7657FC; }
+      .pg-thumb.picked .sel-dot::after { content: ''; width: 6px; height: 10px; border: solid #fff; border-width: 0 2px 2px 0; transform: translate(0, -1px) rotate(45deg); }
+      .pg-thumb .on-page { position: absolute; left: 5px; bottom: 5px; background: rgba(0,0,0,0.6); color: #fff; font: 600 10px 'Inter', sans-serif; padding: 2px 6px; border-radius: 999px; }
+      .sel-bar { position: sticky; bottom: 0; background: #fff; display: flex; align-items: center; gap: 10px; padding: 14px 0 4px; margin-top: 12px; border-top: 1px solid #f0f0f0; }
+      .sel-bar .sel-count { flex: 1; font-size: 14px; color: #666; }
+      .btn-danger { background: #d33; color: #fff; border: none; border-radius: 999px; padding: 10px 18px; font: 700 14px 'Inter', sans-serif; cursor: pointer; }
+      .btn-danger:disabled { opacity: 0.35; cursor: default; }
+      .sel-bar .mini-btn { padding: 10px 18px; font-size: 14px; }
 
       /* ── Rearrange Pages (full-screen drag-to-reorder) ─────────── */
       .rearrange { display: none; position: fixed; inset: 0; z-index: 450; background: #ffffff; flex-direction: column; }
@@ -752,6 +767,7 @@
         <div class="tray-head">
           <div class="tray-title">Your photos <span id="tray-count"></span></div>
           <div class="tray-actions">
+            <button class="mini-btn" id="select-photos-btn" type="button" style="display:none">Select</button>
             <button class="mini-btn" id="autofill-btn" disabled>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h16M4 19h10"/></svg>
               Auto-fill
@@ -1436,12 +1452,14 @@
         pages.push(blankPage()); // inside back cover — always, on the right of the last spread
       }
 
+      document.getElementById('select-photos-btn').addEventListener('click', () => openSelectPhotos());
       function renderTray() {
         const tray = document.getElementById('tray');
         const unplaced = unplacedPhotos();
         const total = photos.size;
         document.getElementById('tray-count').textContent = total ? `(${unplaced.length} unplaced · ${total} total)` : '';
         document.getElementById('autofill-btn').disabled = unplaced.length === 0;
+        document.getElementById('select-photos-btn').style.display = total ? '' : 'none';
         tray.innerHTML = '';
         unplaced.forEach(p => {
           const el = document.createElement('div');
@@ -2210,6 +2228,8 @@
       }
 
       // ── Floating dock: Photos / Pages / Options quick actions ────
+      // There is ONE set of photos per book: this sheet and the "Your photos" tray
+      // are two views of it, so a photo deleted in either is gone from both.
       function openPhotosSheet() {
         const unplaced = unplacedPhotos();
         const total = photos.size;
@@ -2227,9 +2247,11 @@
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h16M4 19h10"/></svg></div>
             <div><div>Auto-fill pages</div><div class="menu-sub">Flow unused photos into spreads</div></div>
           </div>
-          ${unplaced.length ? `<p class="sheet-sub" style="margin:16px 0 4px">Or tap a photo, then tap an empty page slot to place it.</p>` : ''}
+          ${total ? `<div class="pg-head"><p class="sheet-sub">${unplaced.length ? 'Or tap a photo, then tap an empty page slot to place it.' : ''}</p><button class="link-btn" data-act="select">Select</button></div>` : ''}
           ${grid}
         `);
+        const selLink = document.querySelector('#sheet [data-act="select"]');
+        if (selLink) selLink.addEventListener('click', openSelectPhotos);
         document.querySelector('#sheet [data-act="add"]').addEventListener('click', () => { closeSheet(); document.getElementById('photo-input').click(); });
         const af = document.querySelector('#sheet [data-act="autofill"]');
         if (af && unplaced.length) af.addEventListener('click', () => { closeSheet(); document.getElementById('autofill-btn').click(); });
@@ -2248,6 +2270,51 @@
             },
           });
         });
+      }
+
+      // Select mode: every photo (placed ones labelled), tap to pick, delete in bulk.
+      function openSelectPhotos() {
+        const placed = placedIds();
+        const picked = new Set();
+        const all = [...photos.values()];
+        openSheet(`
+          <h2>Select photos</h2>
+          <p class="sheet-sub">Tap photos to select them. Deleting a photo also takes it off its page.</p>
+          <div class="pg-head"><p class="sheet-sub">${all.length} photo${all.length === 1 ? '' : 's'}</p><button class="link-btn" data-act="all">Select all</button></div>
+          <div class="photos-grid">${all.map(p => `<div class="pg-thumb sel-mode" data-id="${p.id}" style="background-image:url('${p.url}')"><span class="sel-dot"></span>${placed.has(p.id) ? '<span class="on-page">On a page</span>' : ''}</div>`).join('')}</div>
+          <div class="sel-bar"><span class="sel-count">None selected</span><button class="mini-btn" data-act="done">Done</button><button class="btn-danger" data-act="delete" disabled>Delete</button></div>
+        `);
+        const q = (sel) => document.querySelector('#sheet ' + sel);
+        const allBtn = q('[data-act="all"]'), delBtn = q('[data-act="delete"]');
+        const sync = () => {
+          document.querySelectorAll('#sheet .pg-thumb').forEach(t => t.classList.toggle('picked', picked.has(t.dataset.id)));
+          q('.sel-count').textContent = picked.size ? `${picked.size} selected` : 'None selected';
+          delBtn.disabled = !picked.size;
+          delBtn.textContent = picked.size ? `Delete ${picked.size}` : 'Delete';
+          allBtn.textContent = picked.size === all.length ? 'Select none' : 'Select all';
+        };
+        document.querySelectorAll('#sheet .pg-thumb').forEach(t => t.addEventListener('click', () => {
+          const id = t.dataset.id; picked.has(id) ? picked.delete(id) : picked.add(id); sync();
+        }));
+        allBtn.addEventListener('click', () => { if (picked.size === all.length) picked.clear(); else all.forEach(p => picked.add(p.id)); sync(); });
+        q('[data-act="done"]').addEventListener('click', closeSheet);
+        delBtn.addEventListener('click', () => {
+          const ids = [...picked];
+          const onPages = ids.filter(id => placed.has(id)).length;
+          const withPop = ids.filter(id => photoHasMedia(photos.get(id))).length;
+          const lines = [`Delete ${ids.length} photo${ids.length === 1 ? '' : 's'}?`];
+          if (onPages) lines.push(`${onPages} ${onPages === 1 ? 'is' : 'are'} on a page and will be taken off it.`);
+          if (withPop) lines.push(`${withPop} ${withPop === 1 ? 'has' : 'have'} a Popcode — its video or audio link goes too.`);
+          if (!confirm(lines.join('\n\n'))) return;
+          const gone = new Set(ids);
+          pages.forEach(pg => { pg.slots = pg.slots.map(id => gone.has(id) ? null : id); });
+          if (gone.has(selectedTrayId)) selectedTrayId = null;
+          swapSource = null;
+          gone.forEach(id => photos.delete(id));
+          closeSheet(); render();
+          showToast(`Deleted ${ids.length} photo${ids.length === 1 ? '' : 's'}. Save to keep the change.`);
+        });
+        sync();
       }
 
       function openPagesSheet() {
