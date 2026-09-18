@@ -181,6 +181,16 @@
          side by side, meeting at a center gutter. */
       .pages { display: flex; flex-direction: column; gap: 30px; }
       .spread { position: relative; transition: opacity 0.2s, transform 0.2s; }
+      /* "+ Insert spread" between spreads — sits in the gap, quiet until hovered. */
+      .spread-insert { display: flex; align-items: center; gap: 12px; margin: -20px 0; }
+      .spread-insert::before, .spread-insert::after { content: ''; flex: 1; border-top: 1px dashed #dcdcdc; opacity: 0; transition: opacity .15s; }
+      .spread-insert button {
+        border: 1px dashed #d0d0d0; background: #fff; color: #888; border-radius: 999px; padding: 5px 13px;
+        font: 600 12px 'Inter', sans-serif; cursor: pointer; opacity: .6; transition: opacity .15s, color .15s, border-color .15s;
+      }
+      .spread-insert:hover::before, .spread-insert:hover::after { opacity: 1; }
+      .spread-insert:hover button, .spread-insert button:focus-visible { opacity: 1; color: #1a1a1a; border-color: #9a9a9a; }
+      @media (hover: none) { .spread-insert button { opacity: 1; } }
 
       /* Two facing pages with a subtle center fold. */
       .spread-body { display: flex; align-items: flex-start; }
@@ -1208,6 +1218,7 @@
       // burst of edits in quick succession collapses into one.
       const cloneCover = (c) => Object.assign({}, c, { photo: PopcodeUndo.clonePhoto(c.photo) });
       const undoStack = PopcodeUndo({
+        extra: () => (document.getElementById('title-input') || {}).value || '',
         capture: () => ({
           photos: [...photos].map(([id, p]) => [id, PopcodeUndo.clonePhoto(p)]),
           pages: pages.map(pg => Object.assign({}, pg, { slots: [...pg.slots] })),
@@ -1437,6 +1448,26 @@
         render();
       });
 
+      // Insert an empty content spread (a full-bleed page facing a 2-photo page)
+      // so it starts at pages[at]. Always two pages, so every later spread keeps
+      // its left/right pairing (including photos across both pages).
+      function insertSpreadAt(at) {
+        if (!pages.length) pages.push(blankPage());
+        at = Math.max(1, Math.min(at, pages.length));
+        const single = singlePage(null);
+        const multi = multiPage(DEFAULT_MULTI_2, []);
+        const fullLeft = Math.floor(at / 2) % 2 === 0;
+        const newPages = fullLeft ? [single, multi] : [multi, single];
+        pages.splice(at, 0, ...newPages);
+        render();
+        requestAnimationFrame(() => {
+          const el = document.querySelector(`#pages .slot[data-page-id="${newPages[0].id}"]`);
+          const sp = el && el.closest('.spread');
+          if (sp) sp.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          showToast('Spread inserted');
+        });
+      }
+
       // "Add spread" appends an empty content spread (single facing 2-photo).
       document.getElementById('add-page-btn').addEventListener('click', () => {
         if (!pages.length) pages.push(blankPage());
@@ -1626,6 +1657,15 @@
 
           spread.appendChild(body);
           container.appendChild(spread);
+          // Between spreads (not after the final one — "Add a spread" covers that).
+          if (s + 2 < pages.length) {
+            const ins = document.createElement('div');
+            ins.className = 'spread-insert';
+            ins.innerHTML = '<button type="button">+ Insert spread</button>';
+            const at = s + 2;
+            ins.querySelector('button').addEventListener('click', () => insertSpreadAt(at));
+            container.appendChild(ins);
+          }
         }
         renderBackCoverRow(container);
       }
@@ -2300,6 +2340,10 @@
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></div>
             <div><div>Move later</div></div>
           </div>
+          <div class="menu-row" data-act="insert">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="16" y1="9" x2="16" y2="15"/><line x1="13" y1="12" x2="19" y2="12"/></svg></div>
+            <div><div>Insert a spread after this</div><div class="menu-sub">Two new pages right after this spread</div></div>
+          </div>
           ${isBlank ? '' : `<div class="menu-row" data-act="clear">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>
             <div><div>Make blank</div><div class="menu-sub">Clear this page (photos return to your tray)</div></div>
@@ -2313,6 +2357,7 @@
           row.addEventListener('click', () => {
             const act = row.dataset.act;
             const i = pages.indexOf(pg);
+            if (act === 'insert') { closeSheet(); insertSpreadAt(i - (i % 2) + 2); return; }
             const unit = spreadUnit(pages, pg);
             if (unit.length === 2) {
               // A photo across both pages moves and deletes as one spread.
@@ -2468,7 +2513,7 @@
           <p class="sheet-sub">Add pages to your book. Drag a page by its handle to rearrange, or use a page’s ⋯ menu to move or delete it.</p>
           <div class="menu-row" data-act="spread">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/></svg></div>
-            <div><div>Add a spread</div><div class="menu-sub">A full-bleed page facing a 2-photo page</div></div>
+            <div><div>Add a spread at the end</div><div class="menu-sub">To put one somewhere else, use “+ Insert spread” between any two spreads, or a page’s ⋯ menu</div></div>
           </div>
           <div class="menu-row" data-act="single">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="9" y1="12" x2="15" y2="12"/></svg></div>
@@ -3409,10 +3454,12 @@
         btn.classList.toggle('ready', ready);
         const saveBtn = document.getElementById('save-design-btn');
         if (saveBtn) {
-          saveBtn.disabled = !ready;
-          // Once the book exists the primary IS a save, so the extra button
-          // would just be a duplicate — it earns its place on a new design.
-          saveBtn.style.display = '';   // always: it's the only save that doesn't need a Popcode yet — hiding it after the first save stranded unsaved work
+          // Save design shows whenever there's anything unsaved, and reads
+          // 'Saved' (greyed) once everything is — so you always know.
+          const dirty = undoStack.isDirty();
+          saveBtn.disabled = !ready || !dirty;
+          saveBtn.textContent = (!ready || dirty) ? 'Save design' : 'Saved';
+          saveBtn.style.display = '';
         }
       }
 

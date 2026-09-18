@@ -652,6 +652,7 @@
       // Every change to the design (photos, pages, text, cover) is a step; a
       // burst of edits in quick succession collapses into one.
       const undoStack = PopcodeUndo({
+        extra: () => (document.getElementById('title-input') || {}).value || '',
         capture: () => ({
           photos: [...photos].map(([id, p]) => [id, PopcodeUndo.clonePhoto(p)]),
           slots: Object.assign({}, slots),
@@ -948,7 +949,7 @@
       const chosenSlug = () => slugField.get();
       const slugValid = () => PopcodeSlug.validate(chosenSlug()).ok;
       function syncSlugNote() { slugField.refresh(); }
-      document.getElementById('title-input').addEventListener('input', (e) => { cover.title = e.target.value; renderSlots(); });   // live cover title
+      document.getElementById('title-input').addEventListener('input', (e) => { cover.title = e.target.value; renderSlots(); updateSummary(); });   // live cover title + Save design state
 
       function photoHasMedia(p) { return !!(p && p.popcode && (p.popcode.video || p.popcode.audio || p.popcode.existingVideoUrl || p.popcode.existingAudioUrl)); }
       function formatMB(b) { return (b / (1024 * 1024)).toFixed(1) + ' MB'; }
@@ -2070,10 +2071,12 @@
         btn.classList.toggle('ready', ready);
         const saveBtn = document.getElementById('save-design-btn');
         if (saveBtn) {
-          saveBtn.disabled = !ready;
-          // Once the board book exists the primary IS a save, so the extra
-          // button would just be a duplicate.
-          saveBtn.style.display = '';   // always: it's the only save that doesn't need a Popcode yet — hiding it after the first save stranded unsaved work
+          // Save design shows whenever there's anything unsaved, and reads
+          // 'Saved' (greyed) once everything is — so you always know.
+          const dirty = undoStack.isDirty();
+          saveBtn.disabled = !ready || !dirty;
+          saveBtn.textContent = (!ready || dirty) ? 'Save design' : 'Saved';
+          saveBtn.style.display = '';
         }
       }
 

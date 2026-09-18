@@ -19,6 +19,10 @@
     const LIMIT = 80;
     let past = [], future = [], cur = null, curSig = null, timer = null, restoring = false;
     let savedSig = null;   // signature at the last save/load; null until known
+    // opts.extra(): state that counts as unsaved work but isn't an undo step
+    // (the title field — text inputs keep their own undo).
+    const extra = () => { try { return opts.extra ? String(opts.extra()) : ''; } catch (e) { return ''; } };
+    let savedExtra = null;
     const sig = (s) => JSON.stringify(opts.signature(s));
     const changed = () => opts.onChange && opts.onChange(past.length > 0, future.length > 0);
 
@@ -26,7 +30,7 @@
       timer = null;
       const s = opts.capture();
       const g = sig(s);
-      if (cur === null) { cur = s; curSig = g; if (savedSig === null) savedSig = g; return; }
+      if (cur === null) { cur = s; curSig = g; if (savedSig === null) { savedSig = g; savedExtra = extra(); } return; }
       if (g === curSig) { cur = s; return; }   // nothing the user would see changed
       past.push(cur);
       if (past.length > LIMIT) past.shift();
@@ -65,13 +69,13 @@
       clearTimeout(timer); timer = null;
       past = []; future = [];
       cur = opts.capture(); curSig = sig(cur);
-      savedSig = curSig;   // a freshly loaded design has nothing unsaved
+      savedSig = curSig; savedExtra = extra();   // a freshly loaded design has nothing unsaved
       changed();
     }
-    function markSaved() { savedSig = sig(opts.capture()); }
+    function markSaved() { savedSig = sig(opts.capture()); savedExtra = extra(); }
     function isDirty() {
       if (savedSig === null) return false;
-      try { return sig(opts.capture()) !== savedSig; } catch (e) { return false; }
+      try { return sig(opts.capture()) !== savedSig || extra() !== savedExtra; } catch (e) { return false; }
     }
     // Closing the tab, reloading, or following any link with unsaved work
     // gets the browser's "Leave site?" prompt (its wording is fixed by the

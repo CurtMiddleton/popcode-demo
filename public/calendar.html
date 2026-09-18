@@ -653,6 +653,7 @@
       // Every change to the design (photos, months, cover, year, font) is a
       // step; a burst of edits in quick succession collapses into one.
       const undoStack = PopcodeUndo({
+        extra: () => (document.getElementById('title-input') || {}).value || '',
         capture: () => ({
           photos: [...photos].map(([id, p]) => [id, PopcodeUndo.clonePhoto(p)]),
           months: months.map(m => Object.assign({}, m)),
@@ -985,11 +986,12 @@
         btn.textContent = editingCollection ? 'Save Changes' : 'Create Calendar';
         const saveBtn = document.getElementById('save-design-btn');
         if (saveBtn) {
-          // Same gate as the primary: there has to be something worth saving.
-          saveBtn.disabled = btn.disabled;
-          // Once the design exists the primary IS a save, so the extra button
-          // would just be a duplicate — it earns its place on a new design.
-          saveBtn.style.display = '';   // always: it's the only save that doesn't need a Popcode yet — hiding it after the first save stranded unsaved work
+          // Save design shows whenever there's anything unsaved, and reads
+          // 'Saved' (greyed) once everything is — so you always know.
+          const dirty = undoStack.isDirty();
+          saveBtn.disabled = btn.disabled || !dirty;
+          saveBtn.textContent = (btn.disabled || dirty) ? 'Save design' : 'Saved';
+          saveBtn.style.display = '';
         }
       }
 
