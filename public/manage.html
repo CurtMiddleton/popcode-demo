@@ -315,7 +315,7 @@
         position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
         background: rgba(0,0,0,0.75); color: white; padding: 10px 22px;
         border-radius: 24px; font-size: 14px; font-weight: 600;
-        opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 999; white-space: nowrap;
+        opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 9600; white-space: nowrap;
       }
       .toast.show { opacity: 1; }
 
@@ -403,6 +403,8 @@
       .vadd input { flex:1; min-width:0; border:1px solid #e2dfd8; border-radius:12px; padding:10px 12px; font-size:16px; font-family:'Inter',sans-serif; }
       .vadd button { border:none; background:#1a1a1a; color:#fff; border-radius:12px; padding:0 16px; font-size:14px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; }
       .vadd button:disabled { opacity:0.5; cursor:default; }
+      .verr { font-size:13px; color:#cc3333; margin-top:6px; }
+      .verr:empty { display:none; }
       .vhelp { font-size:12px; color:#999; margin-top:6px; line-height:1.45; }
       .vempty { font-size:14px; color:#999; padding:10px 0; }
       .vmore { border:none; background:none; color:#5b4fd6; font-weight:600; font-size:13px; cursor:pointer; padding:10px 0 0; font-family:'Inter',sans-serif; }
@@ -1442,6 +1444,7 @@
             <input id="vadd-name" type="text" maxlength="60" placeholder="Name, e.g. Mom" autocomplete="off"/>
             <button type="submit">Add</button>
           </form>
+          <div class="verr" id="vadd-err" role="alert"></div>
           <div class="vhelp">Each person gets their own link. If they forward it, those views show under their name too.</div>`;
         body.appendChild(add);
         add.querySelector('#vadd-form').addEventListener('submit', ev => { ev.preventDefault(); addRecipient(col); });
@@ -1496,6 +1499,7 @@
         const btn = document.querySelector('#vadd-form button');
         const name = (input.value || '').trim();
         if (!name) { input.focus(); return; }
+        document.getElementById('vadd-err').textContent = '';
         btn.disabled = true;
         let row = null, err = null;
         for (let i = 0; i < 3 && !row; i++) {
@@ -1506,7 +1510,14 @@
           if (error && error.code !== '23505') break; // only retry a code collision
         }
         btn.disabled = false;
-        if (!row) { showToast('Couldn’t add that person — try again'); console.error(err); return; }
+        if (!row) {
+          console.error(err);
+          // Errors belong next to the box that caused them, not in a toast
+          // at the bottom of the page behind the panel's backdrop.
+          const el = document.getElementById('vadd-err');
+          if (el) el.textContent = 'Couldn’t add ' + name + '. Check your connection and try again.';
+          return;
+        }
         (recipientsByCol[col.id] = recipientsByCol[col.id] || []).push(row);
         renderViews();
         // Not straight into the share sheet: iOS only opens it from a tap, and
@@ -1517,7 +1528,11 @@
       async function removeRecipient(col, r) {
         if (!(await popcodeConfirm('Their link will still open the Popcode, but views on it will show as anonymous.', { title: `Remove ${r.name}?`, confirmText: 'Remove', cancelText: 'Keep', danger: true }))) return;
         const { data, error } = await db.from('share_recipients').delete().eq('id', r.id).select('id');
-        if (error || !data || !data.length) { showToast('Couldn’t remove — try again'); return; }
+        if (error || !data || !data.length) {
+          const el = document.getElementById('vadd-err');
+          if (el) el.textContent = 'Couldn’t remove ' + r.name + '. Try again.';
+          return;
+        }
         recipientsByCol[col.id] = (recipientsByCol[col.id] || []).filter(x => x.id !== r.id);
         viewEventsBySlug[col.slug] = (viewEventsBySlug[col.slug] || []).map(e =>
           e.recipient_code === r.code ? Object.assign({}, e, { recipient_code: null, recipient_name: null }) : e);
