@@ -184,11 +184,12 @@
       // Where "Edit design" goes for each product family.
       const MAKER = { book: '/book.html?id=', boardbook: '/boardbook.html?id=', calendar: '/calendar.html?id=' };
       function editHref(row) {
-        const d = designs.get(row.collection_id);
-        if (!d) return null;
         const maker = MAKER[row.product_type];
-        return maker ? maker + encodeURIComponent(d.slug)
-                     : '/order.html?design=' + encodeURIComponent(d.slug) + '&edit=1';
+        // Single-image products: a cart line's collection is the SOURCE photo's
+        // project, not a saved design, so reopen the line itself in order.html.
+        if (!maker) return '/order.html?cartItem=' + encodeURIComponent(row.id);
+        const d = designs.get(row.collection_id);
+        return d ? maker + encodeURIComponent(d.slug) : null;
       }
 
       const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>

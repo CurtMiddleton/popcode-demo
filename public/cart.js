@@ -86,6 +86,30 @@
     return res.data;
   }
 
+  // Replace an existing line's design in place (cart → "Edit design" → back).
+  // Quantity is kept; everything describing the print is overwritten.
+  async function update(id, item) {
+    var c = client();
+    if (!c) throw new Error('Cart unavailable');
+    var patch = {
+      collection_id: item.collectionId || null,
+      product_type: item.productType,
+      variant_id: item.variantId,
+      asset_urls: item.assetUrls || [],
+      page_count: item.pageCount || null,
+      options: item.options || {},
+      title: item.title || null,
+      thumb_url: item.thumbUrl || null,
+      updated_at: new Date().toISOString(),
+    };
+    var res = await c.from('cart_items').update(patch).eq('id', id).select();
+    if (res.error) throw new Error(res.error.message);
+    if (!res.data || !res.data.length) throw new Error('That cart item no longer exists.');
+    cache = (cache || []).map(function (r) { return r.id === id ? res.data[0] : r; });
+    emit();
+    return res.data[0];
+  }
+
   async function setCopies(id, copies) {
     var c = client();
     var n = Math.min(99, Math.max(1, parseInt(copies, 10) || 1));
@@ -178,7 +202,7 @@
   }
 
   window.PopcodeCart = {
-    attach: attach, list: list, count: count, add: add, setCopies: setCopies,
+    attach: attach, list: list, count: count, add: add, update: update, setCopies: setCopies,
     remove: remove, clear: clear, quote: quote, toLine: toLine,
     onChange: onChange, money: money, refreshBadge: function () { return list(true); },
   };
