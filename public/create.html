@@ -290,6 +290,7 @@
       .quota-go { padding:14px; border-radius:26px; border:none; background:#1a1a1a; color:#fff; font-size:15px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; text-decoration:none; text-align:center; display:block; }
       .quota-back { padding:12px; border-radius:26px; border:none; background:transparent; color:#777; font-size:14px; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; }
       .quota-back:hover { color:#1a1a1a; }
+      .quota-shop { text-align:center; font-size:14px; font-weight:600; color:#1a1a1a; text-decoration:underline; text-underline-offset:3px; padding:6px; }
       .add-page-btn { width: 100%; max-width: 420px; padding: 16px; border-radius: 30px; border: none; background: #eeeeee; color: #333333; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 16px; transition: background 0.2s; font-family: 'Inter', sans-serif; }
       .add-page-btn:hover { background: #e0e0e0; }
       .create-btn { width: 100%; max-width: 420px; padding: 16px; border-radius: 30px; border: none; background: #1a1a1a; color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: opacity 0.3s, box-shadow 0.3s; font-family: 'Inter', sans-serif; opacity: 0.6; }
@@ -419,7 +420,8 @@
           <div class="quota-body">
             <p id="quota-msg"></p>
             <div class="quota-actions">
-              <a class="quota-go" href="/pricing.html">See pricing</a>
+              <a class="quota-go" href="/pricing.html">See packs</a>
+              <a class="quota-shop" href="/shop.html">Browse the Shop</a>
               <button class="quota-back" type="button" id="quota-back">Not right now</button>
             </div>
           </div>
@@ -476,6 +478,10 @@
           currentUser = data.session.user;
           const uName = data.session.user?.user_metadata?.full_name?.split(' ')[0] || data.session.user?.email?.split('@')[0] || '';
           if (uName) { const g = document.getElementById('user-greeting'); if (g) g.textContent = 'Hi, ' + uName + '!'; }
+          // Out already? Say so now, before any photos go in.
+          loadQuota().then(q => {
+            if (capped() && q.remaining <= 0) showQuotaSheet(0, q.allowance, 0, false);
+          });
         }
       });
 
@@ -968,7 +974,14 @@
         if (btn) btn.textContent = labels.length === 1 ? 'Generate Popcode' : 'Generate Popcodes';
       }
 
-      document.getElementById('add-page-btn').addEventListener('click', addPage);
+      document.getElementById('add-page-btn').addEventListener('click', () => {
+        // One page = one Popcode. Don't let them build past what they have left.
+        if (capped() && pagesOnForm() + 1 > quota.remaining) {
+          showQuotaSheet(quota.remaining, quota.allowance, 0, false);
+          return;
+        }
+        addPage();
+      });
       addPage();
 
       function setProgress(label, pct, isError) {
@@ -1066,18 +1079,38 @@
       function showQuotaSheet(remaining, allowance, needed, afterUpload) {
         const title = document.getElementById('quota-title');
         const msg = document.getElementById('quota-msg');
+        // "free" only while they're still on the free five.
+        const free = (allowance || 5) <= 5 ? 'free ' : '';
+        const packs = 'A pack adds more: 25 for $29 or 100 for $99, with no subscription.';
         if (remaining > 0) {
+          const s = remaining === 1 ? '' : 's';
           title.textContent = 'Not quite enough Popcodes';
-          msg.textContent = `This project has ${needed} Popcodes and you have ${remaining} left of ${allowance}. `
-            + 'Grab a pack and it will go straight through.';
+          msg.textContent = (needed > remaining
+              ? `This has ${needed} photos and you have ${remaining} ${free}Popcode${s} left. Remove ${needed - remaining}, or add more. `
+              : `You have ${remaining} ${free}Popcode${s} left, so that's as many photos as you can add for now. `)
+            + packs;
         } else {
           title.textContent = "You're out of Popcodes";
-          msg.textContent = `Sorry — you have used all ${allowance || 5} of your free Popcodes. `
-            + 'Grab a pack and this will go straight through.'
+          msg.textContent = `You've used all ${allowance || 5} of your ${free}Popcodes. ${packs} `
+            + 'And Popcodes on anything you order from the Popcode Shop are always free.'
             + (afterUpload ? ' Nothing you have uploaded is lost.' : '');
         }
         document.getElementById('quota-overlay').classList.add('visible');
       }
+
+      // Check the allowance up front, not only at Generate — finding out after
+      // adding every photo and video is the wrong time. Generate still checks,
+      // and a database trigger enforces it regardless.
+      let quota = null;   // { remaining, allowance } — null = unknown, don't block
+      async function loadQuota() {
+        try {
+          const q = await db.rpc('popcode_quota');
+          if (!q.error && q.data && q.data.length) quota = q.data[0];
+        } catch (e) { /* quota not deployed, or offline */ }
+        return quota;
+      }
+      const capped = () => quota && quota.allowance <= 1000000;   // admins report huge headroom
+      const pagesOnForm = () => document.querySelectorAll('#pages .page').length;
       document.getElementById('quota-back').addEventListener('click', () => {
         document.getElementById('quota-overlay').classList.remove('visible');
       });
