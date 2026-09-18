@@ -343,13 +343,25 @@
         .hero-inner { grid-template-columns: minmax(0, 296px) minmax(0, 1fr); gap: 60px; }
       }
       @media (max-width: 860px) {
-        /* Stacked: the sentence first, then the thing it describes. Flush right
-           stops making sense once the copy is the full width, so it goes left —
-           the same edge as the logo and everything below the hero. */
-        .hero { padding: 40px 0 150px; }
-        .hero-inner { grid-template-columns: 1fr; padding-left: 28px; padding-right: 28px; }
-        .hero-copy { text-align: left; padding-right: 0; }
-        .sub { margin-left: 0; margin-right: 0; }
+        /* Stacked, and in a different order to the desktop column: headline,
+           then the thing it describes, then the sentence and the buttons under
+           it. Flush right stops making sense once the copy is the full width,
+           so it goes left — the same edge as the logo and everything below.
+
+           display:contents on .hero-copy dissolves the copy column so its three
+           children become siblings of .stage and the four can be interleaved by
+           order. The box goes; the element stays in the tree, so --copy-drop and
+           text-align still inherit through it. Nothing overhangs the bottom of
+           the section any more (the phone now hangs over the subhead instead),
+           so the 150px of padding that was holding it goes back to 80. */
+        .hero { padding: 40px 0 80px; }
+        .hero-inner { display: flex; flex-direction: column; align-items: stretch;
+                      gap: 0; text-align: left; padding-left: 28px; padding-right: 28px; }
+        .hero-copy { display: contents; text-align: left; --copy-drop: 0px; }
+        h1.headline { order: 1; }
+        .stage { order: 2; }
+        .sub { order: 3; margin-left: 0; margin-right: 0; }
+        .hero-cta { order: 4; }
         /* wrap, not nowrap: the buttons carry flex-shrink:0 and nowrap text,
            so forcing one row just pushes the second one off the screen (the
            hero clips its overflow, so it does not even scroll — it vanishes).
@@ -357,7 +369,12 @@
            up, and drop to two rows under that rather than being cut off. */
         .hero-cta { justify-content: flex-start; flex-wrap: wrap; }
         h1.headline { font-size: 78px; }
-        .stage { --stage-h: 420px; margin-top: 18px; }
+        /* The phone is anchored at 46% of the stage and is taller than the 54%
+           left below it, so it hangs 177px past the stage's own box. That used
+           to fall into the section's bottom padding; now the subhead follows it,
+           so the stage has to reserve the overhang itself or the phone lands on
+           top of the text. 404 - 0.54 x 420 = 177, plus room to breathe. */
+        .stage { --stage-h: 420px; margin-top: 0; margin-bottom: 196px; }
         /* Stacked, both used to sit in the middle of the stage with the phone
            covering the piece it is playing. Pushing the phone to the left edge
            and the artwork right restores the desktop relationship: the phone in
@@ -373,7 +390,6 @@
         body .codebar { margin-top: 0; }
       }
       @media (max-width: 560px) {
-        .eyebrow .eb-logo { height: 2em; }
         .hero-inner { padding-left: 20px; padding-right: 20px; }
         h1.headline { font-size: 66px; }
         /* Measured: the two labels need 289px of text at 13px, so with 12px of
@@ -381,7 +397,8 @@
            350px column at 390. */
         .hero-cta { gap: 8px; }
         .hero-cta .btn { font-size: 13px; padding: 12px 12px; }
-        .stage { --stage-h: 330px; }
+        /* Same sum as above at this size: 320 - 0.54 x 330 = 142, plus breathing. */
+        .stage { --stage-h: 330px; margin-bottom: 160px; }
         .phone { width: 158px; height: 320px; border-radius: 30px; margin-left: 4px; padding: 8px; }
         .art-wrap { left: 12%; }
         .phone-screen { border-radius: 24px; }
@@ -444,8 +461,13 @@
          baseline — the wordmark's own art has no descender to align to. */
       /* display:inline-block is load-bearing — the page sets img { display: block }
          globally, which would drop the wordmark onto its own line. */
-      .eyebrow .eb-logo { display: inline-block; height: 3em; width: auto;
-                          vertical-align: -1.05em; margin-left: .3em; }
+      /* 2.33em against the 15px eyebrow is 35px — the same height as the
+         wordmark in the header, so the two read as one size. The offset has to
+         track the height: the wordmark's own baseline sits 35% of the image up
+         from its bottom edge, which is where the -1.05em of the old 3em came
+         from. Keep them tied and any size below stays on the baseline. */
+      .eyebrow .eb-logo { display: inline-block; height: var(--eb-h, 2.33em); width: auto;
+                          vertical-align: calc(var(--eb-h, 2.33em) * -0.35); margin-left: .3em; }
       h2 { font-family: var(--serif); font-weight: 400; font-size: 46px; line-height: 1.08;
            letter-spacing: -0.015em; margin: 0 0 18px; }
       .lede { font-size: 18px; line-height: 1.6; color: var(--muted); max-width: 34em; margin: 0 0 44px; }
