@@ -1914,9 +1914,19 @@ Deleted the `api` CNAME (→ `popcode-prd-fargate-alb-1740653356.us-east-1.elb.a
 
 **Correction to my own framing**: I'd called this a subdomain-takeover risk on the S3 model. It's weaker — an **ELB hostname carries an AWS-assigned identifier an attacker can't pick**, unlike an S3 bucket name. Still right to delete, but housekeeping rather than a hole.
 
-#### Stripe orphan webhook — STILL OPEN, user-side
+#### Stripe orphan webhooks — CLEANED UP, closed
 
-Recurs every few sessions. Stripe keeps its endpoint list **in the Stripe account, not in the repo**. One still points at `https://api.popcodeapp.com/api/v1/checkout/webhook` (and variants at `api.stg.popcode.deploy-cd.com`), from the pre-static backend. Stripe POSTs, fails, emails. **Nothing is broken** — the live endpoint is `popcode.app/api/stripe-webhook`, and even that is only a backup since `api/finalize-order.js` fulfils from the success page. Fix: Stripe → Developers → Webhooks → delete the `api.popcodeapp.com` endpoint, **in live mode and in the sandbox**. Today's DNS deletion only changes the error from "can't connect" to "can't resolve".
+The recurring "webhook failing" emails (flagged 2026-07-17 and 2026-09-02) are dealt with. Stripe keeps its endpoint list **in the Stripe account, not in the repo**, which is why grepping never found anything.
+
+What the audit actually showed:
+
+- **Live account: already clean.** One destination, `popcode-print-orders` → `https://popcode.app/api/stripe-webhook`, Active, listening to exactly `checkout.session.completed` — which is the only event `api/stripe-webhook.js` acts on. Deliveries showed `Total 0 / Failed 0` for the week, i.e. no orders that week, not a fault.
+- **One sandbox exists** — the legacy **Test mode** environment (`acct_1LZwVVGHI16CD4bx`), "Using 0 of 5 account sandboxes". It held **three** destinations, all deleted this session: `api.stg.popcode.deploy-cd.com/api/v1/checkout/webhook`, `api.dev.popcode.deploy-cd.com/...` (both from the pre-static backend), and a stale `popcode-demo-git-claude-k…vercel.app` preview endpoint from the June print-ordering branch. That last one was worth removing too: once Deployment Protection goes back on, a preview endpoint starts 401-ing and becomes a *new* source of failure emails.
+- **`api.popcodeapp.com` was not in this account at all** — neither live nor Test mode. Either it was removed at some point, or those particular emails came from a different Stripe account. If more arrive, read the account name/ID in the email rather than hunting through switchers.
+
+**Where the UI is now:** Workbench → Webhooks shows the current environment's destinations. The environment switcher is on the **main dashboard**, not in Workbench (the `Popcodeapp` chip there is just the account label); sandboxes are listed at `dashboard.stripe.com/sandboxes`, and `dashboard.stripe.com/test/workbench/webhooks` jumps straight into Test mode.
+
+Worth repeating because it stays true: **nothing was ever broken.** `popcode.app/api/stripe-webhook` is only a backup — `api/finalize-order.js` fulfils from the success page with an atomic claim so the two can't double-submit, and credit packs don't touch the webhook at all (`api/finalize-credits.js`).
 
 #### analytics.html — Plan + Popcodes per account (`39626b5`, `3d14422`)
 
