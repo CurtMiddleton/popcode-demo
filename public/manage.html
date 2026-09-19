@@ -21,6 +21,7 @@
     <script src="/config.js"></script>
     <script src="/dialog.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
+    <link rel="stylesheet" href="/ui.css">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
@@ -106,11 +107,8 @@
          action row to wrap, without shrinking any tap target. */
       @media (max-width: 389px) { .top-bar h1 { font-size: 31px; } }
 
+      /* .btn .btn-sm .btn-primary — see below for what is left. */
       .create-btn {
-        background: #1a1a1a; color: white;
-        border: none; border-radius: 24px;
-        padding: 10px 20px; font-size: 14px; font-weight: 500;
-        font-family: 'Inter', sans-serif;
         cursor: pointer; text-decoration: none; transition: opacity 0.2s; white-space: nowrap;
       }
       .create-btn:hover { opacity: 0.9; }
@@ -118,7 +116,7 @@
       /* From 440px down, give the heading room so it stays on one line;
          the button and the gap are the cheaper things to shrink. */
       @media (max-width: 440px) {
-        .create-btn { font-size: 13px; padding: 9px 14px; }
+        .create-btn { --btn-fs: 13px; --btn-pad: 14px; }
         .top-bar-head { gap: 12px; }
       }
 
@@ -211,21 +209,14 @@
       .card-actions { display: flex; gap: 8px; flex-wrap: nowrap; align-items: center; justify-content: flex-start; margin-top: 6px; }
       .card-actions-main { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; flex: 1 1 auto; min-width: 0; }
       .btn-download { background: #eeeeee; color: #333333; }
-      .btn {
-        border: none; border-radius: 20px; padding: 6px 11px; font-size: 13px; font-weight: 400;
-        font-family: 'Inter', sans-serif;
-        cursor: pointer; transition: opacity 0.15s, transform 0.1s; text-decoration: none; display: inline-block;
-      }
-      .btn:active { transform: scale(0.96); }
-      .btn-view { background: #eeeeee; color: #333333; }
-      .btn-view:hover { background: #e0e0e0; }
-      .btn-copy { background: #eeeeee; color: #333333; }
-      .btn-copy:hover { background: #e0e0e0; }
+      /* This page's own .btn rule used to live here. It predated /ui.css and,
+         sitting after the link, silently overrode display, radius and padding
+         on every button on the page. .btn-view and .btn-copy went with it —
+         neither had any markup left. */
+      /* .btn .btn-sm .btn-icon — a darker fill, because delete is the one
+         action that should not look like its neighbours. */
       .btn-delete {
-        background: #666666; color: white; border-radius: 50%;
-        width: 36px; height: 36px; padding: 0;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 15px;
+        background: #666666; color: white;
         flex-shrink: 0;
         margin-left: auto;
       }
@@ -259,29 +250,40 @@
           margin-top: 0;
         }
         .card-actions-main { flex-wrap: nowrap; }
-        .icon-btn { width: 40px; height: 40px; }
+        /* Off the 36px sm step on purpose. This is the >=960px desktop rule,
+           where there is room for a bigger target; phones stay at 36 so the
+           six icons plus the Shop pill hold one row at 390.
+           Note the pill does the opposite (40 on phones, 36 here), so the row
+           is mismatched at both ends — pre-existing, left alone deliberately
+           until the card-actions rework. */
+        .icon-btn { --btn-h: 40px; }
         .icon-btn svg { width: 20px; height: 20px; }
         .icon-btn img { width: 20px; height: 20px; }
-        .btn-delete { width: 40px; height: 40px; margin-left: 0; }
+        .btn-delete { --btn-h: 40px; margin-left: 0; }
       }
 
       /* Icon-only action buttons (gray circles) */
-      .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: #eeeeee; border: none; cursor: pointer; transition: background 0.15s, transform 0.1s; text-decoration: none; padding: 0; }
+      /* .btn .btn-sm .btn-icon — a grey fill rather than ui.css's outlined
+         quiet, because six of these sit in a row and an outline each would
+         read as a grid. */
+      .icon-btn { background: #eeeeee; }
       .icon-btn:hover { background: #e0e0e0; }
       .icon-btn:active { transform: scale(0.93); }
       .icon-btn svg { width: 18px; height: 18px; }
       .icon-btn img { width: 18px; height: 18px; }
       /* Prominent "Shop" CTA — stands out from the gray icon row */
-      .shop-btn { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 18px; margin-left: 4px; border: none; border-radius: 20px; background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%); color: #fff; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 700; text-decoration: none; cursor: pointer; box-shadow: 0 2px 8px rgba(118,87,252,0.32); transition: transform 0.1s, box-shadow 0.15s; }
-      .shop-btn:hover { box-shadow: 0 4px 14px rgba(118,87,252,0.45); }
-      .shop-btn:active { transform: scale(0.96); }
+      /* .btn .btn-sm — the gradient fill is local. The drop shadow is gone:
+         buttons do not cast them. The gradient alone still makes this the one
+         coloured thing in the row. */
+      .shop-btn { --btn-pad: 18px; margin-left: 4px;
+                  background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%); color: #fff; }
       .shop-btn svg { width: 18px; height: 18px; }
       /* Taller for the thumb, but no wider — the extra width was what broke
          the action row on a 390px phone. margin-left goes too: the flex gap
          already spaces it, and those 4px were the difference between one row
          and two. */
       @media (max-width: 600px) {
-        .shop-btn { height: 40px; padding: 0 13px; font-size: 14px; margin-left: 0; }
+        .shop-btn { --btn-h: 40px; --btn-pad: 13px; margin-left: 0; }
         .card-actions-main { gap: 5px; }
       }
       .empty-state {
@@ -395,7 +397,8 @@
       .vstatus.done { color:#1f8a4c; }
       .vstatus.waiting { color:#999; }
       .vacts { display:flex; gap:6px; flex-shrink:0; }
-      .vbtn { border:none; background:#eeeeee; color:#333; border-radius:16px; padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; }
+      /* .btn .btn-sm — a grey fill and a tighter label. */
+      .vbtn { --btn-pad:11px; --btn-fs:12px; background:#eeeeee; color:#333; }
       .vbtn:hover { background:#e0e0e0; }
       .vbtn.x { background:none; color:#aaa; padding:6px 6px; font-size:16px; line-height:1; }
       .vbtn.x:hover { color:#cc3333; background:none; }
@@ -525,7 +528,7 @@
       <div class="top-bar-head">
         <h1 id="lib-title">My Popcodes</h1>
         <div class="top-bar-actions">
-          <a class="create-btn" id="lib-cta" href="/create.html">+ New Popcode</a>
+          <a class="btn btn-sm btn-primary create-btn" id="lib-cta" href="/create.html">+ New Popcode</a>
         </div>
       </div>
       <p class="lib-sub" id="lib-sub"></p>
@@ -728,15 +731,15 @@
           </div>
           <div class="card-actions">
             <div class="card-actions-main">
-            <a class="icon-btn" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></a>
-            <a class="icon-btn" href="${editHref}?id=${escapeHtml(col.slug)}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></a>
-            <button class="icon-btn btn-share-id" data-slug="${escapeHtml(col.slug)}" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
-            ${showDownload ? `<button class="icon-btn btn-download" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>` : ''}
+            <a class="btn btn-sm btn-icon icon-btn" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></a>
+            <a class="btn btn-sm btn-icon icon-btn" href="${editHref}?id=${escapeHtml(col.slug)}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></a>
+            <button class="btn btn-sm btn-icon icon-btn btn-share-id" data-slug="${escapeHtml(col.slug)}" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
+            ${showDownload ? `<button class="btn btn-sm btn-icon icon-btn btn-download" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>` : ''}
             ${isProduct
-              ? `<a class="shop-btn" href="${editHref}?id=${escapeHtml(col.slug)}&order=1" title="Order a printed copy"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`
-              : `<a class="shop-btn" href="/shop.html?id=${escapeHtml(col.slug)}" title="Shop products with this Popcode"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`}
+              ? `<a class="btn btn-sm shop-btn" href="${editHref}?id=${escapeHtml(col.slug)}&order=1" title="Order a printed copy"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`
+              : `<a class="btn btn-sm shop-btn" href="/shop.html?id=${escapeHtml(col.slug)}" title="Shop products with this Popcode"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`}
             </div>
-            <button class="btn btn-delete" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+            <button class="btn btn-sm btn-icon btn-delete" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
           </div>
         `;
 
@@ -1436,8 +1439,8 @@
               <div class="verr vrowmsg"></div>
             </div>
             <div class="vacts">
-              <button class="vbtn" data-act="send">Send</button>
-              <button class="vbtn x" data-act="remove" title="Remove">&times;</button>
+              <button class="btn btn-sm vbtn" data-act="send">Send</button>
+              <button class="btn btn-sm vbtn x" data-act="remove" title="Remove">&times;</button>
             </div>`;
           row.querySelector('[data-act="send"]').addEventListener('click', e => sendPersonal(col, r, e.currentTarget));
           row.querySelector('[data-act="remove"]').addEventListener('click', () => removeRecipient(col, r));

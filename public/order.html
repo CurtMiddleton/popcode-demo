@@ -20,6 +20,7 @@
     <script src="/unsplash-samples.js"></script>
     <script src="/countries.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
+    <link rel="stylesheet" href="/ui.css">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { min-height:100vh; background:#f9f9f9; font-family:'Inter',sans-serif; color:#1a1a1a; display:flex; flex-direction:column; align-items:center; }
@@ -102,7 +103,10 @@
       .detail-info h2 { font-family:'CooperBT', Georgia, serif; font-size:36px; font-weight:400; letter-spacing:-0.01em; margin-bottom:6px; }
       .detail-info .tagline { color:#777; font-size:15px; margin-bottom:28px; }
       .size-chips { display:flex; flex-wrap:wrap; gap:10px; margin:10px 0 6px; }
-      .size-chip { border:1.5px solid #e3e1db; background:#fff; border-radius:14px; padding:11px 18px; font-size:14px; font-weight:500; cursor:pointer; font-family:'Inter',sans-serif; color:#333; }
+      /* .btn .btn-sm .btn-quiet — the selected state is local. The 1.5px
+         border is gone: ui.css gives every variant 1px so selecting a chip
+         cannot change its height or shuffle the row. */
+      .size-chip { --btn-pad:18px; color:#333; font-weight:500; }
       .size-chip.active { border-color:#7657FC; background:#f3f0ff; color:#7657FC; font-weight:600; }
       .size-chip .swatch { display:inline-block; width:14px; height:14px; border-radius:50%; margin-right:7px; vertical-align:-2px; border:1px solid rgba(0,0,0,0.18); }
       .orient-row { margin-top:24px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
@@ -114,13 +118,16 @@
       .specs { border-top:1px solid #eee; padding-top:22px; margin-top:10px; }
       .specs li { list-style:none; color:#555; font-size:14px; padding:6px 0; display:flex; gap:10px; }
       .specs li::before { content:'•'; color:#7657FC; }
-      .primary-btn { width:100%; margin-top:30px; padding:17px; border:none; border-radius:16px; font-size:16px; font-weight:600; color:#fff; font-family:'Inter',sans-serif; cursor:pointer; background:linear-gradient(135deg,#7657FC 0%,#589AF9 100%); }
+      /* .btn .btn-lg .btn-block — the gradient fill is local. */
+      .primary-btn { margin-top:30px; color:#fff;
+                     background:linear-gradient(135deg,#7657FC 0%,#589AF9 100%); }
       .primary-btn:disabled { opacity:.5; cursor:not-allowed; }
       /* Detail-page Create: fixed 378px wide, black, larger + lighter type. */
-      #create-btn { width:378px; max-width:100%; font-size:18px; font-weight:500; background:#1a1a1a; }
+      #create-btn { width:378px; max-width:100%; --btn-fs:18px; font-weight:500; background:#1a1a1a; }
       /* Review step: primary Order (black) + secondary Save */
       #step-review .primary-btn { background:#1a1a1a; }
-      .secondary-btn { width:100%; margin-top:12px; padding:16px; border:1.5px solid #d8d5cd; border-radius:16px; font-size:16px; font-weight:600; color:#1a1a1a; font-family:'Inter',sans-serif; cursor:pointer; background:#fff; }
+      /* .btn .btn-lg .btn-quiet .btn-block — only the spacing is local. */
+      .secondary-btn { margin-top:12px; }
       .secondary-btn:hover { background:#fafafa; }
       .secondary-btn:disabled { opacity:.55; cursor:default; }
       .save-msg { font-size:13px; margin-top:12px; min-height:16px; color:#2b8a3e; }
@@ -297,7 +304,7 @@
             <div class="detail-price" id="detail-price">From —</div>
             <div class="detail-price-note" id="detail-price-note">plus shipping</div>
             <ul class="specs" id="detail-specs"></ul>
-            <button class="primary-btn" id="create-btn">Choose a photo</button>
+            <button class="btn btn-lg btn-block primary-btn" id="create-btn">Choose a photo</button>
           </div>
         </div>
       </div>
@@ -335,9 +342,9 @@
             <div class="detail-price" id="review-price">—</div>
             <div class="detail-price-note">per print, plus shipping at cost</div>
             <ul class="specs" id="review-specs"></ul>
-            <button class="primary-btn" id="addcart-btn">Add to cart</button>
-            <button class="secondary-btn" id="order-btn">Buy this one now</button>
-            <button class="secondary-btn" id="save-btn">Save design</button>
+            <button class="btn btn-lg btn-block primary-btn" id="addcart-btn">Add to cart</button>
+            <button class="btn btn-lg btn-quiet btn-block secondary-btn" id="order-btn">Buy this one now</button>
+            <button class="btn btn-lg btn-quiet btn-block secondary-btn" id="save-btn">Save design</button>
             <div class="save-msg" id="save-msg"></div>
           </div>
         </div>
@@ -420,7 +427,7 @@
             <div><div class="muted">Total</div><div class="price" id="price">—</div></div>
             <div class="price-note" id="price-note">Getting price…</div>
           </div>
-          <button class="primary-btn" id="pay-btn" disabled>Pay with card</button>
+          <button class="btn btn-lg btn-block primary-btn" id="pay-btn" disabled>Pay with card</button>
         </div>
       </div>
 
@@ -1096,7 +1103,7 @@
         colors.forEach(c => {
           const b = document.createElement('button');
           b.type = 'button';
-          b.className = 'size-chip' + (c.id === state.frameColor ? ' active' : '');
+          b.className = 'btn btn-sm btn-quiet size-chip' + (c.id === state.frameColor ? ' active' : '');
           b.innerHTML = `<span class="swatch" style="background:${c.hex}"></span>${c.name}`;
           b.onclick = () => {
             state.frameColor = c.id;
@@ -1118,7 +1125,7 @@
         activeSizeList().forEach(v => {
           const b = document.createElement('button');
           b.type = 'button';
-          b.className = 'size-chip' + (v.id === state.variantId ? ' active' : '');
+          b.className = 'btn btn-sm btn-quiet size-chip' + (v.id === state.variantId ? ' active' : '');
           b.textContent = v.size + (v.imgSize ? ' · ' + v.imgSize : '');
           b.onclick = () => {
             state.variantId = v.id;
@@ -1139,7 +1146,7 @@
         [{ v: false, name: 'No mount' }, { v: true, name: 'White mount' }].forEach(opt => {
           const b = document.createElement('button');
           b.type = 'button';
-          b.className = 'size-chip' + (opt.v === !!state.mounted ? ' active' : '');
+          b.className = 'btn btn-sm btn-quiet size-chip' + (opt.v === !!state.mounted ? ' active' : '');
           b.textContent = opt.name;
           b.onclick = () => {
             if (!!state.mounted === opt.v) return;

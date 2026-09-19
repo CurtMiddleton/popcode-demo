@@ -1,0 +1,139 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Popcode UI — shared tokens
+   ───────────────────────────────────────────────────────────────────────
+   WHY THIS FILE EXISTS, given the repo's inline-duplication idiom:
+
+   The composite.js lesson (2026-07-17) was about shared *JavaScript that a
+   code path calls*. When it failed to load, `window.compositeBadgedImage is
+   not a function` threw and the order page broke. CSS has the opposite
+   failure mode: if this file 404s a page renders with unstyled buttons and
+   keeps working. Nothing throws, nothing blocks checkout.
+
+   The precedent is already here: /assets/fonts.css is a shared stylesheet
+   linked by 21 pages carrying the base64 CooperBT, and nav.js injects a
+   shared <style> block on every page. Shared CSS is already how this site
+   works. Duplicating tokens per page is what produced the 21 button heights
+   and 9 radii the audit measured, and would produce them again.
+
+   ROLLOUT: this file is linked per page, as that page is converted. 24 pages
+   already carry class="btn" in markup while only 7 define a .btn rule, so
+   linking it everywhere at once would restyle 17 unconverted pages. Add the
+   <link> in the same commit that converts the page.
+
+   Link it FIRST in <head>, before the page's own <style>, so a page can
+   always override. Never put layout in here — tokens only.
+
+   RULES THAT HOLD EVERYWHERE:
+     · height is fixed per size, so a border can never change it
+     · every variant carries a 1px border, transparent where unwanted
+     · radius is pill for text, 50% for icon-only. Nothing else.
+     · family, size and weight are always set, never left to the browser
+     · buttons do not cast shadows. `.btn-float` is the one exception and
+       it is for controls that sit over an image.
+
+   Colours read the page's own custom properties where they exist
+   (var(--ink, …)), so a page keeps its palette. Nothing is declared on
+   :root here — no collisions.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+
+.btn {
+  --btn-h: 44px;          /* md — the default */
+  --btn-pad: 22px;
+  --btn-fs: 15px;
+
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  /* Fixed height + border-box is what makes the border free. A bordered and
+     an unbordered button at the same size are the same height, to the pixel.
+     This is the fix for the hero pair that prompted the audit. */
+  height: var(--btn-h);
+  padding: 0 var(--btn-pad);
+  border: 1px solid transparent;
+  border-radius: 999px;
+
+  font-family: var(--sans, 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif);
+  font-size: var(--btn-fs);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+
+  background: transparent;
+  color: var(--ink, #1a1a1a);
+  cursor: pointer;
+  appearance: none;
+  transition: transform .12s ease, background-color .15s ease,
+              border-color .15s ease, color .15s ease;
+}
+
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: none; }
+.btn:focus-visible { outline: 2px solid #7657FC; outline-offset: 2px; }
+.btn:disabled,
+.btn[aria-disabled="true"] { opacity: .45; cursor: default; transform: none; }
+
+/* Sizes. Three, and only three. */
+.btn-sm { --btn-h: 36px; --btn-pad: 16px; --btn-fs: 14px; }
+.btn-lg { --btn-h: 52px; --btn-pad: 28px; --btn-fs: 16px; }
+
+/* Intents. */
+.btn-primary   { background: var(--ink, #1a1a1a); color: #fff; }
+.btn-primary:hover { background: #000; }
+
+.btn-secondary { border-color: var(--ink, #1a1a1a); color: var(--ink, #1a1a1a); }
+.btn-secondary:hover { background: var(--ink, #1a1a1a); color: #fff; }
+
+.btn-quiet     { background: #fff; border-color: var(--line, #e3e3e3);
+                 color: var(--ink, #1a1a1a); }
+.btn-quiet:hover { border-color: #c9c9c9; }
+
+.btn-danger    { background: #c92a2a; color: #fff; }
+.btn-danger:hover { background: #ad2121; }
+
+/* On the brand gradient an outlined button reads as white-on-white, so the
+   secondary fills instead. Used by the hero. */
+.on-grad .btn-secondary { background: #fff; border-color: #fff; color: var(--ink, #1a1a1a); }
+.on-grad .btn-secondary:hover { background: #fff; color: var(--ink, #1a1a1a); }
+
+/* Icon-only: a circle, square at the size's height. */
+.btn-icon { --btn-pad: 0; width: var(--btn-h); border-radius: 50%; }
+.btn-icon svg { width: 20px; height: 20px; display: block; }
+.btn-sm.btn-icon svg { width: 16px; height: 16px; }
+
+/* The one sanctioned shadow: a control floating over an image, where
+   elevation is doing real work separating it from the photo behind. */
+.btn-float { box-shadow: 0 6px 20px rgba(20, 16, 40, .12); }
+
+/* Text-only affordance. Not on the height scale — it is a link that happens
+   to sit among buttons, so it gets the family and weight and nothing else. */
+.btn-link {
+  height: auto; padding: 8px 10px; border-color: transparent;
+  background: none; color: var(--muted, #56514a);
+  font-size: 14px; text-decoration: none;
+}
+.btn-link:hover { color: var(--ink, #1a1a1a); transform: none; }
+
+/* Escape hatch for a button whose label genuinely has to wrap. Keeps the
+   family, weight and radius; gives up the fixed height. Use sparingly —
+   every use is a button that will not line up with its neighbours. */
+.btn-auto { height: auto; min-height: var(--btn-h); padding-block: 12px;
+            white-space: normal; line-height: 1.25; }
+
+/* Full-width, for sheets and mobile bars. */
+.btn-block { display: flex; width: 100%; }
+
+/* Centred under a column of copy. Block-level so margin-inline works, still
+   flex so the label stays centred.
+
+   NEVER override .btn's display with `block` or `inline-block` to get this.
+   The height here is fixed, and only flex centres the label inside it — with
+   `display: block` the label top-aligns and the button reads bottom-heavy.
+   If a page needs .btn to be block-level, it wants `flex`, not `block`. */
+.btn-centered { display: flex; width: fit-content; margin-inline: auto; }

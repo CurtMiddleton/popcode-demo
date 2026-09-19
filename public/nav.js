@@ -99,6 +99,12 @@
     position: relative; display: flex; align-items: center; justify-content: center;
     width: 32px; height: 32px; border-radius: 50%; background: none; border: none;
     cursor: pointer; text-decoration: none; color: #1a1a1a; transition: background 0.15s;
+    /* A <button> with no font-family falls back to the browser default —
+       Arial 13.33px — on every page that loads this nav. Both .hicon buttons
+       hold only an SVG so it is invisible today, but it is the default any
+       label added later would inherit. Family only — the font shorthand
+       would also reset size and line-height on 19 pages for no reason. */
+    font-family: inherit;
   }
   .site-header .hicon:hover { background: #f3f3f3; }
   .site-header .hicon.profile-btn { background: #efefef; }
