@@ -138,7 +138,11 @@
 
       /* ── Hero stage: the printed thing, and the phone playing it ──────── */
       /* A definite height, because the art is sized against it. */
-      .stage { position: relative; height: var(--stage-h, 620px); }
+      /* -100px: the stage is a grid item, so a negative left margin widens it
+         leftward into the gap and takes the phone and the artwork — both
+         anchored at left:0 — with it. The art is sized by height, so nothing
+         resizes. Reset on phones, where the column is stacked. */
+      .stage { position: relative; height: var(--stage-h, 620px); margin-left: -100px; }
       /* The art runs off the right edge on purpose — it reads as a real object
          on a table rather than a product shot pasted into a column. */
       /* The wrapper carries the size, angle and fade; it shrink-wraps the image,
@@ -374,7 +378,15 @@
            to fall into the section's bottom padding; now the subhead follows it,
            so the stage has to reserve the overhang itself or the phone lands on
            top of the text. 404 - 0.54 x 420 = 177, plus room to breathe. */
-        .stage { --stage-h: 420px; margin-top: 0; margin-bottom: 196px; }
+        /* Up into the headline's own block, so the artwork sits beside "play."
+           rather than starting below it. "play." is short, so the right half of
+           that line is empty and the art belongs in it. The pull-up is one line
+           of headline plus the h1's bottom margin, so it differs by font size —
+           see the ≤560 rule. */
+        .stage { --stage-h: 420px; margin-top: -100px; margin-bottom: 196px; margin-left: 0; }
+        /* The art is absolutely positioned and therefore paints above the
+           static headline. It should never cover the word, so the text wins. */
+        h1.headline { position: relative; z-index: 2; }
         /* Stacked, both used to sit in the middle of the stage with the phone
            covering the piece it is playing. Pushing the phone to the left edge
            and the artwork right restores the desktop relationship: the phone in
@@ -384,7 +396,11 @@
            phone entirely and the two read as separate objects. 10% keeps every
            scene overlapping — the phone in front of the thing it is playing —
            while still leaving most of the product beside it. */
-        .art-wrap { left: 10%; }
+        /* Was 10%. Now clear of "play." — every piece starts right of the word
+           with air to spare. The two that still sat left of it once raised
+           (the album spread and the elephant) carry their own xSm; see
+           POPCODE_SCENES. */
+        .art-wrap { left: calc(10% + 50px); }
         /* On a phone the same curve at 120px read as a steep hill; 60px keeps it a gentle arch. */
         .hero-curve { height: 60px; }
         body .codebar { margin-top: 0; }
@@ -397,10 +413,13 @@
            350px column at 390. */
         .hero-cta { gap: 8px; }
         .hero-cta .btn { font-size: 13px; padding: 12px 12px; }
-        /* Same sum as above at this size: 320 - 0.54 x 330 = 142, plus breathing. */
-        .stage { --stage-h: 330px; margin-bottom: 160px; }
+        /* Same sum as above at this size: 320 - 0.54 x 330 = 142, plus breathing.
+           The headline is 66px here, not 78, so the pull-up is a shorter line. */
+        .stage { --stage-h: 330px; margin-top: -88px; margin-bottom: 160px; }
         .phone { width: 158px; height: 320px; border-radius: 30px; margin-left: 4px; padding: 8px; }
-        .art-wrap { left: 12%; }
+        /* Same clearance as the wider phones above — this rule only exists
+           because it comes later in the file and would otherwise win. */
+        .art-wrap { left: calc(10% + 50px); }
         .phone-screen { border-radius: 24px; }
         .phone-notch { width: 60px; height: 17px; }
       }
@@ -1163,7 +1182,10 @@
         // The master carries its own 6.2 degrees of perspective in the artwork;
         // this is the CSS tilt on top of it, dialled back from -9.5 because the
         // combined lean read as too steep.
-        albums:    { img: '/assets/mockups/scenes/Album.webp', alt: 'An open photo album', h: '94%', rot: '-6deg', x: '-1%',
+        // xSm: on a phone the stage rises beside "play.", and these two sit far
+        // enough left that they would run into the word. They slide right until
+        // they clear it; everything else already does.
+        albums:    { img: '/assets/mockups/scenes/Album.webp', alt: 'An open photo album', h: '94%', rot: '-6deg', x: '-1%', xSm: '14%',
                      video: '/video/Album.mp4', dwell: 5500,
                      fallback: 'https://images.unsplash.com/photo-1766366622533-7f12737f6af8?auto=format&fit=crop&w=1200&q=80' },
         // Calendar, print and exhibit hang square: things on a wall read wrong at
@@ -1184,7 +1206,7 @@
         // The resting word, and the one people linger on. Deliberately the
         // largest piece in the reel.
         anything:  { img: '/assets/mockups/scenes/anything.webp', alt: 'A framed photograph of an elephant',
-                     h: '116%', rot: '0deg', x: '-11%', video: '/video/anything.mp4',
+                     h: '116%', rot: '0deg', x: '-11%', xSm: '18%', video: '/video/anything.mp4',
                      // 1500 to hand over to the phone plus the clip's own 7s, so
                      // the reel doesn't cut away mid-elephant on its way round.
                      dwell: 8500,
@@ -1304,6 +1326,17 @@
           }, WORD);
         }
 
+        // The stage sits beside the headline on a phone, so a piece that hangs
+        // left on desktop needs its own offset there. matchMedia, not a width
+        // read, so it follows a rotate-to-landscape without a reload.
+        var narrow = window.matchMedia('(max-width: 860px)');
+        function applyArtGeometry(scene) {
+          artWrap.style.setProperty('--art-rot', scene.rot || '-7deg');
+          artWrap.style.setProperty('--art-h', scene.h || '90%');
+          artWrap.style.setProperty('--art-x', (narrow.matches && scene.xSm) || scene.x || '0');
+          artWrap.style.setProperty('--art-y', scene.y || '0%');
+        }
+
         window.popcodeShowScene = function (word) {
           var scene = POPCODE_SCENES[word];
           if (!scene) return;
@@ -1312,10 +1345,7 @@
           clearInterval(captions);
 
           if (still) {
-            artWrap.style.setProperty('--art-rot', scene.rot || '-7deg');
-            artWrap.style.setProperty('--art-h', scene.h || '90%');
-            artWrap.style.setProperty('--art-x', scene.x || '0');
-            artWrap.style.setProperty('--art-y', scene.y || '0%');
+            applyArtGeometry(scene);
             setArt(scene.img, scene.alt, scene.fallback); play(scene); return;
           }
 
@@ -1323,10 +1353,7 @@
           phone.classList.remove('playing');
           artWrap.classList.add('fading');
           swapIn = setTimeout(function () {
-            artWrap.style.setProperty('--art-rot', scene.rot || '-7deg');
-            artWrap.style.setProperty('--art-h', scene.h || '90%');
-            artWrap.style.setProperty('--art-x', scene.x || '0');
-            artWrap.style.setProperty('--art-y', scene.y || '0%');
+            applyArtGeometry(scene);
             setArt(scene.img, scene.alt, scene.fallback);
             artWrap.classList.remove('fading');
           }, FADE_OUT);
