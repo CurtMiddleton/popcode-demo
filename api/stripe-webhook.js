@@ -54,7 +54,8 @@ export default async function handler(req, res) {
     const session = event.data.object;
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    const { loadOrdersForSession, fulfillSession, isSessionSettled } = await import('../lib/print/fulfill.mjs');
+    const { loadOrdersForSession, fulfillSession, isSessionSettled, settledAmountMinor } =
+      await import('../lib/print/fulfill.mjs');
 
     // A cart checkout produces one print_orders row per fulfillment provider, all
     // sharing this session id. Look them up by session (works for the legacy
@@ -80,7 +81,7 @@ export default async function handler(req, res) {
     const results = await fulfillSession({
       admin,
       orders,
-      amountTotalMinor: session.amount_total,
+      amountTotalMinor: settledAmountMinor(session),
       onError: (err, result) => {
         console.error(err.message, JSON.stringify(result.response).slice(0, 500));
         Sentry.captureException(err);
