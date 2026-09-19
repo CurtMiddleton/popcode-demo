@@ -322,8 +322,12 @@
       .cv-photo { background-size: cover; background-position: center; background-color: #6b665f; overflow: hidden; }
       /* Empty cover photo — flat #ededed like the interior image slots. */
       .cv-photo.cv-photo-empty { background-color: #ededed; }
-      .cv-photo-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center center; user-select: none; -webkit-user-drag: none; }
-      .cv-photo-img.fit { object-fit: contain; }
+      /* Sized/positioned in JS by layoutPhotoInBox, exactly like .slot-img.
+         object-fit + a %-translate cannot pan a photo inside a box of a
+         different shape — it clips to the element, so dragging reveals the
+         background instead of more photo. The editor never had that limit, so
+         the two disagreed and a crop that looked flush printed with a band. */
+      .cv-photo-img { position: absolute; transform-origin: center center; max-width: none; user-select: none; -webkit-user-drag: none; }
       .cv-photo-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: rgba(255,255,255,0.75); font-size: 3cqw; font-weight: 600; padding: 6%; }
       /* Bottom-weighted, the same idea as the back cover's .bc-scrim. The title
          needs the photo darkened behind it, but a flat wash over the whole face
@@ -362,8 +366,7 @@
       .bc-inset-mode { justify-content: flex-start; padding: 0 9%; }
       .bc-inset-mode .bc-inset { margin-top: 23cqh; }
       .bc-full-mode { justify-content: flex-end; padding: 0; }
-      .bc-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center; user-select: none; -webkit-user-drag: none; }
-      .bc-img.fit { object-fit: contain; }
+      .bc-img { position: absolute; transform-origin: center; max-width: none; user-select: none; -webkit-user-drag: none; }
       .bc-empty { position: absolute; inset: 0; background: #ededed; }
       .bc-photo-full { position: absolute; inset: 0; overflow: hidden; }
       .bc-scrim { position: absolute; left: 0; right: 0; bottom: 0; height: 34%; background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.55)); z-index: 2; }
@@ -1834,7 +1837,7 @@
         // "Choose cover photo" button.
         const cphoto = url ? normalizeAdjust(cover.photo.adjust) : null;
         const photo = (style) => url
-          ? `<div class="cv-photo" style="${style}"><img class="cv-photo-img${cphoto.fit === 'fit' ? ' fit' : ''}" src="${url}" style="transform:${adjustTransform(cphoto)}" draggable="false"/></div>`
+          ? `<div class="cv-photo" style="${style}"><img class="cv-photo-img${cphoto.fit === 'fit' ? ' fit' : ''}" src="${url}" crossorigin="anonymous" data-adj='${escapeHtml(JSON.stringify(cphoto))}' draggable="false"/></div>`
           : `<div class="cv-photo cv-photo-empty" style="${style}"></div>`;
         // No cover photo yet → a centered image-placeholder icon (Popsa-style),
         // clickable to add a photo; the rest of the cover still opens the editor.
@@ -1892,7 +1895,7 @@
         const wrap = document.createElement('div');
         const url = backCover.photo && backCover.photo.url;
         const a = url ? normalizeAdjust(backCover.photo.adjust) : null;
-        const img = url ? `<img class="bc-img${a.fit === 'fit' ? ' fit' : ''}" src="${url}" style="transform:${adjustTransform(a)}" draggable="false"/>` : '';
+        const img = url ? `<img class="bc-img${a.fit === 'fit' ? ' fit' : ''}" src="${url}" crossorigin="anonymous" data-adj='${escapeHtml(JSON.stringify(a))}' draggable="false"/>` : '';
         // Print-accurate sizing: cqw is % of the back-cover width, so 1.25" logo /
         // 9pt text / 16pt leading map to the same physical size at any book size.
         const wIn = (currentBookSize().wIn) || 11.7;
@@ -1924,7 +1927,8 @@
       }
       function refreshCoverPreview(editable) {
         const p = document.getElementById('cover-preview');
-        if (p) { p.innerHTML = ''; p.appendChild(buildCoverCanvas(editable)); }
+        if (p) { p.innerHTML = ''; p.appendChild(buildCoverCanvas(editable));
+                 requestAnimationFrame(() => layoutAllSlotPhotos(p)); }
       }
 
       // Keep the vertical spine in sync while the user types on the cover (the
@@ -2117,7 +2121,7 @@
       function openBackCoverPhotoEdit() {
         if (!backCover.photo) return;
         backCover.photo.adjust = backCover.photo.adjust || DEFAULT_ADJUST();
-        startEditPhoto(backCover.photo, bookAr(), {
+        startEditPhoto(backCover.photo, liveBoxAr('#pages .backcover .bc-photo-full, #pages .backcover .bc-inset', bookAr()), {
           back: () => openBackCoverMenu(),
           save: (adj) => { backCover.photo.adjust = normalizeAdjust(adj); render(); openBackCoverMenu(); showToast('Back cover photo updated'); },
           remove: () => { backCover.photo = null; render(); openBackCoverMenu(); },
@@ -2197,7 +2201,6 @@
           rot: ((Math.round((+a.rot || 0) / 90) * 90) % 360 + 360) % 360,
         };
       }
-      const adjustTransform = (a) => `translate(${a.ox}%, ${a.oy}%) scale(${a.scale}) rotate(${a.rot}deg)`;
       // A 1–10 print-quality score from the photo's pixel size and current zoom.
       function printQuality(w, h, scale) {
         if (!w || !h) return 10;
@@ -2230,6 +2233,13 @@
         a.oy = Math.max(-maxOy, Math.min(maxOy, a.oy));
         return a;
       }
+      // Which element's box a placed photo is cropped to.
+      function photoBox(img) {
+        if (img.classList.contains('slot-img')) return img.closest('.slot');
+        if (img.classList.contains('cv-photo-img')) return img.closest('.cv-photo');
+        if (img.classList.contains('bc-img')) return img.parentElement;
+        return null;
+      }
       function layoutPhotoInSlot(slot, img) {
         const a = readAdj(img);
         // A two-page photo is laid out in a box both pages wide; the right half
@@ -2248,10 +2258,12 @@
         img.style.transform = `scale(${a.scale}) rotate(${a.rot}deg)`;
         return true;
       }
+      // Covers and back covers go through the same layout as page slots, so the
+      // Edit Photo stage, the page, the proof and the print all show one crop.
       function layoutAllSlotPhotos(root) {
-        (root || document).querySelectorAll('.slot-img').forEach(img => {
-          const slot = img.closest('.slot'); if (!slot) return;
-          if (!layoutPhotoInSlot(slot, img)) img.addEventListener('load', () => layoutPhotoInSlot(slot, img), { once: true });
+        (root || document).querySelectorAll('.slot-img, .cv-photo-img, .bc-img').forEach(img => {
+          const box = photoBox(img); if (!box) return;
+          if (!layoutPhotoInSlot(box, img)) img.addEventListener('load', () => layoutPhotoInSlot(box, img), { once: true });
         });
       }
       window.addEventListener('resize', () => layoutAllSlotPhotos());
@@ -2276,8 +2288,7 @@
       // Returns null for non-slot / unloaded / CORS-tainted images so the caller can
       // fall back to the plain background-div path.
       function bakeSlotImgForPrint(img) {
-        if (!img.classList.contains('slot-img')) return null;
-        const slot = img.closest('.slot');
+        const slot = photoBox(img);
         if (!slot || !img.complete || !img.naturalWidth) return null;
         const r = slot.getBoundingClientRect();
         if (!r.width || !r.height) return null;
@@ -2295,6 +2306,25 @@
         } catch (e) { return null; }
         const div = document.createElement('div');
         div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background-image:url("' + data + '");background-size:100% 100%;background-repeat:no-repeat;';
+        return div;
+      }
+
+      // Used when a bake is refused (image not loaded, or the canvas is tainted).
+      // Mirrors whatever layoutPhotoInSlot put on the element, so the proof shows
+      // the same crop; falls back to cover/contain only if it never got laid out.
+      function fallbackPhotoDiv(img) {
+        const div = document.createElement('div');
+        if (img.style.width && img.style.height) {
+          div.style.cssText = 'position:absolute;'
+            + `left:${img.style.left};top:${img.style.top};width:${img.style.width};height:${img.style.height};`
+            + `background-image:url("${img.src}");background-size:100% 100%;background-repeat:no-repeat;`
+            + `transform:${img.style.transform || 'none'};transform-origin:center center;`;
+        } else {
+          const isFit = img.classList.contains('fit');
+          div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+            + `background-image:url("${img.src}");background-size:${isFit ? 'contain' : 'cover'};`
+            + 'background-position:center;background-repeat:no-repeat;';
+        }
         return div;
       }
 
@@ -2982,13 +3012,7 @@
             unit.querySelectorAll('.slot-img, .cv-photo-img, .bc-img').forEach(img => {
               const baked = bakeSlotImgForPrint(img);
               if (baked) { img.replaceWith(baked); return; }
-              const isFit = img.classList.contains('fit');
-              const div = document.createElement('div');
-              div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
-                + `background-image:url("${img.src}");background-size:${isFit ? 'contain' : 'cover'};`
-                + 'background-position:center;background-repeat:no-repeat;'
-                + `transform:${img.style.transform || 'none'};transform-origin:center center;`;
-              img.replaceWith(div);
+              img.replaceWith(fallbackPhotoDiv(img));
             });
             unit.querySelectorAll('.cv-spine').forEach(spine => {
               const r = spine.getBoundingClientRect();
@@ -3122,13 +3146,7 @@
           unit.querySelectorAll('.slot-img, .cv-photo-img, .bc-img').forEach(img => {
             const baked = bakeSlotImgForPrint(img);
             if (baked) { img.replaceWith(baked); return; }
-            const isFit = img.classList.contains('fit');
-            const div = document.createElement('div');
-            div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
-              + 'background-image:url("' + img.src + '");background-size:' + (isFit ? 'contain' : 'cover') + ';'
-              + 'background-position:center;background-repeat:no-repeat;'
-              + 'transform:' + (img.style.transform || 'none') + ';transform-origin:center center;';
-            img.replaceWith(div);
+            img.replaceWith(fallbackPhotoDiv(img));
           });
           unit.querySelectorAll('.cv-spine').forEach(spine => spine.remove());
         });
@@ -3665,10 +3683,21 @@
       }
 
       // Open the editor for the front-cover photo.
+      // The Edit Photo window has to be the shape of the box the photo actually
+      // fills, or the crop you frame is not the crop you get. Measured off the
+      // rendered page rather than derived: the cover face is 91% of the jacket
+      // (the spine takes the rest), the Panel style crops that to 62% again, and
+      // the back cover is either full-bleed or one of three inset shapes.
+      function liveBoxAr(sel, fallback) {
+        const el = document.querySelector(sel);
+        const w = el && el.clientWidth, h = el && el.clientHeight;
+        return (w && h) ? (w + ' / ' + h) : fallback;
+      }
+
       function openCoverPhotoEdit() {
         if (!cover.photo) return;
         cover.photo.adjust = cover.photo.adjust || DEFAULT_ADJUST();
-        startEditPhoto(cover.photo, bookAr(), {
+        startEditPhoto(cover.photo, liveBoxAr('#pages .page-canvas.cover .cv-photo', bookAr()), {
           back: () => openCoverMenu(),   // Cancel/close returns to the cover menu
           save: (a) => { cover.photo.adjust = normalizeAdjust(a); render(); openCoverMenu(); showToast('Cover photo updated'); },
           remove: () => {
@@ -4151,6 +4180,10 @@
         sheet.className = 'sheet' + (wide ? ' sheet-wide' : '');
         sheet.innerHTML = `<div class="sheet-grip"></div>${html}`;
         document.getElementById('overlay').classList.add('visible');
+        // Covers inside a sheet (the layout tiles, the Edit title preview) carry
+        // photos that are sized and positioned in JS — they need a pass once the
+        // sheet is laid out, or they render at zero size.
+        requestAnimationFrame(() => layoutAllSlotPhotos(sheet));
       }
       function closeSheet() { document.getElementById('overlay').classList.remove('visible'); }
       document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') closeSheet(); });
