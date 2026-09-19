@@ -2086,3 +2086,154 @@ User: "we don't use that sand color anymore." Page backgrounds now **`#f9f9f9`**
 - Resend Broadcasts + first newsletter; outreach to existing accounts for opt-in.
 - Board book has no signed-out intro screen.
 - Ideas offered, not built: remember last-used auth tab per device; Continue with Google/Apple; show/hide password eye.
+
+### 2026-09-19 — Design audit item 1 (the button system), then the cart: cost breakdown + Stripe Tax
+
+**Two PRs, both merged to `main` and live: #68 (button system, `9409966`) and #69 (cart + tax, `608b92c`).** Started from `docs/design-audit-brief.md`. Ended with NY sales tax being collected on production.
+
+#### The placement decision the brief asked for: one shared `public/ui.css`
+
+The brief said to settle this before writing anything, because converting twice is the expensive outcome. Checked rather than assumed:
+
+- The composite.js lesson (2026-07-17) was about shared **JavaScript that a code path calls**. It *threw* and broke the order page. CSS degrades instead — a missing `ui.css` is unstyled buttons on a working page.
+- **`public/composite.js` is now an orphan**; nothing references it.
+- The precedent that applies is already here: **`/assets/fonts.css` is a shared stylesheet linked by 21 pages** carrying base64 CooperBT, and **`nav.js` injects a shared `<style>` on every page**. Shared CSS is the existing mechanism — and it is where the Arial finding lived, so item 2 could only be fixed in shared code.
+- Per-page token blocks are what produced 21 heights and 9 radii in the first place.
+
+**Rollout constraint found while checking: 24 pages carry `class="btn"` in markup but only 7 defined a `.btn` rule.** Linking ui.css everywhere at once would have restyled 17 unconverted pages. So the `<link>` goes in the same commit that converts the page. Written into the file's header comment.
+
+Routing is safe: `ui.css` cannot match the `[a-z0-9-]` slug rewrite (the dot is not in the class), and static files beat rewrites anyway, as `/nav.js` proves.
+
+#### The system
+
+One `.btn` base, three sizes (`sm` 36 / default 44 / `lg` 52), four intents (`primary`/`secondary`/`quiet`/`danger`), plus `btn-icon`, `btn-float`, `btn-link`, `btn-auto`, `btn-block`, `btn-centered`.
+
+- **Height is fixed per size and every variant carries a 1px border** (transparent where unwanted), so a border can never change height. That was the hero pair, 44 vs 46.
+- **Radius is pill for text, 50% for icon-only.** Nothing else.
+- **Buttons do not cast shadows.** `btn-float` is the one exception (a control over a photo — the carousel arrows).
+- Colours read the page's own `var(--ink, …)`, so each page keeps its palette. Nothing declared on `:root`, so no collisions.
+
+`nav.js` and `dialog.js` inject their own CSS and were **aligned to the same numbers in place** rather than made to depend on ui.css — self-containment is what makes them safe.
+
+#### THE AUDIT'S OWN METHOD WAS WRONG IN TWO WAYS — fix these before trusting any future pass
+
+1. **The empty-data stub hides most of the site.** The brief flagged it; this session quantified it. **Manage showed 1 button and actually has 117.** A rich stub (`richstub.js` in the scratchpad: 8 collections, 2 saved print designs, collection_items, cart_items, credits, print_orders, RPCs) is what made manage/cart/auth measurable.
+2. **The probe only matched `button` and `a.btn`** — it missed every `<a class="icon-btn">`, which is what manage's view/edit/share actions are. Widened to `a[class*="btn"|"cta"|"chip"|"action"|"pill"]`.
+
+With both fixed: **331 buttons, not 203.** Any future audit should start from the widened probe + rich stub, or it will measure page chrome and call it the site.
+
+Also: **`auth.html` redirects a signed-in user to manage.html**, so it can only be measured signed out (the audit script special-cases it).
+
+#### Results
+
+| | before | after |
+|---|---|---|
+| distinct heights | 20 | **12** |
+| distinct radii | 9 | **5** |
+| buttons in Arial | 55 | **0** |
+| button shadows | Shop pill, order-success, 2 arrows | **2 arrows** |
+
+The 12 remaining heights are controls deliberately off the scale, each for a reason: tab bars (analytics), segmented toggles (auth, order), the upload drop zone (create), the two-line size tiles (book/boardbook), text affordances, carousel dots, and **nav.js's 32px icon buttons** — resizing those changes every page's header, so they wait.
+
+Also fixed while in the files: **`order-success` background `#fafafb` → `#f9f9f9`** (item 5).
+
+#### THE BUG CLASS WORTH REMEMBERING: a page overriding `.btn`'s display
+
+The user spotted the venue "Talk to us" button looking bottom-heavy. Cause: **`.venue-body .btn { display: block }`** overrode ui.css's `inline-flex`, and with a fixed height **only flex centres the label** — under `block` it top-aligns. `pricing.html` had the identical rule.
+
+Fixed, `.btn-centered` added for what that rule was trying to do, **and a check added to the measurement pass that flags any `.btn` whose computed display is not flex.** That check then immediately caught the same class of bug on **manage.html**, which had a legacy local `.btn` rule (radius 20, `inline-block`) sitting *after* the ui.css link and silently overriding all 117 buttons. `.btn-view`/`.btn-copy` went with it — neither had markup left.
+
+**If a page needs `.btn` to be block-level, it wants `flex`, not `block`.**
+
+#### Near-miss: a backtick in a nav.js comment
+
+Writing the `font-family: inherit` fix, I put backticks in the CSS comment — which is inside a **JS template literal** in nav.js. `node --check` caught it. Would have broken the nav on all 19 pages. **Always `node --check` nav.js/dialog.js after editing their CSS strings.**
+
+---
+
+### The cart (PR #69)
+
+The cart showed one number for printing, one for shipping, no per-item price, and "Taxes we collect are included." Rebuilt against the Popsa screens.
+
+**Layout:** two columns above 940px with the summary **sticky** in the right one (`top: 88px`, verified by scrolling); one column below — a sticky panel on a phone eats the viewport. Zero horizontal overflow at 320/375/402/768/940/1024/1440.
+
+**Per-line prices:** `allocateLinePrices()` in `lib/print/cart.mjs` splits a group's printing charge across its lines. **Prodigi's per-item `unitCost` does not always sum to `costSummary.items`**, so those are WEIGHTS and the group total stays authoritative: floor each share, then hand the leftover pennies to the largest remainders, so the column always adds to the subtotal. **Shipping is deliberately not split** — it is per parcel, and dividing it would invent a number. Verified on real data: $9.67 + $48.33 = $58.
+
+**A bug in my own first version:** all-zero weights produced $0 lines that disagreed with the subtotal. Caught by unit tests (zero weights, negative weights, missing costMinor, length mismatch, odd remainder across five lines). Falls back to copies.
+
+**From the audit:** "Edit design" was `.linkback` (14px purple, weight 600) next to a 13px grey Remove — two unrelated controls doing the same job. Both are now `.btn .btn-link`.
+
+#### Stripe Tax — live in production, NY only
+
+`lib/print/tax.mjs` maps the Prodigi-shaped address (`townOrCity`/`postalOrZipCode`/`countryCode`) to Stripe's (`city`/`postal_code`/`country`) and calls the Tax Calculation API. **Two rules hold throughout:**
+
+1. **Tax never breaks a quote.** Every path returns null on failure. The cart falls back to "calculated at checkout".
+2. **Stripe is the only source of a tax number.** Nothing estimates a rate. An address outside your registrations correctly calculates to **zero — that is an answer, not a failure.**
+
+`api/cart-quote.js` gained `tax_minor`, `total_with_tax_minor` (both additive, null when uncalculable) and **`tax_status`** (`off` / `incomplete_address` / `error` / `ok`). `total_minor` keeps its old pre-tax meaning so no existing reader changed.
+
+`api/create-checkout.js` puts the address on a **Stripe Customer** rather than re-asking on Stripe's page (which would let the two addresses diverge from the one sent to Prodigi). Line items carry **`tax_behavior: 'exclusive'`**, so tax is added on top instead of falling back to an account default that might be `inclusive` and quietly take it out of margin.
+
+**Everything is behind `STRIPE_TAX_ENABLED`** (Config, not Secret). This is the money path: `automatic_tax` against a misconfigured account **throws**, and a throw there is checkout down for everyone. It also fails soft — a rejected taxed session is retried once untaxed, because an order that undercharges tax is recoverable and a customer who cannot pay is not.
+
+**Gotchas:**
+- **`customer` and `customer_email` are mutually exclusive**, and setting `customer_email: undefined` leaves the key present — enough for the SDK to send it and Stripe to refuse. It must be `delete`d.
+- **A null tax covered four situations and they were indistinguishable from outside.** That is what made the first preview test unreadable — the response proved the code was deployed and proved nothing about why it was quiet. Hence `tax_status`. Add a diagnostic like this to anything that can fail silently.
+
+#### THE BUG NO EYE TEST WOULD HAVE CAUGHT: collected tax recorded as revenue
+
+`fulfillOrder` overwrites `total_charged_minor` with the session's `amount_total` — deliberate, because promo codes are enabled and a discount exists only on the session.
+
+**With `automatic_tax` on, `amount_total` includes the tax.** So a single-order session would have recorded $98.62 as the amount charged, and **`analytics.html:1281` sums that column and labels it "Revenue"**. $7.62 of it belongs to New York.
+
+Worse, it would have been **inconsistent**: `fulfillSession` only passes the amount through for a single-order session, so a two-provider cart kept the correct pre-tax figure. One column, two meanings, depending on how many parcels the cart split into.
+
+Fixed with **`settledAmountMinor(session)` = `amount_total − total_details.amount_tax`** in `lib/print/fulfill.mjs`. Collected tax is deliberately **not** stored — Stripe's Tax → Transactions is the record for filing; a second copy would give two answers to one question.
+
+**Found by reading the post-payment path, not by running it** (the test payment could not be run from the sandbox — the cart is auth-gated and Stripe Checkout needs interactive card entry). Doing that also caught `settledAmountMinor` being used in both api files **without being added to either dynamic import** — a ReferenceError that would have broken fulfillment for every order, taxed or not. `node --check` passes fine on an undefined identifier; **grep every helper against its import**.
+
+#### Verified end to end
+
+| | |
+|---|---|
+| Per-line split | $9.67 + $48.33 = $58 |
+| Cart total | $98.62 |
+| **Stripe total** | **$98.62** — Stripe labelled it "Sales Tax (8.375%)" |
+| Unregistered state (CA) | `tax_status: ok`, tax **$0**, no error |
+| Fulfillment after the Customer swap | `ord_1172988`, status `submitted` |
+| Tax excluded from revenue | `total_charged_minor` **9100**, not 9862 |
+| Production, live key | NY $1.84 on $22.00 (8.375%); CA $0 |
+
+**`buyer_email` is unaffected** by the Customer swap — it is derived in SQL as `coalesce(recipient ->> 'email', u.email)`, never from Stripe's `customer_email`.
+
+#### Vercel / testing gotchas (all recurrences)
+
+- **Env vars apply to the NEXT build only.** The first preview test failed purely because the build predated `STRIPE_TAX_ENABLED`. The endpoint proved the code was deployed; only `tax_status` distinguished "flag off" from "Stripe refused".
+- **Preview URLs cannot be built by hand.** The alias for this branch was `popcode-demo-git-claude-epic-fey-b3bb0c-…` — Vercel truncates the branch name and inserts a hash. Get it from the Vercel bot comment on the PR.
+- **Vercel's env dialog "Environments" field is a summary of everything selected.** It read `Production, claude/epic-feynman-i1c6ki` with Production still ticked; the Production checkbox is one level up from the preview-branch list (via the `<` back arrow). The user caught this, correctly.
+- **Choose Config, not Secret, for a flag.** Secret is one-way — you can never read it back to confirm what is set.
+- **Supabase Table Editor is not sorted by `created_at`.** Rows read 21:42 today, then June, then August. An abandoned checkout looked like the test order. **Every Pay click inserts a `pending` row** whether or not it completes, and the insert always writes the pre-tax figure — so a `pending` row's `total_charged_minor` proves nothing about the fulfillment overwrite. Query by `prodigi_order_id`.
+
+#### TAX / COMPLIANCE — facts established, not code
+
+- **Popcode, Inc. NYS Certificate of Authority, ID `87-4123940`, VALIDATED 9/29/2023.** Business address 709 Main St, New Rochelle NY 10801; mailing 998 Edgewood Ave, Pelham NY 10803.
+- The certificate's own reverse states: a return is due **even with no business and no tax owed**, until you surrender the certificate; **minimum $50 penalty** per late return. A dormant registration accrues penalties.
+- **User confirmed they have been filing in NYS.** No unfiled-period problem. Returns will now carry real taxable sales instead of zeros.
+- **Stripe Tax was already active with NY registered** (from the Popcode 1.0 era) — that is why enabling it worked immediately. **Stripe's "Set up filing" is not needed**; there is already a filing process.
+- **NY requires a jurisdiction breakdown**, not one state total (Westchester 8.375% ≠ NYC). **Stripe → Tax → Transactions** exports exactly that for ST-100.
+- **`tc-721.pdf` is UTAH's exemption certificate**, not NY's — it was for the *old printer*, which was Utah-based. Historical, correctly used at the time. Also: no exemption box checked, no licence number, and the address reads 989 vs the certificate's 998.
+- **STILL OPEN: a resale certificate for Prodigi.** They charged $2.55 tax on a NY-bound order, which points at **ST-120** (NY's form) carrying 87-4123940. Confirm with Prodigi first — it depends where their US entity sources the sale. Also worth checking Prodigi invoices for **non-NY** shipments: Popcode can only give a certificate for NY, and drop-ship rules differ by state.
+- **Never send the Certificate of Authority to a vendor** — it is nontransferable and not to be reproduced. Vendors get the resale certificate; its number goes *on* that form.
+
+#### STILL OPEN
+
+**Design audit:**
+- **Item 3, type scale.** `h1` renders at **12 sizes** (22·23·30·31·34·36·42·44·54·66·90·100), `h2` at 7, `h3` at 8, and **12 headings render in Inter** where the rest are CooperBT — now including an `h2`, which the brief did not catch.
+- **Item 4, card tokens.** Six radii (16·20·22·24·28 and a stray **6px**) across 5 shadow values.
+- **The noise question.** Untouched — needs the Manage screenshots. The rich stub renders Manage properly now: **117 controls across 8 projects**, where the brief guessed "70+ with a dozen".
+- **nav.js's 32px icon buttons and `join-btn`** are off the 36/44/52 scale; fixing them changes every header.
+- **manage.html's action row is mismatched at both ends** — icons 40px desktop / 36 phone, the Shop pill the reverse. Pre-existing, left alone deliberately because it sits inside the noise question.
+
+**Popsa parity (cart):** matched per-line prices, the persistent sticky summary, Subtotal/Shipping/Tax/Total, and tax appearing only once an address exists. **Not matched:** shipping options as cards with prices and delivery estimates (ours is a bare dropdown — change it and wait for a re-quote to see the effect; this is the biggest remaining gap), saved addresses, a per-item ⋯ menu, "Add Another Item", a discounts panel (Stripe's promo field is on their page), and payment-method choice shown before leaving the site.
+
+**Three calls from the button work that are cheap to reverse:** the Shop pill lost its drop shadow; button weight standardised to 600 (app pages were 700); shop size-chips are pills now.
