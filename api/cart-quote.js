@@ -68,6 +68,17 @@ export default async function handler(req, res) {
         total_minor: g.totalMinor,
         line_ids: g.lines.map((l) => l.id).filter(Boolean),
       })),
+      /* Per-line printing charge, so the cart can price each row. Allocated from
+         the group total (see allocateLinePrices), so the column always adds up
+         to printing_minor — these are a split of what is charged, never a
+         second opinion about it. Shipping stays out: it is per parcel, not per
+         line, and dividing it would invent a number. */
+      lines: priced.groups.flatMap((g) =>
+        g.lines.map((l, i) => ({
+          id: l.id,
+          printing_minor: (g.linePrices && g.linePrices[i]) ?? null,
+        })).filter((l) => l.id),
+      ),
     });
   } catch (e) {
     console.error('cart-quote error:', e);
