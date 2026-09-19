@@ -385,7 +385,7 @@
            (baseline minus the x-height), not guessed — which puts the art under
            the ascender of the l and beside the rest. It differs by font size, so
            the ≤560 rule has its own. */
-        .stage { --stage-h: 420px; margin-top: -74px; margin-bottom: 196px; margin-left: 0; }
+        .stage { --stage-h: 420px; margin-top: var(--stage-rise, -74px); margin-bottom: 196px; margin-left: 0; }
         /* The art is absolutely positioned and therefore paints above the
            static headline. It should never cover the word, so the text wins. */
         h1.headline { position: relative; z-index: 2; }
@@ -393,7 +393,7 @@
            covering the piece it is playing. Pushing the phone to the left edge
            and the artwork right restores the desktop relationship: the phone in
            front, and most of the product still visible beside it. */
-        .phone { left: 0; margin-left: 36px; width: 200px; height: 404px; }
+        .phone { left: 0; margin-left: var(--phone-inset, 36px); width: 200px; height: 404px; }
         /* Measured across all five scenes: at 26% the wall pieces cleared the
            phone entirely and the two read as separate objects. 10% keeps every
            scene overlapping — the phone in front of the thing it is playing —
@@ -403,7 +403,7 @@
            art starts around 145, so the phone overlaps it — it is in front of
            the thing it is playing, as on desktop. Pieces that would otherwise
            sit left of the word carry their own xSm; see POPCODE_SCENES. */
-        .art-wrap { left: calc(10% + 20px); }
+        .art-wrap { left: calc(10% + var(--art-inset, 20px)); }
         /* On a phone the same curve at 120px read as a steep hill; 60px keeps it a gentle arch. */
         .hero-curve { height: 60px; }
         body .codebar { margin-top: 0; }
@@ -418,11 +418,11 @@
         .hero-cta .btn { font-size: 13px; padding: 12px 12px; }
         /* Same sum as above at this size: 320 - 0.54 x 330 = 142, plus breathing.
            The headline is 66px here, not 78, so the pull-up is a shorter line. */
-        .stage { --stage-h: 330px; margin-top: -66px; margin-bottom: 160px; }
-        .phone { width: 158px; height: 320px; border-radius: 30px; margin-left: 34px; padding: 8px; }
-        /* Same as the wider phones above — this rule only exists because it
-           comes later in the file and would otherwise win. */
-        .art-wrap { left: calc(10% + 20px); }
+        /* The headline is 66px here, not 78, so the stage rises by a shorter line
+           and the narrower phone sits a little further left. */
+        .hero { --stage-rise: -66px; --phone-inset: 34px; }
+        .stage { --stage-h: 330px; margin-bottom: 160px; }
+        .phone { width: 158px; height: 320px; border-radius: 30px; padding: 8px; }
         .phone-screen { border-radius: 24px; }
         .phone-notch { width: 60px; height: 17px; }
       }
@@ -1334,12 +1334,25 @@
         // left on desktop needs its own offset there. matchMedia, not a width
         // read, so it follows a rotate-to-landscape without a reload.
         var narrow = window.matchMedia('(max-width: 860px)');
+        // Every placement value takes an optional phone-only variant — hSm, xSm,
+        // ySm, rotSm — because a piece sized by height next to a 66px headline
+        // wants a different spot than the same piece beside a 100px one.
         function applyArtGeometry(scene) {
-          artWrap.style.setProperty('--art-rot', scene.rot || '-7deg');
-          artWrap.style.setProperty('--art-h', scene.h || '90%');
-          artWrap.style.setProperty('--art-x', (narrow.matches && scene.xSm) || scene.x || '0');
-          artWrap.style.setProperty('--art-y', scene.y || '0%');
+          var sm = narrow.matches;
+          var pick = function (k, dflt) {
+            var v = sm && scene[k + 'Sm'] != null ? scene[k + 'Sm'] : scene[k];
+            return v == null ? dflt : v;
+          };
+          artWrap.style.setProperty('--art-rot', pick('rot', '-7deg'));
+          artWrap.style.setProperty('--art-h', pick('h', '90%'));
+          artWrap.style.setProperty('--art-x', pick('x', '0'));
+          artWrap.style.setProperty('--art-y', pick('y', '0%'));
         }
+        // For the placement tuner (see /hero-tune.js): re-apply a scene without
+        // the fade, so a slider drag updates the stage immediately.
+        window.popcodeApplyArt = function (word) {
+          var sc = POPCODE_SCENES[word]; if (sc) applyArtGeometry(sc);
+        };
 
         window.popcodeShowScene = function (word) {
           var scene = POPCODE_SCENES[word];
@@ -1414,7 +1427,20 @@
           var sc = window.POPCODE_SCENES && window.POPCODE_SCENES[word];
           return (sc && sc.dwell) || 4000;
         }
+        var paused = false;
+        // Held still by the placement tuner, so a scene can't change mid-drag.
+        window.popcodeReel = {
+          pause: function () { paused = true; },
+          resume: function () { paused = false; },
+          go: function (w) {
+            var n = words.indexOf(w); if (n < 0) return;
+            i = n; show(n, false);
+            if (window.popcodeShowScene) window.popcodeShowScene(w);
+          },
+          words: words,
+        };
         function next() {
+          if (paused) { setTimeout(next, 400); return; }
           i++;
           show(i, true);
           var word = slots[i];
@@ -1428,6 +1454,15 @@
         }
         setTimeout(next, dwellFor(words[0]));
       })();
+
+      // Placement tuner, off unless ?tune is in the URL: sliders over the hero
+      // for the current scene's size and offsets, live on the device you are
+      // holding. Costs everyone else one regex test.
+      if (/[?&]tune\b/.test(location.search)) {
+        var tuneEl = document.createElement('script');
+        tuneEl.src = '/hero-tune.js';
+        document.head.appendChild(tuneEl);
+      }
 
       // The hero copy lines up with the first nav item. nav.js owns that x and
       // works it out from the logo width, so measure it rather than duplicating
