@@ -68,9 +68,16 @@ export default async function handler(req, res) {
        address exists. */
     let taxMinor = null;
     let totalWithTaxMinor = null;
+    /* Why there is no tax number, in one word, so the difference between "the
+       flag is off", "you have not typed an address yet" and "Stripe refused"
+       is one request away instead of a guess. It carries no key, no amount and
+       no configuration — only which branch was taken, which the Tax row already
+       reveals by being present or absent. */
+    let taxStatus = 'off';
     if (TAX_ENABLED && STRIPE_SECRET_KEY) {
       const { calculateTaxMinor, canCalculateTax } = await import('../lib/print/tax.mjs');
       const full = { ...(address || {}), countryCode: country };
+      taxStatus = 'incomplete_address';
       if (canCalculateTax(full)) {
         const stripe = new Stripe(STRIPE_SECRET_KEY);
         const out = await calculateTaxMinor({
@@ -87,9 +94,13 @@ export default async function handler(req, res) {
              charges the correct tax on its own page. */
           console.error('tax calculation failed:', out.error.message);
           Sentry.captureException(out.error);
+          taxStatus = 'error';
         } else if (out) {
           taxMinor = out.taxMinor;
           totalWithTaxMinor = out.totalMinor;
+          taxStatus = 'ok';
+        } else {
+          taxStatus = 'error';
         }
       }
     }
@@ -102,6 +113,7 @@ export default async function handler(req, res) {
       // Additive. Null whenever tax could not be calculated.
       tax_minor: taxMinor,
       total_with_tax_minor: totalWithTaxMinor,
+      tax_status: taxStatus,
       printing_minor: priced.printingMinor,
       shipping_minor: priced.shippingMinor,
       currency: priced.currency,
