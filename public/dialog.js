@@ -23,7 +23,11 @@
   var css = '' +
     '.pcd-overlay{position:fixed;inset:0;z-index:10000;background:rgba(20,16,32,.45);display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;transition:opacity .15s ease}' +
     '.pcd-overlay.on{opacity:1}' +
-    '.pcd-box{background:#fff;border-radius:24px;width:100%;max-width:400px;padding:28px 26px 22px;box-shadow:0 24px 60px rgba(0,0,0,.22);transform:translateY(8px) scale(.98);transition:transform .15s ease;font-family:Inter,system-ui,sans-serif;color:#1a1a1a;text-align:center}' +
+    /* Matches /ui.css's --pc-radius-card and --pc-shadow-raised, stated here
+       rather than linked: this file ships its own CSS so the dialog works on
+       any page, and that self-containment is the property that makes it safe.
+       Keep the numbers in step with ui.css by hand. */
+    '.pcd-box{background:#fff;border-radius:20px;width:100%;max-width:400px;padding:28px 26px 22px;box-shadow:0 16px 40px rgba(20,16,40,.18);transform:translateY(8px) scale(.98);transition:transform .15s ease;font-family:Inter,system-ui,sans-serif;color:#1a1a1a;text-align:center}' +
     '.pcd-overlay.on .pcd-box{transform:none}' +
     '.pcd-title{font-family:CooperBT,Georgia,serif;font-weight:400;font-size:24px;line-height:1.2;letter-spacing:-.01em;margin:0 0 10px}' +
     '.pcd-msg{font-size:15px;line-height:1.55;color:#555;margin:0;white-space:pre-line}' +
