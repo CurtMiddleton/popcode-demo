@@ -30,10 +30,14 @@
     '.pcd-title+.pcd-msg{margin-top:0}' +
     '.pcd-field{margin-top:16px;width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid #e3e3e3;border-radius:12px;font:16px Inter,system-ui,sans-serif;color:#1a1a1a;background:#f9f9f9;text-align:left}' +
     '.pcd-actions{display:flex;flex-direction:column;gap:8px;margin-top:22px}' +
-    '.pcd-btn{padding:14px;border-radius:999px;border:none;background:#1a1a1a;color:#fff;font:700 15px Inter,system-ui,sans-serif;cursor:pointer}' +
+    /* Matches /ui.css's .btn (44px, pill, 1px transparent border, weight 600),
+       but stated here rather than linked: this file ships its own CSS so the
+       dialog works on any page, and that self-containment is the property
+       that makes it safe. Keep the numbers in step with ui.css by hand. */
+    '.pcd-btn{box-sizing:border-box;display:flex;align-items:center;justify-content:center;height:44px;padding:0 22px;border-radius:999px;border:1px solid transparent;background:#1a1a1a;color:#fff;font:600 15px/1 Inter,system-ui,sans-serif;cursor:pointer}' +
     '.pcd-btn:hover{opacity:.9}' +
     '.pcd-btn.danger{background:#c92a2a}' +
-    '.pcd-btn.ghost{background:transparent;color:#777;font-weight:600;font-size:14px;padding:10px}' +
+    '.pcd-btn.ghost{background:transparent;color:#777;font-size:14px}' +
     '.pcd-btn.ghost:hover{color:#1a1a1a;opacity:1}';
   function injectCss() {
     if (document.getElementById('pcd-css')) return;
