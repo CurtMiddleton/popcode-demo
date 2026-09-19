@@ -81,6 +81,10 @@ After writing the entry, commit CLAUDE.md with a message like `Add session notes
 
 ## Queued briefs
 
+- **`docs/design-audit-brief.md`** — a site-wide visual audit, measured over 20
+  pages: 21 button heights, 9 radii, buttons rendering in Arial on 19 pages, 11
+  h1 sizes. Has the method, the findings, a suggested order of work, and the
+  "which screens are too noisy" question still open. Nothing built yet.
 - **`docs/postcard-brief.md`** — the companion postcard that ships with flat/wall
   print orders (prints, framed, canvas, framed canvas, acrylic, tiles). Copy and
   headline are settled; the Prodigi card SKU, card size and per-order-vs-per-design
