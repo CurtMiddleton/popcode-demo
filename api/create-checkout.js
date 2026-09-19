@@ -24,7 +24,8 @@
 // asset URL must live under this Supabase project's public storage prefix.
 //
 // Env: PRODIGI_API_KEY, PRODIGI_BASE_URL, PRINT_MARKUP_MULTIPLIER,
-//      STRIPE_SECRET_KEY, SUPABASE_SERVICE_ROLE_KEY, (optional) PUBLIC_BASE_URL.
+//      STRIPE_SECRET_KEY, SUPABASE_SERVICE_ROLE_KEY, (optional) PUBLIC_BASE_URL,
+//      (optional) STRIPE_TAX_ENABLED, STRIPE_TAX_CODE.
 
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
@@ -36,6 +37,17 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const MARKUP = Number(process.env.PRINT_MARKUP_MULTIPLIER || 1.4);
+
+/* Stripe Tax, behind a switch. This is the money path: a session created with
+   automatic_tax against a misconfigured account THROWS, and a throw here is
+   checkout down for everyone. An env var means it can be turned off without a
+   deploy, and means merging this cannot break anything by itself.
+
+   It also fails soft at the call site — if the taxed session is rejected we
+   retry once without tax and take the order, because an order that undercharges
+   tax is recoverable and a customer who cannot pay is not. */
+const TAX_ENABLED = String(process.env.STRIPE_TAX_ENABLED || '').toLowerCase() === 'true';
+const TAX_CODE = process.env.STRIPE_TAX_CODE || '';
 
 // Composited print images are uploaded to the existing public `experiences`
 // bucket (reuses its owner-write policy). Only accept asset URLs under it.
@@ -215,9 +227,15 @@ export default async function handler(req, res) {
         price_data: {
           currency: group.currency.toLowerCase(),
           unit_amount: group.totalMinor,
+          /* 'exclusive' — tax is added on top of this amount. Without it Stripe
+             falls back to the account default, which may be 'inclusive' and
+             would quietly take the tax out of margin instead of charging it.
+             Harmless when automatic_tax is off. */
+          tax_behavior: 'exclusive',
           product_data: {
             name: label.slice(0, 250),
             description: titles.join(', ').slice(0, 250),
+            ...(TAX_CODE ? { tax_code: TAX_CODE } : {}),
           },
         },
       };
@@ -232,7 +250,31 @@ export default async function handler(req, res) {
         ? `${base}/manage.html?cancelled=1`
         : `${base}/order.html?id=${encodeURIComponent(byId.get(firstLine.collectionId)?.slug || '')}&cancelled=1`;
 
-    const session = await stripe.checkout.sessions.create({
+    /* Stripe needs somewhere to send the goods before it can work out the tax.
+       We already collected the address, so it goes on a Customer rather than
+       being asked for a second time on Stripe's page — re-asking would also let
+       the two addresses diverge, and the one we send Prodigi is this one. */
+    let taxCustomerId = null;
+    if (TAX_ENABLED) {
+      try {
+        const { toStripeAddress } = await import('../lib/print/tax.mjs');
+        const addr = toStripeAddress(recipient.address);
+        const customer = await stripe.customers.create({
+          email: recipient.email,
+          name: recipient.name,
+          address: addr,
+          shipping: { name: recipient.name, address: addr },
+        });
+        taxCustomerId = customer.id;
+      } catch (e) {
+        // No customer means no automatic tax on this session; the order still
+        // goes through, untaxed, rather than failing.
+        console.error('tax customer create failed:', e.message);
+        Sentry.captureException(e);
+      }
+    }
+
+    const baseSession = {
       mode: 'payment',
       // Show a promo-code box on the Stripe Checkout page. Lets a valid
       // promotion code (e.g. a 100%-off test/comp code) be entered to reduce
@@ -250,7 +292,32 @@ export default async function handler(req, res) {
       line_items: lineItems,
       success_url: `${base}/order-success.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl,
-    });
+    };
+
+    /* customer and customer_email are mutually exclusive — Stripe rejects a
+       session carrying both. The Customer already holds the address and the
+       email, so the bare field is DELETED rather than set to undefined: an
+       undefined value still leaves the key present, which is enough for the
+       SDK to send it and for Stripe to refuse the call. */
+    let taxedSession = baseSession;
+    if (taxCustomerId) {
+      taxedSession = { ...baseSession, customer: taxCustomerId, automatic_tax: { enabled: true } };
+      delete taxedSession.customer_email;
+    }
+
+    let session;
+    try {
+      session = await stripe.checkout.sessions.create(taxedSession);
+    } catch (e) {
+      if (taxedSession === baseSession) throw e;
+      /* The one retry that matters. Stripe rejects automatic_tax for reasons we
+         cannot see from here — no origin address, a lapsed registration, a
+         product tax code it will not accept. Taking the order untaxed is
+         recoverable; refusing to take it is not. */
+      console.error('taxed checkout session rejected, retrying untaxed:', e.message);
+      Sentry.captureException(e);
+      session = await stripe.checkout.sessions.create(baseSession);
+    }
 
     await admin.from('print_orders')
       .update({ stripe_session_id: session.id, updated_at: new Date().toISOString() })

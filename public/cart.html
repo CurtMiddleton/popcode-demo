@@ -17,7 +17,6 @@
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="stylesheet" href="/ui.css">
     <style>
-      .cost-lines { display: grid; gap: 6px; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid rgba(0,0,0,.08); }
       .cost-line { display: flex; justify-content: space-between; font-size: 15px; color: #5a564e; }
       .cost-line span:last-child { font-variant-numeric: tabular-nums; color: #1a1a1a; }
       * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -47,7 +46,6 @@
       .row { display:flex; gap:12px; flex-wrap:wrap; }
       .row > div { flex:1; min-width:140px; }
       .muted { color:#999; font-size:13px; }
-      .linkback { display:inline-flex; align-items:center; gap:6px; color:#7657FC; background:none; border:none; text-decoration:none; font-weight:600; font-size:14px; cursor:pointer; font-family:'Inter',sans-serif; }
       .banner { padding:14px 16px; border-radius:14px; font-size:14px; margin-bottom:20px; }
       .banner.error { background:#fdecec; color:#c0392b; }
       .banner.info { background:#f3f0ff; color:#5b3fd6; }
@@ -68,18 +66,43 @@
       .qty button { border:none; background:none; width:34px; height:34px; font-size:17px; cursor:pointer; color:#1a1a1a; font-family:'Inter',sans-serif; }
       .qty button:disabled { opacity:.3; cursor:default; }
       .qty span { min-width:26px; text-align:center; font-size:14px; font-weight:600; }
-      /* .btn .btn-link — a text affordance, off the height scale. */
-      .line-remove { color:#a09a90; font-size:13px; padding:0; }
+      /* Both row actions are .btn .btn-link, so they are the same size and sit on
+         the same baseline. "Edit design" used to be .linkback (14px purple) next
+         to a 13px grey Remove — two unrelated controls doing the same job. */
+      .line-act { font-size:13.5px; padding:0; height:auto; }
+      .line-edit { color:#7657FC; }
+      .line-edit:hover { color:#5b3fd6; }
+      .line-remove { color:#a09a90; }
       .line-remove:hover { color:#c0392b; }
 
       .empty { text-align:center; padding:40px 10px; }
       .empty p { color:#777; font-size:15px; margin-bottom:22px; }
       /* .btn .btn-lg .btn-primary — nothing local left. */
 
-      .totals { border-top:1px solid #f0efeb; padding-top:18px; margin-top:6px; }
-      .total-row { display:flex; justify-content:space-between; align-items:baseline; }
-      .total-row .price { font-size:32px; font-weight:600; }
+      /* Two columns, with the summary following you down the page. The order is
+         the thing you are deciding about, so it should never be a scroll away.
+         One column below 940 — a sticky panel on a phone eats the viewport. */
+      .checkout-grid { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:26px; align-items:start; }
+      @media (max-width:940px) { .checkout-grid { grid-template-columns:minmax(0,1fr); } }
+      .summary-col { position:sticky; top:88px; }
+      @media (max-width:940px) { .summary-col { position:static; } }
+      .summary-card { margin-bottom:0; padding:26px; }
+
+      .totals { display:grid; gap:9px; }
+      .cost-line { display:flex; justify-content:space-between; align-items:baseline;
+                   font-size:14.5px; color:#555; gap:16px; }
+      .cost-line .amt { color:#1a1a1a; font-variant-numeric:tabular-nums; white-space:nowrap; }
+      .cost-line.pending .amt { color:#999; font-weight:400; }
+      .total-row { display:flex; justify-content:space-between; align-items:baseline;
+                   border-top:1px solid #f0efeb; padding-top:14px; margin-top:5px; }
+      .total-row .label { font-size:16px; font-weight:600; }
+      .total-row .price { font-size:30px; font-weight:600; font-variant-numeric:tabular-nums; }
       .note { color:#888; font-size:12.5px; line-height:1.55; margin-top:10px; }
+      /* The per-line price sits with the title, right-aligned, so the column of
+         numbers reads down to the subtotal it adds up to. */
+      .line-price { font-size:15px; font-weight:600; white-space:nowrap;
+                    font-variant-numeric:tabular-nums; margin-left:14px; }
+      .line-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
     </style>
   </head>
   <body>
@@ -103,15 +126,17 @@
       <div id="error-banner" class="banner error" style="display:none;"></div>
       <div id="cancel-banner" class="banner info" style="display:none;">Payment was cancelled — your cart is still here.</div>
 
-      <div class="card" id="items-card">
-        <div id="cart-list"><p class="muted">Loading your cart…</p></div>
-        <p class="note" id="edit-note" style="display:none;">
-          Editing a design after it is in your cart won’t change the print file we
-          already prepared — remove the item and add it again to pick up your changes.
-        </p>
-      </div>
+      <div class="checkout-grid">
+       <div>
+        <div class="card" id="items-card">
+          <div id="cart-list"><p class="muted">Loading your cart…</p></div>
+          <p class="note" id="edit-note" style="display:none;">
+            Editing a design after it is in your cart won’t change the print file we
+            already prepared — remove the item and add it again to pick up your changes.
+          </p>
+        </div>
 
-      <div id="checkout-area" style="display:none;">
+        <div id="checkout-area" style="display:none;">
         <div class="card">
           <h2>Where should we send it?</h2>
           <div class="row">
@@ -150,20 +175,28 @@
           </p>
         </div>
 
-        <div class="card">
+        </div>
+       </div>
+
+       <div class="summary-col" id="summary-col" style="display:none;">
+        <div class="card summary-card">
+          <h2>Order summary</h2>
           <div class="totals">
-            <div class="cost-lines" id="cost-lines" style="display:none;">
-              <div class="cost-line"><span>Printing</span><span id="line-printing">—</span></div>
-              <div class="cost-line"><span>Shipping</span><span id="line-shipping">—</span></div>
-            </div>
+            <div class="cost-line"><span>Subtotal</span><span class="amt" id="line-printing">—</span></div>
+            <div class="cost-line"><span id="shipping-label">Shipping</span><span class="amt" id="line-shipping">—</span></div>
+            <!-- Tax only exists once we know where it is going, so the row stays
+                 out of the summary until an address makes it real. -->
+            <div class="cost-line" id="tax-row" style="display:none;"><span>Tax</span><span class="amt" id="line-tax">—</span></div>
             <div class="total-row">
-              <div><div class="muted">Total</div><div class="price" id="total">—</div></div>
-              <div class="muted" id="total-note">Getting price…</div>
+              <span class="label">Total</span>
+              <span class="price" id="total">—</span>
             </div>
-            <p class="note" id="parcel-note" style="display:none;"></p>
           </div>
+          <p class="note" id="total-note">Getting price…</p>
+          <p class="note" id="parcel-note" style="display:none;"></p>
           <button class="btn btn-lg btn-primary btn-block primary-btn" id="pay-btn" disabled>Pay with card</button>
         </div>
+       </div>
       </div>
     </div>
 
@@ -237,8 +270,10 @@
         const area = document.getElementById('checkout-area');
         document.getElementById('edit-note').style.display = rows.length ? 'block' : 'none';
 
+        const summary = document.getElementById('summary-col');
         if (!rows.length) {
           area.style.display = 'none';
+          summary.style.display = 'none';
           document.getElementById('cart-sub').textContent = 'Nothing in your cart yet.';
           list.innerHTML = `
             <div class="empty">
@@ -249,6 +284,7 @@
         }
 
         area.style.display = 'block';
+        summary.style.display = '';
         const n = rows.reduce((s, r) => s + (r.copies || 1), 0);
         document.getElementById('cart-sub').textContent =
           `${n} item${n === 1 ? '' : 's'} — everything that can ship together will.`;
@@ -263,16 +299,21 @@
             <div class="line" data-id="${esc(r.id)}">
               <div class="line-thumb" style="${r.thumb_url ? `background-image:url('${esc(r.thumb_url)}')` : ''}"></div>
               <div class="line-main">
-                <div class="line-title">${esc(r.title || (d && d.name) || 'Popcode print')}</div>
-                <div class="line-meta">${esc(bits || (d && d.name) || '')}</div>
+                <div class="line-head">
+                  <div>
+                    <div class="line-title">${esc(r.title || (d && d.name) || 'Popcode print')}</div>
+                    <div class="line-meta">${esc(bits || (d && d.name) || '')}</div>
+                  </div>
+                  <div class="line-price" data-price-for="${esc(r.id)}"></div>
+                </div>
                 <div class="line-actions">
                   <div class="qty">
                     <button type="button" data-act="dec" ${r.copies <= 1 ? 'disabled' : ''} aria-label="One fewer">−</button>
                     <span>${r.copies}</span>
                     <button type="button" data-act="inc" aria-label="One more">+</button>
                   </div>
-                  ${href ? `<a class="linkback" href="${esc(href)}">Edit design</a>` : ''}
-                  <button type="button" class="btn btn-link line-remove" data-act="remove">Remove</button>
+                  ${href ? `<a class="btn btn-link line-act line-edit" href="${esc(href)}">Edit design</a>` : ''}
+                  <button type="button" class="btn btn-link line-act line-remove" data-act="remove">Remove</button>
                 </div>
               </div>
             </div>`;
@@ -320,8 +361,9 @@
         const mine = ++quoteToken;
         total.textContent = '—'; note.textContent = 'Getting price…';
         payBtn.disabled = true; priced = null;
-        const costLines = document.getElementById('cost-lines');
-        if (costLines) costLines.style.display = 'none';
+        setLinePrices(null);
+        document.getElementById('line-printing').textContent = '—';
+        document.getElementById('line-shipping').textContent = '—';
 
         try {
           const addr = addressFromForm();
@@ -337,15 +379,31 @@
           total.textContent = PopcodeCart.money(data.total_minor, data.currency);
           // Show what the money is for. On a small print, shipping is most of
           // it — a single figure makes that look like an expensive print.
-          const lines = document.getElementById('cost-lines');
-          if (data.shipping_minor != null && data.printing_minor != null) {
-            document.getElementById('line-printing').textContent = PopcodeCart.money(data.printing_minor, data.currency);
-            document.getElementById('line-shipping').textContent = PopcodeCart.money(data.shipping_minor, data.currency);
-            lines.style.display = '';
+          document.getElementById('line-printing').textContent =
+            data.printing_minor != null ? PopcodeCart.money(data.printing_minor, data.currency) : '—';
+          document.getElementById('line-shipping').textContent =
+            data.shipping_minor != null ? PopcodeCart.money(data.shipping_minor, data.currency) : '—';
+          document.getElementById('shipping-label').textContent =
+            (document.getElementById('shipping').value || 'Standard') + ' shipping';
+          setLinePrices(data.lines, data.currency);
+          /* Tax is calculated at checkout against the delivery address, so the row
+             only appears once there is an address to calculate against — the same
+             point in the flow a shopper expects it. Until then the note says so
+             rather than the summary implying the total is final. */
+          const taxRow = document.getElementById('tax-row');
+          if (data.tax_minor != null) {
+            document.getElementById('line-tax').textContent = PopcodeCart.money(data.tax_minor, data.currency);
+            taxRow.style.display = '';
+            // Tax is added on top, so the Total has to move with it or the
+            // three rows would not add up to the figure being charged.
+            total.textContent = PopcodeCart.money(
+              data.total_with_tax_minor != null ? data.total_with_tax_minor : data.total_minor,
+              data.currency);
+            note.textContent = '';
           } else {
-            lines.style.display = 'none';
+            taxRow.style.display = 'none';
+            note.textContent = 'Any sales tax is calculated at checkout, once you\u2019ve entered your delivery address.';
           }
-          note.textContent = 'Taxes we collect are included.';
           parcels.style.display = data.shipments > 1 ? 'block' : 'none';
           if (data.shipments > 1) {
             parcels.textContent = `These items are made in ${data.shipments} different workshops, so they arrive in ${data.shipments} parcels — shipping for each is already in the total.`;
@@ -359,6 +417,17 @@
             : 'Could not get a price — try again.';
           payBtn.disabled = true;
         }
+      }
+
+      /* Per-line prices come from the quote allocated so they sum to the subtotal
+         exactly (see allocateLinePrices). Printing only — shipping is charged per
+         parcel, not per line, and splitting it across rows would invent a number. */
+      function setLinePrices(lines, currency) {
+        const byId = new Map((lines || []).map((l) => [l.id, l.printing_minor]));
+        document.querySelectorAll('[data-price-for]').forEach((el) => {
+          const v = byId.get(el.getAttribute('data-price-for'));
+          el.textContent = v == null ? '' : PopcodeCart.money(v, currency);
+        });
       }
 
       let quoteTimer = null;

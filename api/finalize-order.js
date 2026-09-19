@@ -49,7 +49,8 @@ export default async function handler(req, res) {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    const { loadOrdersForSession, fulfillSession, isSessionSettled } = await import('../lib/print/fulfill.mjs');
+    const { loadOrdersForSession, fulfillSession, isSessionSettled, settledAmountMinor } =
+      await import('../lib/print/fulfill.mjs');
 
     // A cart checkout produces one row per fulfillment provider, all sharing this
     // session id — finalize every one of them, not just the first.
@@ -64,7 +65,7 @@ export default async function handler(req, res) {
     const results = await fulfillSession({
       admin,
       orders,
-      amountTotalMinor: session.amount_total,
+      amountTotalMinor: settledAmountMinor(session),
       onError: (err, result) => {
         console.error(err.message, JSON.stringify(result.response).slice(0, 500));
         Sentry.captureException(err);
