@@ -212,7 +212,14 @@
      link never splits. */
   const COPY = {
     head: { scan: 'Scan', amp: '&', play: 'Play' },
-    line: (slug) => [`Go to popcode.app/${slug}`, 'on your phone and hit Scan image.'],
+    // With a slug the card names the project's own link. Without one it is the
+    // GENERIC card for Prodigi's dashboard insert set — the account-level
+    // fallback, which has no order to name — so it points at the homepage's
+    // "Have a code? Enter it here." field instead of a Scan button that only
+    // exists on a project page.
+    line: (slug) => (slug
+      ? [`Go to popcode.app/${slug}`, 'on your phone and hit Scan image.']
+      : ['Go to popcode.app', 'on your phone and enter your code.']),
 
   };
 
