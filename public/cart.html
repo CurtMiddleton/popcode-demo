@@ -324,11 +324,17 @@
         framedcanvas: { template: '/assets/mockups/framed.jpg', rect: { x: 0.208, y: 0.111, w: 0.582, h: 0.778 } },
         tile:         { template: '/assets/mockups/tile.jpg',   rect: { x: 0.280, y: 0.206, w: 0.427, h: 0.598 } },
         canvas:       { template: '/assets/mockups/canvas.jpg', rect: { x: 0.190, y: 0.112, w: 0.670, h: 0.804 } },
-        /* The photo book's own template, with the same measured opening and crop
-           manage.html uses for its My Designs cards. `crop` trims the template to
-           the book itself so it is not lost in its own background at 132px. */
-        book:         { template: '/assets/mockups/book-white.jpg', rect: { x: 0.141, y: 0.264, w: 0.732, h: 0.519 },
-                        crop: { x: 0.07, y: 0.20, w: 0.86, h: 0.65 }, noRotate: true },
+        /* A face-on photo book with a visible spine edge and a cast shadow, so it
+           reads as an object rather than a photo with a white border. Opening
+           measured off the template: the cover is the high-contrast region at
+           x 134-878, y 254-790 of the 1000x1000 image (a soft low-contrast
+           deviation is the shadow, so the threshold has to exclude it). Do NOT
+           inset the left edge to "keep the spine": that strip is the template's
+           own cover photo wrapping the spine, so insetting leaves a sliver of
+           the stock leopard showing. `crop` trims to the book plus room for its
+           shadow. */
+        book:         { template: '/assets/mockups/book.jpg', rect: { x: 0.133, y: 0.253, w: 0.747, h: 0.539 },
+                        crop: { x: 0.100, y: 0.222, w: 0.830, h: 0.622 }, noRotate: true, spine: true },
       };
 
       /* The size label is the only thing on a stored line that carries the shape
@@ -436,6 +442,26 @@
         ctx.save(); ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
         drawCovered(ctx, photo, rect.x, rect.y, rect.w, rect.h);
         ctx.restore();
+        /* A hardcover's cover is almost entirely photograph, and the template's
+           own cast shadow is too soft to survive at 132px -- so once the user's
+           photo is in, the book reads as a bare picture. Put the object back:
+           a narrow shading gradient where the cover wraps the spine, and a
+           firmer drop shadow under the block. */
+        if (mk.spine) {
+          const sw = Math.max(3, rect.w * 0.022);
+          const g = ctx.createLinearGradient(rect.x, 0, rect.x + sw, 0);
+          g.addColorStop(0, 'rgba(0,0,0,0.42)');
+          g.addColorStop(0.55, 'rgba(0,0,0,0.12)');
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = g; ctx.fillRect(rect.x, rect.y, sw, rect.h);
+          ctx.save();
+          ctx.shadowColor = 'rgba(0,0,0,0.30)';
+          ctx.shadowBlur = rect.w * 0.05;
+          ctx.shadowOffsetY = rect.h * 0.035;
+          ctx.strokeStyle = 'rgba(0,0,0,0.06)'; ctx.lineWidth = 1;
+          ctx.strokeRect(rect.x + .5, rect.y + .5, rect.w - 1, rect.h - 1);
+          ctx.restore();
+        }
         /* Trim to the product itself where the template carries a lot of
            surrounding background; without this a book is a small object adrift
            in a big empty frame at 132px. */
