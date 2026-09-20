@@ -900,8 +900,16 @@
           : isBook ? ('/book.html?id=' + encodeURIComponent(col.slug))
           : isCalendar ? ('/calendar.html?id=' + encodeURIComponent(col.slug))
           : ('/order.html?design=' + encodeURIComponent(col.slug) + '&edit=1');
-        const orderHref = isBook ? ('/book.html?id=' + encodeURIComponent(col.slug) + '&order=1')
-          : isCalendar ? ('/calendar.html?id=' + encodeURIComponent(col.slug) + '&order=1')
+        /* Everything goes through the cart. This used to send books and
+           calendars to `&order=1`, which opens their SKIP-THE-CART checkout, so
+           the same Order button behaved differently depending on the product --
+           a print landed on Review with "Add to cart", a calendar jumped
+           straight to a shipping form. Board books had no branch at all and
+           fell through to order.html's single-image flow, which is the wrong
+           product entirely. `&cart=1` adds the item and opens the cart. */
+        const orderHref = isBook ? ('/book.html?id=' + encodeURIComponent(col.slug) + '&cart=1')
+          : isCalendar ? ('/calendar.html?id=' + encodeURIComponent(col.slug) + '&cart=1')
+          : isBoardbook ? ('/boardbook.html?id=' + encodeURIComponent(col.slug) + '&cart=1')
           : ('/order.html?design=' + encodeURIComponent(col.slug));
         const bookCover = (isBook && col.book_layout && col.book_layout.cover) || {};
         const coverPhoto = (bookCover.photo_url) || thumbUrl || '';

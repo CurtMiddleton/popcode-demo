@@ -711,6 +711,12 @@
             window.location.href = '/manage.html'; return;
           }
           editingCollection = col;
+          /* A board book opened from My Designs IS saved, but savedSlug and
+             savedCollectionId were only ever set by a save in THIS session --
+             so "Add to cart" on a reopened board book answered "Save your
+             board book first." Setting them here fixes that and the Order
+             deep-link below, which calls the same function. */
+          savedSlug = col.slug; savedCollectionId = col.id;
 
           // Popcoded media keyed by the photo URL it was linked to.
           const { data: items } = await db.from('collection_items')
@@ -769,6 +775,10 @@
           document.getElementById('dock').classList.remove('hidden');
           render();
           undoStack.reset();   // the loaded book is where undo starts
+          // Order action from My Designs. Board books had no deep-link branch,
+          // so that button used to open order.html's single-image print flow.
+          if (new URLSearchParams(location.search).get('cart') === '1')
+            addBoardBookToCart().then(ok => { if (ok) location.href = '/cart.html'; });
         } catch (err) {
           console.error(err);
           if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
@@ -2414,11 +2424,13 @@
           });
           showToast('Added to your cart.');
           if (btn) btn.textContent = 'Added to cart ✓';
+          return true;
         } catch (err) {
           console.error(err);
           if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
           showToast(err.message || 'Could not add to cart.');
           if (btn) { btn.disabled = false; btn.textContent = 'Add to cart'; }
+          return false;
         }
       }
 
