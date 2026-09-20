@@ -101,6 +101,9 @@
 /* The card, its print geometry and its export all live in the shared module,
    so the artboard and the checkout flow render from one source. */
 const { CARD, PRINT } = PopcodePostcard;
+// One source for the stated size — it was written out twice and went stale when
+// the card turned portrait.
+const sizeMm = () => `${Math.round(CARD.wIn * 25.4)} × ${Math.round(CARD.hIn * 25.4)}mm`;
 const buildPostcard = PopcodePostcard.buildCard;
 const setBaselines  = PopcodePostcard.setBaselines;
 const downloadFace  = PopcodePostcard.downloadFace;
@@ -138,7 +141,7 @@ function renderStage() {
     fig.className = 'pc-slot';
     fig.appendChild(hold);
     const cap = document.createElement('figcaption');
-    cap.textContent = 'A6 insert · 148 × 105mm';
+    cap.textContent = `A6 insert · ${sizeMm()}`;
     fig.appendChild(cap);
     stage.appendChild(fig);
     built.push(card);
@@ -147,7 +150,7 @@ function renderStage() {
   built.forEach(setBaselines);
 
   document.getElementById('pc-meta').textContent =
-    `A6 insert 148×105mm · 4mm border · `
+    `A6 insert ${sizeMm()} · 4mm border · `
     + `${CARD.headSizePt}/${CARD.headLeadPt}pt CooperBT · `
     + `${CARD.copySizePt}/${CARD.copyLeadPt}pt FilsonPro Bold`;
   document.getElementById('pc-zv').textContent = Math.round(zoom * 100) + '%';
