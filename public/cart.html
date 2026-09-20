@@ -717,11 +717,21 @@
        * checkout is lost revenue.
        */
       async function uploadCompanionCards(rowsToOrder) {
-        const CARD_FOR = ['print', 'framed', 'framedcanvas', 'canvas', 'acrylic', 'tile'];
         if (!window.PopcodePostcard) return;
+        /* Deliberately NOT filtered by product type. This used to carry its own
+           copy of the server's COMPANION_INSERT_FOR list, and the two drifted:
+           books and calendars were added server-side on 2026-09-15 but not here,
+           so a book bought through the CART uploaded no artwork and
+           create-checkout's HEAD check then shipped it cardless with no error
+           anywhere. The client's job is only to make the artwork available; which
+           order actually gets a card is the server's decision, and keeping the
+           rule in one place is the only way the two can't disagree.
+
+           Cost of over-uploading is a small unused PNG. Capped because each card
+           is a 300 DPI render, and create-checkout uses at most one per order. */
+        const MAX_CARDS = 4;
         const ids = [...new Set(rowsToOrder
-          .filter((r) => CARD_FOR.indexOf(r.product_type) !== -1)
-          .map((r) => r.collection_id).filter(Boolean))];
+          .map((r) => r.collection_id).filter(Boolean))].slice(0, MAX_CARDS);
         if (!ids.length) return;
 
         const { data: cols } = await db.from('collections').select('id, slug').in('id', ids);
