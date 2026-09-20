@@ -324,6 +324,11 @@
         framedcanvas: { template: '/assets/mockups/framed.jpg', rect: { x: 0.208, y: 0.111, w: 0.582, h: 0.778 } },
         tile:         { template: '/assets/mockups/tile.jpg',   rect: { x: 0.280, y: 0.206, w: 0.427, h: 0.598 } },
         canvas:       { template: '/assets/mockups/canvas.jpg', rect: { x: 0.190, y: 0.112, w: 0.670, h: 0.804 } },
+        /* The photo book's own template, with the same measured opening and crop
+           manage.html uses for its My Designs cards. `crop` trims the template to
+           the book itself so it is not lost in its own background at 132px. */
+        book:         { template: '/assets/mockups/book-white.jpg', rect: { x: 0.141, y: 0.264, w: 0.732, h: 0.519 },
+                        crop: { x: 0.07, y: 0.20, w: 0.86, h: 0.65 }, noRotate: true },
       };
 
       /* The size label is the only thing on a stored line that carries the shape
@@ -359,7 +364,50 @@
         ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
       }
 
+      /* A wall calendar has no product photograph to composite into, so draw it:
+         a hung sheet with the month block above the photo, which is the shape
+         calendar.html actually prints and the shape shop.html's card mockup
+         uses. At thumbnail size it only has to read as "calendar", so the grid
+         is suggested with rules rather than rendered as real dates. */
+      async function drawCalendarThumb(el, r) {
+        const W = 420, H = 420, cv = document.createElement('canvas');
+        cv.width = W; cv.height = H;
+        const ctx = cv.getContext('2d');
+        const sheetW = Math.round(W * 0.74), sheetH = Math.round(H * 0.84);
+        const x = Math.round((W - sheetW) / 2), y = Math.round((H - sheetH) / 2);
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.22)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 10;
+        ctx.fillStyle = '#fff'; ctx.fillRect(x, y, sheetW, sheetH);
+        ctx.restore();
+        const gridH = Math.round(sheetH * 0.42), photoY = y + gridH;
+        // month block
+        ctx.fillStyle = '#9a9a9a';
+        ctx.font = `600 ${Math.round(sheetW * 0.075)}px Inter, sans-serif`;
+        ctx.textBaseline = 'top';
+        ctx.fillText('JAN', x + sheetW * 0.09, y + sheetH * 0.07);
+        ctx.strokeStyle = '#e2e2e2'; ctx.lineWidth = 2;
+        for (let i = 0; i < 5; i++) {
+          const ly = y + sheetH * 0.20 + i * (gridH * 0.15);
+          ctx.beginPath(); ctx.moveTo(x + sheetW * 0.09, ly); ctx.lineTo(x + sheetW * 0.91, ly); ctx.stroke();
+        }
+        // photo page
+        if (r.thumb_url) {
+          try {
+            const img = await loadImg(r.thumb_url);
+            ctx.save(); ctx.beginPath();
+            ctx.rect(x, photoY, sheetW, y + sheetH - photoY); ctx.clip();
+            drawCovered(ctx, img, x, photoY, sheetW, y + sheetH - photoY);
+            ctx.restore();
+          } catch (_) { /* no photo: the sheet alone still reads as a calendar */ }
+        }
+        el.style.backgroundImage = '';
+        el.classList.add('has-render');
+        el.innerHTML = '';
+        el.appendChild(cv);
+      }
+
       async function renderLineThumb(el, r) {
+        if (r.product_type === 'calendar') return drawCalendarThumb(el, r);
         const mk = THUMB_MOCKUPS[r.product_type];
         if (!mk || !r.thumb_url) return;                 // keep the plain photo
         const [tpl, photo] = await Promise.all([loadImg(mk.template), loadImg(r.thumb_url)]);
@@ -371,7 +419,9 @@
         let rect = { x: mk.rect.x * tw, y: mk.rect.y * th, w: mk.rect.w * tw, h: mk.rect.h * th };
         /* A portrait frame turned 90 degrees IS its landscape counterpart, so
            rotate the template and remap the opening rather than stretching it. */
-        if (thumbAspect(r) > 1) {
+        /* `noRotate` opts a product out: a book is not a frame, and turning
+           its photograph on its side would show a book lying sideways. */
+        if (thumbAspect(r) > 1 && !mk.noRotate) {
           cv.width = th; cv.height = tw;
           ctx.save(); ctx.translate(th, 0); ctx.rotate(Math.PI / 2);
           ctx.drawImage(tpl, 0, 0, tw, th); ctx.restore();
@@ -386,10 +436,21 @@
         ctx.save(); ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
         drawCovered(ctx, photo, rect.x, rect.y, rect.w, rect.h);
         ctx.restore();
+        /* Trim to the product itself where the template carries a lot of
+           surrounding background; without this a book is a small object adrift
+           in a big empty frame at 132px. */
+        let out = cv;
+        if (mk.crop) {
+          const c = { x: mk.crop.x * cv.width, y: mk.crop.y * cv.height,
+                      w: mk.crop.w * cv.width, h: mk.crop.h * cv.height };
+          out = document.createElement('canvas');
+          out.width = Math.round(c.w); out.height = Math.round(c.h);
+          out.getContext('2d').drawImage(cv, c.x, c.y, c.w, c.h, 0, 0, c.w, c.h);
+        }
         el.style.backgroundImage = '';
         el.classList.add('has-render');
         el.innerHTML = '';
-        el.appendChild(cv);
+        el.appendChild(out);
       }
 
         list.innerHTML = rows.map(r => {
