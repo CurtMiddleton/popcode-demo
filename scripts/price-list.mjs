@@ -60,6 +60,23 @@ const money = (minor, cur = 'USD') =>
 const pad = (s, n) => String(s).padEnd(n);
 const padL = (s, n) => String(s).padStart(n);
 
+// Sandbox and live take DIFFERENT Prodigi keys, and pointing one at the other's
+// base URL returns 401 on every single row — which, until the classification was
+// fixed on 2026-09-20, printed as "not servable to US" on all of them and read
+// like a catalogue problem. Say it up front instead.
+{
+  const base = (process.env.PRODIGI_BASE_URL || 'https://api.sandbox.prodigi.com').trim();
+  const key = (process.env.PRODIGI_API_KEY || '').trim();
+  if (key) {
+    const sandboxUrl = /sandbox/.test(base);
+    if (sandboxUrl !== key.startsWith('test_')) {
+      console.error(`\n⚠ Key/URL mismatch: a ${key.startsWith('test_') ? 'sandbox (test_)' : 'live'} key against ${base}.`);
+      console.error(`  Use ${sandboxUrl ? 'https://api.prodigi.com with the live key' : 'https://api.sandbox.prodigi.com with the test_ key'}, or swap the key.`);
+      console.error('  Every row will fail to authenticate until these agree.\n');
+    }
+  }
+}
+
 const types = Object.keys(PRODUCTS).filter((t) => !ONLY.length || ONLY.includes(t));
 const rows = [];
 
