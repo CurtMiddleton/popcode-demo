@@ -57,7 +57,21 @@
       .line { display:flex; gap:18px; align-items:flex-start; padding:20px 0; border-bottom:1px solid #f0efeb; }
       .line:last-child { border-bottom:none; }
       .line:first-child { padding-top:0; }
-      .line-thumb { width:88px; height:88px; flex:0 0 88px; border-radius:var(--pc-radius-inner); background:#efefef center/cover no-repeat; }
+      /* Popsa-style: show the PRODUCT, not the bare photo. A framed print looks
+         framed, a tile looks like a tile. The photo alone made two very
+         different line items look identical. */
+      .line-thumb {
+        width:132px; height:132px; flex:0 0 132px; border-radius:var(--pc-radius-inner);
+        background:#efefef center/cover no-repeat; position:relative; overflow:hidden;
+      }
+      /* Product renders sit on a neutral panel so a white frame or a borderless
+         print still reads as an object against the white card. */
+      .line-thumb.has-render { background:#ebebeb; }
+      .line-thumb canvas { width:100%; height:100%; display:block; object-fit:contain; }
+      @media (max-width:560px) {
+        .line-thumb { width:104px; height:104px; flex-basis:104px; }
+        .line { gap:14px; }
+      }
       .line-main { flex:1; min-width:0; }
       .line-title { font-size:16px; font-weight:600; line-height:1.35; }
       .line-meta { color:#777; font-size:13px; margin-top:4px; }
@@ -289,6 +303,95 @@
         document.getElementById('cart-sub').textContent =
           `${n} item${n === 1 ? '' : 's'} — everything that can ship together will.`;
 
+      /* ── Product thumbnails ────────────────────────────────────────────
+         A cart line used to show the bare photo, so a framed print and a
+         canvas of the same picture were indistinguishable. These are the same
+         photoreal templates and measured art openings order.html uses for its
+         product previews (MOCKUPS there) -- duplicated rather than shared
+         because order.html is the checkout path and a shared file that fails
+         to load would break it (the composite.js lesson, 2026-07-17).
+
+         rect = the art opening as FRACTIONS of the template image. If order.html
+         ever re-measures one of these, re-measure here too.
+
+         framedcanvas maps to the framed template on purpose: the catalogue
+         describes it as canvas "set inside the classic frame". acrylic, book,
+         calendar and boardbook have no face-on template with a measured
+         opening yet, so they keep the plain photo. */
+      const THUMB_MOCKUPS = {
+        print:        { template: '/assets/mockups/print.jpg',  rect: { x: 0.190, y: 0.113, w: 0.626, h: 0.782 } },
+        framed:       { template: '/assets/mockups/framed.jpg', rect: { x: 0.208, y: 0.111, w: 0.582, h: 0.778 } },
+        framedcanvas: { template: '/assets/mockups/framed.jpg', rect: { x: 0.208, y: 0.111, w: 0.582, h: 0.778 } },
+        tile:         { template: '/assets/mockups/tile.jpg',   rect: { x: 0.280, y: 0.206, w: 0.427, h: 0.598 } },
+        canvas:       { template: '/assets/mockups/canvas.jpg', rect: { x: 0.190, y: 0.112, w: 0.670, h: 0.804 } },
+      };
+
+      /* The size label is the only thing on a stored line that carries the shape
+         (e.g. 16x24"), so parse it rather than shipping a catalogue mirror --
+         that also means lines added before this change still render. */
+      function thumbAspect(r) {
+        const m = /(\d+(?:\.\d+)?)\s*[x\u00d7]\s*(\d+(?:\.\d+)?)/i.exec((r.options || {}).sizeLabel || '');
+        if (!m) return 1;
+        let a = parseFloat(m[1]) / parseFloat(m[2]);
+        if (!isFinite(a) || a <= 0) return 1;
+        /* `orientation` is the field order.html stores today; `orientationLabel`
+           is the display string and is all an older line may carry. Read both
+           so lines already sitting in someone's cart render the right way up. */
+        const o = r.options || {};
+        const landscape = o.orientation === 'landscape' ||
+                          /landscape/i.test(o.orientationLabel || '');
+        if (landscape && a < 1) a = 1 / a;
+        return a;
+      }
+
+      const loadImg = src => new Promise((res, rej) => {
+        const i = new Image(); i.crossOrigin = 'anonymous';
+        i.onload = () => res(i); i.onerror = rej; i.src = src;
+      });
+
+      /* Crop to the opening's aspect, then draw. Cropping FIRST is what keeps a
+         landscape photo from being squashed into a portrait opening. */
+      function drawCovered(ctx, img, x, y, w, h) {
+        const want = w / h, have = img.naturalWidth / img.naturalHeight;
+        let sw = img.naturalWidth, sh = img.naturalHeight, sx = 0, sy = 0;
+        if (have > want) { sw = sh * want; sx = (img.naturalWidth - sw) / 2; }
+        else { sh = sw / want; sy = (img.naturalHeight - sh) / 2; }
+        ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+      }
+
+      async function renderLineThumb(el, r) {
+        const mk = THUMB_MOCKUPS[r.product_type];
+        if (!mk || !r.thumb_url) return;                 // keep the plain photo
+        const [tpl, photo] = await Promise.all([loadImg(mk.template), loadImg(r.thumb_url)]);
+        const S = 420;
+        const s = Math.min(S / tpl.naturalWidth, S / tpl.naturalHeight);
+        const tw = Math.round(tpl.naturalWidth * s), th = Math.round(tpl.naturalHeight * s);
+        const cv = document.createElement('canvas');
+        const ctx = cv.getContext('2d');
+        let rect = { x: mk.rect.x * tw, y: mk.rect.y * th, w: mk.rect.w * tw, h: mk.rect.h * th };
+        /* A portrait frame turned 90 degrees IS its landscape counterpart, so
+           rotate the template and remap the opening rather than stretching it. */
+        if (thumbAspect(r) > 1) {
+          cv.width = th; cv.height = tw;
+          ctx.save(); ctx.translate(th, 0); ctx.rotate(Math.PI / 2);
+          ctx.drawImage(tpl, 0, 0, tw, th); ctx.restore();
+          rect = { x: th - rect.y - rect.h, y: rect.x, w: rect.h, h: rect.w };
+        } else {
+          cv.width = tw; cv.height = th;
+          ctx.drawImage(tpl, 0, 0, tw, th);
+        }
+        /* Hide the template's own stock photo before the real one lands. */
+        ctx.fillStyle = '#e9e9ec';
+        ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+        ctx.save(); ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
+        drawCovered(ctx, photo, rect.x, rect.y, rect.w, rect.h);
+        ctx.restore();
+        el.style.backgroundImage = '';
+        el.classList.add('has-render');
+        el.innerHTML = '';
+        el.appendChild(cv);
+      }
+
         list.innerHTML = rows.map(r => {
           const d = designs.get(r.collection_id);
           const opts = r.options || {};
@@ -318,6 +421,14 @@
               </div>
             </div>`;
         }).join('');
+
+        /* Upgrade each thumbnail to a product render once its template and photo
+           load. Best-effort and per line: a template that fails to load leaves
+           that line on the plain photo rather than blanking it. */
+        rows.forEach(r => {
+          const el = list.querySelector(`.line[data-id="${CSS.escape(String(r.id))}"] .line-thumb`);
+          if (el) renderLineThumb(el, r).catch(() => {});
+        });
 
         requestQuote();
       }
