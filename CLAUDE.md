@@ -2216,7 +2216,7 @@ Fixed with **`settledAmountMinor(session)` = `amount_total − total_details.amo
 
 #### TAX / COMPLIANCE — facts established, not code
 
-- **Popcode, Inc. NYS Certificate of Authority, ID `87-4123940`, VALIDATED 9/29/2023.** Business address 709 Main St, New Rochelle NY 10801; mailing 998 Edgewood Ave, Pelham NY 10803.
+- **Popcode, Inc. NYS Certificate of Authority, ID `87-4123940`, VALIDATED 9/29/2023.** Business address 709 Main St, New Rochelle NY 10801; mailing 998 Edgewood Ave, Pelham NY 10803. **SUPERSEDED 2026-09-20 — the mailing address is now 80 Pintard Ave, New Rochelle NY 10801-7148.** See the later 2026-09-20 entry for the current NYS address record; do not put the Pelham address on anything.
 - The certificate's own reverse states: a return is due **even with no business and no tax owed**, until you surrender the certificate; **minimum $50 penalty** per late return. A dormant registration accrues penalties.
 - **User confirmed they have been filing in NYS.** No unfiled-period problem. Returns will now carry real taxable sales instead of zeros.
 - **Stripe Tax was already active with NY registered** (from the Popcode 1.0 era) — that is why enabling it worked immediately. **Stripe's "Set up filing" is not needed**; there is already a filing process.
@@ -2341,3 +2341,131 @@ Worth writing down so it isn't re-derived. Four reasons, only one about shipping
 - **`analytics.html` is still gated to `curtmid@gmail.com` only** (`ADMIN_EMAIL`) — `curt@theworkshop.works` bounces to manage.html. Offered in three sessions now, never taken; `edit.html` already does the two-email version.
 - **Re-enable Vercel Deployment Protection** on previews. Flagged in four sessions.
 - Shipping options as cards with prices and delivery estimates — the biggest remaining Popsa gap.
+
+### 2026-09-20 (later) — Design audit items 3 and 4, cart product thumbnails, a buy-path audit, and the ST-120
+
+**PR #70 merged to `main` (`0aea553`) — 16 commits, all live in prod and verified by fetching the files, not by trusting the merge.** Separately, one Sentry fix was cherry-picked straight to main earlier in the day (`00c6f80`). Ran alongside the postcard/insert session above; both touched `cart.html`, `book.html`, `calendar.html`, `boardbook.html` and `order.html`, and the merge came out clean.
+
+#### THE LESSON THAT MATTERS MOST — a headless probe only ever sees a page's DEFAULT state
+
+The 2026-09-19 entry reports item 4 as "160 surfaces, 14 radii → 10". **That was a partial census presented as a whole-site one.** Checked what the probe actually measured:
+
+| page | surfaces measured |
+|---|---|
+| analytics | **0** — loads fine, but every card sits behind an inactive tab |
+| book | **2** — intro screen only, never the builder |
+| order | **3** — the product grid never rendered |
+| manage | 16 — Popcodes tab only; My Designs is behind `?tab=designs` |
+
+Anything behind a tab, a later step in a flow, or an admin gate was invisible. The user found it the honest way: *"make the manage card radius consistent with shop and design"* — My Designs was 18px sitting beside 20px cards **on the same page**, and order.html's `.cat-card` was 24px against shop's identical mirrored grid at 20px.
+
+**Redone as a CSS-RULE census** (`/tmp/claude-0/census.py` pattern: parse every rule in every shipped page plus `nav.js`/`dialog.js`, classify by what the surface is). Complete by construction. **Rendering is now only for checking the result, never for finding the work.** Any future audit should start there.
+
+Corollary that bit twice more in one session: my own census filter required a `box-shadow` to count something as floating, which hid `design.html`'s two shadowless sheets. **A filter is a second place to under-measure.**
+
+#### Item 4 — card tokens (the first four commits)
+
+Five tokens now on `:root` in `public/ui.css`, all `--pc-` prefixed:
+
+```
+--pc-radius-card 20px · --pc-radius-inner 12px
+--pc-shadow-card 0 2px 12px/.06      resting
+--pc-shadow-card-hover 0 12px 32px/.12
+--pc-shadow-raised 0 16px 40px       a modal
+--pc-shadow-sheet 0 -10px 44px       a bottom sheet — casts UP
+--pc-shadow-popover 0 8px 32px       a menu or tip
+```
+
+They are **TOKENS, not classes** — pages keep their own `.card`/`.cat-card`/`.design-card` names. Each value is one already in use, never an average: `--pc-shadow-raised` was `dialog.js`'s `.pcd-box`, `--pc-shadow-card-hover` was what both storefront grids had. So the most-considered surface stays put and the strays come to it.
+
+Card tier 21 untokenised rules → 5. Floating tier: modals had 3 radii and 6 shadows across 10 rules. Bottom sheets needed their own token because they sit on the bottom edge and cast **upward** — the raised token would point the shadow the wrong way.
+
+**Manage's cards were 6px**, the squarest surface on the site while everything else sat 16–28px. Moved to the token. User approved after a same-page before/after render.
+
+**DEAD CODE, deliberately left:** every page carries its own `#nav-drawer` rule (18px / `0 12px 48px`) and **none of them render** — `nav.js` injects `#nav-overlay #nav-drawer { border-radius: 0; box-shadow: none }` and its own comment says *"last, so it wins"*. All 12 pages load nav.js. I tokenised all 12 before noticing and reverted: tokenising unreachable CSS implies the drawer uses the card radius when it is a full-bleed sheet. **Worth deleting as its own change.**
+
+`nav.js` and `dialog.js` keep literals on purpose — they inject CSS into every page including any that doesn't link `ui.css`.
+
+#### Item 3 — the page-title scale (`22bc395`)
+
+Two groups of pages expressed the same intent with **opposite breakpoints**: account/analytics/privacy/terms set 36px and stepped **up** to 42 at `min-width: 960`, while ten others set 44 and stepped **down** at `max-width: 680`. Between 681 and 959 that left an 8px gap between pages doing the identical job.
+
+`--pc-h1: 44px`, one breakpoint to 34px at 680. Seventeen pages now say `font-size: var(--pc-h1)` and their own h1 media queries are gone (including a redundant re-assert of 44px `book.html` had at `min-width: 1080`).
+
+```
+h1 sizes desktop 7 → 4      phone 8 → 4      h1 not in CooperBT 2 → 0
+```
+
+The four left are the ones that should be: 100 index, 90 shop, 36 pricing (marketing heroes, per page, shop's chosen by hand), plus 44 for every app page. **34 not 36 on phones** because create/edit/manage already used 34 and have the tightest headers; shrinking can only reduce overflow risk. manage keeps its further step to 31px below 389px — A/B'd against main at 402/390/360, identical.
+
+Outliers brought in: `reset` (22px Inter 700 → the token in CooperBT — it read as a form label), `order-success` (31px), `design` (42px Inter 800).
+
+**Left alone, each checked rather than assumed:** privacy/terms h2 at 18px (19 instances, consistent); **cart's two h2s at 17px Inter** — a judgement call on a recently-designed page, not an accident; index's step h3s at 20px Inter (they sit beside 120px CooperBT numerals and the sans is doing contrast work); `.fcard h3` 46 vs `.moment-text h3` 48 (different components, different breakpoint ladders).
+
+#### Cart: show the PRODUCT, not the photo (`a747ccf`, `017ff47`, `992ecf2`, `f0c8b13`)
+
+A cart line showed the bare photograph, so a framed print, a canvas and a tile of the same picture were three identical thumbnails. `.line-thumb` 88px → **132px** (104 on phones).
+
+Each line composites its photo into the same photoreal template and measured opening `order.html` uses (`MOCKUPS` there). **Duplicated into `cart.html` rather than shared** — order.html is the checkout path and a shared file that failed to load would break it (the composite.js lesson). A drifted thumbnail is cosmetic; a drifted print asset is not.
+
+Two mechanics the rendering has to get right, both verified: **crop to the opening's aspect BEFORE drawing** (or a landscape photo is squashed into a portrait opening), and **a landscape item rotates the template 90° and remaps the opening** — a portrait frame on its side IS its landscape counterpart. Reading orientation from `orientationLabel` as well as `orientation` is load-bearing: `orientation` is what order.html stores today, and a line added before that field existed carries only the label.
+
+**Book** — swapped `book-white.jpg` for **`book.jpg`**, a face-on hardcover. Opening measured off the template (cover is the high-contrast region at x 134-878, y 254-790 of 1000×1000; **the threshold matters — a shadow is a soft low-contrast deviation, so a naive bounding box includes it**). Two things measurement alone didn't solve: insetting the left edge to "preserve the spine" left a sliver of the template's stock leopard showing (that strip IS the cover wrapping the spine); and with the opening right it read as a bare photo, because a hardcover's cover genuinely is almost all photograph — so a spine shading gradient and a firmer drop shadow are drawn on after compositing.
+
+**Calendar** — no product photograph exists, so it's drawn. My first version invented a layout (heading + full-width rules) and **the user rightly said it didn't look like the product**. Rebuilt from `calendar.html`'s own metrics, scaled from its 1400×993 print canvas (`buildGridInner` + the `.gp-*` CSS): month word left 90/top 64 at 148px bold; **date grid on the RIGHT half**, left 610 to right 82, seven columns with 1.5px rules; `.gp-num` a 2×96 rule and the month number at 88px pale grey bottom-left. Dates are real — DOW offset and month length for the year parsed out of the line's own labels. Two pages drawn as ONE sheet, dates above photo, as `renderMonths` builds it. Waits on `document.fonts.ready`.
+
+**Still falling through to the plain photo: acrylic and board book** — no template with a measured opening. Known limits: `book.jpg` is landscape so a square 8×8 book renders in a landscape cover; same for a square tile.
+
+#### THE BUY-PATH BUG, and the audit it earned (`2d49692`, `0dee50a`)
+
+User ordered a calendar and got a **"Ship your calendar" address form instead of the cart**. Working as written, which was the problem — the Order action on a My Designs card did **three different things**:
+
+```
+print, framed, tile…  →  order.html?design=…   Review, "Add to cart"
+book, calendar        →  …&order=1             SKIP THE CART, ship now
+board book            →  order.html?design=…   the WRONG PRODUCT
+```
+
+All now `…&cart=1`, which adds and opens `/cart.html`. `order=1` still works and still means check out with just this one; the in-editor *"Order this one now — skip the cart"* rows are deliberate and untouched.
+
+**Asked to check whether it happened elsewhere. It did — twice more, on the other tab.** The Shop button on a My **Popcodes** card used the same `&order=1`. And asking *which kinds reach that card* found a third: the tab lists any design kind with a `.mind` file — books, calendars **and board books** — but `editHref` only branched on book and calendar, so a board book's **Edit** opened the Popcode editor and its **Shop** did nothing at all (`edit.html` has no order handler).
+
+Fourth, found checking dependencies: **`addBoardBookToCart` guards on `savedSlug`/`savedCollectionId`, which were only ever set by a save in the current session** — so a board book opened from My Designs answered *"Save your board book first."* Already true of its in-editor Add to cart button. `loadBoardBookForEdit` now sets them.
+
+The three add-to-cart functions return true/false so the deep link navigates only when the item landed; each early bail-out returns undefined, which is falsy.
+
+Everything else in the purchase surface checked and correct (shop card, design.html funnel, order.html review, cart's Edit design).
+
+#### Other
+
+- **Sentry, `00c6f80`** — `TypeError: Cannot assign to read only property 'alert'` at `dialog.js:152`. Some environments make `window.alert` non-writable and the file is strict-mode, so the assignment **throws** instead of failing quietly, inside the IIFE. Impact was cosmetic: `popcodeDialog`/`Confirm`/`CopyLink` are assigned before the throw. Wrapped in try/catch. Reproduced headlessly by locking `window.alert` before load — prod code emits that exact TypeError, patched code emits nothing. **Prod events were 100% Chrome on macOS, so it's the extension half of the diagnosis, not in-app browsers.**
+- **Safari carousel corners (`15b3927`)** — homepage carousel cards had square bottom corners. Not from this branch (`.moment` byte-identical to prod) and doesn't reproduce in Chromium at nine widths. Safari declines to clip children to `border-radius` when the element is composited; the card animates a scale transition, so the dark scrim painted to its own square box — and only the bottom showed because that gradient is near-opaque at the bottom. Standard radial `-webkit-mask-image`. **User confirmed fixed.**
+- **Copy:** Birthdays → *"The song, the wish, the whole moment."*; Recipes → *"Watch them make it, step by step."* (*"show how it's done"* is a competitive idiom, wrong warmth, and stacked two verbs); shop card tail → *"they arrive ready to scan."* Avoided anything built on *"their own voice"* — **In Memoriam already owns that**.
+- **Horizontal-overflow sweep**: all pages clean at 1440/960/768/430/390/360/320. `design.html` overflows 4px at 320 — **confirmed identical on main**, caused by its dropzone and a button label, not the heading.
+
+#### TAX — the ST-120 for Prodigi, settled (no code)
+
+Facts, from two real invoices:
+
+- **Seller is `Prodigi Global`**, Unit 20 Caker Stream Road, Alton, Hants. GU34 2QA, **United Kingdom** — a UK entity charging **US sales tax coded `USA:NY`** while fulfilling through `prodigi_us`. Not a contradiction: a foreign seller with US nexus can be NY-registered, and evidently is.
+- **Send the certificate to `billing@prodigi.com`** (on the invoice, not the generic support address).
+- **NYS address record changed** — Sales Tax **physical** 709 Main St, New Rochelle NY 10801-6821; **mailing 80 Pintard Ave, New Rochelle NY 10801-7148**. The Pelham address in the 2026-09-19 entry is dead; that line is marked superseded.
+- **Used 80 Pintard Ave on the form** — it is what Prodigi already bills AND is on the NYS sales tax record, so certificate, invoices and state record all agree with no account change.
+- Popcode's invoice is correctly billed to **Popcode, Inc.** A *Bashō* invoice is billed to Curt personally — different product, same corporate-boundary point, worth fixing there.
+- **The money:** invoice PWI-1558392 / order `ord_14274338` carried **$1.73 tax on $20.85** of goods+shipping. Tax is not in Prodigi's quote, so it never reaches the markup — roughly 8% of cost, absorbed, on every order. That is what the certificate recovers.
+
+**Filled ST-120 (rev. 1/26) delivered as a PDF**, signature block deliberately blank. Blanket certificate; Part 1 NYS vendor; sales tax ID `87-4123940`; **Box A** — tangible personal property for resale in its present form. Fetched the real form from `tax.ny.gov/pdf/current_forms/st/st120_fill_in.pdf` (reachable from the sandbox) and filled it with pymupdf.
+
+**GOTCHA worth keeping — the field data lied.** After filling, the widget readback looked correct, but **rendering the page showed BOTH vendor radios ticked** (NYS vendor *and* temporary vendor) — a false statement on a form carrying criminal penalties. PyMuPDF radio groups need `field_value = False` to clear, not `'Off'`. The same render caught "principally sell" running off the end of its line. **Neither was visible in the data; both were obvious in the picture. Render any filled PDF before sending it.**
+
+**Still open with Prodigi:** how they handle drop-ship orders **outside New York** for a reseller registered only in NY, and which US states Prodigi Global is registered in. That one has real money in it as shipping widens.
+
+#### STILL OPEN
+
+- **The noise question** — the last unstarted item in `docs/design-audit-brief.md`, and the only one that needs real screenshots of Manage and the shop flow with data.
+- **Delete the dead `#nav-drawer` rules** on all 12 pages.
+- **Acrylic and board book have no cart thumbnail**; square book/tile render in landscape/portrait templates. Needs a face-on product shot with a measured opening.
+- **Board book's order sheet** puts "Continue to payment" above "Add to cart" — opposite emphasis from book and calendar. Design call, not a defect.
+- **Custom dropdowns** — user asked, then parked. The decision if resumed: native-on-mobile vs custom-everywhere, and the 231-option country list needs type-to-search either way.
+- **Re-enable Vercel Deployment Protection** — flagged in five sessions now. User was mid-way through it when the session ended; the caution is that **Protect must apply Standard Protection, not All Deployments**, or it puts a login in front of popcode.app itself.
+- Sentry issue `d090246d…` — resolve it; every event predates the fix (guard live 14:43 UTC, last event ~09:24 UTC).
