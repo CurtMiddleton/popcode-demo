@@ -370,42 +370,98 @@
         ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
       }
 
-      /* A wall calendar has no product photograph to composite into, so draw it:
-         a hung sheet with the month block above the photo, which is the shape
-         calendar.html actually prints and the shape shop.html's card mockup
-         uses. At thumbnail size it only has to read as "calendar", so the grid
-         is suggested with rules rather than rendered as real dates. */
+      /* A wall calendar has no product photograph to composite into, so draw it
+         — faithfully. These metrics are calendar.html's own month page, scaled
+         from its 1400x993 print canvas (see buildGridInner and the .gp-* CSS
+         there): the month word top-left, the date grid on the RIGHT half with
+         vertical column rules, and the big pale month number bottom-left. An
+         invented layout (a heading with full-width rules) does not look like
+         the product, which is the whole point of showing a product. */
+      const CAL_PAGE = { W: 1400, H: 993 };
+      const CAL_MONTHS = ['January','February','March','April','May','June',
+                          'July','August','September','October','November','December'];
+      const CAL_DOW = ['S','M','T','W','T','F','S'];
+
+      function calYearOf(r) {
+        const o = r.options || {};
+        const m = /(20\d{2})/.exec(`${o.orientationLabel || ''} ${o.sizeLabel || ''} ${r.title || ''}`);
+        return m ? parseInt(m[1], 10) : new Date().getFullYear() + 1;
+      }
+
+      /* One month page, drawn into (x, y, w, h) at the print canvas's proportions. */
+      function drawCalMonthPage(ctx, x, y, w, h, year, month) {
+        const sx = w / CAL_PAGE.W, sy = h / CAL_PAGE.H;
+        ctx.fillStyle = '#fff'; ctx.fillRect(x, y, w, h);
+        // .gp-month — left 90, top 64, 148px bold
+        ctx.fillStyle = '#141414'; ctx.textBaseline = 'top';
+        ctx.font = `700 ${Math.max(7, 148 * sy)}px Inter, sans-serif`;
+        ctx.fillText(CAL_MONTHS[month], x + 90 * sx, y + 64 * sy);
+        // .gp-num — a 2x96 rule plus the month number at 88px, bottom-left
+        const numY = y + h - 66 * sy - 96 * sy;
+        ctx.fillStyle = '#cfcfcf';
+        ctx.fillRect(x + 90 * sx, numY, Math.max(1, 2 * sx), 96 * sy);
+        ctx.fillStyle = '#c2c2c2';
+        ctx.font = `500 ${Math.max(6, 88 * sy)}px Inter, sans-serif`;
+        ctx.fillText(String(month + 1).padStart(2, '0'), x + (90 + 18) * sx, numY);
+        // .gp-grid — left 610, top 440, right 82, bottom 92; 7 columns, rules between
+        const gx = x + 610 * sx, gy = y + 440 * sy;
+        const gw = w - (610 + 82) * sx, gh = h - (440 + 92) * sy;
+        const colW = gw / 7;
+        const days = new Date(year, month + 1, 0).getDate();
+        const first = new Date(year, month, 1).getDay();
+        const weeks = Math.ceil((first + days) / 7);
+        const rowTop = 62 * sy, rowStep = (gh - rowTop - 26 * sy) / Math.max(5, weeks);
+        ctx.strokeStyle = '#d9d9d9'; ctx.lineWidth = Math.max(0.5, 1.5 * sx);
+        for (let c = 1; c < 7; c++) {
+          const lx = Math.round(gx + c * colW) + 0.5;
+          ctx.beginPath(); ctx.moveTo(lx, gy); ctx.lineTo(lx, gy + gh); ctx.stroke();
+        }
+        ctx.textAlign = 'right';
+        for (let c = 0; c < 7; c++) {
+          const right = gx + (c + 1) * colW - 16 * sx;
+          ctx.fillStyle = '#8a8a8a';
+          ctx.font = `600 ${Math.max(4, 18 * sy)}px Inter, sans-serif`;
+          ctx.fillText(CAL_DOW[c], right, gy);
+          ctx.fillStyle = '#141414';
+          ctx.font = `500 ${Math.max(5, 40 * sy)}px Inter, sans-serif`;
+          for (let row = 0; row < weeks; row++) {
+            const d = row * 7 + c - first + 1;
+            if (d < 1 || d > days) continue;
+            ctx.fillText(String(d), gx + (c + 1) * colW - 14 * sx, gy + rowTop + row * rowStep);
+          }
+        }
+        ctx.textAlign = 'left';
+      }
+
       async function drawCalendarThumb(el, r) {
-        const W = 420, H = 420, cv = document.createElement('canvas');
-        cv.width = W; cv.height = H;
+        const S = 460, cv = document.createElement('canvas');
+        cv.width = S; cv.height = S;
         const ctx = cv.getContext('2d');
-        const sheetW = Math.round(W * 0.74), sheetH = Math.round(H * 0.84);
-        const x = Math.round((W - sheetW) / 2), y = Math.round((H - sheetH) / 2);
+        try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (_) {}
+        /* The printed calendar hangs as ONE sheet: the dates page on top, the
+           photo page directly below it. Same as renderMonths builds. */
+        const sheetH = Math.round(S * 0.88);
+        const pageH = Math.round(sheetH / 2);
+        const sheetW = Math.round(pageH * (CAL_PAGE.W / CAL_PAGE.H));
+        const x = Math.round((S - sheetW) / 2), y = Math.round((S - sheetH) / 2);
         ctx.save();
-        ctx.shadowColor = 'rgba(0,0,0,0.22)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 10;
+        ctx.shadowColor = 'rgba(0,0,0,0.24)';
+        ctx.shadowBlur = 26; ctx.shadowOffsetY = 12;
         ctx.fillStyle = '#fff'; ctx.fillRect(x, y, sheetW, sheetH);
         ctx.restore();
-        const gridH = Math.round(sheetH * 0.42), photoY = y + gridH;
-        // month block
-        ctx.fillStyle = '#9a9a9a';
-        ctx.font = `600 ${Math.round(sheetW * 0.075)}px Inter, sans-serif`;
-        ctx.textBaseline = 'top';
-        ctx.fillText('JAN', x + sheetW * 0.09, y + sheetH * 0.07);
-        ctx.strokeStyle = '#e2e2e2'; ctx.lineWidth = 2;
-        for (let i = 0; i < 5; i++) {
-          const ly = y + sheetH * 0.20 + i * (gridH * 0.15);
-          ctx.beginPath(); ctx.moveTo(x + sheetW * 0.09, ly); ctx.lineTo(x + sheetW * 0.91, ly); ctx.stroke();
-        }
-        // photo page
+        drawCalMonthPage(ctx, x, y, sheetW, pageH, calYearOf(r), 0);
         if (r.thumb_url) {
           try {
             const img = await loadImg(r.thumb_url);
             ctx.save(); ctx.beginPath();
-            ctx.rect(x, photoY, sheetW, y + sheetH - photoY); ctx.clip();
-            drawCovered(ctx, img, x, photoY, sheetW, y + sheetH - photoY);
+            ctx.rect(x, y + pageH, sheetW, sheetH - pageH); ctx.clip();
+            drawCovered(ctx, img, x, y + pageH, sheetW, sheetH - pageH);
             ctx.restore();
-          } catch (_) { /* no photo: the sheet alone still reads as a calendar */ }
+          } catch (_) { /* no photo: the dates page alone still reads as a calendar */ }
         }
+        /* Hairline between the two pages, as on the printed sheet. */
+        ctx.strokeStyle = 'rgba(0,0,0,0.10)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, y + pageH + 0.5); ctx.lineTo(x + sheetW, y + pageH + 0.5); ctx.stroke();
         el.style.backgroundImage = '';
         el.classList.add('has-render');
         el.innerHTML = '';
