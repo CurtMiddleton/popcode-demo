@@ -90,6 +90,18 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Incomplete shipping address' });
     }
 
+    /* Where we will and won't ship. The dropdown already hides these, so
+       reaching here means a stale page or a crafted request — either way this
+       is the gate that actually holds, and it runs before the re-quote, the
+       order row and the Stripe session, so a refusal costs nothing. */
+    {
+      const { destinationRestriction } = await import('../lib/print/destinations.mjs');
+      const blocked = destinationRestriction(
+        recipient.address.countryCode, recipient.address.postalOrZipCode,
+      );
+      if (blocked) return res.status(400).json({ error: blocked.message, restricted: true });
+    }
+
     // 2. Validate every line against the catalog + our own storage prefix.
     const { normalizeLines, quoteCart, CartError } = await import('../lib/print/cart.mjs');
     let lines;

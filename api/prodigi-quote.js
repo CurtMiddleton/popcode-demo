@@ -39,6 +39,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing productType, variantId or destinationCountryCode' });
     }
 
+    const { destinationRestriction } = await import('../lib/print/destinations.mjs');
+    const blocked = destinationRestriction(destinationCountryCode, address && address.postalOrZipCode);
+    if (blocked) return res.status(400).json({ error: blocked.message, restricted: true });
+
     const { findVariant, markupFor, priceParts, providerFor } = await import('../lib/print/catalog.mjs');
     const variant = findVariant(productType, variantId);
     if (!variant) return res.status(400).json({ error: 'Unknown product' });

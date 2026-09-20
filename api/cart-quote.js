@@ -40,6 +40,10 @@ export default async function handler(req, res) {
     const country = (address && address.countryCode) || destinationCountryCode;
     if (!country) return res.status(400).json({ error: 'Missing destinationCountryCode' });
 
+    const { destinationRestriction } = await import('../lib/print/destinations.mjs');
+    const blocked = destinationRestriction(country, address && address.postalOrZipCode);
+    if (blocked) return res.status(400).json({ error: blocked.message, restricted: true });
+
     const { normalizeLines, quoteCart, CartError } = await import('../lib/print/cart.mjs');
     const { getProvider } = await import('../lib/print/providers/index.mjs');
 
