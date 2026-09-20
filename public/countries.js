@@ -1,11 +1,20 @@
-// ISO 3166-1 alpha-2 destinations offered for print orders, alphabetical.
+// ISO 3166-1 alpha-2 destinations for print orders, alphabetical.
 // Generated from iso-codes 3166-1 (plus XK/Kosovo, a user-assigned code).
-// Excluded: uninhabited territories, and destinations under a comprehensive
-// embargo or with no working payment/carrier route. Targeted sanctions are NOT
-// grounds for exclusion — they restrict named parties, not retail shipping.
-// Prodigi decides actual per-SKU coverage at quote time, so a country listed
-// here is offered, not guaranteed — an unservable pair fails the quote with a
-// friendly message well before payment.
+//
+// COUNTRIES is the full list of destinations we know about; RESTRICTED says
+// which of them we will not currently sell into, and why. The dropdown offers
+// the difference. Names are resolved from the FULL list, so a past order to a
+// country we have since stopped offering still renders its name rather than a
+// bare code.
+//
+// lib/print/destinations.mjs is the authority — it is what checkout enforces,
+// it carries the full reasoning, and it additionally covers the six
+// comprehensively embargoed countries that were never in this list at all.
+// scripts/check-destinations.mjs fails if the two drift apart.
+//
+// Prodigi decides actual per-SKU coverage at quote time, so a country offered
+// here is not guaranteed — an unservable pair fails the quote with a friendly
+// message well before payment.
 (function () {
   var COUNTRIES = [
     { code: "AF", name: "Afghanistan" },
@@ -241,6 +250,23 @@
     { code: "AX", name: "\u00c5land Islands" },
   ];
 
+  /* Mirrors lib/print/destinations.mjs. Two reasons, kept apart:
+       'sanctions' — US law (Afghanistan; the other six were never listed).
+       'vat'       — UK + EU only, where a single sale creates a VAT
+                     registration obligation on day one. Purely a business
+                     decision: delete a code here and in destinations.mjs the
+                     day the registration exists. */
+  var RESTRICTED = {
+    AF: "sanctions",
+    GB: "vat", IM: "vat",
+    AT: "vat", BE: "vat", BG: "vat", HR: "vat", CY: "vat", CZ: "vat", DK: "vat",
+    EE: "vat", FI: "vat", FR: "vat", DE: "vat", GR: "vat", HU: "vat", IE: "vat",
+    IT: "vat", LV: "vat", LT: "vat", LU: "vat", MT: "vat", NL: "vat", PL: "vat",
+    PT: "vat", RO: "vat", SK: "vat", SI: "vat", ES: "vat", SE: "vat",
+  };
+
+  window.POPCODE_RESTRICTED = RESTRICTED;
+
   window.POPCODE_COUNTRIES = COUNTRIES;
 
   window.popcodeCountryName = function (code) {
@@ -249,18 +275,31 @@
     return c;
   };
 
-  // Fill a <select> with the destination list. `selected` defaults to US so the
-  // common case still takes zero clicks.
+  // Copy for "your country isn't here". Lives here so all four checkout
+  // surfaces say the same thing; each page decides WHERE it goes by putting an
+  // empty element with [data-country-note] wherever it fits that layout.
+  var NOTE = "Don\u2019t see your country? We can\u2019t ship everywhere yet \u2014 email info@popcodeapp.com and we\u2019ll let you know when we can.";
+  window.POPCODE_COUNTRY_NOTE = NOTE;
+
+  // Fill a <select> with the destinations we currently offer. `selected`
+  // defaults to US so the common case still takes zero clicks. Also fills any
+  // [data-country-note] placeholders, so a customer in London gets a reason
+  // and somewhere to write to instead of concluding the site is broken.
   window.popcodeFillCountrySelect = function (el, selected) {
     if (!el) return;
     var want = String(selected || "US").toUpperCase();
+    if (RESTRICTED[want]) want = "US";
     el.innerHTML = "";
     COUNTRIES.forEach(function (c) {
+      if (RESTRICTED[c.code]) return;
       var o = document.createElement("option");
       o.value = c.code;
       o.textContent = c.name;
       if (c.code === want) o.selected = true;
       el.appendChild(o);
     });
+    var notes = document.querySelectorAll("[data-country-note]");
+    for (var i = 0; i < notes.length; i++) if (!notes[i].textContent) notes[i].textContent = NOTE;
   };
+
 })();

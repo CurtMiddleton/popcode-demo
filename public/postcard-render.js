@@ -68,7 +68,11 @@
      the URL so the link is never split across lines. */
   .pc-copy {
     position: absolute;
-    left: 0; right: 0;
+    /* Inset to the safe area, not the trim: centred on the card either way, but
+       a line too long to fit now wraps inside the safe area instead of running
+       out into Prodigi's 4mm border. fitCopy() shrinks it first, so wrapping is
+       the backstop rather than the mechanism. */
+    left: var(--margin); right: var(--margin);
     top: var(--copy-top);
     margin: 0;
     font-family: 'FilsonPro', 'Inter', system-ui, sans-serif;
@@ -107,22 +111,33 @@
   }
 
   const CARD = {
-    /* A6 LANDSCAPE — Prodigi's branded-insert postcard, 148 × 105mm on 260gsm
-       ultra smooth, "including 4mm border". The fulfilling lab puts it in the
-       box, so there is no separate shipment and no bleed to supply: the stock
-       is pre-cut and the file edge IS the card edge.
+    /* The card READS LANDSCAPE, 148 x 105mm — the approved artwork, unchanged.
 
-       Prodigi states the size as "A6, 105 × 148mm", which is portrait notation.
-       We supply it LANDSCAPE, matching the approved artwork — and landscape is
-       also what the design was measured against, so the composition carries
-       over rather than being re-invented. ORIENTATION IS UNCONFIRMED: check the
-       proof image on the first order, and flip to portrait if Prodigi rotates
-       or crops it.
+       The FILE Prodigi wants is A6 portrait. Its own spec line on the insert:
+       "Single-sided A6 (4.1x5.8"), 260gsm postcard with a smooth finish.
+       Includes a 4mm white border." 4.1 x 5.8in is 105 x 148mm. So the artwork
+       is composed here at its reading size and ROTATED on export — see
+       buildPostcardInsert(). A card is a rectangle with no inherent up, so a
+       landscape-reading postcard is an ordinary object; what matters is that the
+       file matches the stock, which rotation achieves without touching a design
+       that was signed off.
+
+       An earlier version supplied a 1748 x 1240 landscape FILE and flagged the
+       orientation as unconfirmed. That was the actual bug: right composition,
+       wrong file shape.
+
+       Re-composing for portrait was tried and rejected: at 105mm wide the
+       sentence has only 89mm of safe width, and a 30-character slug (slug.js
+       MAX) runs past it — a problem the approved layout does not have, and one
+       created purely by turning the design rather than the file.
+
+       Pre-cut stock, so there is no bleed to supply, and Prodigi adds the 4mm
+       border itself — marginIn keeps content well clear of it.
 
        This replaces a GLOBAL-POST line item, which turned out to be fulfilled
        in a different country — a second transatlantic parcel that never
        travelled with the print. See docs/postcard-brief.md. */
-    wIn: 148 / 25.4,    // 5.8268in
+    wIn: 148 / 25.4,    // 5.8268in — the reading width
     hIn: 105 / 25.4,    // 4.1339in
     bleedIn: 0,         // pre-cut stock; the file edge is the card edge
     marginIn: 8 / 25.4, // 8mm — double Prodigi's stated 4mm border, for comfort
@@ -135,12 +150,6 @@
     // placed here the same way — left edge + baseline, both from the trim edge.
     // "Play" is positioned, NOT flowed after a space: the artwork tightens that
     // gap by hand, and a literal space glyph renders it ~10pt too wide.
-    // Left edge and the ampersand-to-Play offset are carried over from the
-    // approved artwork (that gap is hand-tightened and must not be re-flowed);
-    // only the vertical placement is re-composed for portrait.
-    // Carried over from the approved artwork. Left margin and the hand-tightened
-    // ampersand-to-Play offset are unchanged; baselines drop 1.5mm because this
-    // card is 3mm taller than the one the artwork was drawn at.
     headRuns: [
       { key: 'scan', leftIn: 11.18 / 25.4, baseIn: 27.43 / 25.4 },
       { key: 'amp',  leftIn: 11.18 / 25.4, baseIn: 43.65 / 25.4 },
@@ -152,6 +161,14 @@
     copySizePt: 11,
     copyLeadPt: 14,
     copyBaseIn: 70.35 / 25.4,   // 68.34mm in the artwork, scaled for the taller card
+    // A slug is creator-chosen and may be up to 30 characters (slug.js MAX).
+    // Ordinary ones sit well inside the 132mm safe width at the approved 11pt,
+    // but a long slug of wide letterforms does not, and this asset is generated
+    // per order with nobody looking at it — so overflow has to be impossible,
+    // not merely unlikely. fitCopy() steps the size down ONLY when a line would
+    // breach the safe area, leaving the approved 11pt untouched in every
+    // ordinary case.
+    copyMinPt: 8,
 
     // Wordmark, reversed. PDF ink box 100.3 × 26.5pt, left edge 297.6pt from the
     // trim's left edge, top 29.4pt below it.
@@ -212,7 +229,14 @@
      link never splits. */
   const COPY = {
     head: { scan: 'Scan', amp: '&', play: 'Play' },
-    line: (slug) => [`Go to popcode.app/${slug}`, 'on your phone and hit Scan image.'],
+    // With a slug the card names the project's own link. Without one it is the
+    // GENERIC card for Prodigi's dashboard insert set — the account-level
+    // fallback, which has no order to name — so it points at the homepage's
+    // "Have a code? Enter it here." field instead of a Scan button that only
+    // exists on a project page.
+    line: (slug) => (slug
+      ? [`Go to popcode.app/${slug}`, 'on your phone and hit Scan image.']
+      : ['Go to popcode.app', 'on your phone and enter your code.']),
 
   };
 
@@ -307,6 +331,38 @@
   }
 
   /**
+   * Shrink the sentence, and only if it would otherwise run past the safe area.
+   *
+   * The URL line carries a creator-chosen slug of up to 30 characters
+   * (slug.js MAX). At the approved 11pt that is ~104mm of type on a card whose
+   * safe width is 89mm — it would print into the border, or off the card. This
+   * is a per-order asset generated without anyone looking at it, so overflow has
+   * to be impossible rather than unlikely.
+   *
+   * Called from setBaselines() rather than left to each caller, because the
+   * artboard and the print path both go through that and a fit applied to only
+   * one of them is exactly the preview/press drift this file exists to prevent.
+   */
+  function fitCopy(card) {
+    const p = card.querySelector('.pc-copy');
+    if (!p) return;
+    const safePx = (CARD.wIn - CARD.marginIn * 2) * 96;
+    const widest = () => {
+      const rng = document.createRange();
+      rng.selectNodeContents(p);
+      return Array.from(rng.getClientRects()).reduce((m, r) => Math.max(m, r.width), 0);
+    };
+    // A transformed card (the artboard zooms) reports scaled rects, so compare
+    // in the card's own units.
+    const scale = card.getBoundingClientRect().width / card.offsetWidth || 1;
+    let pt = CARD.copySizePt;
+    while (pt > CARD.copyMinPt && widest() / scale > safePx) {
+      pt = Math.max(CARD.copyMinPt, pt - 0.25);
+      p.style.fontSize = pt + 'pt';
+    }
+  }
+
+  /**
    * Put each text block's FIRST BASELINE exactly where the artwork specifies.
    *
    * CSS positions a line box, not a baseline. The distance between the two
@@ -334,6 +390,9 @@
       probe.remove();
       el.style.top = (baselineIn - offsetIn) + 'in';
     };
+    // Fit before placing: shrinking the copy changes where its baseline sits.
+    fitCopy(card);
+
     // Baselines are stated from the TRIM edge; .pc-trim is that box.
     CARD.headRuns.forEach((r) => place(`.pc-${r.key}`, r.baseIn));
     place('.pc-copy', CARD.copyBaseIn);
@@ -363,7 +422,7 @@
        A branded insert is printed on one side of pre-cut stock, so there is no
        sheet to compose and no back to supply. */
     // One face, at the size Prodigi's insert postcard expects.
-    insertPx: { w: 1748, h: 1240 },   // 148 x 105mm at 300 DPI
+    insertPx: { w: 1240, h: 1748 },   // 105 x 148mm (A6 portrait) at 300 DPI
   };
   const FACES = ['front'];   // an insert is printed on one side
 
@@ -474,9 +533,12 @@
     await loadPrintLibs();
     const { jsPDF } = window.jspdf;
     const w = CARD.wIn + CARD.bleedIn * 2, h = CARD.hIn + CARD.bleedIn * 2;
-    // Landscape, matching the card — jsPDF swaps the format array to suit the
-    // orientation, so a portrait setting here crops the right edge off.
-    const doc = new jsPDF({ unit: 'in', format: [w, h], orientation: 'landscape', compress: true });
+    // jsPDF reorders the format array to suit the orientation, so a setting that
+    // disagrees with the card crops an edge off. Derive it from the card rather
+    // than naming it: this was hard-coded once and went stale the moment the
+    // card's orientation changed.
+    const orientation = w > h ? 'landscape' : 'portrait';
+    const doc = new jsPDF({ unit: 'in', format: [w, h], orientation, compress: true });
     const canvas = await renderFace(slug);
     doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, w, h);
     doc.save(`popcode-insert-${slug}.pdf`);
@@ -501,6 +563,11 @@
    * The print-ready insert: one face at exactly the pixel size Prodigi's
    * branded-insert postcard expects.
    *
+   * The card is composed LANDSCAPE (its reading orientation, and the approved
+   * artwork) and the stock is A6 PORTRAIT, so the face is rotated a quarter
+   * turn on the way into the file. The recipient turns the card; the artwork is
+   * the one that was signed off, to the pixel.
+   *
    * @param {string} slug
    * @returns {Promise<Blob>} PNG, PRINT.insertPx
    */
@@ -509,14 +576,27 @@
     const { w, h } = PRINT.insertPx;
     const face = await renderFace(slug);
 
-    // Drawn to an exact rect: the face renders at its natural CSS size and the
-    // asset must be exactly the declared pixel size, so scale on the way in.
+    // The face is landscape and the file is portrait, so this must be a quarter
+    // turn — not a stretch into a differently-shaped box, which is what drawing
+    // it straight into these dimensions would do.
+    const turned = (face.width > face.height) !== (w > h);
+
     const out = document.createElement('canvas');
     out.width = w; out.height = h;
     const ctx = out.getContext('2d');
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(face, 0, 0, w, h);
+
+    if (turned) {
+      // Clockwise about the centre: the card's top edge ends up on the right, so
+      // it reads when turned anticlockwise — the natural way to pick a card up.
+      ctx.translate(w / 2, h / 2);
+      ctx.rotate(Math.PI / 2);
+      // Drawn to an exact rect in the ROTATED frame, whose axes are swapped.
+      ctx.drawImage(face, -h / 2, -w / 2, h, w);
+    } else {
+      ctx.drawImage(face, 0, 0, w, h);
+    }
     return new Promise((res) => out.toBlob(res, 'image/png'));
   }
 

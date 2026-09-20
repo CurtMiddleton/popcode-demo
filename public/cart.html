@@ -39,6 +39,8 @@
       .card { background:#fff; border-radius:var(--pc-radius-card); padding:30px; margin-bottom:26px; box-shadow:var(--pc-shadow-card); }
       .card h2 { font-size:17px; font-weight:600; margin-bottom:20px; }
       label { display:block; font-size:13px; font-weight:500; margin:18px 0 8px; color:#333; }
+      /* "Don’t see your country?" — filled by countries.js. */
+      .country-note { font-size:12px; line-height:1.4; color:#8a857d; margin:6px 0 0; }
       /* 16px is a floor, not a style choice: iOS Safari zooms the page when
          you focus a field below it, cropping the form mid-entry. */
       select, input { width:100%; padding:11px 12px; border:1.5px solid #e3e1db; border-radius:12px; font-size:16px; font-family:'Inter',sans-serif; background:#fff; }
@@ -157,6 +159,7 @@
             <div>
               <label for="country">Ship to (country)</label>
               <select id="country"></select>
+              <p class="country-note" data-country-note></p>
             </div>
             <div>
               <label for="shipping">Shipping</label>
@@ -666,9 +669,11 @@
         } catch (err) {
           if (mine !== quoteToken) return;
           total.textContent = '—';
-          note.textContent = err.unservable
-            ? 'We can’t ship one of these to that country.'
-            : 'Could not get a price — try again.';
+          note.textContent = err.restricted
+            ? err.message
+            : err.unservable
+              ? 'We can’t ship one of these to that country.'
+              : 'Could not get a price — try again.';
           payBtn.disabled = true;
         }
       }
