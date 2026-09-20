@@ -377,22 +377,43 @@
       .bc-inset.bc-landscape { aspect-ratio: 854 / 627; }
       .bc-inset.bc-portrait { aspect-ratio: 3 / 4; }
       .bc-inset.bc-square { aspect-ratio: 1 / 1; }
-      /* Branding pinned to the approved spec (2026-09-18 mockup), the same spot in
-         both styles: logo top 77.5% down, symbol ending ~0.33" above the bottom. */
-      .bc-brand { position: absolute; left: 0; right: 0; top: 77.5cqh; z-index: 3; display: flex; flex-direction: column; align-items: center; }
-      .bc-logo { width: auto; height: auto; display: block; }   /* width set inline to 1.25" */
-      /* 9pt Inter semibold, 16pt leading (sizes set inline, computed from book width). */
-      .bc-inst { font-family: 'Inter', sans-serif; font-weight: 600; text-align: center; color: #1a1a1a; margin-top: 1.6cqw; }
+      /* Branding block, to the approved spec (2026-09-18 mockup) and the same spot
+         in both styles: block top 6.41" down the page, symbol ending ~0.33" above
+         the bottom edge. Every dimension — position, logo width, both gaps, the
+         type size and its leading — is set inline in cqw from the inches/points
+         in BC_BRAND, so it is print-accurate at any book size and the admin
+         tweaker can nudge it. */
+      .bc-brand { position: absolute; left: 0; right: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; }
+      .bc-logo { width: auto; height: auto; display: block; }   /* width set inline */
+      /* Inter semibold; size and leading set inline (BC_BRAND.textPt / leadPt). */
+      .bc-inst { font-family: 'Inter', sans-serif; font-weight: 600; text-align: center; color: #1a1a1a; }
       .bc-inst b { color: #1a1a1a; font-weight: 600; }
-      .bc-symbol { display: block; height: auto; margin-top: 1.3cqw; }   /* width set inline */
+      .bc-symbol { display: block; height: auto; }   /* width + margin set inline */
       .bc-brand-rev .bc-inst { color: rgba(255,255,255,0.9); }
       .bc-brand-rev .bc-inst b { color: #fff; }
+      /* Back-cover branding tweaker (admin): label · slider · live value. */
+      .bc-tw { display: grid; gap: 12px; margin-top: 4px; }
+      .bc-tw-row { display: grid; grid-template-columns: minmax(150px, 1.1fr) minmax(120px, 2fr) 74px; align-items: center; gap: 12px; }
+      .bc-tw-row label { font-size: 13px; font-weight: 700; color: #1a1a1a; }
+      .bc-tw-hint { display: block; font-weight: 500; color: #6a6455; font-size: 12px; }
+      .bc-tw-row input[type=range] { width: 100%; accent-color: #7657FC; }
+      .bc-tw-row output { font-size: 13px; font-weight: 700; color: #1a1a1a; text-align: right; font-variant-numeric: tabular-nums; }
+      .bc-tw-clear { margin-top: 12px; font-size: 13px; font-weight: 600; color: #6a6455; }
+      @media (max-width: 560px) {
+        .bc-tw-row { grid-template-columns: 1fr 66px; }
+        .bc-tw-row label { grid-column: 1 / -1; }
+      }
       .bc-seg { display: inline-flex; background: #ececec; border-radius: 999px; padding: 3px; gap: 2px; }
       .bc-seg-btn { background: transparent; border: none; padding: 8px 16px; font-size: 13px; font-weight: 700; color: #666; border-radius: 999px; cursor: pointer; font-family: 'Inter', sans-serif; }
       .bc-seg-btn.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 
       /* Cover editor sheet */
       .cover-preview { position: relative; width: 100%; aspect-ratio: var(--book-ar, 117 / 83); border-radius: 8px; overflow: hidden; container-type: inline-size; box-shadow: 0 2px 14px rgba(0,0,0,0.18); margin-bottom: 16px; background: #605d58; }
+      /* The back cover sizes its inset photo in cqh, which needs a size container
+         (as .page-canvas.backcover is). Without this the sheet preview resolves
+         those against an ancestor and doesn't match the printed page — which
+         makes it useless for judging the branding block against a proof. */
+      .cover-preview.backcover { container-type: size; background: #fff; }
       .cvtpl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
       .cvtpl { cursor: pointer; }
       .cvtpl-mini { position: relative; width: 100%; aspect-ratio: var(--book-ar, 117 / 83); container-type: inline-size; border-radius: 6px; overflow: hidden; border: 2px solid #eceae4; }
@@ -464,6 +485,15 @@
       .proof-canvas .slot.empty::after { content: none !important; }
       /* The popcode media tag is a builder overlay, not part of the printed page. */
       .proof-canvas .slot-badge { display: none !important; }
+      /* The fold groove and the spine's rounded shading are screen affordances —
+         they make the builder read as a physical book. They are not artwork, and
+         printing them lays a dark band down the left of the cover. (html2canvas
+         renders the groove's gradient as a hard step, which is the thin black
+         line it puts on the proof.) The printed book makes its own hinge. */
+      .proof-canvas .cv-face::before { content: none !important; }
+      .proof-canvas .cv-spine { background: #ffffff !important; }
+      /* Same class of thing: the inset photo's lift shadow would print as a smudge. */
+      .proof-canvas .bc-inset { box-shadow: none !important; }
 
       .add-page-btn {
         width: 100%; padding: 15px; border-radius: 14px; border: 1.5px dashed #cfcabd; background: transparent;
@@ -1539,14 +1569,14 @@
 
       // ── Rendering ───────────────────────────────────────────────
       function render() { ensureBookEndpapers(); renderTray(); renderPages(); updateSummary(); requestAnimationFrame(() => { sizeSlotBadges(); layoutAllSlotPhotos(); }); }
-      // Size each slot's Popcode badge exactly like the print bake: 9% of the
-      // slot's shorter edge, inset by half its size from the corner.
+      // Size each slot's Popcode badge exactly like the print bake: a fixed 1/2"
+      // square inset 1/4" from the corner, scaled off the PAGE (not the slot), so
+      // every badge in the book is the same size on paper.
       function sizeSlotBadges() {
         document.querySelectorAll('.slot .slot-badge').forEach(badge => {
-          const r = badge.parentElement.getBoundingClientRect();
-          if (!r.width || !r.height) return;
-          const size = Math.round(Math.min(r.width, r.height) * PRINT_A4L.badgeScale);
-          const pad = Math.round(size * 0.5);
+          const pw = slotPageWidth(badge.parentElement);
+          if (!pw) return;
+          const { size, pad } = badgeBoxPx(pw);
           badge.style.width = badge.style.height = size + 'px';
           badge.style.right = badge.style.bottom = pad + 'px';
         });
@@ -1893,6 +1923,28 @@
         return wrap;
       }
 
+      // ── Back-cover branding block: logo · URL copy · symbol ──────
+      // Shipped defaults, in inches on the finished page (type in points), so the
+      // block is the same physical size at any book size. These are what every
+      // customer's book prints with. The admin tweaker (openBcBrandTweaker) nudges
+      // a LOCAL copy in localStorage so the numbers can be dialled in against a
+      // real printed proof; when they're right, paste them back in here.
+      const BC_BRAND_DEFAULTS = {
+        top:     6.4075,  // in — top of the block, from the top edge of the page
+        logoW:   1.4,     // in — Popcode wordmark width
+        gapLogo: 0.187,   // in — wordmark → copy
+        textPt:  10,      // pt — instruction copy
+        leadPt:  16,      // pt — leading
+        gapSym:  0.152,   // in — copy → symbol
+        symW:    0.4,     // in — Popcode symbol width
+      };
+      const BC_BRAND_KEY = 'popcode.bcBrand';
+      let BC_BRAND = { ...BC_BRAND_DEFAULTS };
+      try {
+        const saved = JSON.parse(localStorage.getItem(BC_BRAND_KEY) || 'null');
+        if (saved && typeof saved === 'object') BC_BRAND = { ...BC_BRAND_DEFAULTS, ...saved };
+      } catch (e) { /* private mode / blocked storage — ship the defaults */ }
+
       // Back cover (Bashō model): full-bleed OR inset photo (landscape/portrait/
       // square), with the Popcode logo + popcode.app centered underneath.
       function buildBackCoverCanvas() {
@@ -1904,13 +1956,15 @@
         // 9pt text / 16pt leading map to the same physical size at any book size.
         const wIn = (currentBookSize().wIn) || 11.7;
         const inCqw = (inches) => (inches / wIn * 100).toFixed(3) + 'cqw';
-        const textSz = (10 / (wIn * 72) * 100).toFixed(3) + 'cqw';  // 10pt
-        const lead = (16 / 10).toFixed(3);                          // 16pt leading on 10pt
+        const ptCqw = (pt) => inCqw(pt / 72);
+        const B = BC_BRAND;
+        const textSz = ptCqw(B.textPt);
+        const lead = (B.leadPt / (B.textPt || 1)).toFixed(3);
         const slug = (typeof chosenSlug === 'function' && chosenSlug()) ? chosenSlug() : 'yourlink';
-        const brand = (rev) => `<div class="bc-brand${rev ? ' bc-brand-rev' : ''}">
-          <img class="bc-logo" style="width:${inCqw(1.4)}" src="/assets/Popcode_logo${rev ? '.rev' : ''}.png" alt="Popcode"/>
-          <div class="bc-inst" style="font-size:${textSz};line-height:${lead}">Go to <b>popcode.app/${escapeHtml(slug)}</b> on your phone.<br>Scan photos with the Popcode symbol.</div>
-          <img class="bc-symbol" style="width:${inCqw(0.4)}" src="/assets/popcode_symbol_color.svg" alt=""/>
+        const brand = (rev) => `<div class="bc-brand${rev ? ' bc-brand-rev' : ''}" style="top:${inCqw(B.top)}">
+          <img class="bc-logo" style="width:${inCqw(B.logoW)}" src="/assets/Popcode_logo${rev ? '.rev' : ''}.png" alt="Popcode"/>
+          <div class="bc-inst" style="margin-top:${inCqw(B.gapLogo)};font-size:${textSz};line-height:${lead}">Go to <b>popcode.app/${escapeHtml(slug)}</b> on your phone.<br>Scan photos with the Popcode symbol.</div>
+          <img class="bc-symbol" style="margin-top:${inCqw(B.gapSym)};width:${inCqw(B.symW)}" src="/assets/popcode_symbol_color.svg" alt=""/>
         </div>`;
         const pick = !url ? `<div class="cv-pick" data-cv="bpick"><span class="cv-pick-btn">${IC_PHOTO_PH}</span></div>` : '';
         if (backCover.mode === 'fullbleed') {
@@ -2178,17 +2232,111 @@
             <div class="menu-ic">${IC_TRASH}</div>
             <div><div>Remove photo</div></div>
           </div>` : ''}
+          ${isProofAdmin() ? `<div class="menu-row" data-act="brand">
+            <div class="menu-ic" style="background:#f3f0ff;color:#5b3fd6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></svg></div>
+            <div><div>Branding block</div><div class="menu-sub">Admin · position the logo, URL and symbol</div></div>
+          </div>` : ''}
         `);
         document.querySelectorAll('#sheet .menu-row').forEach(row => {
           row.addEventListener('click', () => {
             const act = row.dataset.act;
             if (act === 'photo') { closeSheet(); chooseBackCoverPhoto(render); }
             else if (act === 'crop') { openBackCoverPhotoEdit(); }
+            else if (act === 'brand') { openBcBrandTweaker(); }
             else if (act === 'remove') {
               backCover.photo = null; closeSheet(); render();
             }
           });
         });
+      }
+
+      // ── Back-cover branding tweaker (admin) ──────────────────────
+      // A design tool, not a product feature: it nudges a LOCAL copy of BC_BRAND
+      // (localStorage, this browser only) so the block can be positioned against a
+      // real printed proof. Nothing here reaches another customer's book — when the
+      // numbers are right, "Copy values" gives the literal to paste into
+      // BC_BRAND_DEFAULTS above, and that is what ships.
+      const BC_BRAND_FIELDS = [
+        { k: 'top',     label: 'Block position',        unit: 'in', min: 2,    max: 8,   step: 0.01,  hint: 'from the top edge of the page' },
+        { k: 'logoW',   label: 'Logo width',            unit: 'in', min: 0.5,  max: 3,   step: 0.01 },
+        { k: 'gapLogo', label: 'Gap · logo → text',     unit: 'in', min: 0,    max: 0.8, step: 0.005 },
+        { k: 'textPt',  label: 'Text size',             unit: 'pt', min: 6,    max: 18,  step: 0.25 },
+        { k: 'leadPt',  label: 'Line spacing',          unit: 'pt', min: 8,    max: 30,  step: 0.25 },
+        { k: 'gapSym',  label: 'Gap · text → symbol',   unit: 'in', min: 0,    max: 0.8, step: 0.005 },
+        { k: 'symW',    label: 'Symbol width',          unit: 'in', min: 0.15, max: 1.2, step: 0.01 },
+      ];
+      const bcFmt = (f) => f.unit === 'in' ? BC_BRAND[f.k].toFixed(3) + '"' : BC_BRAND[f.k] + 'pt';
+      function saveBcBrand() {
+        try { localStorage.setItem(BC_BRAND_KEY, JSON.stringify(BC_BRAND)); } catch (e) {}
+      }
+      // How much clear page is left under the block — the number that says whether
+      // a bigger logo or a wider gap has pushed the symbol off the bottom edge.
+      function bcBottomClearance() {
+        const page = document.querySelector('#bc-preview');
+        const blk = document.querySelector('#bc-preview .bc-brand');
+        if (!page || !blk) return null;
+        const pr = page.getBoundingClientRect(), br = blk.getBoundingClientRect();
+        if (!pr.height) return null;
+        return (pr.bottom - br.bottom) / pr.height * (currentBookSize().hIn || 8.2677);
+      }
+      function refreshBcClearance() {
+        const el = document.getElementById('bc-clear');
+        if (!el) return;
+        // The block's height is the logo + copy + symbol, so it only measures true
+        // once those bitmaps have decoded — re-run when the last one lands.
+        const pending = [...document.querySelectorAll('#bc-preview .bc-brand img')].filter(im => !im.complete || !im.naturalWidth);
+        pending.forEach(im => im.addEventListener('load', () => refreshBcClearance(), { once: true }));
+        const c = bcBottomClearance();
+        if (c === null || pending.length) { if (c === null) el.textContent = ''; return; }
+        el.textContent = c.toFixed(2) + '" of clear page below the symbol';
+        el.style.color = c < 0.25 ? '#c0392b' : '#6a6455';
+      }
+      function openBcBrandTweaker() {
+        const rows = BC_BRAND_FIELDS.map(f => `
+          <div class="bc-tw-row">
+            <label for="bctw-${f.k}">${f.label}${f.hint ? ` <span class="bc-tw-hint">${f.hint}</span>` : ''}</label>
+            <input type="range" id="bctw-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${BC_BRAND[f.k]}"/>
+            <output id="bctwv-${f.k}">${bcFmt(f)}</output>
+          </div>`).join('');
+        openSheet(`
+          <h2>Branding block</h2>
+          <p class="sheet-sub">Admin only. Positions the logo, the URL copy and the symbol on the back cover. Values are in inches and points on the finished page, saved in this browser — use “Copy values” to make them the shipped default.</p>
+          <div class="cover-preview backcover" id="bc-preview"></div>
+          <div class="bc-tw">${rows}</div>
+          <div class="bc-tw-clear" id="bc-clear"></div>
+          <div class="sheet-actions">
+            <button class="btn-secondary" id="bctw-reset">Reset</button>
+            <button class="btn-secondary" id="bctw-copy">Copy values</button>
+            <button class="btn-primary" id="bctw-done">Done</button>
+          </div>
+        `, true);
+        refreshBackCoverPreview();
+        requestAnimationFrame(refreshBcClearance);
+        document.querySelectorAll('#sheet .bc-tw input[type=range]').forEach(inp => {
+          inp.addEventListener('input', () => {
+            const f = BC_BRAND_FIELDS.find(x => x.k === inp.dataset.k);
+            BC_BRAND[f.k] = parseFloat(inp.value);
+            document.getElementById('bctwv-' + f.k).textContent = bcFmt(f);
+            saveBcBrand();
+            refreshBackCoverPreview();
+            requestAnimationFrame(refreshBcClearance);
+          });
+          // Only repaint the real pages on release — re-rendering the whole book
+          // on every slider frame would stutter.
+          inp.addEventListener('change', () => render());
+        });
+        document.getElementById('bctw-reset').addEventListener('click', () => {
+          BC_BRAND = { ...BC_BRAND_DEFAULTS };
+          try { localStorage.removeItem(BC_BRAND_KEY); } catch (e) {}
+          render(); openBcBrandTweaker(); showToast('Back to the shipped values');
+        });
+        document.getElementById('bctw-copy').addEventListener('click', async () => {
+          const body = BC_BRAND_FIELDS.map(f => `  ${f.k}: ${BC_BRAND[f.k]},`).join('\n');
+          const text = `const BC_BRAND_DEFAULTS = {\n${body}\n};`;
+          try { await navigator.clipboard.writeText(text); showToast('Values copied'); }
+          catch (e) { window.prompt('Copy these into BC_BRAND_DEFAULTS:', text); }
+        });
+        document.getElementById('bctw-done').addEventListener('click', () => { closeSheet(); render(); });
       }
 
       // Create one photo slot wired for tap/drag/place. `slotIdx` maps to pg.slots.
@@ -2995,9 +3143,7 @@
               const tag = slot.querySelector('.slot-badge');
               if (!tag) return;             // slot isn't popcoded
               tag.remove();                 // swap the SVG badge for a PNG
-              const br = slot.getBoundingClientRect();
-              const bsize = Math.round(Math.min(br.width, br.height) * PRINT_A4L.badgeScale);
-              const bpad = Math.round(bsize * 0.5);
+              const { size: bsize, pad: bpad } = badgeBoxPx(slotPageWidth(slot));
               const b = document.createElement('div');
               b.style.cssText = 'position:absolute;z-index:3;right:' + bpad + 'px;bottom:' + bpad + 'px;'
                 + 'width:' + bsize + 'px;height:' + bsize + 'px;pointer-events:none;'
@@ -3019,10 +3165,20 @@
               img.replaceWith(fallbackPhotoDiv(img));
             });
             unit.querySelectorAll('.cv-spine').forEach(spine => {
+              // html2canvas can't do writing-mode, so re-lay the vertical spine as
+              // a horizontal strip rotated a quarter turn. Two things matter:
+              //  · flex-shrink: 0 — as a flex item of the narrow spine the strip is
+              //    otherwise squeezed to min-content, which leaves space-between no
+              //    free space and butts the year up against the title.
+              //  · the strip's length is the spine's own content box (height less
+              //    its padding), so the year lands on the foot exactly where the
+              //    builder puts it, rather than at a guessed fraction of the height.
+              const cs = getComputedStyle(spine);
               const r = spine.getBoundingClientRect();
+              const len = Math.max(0, r.height - parseFloat(cs.paddingTop || 0) - parseFloat(cs.paddingBottom || 0));
               const inner = document.createElement('div');
               inner.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;white-space:nowrap;'
-                + `width:${Math.round(r.height * 0.86)}px;transform:rotate(90deg);transform-origin:center center;`;
+                + `flex:0 0 auto;width:${Math.round(len)}px;transform:rotate(90deg);transform-origin:center center;`;
               while (spine.firstChild) inner.appendChild(spine.firstChild);
               spine.style.writingMode = 'horizontal-tb';
               spine.style.flexDirection = 'row';
@@ -3067,7 +3223,25 @@
       // against the live quote API (16 refused, 18 quotes, 122 quotes, 124
       // refused). Keep in step with lib/print/catalog.mjs — padding a book past
       // the true minimum just sells blank pages at $1.06 per two.
-      const PRINT_A4L = { dpi: 300, minPages: 18, maxPages: 122, badgeScale: 0.09 };
+      const PRINT_A4L = { dpi: 300, minPages: 18, maxPages: 122 };
+
+      // ── Popcode scan badge: one fixed physical size, everywhere ──
+      // A badge used to be 9% of its slot's shorter edge, so a full-bleed photo
+      // got a badge nearly three times the one on a photo in a four-up. Size is
+      // a design decision, not a function of the picture: the badge only signals
+      // that a page is scannable (MindAR tracks the photograph itself), so it is
+      // now a fixed 1/2" square inset 1/4" from the corner on every page, at
+      // every book size. Smaller also means the printed photo deviates less from
+      // the target the .mind file was compiled from.
+      const BADGE_IN = 0.5, BADGE_INSET_IN = 0.25;
+      // Badge box in px for a page rendered `pageWidthPx` wide. Every render path
+      // (builder, proof, print) puts slots inside a .page-canvas of a known width,
+      // which is what converts inches to pixels.
+      function badgeBoxPx(pageWidthPx) {
+        const perIn = (pageWidthPx || 0) / (currentBookSize().wIn || 11.6929);
+        return { size: Math.max(5, Math.round(BADGE_IN * perIn)), pad: Math.round(BADGE_INSET_IN * perIn) };
+      }
+      const slotPageWidth = (slot) => { const p = slot.closest('.page-canvas'); return p ? p.getBoundingClientRect().width : 0; };
 
       // Rasterize the Popcode badge SVG (viewBox-only, no intrinsic size) to a
       // PNG data-URL so html2canvas renders it (it drops external SVG <img>s).
@@ -3133,10 +3307,8 @@
             const tag = slot.querySelector('.slot-badge');
             if (!tag) return;               // slot isn't popcoded
             tag.remove();                   // swap the SVG badge for a PNG (html2canvas drops external SVGs)
-            // Square badge sized off the slot's shorter edge (matches order.html).
-            const r = slot.getBoundingClientRect();
-            const size = Math.round(Math.min(r.width, r.height) * PRINT_A4L.badgeScale);
-            const pad = Math.round(size * 0.5);
+            // Fixed 1/2" square inset 1/4" from the corner — see badgeBoxPx.
+            const { size, pad } = badgeBoxPx(slotPageWidth(slot));
             const b = document.createElement('div');
             b.style.cssText = 'position:absolute;z-index:3;right:' + pad + 'px;bottom:' + pad + 'px;'
               + 'width:' + size + 'px;height:' + size + 'px;pointer-events:none;'
