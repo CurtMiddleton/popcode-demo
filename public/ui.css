@@ -32,9 +32,69 @@
        it is for controls that sit over an image.
 
    Colours read the page's own custom properties where they exist
-   (var(--ink, …)), so a page keeps its palette. Nothing is declared on
-   :root here — no collisions.
+   (var(--ink, …)), so a page keeps its palette. The only things declared on
+   :root are the card tokens below, all prefixed --pc- — a namespace no page
+   used before they were added, so they cannot collide with --ink/--bg/--grad.
    ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Card tokens ──────────────────────────────────────────────────────
+   Measured across 21 pages: 160 surfaces wearing 14 radii and 14 shadows.
+   Most of that was one thing — an app card — written fourteen times.
+
+   These are TOKENS, not classes. Pages keep their own .card / .section /
+   .content / .cat-card names and reference the variable, so nothing depends
+   on a shared class name and a page can still opt out by writing a literal.
+
+   TWO RADII. A card, and a surface nested inside one (a thumbnail, a stage,
+   a preview well). Inner is visibly smaller so the nesting reads.
+
+   TWO ELEVATIONS. Resting is every ordinary card. Raised is for something
+   floating over the page — a dialog, a popover — where the shadow is doing
+   the work of saying "this is above everything else".
+
+   WHAT THESE DO NOT COVER, deliberately: illustration. The phones, product
+   mockups and hero cards cast deep dramatic shadows (0 40px 80px on the
+   homepage phone) because they are pictures of objects, not surfaces of the
+   UI. Same reasoning as .btn-float. Leave them alone; a token would flatten
+   them into cards and lose the point. */
+:root {
+  --pc-radius-card: 20px;
+  --pc-radius-inner: 12px;
+  --pc-shadow-card: 0 2px 12px rgba(0, 0, 0, .06);
+  /* A clickable card's hover lift. Four of them had four values; this is the
+     one the two storefront grids already used, so the shop is unchanged and
+     the odd ones come to it. Not for inner thumbnails -- .pg-thumb and
+     .pk-thumb lift on their own, smaller scale. */
+  --pc-shadow-card-hover: 0 12px 32px rgba(0, 0, 0, .12);
+  --pc-shadow-raised: 0 16px 40px rgba(20, 16, 40, .18);
+  /* A bottom sheet cannot use --pc-shadow-raised: it is anchored to the
+     bottom edge and casts UPWARD. Same weight, negative y. */
+  --pc-shadow-sheet: 0 -10px 44px rgba(0, 0, 0, .22);
+  /* A small popover -- a share menu, a kebab menu, a tip. Lighter than a
+     modal because it is attached to the thing that opened it rather than
+     covering the page, and it takes --pc-radius-inner, not the card radius:
+     20px on something the size of three menu rows reads as a bubble. */
+  --pc-shadow-popover: 0 8px 32px rgba(0, 0, 0, .18);
+}
+
+/* ── Page title ───────────────────────────────────────────────────────
+   The h1 at the top of an app page: "My Popcodes", "Your cart", "Edit
+   Popcode". Measured across 21 pages at two widths it rendered at 12 sizes,
+   and the pages expressed the same intent with OPPOSITE breakpoints -- one
+   group set 36px and stepped UP to 42 at min-width 960, the other set 44 and
+   stepped DOWN at max-width 680. Between 681 and 959 that left an 8px gap
+   between pages doing the same job.
+
+   One token, one breakpoint. A page sets `font-size: var(--pc-h1)` and drops
+   its own media query. 34 rather than 36 on phones because the app pages with
+   the tightest headers already used 34 and shrinking can only reduce overflow
+   risk; manage keeps a further step below 389px, which is load-bearing for
+   its heading-plus-button row.
+
+   NOT for marketing heroes. index (100), shop (90) and pricing (36) are
+   deliberate, set per page, and shop's was chosen by hand. */
+:root { --pc-h1: 44px; }
+@media (max-width: 680px) { :root { --pc-h1: 34px; } }
 
 /* ── Buttons ─────────────────────────────────────────────────────────── */
 

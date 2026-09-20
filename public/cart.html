@@ -33,10 +33,10 @@
       .nav-divider { height:1px; background:#ececec; margin:8px 0; }
 
       .wrap { width:100%; max-width:1040px; margin:0 auto; padding:44px 28px 140px; }
-      h1 { font-family:'CooperBT', Georgia, serif; font-size:44px; font-weight:400; margin-bottom:16px; letter-spacing:-0.01em; }
-      @media (max-width:680px) { h1 { font-size:36px; } .wrap { padding-top:28px; } }
+      h1 { font-family:'CooperBT', Georgia, serif; font-size:var(--pc-h1); font-weight:400; margin-bottom:16px; letter-spacing:-0.01em; }
+      @media (max-width:680px) { .wrap { padding-top:28px; } }
       .sub { color:#666; font-size:16px; line-height:1.5; margin-bottom:32px; max-width:600px; }
-      .card { background:#fff; border-radius:22px; padding:30px; margin-bottom:26px; box-shadow:0 2px 12px rgba(0,0,0,0.05); }
+      .card { background:#fff; border-radius:var(--pc-radius-card); padding:30px; margin-bottom:26px; box-shadow:var(--pc-shadow-card); }
       .card h2 { font-size:17px; font-weight:600; margin-bottom:20px; }
       label { display:block; font-size:13px; font-weight:500; margin:18px 0 8px; color:#333; }
       /* "Don’t see your country?" — filled by countries.js. */
@@ -59,7 +59,21 @@
       .line { display:flex; gap:18px; align-items:flex-start; padding:20px 0; border-bottom:1px solid #f0efeb; }
       .line:last-child { border-bottom:none; }
       .line:first-child { padding-top:0; }
-      .line-thumb { width:88px; height:88px; flex:0 0 88px; border-radius:12px; background:#efefef center/cover no-repeat; box-shadow:0 2px 10px rgba(0,0,0,0.10); }
+      /* Popsa-style: show the PRODUCT, not the bare photo. A framed print looks
+         framed, a tile looks like a tile. The photo alone made two very
+         different line items look identical. */
+      .line-thumb {
+        width:132px; height:132px; flex:0 0 132px; border-radius:var(--pc-radius-inner);
+        background:#efefef center/cover no-repeat; position:relative; overflow:hidden;
+      }
+      /* Product renders sit on a neutral panel so a white frame or a borderless
+         print still reads as an object against the white card. */
+      .line-thumb.has-render { background:#ebebeb; }
+      .line-thumb canvas { width:100%; height:100%; display:block; object-fit:contain; }
+      @media (max-width:560px) {
+        .line-thumb { width:104px; height:104px; flex-basis:104px; }
+        .line { gap:14px; }
+      }
       .line-main { flex:1; min-width:0; }
       .line-title { font-size:16px; font-weight:600; line-height:1.35; }
       .line-meta { color:#777; font-size:13px; margin-top:4px; }
@@ -292,6 +306,238 @@
         document.getElementById('cart-sub').textContent =
           `${n} item${n === 1 ? '' : 's'} — everything that can ship together will.`;
 
+      /* ── Product thumbnails ────────────────────────────────────────────
+         A cart line used to show the bare photo, so a framed print and a
+         canvas of the same picture were indistinguishable. These are the same
+         photoreal templates and measured art openings order.html uses for its
+         product previews (MOCKUPS there) -- duplicated rather than shared
+         because order.html is the checkout path and a shared file that fails
+         to load would break it (the composite.js lesson, 2026-07-17).
+
+         rect = the art opening as FRACTIONS of the template image. If order.html
+         ever re-measures one of these, re-measure here too.
+
+         framedcanvas maps to the framed template on purpose: the catalogue
+         describes it as canvas "set inside the classic frame". acrylic, book,
+         calendar and boardbook have no face-on template with a measured
+         opening yet, so they keep the plain photo. */
+      const THUMB_MOCKUPS = {
+        print:        { template: '/assets/mockups/print.jpg',  rect: { x: 0.190, y: 0.113, w: 0.626, h: 0.782 } },
+        framed:       { template: '/assets/mockups/framed.jpg', rect: { x: 0.208, y: 0.111, w: 0.582, h: 0.778 } },
+        framedcanvas: { template: '/assets/mockups/framed.jpg', rect: { x: 0.208, y: 0.111, w: 0.582, h: 0.778 } },
+        tile:         { template: '/assets/mockups/tile.jpg',   rect: { x: 0.280, y: 0.206, w: 0.427, h: 0.598 } },
+        canvas:       { template: '/assets/mockups/canvas.jpg', rect: { x: 0.190, y: 0.112, w: 0.670, h: 0.804 } },
+        /* A face-on photo book with a visible spine edge and a cast shadow, so it
+           reads as an object rather than a photo with a white border. Opening
+           measured off the template: the cover is the high-contrast region at
+           x 134-878, y 254-790 of the 1000x1000 image (a soft low-contrast
+           deviation is the shadow, so the threshold has to exclude it). Do NOT
+           inset the left edge to "keep the spine": that strip is the template's
+           own cover photo wrapping the spine, so insetting leaves a sliver of
+           the stock leopard showing. `crop` trims to the book plus room for its
+           shadow. */
+        book:         { template: '/assets/mockups/book.jpg', rect: { x: 0.133, y: 0.253, w: 0.747, h: 0.539 },
+                        crop: { x: 0.100, y: 0.222, w: 0.830, h: 0.622 }, noRotate: true, spine: true },
+      };
+
+      /* The size label is the only thing on a stored line that carries the shape
+         (e.g. 16x24"), so parse it rather than shipping a catalogue mirror --
+         that also means lines added before this change still render. */
+      function thumbAspect(r) {
+        const m = /(\d+(?:\.\d+)?)\s*[x\u00d7]\s*(\d+(?:\.\d+)?)/i.exec((r.options || {}).sizeLabel || '');
+        if (!m) return 1;
+        let a = parseFloat(m[1]) / parseFloat(m[2]);
+        if (!isFinite(a) || a <= 0) return 1;
+        /* `orientation` is the field order.html stores today; `orientationLabel`
+           is the display string and is all an older line may carry. Read both
+           so lines already sitting in someone's cart render the right way up. */
+        const o = r.options || {};
+        const landscape = o.orientation === 'landscape' ||
+                          /landscape/i.test(o.orientationLabel || '');
+        if (landscape && a < 1) a = 1 / a;
+        return a;
+      }
+
+      const loadImg = src => new Promise((res, rej) => {
+        const i = new Image(); i.crossOrigin = 'anonymous';
+        i.onload = () => res(i); i.onerror = rej; i.src = src;
+      });
+
+      /* Crop to the opening's aspect, then draw. Cropping FIRST is what keeps a
+         landscape photo from being squashed into a portrait opening. */
+      function drawCovered(ctx, img, x, y, w, h) {
+        const want = w / h, have = img.naturalWidth / img.naturalHeight;
+        let sw = img.naturalWidth, sh = img.naturalHeight, sx = 0, sy = 0;
+        if (have > want) { sw = sh * want; sx = (img.naturalWidth - sw) / 2; }
+        else { sh = sw / want; sy = (img.naturalHeight - sh) / 2; }
+        ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+      }
+
+      /* A wall calendar has no product photograph to composite into, so draw it
+         — faithfully. These metrics are calendar.html's own month page, scaled
+         from its 1400x993 print canvas (see buildGridInner and the .gp-* CSS
+         there): the month word top-left, the date grid on the RIGHT half with
+         vertical column rules, and the big pale month number bottom-left. An
+         invented layout (a heading with full-width rules) does not look like
+         the product, which is the whole point of showing a product. */
+      const CAL_PAGE = { W: 1400, H: 993 };
+      const CAL_MONTHS = ['January','February','March','April','May','June',
+                          'July','August','September','October','November','December'];
+      const CAL_DOW = ['S','M','T','W','T','F','S'];
+
+      function calYearOf(r) {
+        const o = r.options || {};
+        const m = /(20\d{2})/.exec(`${o.orientationLabel || ''} ${o.sizeLabel || ''} ${r.title || ''}`);
+        return m ? parseInt(m[1], 10) : new Date().getFullYear() + 1;
+      }
+
+      /* One month page, drawn into (x, y, w, h) at the print canvas's proportions. */
+      function drawCalMonthPage(ctx, x, y, w, h, year, month) {
+        const sx = w / CAL_PAGE.W, sy = h / CAL_PAGE.H;
+        ctx.fillStyle = '#fff'; ctx.fillRect(x, y, w, h);
+        // .gp-month — left 90, top 64, 148px bold
+        ctx.fillStyle = '#141414'; ctx.textBaseline = 'top';
+        ctx.font = `700 ${Math.max(7, 148 * sy)}px Inter, sans-serif`;
+        ctx.fillText(CAL_MONTHS[month], x + 90 * sx, y + 64 * sy);
+        // .gp-num — a 2x96 rule plus the month number at 88px, bottom-left
+        const numY = y + h - 66 * sy - 96 * sy;
+        ctx.fillStyle = '#cfcfcf';
+        ctx.fillRect(x + 90 * sx, numY, Math.max(1, 2 * sx), 96 * sy);
+        ctx.fillStyle = '#c2c2c2';
+        ctx.font = `500 ${Math.max(6, 88 * sy)}px Inter, sans-serif`;
+        ctx.fillText(String(month + 1).padStart(2, '0'), x + (90 + 18) * sx, numY);
+        // .gp-grid — left 610, top 440, right 82, bottom 92; 7 columns, rules between
+        const gx = x + 610 * sx, gy = y + 440 * sy;
+        const gw = w - (610 + 82) * sx, gh = h - (440 + 92) * sy;
+        const colW = gw / 7;
+        const days = new Date(year, month + 1, 0).getDate();
+        const first = new Date(year, month, 1).getDay();
+        const weeks = Math.ceil((first + days) / 7);
+        const rowTop = 62 * sy, rowStep = (gh - rowTop - 26 * sy) / Math.max(5, weeks);
+        ctx.strokeStyle = '#d9d9d9'; ctx.lineWidth = Math.max(0.5, 1.5 * sx);
+        for (let c = 1; c < 7; c++) {
+          const lx = Math.round(gx + c * colW) + 0.5;
+          ctx.beginPath(); ctx.moveTo(lx, gy); ctx.lineTo(lx, gy + gh); ctx.stroke();
+        }
+        ctx.textAlign = 'right';
+        for (let c = 0; c < 7; c++) {
+          const right = gx + (c + 1) * colW - 16 * sx;
+          ctx.fillStyle = '#8a8a8a';
+          ctx.font = `600 ${Math.max(4, 18 * sy)}px Inter, sans-serif`;
+          ctx.fillText(CAL_DOW[c], right, gy);
+          ctx.fillStyle = '#141414';
+          ctx.font = `500 ${Math.max(5, 40 * sy)}px Inter, sans-serif`;
+          for (let row = 0; row < weeks; row++) {
+            const d = row * 7 + c - first + 1;
+            if (d < 1 || d > days) continue;
+            ctx.fillText(String(d), gx + (c + 1) * colW - 14 * sx, gy + rowTop + row * rowStep);
+          }
+        }
+        ctx.textAlign = 'left';
+      }
+
+      async function drawCalendarThumb(el, r) {
+        const S = 460, cv = document.createElement('canvas');
+        cv.width = S; cv.height = S;
+        const ctx = cv.getContext('2d');
+        try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (_) {}
+        /* The printed calendar hangs as ONE sheet: the dates page on top, the
+           photo page directly below it. Same as renderMonths builds. */
+        const sheetH = Math.round(S * 0.88);
+        const pageH = Math.round(sheetH / 2);
+        const sheetW = Math.round(pageH * (CAL_PAGE.W / CAL_PAGE.H));
+        const x = Math.round((S - sheetW) / 2), y = Math.round((S - sheetH) / 2);
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.24)';
+        ctx.shadowBlur = 26; ctx.shadowOffsetY = 12;
+        ctx.fillStyle = '#fff'; ctx.fillRect(x, y, sheetW, sheetH);
+        ctx.restore();
+        drawCalMonthPage(ctx, x, y, sheetW, pageH, calYearOf(r), 0);
+        if (r.thumb_url) {
+          try {
+            const img = await loadImg(r.thumb_url);
+            ctx.save(); ctx.beginPath();
+            ctx.rect(x, y + pageH, sheetW, sheetH - pageH); ctx.clip();
+            drawCovered(ctx, img, x, y + pageH, sheetW, sheetH - pageH);
+            ctx.restore();
+          } catch (_) { /* no photo: the dates page alone still reads as a calendar */ }
+        }
+        /* Hairline between the two pages, as on the printed sheet. */
+        ctx.strokeStyle = 'rgba(0,0,0,0.10)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, y + pageH + 0.5); ctx.lineTo(x + sheetW, y + pageH + 0.5); ctx.stroke();
+        el.style.backgroundImage = '';
+        el.classList.add('has-render');
+        el.innerHTML = '';
+        el.appendChild(cv);
+      }
+
+      async function renderLineThumb(el, r) {
+        if (r.product_type === 'calendar') return drawCalendarThumb(el, r);
+        const mk = THUMB_MOCKUPS[r.product_type];
+        if (!mk || !r.thumb_url) return;                 // keep the plain photo
+        const [tpl, photo] = await Promise.all([loadImg(mk.template), loadImg(r.thumb_url)]);
+        const S = 420;
+        const s = Math.min(S / tpl.naturalWidth, S / tpl.naturalHeight);
+        const tw = Math.round(tpl.naturalWidth * s), th = Math.round(tpl.naturalHeight * s);
+        const cv = document.createElement('canvas');
+        const ctx = cv.getContext('2d');
+        let rect = { x: mk.rect.x * tw, y: mk.rect.y * th, w: mk.rect.w * tw, h: mk.rect.h * th };
+        /* A portrait frame turned 90 degrees IS its landscape counterpart, so
+           rotate the template and remap the opening rather than stretching it. */
+        /* `noRotate` opts a product out: a book is not a frame, and turning
+           its photograph on its side would show a book lying sideways. */
+        if (thumbAspect(r) > 1 && !mk.noRotate) {
+          cv.width = th; cv.height = tw;
+          ctx.save(); ctx.translate(th, 0); ctx.rotate(Math.PI / 2);
+          ctx.drawImage(tpl, 0, 0, tw, th); ctx.restore();
+          rect = { x: th - rect.y - rect.h, y: rect.x, w: rect.h, h: rect.w };
+        } else {
+          cv.width = tw; cv.height = th;
+          ctx.drawImage(tpl, 0, 0, tw, th);
+        }
+        /* Hide the template's own stock photo before the real one lands. */
+        ctx.fillStyle = '#e9e9ec';
+        ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+        ctx.save(); ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
+        drawCovered(ctx, photo, rect.x, rect.y, rect.w, rect.h);
+        ctx.restore();
+        /* A hardcover's cover is almost entirely photograph, and the template's
+           own cast shadow is too soft to survive at 132px -- so once the user's
+           photo is in, the book reads as a bare picture. Put the object back:
+           a narrow shading gradient where the cover wraps the spine, and a
+           firmer drop shadow under the block. */
+        if (mk.spine) {
+          const sw = Math.max(3, rect.w * 0.022);
+          const g = ctx.createLinearGradient(rect.x, 0, rect.x + sw, 0);
+          g.addColorStop(0, 'rgba(0,0,0,0.42)');
+          g.addColorStop(0.55, 'rgba(0,0,0,0.12)');
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = g; ctx.fillRect(rect.x, rect.y, sw, rect.h);
+          ctx.save();
+          ctx.shadowColor = 'rgba(0,0,0,0.30)';
+          ctx.shadowBlur = rect.w * 0.05;
+          ctx.shadowOffsetY = rect.h * 0.035;
+          ctx.strokeStyle = 'rgba(0,0,0,0.06)'; ctx.lineWidth = 1;
+          ctx.strokeRect(rect.x + .5, rect.y + .5, rect.w - 1, rect.h - 1);
+          ctx.restore();
+        }
+        /* Trim to the product itself where the template carries a lot of
+           surrounding background; without this a book is a small object adrift
+           in a big empty frame at 132px. */
+        let out = cv;
+        if (mk.crop) {
+          const c = { x: mk.crop.x * cv.width, y: mk.crop.y * cv.height,
+                      w: mk.crop.w * cv.width, h: mk.crop.h * cv.height };
+          out = document.createElement('canvas');
+          out.width = Math.round(c.w); out.height = Math.round(c.h);
+          out.getContext('2d').drawImage(cv, c.x, c.y, c.w, c.h, 0, 0, c.w, c.h);
+        }
+        el.style.backgroundImage = '';
+        el.classList.add('has-render');
+        el.innerHTML = '';
+        el.appendChild(out);
+      }
+
         list.innerHTML = rows.map(r => {
           const d = designs.get(r.collection_id);
           const opts = r.options || {};
@@ -321,6 +567,14 @@
               </div>
             </div>`;
         }).join('');
+
+        /* Upgrade each thumbnail to a product render once its template and photo
+           load. Best-effort and per line: a template that fails to load leaves
+           that line on the plain photo rather than blanking it. */
+        rows.forEach(r => {
+          const el = list.querySelector(`.line[data-id="${CSS.escape(String(r.id))}"] .line-thumb`);
+          if (el) renderLineThumb(el, r).catch(() => {});
+        });
 
         requestQuote();
       }
