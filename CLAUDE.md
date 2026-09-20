@@ -2237,3 +2237,107 @@ Fixed with **`settledAmountMinor(session)` = `amount_total − total_details.amo
 **Popsa parity (cart):** matched per-line prices, the persistent sticky summary, Subtotal/Shipping/Tax/Total, and tax appearing only once an address exists. **Not matched:** shipping options as cards with prices and delivery estimates (ours is a bare dropdown — change it and wait for a re-quote to see the effect; this is the biggest remaining gap), saved addresses, a per-item ⋯ menu, "Add Another Item", a discounts panel (Stripe's promo field is on their page), and payment-method choice shown before leaving the site.
 
 **Three calls from the button work that are cheap to reverse:** the Shop pill lost its drop shadow; button weight standardised to 600 (app pages were 700); shop size-chips are pills now.
+
+### 2026-09-20 — Companion insert was the wrong shape on every order; a dead API key would have read as "we don't ship there"
+
+**Three commits, all fast-forwarded to `main` and live: `30d244f`, `06131bc`, `36bdd43`.** No PRs. No migration (the `branding` column was already run in prod on 2026-09-15). Started as "walk me through the Prodigi dashboard" and turned into two live bugs, neither of which was the thing we set out to do.
+
+#### THE ORIENTATION BUG — and the spec line that settled it
+
+Prodigi's dashboard prints the insert's spec **on the insert itself**, in the Add-insert-set dialog:
+
+> "Single-sided A6 (4.1x5.8"), 260gsm postcard with a smooth finish. **Includes a 4mm white border.**"
+
+**4.1 × 5.8in is 105 × 148mm — the stock is A6 PORTRAIT.** We were generating a 1748 × 1240 **landscape** file, which would have printed rotated or cropped. Not just the generic dashboard card: **every per-order card, on every order**, since the insert has been enabled since 2026-09-15.
+
+This had been sitting in the code as an explicit "ORIENTATION IS UNCONFIRMED — check the proof image on the first order" comment since the card was built. The answer was one dialog away the whole time and nobody had opened it. **When a spec is marked unconfirmed, the supplier's own UI is worth a look before waiting on an order to tell you.**
+
+**Two ways to fix it, and the user picked the right one.** I had already re-composed the design for a portrait canvas (wordmark moved from top-right, where it no longer fits beside "Scan" on a 105mm-wide card, down to bottom-left; vertical rhythm rebalanced) when the user asked *"cant we just rotate the design 90 degrees?"* — which is better, for a reason that only showed up on measuring:
+
+- **A portrait card has 89mm of safe width.** A 30-character slug (`slug.js` MAX) renders ~104mm at the approved 11pt. So the re-lay *needed* auto-shrinking type to stay legal — machinery that exists only because the card got narrow.
+- **Rotated, the sentence still runs along the 148mm edge**, exactly as the approved artwork intended. 132mm of room. Nothing to solve.
+- And it isn't a redesign. The re-lay was me redrawing signed-off artwork; rotation is that artwork, unchanged, in a correctly-shaped file.
+
+A card is a rectangle with no inherent up, so a landscape-reading postcard is an ordinary object.
+
+**How it works now** (`public/postcard-render.js`): `CARD` stays at the approved landscape 148 × 105 with every placement number untouched (verified: they don't appear in the diff at all). `PRINT.insertPx` is `{ w: 1240, h: 1748 }`, and `buildPostcardInsert()` rotates the rendered face a quarter turn clockwise into that portrait canvas — so the original top edge lands on the right and the type reads top-to-bottom, the usual Western convention for vertical type. The rotation is conditional on the face and file disagreeing about orientation, not hard-coded, so drawing it straight into a differently-shaped box (which would stretch it) can't happen by accident.
+
+Verified: the gradient's corner signature confirms a quarter turn rather than a stretch (purple top-left, cyan bottom-right — the landscape gradient turned), the export is exactly 1240 × 1748 = 104.99 × 148.00mm at 300 DPI, and it matches its declaration in both files.
+
+**Two things fixed alongside, both the same class of mistake:**
+- **The proof PDF's orientation was hard-coded** and had already gone stale once. Now derived: `const orientation = w > h ? 'landscape' : 'portrait'`.
+- **The sentence's box spanned the full trim**, so a line too long to fit could sit out in the border without ever wrapping. Inset to the safe area, and `fitCopy()` steps the type down only when a line would otherwise breach it. Ordinary slugs still render at the approved 11pt; an `'m' × 30` slug drops to 10.75pt. Called from `setBaselines()` rather than left to each caller, because the artboard and the print path both go through that and a fit applied to only one of them is exactly the preview/press drift this file exists to prevent.
+
+#### THE SECOND BUG — an auth failure reading as an unservable route (`36bdd43`)
+
+`lib/print/providers/prodigi.mjs` classified **every 4xx** quote failure as `unservable`, which makes the caller stop retrying and tell the customer *"We can't ship this item to your country."* **401 and 403 are our own credentials, and 429 is a rate limit that clears** — none of them says anything about the route.
+
+So **a revoked, rotated or mistyped Prodigi key would have shown every customer a plausible-looking product limitation**, with the retry skipped and nothing raised in Sentry, because an unservable route is expected behaviour rather than an error. A total outage in the costume of a catalogue gap.
+
+It surfaced by accident: a `price-list.mjs` run reported **all 17 print and tile variants as "not servable to US"** — items on sale to the US right now. That's what a 401 looked like.
+
+`printify.mjs` had the identical flaw. The set now lives in one module (`lib/print/providers/statuses.mjs`, `UNSERVABLE_STATUSES = {400, 404, 409, 422}`) rather than a copy per provider — the two copies had already drifted in their comments, and this is the kind of rule that gets fixed in one place and left wrong in the other. `price-list.mjs` also now warns when `PRODIGI_API_KEY` and `PRODIGI_BASE_URL` disagree about sandbox vs live, which 401s every row with no hint that the key is the problem.
+
+#### Prodigi dashboard — both insert sets now configured
+
+| set | what it is | cost | usage |
+|---|---|---|---|
+| **Popcode Round packaging sticker** | "High-gloss round sticker (65mm / 2.5"), placed on the **outside of the packaging**. On tubes, attached to the end cap." Carries the wordmark + `popcode.app` on the brand gradient. | **$1.25** | API + Online order |
+| **Popcode companion card** | The A6 postcard, generic (no-slug) artwork as the account-level fallback | **$2.50** | API (advised ticking Online order too, for hand-placed replacement orders where no slug-specific card exists) |
+
+**$3.75 per ORDER, not per item, and in no quote — so it comes straight off margin.**
+
+**I argued for dropping the sticker and was wrong.** I valued it as an information channel ("the card already carries the URL"); its actual job is presentation — the packaging is a brown envelope and the sticker is the only branding on it. The user pushed back, and the dashboard confirmed it's exterior. Kept.
+
+#### Insert economics — and why nothing was dropped
+
+`TYPE_MARKUPS` is no longer a flat 1.4 (a 2026-09-16 session rebalanced it per type when shipping came out of the markup). Margin ≈ goods × (markup − 1), so the goods cost each type needs to carry $3.75:
+
+| | markup | goods needed | actual goods (per `catalog.mjs:406-418`) |
+|---|---|---|---|
+| print | 1.8 | **$4.69** | $6–22 |
+| tile | 2.0 | **$3.75** | $8–10 |
+
+**Nothing is underwater, and I nearly recommended a cut that wasn't warranted.** I assumed the small print sizes sat below that quoted $6 floor. They don't — checking the commit order settled it: the small sizes went in on 15 September (`1e8f3fc`), the markup table the day *after* (`927acb0`), with them already in the catalogue. **Check whether a comment predates the thing you're measuring before you trust its range.**
+
+Also moot by the time we got there: **the 4×6 is already retired and hidden** (not in `order.html`'s picker), for a sharper reason than mine — Prodigi charges the same to make and post a 4×6 as a 5×7, so it earned identical margin for a visibly smaller print and only undercut the 5×7. The shop starts at 5×7.
+
+**Decision: no minimum quantities.** The inserts are billed per *order*, so a per-product quantity minimum is the wrong lever anyway (one 4×6 plus one tile is still one order, one card). And a minimum is real UI work — cart validation, messaging, an error someone meets at checkout — to rescue sizes that have never sold. Minimums make sense when the cheap item is the hero product; that's Mixtiles' model, not ours.
+
+#### "Why is Shutterfly's 4×6 $0.39 + $5.99 shipping and ours ~$22?"
+
+Worth writing down so it isn't re-derived. Four reasons, only one about shipping:
+
+1. **Not the same product.** $0.39 is a glossy photographic print off a minilab. Ours is `GLOBAL-FAP` — enhanced matte art, 200gsm, a fine-art giclée-type print. Shutterfly sells that too and it isn't 39¢ there either.
+2. **$0.39 is a loss leader.** They own their labs and print at vast scale; cheap 4×6s are the hook that sells books and canvas. We're a reseller — Prodigi's trade price already contains Prodigi's margin and ours goes on top. **Structurally two margins behind a vertically integrated printer**, and no tuning closes that.
+3. **Their $5.99 is a subsidised flat rate**, not a carrier quote. It covers one print or a hundred.
+4. **Our shipping isn't per-print either** — the cart quotes each provider's items as a single shipment, so ten prints carry roughly one shipping charge. A single small print is simultaneously our worst case and their best marketing case.
+
+**Conclusion: don't try to win it.** A commodity 4×6 isn't the product; a photo that plays a video is. Matching them means finding a supplier who prints below Prodigi's trade rate — a different company, not a settings change. User confirmed: **keep Standard as the default shipping method and keep the same stock.** Both verified as already the case (both pickers have `selected`, and all four server paths fall back to `'Standard'`) — a genuine no-op, nothing changed.
+
+#### `price-list.mjs` gained margin-after-inserts (`06131bc`)
+
+`--copies=N` to read the table at realistic basket sizes, and a **net** column = margin less the per-order inserts (losses parenthesised), plus a **min qty** column — how many of an item an order needs before it carries its own inserts, i.e. what a minimum would have to be set to. `--inserts=0` gives the old view.
+
+#### LESSONS — deploy verification bit me twice in one session
+
+**I reported "still not live after 20 checks" when it had been live the whole time.** Both failure modes are worth avoiding:
+1. **I polled for a string my own file doesn't contain.** "quarter turn" wraps across a line in all three places I wrote it, so the grep could only ever fail. Checking `grep -c` against the *local* file first would have caught it in a second.
+2. **I was reading a cached response.** `x-vercel-cache: HIT`, `age: 270` — the CDN served the old bytes for the entire poll, and even a `?cb=` buster came back stale before invalidation caught up.
+
+**The reliable check is `curl` the file and `cmp` it against local.** Byte identity settles it; a string match only tells you about the string you guessed. (This is the third session in a row where deploy verification produced a false reading — see 2026-09-15's "a 200 on a path that already existed proves nothing".)
+
+#### Other gotchas from this session
+
+- **The user's local repo was 214 commits behind the branch.** `git checkout <branch>` printed "Already on ..." and was a silent no-op, so the file they were told to run genuinely didn't exist for them. **When someone says "module not found" for a file you can see, check how far behind their checkout is before debugging anything else** — `git status --short --branch` says it in one line.
+- **`.DS_Store` blocked their `git pull`** ("local changes would be overwritten"). Already fixed upstream in `0c17c68` — they're untracked and gitignored now, which is *why* the pull wanted to delete them. `git checkout -- .DS_Store public/.DS_Store public/assets/.DS_Store` then pull. Nothing lost; they only hold Finder window positions.
+- **They pasted `test_your_sandbox_key` literally.** Placeholders in a command block get run verbatim. Name them so they can't be mistaken for values (`PASTE_KEY_HERE`), and say explicitly that they must be replaced.
+- **Their terminal opens in `~`, not the project** (documented on 2026-04-22, still true). Every command block needs `cd ~/popcode-demo` first.
+- **Prodigi's insert set dialog is `Settings` / `Add inserts` tabs**, with the price shown per insert in the row and totalled in the pill at the top right. "Usage" = which order paths get the set by default.
+
+#### STILL OPEN
+
+- **Place one real order** — settles three things at once: whether a per-order `branding` block **replaces** the dashboard default or **adds a second card** (the two doc sources conflict and this is still unresolved), whether the rotation prints right, and the exact margin (`print_orders` records `quote_cost_minor` against `total_charged_minor`, replacing every estimate above).
+- **`analytics.html` is still gated to `curtmid@gmail.com` only** (`ADMIN_EMAIL`) — `curt@theworkshop.works` bounces to manage.html. Offered in three sessions now, never taken; `edit.html` already does the two-email version.
+- **Re-enable Vercel Deployment Protection** on previews. Flagged in four sessions.
+- Shipping options as cards with prices and delivery estimates — the biggest remaining Popsa gap.
