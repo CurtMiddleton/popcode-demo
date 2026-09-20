@@ -2237,3 +2237,59 @@ Fixed with **`settledAmountMinor(session)` = `amount_total − total_details.amo
 **Popsa parity (cart):** matched per-line prices, the persistent sticky summary, Subtotal/Shipping/Tax/Total, and tax appearing only once an address exists. **Not matched:** shipping options as cards with prices and delivery estimates (ours is a bare dropdown — change it and wait for a re-quote to see the effect; this is the biggest remaining gap), saved addresses, a per-item ⋯ menu, "Add Another Item", a discounts panel (Stripe's promo field is on their page), and payment-method choice shown before leaving the site.
 
 **Three calls from the button work that are cheap to reverse:** the Shop pill lost its drop shadow; button weight standardised to 600 (app pages were 700); shop size-chips are pills now.
+
+### 2026-09-19 (parallel session) — Book cover tint + the crop bug behind it, the home hero on phones, and a placement tuner
+
+**Ran alongside the button-system/cart session above — same day, same repo, different branch (`claude/relaxed-mendel-7mrnck`), every commit fast-forwarded to `main` and live.** Commits: `4988dcf` `3c95665` `3d3844b` `a2efed7` `74cf6eb` `8e2b07e` `b1ef521` `004b1a8` `b50edf9` `7f6990c`. No migration, no env change. The `docs/design-audit-brief.md` that the other session then worked from was written at the end of this one.
+
+#### The book cover gray band — two independent causes, and the one the 2026-09-02 notes predicted
+
+User, with screenshots: *"i'm moving the photo up so bottom edge is flush… but when i see the preview of the cover it shows a band of gray as if i moved it up further."* Two separate bugs stacked, and fixing either alone would have left it broken.
+
+**1. Covers were still on the old crop model.** The 2026-09-02 entry ends with "extend the unified crop model + clamp to the cover/back-cover photos (still object-fit)" as a follow-up. This was it. `.cv-photo-img` / `.bc-img` were `object-fit: cover` plus a `transform: translate(%)`, and **that is not a crop-reposition** — cover clips the image to the element box, so translating slides the *clip window* and drags emptiness in behind it. Page slots had been fixed in September; covers hadn't, so the same gesture did two different things depending on which surface you were on.
+   Fix: covers now go through `layoutPhotoInSlot` / `drawPhotoAdjusted` / `clampPan` like every page slot. New `photoBox(img)` maps an img to its box (`.slot` / `.cv-photo` / the `.bc-img` parent), `layoutAllSlotPhotos` walks all three classes, `bakeSlotImgForPrint` uses the same mapping, and `fallbackPhotoDiv` mirrors the real layout for the print path. `adjustTransform` was deleted once its last caller went.
+
+**2. The editor window was the wrong shape.** Edit Photo sized its crop window from `bookAr()` — the *book's* aspect — but a cover photo's real box is not the book. Style A insets it, the back cover has an inset mode and a full-bleed mode. So you were panning inside a window that didn't match what the page would draw, and it landed short.
+   Fix: `liveBoxAr(selector, fallback)` measures the actual rendered box and falls back to `bookAr()` only if it isn't on screen yet. Cover and back cover each pass their own selector.
+
+**Verification that mattered:** swept pans and zooms across all three cover styles and both back-cover modes, asserting no gap ever appears and that the editor's source rect equals the page's source rect. Two self-inflicted detours on the way: the coverage test read 0×0 boxes because book.html opens on an intro screen (click `#start-book-btn` first), and an "aspect mismatch" of 0.0001 was my own 4-dp rounding against fractional `clientWidth`. Also `backCover.mode` is **`'fullbleed'`**, not `'full'` — guessing it cost a run that kept measuring the inset box.
+
+#### Cover tint became a gradient, then a slider (`4988dcf`, `3c95665`)
+
+The tint was a flat wash over the whole photo, which dulled the picture to make the title legible. It's now a gradient weighted to the bottom where the type sits, and the amount is a slider in the cover sheet (`#cv-tint`, 0–60%) persisted as `cover.tint`. **`DEFAULT_COVER_TINT` 0.28 → 0.18**, since the gradient does the legibility work the wash was doing by brute force.
+
+#### Home hero — desktop nudge, and a real rebuild on phones (`a2efed7`, `74cf6eb`, `b1ef521`, `b50edf9`)
+
+Desktop only wanted the stage moved left; it went 100px, the user said too far, and it settled at **-60px**. The phone layout was the actual work: the art and phone sat below the subhead and the buttons, far from the headline they belong to.
+
+- **Reorder without touching the DOM:** `.hero-copy { display: contents }` dissolves the copy wrapper so headline / stage / sub / CTA become siblings of one flex column and take `order: 1…4`.
+- **`display: contents` does not stop inheritance** — the headline stayed right-aligned because `.hero-copy { text-align: right }` still passed through a box that no longer exists. Set `text-align: left` on `.hero-copy` itself. Worth remembering: contents removes the *box*, not the cascade.
+- **A media query that looked ignored wasn't.** `.art-wrap { left: calc(10% + 50px) }` did nothing at 390px because a later `@media (max-width: 560px)` block set `left: 12%`. Media queries add no specificity; an equally specific rule wins on source order alone. Both blocks have to move together.
+- Aligning the art's top edge to the top of the **y in "play."** was done from font metrics, not by eye: `baseline = rangeTop + fontBoundingBoxAscent`, then `x-height top = baseline - measureText('y').actualBoundingBoxAscent`.
+
+#### The placement tuner — `public/hero-tune.js`, `popcode.app/?tune` (`004b1a8`)
+
+After two rounds of "move the art left a bit and the phone right a bit," the user asked what the best way to specify this actually is. The answer was to stop specifying it: **put the numbers under their thumb on the phone they're looking at, and have the panel hand back the exact lines to paste.**
+
+- Loaded only when `/[?&]tune\b/` matches, so an ordinary visit costs one regex test.
+- Four per-scene sliders (height / across / up-down / tilt) + three globals, scene chips, Copy (clipboard with an on-screen textarea fallback, since clipboard needs a gesture *and* a secure context), Reset, collapse. z-index **9600** to clear the 9000 Beta Feedback FAB, and `.ht.peek { opacity: .16 }` so the panel gets out of the way while a slider is held — it otherwise covers the thing you're judging.
+- **It writes onto the scene objects and re-renders through the page's own `window.popcodeApplyArt`**, never a parallel implementation. What the sliders show is what the page does, so the values can't be right in the panel and wrong in the product.
+- Needed two hooks in index.html: `window.popcodeReel` (`pause` / `resume` / `go(word)` / `words`, with `next()` deferring while paused) and `applyArtGeometry` reading a phone variant first.
+
+**New knobs it writes:** per-scene `hSm` / `xSm` / `ySm` / `rotSm`, and three custom properties on `.hero` — `--stage-rise`, `--art-inset`, `--phone-inset` — so the phone globals are drivable without touching the rules.
+
+**Applied at 402×748, and only the values that differ from desktop are written** (`albums xSm -10%` · `calendars xSm 40% ySm 4%` · `prints xSm 37% ySm 2%` · `exhibits xSm 37%` · `anything xSm 11%`; globals `-66px` / `20px` / `34px`). Writing all twenty would have frozen the desktop numbers into the phone block and broken the link between them.
+
+**Open question deliberately left:** whether `?tune` stays shipped. It's ~11.5 KB that never loads, and it will be wanted again the next time the hero moves.
+
+#### Smaller
+
+- Eyebrow wordmark under "Two ways to experience" was 45px and out of scale; **tied to the nav's 35px** via `--eb-h` in ems so it tracks the line it sits on (`3d3844b` also gave the dock symbol a hover/idle spin).
+
+#### `docs/design-audit-brief.md` (`7f6990c`) — the handoff
+
+User asked for a site-wide visual audit and, separately, for the screens that feel too noisy. Measured rather than opined: headless pass over 20 pages at 1440 and 402, dumping **computed** style for every visible button, heading and card. Headline numbers: **203 buttons, 21 distinct heights, 9 radii**; buttons rendering in **Arial on 19 pages** (nav.js's icon buttons never get a `font-family`); **11 h1 sizes**; the homepage's mismatched hero pair traced to `.btn-ghost` carrying a 1px border `.btn-dark` doesn't (39 vs 41 phone, 44 vs 46 desktop).
+
+**The brief states its own blind spot and refuses the second half.** The stub returns empty data, so Manage renders no cards, Cart no lines, Shop no products — every count is page chrome only, and the noise question cannot honestly be answered from it. It lists candidates, not conclusions. The next session confirmed why that mattered: with a rich stub Manage showed **117 controls across 8 projects** against the brief's guess of "70+".
+
+**Measure computed style, not the stylesheet.** Nearly every finding is invisible in the CSS — it comes from a rule in another file, a breakpoint, or a declaration nobody ever wrote.
