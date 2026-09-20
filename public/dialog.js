@@ -148,6 +148,12 @@
   window.popcodeConfirm = popcodeConfirm;
   window.popcodeCopyLink = popcodeCopyLink;
   // Every alert(...) on the page, designed. Kept as the original for debugging.
-  window.__nativeAlert = window.alert;
-  window.alert = function (msg) { popcodeDialog({ message: msg }); };
+  // Some in-app browsers and extensions define window.alert as non-writable,
+  // and this file is strict-mode, so the assignment THROWS rather than failing
+  // quietly -- which took the rest of this IIFE down with it. The designed box
+  // is a nicety; the native one is a fine fallback. Never let it break the page.
+  try {
+    window.__nativeAlert = window.alert;
+    window.alert = function (msg) { popcodeDialog({ message: msg }); };
+  } catch (e) {}
 })();
