@@ -380,13 +380,20 @@
             + parcels.length + ' different workshops, so they ship separately.</div>'
           : '';
 
-        return note + parcels.map((p) => {
+        return note + parcels.map((p, i) => {
           const shipped = String(p.status || '').toLowerCase() === 'shipped';
           const sub = shipped
             ? (p.dispatched_at ? 'Dispatched ' + esc(when(p.dispatched_at)) : 'On its way')
             : 'Still being made';
+          /* Prodigi reports "Mixed" as the carrier on a shipment it has not
+             allocated yet. That is their placeholder, not a courier, and
+             "Mixed \u00b7 Still being made" reads like a bug. Until there is a
+             real carrier the parcel is named by its position instead. */
+          const named = p.carrier && p.carrier.toLowerCase() !== 'mixed';
+          const label = named ? p.carrier
+            : (parcels.length > 1 ? 'Parcel ' + (i + 1) : 'Your parcel');
           return '<div class="parcel"><div class="parcel-what">'
-            + esc(p.carrier || 'Parcel')
+            + esc(label)
             + '<div class="parcel-sub">' + sub
             + (p.tracking_number ? ' \u00b7 ' + esc(p.tracking_number) : '') + '</div></div>'
             + (p.tracking_url
