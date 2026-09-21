@@ -29,24 +29,36 @@ if (!KEY) {
 
 const CONTROL = 'BOOK-FE-A4-L-LF-G';
 
-// The known-good SKU reads BOOK-FE-{size}-{orientation}-{binding}-{finish}.
-// Only the size and orientation tokens are in doubt for the square, so vary
-// those and keep LF (layflat). Finish is varied too since it may not be 'G'.
-const SIZES = ['21X21', '21x21', '210X210', '8X8', '8x8', 'SQ', 'S'];
-const ORIENTATIONS = ['SQ', 'S', '', 'P', 'L'];
-const FINISHES = ['G', 'M', ''];
+// The known-good SKU reads BOOK-FE-{size}-{orientation}-{binding}-{finish}
+// (BOOK-FE-A4-L-LF-G). For the 8.3×8.3" square, the size AND orientation tokens
+// are both unknown — Prodigi publishes only the "BOOK-FE" prefix (verified: the
+// marketing PDFs for layflat/hardcover/softcover all stop there), and the
+// catalogue endpoint is exact-match, so the only option is to try the plausible
+// spellings. This grid is deliberately broad because a read costs nothing.
+const SIZES = [
+  '21X21', '21x21', '210X210', '210', '21', '8X8', '8x8', '8',
+  '21SQ', 'SQ21', 'S21', '21S', 'SQ', 'S', 'SM', 'SML', 'SMALL',
+];
+const ORIENTATIONS = ['SQ', 'S', '', 'SQR', 'P', 'L'];
+// LF (layflat) is the product line itself, so it's fixed; only size/orient/finish
+// are really in doubt. (Pass any other spelling Prodigi gives you as an argument.)
+const BINDINGS = ['LF'];
+const FINISHES = ['G', 'M', 'GL', 'MT', ''];
 
 const candidates = [];
 for (const size of SIZES) {
   for (const o of ORIENTATIONS) {
-    for (const f of FINISHES) {
-      const sku = ['BOOK-FE', size, o, 'LF', f].filter(Boolean).join('-');
-      if (!candidates.includes(sku)) candidates.push(sku);
+    for (const bind of BINDINGS) {
+      for (const f of FINISHES) {
+        const sku = ['BOOK-FE', size, o, bind, f].filter(Boolean).join('-');
+        if (!candidates.includes(sku)) candidates.push(sku);
+      }
     }
   }
 }
 // The 11.7" square, in case that one is wanted too.
-for (const size of ['29X29', '297X297', '11X11']) candidates.push(`BOOK-FE-${size}-SQ-LF-G`);
+for (const size of ['29X29', '297X297', '11X11', '30SQ', 'L', 'LG', 'LGE'])
+  candidates.push(`BOOK-FE-${size}-SQ-LF-G`);
 candidates.push(...process.argv.slice(2));
 
 const get = async (sku) => {
@@ -96,5 +108,10 @@ if (!found.length) {
   process.exit(1);
 }
 
-console.log(`\nFound ${found.length}. Put the square one in lib/print/catalog.mjs as book-21sq-layflat's`);
-console.log('sku, drop its `hidden` flag, then re-run: node scripts/price-list.mjs --type=book\n');
+console.log(`\nFound ${found.length}. The 8.3×8.3" one is the row whose dims read "210×210 mm" (or 8.3×8.3 in).`);
+console.log('To turn the 8×8 book back on, paste that exact SKU into TWO places:');
+console.log('  1. lib/print/catalog.mjs → the `book-21sq-layflat` entry:');
+console.log('       set  sku: \'<THE VERIFIED SKU>\'   and DELETE the  hidden: true  flag');
+console.log('  2. public/book.html → BOOK_SIZES[\'square-8x8\']: DELETE the  unavailable: true  flag');
+console.log('Then sanity-check the price:  node scripts/price-list.mjs --type=book\n');
+console.log('(If you\'d rather not touch code, just paste the SKU back to Claude and it will wire + verify it.)\n');
