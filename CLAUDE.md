@@ -2468,3 +2468,117 @@ Now a blocking modal with a determinate bar and page counter, in `book.html` and
 - **`analytics.html` still gated to `curtmid@gmail.com` only** — four sessions now.
 - **Re-enable Vercel Deployment Protection** on previews — five sessions now.
 - Shipping options as cards with prices and estimates — the biggest remaining Popsa gap.
+
+### 2026-09-21 (later) — Why an order shipped in two parcels, and why the sticker never shipped at all
+
+Continuation of the same day. Branch `claude/eloquent-turing-7vwk8u`, six commits, each fast-forwarded to `main` and verified live: `9e49b7b`, `acdb279`, `9e095e9`, `6dce211`, `974c2a3`, `48d9ab7`. No PRs, no migrations. Started as one question about a cancelled order and turned up two live defects, one of which I had shipped myself earlier the same day.
+
+#### The cancelled order (14540074) — a $6 print and a $30 framed print
+
+Prodigi split it into two parcels on two carriers:
+
+| | product | carrier | shipping |
+|---|---|---|---|
+| shp_14071074 | `GLOBAL-FAP-5x7` flat fine-art print | USPS Priority Mail Flat | **$10.75** |
+| shp_14071075 | `GLOBAL-CFP-5x7` framed print, black | UPS Ground Shipping | **$21.55** |
+
+Full summary: Items $36.00, **Inserts $5.00**, Shipping $32.30, Tax $6.13, **Total $79.43**. Customer side would have been $58 printing + $33 shipping = **$91** (matches the Stripe figure exactly), $98.62 with tax. Gross **$11.57** — or $17.70 if the ST-120 resale certificate were in place and Prodigi weren't charging us $6.13 of sales tax.
+
+**Why two rates:** a flat print goes in a flat mailer, a framed print is rigid, glazed, heavy and breakable and needs a box on a ground carrier. They are not made in the same place and physically cannot travel together. **Prodigi's own docs say it outright** — *"we allocate to the most cost-effective lab based on the chosen products, destination and shipping method. This may require us to split the order into multiple shipments."* Same mechanism as the $76 bug on 2026-09-15; that one was a UK-fulfilled postcard SKU, this one is a frame on different equipment. Nothing is marked up here: shipping is passed at cost.
+
+The framed item would have cost $21.55 to ship alone. Adding the $6 print cost $10.75 more **only because it couldn't ride along**. Two framed prints from one lab would have shared the $21.55 — which is the real shape of "the second item quadruples net": it only holds **within a lab group**.
+
+#### THE CART WAS COUNTING THE WRONG THING (`9e49b7b`, `acdb279`)
+
+`cart.html` already had a "ships in N parcels" note. It read `priced.groups.length` — the number of **PROVIDERS** (Prodigi vs Printify). One Prodigi group covers any number of labs, so on a Prodigi-only order the count was always 1 and the warning **never fired on the orders it existed for**. Comment in the code even asserted "One group = one parcel", which was simply false.
+
+The data was already in hand and being thrown away: Prodigi returns `quotes[0].shipments[]` on **every** quote, each with `carrier`, `fulfillmentLocation.labCode` and `cost`. `sumQuoteMinor` parsed `costSummary` and dropped the rest.
+
+Now: `sumQuoteMinor` returns `parcels`, `quoteCart` prices each one, `/api/cart-quote` reports the true `shipments` count plus a `parcels:[{carrier, shipping_minor}]` array, and the summary lists them under the shipping line:
+
+```
+Subtotal                              $58
+Standard shipping                     $33
+    USPS Priority Mail Flat           $11
+    UPS Ground Shipping               $22
+Tax                                 $7.62
+Total                              $98.62
+```
+
+**Two invariants that matter more than the feature:**
+
+1. **Charged totals are untouched.** The per-parcel figures are a *split* of the shipping line, never a second opinion — same discipline as the per-line prices. Naive per-parcel rounding breaks it: two $10.20 parcels ceil to $11 + $11 = $22 against a $21 charge, and the rows would out-total the total.
+2. **Split in WHOLE DOLLARS, not cents.** My first version was proportional in minor units and produced **$10.98 and $22.02** under a $33.00 line — arithmetically correct and visibly wrong, because every other figure in that summary is whole. Splitting the dollars and scaling back gives $11 + $22, which is what you'd write by hand. `priceParts` always ceils shipping to a whole dollar so the division is exact; there is a `% 100` guard anyway.
+
+The largest-remainder splitter is now one shared **`catalog.splitMinor(weights, total)`**, used by both `allocateLinePrices` and the parcel split, instead of a second copy. Use it for any future "show a charged figure broken down".
+
+Rows only render when there are **2+** parcels — repeating a single parcel's rate under the line that already states it is noise. Note wording is number-agnostic ("every rate above"), since an order can split three ways.
+
+Verified against the real order's numbers (printing $58 / shipping $33 / total $91 / 2 parcels summing to $33), plus zero-weight, single-parcel, no-breakdown, odd-remainder and failed-quote paths, and no horizontal overflow at 320–1200px with a 44-character carrier name.
+
+#### THE STICKER — `branding` is a map of slots, and we were naming one
+
+From Prodigi's docs (`https://www.prodigi.com/print-api/docs/reference/`), the **eight** branding slots:
+
+```
+postcard   flyer   packing_slip_bw   packing_slip_color
+sticker_exterior_round   sticker_exterior_rectangle
+sticker_interior_round   sticker_interior_rectangle
+```
+
+**The casing is genuinely mixed** — `postcard` and `flyer` are plain words, stickers and packing slips are snake_case. Confirmed against the raw request AND response examples in the page source, not a doc-summariser's rendering (the summariser normalised it, and this repo has been burnt by that before — see the Shotstack `fit: cover/crop` inversion on 2026-07-15). **A misspelt key is not an error — the slot silently never ships**, which is exactly how this would go unnoticed again.
+
+We were sending `{ postcard }`. `create-checkout` now names both slots via a new **`catalog.buildBranding({ postcardUrl, stickerUrl })`**; `companionInsertBranding` is kept as a thin wrapper.
+
+**A REGRESSION I SHIPPED AND CAUGHT 20 MINUTES LATER (`6dce211`)** — worth remembering as a shape. A **multi-project** order has no per-order card (`companionInsertCollectionId` returns null when lines span designs). Today that sends no `branding` at all, so the dashboard default applies and the box gets a generic card *and* a sticker. My first version would have sent `{ sticker_exterior_round }` alone, which **replaces** the default, shipping a sticker and **no card whatsoever**. Strictly worse than before. The override now happens only when there is a card to put in its place:
+
+```
+single project, sticker deployed  -> our card + our sticker
+single project, sticker missing   -> our card
+multi-project / upload failed     -> dashboard default (unchanged)
+```
+
+Both assets are HEAD-checked before being named, because Prodigi fetches these URLs server-side and a 404 fails the order AFTER the customer has paid. The sticker URL is **absolute and pinned to production** (`PACKAGING_STICKER.url`, overridable by `PACKAGING_STICKER_URL`): a preview deployment is not publicly reachable (Deployment Protection answers 401), so deriving the origin from the request would quietly hand Prodigi a URL it cannot read.
+
+#### THE "Default for:" OBSERVATION — still unexplained, and I over-claimed before seeing it
+
+A screenshot of Settings → Branding showed the companion card marked **"Default for: API, Online order"** and the sticker set with **no "Default for:" line at all**. Earlier notes (2026-09-20) recorded the sticker as "API + Online order", so **setting the card as default appears to have knocked the sticker off — Prodigi seems to allow one default insert set per channel.**
+
+I had already asserted, in a commit message, that the `branding` override was *the* cause. A cost summary alone cannot distinguish "our object replaced the default" from "the sticker was never a default for API orders", and this screenshot makes the second likelier. **It does not change the fix** — naming the asset explicitly bypasses defaults entirely, which is also why it is the better mechanism: it cannot be switched off by an unrelated dashboard change, the way this one just was.
+
+**Consequence still live:** an order placed from the **dashboard** rather than the API follows those defaults, so it currently gets a card and no sticker.
+
+#### The artwork: rebuilt, then replaced by the original (`974c2a3`, then `48d9ab7`)
+
+The sticker art existed only inside the Prodigi dashboard, which is not a URL their API can fetch. `mdfind` and the Dropbox folder turned up nothing (the `Sticker Mule` folder is the **badge** stickers customers order — a different product), so I rebuilt it as `public/sticker.html`: a canvas artboard pulling `CARD.gradient` straight from `postcard-render.js` so the sticker and the card that travels in the same box could not drift. Canvas takes the axial endpoints directly, so unlike the CSS form there is no projection to do.
+
+**Then the original turned up and replaced it, committed byte-for-byte rather than re-encoded.** `public/sticker.html` was deleted with it: it existed only because the artwork was thought lost, and its composition differed from the approved one — a generator that produces something other than what ships is worse than no generator. The artwork is in git now, so it cannot go missing again.
+
+**The rebuild did settle one fact.** The approved file is **827×827 at 300 DPI = a 70mm square**, so the bleed is **2.5mm** around the 65mm cut, not the 3mm I had assumed. Recorded in `catalog.mjs` beside the config. It runs to all four corners; a square fully covered by artwork with the die cut taking the circle out of the middle means no cut position can expose a bare edge.
+
+Two design notes from the rebuild, if it is ever needed again: the **wordmark already reads "popcode"**, so `popcode.app` beneath it at equal size sets the same seven letters twice and reads as two competing logos — it wants to be small and letterspaced. And **neither symbol PNG works on the gradient**: `popcode-symbol.png` is a black disc with the mark knocked out, `.rev.png` is its inverse (white disc, BLACK pinwheel — `.rev` means colour-inverted for sitting on a dark photo, per 2026-09-02). A white pinwheel means pulling the inner path out of `popcode_symbol_k.svg`, the way `shop.html` does.
+
+#### ECONOMICS — the one that changes the model
+
+**Inserts are billed PER SHIPMENT, not per order.** `Inserts $5.00` on the cancelled order is two postcards at $2.50 and nothing else — two stickers would have made it $7.50. So a lab split **doubles the insert bill**, and inserts are never in the quote, so it comes straight off margin: **$5.00 of that order's $11.57 gross, 43% of what would have been kept.**
+
+Every "$3.75 per order" figure in earlier notes is per-parcel-per-order and wrong for split orders. Verified live the same session: a 5×7 print to the US is **$6.00 goods + $10.75 shipping = $16.75 cost against $22.00 charged**, i.e. $5.25, **$1.50 after inserts** on a single parcel. A two-parcel version of that order would be underwater.
+
+Ruled out while in there: printing the URL on a product's reverse. `GLOBAL-FAP-5x7` and `PHOTIL-FRA-0507` both report `print areas 1 — default` (`scripts/verify-prodigi-sku.mjs` reads `product.printAreas`, so it is one command). **When a design argument turns on a supplier capability, check the capability before arguing.**
+
+#### GOTCHAS
+
+- **`numpy` is NOT installed in this sandbox; PIL is.** An image-analysis script that imports numpy dies on line 2. Write the pixel loops in pure PIL.
+- **`curl` status `000` is not a 404** — it means no response (dropped connection through the proxy). I nearly reported a removed page as confirmed-404 on the strength of it. Re-request before drawing a conclusion.
+- **Chromium's PNG encoder writes RGBA even with `getContext('2d', { alpha: false })`.** I wrote a comment claiming the flag shrank the export; it does not (785KB either way). Flattening to RGB with PIL is what saves it (182KB, pixel-identical by hash) — but only matters for a file we generate, and the shipped one is now the original at 78KB.
+- **A `git rebase` while files are unstaged errors out and does nothing** — harmless here (already up to date), but it prints before the `&&` chain and can look like the commit failed when it did not. Check `git log` rather than trusting the error.
+- A sandbox `python3 -m http.server` plus `playwright-core` (scratchpad only — `node_modules` is tracked in this repo) drives `cart.html` fine with a stubbed supabase; **`rows` is a top-level `let` in an inline script, so `window.rows = …` does NOT set it** — assign the bare identifier inside `page.evaluate` instead.
+- Deploy verification by `curl` + `cmp` against the local file worked cleanly three times this session. Keep doing that rather than grepping for a guessed string.
+
+#### STILL OPEN
+
+- **Watch the first real order** for `Inserts $3.75` with a Postcard AND a Sticker — that is the proof the whole chain works.
+- **Dashboard-placed orders still get no sticker** (the `Default for:` thing above).
+- **Per-parcel insert cost vs the cheap end of the catalogue** — a 5×7 nets ~$1.50 on one parcel and loses money on two. Worth a look once a few real orders exist.
+- **ST-120 resale certificate for Prodigi** — they charge us sales tax our quote never sees ($6.13 on this order).
+- Unchanged from earlier: `analytics.html` still gated to `curtmid@gmail.com` only (five sessions); re-enable Vercel Deployment Protection on previews (six sessions); shipping options as cards with prices and delivery estimates is still the biggest Popsa gap.
