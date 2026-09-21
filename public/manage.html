@@ -240,12 +240,14 @@
                   background: linear-gradient(135deg, #7657FC 0%, #589AF9 100%); color: #fff; }
       .shop-btn svg { width: 18px; height: 18px; }
 
-      /* Every action is a button with a caption under it, so the row teaches
-         its own icons. Captions only appear from 960px up — a phone has no
-         width to spare, so there it stays icon-only on the title attribute. */
-      .act { display: inline-flex; flex-direction: column; align-items: center; gap: 5px; flex-shrink: 0; }
+      /* Each action carries a name that appears on hover: the button lifts and
+         the word arrives underneath. The label is absolutely positioned, so
+         nothing in the row moves and the row is the same height it always was.
+         Hover only, so below 960px it is off entirely — a phone has no hover
+         and no width, and there it stays on the title attribute. */
+      .act { position: relative; display: inline-flex; flex-shrink: 0; }
       .act-delete { margin-left: auto; }
-      .act-label { display: none; font-family: 'Inter', sans-serif; font-size: 11px; line-height: 1; color: #8a8a8a; white-space: nowrap; }
+      .act-label { display: none; }
 
       @media (min-width: 960px) {
         .card { padding: 16px; min-height: 232px; }
@@ -253,11 +255,11 @@
         .card-main { gap: 32px; margin-bottom: 0; align-items: flex-start; }
         .card-info { padding-top: 49px; padding-right: 0; align-self: stretch; min-height: 0; }
         .card-title { font-size: 26px; line-height: 1.1; }
-        /* Tracks the action row's measured width: 290px with captions and a
-           round Shop, down from 334px when Shop was a pill. 216 keeps exactly
-           the clearance these lines had at 260. */
-        .card-meta { font-size: 14px; margin-top: 20px; padding-right: 216px; }
-        .card-id { font-size: 14px; margin-top: 26px; margin-bottom: 0; padding-right: 216px; }
+        /* Tracks the action row's measured width: 349px on the even 10px gap,
+           up from 334px on the old uneven 6/10. 275 keeps exactly the
+           clearance these lines had at 260. */
+        .card-meta { font-size: 14px; margin-top: 20px; padding-right: 275px; }
+        .card-id { font-size: 14px; margin-top: 26px; margin-bottom: 0; padding-right: 275px; }
         .card-actions {
           position: absolute;
           right: 20px;
@@ -277,19 +279,31 @@
         .icon-btn svg { width: 20px; height: 20px; }
         .icon-btn img { width: 20px; height: 20px; }
         .btn-delete { --btn-h: 40px; }
-        /* A caption makes each action taller than its button, so top-align
-           them and every button still sits on one line. */
-        .card-actions, .card-actions-main { align-items: flex-start; }
-        .act-label { display: block; }
-        /* Shop joins the row as a circle and its word moves underneath, so
-           every action reads the same way. It keeps the gradient, so it is
-           still the one coloured thing in the row. This also settles the
-           40-vs-36 mismatch the rule above used to flag: here they are all 40.
-           Below 960px there are no captions, so it stays a pill with the word
-           on it — a bare circle there would lose the word entirely. */
-        .shop-btn { --btn-h: 40px; --btn-pad: 0; width: var(--btn-h); border-radius: 50%; gap: 0; }
-        .shop-word { display: none; }
-        .act-shop .act-label { color: #7657FC; font-weight: 600; }
+        /* One gap for the whole row. It was 6px between the icons but 10px
+           before Shop and delete, which read as uneven; 10 everywhere is
+           even and a little airier than the 6 it replaces. */
+        .card-actions-main { gap: 10px; }
+        .shop-btn { --btn-h: 40px; margin-left: 0; }
+        /* The whole action lifts, not just the button, so the label rides up
+           with it and makes its own room. The budget is tight: the row sits
+           16px off the card's bottom edge, and lift + gap + type has to fit
+           inside that or the word touches the edge. 6 + 2 + 11 leaves 9px. */
+        .act { transition: transform .15s ease; }
+        .act:hover, .act:focus-within { transform: translateY(-6px); }
+        /* The name, on hover: Inter 600, the weight Shop's caption carried.
+           Absolutely positioned, so the row keeps its height and nothing
+           beside it moves. */
+        .act-label {
+          display: block; position: absolute; top: 100%; left: 50%;
+          margin-top: 2px;
+          font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+          line-height: 1; color: #8a8a8a; white-space: nowrap;
+          pointer-events: none; opacity: 0;
+          transform: translateX(-50%) translateY(-3px);
+          transition: opacity .15s ease, transform .15s ease;
+        }
+        .act:hover .act-label,
+        .act:focus-within .act-label { opacity: 1; transform: translateX(-50%) translateY(0); }
       }
 
       /* Icon-only action buttons (gray circles) */
@@ -763,8 +777,8 @@
             <span class="act"><button class="btn btn-sm btn-icon icon-btn btn-share-id" data-slug="${escapeHtml(col.slug)}" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button><span class="act-label">Share</span></span>
             ${showDownload ? `<span class="act"><button class="btn btn-sm btn-icon icon-btn btn-download" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><span class="act-label">Download</span></span>` : ''}
             ${isProduct
-              ? `<span class="act act-shop"><a class="btn btn-sm shop-btn" href="${editHref}?id=${escapeHtml(col.slug)}&cart=1" title="Add a printed copy to your cart"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span class="shop-word">Shop</span></a><span class="act-label">Shop</span></span>`
-              : `<span class="act act-shop"><a class="btn btn-sm shop-btn" href="/shop.html?id=${escapeHtml(col.slug)}" title="Shop products with this Popcode"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span class="shop-word">Shop</span></a><span class="act-label">Shop</span></span>`}
+              ? `<a class="btn btn-sm shop-btn" href="${editHref}?id=${escapeHtml(col.slug)}&cart=1" title="Add a printed copy to your cart"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`
+              : `<a class="btn btn-sm shop-btn" href="/shop.html?id=${escapeHtml(col.slug)}" title="Shop products with this Popcode"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`}
             </div>
             <span class="act act-delete"><button class="btn btn-sm btn-icon btn-delete" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button><span class="act-label">Delete</span></span>
           </div>
