@@ -2341,3 +2341,130 @@ Worth writing down so it isn't re-derived. Four reasons, only one about shipping
 - **`analytics.html` is still gated to `curtmid@gmail.com` only** (`ADMIN_EMAIL`) — `curt@theworkshop.works` bounces to manage.html. Offered in three sessions now, never taken; `edit.html` already does the two-email version.
 - **Re-enable Vercel Deployment Protection** on previews. Flagged in four sessions.
 - Shipping options as cards with prices and delivery estimates — the biggest remaining Popsa gap.
+
+### 2026-09-21 — First card-carrying order placed; a silent cart drift, a leaked key, and real margin numbers at last
+
+**Three commits, all fast-forwarded to `main` and live: `63ebecb`, `22e8e02`, `9a6cb0d`.** No PRs, no migrations. The session's purpose was "confirm the sticker and card actually ship" and it became four separate finds on the way there. **Prodigi order `ord_14540083` is placed and is the first order ever to carry a companion card** — its proof image is the outstanding answer to almost everything below.
+
+#### THE CART WAS SHIPPING BOOKS AND CALENDARS CARDLESS (`63ebecb`)
+
+`cart.html` carried its **own hardcoded copy** of the server's `COMPANION_INSERT_FOR`, and the two had already drifted: books and calendars were added server-side on 2026-09-15 and never here. `book.html` and `calendar.html` both call `PopcodeCart.add()`, so those products genuinely reach the cart — and a book bought that way uploaded no artwork, `create-checkout`'s HEAD check then found nothing, and it shipped **cardless with no error anywhere**. The direct-checkout path from those two pages was fine, which is exactly what hid it.
+
+This was already broken when I wrote yesterday's warning that "any future checkout surface needs the script tag AND the upload." The warning was right and I didn't apply it to the surface already in front of me.
+
+**Fix: the client no longer decides.** It uploads artwork for every collection in the order (capped at 4 — each card is a 300 DPI render, and `create-checkout` uses at most one) and the server keeps the product rule. Two copies of one rule is what created this; there is now one.
+
+#### THE LEAKED PRODIGI KEY, AND WHY PROD WENT DOWN FOR TWENTY MINUTES
+
+The user pasted a **live `api.prodigi.com` key in plaintext** while running the SKU verifier. Rotated the same session — and it's worth recording what that did, because it caught the recurring Vercel rule again:
+
+**Print checkout was 401ing on production until a redeploy.** Revoking the old key is instant; the running deployment still had it baked in, and **Vercel env vars only apply to the NEXT build**. Verified from outside with a real quote call, which is the fastest way to check:
+
+```
+curl -s -X POST https://popcode.app/api/prodigi-quote -H "Content-Type: application/json" \
+  -d '{"productType":"print","variantId":"fap-5x7","copies":1,"destinationCountryCode":"US","shippingMethod":"Standard"}'
+```
+
+**That 401 also validated yesterday's fix in production, by accident.** It came back as a plain `Prodigi quote failed (401)`. Before `36bdd43` it would have read *"We can't ship this size to the United States"* — a dead key wearing the costume of a catalogue limitation, with nothing raised in Sentry. Shipped in the morning, proven by a real outage in the afternoon.
+
+Also told the user the key is in `~/.zsh_history` and to delete those lines from a *different* terminal tab, since zsh rewrites the file on exit.
+
+#### REAL MARGIN NUMBERS — every estimate in yesterday's notes is now superseded
+
+The healthy quote that came back after the redeploy is the first hard data:
+
+| 5×7 print, US, Standard | |
+|---|---|
+| Prodigi goods | **$6.00** |
+| Prodigi shipping | **$10.75** |
+| your cost | $16.75 |
+| customer pays | **$22.00** ($11 printing + $11 shipping) |
+| gross margin | $5.25 |
+| **after $3.75 of inserts** | **$1.50** |
+
+So yesterday's estimate from the code comment (~$6 goods → about a dollar net) was right, and **nothing needed dropping** — it's positive, just thin.
+
+**The number that actually matters is the second item.** Shipping and inserts are $14.50 of fixed cost the first item has already paid. A second 5×7 adds ~$6 of goods and ~$11 of revenue:
+
+| | one 5×7 | two 5×7 |
+|---|---|---|
+| customer pays | $22 | ~$33 |
+| your cost | $16.75 | ~$23 |
+| **net after inserts** | **$1.50** | **~$6.25** |
+
+**The second print roughly quadruples what you keep.** That is the shape of this business, and it makes the answer to thin margins a merchandising one — "add another print", a bundle, a free-shipping threshold — not the minimum-quantity idea. All of those pull the same direction without ever turning a customer away. Also note **$10.75 of the $16.75 cost is postage**: no markup change touches that, only more items per parcel.
+
+#### PRINTS HAVE NO REVERSE SIDE — settled, thirty seconds, no debate
+
+The best answer to "N products, one instruction" would have been printing each product's URL on its own back, the way books and calendars already do. It's dead:
+
+```
+GLOBAL-FAP-5x7   print areas  1 — default
+PHOTIL-FRA-0507  print areas  1 — default
+```
+
+`scripts/verify-prodigi-sku.mjs:82` reads `product.printAreas`, so this is one command. **When a design argument turns on a supplier capability, check the capability before arguing.**
+
+#### THE MULTI-PROJECT PROBLEM — analysed, not built
+
+`companionInsertCollectionId` returns a card only when every card-eligible line shares one collection (`ids.size === 1`). A multi-project order therefore sends **no `branding` key at all** (`prodigi.mjs:116` omits it rather than sending null), so the dashboard's generic card ships instead. That part works — but **the generic card says "enter your code" and nothing in the box carries a code for a flat print.** The fallback exists and is useless exactly when it's needed.
+
+The constraint that shapes every fix: **Prodigi's `branding` has one `postcard` slot per order**, and it is per-order, not per-item. "Several cards" is not available.
+
+| | works for N | recipient does | can pick wrong | runtime cost | first-scan lag | build |
+|---|---|---|---|---|---|---|
+| A. direct slug (today) | ✗ one | types a URL | never | none | none | done |
+| B. multi-URL card | ~4 max | types one per project | never | none | none | ~1 day |
+| **C. order code** | ✓ any | types a code, taps a list | never | none | none | ~1 day |
+| D. handle + camera | ✓ any | points the phone | **yes** | per scan | **5–6s** | weeks |
+| E. email the buyer | ✓ any | clicks a link | never | none | none | hours |
+
+**Recommendation: C + E now, D when scan volume justifies fixing the cold start.**
+
+- **C** reuses the code field already on the homepage, and the ordering problem I priced it expensively on is solvable: **the client mints the code**, renders the card with it, uploads to `orders/{code}.png` and hands it to `create-checkout`. No server-side rendering. Note the code is a **capability URL** — anyone holding it sees that order's projects — so it needs real entropy.
+- **D is the camera/handle path, and this conversation reopened the 17 September decision.** I argued then that the handle model's benefit aimed at a gap the print pipeline had closed; the multi-product order *is* that gap. Two things I had wrong: **`/u/{handle}` already routes** (rewrite rule 1, unambiguous at any case or length — the collision only affects the bare `/{handle}` form), and **`creators` already has self-insert/update RLS**. What's genuinely missing is auto-indexing (nothing but `seed-identification.mjs` writes `pop_images`; `handle` in the builder HTML is all `handleVideoPick`) and the unsolved 5–6s cold start, which lands on *every* single-item order because there's no second page to warm it. If D is ever built, use it for **multi-project orders only** — the common case keeps a foreign key that cannot be wrong.
+- **E is never the answer alone**: it goes to the buyer, and a gift goes to someone else.
+
+#### STRIPE: COUPON ≠ PROMOTION CODE, AND FOUR LIVE 100%-OFF CODES
+
+`FREE100` was rejected at checkout as invalid while looking perfectly valid in the dashboard. **A coupon is the offer; a promotion code is the typeable string that unlocks it, and the checkout field only accepts the latter.** The old FREE100 had "No promotion codes" — nothing to type. It was also welded to *Applicable Products: 10 Postcard*, a 2023 product, so it would have discounted $0 even once fixed.
+
+Worth knowing for next time: `allow_promotion_codes: true` is all we set; we never pass `discounts` server-side. **So a coupon with no promotion code attached cannot be redeemed at our checkout at all** — that fact is what made the cleanup below safe.
+
+**The real find: four legacy 100%-off coupons were Active with no expiry, and POPSTAR100 had 23 redemptions.** That string is out in the world from the Popcode 1.0 era, when redeeming it cost nothing because the product was digital. It isn't digital now — a redemption means a real print, real postage and $3.75 of inserts billed to us against an order collecting $0.
+
+Checked Subscriptions first (empty) before deleting anything, because a "100% off forever" coupon on a live subscription would have started **charging 23 comped people** on deletion. All legacy coupons removed; one `FREE100` remains, 100% off once, max 2 redemptions.
+
+Two things about a 100%-off order, both already handled: **`fulfill.mjs:25` accepts `no_payment_required`**, which is what Stripe returns at $0, so it still fulfils. And there's **one Stripe line item per provider group carrying printing + shipping together**, so 100% off zeroes the whole thing, postage included — your Prodigi bill is unchanged. The order records `total_charged_minor = 0`, which is honest, not a bug.
+
+#### PRINT RENDERING NOW HAS A REAL PROGRESS MODAL (`22e8e02`)
+
+A 62-page book renders every page at 300 DPI, and progress went through `showToast`, which **auto-hides after 2200ms — shorter than one page takes.** It flickered in and out for the whole job and read as something repeatedly going wrong.
+
+Now a blocking modal with a determinate bar and page counter, in `book.html` and `calendar.html`. Blocking is deliberate: editing mid-render would corrupt the file being built. `closePrintProgress()` runs in a **`finally`**, so a throw can't strand the page behind the scrim.
+
+**The bug worth remembering: both files already defined a `setProgress`** (the save bar) later in the file. Function declarations hoist and the last one wins, so my version was silently replaced and my calls landed on the old `(label, pct, isError)` signature — passing a page-number string as `isError`, which is truthy, flipping the save bar into an error state on every page. **`node --check` passes happily on a name collision**, and the diff looks fine because the clash is 3,000 lines away. It only showed up as a bar stuck at 0% when driven in a browser. Named `openPrintProgress` / `setPrintProgress` / `closePrintProgress`.
+
+#### ORDER-SUCCESS HEADING (`9a6cb0d`)
+
+"Thanks — payment received!" → **"Thanks, payment received!"** at **30px**, not the `--pc-h1` token: the box gives 360px of content and the sentence measures 350px at 30px, 374px at 32px. Below 420px the box's own gutters left 192px and it broke over *three* lines, so those are trimmed there to hold it to two.
+
+**One line on a phone isn't reachable** and I said so rather than shrinking it: 390px would need a 22px headline, and 320px fits nothing readable.
+
+**Measured with a Range over the text.** My first attempt measured the `h1`'s own rect — but an `h1` is a block, so it reports the container width and cheerfully claimed 44px fit at 320px. Same class of error as the postcard copy box. **To ask "do these words fit", measure the words.**
+
+#### LESSONS
+
+- **Two copies of one rule will drift, and the drift is silent.** The cart's product list and the server's disagreed for six days. Same shape as yesterday's `UNSERVABLE_STATUSES`. When a decision is split across client and server, the client's job is to *make things available* and the server's is to *decide*.
+- **`node --check` cannot see a name collision.** For anything added to a multi-thousand-line file, grep for the identifier before choosing it, and drive it in a browser after.
+- **An element's bounding rect is not its text's width.** Blocks fill their container.
+- **Before deleting Stripe coupons, check Subscriptions.** A "forever" discount on a live subscription is someone's comped account.
+- Parallel sessions were in `book.html` all day (four commits, ~215 lines on cover artwork and the proof). Rebase was clean, and I **re-ran the browser test after rebasing** rather than assuming.
+
+#### STILL OPEN
+
+- **`ord_14540083`'s proof image** answers three things at once: does a per-order `branding` block **replace** the dashboard default or **add a second card**; does the rotation print right way up; and does sending a card **suppress the sticker**. That last one is a constraint on every option in the table above.
+- The **multi-project card** — C + E designed, nothing built.
+- **`analytics.html` still gated to `curtmid@gmail.com` only** — four sessions now.
+- **Re-enable Vercel Deployment Protection** on previews — five sessions now.
+- Shipping options as cards with prices and estimates — the biggest remaining Popsa gap.
