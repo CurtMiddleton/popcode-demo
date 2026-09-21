@@ -461,6 +461,7 @@
       const RANGE_TABS = new Set(['activity', 'overview', 'content']);
 
       document.getElementById('main-content').innerHTML = '<p class="empty">Checking session...</p>';
+
       db.auth.getSession().then(({ data, error }) => {
         if (error) {
           document.getElementById('main-content').innerHTML = '<p class="empty">Auth error: ' + error.message + '</p>';
@@ -1319,9 +1320,63 @@
         }
 
         el.innerHTML =
-          '<div class="section"><div class="section-title" style="margin-bottom:12px">Print Orders</div>' +
+          '<div class="section">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">' +
+            '<div class="section-title" style="margin:0">Print Orders</div>' +
+            '<button class="btn btn-sm btn-secondary" id="sync-prints">Sync from Prodigi</button>' +
+          '</div>' +
           '<p class="muted" style="font-size:12px;margin:-4px 0 12px">Click an order to edit status, add a tracking link, resubmit, or preflight its assets.</p>' +
+          '<div class="muted" id="sync-msg" style="font-size:12px;margin:-6px 0 12px;display:none"></div>' +
           cards + table + '</div>';
+
+        /* Pull real status and tracking for every still-open order. The webhook
+           is the live path; this covers the two cases it cannot — orders placed
+           before callbacks existed, and any event that was missed. */
+        const syncBtn = el.querySelector('#sync-prints');
+        if (syncBtn) syncBtn.addEventListener('click', async () => {
+          const msg = el.querySelector('#sync-msg');
+          const label = syncBtn.textContent;
+          syncBtn.disabled = true; syncBtn.textContent = 'Syncing\u2026';
+          msg.style.display = ''; msg.textContent = 'Asking Prodigi about every open order\u2026';
+          try {
+            const { data: { session } } = await db.auth.getSession();
+            const resp = await fetch('/api/sync-print-order', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json',
+                         'Authorization': 'Bearer ' + (session && session.access_token) },
+              body: JSON.stringify({ all: true }),
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+            const res = data.results || [];
+            const moved = res.filter(r => r.changed);
+            const failed = res.filter(r => r.error);
+            /* Report what actually happened, per order. "Synced 12" would hide
+               a key that is 401ing on every one of them. */
+            const summary =
+              escapeHtml('Checked ' + res.length + ' \u00b7 ' + moved.length + ' changed'
+                + (failed.length ? ' \u00b7 ' + failed.length + ' failed' : ''))
+              + (moved.length ? '<br>' + moved.map(r =>
+                  escapeHtml(r.from + ' \u2192 ' + r.to + (r.shipments ? ' (' + r.shipments + ' parcel'
+                    + (r.shipments > 1 ? 's' : '') + ')' : ''))).join('<br>') : '')
+              + (failed.length ? '<br><span class="danger">' + failed.map(r =>
+                  escapeHtml(r.error)).join('<br>') + '</span>' : '');
+            /* Refresh BEFORE reporting: loadPrints() re-renders this whole
+               section, which destroys the #sync-msg element. Write the summary
+               into the fresh one. */
+            cachedPrints = null;
+            await loadPrints();
+            const after = document.getElementById('sync-msg');
+            if (after) { after.style.display = ''; after.innerHTML = summary; }
+          } catch (e) {
+            const box = document.getElementById('sync-msg') || msg;
+            box.style.display = '';
+            box.innerHTML = '<span class="danger">' + escapeHtml(String(e.message || e)) + '</span>';
+          } finally {
+            const btn2 = document.getElementById('sync-prints') || syncBtn;
+            btn2.disabled = false; btn2.textContent = label;
+          }
+        });
 
         el.querySelectorAll('tr.print-row').forEach(row => {
           row.addEventListener('click', () => {
