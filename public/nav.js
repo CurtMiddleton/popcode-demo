@@ -40,9 +40,11 @@
      Past Views, cart, avatar, log out — and a Create account button instead.
      Matched by href so it also covers pages that ship their own drawer. */
   html.pc-signed-out .site-header .nav-inline a[href^="/manage.html"],
+  html.pc-signed-out .site-header .nav-inline a[href="/orders.html"],
   html.pc-signed-out .site-header .nav-inline a[href="/views.html"],
   html.pc-signed-out #nav-drawer a[href^="/manage.html"],
   html.pc-signed-out #nav-drawer a[href="/views.html"],
+  html.pc-signed-out #nav-drawer a[href="/orders.html"],
   html.pc-signed-out #nav-drawer a[href="/account.html"],
   html.pc-signed-out #nav-drawer a[href="/cart.html"],
   html.pc-signed-out #nav-drawer .nav-logout,
@@ -244,6 +246,8 @@
   var IC_LOGOUT = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
   var IC_CLOSE = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   // Person-in-a-circle, matching the avatar button itself.
+  // A package: the one thing on this menu that arrives in the post.
+  var IC_ORDERS = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05"/><path d="M12 22.08V12"/></svg>';
   var IC_ACCOUNT = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18.5a6.5 6.5 0 0 1 11 0"/></svg>';
 
   var header =
@@ -262,6 +266,7 @@
             '</div>' +
             '<div class="aq-divider" id="aq-divider" style="display:none;"></div>' +
             '<a href="/account.html" role="menuitem">' + IC_ACCOUNT + 'My Account</a>' +
+            '<a href="/orders.html" role="menuitem">' + IC_ORDERS + 'My Orders</a>' +
             '<button type="button" role="menuitem" id="account-logout">' + IC_LOGOUT + 'Log Out</button>' +
           '</div>' +
         '</div>' +
@@ -359,6 +364,7 @@
       '<div id="nav-drawer-bg"></div>' +
       '<div id="nav-drawer">' +
         links +
+        '<a class="nav-link" href="/orders.html">' + IC_ORDERS + 'My Orders</a>' +
         '<a class="nav-link" href="/account.html">' + IC_ACCOUNT + 'My Account</a>' +
       '</div>';
     document.body.appendChild(overlay);
@@ -397,6 +403,18 @@
       bottom.appendChild(document.createElement('div')).className = 'nav-divider';
       var account = drawer.querySelector('.nav-link[href="/account.html"]');
       if (account) bottom.appendChild(account);
+      /* My Orders, created here rather than pasted into every page's own
+         #nav-overlay markup. Most pages predate the shared nav and carry that
+         markup themselves, so adding the link to buildDrawer() alone would
+         reach only the marketing pages. Moved if a page already has one. */
+      var orders = drawer.querySelector('.nav-link[href="/orders.html"]');
+      if (!orders) {
+        orders = document.createElement('a');
+        orders.className = 'nav-link';
+        orders.href = '/orders.html';
+        orders.innerHTML = IC_ORDERS + 'My Orders';
+      }
+      bottom.appendChild(orders);
       var cart = document.createElement('a');
       cart.className = 'nav-link'; cart.href = '/cart.html';
       cart.innerHTML = IC_CART + 'Cart<span class="nav-cart-count" id="nav-cart-count">0</span>';

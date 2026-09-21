@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <!-- Sentry error monitoring (errors-only; init in /sentry-init.js) -->
+    <script
+      src="https://browser.sentry-cdn.com/10.59.0/bundle.min.js"
+      integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
+      crossorigin="anonymous"></script>
+    <script src="/sentry-init.js"></script>
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
+    <meta property="og:title" content="Popcode">
+    <meta property="og:description" content="Bring your photos to life with AR video">
+    <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=2">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <title>Popcode — My Orders</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <link rel="stylesheet" href="/ui.css">
+    <style>
+      .top-bar {
+        width: 100%; max-width: 560px; padding: 48px 24px 0;
+        display: flex; align-items: flex-start; justify-content: flex-start;
+        margin-bottom: 24px; gap: 12px;
+      }
+      .top-bar h1 { font-size: var(--pc-h1); font-weight: 400; color: #1a1a1a; font-family: 'CooperBT', serif; letter-spacing: 0; }
+      .content { width: 100%; max-width: 560px; padding: 0 24px; display: flex; flex-direction: column; gap: 20px; }
+      .card {
+        background: white; border-radius: var(--pc-radius-card);
+        padding: 28px 24px; box-shadow: var(--pc-shadow-card);
+      }
+      .card-title { font-size: 16px; font-weight: 700; margin-bottom: 20px; }
+      .card.admin-only { display: flex; }
+      /* The page shell, same as account.html's. The reset is load-bearing:
+         without box-sizing, .top-bar's width:100% plus its 24px padding
+         pushes the whole page sideways. */
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        min-height: 100vh; background: #f9f9f9;
+        font-family: 'Inter', sans-serif;
+        font-weight: 400; color: #1a1a1a;
+        display: flex; flex-direction: column; align-items: center;
+        padding: 0 0 80px; overflow-x: hidden;
+      }
+
+      /* Orders are wider than the settings cards: a parcel row with a carrier
+         name and a tracking link does not fit a 560px column on desktop. */
+      .top-bar, .content { max-width: 720px; }
+
+      .empty { text-align: center; color: #8a857d; font-size: 15px; line-height: 1.6; padding: 40px 0; }
+      .empty a { color: #1a1a1a; font-weight: 600; }
+
+      .order-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+      .order-when { font-size: 13px; color: #8a857d; }
+      .order-ref  { font-family: 'CooperBT', Georgia, serif; font-size: 22px; line-height: 1.15; margin-top: 3px; }
+
+      /* One word, colour-coded, but the colours stay quiet — a shipped order is
+         good news, not an alert. */
+      .state { flex-shrink: 0; padding: 5px 12px; border-radius: 999px; font-size: 12px;
+               font-weight: 700; white-space: nowrap; }
+      .state-making   { background: #f1f1f1; color: #4a4a4a; }
+      .state-printing { background: #eef3ff; color: #3b5bdb; }
+      .state-shipped  { background: #e9f7ef; color: #2b7a4b; }
+      .state-done     { background: #e9f7ef; color: #2b7a4b; }
+      .state-problem  { background: #fdecec; color: #b42318; }
+
+      /* The timeline earns its space by answering "what happens next", which a
+         single status word cannot. */
+      .steps { display: flex; gap: 0; margin: 22px 0 4px; }
+      .step  { flex: 1; text-align: center; position: relative; font-size: 11.5px;
+               color: #a9a49c; font-weight: 600; }
+      .step::before { content: ''; display: block; height: 3px; border-radius: 2px;
+                      background: #ececec; margin-bottom: 9px; }
+      .step:first-child::before { border-radius: 2px 0 0 2px; }
+      .step:last-child::before  { border-radius: 0 2px 2px 0; }
+      .step.on::before { background: #1a1a1a; }
+      .step.on { color: #1a1a1a; }
+      .step + .step::before { margin-left: 2px; }
+
+      .sec { margin-top: 24px; padding-top: 20px; border-top: 1px solid #f0efeb; }
+      .sec-title { font-size: 12px; font-weight: 700; letter-spacing: .04em;
+                   text-transform: uppercase; color: #a9a49c; margin-bottom: 14px; }
+
+      .line { display: flex; gap: 14px; align-items: flex-start; }
+      .line + .line { margin-top: 16px; }
+      .line-thumb { width: 60px; height: 60px; border-radius: 8px; background: #ededed;
+                    object-fit: cover; flex-shrink: 0; }
+      .line-main { flex: 1; min-width: 0; }
+      .line-name { font-size: 15px; font-weight: 600; line-height: 1.3; }
+      .line-spec { font-size: 13px; color: #8a857d; margin-top: 3px; }
+      .line-price { font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+      .parcel { display: flex; gap: 12px; align-items: baseline; justify-content: space-between; }
+      .parcel + .parcel { margin-top: 12px; }
+      .parcel-what { font-size: 14px; min-width: 0; }
+      .parcel-sub  { font-size: 12.5px; color: #8a857d; margin-top: 2px; }
+      .waiting { font-size: 14px; color: #8a857d; line-height: 1.6; }
+
+      .pop { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+      .pop-what { font-size: 14px; line-height: 1.5; min-width: 0; }
+      .pop-gone { color: #b42318; }
+
+      .totals { margin-top: 22px; padding-top: 16px; border-top: 1px solid #f0efeb;
+                display: flex; justify-content: space-between; align-items: baseline; }
+      .totals .lbl { font-size: 14px; color: #6b6760; }
+      .totals .amt { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .ship-to { font-size: 13px; color: #8a857d; line-height: 1.55; margin-top: 10px; }
+
+      @media (max-width: 560px) {
+        .order-ref { font-size: 19px; }
+        .step { font-size: 10.5px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="nav-overlay">
+      <div id="nav-drawer-bg"></div>
+      <div id="nav-drawer">
+        <a class="nav-link" href="/manage.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          My Popcodes
+        </a>
+        <a class="nav-link" href="/manage.html?tab=designs"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>My Designs</a>
+        <a class="nav-link" href="/shop.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>
+        <a class="nav-link" href="/create.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          New Popcode
+        </a>
+        <a class="nav-link" href="/views.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Past Views
+        </a>
+        <a class="nav-link" href="/account.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          My Account
+        </a>
+        <a class="nav-link" href="/howto.html">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          How It Works
+        </a>
+        <a class="nav-link nav-link-admin" href="/analytics.html" style="display:none;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="13" width="3" height="5"/><rect x="12" y="9" width="3" height="9"/><rect x="17" y="6" width="3" height="12"/></svg>
+          Analytics
+        </a>
+      </div>
+    </div>
+
+    <div class="top-bar">
+      <h1>My Orders</h1>
+    </div>
+
+    <div class="content" id="content">
+      <p class="empty" id="loading">Loading your orders…</p>
+    </div>
+
+    <script src="/nav.js"></script>
+    <script src="/beta-feedback.js"></script>
+    <script>
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g,
+        (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+      const money = (m, cur) => m == null ? ''
+        : new Intl.NumberFormat(undefined, { style:'currency', currency: cur || 'USD' })
+            .format(m / 100).replace(/\.00$/, '');
+      const when = (iso) => !iso ? '' : new Date(iso)
+        .toLocaleDateString(undefined, { day:'numeric', month:'long', year:'numeric' });
+
+      /* Our status vocabulary is internal ("submitted", "prodigi_failed"). None of
+         it means anything to a buyer, so nothing reaches the page untranslated. */
+      const STATE = {
+        pending:        { label:'Not paid',    cls:'state-problem', step:0 },
+        payment_failed: { label:'Payment failed', cls:'state-problem', step:0 },
+        paid:           { label:'Confirmed',   cls:'state-making',  step:1 },
+        submitting:     { label:'Confirmed',   cls:'state-making',  step:1 },
+        submitted:      { label:'Preparing',   cls:'state-making',  step:1 },
+        in_production:  { label:'Printing',    cls:'state-printing',step:2 },
+        shipped:        { label:'On its way',  cls:'state-shipped', step:3 },
+        complete:       { label:'Delivered',   cls:'state-done',    step:4 },
+        cancelled:      { label:'Cancelled',   cls:'state-problem', step:0 },
+        /* A Prodigi submit failure is ours to fix, not something to explain to a
+           customer in our own jargon. Sentry already has the detail. */
+        prodigi_failed: { label:'Needs attention', cls:'state-problem', step:1 },
+      };
+      const stateOf = (s) => STATE[s] || { label:'Processing', cls:'state-making', step:1 };
+
+      const STEPS = ['Ordered', 'Printing', 'Shipped', 'Delivered'];
+
+      const PRODUCT = {
+        print:'Print', framed:'Framed print', canvas:'Canvas', framedcanvas:'Framed canvas',
+        acrylic:'Acrylic', tile:'Photo tile', book:'Photo book', calendar:'Calendar',
+        boardbook:'Board book',
+      };
+      const EDITOR = { book:'/book.html', calendar:'/calendar.html', boardbook:'/boardbook.html' };
+
+      let user = null;
+
+      async function load() {
+        const { data: { session } } = await db.auth.getSession();
+        if (!session) {
+          location.href = '/auth.html?next=' + encodeURIComponent('/orders.html');
+          return;
+        }
+        user = session.user;
+
+        /* Read straight from the table: "read own print_orders" (2026-06-27)
+           already scopes SELECT to auth.uid(), so this needs no endpoint. */
+        const { data: rows, error } = await db
+          .from('print_orders')
+          .select('id, order_group_id, status, items, product_type, sku, copies, attributes, '
+                + 'asset_urls, recipient, shipping_method, currency, total_charged_minor, '
+                + 'tracking_url, shipments, created_at, collection_id')
+          .order('created_at', { ascending: false });
+
+        const el = document.getElementById('content');
+        if (error) {
+          el.innerHTML = '<p class="empty">Couldn\u2019t load your orders \u2014 please try again.</p>';
+          return;
+        }
+
+        /* A cart spanning two providers writes one row PER PROVIDER, sharing an
+           order_group_id. They are one purchase to the person who paid, so they
+           are shown as one order — otherwise buying a print and a board book
+           looks like being charged twice. */
+        const groups = [];
+        const byKey = new Map();
+        for (const r of rows || []) {
+          if (r.status === 'pending') continue;   // abandoned checkout, never paid
+          const key = r.order_group_id || r.id;
+          if (!byKey.has(key)) { const g = { key, rows: [] }; byKey.set(key, g); groups.push(g); }
+          byKey.get(key).rows.push(r);
+        }
+
+        if (!groups.length) {
+          el.innerHTML = '<p class="empty">You haven\u2019t ordered anything yet.<br>'
+            + '<a href="/shop.html">Visit the shop</a></p>';
+          return;
+        }
+
+        const cols = await loadCollections(groups);
+        el.innerHTML = groups.map((g) => card(g, cols)).join('');
+      }
+
+      /* Names and slugs for the projects behind the ordered items, so an order can
+         link to the Popcode it prints. Own-row reads, same as everywhere else. */
+      async function loadCollections(groups) {
+        const ids = new Set();
+        for (const g of groups) for (const r of g.rows) {
+          for (const it of (r.items || [])) if (it.collection_id) ids.add(it.collection_id);
+          if (r.collection_id) ids.add(r.collection_id);
+        }
+        if (!ids.size) return new Map();
+        const { data } = await db.from('collections')
+          .select('id, slug, name, kind').in('id', [...ids]);
+        return new Map((data || []).map((c) => [c.id, c]));
+      }
+
+      function card(g, cols) {
+        const rows = g.rows;
+        const first = rows[0];
+        const parcels = rows.flatMap((r) => (r.shipments || []).map((s) => ({ ...s, row: r })));
+
+        /* The least-advanced PART decides the headline, at both levels: the
+           least-advanced row, and then the parcels inside it.
+
+           A row goes to "shipped" the moment Prodigi dispatches its first
+           parcel, which is correct for the row and wrong for the customer — an
+           order split across two labs would announce "On its way" while half of
+           it had not been made. That is exactly the claim that generates the
+           "where is the rest of my order" email, so a partly-dispatched order
+           says so and does not light the Shipped step. */
+        const worst = rows.reduce((a, r) =>
+          stateOf(r.status).step < stateOf(a.status).step ? r : a, first);
+        let st = stateOf(worst.status);
+        const shippedParcels = parcels.filter(
+          (p) => String(p.status || '').toLowerCase() === 'shipped').length;
+        if (parcels.length > 1 && shippedParcels > 0 && shippedParcels < parcels.length) {
+          st = { label: 'Partly shipped', cls: 'state-printing', step: 2 };
+        }
+        const totalMinor = rows.reduce((a, r) => a + (r.total_charged_minor || 0), 0);
+
+        return '<div class="card">'
+          + '<div class="order-head"><div>'
+          +   '<div class="order-when">' + esc(when(first.created_at)) + '</div>'
+          +   '<div class="order-ref">Order ' + esc(shortRef(g.key)) + '</div>'
+          + '</div><span class="state ' + st.cls + '">' + esc(st.label) + '</span></div>'
+          + steps(st.step)
+          + section('Items', rows.flatMap((r) => lines(r, cols)).join(''))
+          + section('Delivery', delivery(parcels, st, first))
+          + popcodes(rows, cols)
+          + '<div class="totals"><span class="lbl">Total paid</span>'
+          +   '<span class="amt">' + esc(money(totalMinor, first.currency)) + '</span></div>'
+          + '</div>';
+      }
+
+      // Enough of the id to quote in an email, without printing a raw UUID.
+      const shortRef = (key) => '#' + String(key).replace(/-/g, '').slice(0, 8).toUpperCase();
+
+      const section = (title, body) => !body ? ''
+        : '<div class="sec"><div class="sec-title">' + esc(title) + '</div>' + body + '</div>';
+
+      function steps(active) {
+        return '<div class="steps">' + STEPS.map((s, i) =>
+          '<div class="step' + (i < active ? ' on' : '') + '">' + esc(s) + '</div>').join('') + '</div>';
+      }
+
+      function lines(r, cols) {
+        const items = (r.items && r.items.length) ? r.items : [{
+          product_type: r.product_type, sku: r.sku, copies: r.copies,
+          attributes: r.attributes, asset_urls: r.asset_urls, collection_id: r.collection_id,
+        }];
+        return items.map((it) => {
+          const col = cols.get(it.collection_id);
+          const name = it.title || (col && col.name) || PRODUCT[it.product_type] || 'Item';
+          const thumb = firstAsset(it);
+          const spec = [
+            PRODUCT[it.product_type] || it.product_type,
+            sizeOf(it),
+            (it.attributes && it.attributes.color) ? it.attributes.color : null,
+            (it.copies > 1) ? ('\u00d7 ' + it.copies) : null,
+          ].filter(Boolean).join(' \u00b7 ');
+          return '<div class="line">'
+            + (thumb ? '<img class="line-thumb" src="' + esc(thumb) + '" alt="">'
+                     : '<div class="line-thumb"></div>')
+            + '<div class="line-main"><div class="line-name">' + esc(name) + '</div>'
+            +   '<div class="line-spec">' + esc(spec) + '</div></div>'
+            + '</div>';
+        });
+      }
+
+      /* The composited print asset — the actual file sent to the lab, badge and
+         all — so the thumbnail is what was printed, not the source photo. */
+      function firstAsset(it) {
+        const a = it.asset_urls;
+        if (Array.isArray(a)) {
+          const hit = a.find((x) => x && (x.url || typeof x === 'string'));
+          return hit ? (hit.url || hit) : null;
+        }
+        return null;
+      }
+
+      /* The size lives in the SKU, the only place it is recorded on the order,
+         and the two catalogues spell it differently: GLOBAL-FAP-5x7 spells it
+         out, PHOTIL-FRA-0507 packs it into four digits. Anything that matches
+         neither shows no size rather than a guessed one. */
+      function sizeOf(it) {
+        const sku = String(it.sku || '');
+        const plain = /-(\d+)x(\d+)$/i.exec(sku);
+        if (plain) return plain[1] + '\u00d7' + plain[2] + '\u2033';
+        const packed = /-(\d{2})(\d{2})$/.exec(sku);
+        if (packed) {
+          const w = +packed[1], h = +packed[2];
+          if (w > 0 && h > 0) return w + '\u00d7' + h + '\u2033';
+        }
+        return null;
+      }
+
+      function delivery(parcels, st, first) {
+        const addr = first.recipient && first.recipient.address;
+        const to = addr ? '<div class="ship-to">To ' + esc([first.recipient.name, addr.line1,
+              addr.townOrCity, addr.stateOrCounty, addr.postalOrZipCode, addr.countryCode]
+              .filter(Boolean).join(', ')) + '</div>' : '';
+
+        if (!parcels.length) {
+          const msg = st.cls === 'state-problem'
+            ? 'We\u2019re looking into this order. We\u2019ll be in touch.'
+            : 'We\u2019ll show tracking here as soon as it ships.';
+          return '<div class="waiting">' + msg + '</div>' + to;
+        }
+
+        /* One row per parcel. An order made at two labs really does arrive as two
+           boxes on two carriers (see order 14540074), and a customer shown a
+           single tracking number for it concludes half of it is lost. */
+        const note = parcels.length > 1
+          ? '<div class="waiting" style="margin-bottom:14px;">These were made in '
+            + parcels.length + ' different workshops, so they ship separately.</div>'
+          : '';
+
+        return note + parcels.map((p) => {
+          const shipped = String(p.status || '').toLowerCase() === 'shipped';
+          const sub = shipped
+            ? (p.dispatched_at ? 'Dispatched ' + esc(when(p.dispatched_at)) : 'On its way')
+            : 'Still being made';
+          return '<div class="parcel"><div class="parcel-what">'
+            + esc(p.carrier || 'Parcel')
+            + '<div class="parcel-sub">' + sub
+            + (p.tracking_number ? ' \u00b7 ' + esc(p.tracking_number) : '') + '</div></div>'
+            + (p.tracking_url
+                ? '<a class="btn btn-sm btn-secondary" target="_blank" rel="noopener" href="'
+                  + esc(p.tracking_url) + '">Track</a>' : '')
+            + '</div>';
+        }).join('') + to;
+      }
+
+      /* The part no other print shop can show: the print is permanent, what it
+         plays is not. This is also the only place a customer would think to check
+         whether a printed thing still works. */
+      function popcodes(rows, cols) {
+        const seen = new Set();
+        const out = [];
+        for (const r of rows) {
+          const ids = (r.items || []).map((i) => i.collection_id)
+            .concat(r.collection_id ? [r.collection_id] : []);
+          for (const id of ids) {
+            if (!id || seen.has(id)) continue;
+            seen.add(id);
+            const col = cols.get(id);
+            if (!col) {
+              // The project was deleted, so every printed copy has gone dead.
+              out.push('<div class="pop"><div class="pop-what pop-gone">'
+                + 'The Popcode behind this was deleted, so it no longer plays.</div></div>');
+              continue;
+            }
+            const editor = EDITOR[col.kind] || '/edit.html';
+            out.push('<div class="pop"><div class="pop-what">Plays <strong>'
+              + esc(col.name || col.slug) + '</strong><br>'
+              + '<span style="color:#8a857d">popcode.app/' + esc(col.slug) + '</span></div>'
+              + '<a class="btn btn-sm btn-secondary" href="' + esc(editor) + '?id='
+              + encodeURIComponent(col.slug) + '">Change what it plays</a></div>');
+          }
+        }
+        return section('Your Popcode', out.join(''));
+      }
+
+      load();
+    </script>
+  </body>
+</html>
