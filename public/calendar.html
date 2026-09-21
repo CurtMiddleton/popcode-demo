@@ -329,6 +329,37 @@
       .ep-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
       .ep-head h2 { font-size: 20px; font-weight: 700; }
       .ep-x { border: none; background: transparent; cursor: pointer; color: #444; padding: 4px; display: flex; }
+      .ep-x:hover { color: #000; }
+      /* ── Edit Photo (Popsa-style crop/zoom/reposition/rotate) — ported from
+         book.html. Placed photos render as absolutely-positioned <img> laid out
+         in JS (layoutPhotoInSlot); the editor shows the whole photo with the
+         area outside the crop window ghosted. */
+      @media (min-width: 720px) { .sheet.sheet-wide { max-width: 960px; } }
+      .ep-grid { display: flex; flex-direction: column; gap: 18px; }
+      @media (min-width: 720px) { .ep-grid { flex-direction: row; align-items: flex-start; } .ep-preview { flex: 1 1 0; min-width: 0; } .ep-side { flex: 0 0 340px; } }
+      .ep-stage { position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 56vh; margin: 0 auto; overflow: hidden; background: #f4f3f0; border-radius: 10px; touch-action: none; cursor: grab; }
+      .ep-stage:active { cursor: grabbing; }
+      .ep-img { position: absolute; object-fit: cover; transform-origin: center center; user-select: none; -webkit-user-drag: none; will-change: transform; z-index: 1; }
+      .ep-img.fit { object-fit: contain; }
+      .ep-window { position: absolute; z-index: 2; pointer-events: none; box-shadow: 0 0 0 3000px rgba(247,246,242,0.66); border: 1.5px solid rgba(255,255,255,0.92); outline: 1px solid rgba(0,0,0,0.14); }
+      .ep-thirds { position: absolute; inset: 0; display: none; pointer-events: none; background-image: linear-gradient(rgba(255,255,255,0.55) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.55) 1px, transparent 1px); background-size: 33.333% 33.333%; }
+      .ep-hint { text-align: center; font-size: 12px; color: #999; margin-top: 8px; }
+      .ep-quality { display: flex; align-items: center; justify-content: space-between; background: #f2f0ea; border-radius: 12px; padding: 14px 16px; font-weight: 700; color: #444; margin-bottom: 12px; }
+      .ep-quality b { font-size: 18px; color: #1a1a1a; }
+      .ep-quality.good { background: #eaf7ee; } .ep-quality.good b { color: #1a7f45; }
+      .ep-quality.warn { background: #fdecec; } .ep-quality.warn b { color: #d33; }
+      .ep-stat { display: flex; align-items: center; justify-content: space-between; padding: 9px 4px; border-bottom: 1px solid #f2f0ea; font-weight: 600; color: #777; font-size: 15px; }
+      .ep-stat b { color: #1a1a1a; }
+      .ep-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
+      .ep-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 2px; border: 1px solid #e6e3db; border-radius: 12px; background: #fff; cursor: pointer; font-family: 'Inter', sans-serif; font-size: 11.5px; font-weight: 600; color: #1a1a1a; }
+      .ep-btn:hover { background: #fafafa; }
+      .ep-btn.active { border-color: #7657FC; background: #f3f0ff; color: #5b3fd6; }
+      .ep-btn.ep-danger { color: #d33; } .ep-btn.ep-danger:hover { background: #fdecec; }
+      .ep-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+      .ep-foot button { padding: 12px 28px; border-radius: 14px; font-size: 15px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; border: none; }
+      /* Placed photos as positioned <img> (laid out by layoutPhotoInSlot), so the
+         crop the editor frames is exactly what the page shows and the print bakes. */
+      .photo-frame .pf-photo-img, .cover-frame .cf-photo-img { position: absolute; z-index: 0; transform-origin: center center; max-width: none; user-select: none; -webkit-user-drag: none; }
       .menu-row { display: flex; align-items: center; gap: 14px; padding: 15px 6px; cursor: pointer; border-bottom: 1px solid #f2f0ea; font-size: 16px; font-weight: 600; color: #1a1a1a; }
       .menu-row:last-child { border-bottom: none; }
       .menu-row:hover { background: #fafafa; }
@@ -765,7 +796,7 @@
         months.forEach(m => { if (m.photoId && !ordered.includes(m.photoId)) ordered.push(m.photoId); });
         return ordered.filter(id => photoHasMedia(photos.get(id)));
       }
-      function openSheet(html) { document.getElementById('sheet').innerHTML = html; document.getElementById('overlay').classList.add('visible'); }
+      function openSheet(html, wide) { const sh = document.getElementById('sheet'); sh.className = 'sheet' + (wide ? ' sheet-wide' : ''); sh.innerHTML = html; document.getElementById('overlay').classList.add('visible'); }
       function closeSheet() { document.getElementById('overlay').classList.remove('visible'); }
       document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') closeSheet(); });
 
@@ -866,10 +897,114 @@
         return p ? p.url : null;
       }
 
+      // ── True crop-and-reposition (matches the Edit Photo preview + the print) ──
+      // A placed photo is drawn at its cover/contain-fit size, centered in the box
+      // (the 1400×993 .page-inner), then panned by a fraction of the box and
+      // scaled/rotated. Same model as the Edit Photo stage (layoutEp) and the
+      // canvas bake (drawPhotoAdjusted) so editor == page == print — unlike
+      // object-fit:cover + a %-translate, which can't pan a mismatched-aspect photo.
+      const DEFAULT_ADJUST = () => ({ fit: 'fill', scale: 1, ox: 0, oy: 0, rot: 0 });
+      function normalizeAdjust(a) {
+        const d = DEFAULT_ADJUST();
+        if (!a || typeof a !== 'object') return d;
+        return {
+          fit: a.fit === 'fit' ? 'fit' : 'fill',
+          scale: Math.max(1, Math.min(3, +a.scale || 1)),
+          ox: Math.max(-80, Math.min(80, +a.ox || 0)),
+          oy: Math.max(-80, Math.min(80, +a.oy || 0)),
+          rot: ((Math.round((+a.rot || 0) / 90) * 90) % 360 + 360) % 360,
+        };
+      }
+      // A 1–10 print-quality score from the photo's pixel size and current zoom.
+      function printQuality(w, h, scale) {
+        if (!w || !h) return 10;
+        const eff = Math.min(w, h) / (scale || 1);
+        return Math.max(1, Math.min(10, Math.round(eff / 170)));
+      }
+      function readAdj(img) { try { return normalizeAdjust(JSON.parse(img.dataset.adj || '{}')); } catch (e) { return DEFAULT_ADJUST(); } }
+      // Clamp the pan so the photo always covers the crop box (no background bleed).
+      function clampPan(a, boxW, boxH, iw, ih) {
+        if (!iw || !ih || !boxW || !boxH) return a;
+        const fitScale = a.fit === 'fit' ? Math.min(boxW / iw, boxH / ih) : Math.max(boxW / iw, boxH / ih);
+        const rotated = (a.rot % 180) !== 0;
+        const imgW = (rotated ? ih : iw) * fitScale * a.scale;
+        const imgH = (rotated ? iw : ih) * fitScale * a.scale;
+        const maxOx = Math.max(0, (imgW - boxW) / (2 * boxW) * 100);
+        const maxOy = Math.max(0, (imgH - boxH) / (2 * boxH) * 100);
+        a.ox = Math.max(-maxOx, Math.min(maxOx, a.ox));
+        a.oy = Math.max(-maxOy, Math.min(maxOy, a.oy));
+        return a;
+      }
+      // A placed photo is cropped to its .page-inner (the fixed 1400×993 canvas).
+      function photoBox(img) { return img.closest('.page-inner'); }
+      function layoutPhotoInSlot(box, img) {
+        const a = readAdj(img);
+        const W = box.clientWidth, H = box.clientHeight;
+        const iw = img.naturalWidth, ih = img.naturalHeight;
+        if (!W || !H || !iw || !ih) return false;
+        clampPan(a, W, H, iw, ih);
+        const fitScale = a.fit === 'fit' ? Math.min(W / iw, H / ih) : Math.max(W / iw, H / ih);
+        const imgW = iw * fitScale, imgH = ih * fitScale;
+        img.style.width = imgW + 'px'; img.style.height = imgH + 'px';
+        img.style.left = ((W - imgW) / 2 + a.ox / 100 * W) + 'px';
+        img.style.top = ((H - imgH) / 2 + a.oy / 100 * H) + 'px';
+        img.style.transform = `scale(${a.scale}) rotate(${a.rot}deg)`;
+        return true;
+      }
+      function layoutAllSlotPhotos(root) {
+        (root || document).querySelectorAll('.pf-photo-img, .cf-photo-img').forEach(img => {
+          const box = photoBox(img); if (!box) return;
+          if (!layoutPhotoInSlot(box, img)) img.addEventListener('load', () => layoutPhotoInSlot(box, img), { once: true });
+        });
+      }
+      window.addEventListener('resize', () => layoutAllSlotPhotos());
+      // Canvas bake used by the print path: draw `img` into rect (x,y,w,h) honoring
+      // the crop/zoom/rotate — the exact geometry layoutPhotoInSlot renders.
+      function drawPhotoAdjusted(ctx, img, adjust, x, y, w, h) {
+        const a = normalizeAdjust(adjust);
+        const iw = img.naturalWidth, ih = img.naturalHeight;
+        clampPan(a, w, h, iw, ih);
+        const fitScale = a.fit === 'fit' ? Math.min(w / iw, h / ih) : Math.max(w / iw, h / ih);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+        ctx.translate(x + w / 2 + (a.ox / 100) * w, y + h / 2 + (a.oy / 100) * h);
+        ctx.scale(a.scale, a.scale);
+        ctx.rotate(a.rot * Math.PI / 180);
+        const dw = iw * fitScale, dh = ih * fitScale;
+        ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
+      }
+      // For the print: bake a photo <img> to a pre-cropped background div so it
+      // prints exactly what the page shows (html2canvas 1.4.1 mishandles a
+      // transformed <img> but renders a background div trivially). Returns null
+      // for unloaded / CORS-tainted images so the caller can leave the <img>.
+      function bakeSlotImgForPrint(img) {
+        const box = photoBox(img);
+        if (!box || !img.complete || !img.naturalWidth) return null;
+        const r = box.getBoundingClientRect();
+        if (!r.width || !r.height) return null;
+        const S = 2;
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(r.width * S));
+        c.height = Math.max(1, Math.round(r.height * S));
+        let data;
+        try {
+          drawPhotoAdjusted(c.getContext('2d'), img, readAdj(img), 0, 0, c.width, c.height);
+          data = c.toDataURL('image/jpeg', 0.92);
+        } catch (e) { return null; }
+        const div = document.createElement('div');
+        div.style.cssText = 'position:absolute;inset:0;z-index:0;width:100%;height:100%;background-image:url("' + data + '");background-size:100% 100%;background-repeat:no-repeat;';
+        return div;
+      }
+
       function buildPhotoInner(inner, photoId, isCover) {
         const url = photoUrlFor(photoId);
+        const p0 = photoId && photos.get(photoId);
         let html = '';
-        if (url) html += `<div class="${isCover ? 'cf-photo' : 'pf-photo'}" style="background-image:url('${url}')"></div>`;
+        if (url) {
+          const adj = normalizeAdjust(p0 && p0.adjust);
+          html += `<img class="${isCover ? 'cf-photo-img' : 'pf-photo-img'}${adj.fit === 'fit' ? ' fit' : ''}" src="${url}" crossorigin="anonymous" draggable="false" data-adj='${escapeHtml(JSON.stringify(adj))}'/>`;
+        }
         if (isCover) {
           const title = (document.getElementById('title-input').value || '').trim();
           if (url) html += '<div class="cf-tint"></div>';
@@ -1040,6 +1175,11 @@
         buildBackInner(bf.inner);
         backCard.appendChild(bf.frame);
         host.appendChild(backCard);
+
+        // Lay out every placed photo now that the frames are in the DOM (their
+        // .page-inner boxes report their fixed 1400×993 size). Cached imgs lay out
+        // immediately; still-loading ones get a one-shot load listener.
+        layoutAllSlotPhotos(host);
       }
 
       function updateSummary() {
@@ -1119,6 +1259,10 @@
             <div class="menu-ic"><img src="/assets/popcode_symbol_color.svg" style="width:20px;height:20px"/></div>
             <div><div>${hasPop ? 'Edit Popcode' : 'Add a Popcode'}</div><div class="menu-sub">${hasPop ? 'Change or remove the linked media' : 'Link a video or audio recording'}</div></div>
           </div>
+          <div class="menu-row" id="fm-edit">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v14a1 1 0 0 0 1 1h14"/><path d="M18 21V7a1 1 0 0 0-1-1H3"/></svg></div>
+            <div><div>Edit photo</div><div class="menu-sub">Fill / fit, zoom, reposition, rotate</div></div>
+          </div>
           <div class="menu-row" id="fm-replace">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>
             <div><div>Choose a different photo</div></div>
@@ -1130,8 +1274,187 @@
         `);
         document.getElementById('fm-x').addEventListener('click', closeSheet);
         document.getElementById('fm-popcode').addEventListener('click', () => { closeSheet(); openPopcodeSheet(photo); });
+        document.getElementById('fm-edit').addEventListener('click', () => openEditPhotoFor(target));
         document.getElementById('fm-replace').addEventListener('click', () => openPhotoPicker(target));
         document.getElementById('fm-remove').addEventListener('click', () => { setPhotoAt(target, null); closeSheet(); render(); });
+      }
+
+      // ── Edit Photo (Popsa-style crop/zoom/reposition/rotate) ────
+      // Ported from book.html. Same UX + adjust model; the crop box is the full
+      // 1400×993 photo page (ar 1400/993 for both cover and month photos).
+      let editPhotoState = null; // { photo, a, gridOn, ar, ctx }
+      function epIcon(name) {
+        const o = 'width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+        const P = {
+          fill: '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>',
+          fit: '<polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="10" y1="14" x2="3" y2="21"/>',
+          grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+          rotate: '<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',
+          replace: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
+          remove: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>',
+          zin: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>',
+          zout: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>',
+        };
+        return `<svg ${o}>${P[name] || ''}</svg>`;
+      }
+
+      // Open the editor for a cover/month photo. The crop box is the whole photo
+      // page (1400×993), so the crop you frame is exactly what prints.
+      function openEditPhotoFor(target) {
+        const photo = photos.get(photoAt(target));
+        if (!photo) return;
+        startEditPhoto(photo, '1400 / 993', {
+          save: (a) => { photo.adjust = normalizeAdjust(a); closeSheet(); render(); showToast('Photo updated'); },
+          remove: () => { setPhotoAt(target, null); closeSheet(); render(); },
+          replace: (out) => {
+            photo.file = out; photo.url = URL.createObjectURL(out); photo.existingUrl = null;
+            photo.adjust = DEFAULT_ADJUST(); return photo;
+          },
+        });
+      }
+
+      function startEditPhoto(photo, ar, ctx) {
+        editPhotoState = { photo, a: { ...normalizeAdjust(photo.adjust || DEFAULT_ADJUST()) }, gridOn: false, ar, ctx };
+        renderEditPhoto();
+      }
+
+      function renderEditPhoto() {
+        const s = editPhotoState;
+        const source = s.photo.source || (s.photo.existingUrl && !s.photo.file ? 'Saved' : 'Device');
+        const btn = (act, label) => `<button class="ep-btn${act === 'remove' ? ' ep-danger' : ''}" data-act="${act}">${epIcon(act)}<span>${label}</span></button>`;
+        openSheet(`
+          <div class="ep-head"><h2>Edit Photo</h2><button class="ep-x" id="ep-close" aria-label="Close">${IC_X}</button></div>
+          <div class="ep-grid">
+            <div class="ep-preview">
+              <div class="ep-stage" id="ep-stage">
+                <img class="ep-img" id="ep-img" src="${s.photo.url}" draggable="false"/>
+                <div class="ep-window" id="ep-window"><div class="ep-thirds" id="ep-thirds"></div></div>
+              </div>
+              <div class="ep-hint">Drag the photo to reposition — the faded area is the rest of your photo</div>
+            </div>
+            <div class="ep-side">
+              <div class="ep-quality" id="ep-quality"><span>Print Quality</span><b id="ep-q">—</b></div>
+              <div class="ep-stat"><span>Scale</span><b id="ep-scale">100%</b></div>
+              <div class="ep-stat"><span>Dimensions</span><b id="ep-dims">—</b></div>
+              <div class="ep-stat"><span>Source</span><b>${escapeHtml(source)}</b></div>
+              <div class="ep-btns">
+                ${btn('fill', 'Fill')}${btn('fit', 'Fit')}${btn('grid', 'Grid')}${btn('rotate', 'Rotate')}
+                ${btn('replace', 'Replace')}${btn('remove', 'Remove')}${btn('zin', 'Zoom In')}${btn('zout', 'Zoom Out')}
+              </div>
+            </div>
+          </div>
+          <div class="ep-foot"><button class="btn-secondary" id="ep-cancel">Cancel</button><button class="btn-primary" id="ep-save">Save</button></div>
+        `, true);
+        const img = document.getElementById('ep-img');
+        const setDims = (w, h) => { s.photo.iw = w; s.photo.ih = h; if (!s.photo.ow) { s.photo.ow = w; s.photo.oh = h; } updateEp(); };
+        if (img.complete && img.naturalWidth) setDims(img.naturalWidth, img.naturalHeight);
+        else img.addEventListener('load', () => setDims(img.naturalWidth, img.naturalHeight));
+        document.getElementById('ep-close').addEventListener('click', epClose);
+        document.getElementById('ep-cancel').addEventListener('click', epClose);
+        document.getElementById('ep-save').addEventListener('click', () => s.ctx.save(s.a));
+        document.querySelectorAll('#sheet .ep-btn').forEach(b => b.addEventListener('click', () => epAction(b.dataset.act)));
+        enableEpPan();
+        layoutEp();
+        requestAnimationFrame(layoutEp);
+        updateEp();
+      }
+      // Lay out the crop window + photo layer inside the stage. The window is the
+      // fixed crop rect; the photo layer is drawn at its FULL cover/contain-fit
+      // size (overflowing the window), centered on the window, then panned/scaled/
+      // rotated. The window's big light box-shadow ghosts everything outside it.
+      function layoutEp() {
+        const stage = document.getElementById('ep-stage'), win = document.getElementById('ep-window'), img = document.getElementById('ep-img');
+        if (!stage || !win || !img || !editPhotoState) return;
+        const s = editPhotoState;
+        const SW = stage.clientWidth, SH = stage.clientHeight;
+        if (!SW || !SH) return;
+        const m = String(s.ar || '1 / 1').split('/');
+        const arNum = (parseFloat(m[0]) || 1) / (parseFloat(m[1]) || 1);
+        const pad = 0.86;
+        let ww, wh;
+        if (SW / SH > arNum) { wh = SH * pad; ww = wh * arNum; } else { ww = SW * pad; wh = ww / arNum; }
+        const wx = (SW - ww) / 2, wy = (SH - wh) / 2;
+        win.style.left = wx + 'px'; win.style.top = wy + 'px'; win.style.width = ww + 'px'; win.style.height = wh + 'px';
+        s._ww = ww; s._wh = wh; s._wcx = wx + ww / 2; s._wcy = wy + wh / 2;
+        const iw = img.naturalWidth || s.photo.iw, ih = img.naturalHeight || s.photo.ih;
+        if (iw && ih) {
+          const a = s.a;
+          clampPan(a, ww, wh, iw, ih);
+          const fitScale = a.fit === 'fit' ? Math.min(ww / iw, wh / ih) : Math.max(ww / iw, wh / ih);
+          const imgW = iw * fitScale, imgH = ih * fitScale;
+          img.style.width = imgW + 'px'; img.style.height = imgH + 'px';
+          img.style.left = (s._wcx - imgW / 2) + 'px'; img.style.top = (s._wcy - imgH / 2) + 'px';
+        }
+        applyEpTransform();
+      }
+      function applyEpTransform() {
+        const img = document.getElementById('ep-img'), s = editPhotoState; if (!img || !s || !s._ww) return;
+        const a = s.a;
+        img.style.transform = `translate(${a.ox / 100 * s._ww}px, ${a.oy / 100 * s._wh}px) scale(${a.scale}) rotate(${a.rot}deg)`;
+      }
+      window.addEventListener('resize', () => { if (document.getElementById('ep-stage')) layoutEp(); });
+
+      function updateEp() {
+        const s = editPhotoState, a = s.a;
+        const img = document.getElementById('ep-img'); if (!img) return;
+        layoutEp();
+        document.getElementById('ep-scale').textContent = Math.round(a.scale * 100) + '%';
+        const w = s.photo.ow || s.photo.iw, h = s.photo.oh || s.photo.ih;
+        document.getElementById('ep-dims').textContent = w ? `${w} × ${h}` : '—';
+        const q = printQuality(w, h, a.scale);
+        const qbox = document.getElementById('ep-quality');
+        document.getElementById('ep-q').textContent = q + '/10';
+        qbox.classList.toggle('good', q >= 8); qbox.classList.toggle('warn', q <= 4);
+        document.getElementById('ep-thirds').style.display = s.gridOn ? 'block' : 'none';
+        const set = (act, on) => { const el = document.querySelector(`.ep-btn[data-act="${act}"]`); if (el) el.classList.toggle('active', on); };
+        set('fill', a.fit === 'fill'); set('fit', a.fit === 'fit'); set('grid', s.gridOn);
+      }
+
+      function epClose() { const c = editPhotoState && editPhotoState.ctx; if (c && c.back) c.back(); else closeSheet(); }
+
+      function epAction(act) {
+        const s = editPhotoState, a = s.a;
+        if (act === 'fill') a.fit = 'fill';
+        else if (act === 'fit') a.fit = 'fit';
+        else if (act === 'grid') s.gridOn = !s.gridOn;
+        else if (act === 'rotate') a.rot = (a.rot + 90) % 360;
+        else if (act === 'zin') a.scale = Math.min(3, Math.round((a.scale + 0.1) * 10) / 10);
+        else if (act === 'zout') a.scale = Math.max(1, Math.round((a.scale - 0.1) * 10) / 10);
+        else if (act === 'replace') { epReplace(); return; }
+        else if (act === 'remove') { s.ctx.remove(); return; }
+        updateEp();
+      }
+
+      function epReplace() {
+        const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+        inp.addEventListener('change', async () => {
+          const f = inp.files[0]; if (!f) return;
+          const out = await optimizePhoto(f);
+          if (!out) { showToast('That photo couldn’t be read — try another.'); return; }
+          const np = editPhotoState.ctx.replace(out);
+          if (np) editPhotoState.photo = np;
+          editPhotoState.a = DEFAULT_ADJUST(); editPhotoState.gridOn = false;
+          renderEditPhoto();
+        });
+        inp.click();
+      }
+
+      // Drag inside the stage to pan the photo (offset in % of the crop window).
+      function enableEpPan() {
+        const stage = document.getElementById('ep-stage'), win = document.getElementById('ep-window'); if (!stage || !win) return;
+        stage.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          const a = editPhotoState.a;
+          const rect = win.getBoundingClientRect();
+          const sx = e.clientX, sy = e.clientY, ox0 = a.ox, oy0 = a.oy;
+          const move = (ev) => {
+            a.ox = Math.max(-80, Math.min(80, ox0 + (ev.clientX - sx) / rect.width * 100));
+            a.oy = Math.max(-80, Math.min(80, oy0 + (ev.clientY - sy) / rect.height * 100));
+            updateEp();
+          };
+          const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); };
+          document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+        });
       }
 
       // ── Popcode editor (video upload OR audio record) ───────────
@@ -1909,8 +2232,8 @@
               year: calYear,
               holidays: holidaysOn ? 'us' : 'none',
               font: calFont,
-              cover: { title, photo_url: cover.photoId ? urlById[cover.photoId] || null : null },
-              months: months.map(m => ({ photo_url: m.photoId ? urlById[m.photoId] || null : null })),
+              cover: { title, photo_url: cover.photoId ? urlById[cover.photoId] || null : null, photo_adjust: cover.photoId ? (photos.get(cover.photoId) || {}).adjust || null : null },
+              months: months.map(m => ({ photo_url: m.photoId ? urlById[m.photoId] || null : null, photo_adjust: m.photoId ? (photos.get(m.photoId) || {}).adjust || null : null })),
               // Photos added but not placed on a month yet (restored on reopen).
               tray: trayIds.map(id => urlById[id]).filter(Boolean),
             },
@@ -2069,6 +2392,13 @@
         // Wait for images + fonts before capture.
         const imgs = [...proof.querySelectorAll('img')];
         await Promise.all(imgs.map(im => (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(r => { im.onload = im.onerror = r; })));
+        // Bake each cropped photo <img> to a pre-cropped background div so the
+        // print shows exactly the crop the editor framed (html2canvas 1.4.1
+        // mishandles a transformed <img>). Falls back to leaving the <img> if the
+        // source is unloaded or CORS-tainted.
+        units.forEach(unit => unit.querySelectorAll('.pf-photo-img, .cf-photo-img').forEach(img => {
+          const div = bakeSlotImgForPrint(img); if (div) img.replaceWith(div);
+        }));
         if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
         await new Promise(r => setTimeout(r, 120));
 
@@ -2315,6 +2645,11 @@
           while (months.length < 12) months.push({ photoId: null });
           cover = { photoId: getPhotoId(cal.cover && cal.cover.photo_url) };
           (cal.tray || []).forEach(url => getPhotoId(url));
+          // Restore each photo's crop/zoom/rotate (stored per slot; the runtime
+          // model is per-photo, matching book.html).
+          const restoreAdj = (id, adj) => { if (id && adj) { const p = photos.get(id); if (p) p.adjust = normalizeAdjust(adj); } };
+          restoreAdj(cover.photoId, cal.cover && cal.cover.photo_adjust);
+          (cal.months || []).forEach((m, i) => { if (months[i]) restoreAdj(months[i].photoId, m && m.photo_adjust); });
           document.getElementById('title-input').value = (cal.cover && cal.cover.title) || col.name || '';
           lockSlug(col.slug);
           document.querySelector('.wrap h1').textContent = 'Edit Calendar';
