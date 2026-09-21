@@ -155,18 +155,22 @@ export default async function handler(req, res) {
       }
     }
 
-    /* The sticker is static art in our own repo, so it is either deployed or it
-       is not — but it is still checked, because naming a missing one would fail
-       the whole order rather than just losing the sticker. */
+    /* ONLY override the dashboard's default set when we have a per-order card to
+       put in its place. Sending `branding` replaces that set outright, so a
+       sticker-only object would ship a box with no card at all — worse than the
+       generic card the default already provides. This is the case on a
+       multi-project order, where there is no single slug to print.
+
+       So: card + sticker when we have a card; otherwise leave `branding` off
+       and let the dashboard default stand, exactly as it does today. */
     let stickerUrl = null;
-    if (PACKAGING_STICKER.enabled && await reachable(PACKAGING_STICKER.url)) {
-      stickerUrl = PACKAGING_STICKER.url;
+    if (postcardUrl && PACKAGING_STICKER.enabled) {
+      // Static art in our own repo, but still checked: naming a missing asset
+      // fails the whole order rather than just losing the sticker.
+      if (await reachable(PACKAGING_STICKER.url)) stickerUrl = PACKAGING_STICKER.url;
     }
 
-    /* Both slots in one object. Sending `branding` replaces the dashboard's
-       default insert set outright, so anything left out here does not ship —
-       which is how the sticker went missing when only the card was sent. */
-    const branding = buildBranding({ postcardUrl, stickerUrl });
+    const branding = postcardUrl ? buildBranding({ postcardUrl, stickerUrl }) : null;
 
     // 4. Authoritative re-quote, per provider group (never trust the client price).
     const { getProvider } = await import('../lib/print/providers/index.mjs');
