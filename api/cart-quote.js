@@ -3,7 +3,7 @@
 // Body: { items: [{ productType, variantId, copies, pageCount }],
 //         destinationCountryCode, address, shippingMethod }
 // 200  { total_minor, currency, markup, groups: [{ provider, total_minor,
-//        cost_minor, line_ids }], shipments }
+//        cost_minor, line_ids }], shipments, parcels:[{ carrier, shipping_minor }] }
 //
 // Lines are grouped by fulfillment provider and each group is quoted ONCE, so the
 // number the cart shows already reflects the real saving of shipping several
@@ -124,8 +124,19 @@ export default async function handler(req, res) {
       // Per-type markups mean there is no single rate; report the one this order
       // actually achieved on its goods. MARKUP is now only a fallback.
       markup: priced.effectiveMarkup ?? MARKUP,
-      // One group = one parcel, so the UI can say "ships in 2 parcels" honestly.
-      shipments: priced.groups.length,
+      /* The real number of parcels, summed across every provider's own split.
+         This was `groups.length` — the number of PROVIDERS — until 2026-09-21,
+         which is a different number: Prodigi splits one group into a parcel per
+         lab, so an order of a flat print and a framed print promised one
+         delivery in the cart and arrived as two. */
+      shipments: priced.parcels.length,
+      /* Per-parcel carrier and charge, so the cart can show WHY shipping is
+         what it is. Each shipping_minor is a split of the charged shipping line
+         (see quoteCart), so these always add up to shipping_minor exactly. */
+      parcels: priced.parcels.map((p) => ({
+        carrier: p.carrier,
+        shipping_minor: p.shippingMinor,
+      })),
       groups: priced.groups.map((g) => ({
         provider: g.provider,
         cost_minor: g.costMinor,

@@ -113,6 +113,14 @@
                    border-top:1px solid #f0efeb; padding-top:14px; margin-top:5px; }
       .total-row .label { font-size:16px; font-weight:600; }
       .total-row .price { font-size:30px; font-weight:600; font-variant-numeric:tabular-nums; }
+      /* Parcel rows sit under the shipping line, indented and quieter, so they
+         read as a breakdown OF it rather than as extra charges beside it. */
+      /* Tucked up under the shipping line and spaced tighter than the rows
+         around it, so the pair reads as one attached breakdown. */
+      #parcel-lines:not(:empty) { display:grid; gap:4px; margin-top:-3px; }
+      .parcel-line { display:flex; justify-content:space-between; align-items:baseline;
+                     gap:12px; font-size:13px; color:#8a8580; padding-left:14px; }
+      .parcel-line .amt { font-variant-numeric:tabular-nums; white-space:nowrap; }
       .note { color:#888; font-size:12.5px; line-height:1.55; margin-top:10px; }
       /* The per-line price sits with the title, right-aligned, so the column of
          numbers reads down to the subtotal it adds up to. */
@@ -201,6 +209,9 @@
           <div class="totals">
             <div class="cost-line"><span>Subtotal</span><span class="amt" id="line-printing">—</span></div>
             <div class="cost-line"><span id="shipping-label">Shipping</span><span class="amt" id="line-shipping">—</span></div>
+            <!-- One row per parcel, filled in from the quote. Empty whenever the
+                 order ships in a single box, so the common case stays plain. -->
+            <div id="parcel-lines"></div>
             <!-- Tax only exists once we know where it is going, so the row stays
                  out of the summary until an address makes it real. -->
             <div class="cost-line" id="tax-row" style="display:none;"><span>Tax</span><span class="amt" id="line-tax">—</span></div>
@@ -621,6 +632,7 @@
         setLinePrices(null);
         document.getElementById('line-printing').textContent = '—';
         document.getElementById('line-shipping').textContent = '—';
+        setParcels(null);
 
         try {
           const addr = addressFromForm();
@@ -661,14 +673,22 @@
             taxRow.style.display = 'none';
             note.textContent = 'Any sales tax is calculated at checkout, once you\u2019ve entered your delivery address.';
           }
+          /* `shipments` is the real number of boxes, counted across every
+             provider's own lab split — not the number of providers, which is
+             what it used to be. A framed print and a flat print are made in
+             different workshops and cannot travel together, so the customer
+             sees both rates before paying rather than one surprising total. */
+          setParcels(data.parcels, data.currency);
           parcels.style.display = data.shipments > 1 ? 'block' : 'none';
           if (data.shipments > 1) {
-            parcels.textContent = `These items are made in ${data.shipments} different workshops, so they arrive in ${data.shipments} parcels — shipping for each is already in the total.`;
+            parcels.textContent = `These are made in ${data.shipments} different workshops, so they ship separately — both rates are in the total above.`;
           }
           payBtn.disabled = false;
         } catch (err) {
           if (mine !== quoteToken) return;
           total.textContent = '—';
+          setParcels(null);
+          parcels.style.display = 'none';
           note.textContent = err.restricted
             ? err.message
             : err.unservable
@@ -676,6 +696,29 @@
               : 'Could not get a price — try again.';
           payBtn.disabled = true;
         }
+      }
+
+      /* One row per parcel under the shipping line, so a large shipping figure
+         explains itself. Only shown when there IS more than one — repeating a
+         single parcel's rate under the line that already states it is noise.
+         Each amount is a split of the charged shipping (see quoteCart), so the
+         rows always add up to the line above them. */
+      function setParcels(parcels, currency) {
+        const wrap = document.getElementById('parcel-lines');
+        wrap.textContent = '';
+        if (!Array.isArray(parcels) || parcels.length < 2) return;
+        parcels.forEach((p, i) => {
+          const row = document.createElement('div');
+          row.className = 'parcel-line';
+          const name = document.createElement('span');
+          // Carrier text comes from the provider, so it is set as text, never HTML.
+          name.textContent = p.carrier || `Parcel ${i + 1}`;
+          const amt = document.createElement('span');
+          amt.className = 'amt';
+          amt.textContent = PopcodeCart.money(p.shipping_minor, currency);
+          row.append(name, amt);
+          wrap.appendChild(row);
+        });
       }
 
       /* Per-line prices come from the quote allocated so they sum to the subtotal
