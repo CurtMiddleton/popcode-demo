@@ -2271,13 +2271,20 @@
       }
       // How much clear page is left under the block — the number that says whether
       // a bigger logo or a wider gap has pushed the symbol off the bottom edge.
+      // Derived from the preview's WIDTH and the book's true height, never from the
+      // preview's own height: the preview box is `--book-ar` (117/83), a 0.3%
+      // rounding of the real 11.6929 x 8.2677, so measuring the gap to its bottom
+      // edge reports ~0.02" more clear page than the printed sheet actually has.
+      // Width is the axis every BC_BRAND value is expressed in, so it is exact.
       function bcBottomClearance() {
         const page = document.querySelector('#bc-preview');
         const blk = document.querySelector('#bc-preview .bc-brand');
         if (!page || !blk) return null;
         const pr = page.getBoundingClientRect(), br = blk.getBoundingClientRect();
-        if (!pr.height) return null;
-        return (pr.bottom - br.bottom) / pr.height * (currentBookSize().hIn || 8.2677);
+        if (!pr.width) return null;
+        const size = currentBookSize();
+        const perIn = pr.width / (size.wIn || 11.6929);
+        return (size.hIn || 8.2677) - ((br.bottom - pr.top) / perIn);
       }
       function refreshBcClearance() {
         const el = document.getElementById('bc-clear');
