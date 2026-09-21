@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Popcode Packaging Sticker</title>
+
+<link rel="stylesheet" href="/assets/fonts.css">
+<!-- For CARD.gradient / artGradient: the sticker and the companion card travel
+     in the same box, so they must carry the SAME gradient, from one definition. -->
+<script src="/postcard-render.js"></script>
+
+<style>
+  /* ══════════════════════════════════════════════════════════════════
+     ROUND PACKAGING STICKER — production artboard / renderer.
+
+     Prodigi's "sticker_exterior_round" slot: the branding that goes on the
+     OUTSIDE of an otherwise plain envelope. Their dashboard describes the
+     stock as "High-gloss round sticker (65mm / 2.5")", $1.25, and on tubes
+     it goes on the end cap.
+
+     The file is a SQUARE fully covered by artwork, with the die cut taking
+     the circle out of the middle. That way no cut position can expose a bare
+     corner — bleed is inherent rather than something to get right.
+
+     Everything is expressed in MILLIMETRES and converted once, so the numbers
+     below read the way a press spec does.
+     ══════════════════════════════════════════════════════════════════ */
+  :root { --stage:#e8e6e1; --ink:#3a3731; --strong:#17150f; --dim:#8a857c;
+          --bar:rgba(255,255,255,.86); --line:rgba(0,0,0,.08); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --stage:#1c1b19; --ink:#cdc8bf; --strong:#f3f0ea; --dim:#8a857c;
+      --bar:rgba(30,29,27,.9); --line:rgba(255,255,255,.1);
+    }
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { min-height:100vh; background:var(--stage); color:var(--ink);
+         font-family:'Inter',system-ui,sans-serif; display:flex; flex-direction:column;
+         align-items:center; gap:22px; padding:28px 16px 60px; }
+  h1 { font-size:19px; font-weight:600; color:var(--strong); }
+  .spec { font-size:13px; color:var(--dim); text-align:center; line-height:1.6; max-width:460px; }
+  .stage { background:#fff; border-radius:18px; padding:26px; box-shadow:0 10px 40px rgba(0,0,0,.1); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .stage { background:#262523; }
+  }
+  /* Shown at true physical size on a nominal 96dpi screen, so it can be held
+     up against a real 65mm sticker. */
+  canvas { display:block; width:71mm; height:71mm; }
+  .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center; }
+  button { font:inherit; font-size:14px; font-weight:600; border:1px solid var(--line);
+           background:var(--bar); color:var(--strong); border-radius:999px;
+           padding:10px 18px; cursor:pointer; }
+  button.primary { background:#17150f; color:#fff; border-color:#17150f; }
+  label { font-size:13px; color:var(--dim); display:flex; gap:6px; align-items:center; cursor:pointer; }
+  .out { font-size:12.5px; color:var(--dim); font-variant-numeric:tabular-nums; }
+</style>
+</head>
+<body>
+
+<h1>Popcode packaging sticker</h1>
+<p class="spec" id="spec"></p>
+<div class="stage"><canvas id="cv"></canvas></div>
+<div class="bar">
+  <label><input type="checkbox" id="guides" checked> Show cut &amp; safe guides</label>
+  <button class="primary" id="dl">Download PNG</button>
+</div>
+<p class="out" id="out"></p>
+
+<script>
+/* The spec. Millimetres throughout.
+
+   bleedMm is the one number NOT confirmed against a Prodigi spec sheet — their
+   docs say only that branding assets are "validated for format and quality".
+   3mm is the standard die-cut allowance and the square-fill approach above
+   makes an over- or under-cut harmless either way. If Prodigi ever states a
+   figure, change it here and re-export. */
+const S = {
+  cutMm:   65,     // the die-cut diameter, per Prodigi's dashboard
+  bleedMm: 3,      // artwork beyond the cut, on all sides
+  safeMm:  4,      // keep all content this far inside the cut
+  dpi:     300,
+
+  /* The wordmark already reads "popcode", so an equally-sized "popcode.app"
+     beneath it sets the same seven letters twice and reads as two logos. The
+     URL is therefore deliberately small and letterspaced — an address line
+     under a mark, not a second mark.
+
+     A pinwheel-symbol composition would avoid the repetition altogether, but
+     neither symbol PNG is usable here: popcode-symbol.png is a black disc with
+     the mark knocked out and .rev.png is its inverse, so both read as a coin on
+     the gradient rather than a white mark. It would mean pulling the inner path
+     out of popcode_symbol_k.svg, the way shop.html does. */
+  markFrac:   0.66,
+  gapMm:      3.6,
+  urlMm:      3.6,
+  urlTrackEm: 0.10,
+};
+
+const MM_PER_IN = 25.4;
+const fileMm = S.cutMm + S.bleedMm * 2;
+const px = (mm) => (mm / MM_PER_IN) * S.dpi;
+const SIZE = Math.round(px(fileMm));
+
+const cv = document.getElementById('cv');
+cv.width = SIZE; cv.height = SIZE;
+/* alpha:false — the artwork covers every pixel by design (that is what makes
+   the bleed safe), so nothing needs compositing.
+
+   Note it does NOT shrink the download: Chrome's PNG encoder writes RGBA either
+   way, so toBlob gives ~785KB. The committed asset is flattened to RGB
+   afterwards (~182KB, pixel-identical) because Prodigi fetches it once per
+   order. If you re-export from this page, flatten before committing:
+     python3 -c "from PIL import Image; Image.open(P).convert('RGB').save(P, optimize=True)"
+*/
+const ctx = cv.getContext('2d', { alpha: false });
+
+document.getElementById('spec').textContent =
+  `${S.cutMm}mm cut + ${S.bleedMm}mm bleed = ${fileMm}mm square, ${S.dpi} DPI → ${SIZE}×${SIZE}px. `
+  + `Content stays ${S.safeMm}mm inside the cut.`;
+
+const wordmark = new Image();
+wordmark.src = '/assets/Popcode_wordmark.rev.png';   // white lockup, 2232x591
+
+/* The same gradient the companion postcard carries, from the same definition —
+   CARD.gradient in postcard-render.js, sampled out of the approved PDF's axial
+   shading. Canvas takes the endpoints directly, so unlike the CSS form there is
+   no projection to do: the stops are already positions along this line. */
+function paintGround() {
+  const g = window.PopcodePostcard.CARD.gradient;
+  const grad = ctx.createLinearGradient(
+    g.from.x * SIZE, g.from.y * SIZE, g.to.x * SIZE, g.to.y * SIZE);
+  for (const [t, hex] of g.stops) grad.addColorStop(t, hex);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, SIZE, SIZE);
+}
+
+function render({ guides = false } = {}) {
+  paintGround();
+
+  const c = SIZE / 2;
+  const markW = px(S.cutMm * S.markFrac);
+  const markH = markW * (wordmark.naturalHeight / wordmark.naturalWidth);
+  const urlPx = px(S.urlMm);
+
+  // Centre the mark-plus-URL block on the circle, measuring the URL by its cap
+  // height rather than its line box so the optical centre is right.
+  ctx.font = `700 ${urlPx}px 'FilsonPro', 'Inter', system-ui, sans-serif`;
+  ctx.textBaseline = 'alphabetic';
+  ctx.letterSpacing = `${S.urlTrackEm}em`;
+  const m = ctx.measureText('popcode.app');
+  const capH = (m.actualBoundingBoxAscent || urlPx * 0.72);
+  const blockH = markH + px(S.gapMm) + capH;
+  const top = c - blockH / 2;
+
+  ctx.drawImage(wordmark, c - markW / 2, top, markW, markH);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  /* Letterspacing shifts a centred string right by one trailing space, so pull
+     it back half a space to keep the optical centre true. */
+  ctx.fillText('popcode.app', c - (urlPx * S.urlTrackEm) / 2, top + markH + px(S.gapMm) + capH);
+  ctx.letterSpacing = '0px';
+
+  if (guides) {
+    ctx.lineWidth = Math.max(1, px(0.25));
+    ctx.setLineDash([px(1.4), px(1.4)]);
+    ctx.strokeStyle = 'rgba(255,255,255,.85)';
+    ctx.beginPath(); ctx.arc(c, c, px(S.cutMm / 2), 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.45)';
+    ctx.beginPath(); ctx.arc(c, c, px((S.cutMm - S.safeMm * 2) / 2), 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+/* A blank or white file is the failure that would survive a glance and waste a
+   real order, so prove the artwork painted before handing over a download —
+   the same check the postcard renderer makes. */
+function assertPainted() {
+  const c = SIZE / 2, r = px(S.cutMm / 2) * 0.9;
+  let lit = 0, n = 0;
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    const [x, y] = [c + Math.cos(a) * r, c + Math.sin(a) * r];
+    const [R, G, B, A] = ctx.getImageData(Math.round(x), Math.round(y), 1, 1).data;
+    n++;
+    if (A > 250 && !(R > 245 && G > 245 && B > 245) && (R + G + B) > 24) lit++;
+  }
+  if (lit / n < 0.9) throw new Error(`Sticker: only ${lit}/${n} sampled points carry the gradient`);
+}
+
+async function ready() {
+  if (!wordmark.complete) await wordmark.decode();
+  if (document.fonts) { try { await document.fonts.load(`700 40px 'FilsonPro'`); await document.fonts.ready; } catch {} }
+}
+
+async function draw() {
+  await ready();
+  render({ guides: document.getElementById('guides').checked });
+}
+
+document.getElementById('guides').addEventListener('change', draw);
+
+
+document.getElementById('dl').addEventListener('click', async () => {
+  await ready();
+  render({ guides: false });   // never export the guides
+  try { assertPainted(); } catch (e) {
+    document.getElementById('out').textContent = e.message; return;
+  }
+  cv.toBlob((blob) => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'popcode-packaging-sticker.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    document.getElementById('out').textContent =
+      `Exported ${SIZE}×${SIZE}px (${fileMm}mm at ${S.dpi} DPI), ${(blob.size / 1024).toFixed(0)} KB`;
+    render({ guides: document.getElementById('guides').checked });
+  }, 'image/png');
+});
+
+// Exposed so a headless run can produce the committed file the same way.
+window.__sticker = { S, SIZE, fileMm, render, assertPainted, ready, cv };
+
+draw();
+</script>
+</body>
+</html>
