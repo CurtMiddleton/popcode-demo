@@ -55,7 +55,7 @@ export default async function handler(req, res) {
          ever placed would grow into a slow sweep for no information. */
       const { data, error } = await admin
         .from('print_orders')
-        .select('id, status, prodigi_order_id')
+        .select('id, status, prodigi_order_id, provider_status')
         .not('prodigi_order_id', 'is', null)
         .in('status', ['submitted', 'in_production', 'shipped'])
         .order('created_at', { ascending: false })
@@ -66,7 +66,7 @@ export default async function handler(req, res) {
       if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
       const { data, error } = await admin
         .from('print_orders')
-        .select('id, status, prodigi_order_id')
+        .select('id, status, prodigi_order_id, provider_status')
         .eq('id', orderId)
         .maybeSingle();
       if (error) throw error;
@@ -77,8 +77,9 @@ export default async function handler(req, res) {
       rows = [data];
     }
 
-    const { fetchProdigiOrder } = await import('../lib/print/providers/prodigi.mjs');
+    const { fetchProdigiOrder, baseUrl } = await import('../lib/print/providers/prodigi.mjs');
     const { buildOrderPatch, shouldAdvance } = await import('../lib/print/order-status.mjs');
+    const where = baseUrl();
 
     const results = [];
     for (const row of rows) {
@@ -87,8 +88,39 @@ export default async function handler(req, res) {
         results.push({ id: row.id, skipped: 'dry run' });
         continue;
       }
+
+      /* Already established as absent from THIS Prodigi. Orders placed against
+         the sandbox do not exist in live and never will, so without this every
+         sync forever re-asks about them, burns a call each, and ends in a wall
+         of identical 404s that mean nothing.
+
+         Keyed on the base URL, not a bare flag: point the app back at the
+         sandbox and these become findable again, so the note has to expire by
+         itself rather than hide them permanently. */
+      const gone = row.provider_status && row.provider_status.unreachable;
+      if (gone && gone.base_url === where) {
+        results.push({ id: row.id, skipped: 'not on this Prodigi environment' });
+        continue;
+      }
+
       const fetched = await fetchProdigiOrder(row.prodigi_order_id);
-      if (!fetched.ok) { results.push({ id: row.id, error: fetched.error }); continue; }
+      if (!fetched.ok) {
+        /* 404 is the provider saying this id does not exist here — permanent,
+           unlike a 500 or a timeout, which are worth asking about again. */
+        if (fetched.status === 404) {
+          await admin.from('print_orders').update({
+            provider_status: {
+              ...(row.provider_status || {}),
+              unreachable: { base_url: where, status: 404, at: new Date().toISOString() },
+            },
+            updated_at: new Date().toISOString(),
+          }).eq('id', row.id);
+          results.push({ id: row.id, error: fetched.error, permanent: true });
+          continue;
+        }
+        results.push({ id: row.id, error: fetched.error });
+        continue;
+      }
 
       const patch = buildOrderPatch(fetched.order);
       const from = row.status;
