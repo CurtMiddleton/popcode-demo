@@ -1932,12 +1932,20 @@
       const BC_BRAND_DEFAULTS = {
         top:     6.4075,  // in — top of the block, from the top edge of the page
         logoW:   1.4,     // in — Popcode wordmark width
-        gapLogo: 0.105,   // in — wordmark → copy
+        gapLogo: 0.19,    // in — wordmark → copy
         textPt:  10,      // pt — instruction copy
         leadPt:  16,      // pt — leading
         gapSym:  0.152,   // in — copy → symbol
         symW:    0.4,     // in — Popcode symbol width
       };
+      // Both wordmarks are trimmed to the letterforms and identical in pixels
+      // (2232x591), so `logoW` means the same thing on a white cover and a photo
+      // one. NOT Popcode_logo.rev.png: that file carries transparent padding on
+      // all four sides, which printed the white wordmark 12% small and made the
+      // gap below it read wider than the number set here. It stays as it is
+      // because the six Supabase email templates hardcode its 200x70 dimensions.
+      const BC_LOGO_DARK  = '/assets/Popcode_logo.png';
+      const BC_LOGO_LIGHT = '/assets/Popcode_logo.rev.print.png';
       const BC_BRAND_KEY = 'popcode.bcBrand';
       let BC_BRAND = { ...BC_BRAND_DEFAULTS };
       try {
@@ -1962,7 +1970,7 @@
         const lead = (B.leadPt / (B.textPt || 1)).toFixed(3);
         const slug = (typeof chosenSlug === 'function' && chosenSlug()) ? chosenSlug() : 'yourlink';
         const brand = (rev) => `<div class="bc-brand${rev ? ' bc-brand-rev' : ''}" style="top:${inCqw(B.top)}">
-          <img class="bc-logo" style="width:${inCqw(B.logoW)}" src="/assets/Popcode_logo${rev ? '.rev' : ''}.png" alt="Popcode"/>
+          <img class="bc-logo" style="width:${inCqw(B.logoW)}" src="${rev ? BC_LOGO_LIGHT : BC_LOGO_DARK}" alt="Popcode"/>
           <div class="bc-inst" style="margin-top:${inCqw(B.gapLogo)};font-size:${textSz};line-height:${lead}">Go to <b>popcode.app/${escapeHtml(slug)}</b> on your phone.<br>Scan photos with the Popcode symbol.</div>
           <img class="bc-symbol" style="margin-top:${inCqw(B.gapSym)};width:${inCqw(B.symW)}" src="/assets/popcode_symbol_color.svg" alt=""/>
         </div>`;
