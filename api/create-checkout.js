@@ -127,29 +127,46 @@ export default async function handler(req, res) {
       if (c.user_id !== user.id) return res.status(403).json({ error: 'Not your design' });
     }
 
-    // 3b. Resolve the companion postcard, if this order earns one. It is a
-    // BRANDED INSERT, not a line item — the fulfilling lab puts it in the box,
-    // so it is absent from the quote and adds no shipping. Its URL is built
-    // from the slug read above, never from anything the client sent.
-    const { COMPANION_INSERT, companionInsertCollectionId, companionInsertPath, companionInsertBranding } =
-      await import('../lib/print/catalog.mjs');
-    let branding = null;
+    // 3b. Resolve this order's branded inserts: the companion postcard (if the
+    // order earns one) and the round packaging sticker. Both are BRANDED
+    // INSERTS, not line items — the fulfilling lab puts them in/on the box, so
+    // they are absent from the quote and add no shipping. Note they ARE billed
+    // per SHIPMENT, so an order split across labs pays for each one twice.
+    // The card's URL is built from the slug read above, never from the client.
+    const { COMPANION_INSERT, PACKAGING_STICKER, companionInsertCollectionId,
+            companionInsertPath, buildBranding } = await import('../lib/print/catalog.mjs');
+
+    /* Confirm each asset exists before naming it. Prodigi fetches these URLs
+       from their own servers, so a 404 here becomes a failed order AFTER the
+       customer has paid — going without an insert is much the better failure.
+       Same guard create-montage.js uses on a soundtrack URL. */
+    const reachable = async (url) => {
+      try { return (await fetch(url, { method: 'HEAD' })).ok; } catch { return false; }
+    };
+
+    let postcardUrl = null;
     if (COMPANION_INSERT.enabled) {
       const cardFor = companionInsertCollectionId(lines);
       const slug = cardFor && byId.get(cardFor)?.slug;
       if (slug) {
-        // Confirm the artwork exists before naming it. The client uploads it
-        // best-effort, so it can legitimately be missing — and Prodigi fetches
-        // this URL server-side, so a 404 here becomes a failed order AFTER the
-        // customer has paid. Going without a card is much the better failure.
-        // Same guard as create-montage.js uses on a soundtrack URL.
+        // The client uploads this best-effort, so it can legitimately be missing.
         const url = PUBLIC_ASSET_PREFIX + companionInsertPath(slug);
-        try {
-          const head = await fetch(url, { method: 'HEAD' });
-          if (head.ok) branding = companionInsertBranding(url);
-        } catch { /* unreachable — ship without the card */ }
+        if (await reachable(url)) postcardUrl = url;
       }
     }
+
+    /* The sticker is static art in our own repo, so it is either deployed or it
+       is not — but it is still checked, because naming a missing one would fail
+       the whole order rather than just losing the sticker. */
+    let stickerUrl = null;
+    if (PACKAGING_STICKER.enabled && await reachable(PACKAGING_STICKER.url)) {
+      stickerUrl = PACKAGING_STICKER.url;
+    }
+
+    /* Both slots in one object. Sending `branding` replaces the dashboard's
+       default insert set outright, so anything left out here does not ship —
+       which is how the sticker went missing when only the card was sent. */
+    const branding = buildBranding({ postcardUrl, stickerUrl });
 
     // 4. Authoritative re-quote, per provider group (never trust the client price).
     const { getProvider } = await import('../lib/print/providers/index.mjs');
