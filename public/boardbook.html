@@ -2908,38 +2908,24 @@
         return c;
       }
       async function compositeCoverWrap() { return toJpegBlob(await coverWrapCanvas()); }
-      // The spine is the ~9mm strip between the two squares. Left white it prints as
-      // a bright stripe between two photos, so bridge it row by row from the edge
-      // pixels either side -- seamless whatever the two covers are, and it stays
-      // white when both are. Reading the canvas back needs the photos to be
-      // CORS-clean; if anything taints it, leave the spine white rather than lose
-      // the whole cover asset.
+      // The spine is the ~9mm strip between the two squares. Fill it by REFLECTING
+      // the front cover across the fold (x1), so the front photo wraps onto the
+      // spine as real image content that meets the front seamlessly. An earlier
+      // version ramped/blended the two covers' 1px edge columns across the spine,
+      // which stretched the front edge horizontally and read as a blurry light
+      // band beside the photo. drawImage (unlike getImageData) needs no pixel
+      // read-back, so this also works on a CORS-tainted canvas; if it still
+      // throws, the spine simply stays white.
       function drawSpineBridge(ctx, x0, x1, h) {
         const w = Math.round(x1 - x0);
         if (w <= 0) return;
         try {
-          const left = ctx.getImageData(x0 - 1, 0, 1, h).data;    // back cover's edge
-          const right = ctx.getImageData(x1, 0, 1, h).data;       // front cover's edge
-          const strip = ctx.createImageData(w, h);
-          const d = strip.data;
-          for (let y = 0; y < h; y++) {
-            const li = y * 4, ri = y * 4, ro = y * w * 4;
-            for (let x = 0; x < w; x++) {
-              // Keep each cover's colour SOLID across its half of the spine and
-              // only cross over in a narrow band at the centre (the physical
-              // fold). A full-width ramp made a white back cover fade across the
-              // whole spine and read as a blurry light band beside the front
-              // photo; this keeps the front (and back) meeting the spine cleanly.
-              const f = w === 1 ? 0.5 : x / (w - 1);
-              const t = Math.max(0, Math.min(1, (f - 0.38) / 0.24)), o = ro + x * 4;
-              d[o]     = left[li]     + (right[ri]     - left[li])     * t;
-              d[o + 1] = left[li + 1] + (right[ri + 1] - left[li + 1]) * t;
-              d[o + 2] = left[li + 2] + (right[ri + 2] - left[li + 2]) * t;
-              d[o + 3] = 255;
-            }
-          }
-          ctx.putImageData(strip, x0, 0);
-        } catch (_) { /* tainted canvas — the spine just stays white */ }
+          ctx.save();
+          ctx.translate(x1, 0);
+          ctx.scale(-1, 1);                                  // mirror about the fold
+          ctx.drawImage(ctx.canvas, x1, 0, w, h, 0, 0, w, h); // front's left slice → spine
+          ctx.restore();
+        } catch (_) { ctx.restore(); /* leave the spine white */ }
       }
       // Bake the back cover into rect (x,0,w,h): the photo if there is one, a scrim
       // under the type, then the brand block — the same geometry the builder
