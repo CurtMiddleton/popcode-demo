@@ -329,7 +329,7 @@
       // rim + inner colour (the product's coloured inner is its selling point)
       ctx.save();
       ellipse(ctx, x + bw / 2, y, bw / 2, ry); ctx.fillStyle = '#f2f2f2'; ctx.fill();
-      ellipse(ctx, x + bw / 2, y, bw / 2 - S * 0.022, ry * 0.78); ctx.fillStyle = '#c0392b'; ctx.fill();
+      ellipse(ctx, x + bw / 2, y, bw / 2 - S * 0.022, ry * 0.78); ctx.fillStyle = '#d9d9d9'; ctx.fill();
       ctx.restore();
       ctx.save();
       ctx.beginPath(); ctx.ellipse(x + bw / 2, y + bh, bw / 2, ry, 0, 0, Math.PI); ctx.clip();

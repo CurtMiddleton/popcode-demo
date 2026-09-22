@@ -518,10 +518,27 @@
           { id: 'orn-bauble',    size: 'Bauble',         aspect: 79 / 84,  minCopies: 3, round: true },
         ],
         mug: [
-          { id: 'mug-11oz', size: '11oz', aspect: 190 / 100, wrap: { widthMm: 190, heightMm: 100, safeMm: 4 } },
+          { id: 'mug-11oz', size: '11oz', aspect: 229 / 95, wrap: { widthMm: 229, heightMm: 95, safeMm: 4 } },
         ],
       };
-      const CATEGORIES = ['print', 'tile', 'canvas', 'framed', 'framedcanvas', 'acrylic', 'mug', 'ornament', 'magnet', 'sticker'];
+            /* Built, priced, and NOT offered.
+
+         Magnets, stickers and ornaments have no US print lab at Prodigi — no
+         GLOBAL-* SKU, and a live quote on 2026-09-22 put transatlantic postage
+         at $33.18 a parcel whether Standard or Budget. That is three small
+         stickers, $3.21 of goods, for $44 to the customer; three fridge magnets
+         for $73. The margin is fine and the price is indefensible, so they are
+         kept out of the shop rather than sold at numbers that would tell
+         visitors something untrue about Popcode's pricing.
+
+         Everything about them works — pack sizes, the die-cut-safe badge, PNG
+         assets, the pixel caps. Delete a name from this set to offer it, once
+         either Popcode sells into the UK/EU or these move to a US provider
+         (Printify already fulfils the board book from District Photo in the US,
+         and PRODUCT_PROVIDER exists for exactly this). */
+      const NO_US_FULFILMENT = new Set(['magnet', 'sticker', 'ornament']);
+      const ALL_CATEGORIES = ['print', 'tile', 'canvas', 'framed', 'framedcanvas', 'acrylic', 'mug', 'ornament', 'magnet', 'sticker'];
+      const CATEGORIES = ALL_CATEGORIES.filter(t => !NO_US_FULFILMENT.has(t));
       const CATEGORY_META = {
         print:  { name: 'Prints',        tagline: 'Classic fine-art prints',  desc: 'Museum-quality enhanced matte giclée prints — perfect for any photo.', specs: ['Enhanced matte art paper, 200gsm', 'Giclée print', 'Ships worldwide'] },
         tile:   { name: 'Photo Tiles',   tagline: 'Framed photo tiles',       desc: 'Ready-to-hang framed tiles — great on their own or in a cluster.',     specs: ['Black or white frame', 'Ready to hang', 'Ships worldwide'] },
@@ -593,22 +610,13 @@
           { id: 'white',   name: 'White',   hex: '#f7f6f3' },
           { id: 'natural', name: 'Natural', hex: '#c9a97e' },
         ],
-        /* Mug handle/inner colour. Not a frame, but mechanically identical: the
-           colour is part of the SKU rather than an attribute, and the variant id
-           is the base id plus the colour, so the same picker and the same
-           orderVariantId() serve both. Black keeps the bare id.
-           Prodigi sells nine colours; these five are the ones whose SKUs it
-           actually publishes — see the note in lib/print/catalog.mjs. */
-        mug: [
-          { id: 'black', name: 'Black',      hex: '#141414' },
-          { id: 'red',   name: 'Red',        hex: '#c0392b' },
-          { id: 'ylw',   name: 'Yellow',     hex: '#f1c40f' },
-          { id: 'pnk',   name: 'Pink',       hex: '#e88aa8' },
-          { id: 'ligr',  name: 'Lime Green', hex: '#9bcf3c' },
-        ],
       };
-      // What to call the colour row for each product. A mug has no frame.
-      const COLOR_ROW_LABEL = { mug: 'Mug colour' };
+      /* What to call the colour row for each product. Only frames have one
+         today: the mug we sell is GLOBAL-MUG-W, which is white. The coloured
+         mugs would need this back (and the mechanism suits them exactly — the
+         colour is in the SKU, like a frame colour), but they are UK-only and
+         not offered. See lib/print/catalog.mjs. */
+      const COLOR_ROW_LABEL = {};
       const frameColorsFor = (t) => FRAME_COLORS[t] || null;
       const ORIENTATION_LOCKED = new Set(['mug', 'ornament', 'magnet', 'sticker']);
       function frameColorHex() {
