@@ -440,14 +440,16 @@
       <div class="hero" style="font-family:'CooperBT',Georgia,serif;font-size:28px;">Your board book is ready!</div>
       <p style="color:#555;">Popcoded pages will play their video or audio when scanned. Share the link or view your book.</p>
       <div class="link" id="result-link"></div>
-      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:10px 0 26px;">
-        <a class="btn-primary" id="result-view" href="#">View book</a>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:10px 0 14px;">
+        <button class="btn-primary" id="cart-btn">Add to cart</button>
+        <a class="btn-secondary" id="result-view" href="#">View book</a>
         <button class="btn-secondary" id="result-copy">Copy link</button>
         <a class="btn-secondary" href="/manage.html">Back to My Designs</a>
       </div>
+      <p style="color:#888;font-size:13px;line-height:1.5;max-width:420px;margin:0 auto 14px;">Your cart lets you order this with your other designs in one go.</p>
+      <button id="order-toggle" style="background:none;border:none;color:#7657FC;font-family:'Inter',sans-serif;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:20px;">Or order just this one now</button>
 
-      <!-- Order the printed board book (admin-gated until the live chain is validated) -->
-      <div id="order-soon" class="hidden" style="max-width:460px;margin:0 auto;color:#666;font-size:14px;background:#fff;border-radius:16px;padding:20px;box-shadow:0 1px 6px rgba(0,0,0,0.06);">Ordering the printed 6×6″ board book is coming soon — your design is saved to <strong>My Popcodes</strong> and is already scannable.</div>
+      <!-- Order this one board book on its own, skipping the cart. Revealed by #order-toggle. -->
       <div id="order-box" class="hidden" style="max-width:460px;margin:0 auto;text-align:left;background:#fff;border-radius:16px;padding:22px 20px;box-shadow:0 1px 6px rgba(0,0,0,0.06);">
         <h2 style="font-family:'CooperBT',Georgia,serif;font-size:22px;margin:0 0 4px;text-align:center;">Order your printed board book</h2>
         <p style="color:#666;font-size:14px;text-align:center;margin:0 0 4px;">Real 6×6″ laminated chipboard.</p>
@@ -463,8 +465,6 @@
         </div>
         <div class="field"><label for="o-country">Country</label><select class="text-input" id="o-country" style="max-width:none"></select></div>
         <button class="btn-primary" id="order-btn" style="width:100%;margin-top:6px;">Continue to payment</button>
-        <button class="save-btn" id="cart-btn" style="width:100%;margin-top:10px;">Add to cart</button>
-        <p style="color:#888;font-size:12.5px;line-height:1.5;margin-top:10px;">Adding it to your cart lets you order it with your other designs in one go.</p>
         <div class="note" id="order-note" style="text-align:center;margin-top:10px;"></div>
       </div>
     </div>
@@ -528,11 +528,6 @@
       // /cart.js (injected by nav.js) reuses this client instead of making its own.
       window.__popcodeCartDb = db;
       let currentUser = null;
-      // Ordering the printed board book is gated to admins until the live
-      // Stripe→Printify chain is validated with one real order; everyone can still
-      // design + scan. Flip by removing this gate (see showResult).
-      const ADMIN_EMAILS = ['curtmid@gmail.com', 'curt@theworkshop.works'];
-      let isAdmin = false;
 
       // The 6×6 board book (Printify blueprint 2727 / variant 148738) reads like a real
       // book: front cover on the right, then Page 1 on the right (facing the inside
@@ -583,8 +578,10 @@
         { id: 'libre', name: 'Libre Baskerville', stack: "'Libre Baskerville', Georgia, serif" },
       ];
       const coverFontStack = (id) => (COVER_FONTS.find(f => f.id === id) || COVER_FONTS[0]).stack;
-      // Page text sets its own weight. Only use a weight we actually load a face
-      // for — asking for 700 where there is none gets a synthesised fake bold.
+      // Page text and the cover headline set their own weight: the sans faces need
+      // to be bold, since Inter or DM Sans at 400 reads thin at title size. Only use
+      // a weight we actually load a face for — asking for 700 where there is none
+      // gets a synthesised fake bold. Cooper has one weight and is chunky already.
       const TEXT_WEIGHT = { cooper: 400, cormorant: 600, dmsans: 700, inter: 700, filson: 700, libre: 700 };
       const textWeight = (id) => TEXT_WEIGHT[id] || 400;
       let cover = { title: '', subtitle: '', font: 'cooper' };
@@ -693,7 +690,6 @@
       db.auth.getSession().then(({ data }) => {
         if (!data.session) { window.location.href = '/auth.html'; return; }
         currentUser = data.session.user;
-        isAdmin = ADMIN_EMAILS.includes((currentUser.email || '').toLowerCase());
         const editId = new URLSearchParams(location.search).get('id');
         if (editId) loadBoardBookForEdit(editId);
       });
@@ -1220,7 +1216,8 @@
       async function ensureTextFonts() {
         const need = new Set();
         POSITIONS.forEach(pos => { const t = pageText(pos); if (t) need.add(`${textWeight(t.font)} 40px ${coverFontStack(t.font)}`); });
-        if (cover.title || cover.subtitle) need.add(`400 40px ${coverFontStack(cover.font)}`);
+        if (cover.title) need.add(`${textWeight(cover.font)} 40px ${coverFontStack(cover.font)}`);
+        if (cover.subtitle) need.add(`400 40px ${coverFontStack(cover.font)}`);
         await Promise.all([...need].map(f => document.fonts.load(f).catch(() => {})));
         try { await document.fonts.ready; } catch (_) {}
       }
@@ -1313,10 +1310,10 @@
         let overlay = '';
         if (isCover) {
           if (cover.title || cover.subtitle) {
-            overlay = `<div class="cover-scrim"></div><div class="cover-title" style="font-family:${coverFontStack(cover.font)}">${escapeHtml(cover.title || '')}${cover.subtitle ? `<span class="cover-sub">${escapeHtml(cover.subtitle)}</span>` : ''}</div>`;
+            overlay = `<div class="cover-scrim"></div><div class="cover-title" style="font-family:${coverFontStack(cover.font)};font-weight:${textWeight(cover.font)}">${escapeHtml(cover.title || '')}${cover.subtitle ? `<span class="cover-sub">${escapeHtml(cover.subtitle)}</span>` : ''}</div>`;
           } else {
             // Faint "Your Title" placeholder (over a photo, or on the empty cover).
-            overlay = `${p ? '<div class="cover-scrim"></div>' : ''}<div class="cover-title placeholder${p ? '' : ' on-empty'}" style="font-family:${coverFontStack(cover.font)}">Your Title</div>`;
+            overlay = `${p ? '<div class="cover-scrim"></div>' : ''}<div class="cover-title placeholder${p ? '' : ' on-empty'}" style="font-family:${coverFontStack(cover.font)};font-weight:${textWeight(cover.font)}">Your Title</div>`;
           }
         }
         // A text page is never "empty" — its colour is the page, so it should not
@@ -2362,9 +2359,17 @@
           const url = 'https://popcode.app/' + slug;
           (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => showToast('Link copied')).catch(() => showToast(url));
         };
-        // Ordering is admin-only until validated; everyone else sees a "coming soon" note.
-        document.getElementById('order-box').classList.toggle('hidden', !isAdmin);
-        document.getElementById('order-soon').classList.toggle('hidden', isAdmin);
+        // The address form starts closed -- finishing a book should offer the cart,
+        // not an address to fill in. "Or order just this one now" opens it.
+        const orderBox = document.getElementById('order-box');
+        const orderToggle = document.getElementById('order-toggle');
+        orderBox.classList.add('hidden');
+        orderToggle.classList.remove('hidden');
+        orderToggle.onclick = () => {
+          orderBox.classList.remove('hidden');
+          orderToggle.classList.add('hidden');
+          orderBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        };
         window.scrollTo({ top: 0 });
       }
 
@@ -2483,6 +2488,7 @@
         const title = (cover.title || '').trim(), subtitle = (cover.subtitle || '').trim();
         if (!title && !subtitle) return;
         const fam = coverFontStack(cover.font);
+        const fwt = textWeight(cover.font);
         ctx.save();
         const g = ctx.createLinearGradient(0, y + h * 0.45, 0, y + h);
         g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.6)');
@@ -2500,7 +2506,7 @@
         }
         if (title) {
           const fs = Math.round(h * 0.09), lh = fs * 1.12;
-          ctx.font = `${fs}px ${fam}`; ctx.shadowBlur = fs * 0.4;
+          ctx.font = `${fwt} ${fs}px ${fam}`; ctx.shadowBlur = fs * 0.4;
           const words = title.split(/\s+/), lines = []; let line = '';
           for (const wd of words) {
             const t = line ? line + ' ' + wd : wd;
