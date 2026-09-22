@@ -184,7 +184,15 @@
   const DRAWN_CARDS = {
     framedcanvas: { kind: 'framedcanvas' },
     acrylic: { kind: 'acrylic' },
+    // The gift products have no photoreal template in /assets/mockups, so their
+    // storefront cards are drawn. Without an entry here the card renders an
+    // empty grey box, which is worse than a drawn approximation.
+    mug: { kind: 'mug' },
+    ornament: { kind: 'ornament' },
+    magnet: { kind: 'magnet' },
+    sticker: { kind: 'sticker' },
   };
+  const GIFT_KINDS = new Set(['mug', 'ornament', 'magnet', 'sticker']);
   async function loadCardPhoto(photoUrl, fallbackUrl) {
     try { return await loadImg(photoUrl, true); }
     catch (_) { if (fallbackUrl) { try { return await loadImg(fallbackUrl, true); } catch (_) {} } }
@@ -268,11 +276,140 @@
     ctx.globalAlpha = 1;
   }
 
+  /* Storefront cards for the gift products.
+
+     Drawn rather than composited into a product photo, because Prodigi ships no
+     template for these and a card with nothing in it reads as a broken product.
+     Each one shows the thing that makes the product worth buying: the mug shows
+     the photo wrapping round it AND the popcode.app line beside the handle,
+     which is the only place that link can live on a mug; the ornament hangs; the
+     sticker has its kiss-cut border and a lifted corner; the magnet sits square
+     with a soft shadow. */
+  function ellipse(ctx, cx, cy, rx, ry) {
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  }
+  async function drawGiftCard(cv, kind, photoUrl, fallbackUrl) {
+    const photo = await loadCardPhoto(photoUrl, fallbackUrl);
+    if (!photo) throw new Error('No sample photo available');
+    const S = 860, M = 60;
+    cv.width = S + 2 * M; cv.height = S + 2 * M;
+    const ctx = cv.getContext('2d');
+    const shadow = () => { ctx.shadowColor = 'rgba(0,0,0,0.22)'; ctx.shadowBlur = 30; ctx.shadowOffsetX = 8; ctx.shadowOffsetY = 20; };
+
+    if (kind === 'mug') {
+      // Body is a cylinder seen face-on: straight sides, an elliptical rim, and
+      // a handle on the right. The photo wraps the body, so it is drawn to the
+      // full body width and clipped to it.
+      const bw = S * 0.62, bh = S * 0.56;
+      const x = M + S * 0.10, y = M + (S - bh) / 2;
+      const ry = bh * 0.085;
+      // handle first, so the body overlaps its inner edge
+      ctx.save(); shadow();
+      ctx.strokeStyle = '#d8d8d8'; ctx.lineWidth = S * 0.045; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.ellipse(x + bw, y + bh * 0.52, S * 0.115, S * 0.15, 0, -Math.PI / 2.1, Math.PI / 2.1);
+      ctx.stroke(); ctx.restore();
+      ctx.save(); shadow();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.rect(x, y, bw, bh); ctx.fill(); ctx.restore();
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x, y, bw, bh); ctx.clip();
+      coverDraw(ctx, photo, x, y, bw, bh);
+      // The link, set vertically beside the handle — the real product's only
+      // place for it, so the card shows it rather than implying a clean photo.
+      const fp = Math.round(bh * 0.085);
+      const barW = fp * 1.9, barX = x + bw - barW - S * 0.012;
+      const g = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+      g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.45, 'rgba(0,0,0,0.42)'); g.addColorStop(1, 'rgba(0,0,0,0.42)');
+      ctx.fillStyle = g; ctx.fillRect(barX, y, barW, bh);
+      ctx.translate(barX + barW / 2, y + bh / 2); ctx.rotate(-Math.PI / 2);
+      ctx.font = '600 ' + fp + 'px Inter, sans-serif'; ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('popcode.app/yourcode', 0, 0);
+      ctx.restore();
+      // rim + inner colour (the product's coloured inner is its selling point)
+      ctx.save();
+      ellipse(ctx, x + bw / 2, y, bw / 2, ry); ctx.fillStyle = '#f2f2f2'; ctx.fill();
+      ellipse(ctx, x + bw / 2, y, bw / 2 - S * 0.022, ry * 0.78); ctx.fillStyle = '#c0392b'; ctx.fill();
+      ctx.restore();
+      ctx.save();
+      ctx.beginPath(); ctx.ellipse(x + bw / 2, y + bh, bw / 2, ry, 0, 0, Math.PI); ctx.clip();
+      ellipse(ctx, x + bw / 2, y + bh, bw / 2, ry); ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fill();
+      ctx.restore();
+      return;
+    }
+
+    if (kind === 'ornament') {
+      const r = S * 0.34, cx = M + S / 2, cy = M + S * 0.58;
+      ctx.save();  // hanging ribbon
+      ctx.strokeStyle = '#b9412f'; ctx.lineWidth = S * 0.018;
+      ctx.beginPath(); ctx.moveTo(cx, M + S * 0.06);
+      ctx.quadraticCurveTo(cx - S * 0.05, M + S * 0.14, cx, cy - r); ctx.stroke();
+      ctx.restore();
+      ctx.save(); shadow();
+      ellipse(ctx, cx, cy, r, r); ctx.fillStyle = '#fff'; ctx.fill(); ctx.restore();
+      ctx.save(); ellipse(ctx, cx, cy, r, r); ctx.clip();
+      coverDraw(ctx, photo, cx - r, cy - r, r * 2, r * 2);
+      ctx.restore();
+      ctx.save();  // gloss + cap
+      ellipse(ctx, cx, cy, r, r);
+      const gl = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+      gl.addColorStop(0, 'rgba(255,255,255,0.28)'); gl.addColorStop(0.4, 'rgba(255,255,255,0.03)');
+      gl.addColorStop(1, 'rgba(0,0,0,0.10)');
+      ctx.fillStyle = gl; ctx.fill(); ctx.restore();
+      ctx.fillStyle = '#c9ab63';
+      ctx.fillRect(cx - S * 0.045, cy - r - S * 0.045, S * 0.09, S * 0.05);
+      return;
+    }
+
+    if (kind === 'sticker') {
+      // Kiss-cut: the art sits on a white die-cut border, on its backing sheet.
+      const w = S * 0.60, h = w, x = M + (S - w) / 2, y = M + (S - h) / 2;
+      const b = w * 0.055;
+      ctx.save(); shadow();
+      ctx.fillStyle = '#ffffff';
+      roundRect(ctx, x - b, y - b, w + 2 * b, h + 2 * b, w * 0.10); ctx.fill();
+      ctx.restore();
+      ctx.save(); roundRect(ctx, x, y, w, h, w * 0.07); ctx.clip();
+      coverDraw(ctx, photo, x, y, w, h); ctx.restore();
+      // lifted bottom-right corner, so it reads as a peel-off sticker
+      ctx.save(); shadow();
+      ctx.fillStyle = '#efefef'; ctx.beginPath();
+      ctx.moveTo(x + w + b, y + h - b * 1.2);
+      ctx.lineTo(x + w + b, y + h + b);
+      ctx.lineTo(x + w - b * 1.2, y + h + b);
+      ctx.closePath(); ctx.fill(); ctx.restore();
+      return;
+    }
+
+    // magnet — square board with a soft shadow, slightly tilted on the fridge
+    const w = S * 0.60, x = M + (S - w) / 2, y = M + (S - w) / 2;
+    ctx.save();
+    ctx.translate(x + w / 2, y + w / 2); ctx.rotate(-0.025); ctx.translate(-(x + w / 2), -(y + w / 2));
+    shadow(); ctx.fillStyle = '#fff'; ctx.fillRect(x, y, w, w); ctx.restore();
+    ctx.save();
+    ctx.translate(x + w / 2, y + w / 2); ctx.rotate(-0.025); ctx.translate(-(x + w / 2), -(y + w / 2));
+    ctx.beginPath(); ctx.rect(x, y, w, w); ctx.clip();
+    coverDraw(ctx, photo, x, y, w, w);
+    ctx.strokeStyle = 'rgba(0,0,0,0.10)'; ctx.lineWidth = 3; ctx.strokeRect(x, y, w, w);
+    ctx.restore();
+  }
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+
   // Draws template + photo into `cv`. Resolves once the template is drawn; if
   // the photo can't load, the template's own baked photo stays visible.
   window.drawProductCardMockup = async function (cv, productId, photoUrl, fallbackUrl) {
     if (productId === 'book-square') return drawSquareBookCard(cv, photoUrl, fallbackUrl);
-    if (DRAWN_CARDS[productId]) return drawSimpleCard(cv, DRAWN_CARDS[productId].kind, photoUrl, fallbackUrl);
+    if (DRAWN_CARDS[productId]) {
+      const kind = DRAWN_CARDS[productId].kind;
+      return GIFT_KINDS.has(kind)
+        ? drawGiftCard(cv, kind, photoUrl, fallbackUrl)
+        : drawSimpleCard(cv, kind, photoUrl, fallbackUrl);
+    }
     const mk = CARD_MOCKUPS[productId];
     if (!mk) throw new Error('No card mockup for ' + productId);
     // Resolve BOTH images before drawing anything, and never show the

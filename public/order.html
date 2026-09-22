@@ -387,6 +387,7 @@
             <div>
               <label for="copies">Copies</label>
               <input id="copies" type="number" min="1" value="1"/>
+              <p class="country-note" id="copies-note" style="display:none;"></p>
             </div>
             <div>
               <label for="country">Ship to (country)</label>
@@ -495,8 +496,32 @@
           { id: 'acry-12x16', size: '12×16"', aspect: 12 / 16 },
           { id: 'acry-16x24', size: '16×24"', aspect: 16 / 24 },
         ],
+        /* Gift products. Mirrors lib/print/catalog.mjs — ids and aspects MUST
+           match it, and so must `minCopies`, `round` and `wrap`, because the
+           server re-derives all of them and quotes/charges from its own copy.
+           The extra fields here only steer the preview and the quantity box. */
+        magnet: [
+          { id: 'mag-4in', size: '4×4"', aspect: 1, minCopies: 3 },
+          { id: 'mag-6in', size: '6×6"', aspect: 1, minCopies: 3 },
+        ],
+        sticker: [
+          { id: 'sti-3x4', size: '3×4"',     aspect: 66.9 / 95.3, minCopies: 3, format: 'png' },
+          { id: 'sti-5_5', size: '5.5×5.5"', aspect: 1,           minCopies: 3, format: 'png' },
+          { id: 'sti-8_5', size: '8.5×8.5"', aspect: 1,           minCopies: 3, format: 'png' },
+          { id: 'sti-14',  size: '14×14"',   aspect: 1,           minCopies: 3, format: 'png' },
+        ],
+        ornament: [
+          { id: 'orn-alum-rect', size: 'Aluminium 4×3"', aspect: 102 / 75, minCopies: 3 },
+          { id: 'orn-alum-sq',   size: 'Aluminium 3×3"', aspect: 1,        minCopies: 3 },
+          { id: 'orn-glass-sq',  size: 'Glass 3×3"',     aspect: 1,        minCopies: 3 },
+          { id: 'orn-ceramic',   size: 'Ceramic 3×3"',   aspect: 1,        minCopies: 3, round: true },
+          { id: 'orn-bauble',    size: 'Bauble',         aspect: 79 / 84,  minCopies: 3, round: true },
+        ],
+        mug: [
+          { id: 'mug-11oz', size: '11oz', aspect: 190 / 100, wrap: { widthMm: 190, heightMm: 100, safeMm: 4 } },
+        ],
       };
-      const CATEGORIES = ['print', 'tile', 'canvas', 'framed', 'framedcanvas', 'acrylic'];
+      const CATEGORIES = ['print', 'tile', 'canvas', 'framed', 'framedcanvas', 'acrylic', 'mug', 'ornament', 'magnet', 'sticker'];
       const CATEGORY_META = {
         print:  { name: 'Prints',        tagline: 'Classic fine-art prints',  desc: 'Museum-quality enhanced matte giclée prints — perfect for any photo.', specs: ['Enhanced matte art paper, 200gsm', 'Giclée print', 'Ships worldwide'] },
         tile:   { name: 'Photo Tiles',   tagline: 'Framed photo tiles',       desc: 'Ready-to-hang framed tiles — great on their own or in a cluster.',     specs: ['Black or white frame', 'Ready to hang', 'Ships worldwide'] },
@@ -504,6 +529,14 @@
         framed: { name: 'Framed Prints', tagline: 'Classic framed prints',    desc: 'Fine-art print in a classic frame behind perspex glaze — black, white or natural wood, with an optional conservation mount.', specs: ['Fine-art paper + perspex glaze', 'Black, white or natural frame', 'Optional conservation mount', 'Ships worldwide'] },
         framedcanvas: { name: 'Framed Canvas', tagline: 'Canvas in a classic frame', desc: '38mm stretched cotton canvas set inside the classic frame — gallery presentation, ready to hang.', specs: ['400gsm artist-grade canvas', 'Black, white or natural frame', 'Ships worldwide'] },
         acrylic: { name: 'Acrylic Prints', tagline: 'High-gloss acrylic panels', desc: 'Your photo hand-mounted behind 10mm high-gloss acrylic with diamond-polished edges — floats off the wall.', specs: ['10mm acrylic, polished edges', 'Invisible floating subframe', 'Ships worldwide'] },
+        /* Gift products. Every one of these is made and posted from the UK,
+           which is why the specs say so plainly: they arrive separately from
+           anything else in the same order, and they take longer. Better said on
+           the product page than discovered at the door. */
+        mug:      { name: 'Photo Mugs',  tagline: '11oz coloured photo mugs',  desc: 'A photo wrapped the whole way round an 11oz ceramic mug, with your Popcode link set discreetly beside the handle.', specs: ['Ceramic, dishwasher tested', 'Nine-colour handle and inner', 'Link printed beside the handle', 'Made and posted from the UK'] },
+        ornament: { name: 'Ornaments',   tagline: 'Christmas tree ornaments',  desc: 'Aluminium, glass, ceramic or a shatterproof bauble — a photo on the tree that plays when someone points a phone at it.', specs: ['Aluminium, glass, ceramic or bauble', 'Ribbon or string to hang', 'Single-sided print', 'Made and posted from the UK'] },
+        magnet:   { name: 'Photo Magnets', tagline: 'Fridge magnets',          desc: 'A photo on the fridge that comes to life — sold in sets of three.', specs: ['Silver-halide print on magnetic board', 'Sets of three', 'Made and posted from the UK'] },
+        sticker:  { name: 'Stickers',    tagline: 'Kiss-cut vinyl stickers',   desc: 'Durable kiss-cut vinyl stickers on a peel-away backing — sold in sets of three.', specs: ['Premium vinyl, matt finish', 'Kiss-cut on a backing sheet', 'Sets of three', 'Made and posted from the UK'] },
       };
 
       // Photorealistic mockups (Route B): a face-on product photo + the rectangle
@@ -560,8 +593,24 @@
           { id: 'white',   name: 'White',   hex: '#f7f6f3' },
           { id: 'natural', name: 'Natural', hex: '#c9a97e' },
         ],
+        /* Mug handle/inner colour. Not a frame, but mechanically identical: the
+           colour is part of the SKU rather than an attribute, and the variant id
+           is the base id plus the colour, so the same picker and the same
+           orderVariantId() serve both. Black keeps the bare id.
+           Prodigi sells nine colours; these five are the ones whose SKUs it
+           actually publishes — see the note in lib/print/catalog.mjs. */
+        mug: [
+          { id: 'black', name: 'Black',      hex: '#141414' },
+          { id: 'red',   name: 'Red',        hex: '#c0392b' },
+          { id: 'ylw',   name: 'Yellow',     hex: '#f1c40f' },
+          { id: 'pnk',   name: 'Pink',       hex: '#e88aa8' },
+          { id: 'ligr',  name: 'Lime Green', hex: '#9bcf3c' },
+        ],
       };
+      // What to call the colour row for each product. A mug has no frame.
+      const COLOR_ROW_LABEL = { mug: 'Mug colour' };
       const frameColorsFor = (t) => FRAME_COLORS[t] || null;
+      const ORIENTATION_LOCKED = new Set(['mug', 'ornament', 'magnet', 'sticker']);
       function frameColorHex() {
         const list = frameColorsFor(state.productType);
         const c = list && list.find(x => x.id === state.frameColor);
@@ -578,9 +627,55 @@
       function baseAspect() { const v = variantOf(state.productType, state.variantId); return v ? v.aspect : null; }
       function currentAspect() {
         const a = baseAspect();
+        // A locked product ignores a landscape flag entirely, even one restored
+        // from a saved design or a cart row written before the lock existed —
+        // turning a mug wrap or an ornament on its side produces artwork the
+        // product cannot take.
+        if (ORIENTATION_LOCKED.has(state.productType)) return a;
         if (a && a !== 1 && state.orientation === 'landscape') return 1 / a;
         return a;
       }
+
+      /* Extra compositor options the gift products need and the flat ones don't:
+         a round die-cut (keep the badge out of the corner that gets cut away),
+         a 360 wrap (set the popcode.app URL beside the handle, since there is no
+         back to print it on), and PNG output where Prodigi demands it.
+         Returns {} for everything else, so the existing products are untouched. */
+      function giftArtOpts(photo) {
+        const v = variantOf(state.productType, state.variantId);
+        if (!v) return {};
+        const o = {};
+        if (v.round) o.round = true;
+        if (v.format) o.format = v.format;
+        if (v.wrap) {
+          o.wrap = v.wrap;
+          const slug = (photo || state.selectedPhoto || {}).slug;
+          if (slug) o.wrapText = 'popcode.app/' + slug;
+        }
+        return o;
+      }
+
+      /* How many of this variant an order must contain — the pack size. Mirrors
+         catalog.minCopiesFor; the server clamps to the same number, so the box
+         below simply cannot produce a quantity checkout would raise. */
+      function minCopies() {
+        const v = variantOf(state.productType, state.variantId);
+        const n = v && parseInt(v.minCopies, 10);
+        return Number.isFinite(n) && n > 1 ? n : 1;
+      }
+      function syncCopiesInput() {
+        const el = document.getElementById('copies');
+        if (!el) return;
+        const min = minCopies();
+        el.min = String(min);
+        if ((parseInt(el.value, 10) || 1) < min) el.value = String(min);
+        const note = document.getElementById('copies-note');
+        if (note) {
+          note.textContent = min > 1 ? `Sold in sets of ${min}` : '';
+          note.style.display = min > 1 ? '' : 'none';
+        }
+      }
+      const copiesValue = () => Math.max(minCopies(), parseInt(document.getElementById('copies').value, 10) || 1);
 
       // ---- print brightness/vibrancy correction ------------------------------
       // Screens are backlit and emit light; a print only reflects it, so an
@@ -714,8 +809,7 @@
           pc.clearRect(0, 0, pw, ph);
           if (adjust) drawPhotoAdjusted(pc, img, adjust, 0, 0, pw, ph);
           else pc.drawImage(img, sx, sy, cropW, cropH, 0, 0, pw, ph);
-          var pbS = Math.round(Math.min(pw, ph) * scale), pbp = Math.round(Math.min(pw, ph) * 0.025);
-          pc.drawImage(iconImg, pw - pbS - pbp, ph - pbS - pbp, pbS, pbS);
+          placeBadge(pc, iconImg, pw, ph, scale, opts);
           if (!returnDataUrl) return null;
         }
         // Full-res output (the actual print asset). JPEG keeps the file small so
@@ -729,10 +823,84 @@
         // Brighten/pop the photo for print before the badge goes on top.
         var corr = opts.correction || correctionByKey(ACTIVE_CORRECTION);
         applyCorrection(ctx, cropW, cropH, corr);
-        var badgeSize = Math.round(Math.min(cropW, cropH) * scale);
-        var pad = Math.round(Math.min(cropW, cropH) * 0.025);
-        ctx.drawImage(iconImg, cropW - badgeSize - pad, cropH - badgeSize - pad, badgeSize, badgeSize);
-        return c.toDataURL('image/jpeg', 0.92);
+        placeBadge(ctx, iconImg, cropW, cropH, scale, opts);
+        // A 360 wrap has no back to print on, so the popcode.app URL is set into
+        // the artwork itself, up the trailing edge (see drawWrapUrl).
+        if (opts.wrap && opts.wrapText) drawWrapUrl(ctx, cropW, cropH, opts.wrapText, opts.wrap);
+        // Stickers are die-cut from a PNG and Prodigi rejects a JPEG for them;
+        // everything else stays JPEG so the checkout upload stays small.
+        return opts.format === 'png' ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.92);
+      }
+
+      /* Where the Popcode badge sits on the artwork.
+
+         Square products put it in the bottom-right corner with a small margin,
+         which is how every print in the shop has looked. A ROUND product —
+         a bauble, a ceramic ornament — is die-cut from that same square, so the
+         corner is exactly the part that gets thrown away: a badge there ships a
+         scannable ornament with the scan mark sliced off. For those, the badge
+         moves down the bottom-right diagonal to sit inside the inscribed
+         circle, which is the nearest position to the corner that actually
+         survives the cut. */
+      function placeBadge(ctx, iconImg, w, h, scale, opts) {
+        var minSide = Math.min(w, h);
+        var size = Math.round(minSide * scale);
+        var pad = Math.round(minSide * 0.025);
+        var x = w - size - pad, y = h - size - pad;
+        if (opts && opts.round) {
+          // Centre of the badge on the 45 degree diagonal, far enough in that the
+          // whole badge (plus its own half-diagonal) clears the circle's edge.
+          var r = minSide / 2;
+          var reach = Math.max(0, r - size * 0.71 - pad);
+          x = Math.round(w / 2 + reach * 0.707 - size / 2);
+          y = Math.round(h / 2 + reach * 0.707 - size / 2);
+        }
+        ctx.drawImage(iconImg, x, y, size, size);
+      }
+
+      /* The popcode.app URL up the trailing edge of a wrap-around mug.
+
+         A mug has ONE print area that goes all the way round, so there is no
+         back and no margin to put an address on — it has to live in the picture.
+         The template's left and right edges are the two sides of the handle, so
+         text set vertically at the right edge finishes beside it rather than
+         across the photo, and reads the right way up when the mug is turned.
+
+         A dark translucent bar sits under it because the artwork behind is the
+         customer's photo and could be any colour; white type alone is legible on
+         some photos and invisible on others. `safeMm` keeps everything clear of
+         the edge — Prodigi allows 1-2mm of artwork movement during production,
+         so type any closer can be trimmed. */
+      function drawWrapUrl(ctx, w, h, text, wrap) {
+        var safe = Math.round((wrap.safeMm / wrap.widthMm) * w);
+        var fontPx = Math.max(12, Math.round(h * 0.052));
+        var barW = Math.round(fontPx * 1.9);
+        ctx.save();
+        ctx.translate(w - safe - barW, 0);
+        var grad = ctx.createLinearGradient(0, 0, barW, 0);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(0.45, 'rgba(0,0,0,0.42)');
+        grad.addColorStop(1, 'rgba(0,0,0,0.42)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, barW, h);
+        // Rotate so the baseline runs up the mug: reading bottom-to-top puts the
+        // text upright when the handle is on the right.
+        ctx.translate(barW / 2, h / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.font = '600 ' + fontPx + 'px Inter, Helvetica, Arial, sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = Math.round(fontPx * 0.35);
+        // Never let a long slug run past the mug's height.
+        var maxLen = h - safe * 2;
+        while (ctx.measureText(text).width > maxLen && fontPx > 9) {
+          fontPx -= 1;
+          ctx.font = '600 ' + fontPx + 'px Inter, Helvetica, Arial, sans-serif';
+        }
+        ctx.fillText(text, 0, 0);
+        ctx.restore();
       }
 
       // Build a single labeled calibration sheet: the same photo shown at every
@@ -1106,6 +1274,7 @@
         row.style.display = colors ? '' : 'none';
         wrap.innerHTML = '';
         if (!colors) return;
+        row.querySelector('label').textContent = COLOR_ROW_LABEL[state.productType] || 'Frame';
         colors.forEach(c => {
           const b = document.createElement('button');
           b.type = 'button';
@@ -1165,7 +1334,13 @@
       }
       function updateOrientationVisibility() {
         const a = baseAspect();
-        document.getElementById('orient-row').style.display = (a && a !== 1) ? 'flex' : 'none';
+        // Orientation is fixed on the gift products, so the toggle is hidden for
+        // them even when the shape isn't square. A mug's artwork wraps a fixed
+        // 190x100mm band, an ornament hangs from a ribbon at one end, and a
+        // kiss-cut sticker is cut by a die of one fixed shape — none of the
+        // three can be turned the other way up the way a print can.
+        document.getElementById('orient-row').style.display =
+          (a && a !== 1 && !ORIENTATION_LOCKED.has(state.productType)) ? 'flex' : 'none';
       }
       // ---- in-situ scene previews (Studio / Wall / Shelf / Styled) ----------------
       // The artwork always renders at the selected size's true aspect; the scene is
@@ -1208,7 +1383,7 @@
         }
       }
       async function badgedImg(src, aspect) {
-        const url = await compositeBadgedImage(src, { scale: state.scale, aspect, adjust: state.selectedPhoto ? state.photoAdjust : null });
+        const url = await compositeBadgedImage(src, Object.assign({ scale: state.scale, aspect, adjust: state.selectedPhoto ? state.photoAdjust : null }, giftArtOpts()));
         const img = new Image();
         await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
         return img;
@@ -1352,7 +1527,7 @@
         const r = { x: bd.rect.x * W, y: bd.rect.y * H, w: bd.rect.w * W, h: bd.rect.h * H };
         ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
         if (state.selectedPhoto) {
-          const artUrl = await compositeBadgedImage(state.selectedPhoto.url, { scale: state.scale, aspect: r.w / r.h });
+          const artUrl = await compositeBadgedImage(state.selectedPhoto.url, Object.assign({ scale: state.scale, aspect: r.w / r.h }, giftArtOpts()));
           const art = new Image(); await new Promise((res, rej) => { art.onload = res; art.onerror = rej; art.src = artUrl; });
           ctx.drawImage(art, r.x, r.y, r.w, r.h);
         } else {
@@ -1500,13 +1675,20 @@
       // going and is passed through at cost, so it joins as its own line at
       // checkout rather than inflating the number on the shelf.
       async function refreshDetailPrice() {
+        // Every selection change lands here, so it is also where the quantity box
+        // is re-synced to the selected variant's pack size.
+        syncCopiesInput();
         const el = document.getElementById('detail-price');
         const note = document.getElementById('detail-price-note');
+        const pack = minCopies();
         el.textContent = 'From …'; note.textContent = 'plus shipping';
         try {
-          const d = await quoteFor(state.productType, orderVariantId());
+          // Pack products are quoted at the pack size, so the headline price is
+          // the price of the thing you can actually buy. Quoting one of
+          // something sold in threes would advertise a price that does not exist.
+          const d = await quoteFor(state.productType, orderVariantId(), { copies: pack });
           el.textContent = 'From ' + formatMoney(d.printing_minor, d.currency);
-          note.textContent = 'per print, plus shipping at cost';
+          note.textContent = (pack > 1 ? `per set of ${pack}` : 'per print') + ', plus shipping at cost';
         } catch (e) { el.textContent = '—'; note.textContent = 'Pricing unavailable: ' + e.message; }
       }
       document.getElementById('orientation-toggle').addEventListener('click', e => {
@@ -2108,11 +2290,16 @@
         const calibrate = qs.get('calibrate');
         const dataUrl = calibrate
           ? await buildCalibrationSheet(photo.url, currentAspect())
-          : await compositeBadgedImage(photo.url, { scale: state.scale, aspect: currentAspect(), adjust: state.photoAdjust });
+          : await compositeBadgedImage(photo.url, Object.assign({ scale: state.scale, aspect: currentAspect(), adjust: state.photoAdjust }, giftArtOpts(photo)));
         const blob = dataUrlToBlob(dataUrl);
         const scalePct = Math.round(state.scale * 100);
+        // Stickers are uploaded as PNG because Prodigi's kiss-cut products only
+        // accept PNG; everything else stays JPEG. The extension has to follow the
+        // bytes — a PNG served as .jpg is the kind of mismatch that fails at the
+        // lab, after the customer has paid.
+        const ext = (blob.type === 'image/png') ? '.png' : '.jpg';
         const path = photo.slug + '/print-' + photo.target_index + '-' + state.orientation
-          + (calibrate ? '-calib' : '-badge' + scalePct) + '.jpg';
+          + (calibrate ? '-calib' : '-badge' + scalePct) + ext;
         const up = await db.storage.from('experiences').upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
         if (up.error) throw new Error('Could not prepare the print image: ' + up.error.message);
         return db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
@@ -2140,7 +2327,9 @@
             collectionId: photo.collectionId,
             productType: state.productType,
             variantId: orderVariantId(),
-            copies: 1,
+            // Pack-size products go in as a set; the server clamps to the same
+            // number, so adding 1 would only surprise the customer in the cart.
+            copies: copiesValue(),
             assetUrls: [{ target_index: photo.target_index, print_area: 'default', url: publicUrl }],
             title: meta.name + ' · ' + v.size + (fcn && fcn.id !== 'black' ? ' ' + fcn.name : ''),
             thumbUrl: photo.url,
@@ -2210,7 +2399,7 @@
         updateIntlNote(country);
         try {
           const d = await quoteFor(state.productType, state.variantId, {
-            copies: Math.max(1, parseInt(document.getElementById('copies').value, 10) || 1),
+            copies: copiesValue(),
             country,
             shipping: document.getElementById('shipping').value,
           });
@@ -2295,7 +2484,7 @@
               collectionId: photo.collectionId,
               productType: state.productType,
               variantId: orderVariantId(),
-              copies: Math.max(1, parseInt(document.getElementById('copies').value, 10) || 1),
+              copies: copiesValue(),
               shippingMethod: document.getElementById('shipping').value,
               recipient,
               assetUrls: [{ target_index: photo.target_index, print_area: 'default', url: publicUrl }],

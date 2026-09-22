@@ -43,9 +43,15 @@ export default async function handler(req, res) {
     const blocked = destinationRestriction(destinationCountryCode, address && address.postalOrZipCode);
     if (blocked) return res.status(400).json({ error: blocked.message, restricted: true });
 
-    const { findVariant, markupFor, priceParts, providerFor } = await import('../lib/print/catalog.mjs');
+    const { findVariant, markupFor, priceParts, providerFor, normalizeCopies, minCopiesFor } = await import('../lib/print/catalog.mjs');
     const variant = findVariant(productType, variantId);
     if (!variant) return res.status(400).json({ error: 'Unknown product' });
+
+    // Quote the quantity we would actually sell. Pack-size products (magnets,
+    // stickers, ornaments) have a minimum, and quoting one of something the
+    // shop only sells in threes would show a price checkout then refused to
+    // honour. `min_copies` goes back so the UI can label the pack.
+    const qty = normalizeCopies(variant, copies);
 
     // Page-priced books: Prodigi needs a page count to quote at all, so a
     // request that omits one is priced at the minimum book. Same validation as
@@ -74,11 +80,13 @@ export default async function handler(req, res) {
       try {
         // `address` is optional and only used by providers that price shipping by
         // full address (e.g. Printify); Prodigi ignores it and prices by country.
-        summed = await provider.quote({ variant, copies, pageCount: pages, destinationCountryCode, address, shippingMethod });
+        summed = await provider.quote({ variant, copies: qty, pageCount: pages, destinationCountryCode, address, shippingMethod });
       } catch (err) {
         // Unservable routes are a normal answer, not a failure — don't retry.
         if (err.unservable) return res.status(502).json({ error: 'Could not price this product/destination', unservable: true });
-        if (attempt === 2) throw err;
+        // Deterministic failures (an unknown SKU) answer the same way every
+        // time — surface them instead of asking twice more.
+        if (err.noRetry || attempt === 2) throw err;
       }
     }
     if (!summed) return res.status(502).json({ error: 'Could not price this product/destination', unservable: true });
@@ -95,6 +103,8 @@ export default async function handler(req, res) {
       shipping_minor: parts.shippingMinor,
       currency: summed.currency,
       page_count: pages,
+      copies: qty,
+      min_copies: minCopiesFor(variant),
       breakdown: {
         product_and_shipping_minor: summed.totalMinor,
         product_cost_minor: summed.itemsMinor ?? null,
