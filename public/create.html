@@ -21,6 +21,7 @@
     <script src="/config.js"></script>
     <script src="/dialog.js"></script>
     <script src="/activity.js"></script>
+    <script src="/referral.js"></script>
     <script src="/slug.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/image-source.js"></script>
@@ -479,7 +480,11 @@
         if (!data.session) {
           // Nobody lands here by accident — they clicked Create a Popcode — so
           // assume no account yet and return them here once they have one.
-          window.location.href = '/auth.html?mode=signup&next=%2Fcreate.html';
+          // Carry the referring project through the detour as well as in
+          // storage, so the credit survives a browser that refuses localStorage.
+          const authUrl = '/auth.html?mode=signup&next=%2Fcreate.html';
+          window.location.href = window.PopcodeReferral
+            ? window.PopcodeReferral.decorate(authUrl) : authUrl;
         } else {
           currentUser = data.session.user;
           const uName = data.session.user?.user_metadata?.full_name?.split(' ')[0] || data.session.user?.email?.split('@')[0] || '';

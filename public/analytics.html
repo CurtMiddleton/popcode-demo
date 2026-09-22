@@ -532,6 +532,12 @@
       // keeps "made something" separable from "watched something" — the
       // question the dashboard could not answer before creation events existed.
       var CREATE_EVENTS = ['signup', 'create_project', 'create_book', 'create_boardbook', 'create_calendar', 'create_montage'];
+      // Referral events ride in scan_events like everything else, but they are
+      // neither a creation nor a view. They need their own category: anything
+      // falling through to 'viewed' is counted in Unique Visitors and the By
+      // Project table, which is exactly how creation events quietly inflated
+      // both when they were first added.
+      var REFERRAL_EVENTS = ['referral_visit', 'referral_signup'];
       // Account-level events (signup, montage) precede any project.
       function projectCell(e) {
         if (!e.slug) return '<span class="muted" style="font-weight:400">Account</span>';
@@ -539,6 +545,7 @@
       }
       function eventCategory(t) {
         if (CREATE_EVENTS.indexOf(t) !== -1) return 'created';
+        if (REFERRAL_EVENTS.indexOf(t) !== -1) return 'referral';
         if (t === 'save_design') return 'ordered';
         return 'viewed';
       }
@@ -1778,6 +1785,7 @@
           await ensureUsers();
           await ensureAllEvents();
           renderFunnel();
+          renderWordOfMouth();
         } catch (e) {
           console.error('loadFunnel error:', e);
           wrap.innerHTML = '<div class="empty" style="padding:20px">Could not build the funnel: ' +
@@ -1849,6 +1857,103 @@
         const noPrints = cachedPrints === null;
         wrap.innerHTML = rows +
           (noPrints ? '<p class="muted" style="font-size:11px;margin-top:10px">Print orders still loading — the last stage may read low.</p>' : '');
+      }
+
+      /*
+       * Word of mouth — does a printed Popcode make new creators?
+       *
+       * Every product shipped is an advert in someone's house, and this is the
+       * only place that says whether it works. view.html tags its "Create your
+       * own" button with the project the visitor was looking at; referral.js
+       * logs the tap and, if they go on to open an account, the sign-up. Both
+       * events carry the REFERRING project's slug, so a new account can be
+       * joined back to the print that produced it.
+       *
+       * All time, like the funnel above: whether a print eventually produced a
+       * creator is a lifetime question, not a 30-day one.
+       */
+      function renderWordOfMouth() {
+        const wrap = document.getElementById('wom-wrap');
+        if (!wrap) return;
+
+        const evts = cachedAllEvts || [];
+        const cols = cachedCols || [];
+
+        // referral.js already collapses a reload (and the bounce through
+        // auth.html) to one event per tab, so each row here is one person
+        // reaching the sign-up page from someone else's Popcode.
+        const visits = evts.filter(e => e.event_type === 'referral_visit');
+        const signups = new Set();
+        evts.forEach(e => {
+          if (e.event_type === 'referral_signup' && e.user_id) signups.add(e.user_id);
+        });
+        const owners = new Set(cols.map(c => c.user_id).filter(Boolean));
+        let made = 0;
+        signups.forEach(id => { if (owners.has(id)) made++; });
+
+        const taps = visits.length;
+
+        if (!taps && !signups.size) {
+          wrap.innerHTML =
+            '<p class="muted" style="font-size:12px;line-height:1.6;margin:0">' +
+            'Nothing yet. This only counts taps from ' + new Date().getFullYear() + ' onward — ' +
+            'the button on the viewer was untracked before now, so a zero here means ' +
+            '<em>not measured yet</em>, not <em>nobody did it</em>. Give it a few weeks of real scans.' +
+            '</p>';
+          return;
+        }
+
+        const stages = [
+          { label: 'Tapped “Create your own”', n: taps,
+            hint: 'Reached sign-up from someone else\u2019s Popcode' },
+          { label: 'Opened an account',        n: signups.size,
+            hint: 'Went on to sign up' },
+          { label: 'Made their own',           n: made,
+            hint: 'Has at least one project of their own' },
+        ];
+
+        const rows = stages.map((st, i) => {
+          const prev = i === 0 ? null : stages[i - 1].n;
+          const ofTop = taps ? Math.round(st.n / taps * 100) : 0;
+          const step = (prev === null || prev === 0) ? null : Math.round(st.n / prev * 100);
+          return '<div class="fn-row">' +
+            '<div class="fn-head">' +
+              '<span class="fn-label">' + st.label + '</span>' +
+              '<span class="fn-n">' + st.n + '<span class="fn-of"> of ' + taps + '</span></span>' +
+            '</div>' +
+            '<div class="fn-track"><div class="fn-fill" style="width:' + ofTop + '%"></div></div>' +
+            '<div class="fn-foot">' +
+              '<span class="muted">' + st.hint + '</span>' +
+              (step === null ? '' :
+                '<span class="fn-step' + (step < 50 ? ' low' : '') + '">' + step + '% of previous</span>') +
+            '</div>' +
+          '</div>';
+        }).join('');
+
+        // Which prints are actually doing the work. Only worth showing once
+        // there is more than one source to compare.
+        const bySlug = {};
+        visits.forEach(e => { if (e.slug) bySlug[e.slug] = (bySlug[e.slug] || 0) + 1; });
+        const top = Object.keys(bySlug).sort((a, b) => bySlug[b] - bySlug[a]).slice(0, 5);
+        const sources = top.length < 2 ? '' :
+          '<div style="margin-top:14px;padding-top:12px;border-top:1px solid #ebebeb">' +
+          '<div class="muted" style="font-size:11px;margin-bottom:6px">Where the taps came from</div>' +
+          top.map(sl => {
+            const c = projectBySlug(sl);
+            return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">' +
+              '<span>' + escapeHtml((c && c.name) || sl) + '</span>' +
+              '<span class="muted">' + bySlug[sl] + '</span></div>';
+          }).join('') + '</div>';
+
+        const rate = taps ? Math.round(made / taps * 100) : 0;
+        // Colour the headline by the 5% rule below, not unconditionally — a
+        // green 0% would read as reassurance.
+        const rateColor = rate >= 5 ? '#2b8a3e' : '#e67700';
+        wrap.innerHTML = rows + sources +
+          '<p class="muted" style="font-size:11px;margin-top:12px;line-height:1.6">' +
+          '<strong style="color:' + rateColor + '">' + rate + '%</strong> of people who tapped the button went on to make a Popcode of their own. ' +
+          'Above roughly 5% and each box you ship is paying for the next one; near zero and the problem is the screen they land on, not the number of scans.' +
+          '</p>';
       }
 
       async function ensureUsers() {
@@ -2250,6 +2355,11 @@
               <div class="section-title" style="margin-bottom:4px">Funnel</div>
               <p class="muted" style="font-size:12px;margin-bottom:16px">How far accounts get, all time — this one ignores the date range above, because whether a signup ever made something is a lifetime question.</p>
               <div id="funnel-wrap"><div class="loading-msg" style="padding:24px"><div class="spinner"></div>Building funnel&hellip;</div></div>
+            </div>
+            <div class="section" style="margin-bottom:20px">
+              <div class="section-title" style="margin-bottom:4px">Word of mouth</div>
+              <p class="muted" style="font-size:12px;margin-bottom:16px">Whether a printed Popcode in someone's house turns its viewers into creators. Every product shipped is an advert that keeps working; this is the only place that says if it does. All time.</p>
+              <div id="wom-wrap"><div class="loading-msg" style="padding:24px"><div class="spinner"></div>Counting referrals&hellip;</div></div>
             </div>
             <div class="cards">
               <div class="card"><div class="card-value">${opens}</div><div class="card-label">Total Opens</div></div>

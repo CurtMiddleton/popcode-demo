@@ -21,6 +21,7 @@
     <script src="/config.js"></script>
     <script src="/dialog.js"></script>
     <script src="/activity.js"></script>
+    <script src="/referral.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="stylesheet" href="/ui.css">
     <script src="/nav.js" defer></script>
@@ -438,6 +439,11 @@
           const optIn = document.getElementById('marketing-checkbox').checked;
           const meta = { full_name: name, marketing_opt_in: optIn };
           if (optIn) meta.marketing_opt_in_at = new Date().toISOString();
+          // If they got here from someone else's Popcode, keep the referring
+          // slug on the account too. The event below is what the dashboard
+          // counts; this is the durable per-account copy.
+          const refSlug = window.PopcodeReferral && window.PopcodeReferral.get();
+          if (refSlug) meta.referred_from = refSlug;
           // The confirmation link returns them to where they were heading (a shop
           // product, say) rather than the homepage. popcode.app/** is on the
           // Supabase redirect allow list, which covers every page.
@@ -446,7 +452,11 @@
           if (!error) {
             // signUp returns the user even while the confirmation is pending,
             // so the top of the funnel is captured whether or not they confirm.
-            logActivity('signup', { user_id: signUpData && signUpData.user && signUpData.user.id });
+            const newUserId = signUpData && signUpData.user && signUpData.user.id;
+            logActivity('signup', { user_id: newUserId });
+            // Credit the print that produced this account, then forget it so
+            // the same browser can't be counted twice.
+            if (window.PopcodeReferral) window.PopcodeReferral.claim(newUserId);
             showSuccess('Almost there. We sent a confirmation link to ' + email + '. Tap it, then sign in.', {
               hint: FROM_HINT,
               resend: { label: 'Resend email', send: () => resendConfirmation(email), coolFirst: true },
