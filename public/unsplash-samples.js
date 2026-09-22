@@ -161,7 +161,7 @@
        and bottom mask the photo correctly. Built from Prodigi's own product
        shot; the design it carried was removed pixel by pixel, which is also why
        there is no third-party artwork in the asset. */
-    mug: { template: '/assets/mockups/mug.png', rect: { x: 0.1850, y: 0.1767, w: 0.5596, h: 0.6778 }, cutout: true, cylinder: true },
+    mug: { template: '/assets/mockups/mug.png', rect: { x: 0.1850, y: 0.1756, w: 0.5596, h: 0.6800 }, cutout: true, cylinder: true },
     print:  { template: '/assets/mockups/print.jpg',  rect: { x: 0.190, y: 0.113, w: 0.626, h: 0.782 }, crop: { x: 0.168, y: 0.089, w: 0.667, h: 0.823 } },
     tile:   { template: '/assets/mockups/tile.jpg',   rect: { x: 0.280, y: 0.206, w: 0.427, h: 0.598 }, crop: { x: 0.242, y: 0.167, w: 0.521, h: 0.696 } },
     canvas: { template: '/assets/mockups/canvas.jpg', rect: { x: 0.190, y: 0.112, w: 0.670, h: 0.804 }, crop: { x: 0.168, y: 0.094, w: 0.709, h: 0.869 } },

@@ -574,7 +574,7 @@
         // Made from Prodigi's own product shot with the design it carried erased
         // pixel by pixel, so the asset holds no third-party artwork. `cutout`
         // puts the art under the template, letting the cylinder's arcs mask it.
-        mug:    { template: '/assets/mockups/mug.png',    rect: { x: 0.1850, y: 0.1767, w: 0.5596, h: 0.6778 }, cutout: true, cylinder: true },
+        mug:    { template: '/assets/mockups/mug.png',    rect: { x: 0.1850, y: 0.1756, w: 0.5596, h: 0.6800 }, cutout: true, cylinder: true },
       };
 
       // Per-product product-photo GALLERY (like Prodigi's own product-page galleries).
@@ -1755,8 +1755,33 @@
         // No thumbnail strip / scenes. The product reshapes to the selected size's aspect
         // ratio and portrait/landscape (photo cropped to fit); the tile + stage stay put.
         document.getElementById('view-row').innerHTML = '';
-        const art = await getArtImage(aspect);
-        renderProductOnly(cv, art, aspect);
+        /* Products whose shape IS the product get their real mockup here, not the
+           drawn one. renderProductOnly paints the artwork as a bare rectangle
+           with a drop shadow, which reads correctly for a print, a canvas or a
+           tile — they ARE flat rectangles. A mug is not: that path showed its
+           229mm wrap as a flat panorama with no mug anywhere in sight. */
+        const mk = MOCKUPS[state.productType];
+        if (mk && mk.cutout) {
+          // Same fallback ladder as getArtImage: the sample is a random Unsplash
+          // shot, so retry once with the bundled copy before giving up on the
+          // mockup — otherwise a blocked Unsplash silently drops the product
+          // back to a bare rectangle.
+          const src = state.selectedPhoto ? state.selectedPhoto.url : SAMPLE_PHOTO;
+          const opts = { scale: state.scale, mockup: mk, aspect };
+          try {
+            await renderProductMockup(cv, src, opts);
+          } catch (_) {
+            try {
+              if (state.selectedPhoto || src === FALLBACK_SAMPLE) throw 0;
+              await renderProductMockup(cv, FALLBACK_SAMPLE, opts);
+            } catch (_) {
+              renderProductOnly(cv, await getArtImage(aspect), aspect);
+            }
+          }
+        } else {
+          const art = await getArtImage(aspect);
+          renderProductOnly(cv, art, aspect);
+        }
         updateDetailCta();
         renderPopcodeCta();
       }
