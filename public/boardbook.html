@@ -2592,7 +2592,7 @@
               blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.9));
             }
             const path = `${slug}/board/tray-${p.id}.jpg`;
-            const { error } = await db.storage.from(bucket).upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
+            const { error } = await uploadWithRetry(bucket, path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
             if (error) throw new Error('Photo upload failed: ' + error.message);
             p.existingUrl = pub(path);
             trayUrls.push(p.existingUrl);
@@ -2613,7 +2613,7 @@
               const sqCanvas = await squareCanvas(p, 1400, false);
               const blob = await new Promise(r => sqCanvas.toBlob(r, 'image/jpeg', 0.9));
               const path = `${slug}/board/${pos}.jpg`;
-              const { error } = await db.storage.from(bucket).upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+              const { error } = await uploadWithRetry(bucket, path, blob, { contentType: 'image/jpeg', upsert: true });
               if (error) throw new Error('Photo upload failed: ' + error.message);
               photoUrlByPos[pos] = pub(path) + `?v=${Date.now()}`;
               recroppedPos.add(pos);
@@ -2648,7 +2648,7 @@
             const compiler = new MINDAR.IMAGE.Compiler();
             await compiler.compileImageTargets(imgs, (prog) => setProgress(`Making your pages scannable… ${Math.round(prog)}%`, 34 + prog * 0.26));
             const buffer = await compiler.exportData();
-            const { error: mErr } = await db.storage.from(bucket).upload(`${slug}/target.mind`, new Blob([buffer]), { contentType: 'application/octet-stream', upsert: true });
+            const { error: mErr } = await uploadWithRetry(bucket, `${slug}/target.mind`, new Blob([buffer]), { contentType: 'application/octet-stream', upsert: true });
             if (mErr) throw new Error('Target upload failed: ' + mErr.message);
             mindUrl = pub(`${slug}/target.mind`) + `?v=${Date.now()}`;
           }
@@ -2665,7 +2665,7 @@
               if (pc.audio) {
                 const ext = (pc.audio.name && pc.audio.name.split('.').pop()) || 'webm';
                 const apath = `${slug}/audio_${i}.${ext}`;
-                const { error } = await db.storage.from(bucket).upload(apath, pc.audio, { contentType: pc.audio.type || 'audio/webm', upsert: true });
+                const { error } = await uploadWithRetry(bucket, apath, pc.audio, { contentType: pc.audio.type || 'audio/webm', upsert: true });
                 if (error) throw new Error(`Audio ${i + 1} upload failed: ${error.message}`);
                 audioUrl = pub(apath) + `?v=${Date.now()}`;
               }
@@ -2674,7 +2674,7 @@
               let videoUrl = pc.existingVideoUrl || null;
               if (pc.video) {
                 const vpath = `${slug}/video_${i}.mp4`;
-                const { error } = await db.storage.from(bucket).upload(vpath, pc.video, { contentType: pc.video.type || 'video/mp4', upsert: true });
+                const { error } = await uploadWithRetry(bucket, vpath, pc.video, { contentType: pc.video.type || 'video/mp4', upsert: true });
                 if (error) throw new Error(`Video ${i + 1} upload failed: ${error.message}`);
                 videoUrl = pub(vpath) + `?v=${Date.now()}`;
               }
@@ -2798,6 +2798,23 @@
         sel.innerHTML = COUNTRY_OPTIONS.map(([c, n]) => `<option value="${c}">${n}</option>`).join('');
       })();
 
+      // Storage uploads sometimes fail with a network-level "Load failed"
+      // (Safari's generic fetch error) — a transient blip, not a real rejection.
+      // Retry those a couple of times with backoff before giving up; every upload
+      // here uses upsert:true so a retry is idempotent. A permission/RLS error is
+      // not transient, so return it immediately without wasting retries.
+      async function uploadWithRetry(bucket, path, blob, opts, tries = 3) {
+        let res = { error: null };
+        for (let i = 0; i < tries; i++) {
+          res = await db.storage.from(bucket).upload(path, blob, opts);
+          if (!res.error) return res;
+          const msg = (res.error.message || '').toLowerCase();
+          if (!/load failed|failed to fetch|network|timeout|timed out|connection|fetch/.test(msg)) return res;
+          await new Promise(r => setTimeout(r, 600 * (i + 1)));
+        }
+        return res;
+      }
+
       // Build the 11 Printify print images (cover wrap + 10 two-page spreads) and
       // upload them. Shared by "add to cart" and "order now" — the images can only
       // be rendered here, from the live board, so a cart line stores their URLs.
@@ -2812,7 +2829,7 @@
         for (const job of jobs) {
           const blob = await job.make();
           const path = `${savedSlug}/board/print_${job.pos}.jpg`;
-          const { error } = await db.storage.from(bucket).upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+          const { error } = await uploadWithRetry(bucket, path, blob, { contentType: 'image/jpeg', upsert: true });
           if (error) throw new Error('Could not prepare a page: ' + error.message);
           assetUrls.push({ url: pub(path), print_area: job.pos });
         }
