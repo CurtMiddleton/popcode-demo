@@ -105,6 +105,14 @@
       .badge-create_montage   { background: #ffe4d6; color: #b1400a; }
       .badge-save_design      { background: #f3e8d6; color: #86601f; }
 
+      /* Word of mouth — cool purples, so a referral reads as its own story
+         rather than as a view (grey) or a creation (warm). Without a rule here
+         these would fall back to bare .badge, which has no background at all. */
+      .badge-referral_visit   { background: #f1efff; color: #6a5ae0; }
+      .badge-referral_signup  { background: #e4dfff; color: #5b34d6; }
+      /* Administrative act, matching the amber of the Comp plan badge. */
+      .badge-credits_granted  { background: #fff4e0; color: #b8860b; }
+
       /* Print-order status pills + Retry action */
       .ps { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
       .ps-green { background: #e8f9ee; color: #2b8a3e; }
@@ -117,6 +125,12 @@
       .retry-btn:hover { background: #fff5f5; }
       .retry-btn:disabled { opacity: 0.5; cursor: default; }
       .prints-err { color: #c92a2a; font-size: 10.5px; margin-top: 3px; max-width: 280px; line-height: 1.3; }
+      /* Same compact in-table register as .retry-btn, in the brand purple —
+         these sit in a cell, so they are deliberately off the 36/44/52 button
+         scale in ui.css. */
+      .grant-btn { padding: 4px 12px; border-radius: 14px; border: 1px solid #ddd4ff; background: #fff; font-size: 11px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; color: #7657FC; white-space: nowrap; }
+      .grant-btn:hover { background: #f6f3ff; }
+      .grant-btn:disabled { opacity: 0.5; cursor: default; }
       .card-value.danger { color: #c92a2a; }
       .prints-cards { grid-template-columns: repeat(4, 1fr); }
       @media (max-width: 720px) { .prints-cards { grid-template-columns: repeat(2, 1fr); } }
@@ -524,7 +538,8 @@
       }
       function eventBadge(e) {
         const labels = { scan_open: 'Opened', target_found: 'Photo Found', video_play: 'Video Played', video_complete: 'Video Done', video_error: 'Error', audio_play: 'Audio Played', audio_complete: 'Audio Done',
-          signup: 'Signed Up', create_project: 'Made a Popcode', create_book: 'Made a Book', create_boardbook: 'Made a Board Book', create_calendar: 'Made a Calendar', create_montage: 'Made a Montage', save_design: 'Saved a Design' };
+          signup: 'Signed Up', create_project: 'Made a Popcode', create_book: 'Made a Book', create_boardbook: 'Made a Board Book', create_calendar: 'Made a Calendar', create_montage: 'Made a Montage', save_design: 'Saved a Design',
+          referral_visit: 'Came From a Popcode', referral_signup: 'Signed Up via a Popcode', credits_granted: 'Credits Granted' };
         return `<span class="badge badge-${e}">${labels[e] || e}</span>`;
       }
 
@@ -538,6 +553,10 @@
       // Project table, which is exactly how creation events quietly inflated
       // both when they were first added.
       var REFERRAL_EVENTS = ['referral_visit', 'referral_signup'];
+      // Administrative acts, logged for the audit trail rather than because
+      // anyone visited. Same rule as above: they must not fall through to
+      // 'viewed' or they land in Unique Visitors.
+      var ADMIN_EVENTS = ['credits_granted'];
       // Account-level events (signup, montage) precede any project.
       function projectCell(e) {
         if (!e.slug) return '<span class="muted" style="font-weight:400">Account</span>';
@@ -546,6 +565,7 @@
       function eventCategory(t) {
         if (CREATE_EVENTS.indexOf(t) !== -1) return 'created';
         if (REFERRAL_EVENTS.indexOf(t) !== -1) return 'referral';
+        if (ADMIN_EVENTS.indexOf(t) !== -1) return 'admin';
         if (t === 'save_design') return 'ordered';
         return 'viewed';
       }
@@ -1128,6 +1148,17 @@
         const optInTotal = cachedOptIns
           ? users.filter(u => cachedOptIns[u.id] && cachedOptIns[u.id].opted_in).length : null;
 
+        // An admin has no cap, so comping them Popcodes would change nothing —
+        // say so rather than offering a button that does nothing visible.
+        const grantCell = function(u) {
+          if (UNCAPPED.has((u.email || '').toLowerCase())) {
+            return '<span class="muted" title="Admins have no cap">—</span>';
+          }
+          return '<button class="grant-btn" data-uid="' + escapeHtml(u.id) +
+            '" data-label="' + escapeHtml(u.full_name || u.email || u.id.slice(0, 8)) +
+            '" title="Give this account free Popcodes">+ Popcodes</button>';
+        };
+
         const rowHtml = function(u) {
           const nameDisplay = u.full_name || '—';
           const plan = planFor(u);
@@ -1155,6 +1186,7 @@
             '<td class="muted" style="text-align:right;white-space:nowrap">' + quota + '</td>' +
             '<td class="muted" style="text-align:right">' + (u.project_count || 0) + '</td>' +
             '<td style="text-align:center">' + optInCell(u) + '</td>' +
+            '<td style="text-align:center">' + grantCell(u) + '</td>' +
             '</tr>';
         };
 
@@ -1164,7 +1196,7 @@
           const label = accountsExpanded
             ? 'Show fewer ▲'
             : 'Show ' + (users.length - 10) + ' more ▼';
-          tbody += '<tr class="accounts-toggle-row"><td colspan="7">' +
+          tbody += '<tr class="accounts-toggle-row"><td colspan="8">' +
             '<button class="accounts-toggle" id="accounts-toggle-btn">' + label + '</button>' +
             '</td></tr>';
         }
@@ -1204,6 +1236,7 @@
               '<th style="text-align:right">Popcodes</th>' +
               '<th style="text-align:right">Projects</th>' +
               '<th style="text-align:center" title="Agreed to tips and news emails">Emails</th>' +
+              '<th style="text-align:center" title="Comp free Popcodes on top of the free five">Comp</th>' +
             '</tr></thead>' +
             '<tbody>' + tbody + '</tbody>' +
           '</table>';
@@ -1214,6 +1247,84 @@
             accountsExpanded = !accountsExpanded;
             renderAccounts();
           });
+        }
+        // Attached per render rather than delegated: #accounts-wrap lives inside
+        // #main-content, which is rebuilt whenever the date range changes, so a
+        // listener on the wrapper would be lost anyway — and re-attaching to a
+        // surviving wrapper would stack duplicates.
+        wrap.querySelectorAll('.grant-btn').forEach(function (b) {
+          b.addEventListener('click', function () {
+            grantCredits(b.dataset.uid, b.dataset.label, b);
+          });
+        });
+      }
+
+      /*
+       * Comp someone free Popcodes from the dashboard.
+       *
+       * The write goes through /api/grant-credits, not straight to the table:
+       * popcode_credits deliberately grants the client SELECT-your-own-rows
+       * only, so that nobody holding the public key can top themselves up. The
+       * endpoint re-checks the caller is an admin with the service key.
+       *
+       * Only `granted` moves. `purchased` stays the record of what was paid
+       * for, so a comp can never be mistaken for revenue in the Accounts
+       * tally.
+       */
+      async function grantCredits(userId, label, btnEl) {
+        if (!userId) return;
+        var entered = null;
+        const confirmed = await popcodeDialog({
+          title: 'Comp Popcodes',
+          message: 'How many free Popcodes for ' + label + '?\n\n' +
+                   'Added on top of the free five. A negative number takes some back.',
+          value: '50',
+          confirmText: 'Comp them',
+          cancelText: 'Cancel',
+          onConfirm: function (ok) {
+            const f = ok.parentNode.parentNode.querySelector('.pcd-field');
+            entered = f ? f.value : null;
+          },
+        });
+        if (!confirmed) return;
+
+        const n = parseInt(String(entered == null ? '' : entered).trim(), 10);
+        if (!Number.isInteger(n) || n === 0) {
+          alert('Enter a whole number of Popcodes, for example 50.');
+          return;
+        }
+
+        if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Saving…'; }
+        try {
+          const { data: { session } } = await db.auth.getSession();
+          if (!session) { alert('Your session expired. Sign in again.'); return; }
+          const resp = await fetch('/api/grant-credits', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json',
+                       'Authorization': 'Bearer ' + session.access_token },
+            body: JSON.stringify({ userId: userId, amount: n }),
+          });
+          const j = await resp.json().catch(function () { return {}; });
+          if (!resp.ok || !j.ok) {
+            alert('Could not comp those Popcodes.\n\n' + (j.error || ('HTTP ' + resp.status)));
+            return;
+          }
+          // Patch the cache rather than refetching the whole ledger, and clear
+          // any earlier read failure now that we know the table is reachable.
+          cachedCredits = cachedCredits || {};
+          cachedCredits[userId] = { purchased: j.purchased, granted: j.granted,
+                                    from_purchases: j.from_purchases };
+          creditsError = false;
+          renderAccounts();   // rebuilds the row, the Plan badge and the tally
+          alert(label + ' now has ' + j.allowance + ' Popcodes in total' +
+                (j.granted ? ' (' + j.granted + ' comped).' : '.'));
+        } catch (e) {
+          console.error('grantCredits error:', e);
+          alert('Could not comp those Popcodes.\n\n' + (e.message || String(e)));
+        } finally {
+          // renderAccounts() usually replaces this button outright; restore it
+          // for the paths that return early or fail.
+          if (btnEl && btnEl.isConnected) { btnEl.disabled = false; btnEl.textContent = '+ Popcodes'; }
         }
       }
 
