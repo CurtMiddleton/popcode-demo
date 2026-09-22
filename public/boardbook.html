@@ -211,6 +211,23 @@
       /* Back cover. Every size comes from BC_BOARD as cqw (% of the 6″ page), so
          what this previews is the physical size the cover wrap is baked at. */
       .slot .bc-scrim { position: absolute; left: 0; right: 0; bottom: 0; height: 46%; z-index: 2; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 100%); pointer-events: none; }
+      /* The page is square, so cqw doubles as cqh and every inch below can be a
+         % of the width — no container-type: size needed (unlike the photo book,
+         whose cover isn't square). */
+      .slot .bc { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+      .slot .bc-full-mode { justify-content: flex-start; padding: 0; }
+      .slot .bc-inset-mode { justify-content: flex-start; padding: 0 9%; }
+      .slot .bc-photo-full { position: absolute; inset: 0; overflow: hidden; }
+      .slot .bc-inset { position: relative; overflow: hidden; background: #ededed; flex: 0 0 auto; margin-top: 9.167cqw; height: 48.333cqw; box-shadow: 0 1px 8px rgba(0,0,0,0.08); }
+      .slot .bc-inset.bc-landscape { aspect-ratio: 854 / 627; }
+      .slot .bc-inset.bc-portrait { aspect-ratio: 3 / 4; }
+      .slot .bc-inset.bc-square { aspect-ratio: 1 / 1; }
+      /* Segmented control, for the back-cover layout sheet. */
+      .bc-seg { display: inline-flex; background: #ececec; border-radius: 999px; padding: 3px; gap: 2px; }
+      .bc-seg-btn { background: transparent; border: none; padding: 8px 16px; font-size: 13px; font-weight: 700; color: #666; border-radius: 999px; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .bc-seg-btn.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+      .field-label { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
+      .bc-preview-wrap { width: 100%; max-width: 260px; margin: 0 auto 16px; }
       .slot .bc-brand { position: absolute; left: 0; right: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; pointer-events: none; }
       .slot .bc-brand img { display: block; }
       .slot .bc-inst { text-align: center; font-family: 'Inter', sans-serif; font-weight: 600; color: #1a1a1a; }
@@ -706,7 +723,15 @@
       // gets a synthesised fake bold. Cooper has one weight and is chunky already.
       const TEXT_WEIGHT = { cooper: 400, cormorant: 600, dmsans: 700, inter: 700, filson: 700, libre: 700 };
       const textWeight = (id) => TEXT_WEIGHT[id] || 400;
-      let cover = { title: '', subtitle: '', font: 'cooper' };
+      let cover = { title: '', subtitle: '', font: 'cooper', noText: false };
+      // Back cover, the same two styles the photo book offers: a photo bled to the
+      // edges, or an inset photo sitting above the brand panel on white.
+      let backCover = { mode: 'fullbleed', shape: 'landscape' };
+      const BC_SHAPES = { landscape: 854 / 627, portrait: 3 / 4, square: 1 };
+      const bcShapeAr = () => BC_SHAPES[backCover.shape] || BC_SHAPES.landscape;
+      // Inches on the 6″ page. The panel starts 4.25″ down, so a 2.9″ box 0.55″
+      // from the top leaves a clear 0.8″ between the photo and the wordmark.
+      const BC_INSET = { top: 0.55, h: 2.9, padPct: 9 };
 
       // ── Page text ──────────────────────────────────────────────────
       // A page can carry a line of text as well as (or instead of) a photo. With no
@@ -881,7 +906,12 @@
 
           // Restore cover text/font.
           const c = col.book_layout.cover;
-          if (c) cover = { title: c.title || '', subtitle: c.subtitle || '', font: COVER_FONTS.some(f => f.id === c.font) ? c.font : 'cooper' };
+          if (c) cover = { title: c.title || '', subtitle: c.subtitle || '', font: COVER_FONTS.some(f => f.id === c.font) ? c.font : 'cooper', noText: !!c.no_text };
+          const bk = col.book_layout.back;
+          if (bk) backCover = {
+            mode: bk.mode === 'inset' ? 'inset' : 'fullbleed',
+            shape: BC_SHAPES[bk.shape] ? bk.shape : 'landscape',
+          };
 
           document.getElementById('title-input').value = col.name || '';
           slugField.lock(col.slug, 'This book’s link — locked so printed pages keep working.');
@@ -1280,8 +1310,10 @@
       }
       function layoutAllSlotPhotos(root) {
         (root || document).querySelectorAll('.slot-img').forEach(img => {
-          const slot = img.closest('.slot'); if (!slot) return;
-          if (!layoutPhotoInSlot(slot, img)) img.addEventListener('load', () => layoutPhotoInSlot(slot, img), { once: true });
+          // An inset back-cover photo cover-fits its frame, not the whole page.
+          const box = img.closest('.bc-inset') || img.closest('.slot');
+          if (!box) return;
+          if (!layoutPhotoInSlot(box, img)) img.addEventListener('load', () => layoutPhotoInSlot(box, img), { once: true });
         });
       }
       window.addEventListener('resize', () => layoutAllSlotPhotos());
@@ -1584,12 +1616,12 @@
         tray.appendChild(add);
       }
 
-      // The back cover's brand panel, over a scrim when there's a photo behind it.
-      function backCoverBrandHTML(hasPhoto) {
+      // The back cover's brand panel. Reversed (white) only when it sits on a
+      // bled photo; on white, or above an inset photo, it's dark on white.
+      function backCoverBrandHTML(reversed) {
         const b = BC_BOARD, pct = (inches) => (inches / PAGE_IN * 100).toFixed(3) + 'cqw';
-        return `${hasPhoto ? '<div class="bc-scrim"></div>' : ''}
-          <div class="bc-brand${hasPhoto ? ' bc-brand-rev' : ''}" style="top:${pct(bcBlockTopIn())}">
-            <img src="${hasPhoto ? BC_LOGO_LIGHT : BC_LOGO_DARK}" style="width:${pct(b.logoW)}" alt="Popcode"/>
+        return `<div class="bc-brand${reversed ? ' bc-brand-rev' : ''}" style="top:${pct(bcBlockTopIn())}">
+            <img src="${reversed ? BC_LOGO_LIGHT : BC_LOGO_DARK}" style="width:${pct(b.logoW)}" alt="Popcode"/>
             <div class="bc-inst" style="margin-top:${pct(b.gapLogo)};font-size:${pct(b.textPt / 72)};line-height:${pct(b.leadPt / 72)}">${bcCopyHTML()}</div>
             <img src="/assets/popcode_symbol_color.svg" style="margin-top:${pct(b.gapSym)};width:${pct(b.symW)}" alt=""/>
           </div>`;
@@ -1600,14 +1632,33 @@
       // One printed face. Content is passed in rather than read from `slots`, so the
       // builder and the Rearrange view draw a page the same way — rearrange works on
       // a pending order and must not touch the live book to preview it.
+      // The back cover, in either style. Its photo has to sit inside the inset
+      // frame rather than fill the page, so this builds the whole face.
+      function backCoverFaceHTML(p, o) {
+        const full = backCover.mode === 'fullbleed';
+        const img = p ? `<img class="slot-img" src="${p.url}" crossorigin="anonymous" draggable="false" data-adj='${JSON.stringify(normalizeAdjust(p.adjust))}'/>` : '';
+        const body = full
+          ? `<div class="bc-photo-full">${img}</div>`
+          : `<div class="bc-inset bc-${backCover.shape}">${img}</div>`;
+        // Only a bled photo needs white type; an inset one leaves the page white.
+        const reversed = full && !!p;
+        // In inset style the grey frame is the add-a-photo affordance, so the
+        // page itself is never drawn as an empty slot.
+        const emptyCls = (full && !p) ? ' empty' : '';
+        return `<div class="slot square${emptyCls}${!o.static && swapSource === 'back_cover' ? ' swap-source' : ''}"${o.static ? '' : ' data-pos="back_cover"'}>
+            <div class="bc ${full ? 'bc-full-mode' : 'bc-inset-mode'}">${body}</div>
+            ${full && p ? '<div class="bc-scrim"></div>' : ''}
+            ${backCoverBrandHTML(reversed)}
+          </div>`;
+      }
       function slotFaceHTML(pos, pid, t, opts) {
         const o = opts || {};
         const p = pid ? photos.get(pid) : null;
         const isCover = pos === 'cover';
         const isBack = pos === 'back_cover';
+        if (isBack) return backCoverFaceHTML(p, o);
         let overlay = '';
-        if (isBack) overlay = backCoverBrandHTML(!!p);
-        if (isCover) {
+        if (isCover && !cover.noText) {
           if (cover.title || cover.subtitle) {
             overlay = `<div class="cover-scrim"></div><div class="cover-title" style="font-family:${coverFontStack(cover.font)};font-weight:${textWeight(cover.font)}">${escapeHtml(cover.title || '')}${cover.subtitle ? `<span class="cover-sub">${escapeHtml(cover.subtitle)}</span>` : ''}</div>`;
           } else {
@@ -1615,7 +1666,7 @@
             overlay = `${p ? '<div class="cover-scrim"></div>' : ''}<div class="cover-title placeholder${p ? '' : ' on-empty'}" style="font-family:${coverFontStack(cover.font)};font-weight:${textWeight(cover.font)}">Your Title</div>`;
           }
         }
-        const popcoded = !isBack && photoHasMedia(p);
+        const popcoded = photoHasMedia(p);
         // A text page is never "empty" — its colour is the page, so it should not
         // show the add-a-photo frame icon.
         return `<div class="slot square${p || t ? '' : ' empty'}${!o.static && pos === swapSource ? ' swap-source' : ''}"${o.static ? '' : ` data-pos="${pos}"`}${t ? ` style="background:${t.bg}"` : ''}>
@@ -1683,8 +1734,9 @@
         openSheet(`
           <h2>Front cover</h2>
           <p class="sheet-sub">Add a cover photo and a title — like the photo book.</p>
-          <div class="menu-row" data-act="text"><div class="menu-ic">${MENU_IC.text}</div><div><div>Edit cover text</div><div class="menu-sub">${escapeHtml([cover.title, cover.subtitle].filter(Boolean).join(' · ')) || 'Title and subtitle / date'}</div></div></div>
-          <div class="menu-row" data-act="font"><div class="menu-ic"><span style="font-family:Georgia,serif;font-size:19px;line-height:1">Aa</span></div><div><div>Change font</div><div class="menu-sub">${escapeHtml((COVER_FONTS.find(f => f.id === cover.font) || COVER_FONTS[0]).name)}</div></div></div>
+          <div class="menu-row" data-act="notext"><div class="menu-ic">${MENU_IC.text}</div><div><div>${cover.noText ? 'Print the title on the cover' : 'Leave the cover without type'}</div><div class="menu-sub">${cover.noText ? 'Currently a photo-only cover' : 'Just the photo — your title still names the book and its link'}</div></div></div>
+          ${cover.noText ? '' : `<div class="menu-row" data-act="text"><div class="menu-ic">${MENU_IC.edit}</div><div><div>Edit cover text</div><div class="menu-sub">${escapeHtml([cover.title, cover.subtitle].filter(Boolean).join(' · ')) || 'Title and subtitle / date'}</div></div></div>`}
+          ${cover.noText ? '' : `<div class="menu-row" data-act="font"><div class="menu-ic"><span style="font-family:Georgia,serif;font-size:19px;line-height:1">Aa</span></div><div><div>Change font</div><div class="menu-sub">${escapeHtml((COVER_FONTS.find(f => f.id === cover.font) || COVER_FONTS[0]).name)}</div></div></div>`}
           <div class="menu-row" data-act="photo"><div class="menu-ic">${has ? MENU_IC.replace : MENU_IC.photo}</div><div><div>${has ? 'Change the cover photo' : 'Add a cover photo'}</div><div class="menu-sub">Upload an image for the cover</div></div></div>
           ${has ? `<div class="menu-row" data-act="edit"><div class="menu-ic">${MENU_IC.edit}</div><div><div>Adjust cover photo</div><div class="menu-sub">Fill / fit, zoom, reposition, rotate</div></div></div>` : ''}
           ${has ? `<div class="menu-row" data-act="popcode"><div class="menu-ic"><img src="/assets/popcode_symbol_color.svg" style="width:20px;height:20px"/></div><div><div>${photoHasMedia(photos.get(slots['cover'])) ? 'Edit the cover Popcode' : 'Add a Popcode to the cover'}</div><div class="menu-sub">${photoHasMedia(photos.get(slots['cover'])) ? 'Change or remove the linked media' : 'Link a video or audio recording'}</div></div></div>` : ''}
@@ -1693,6 +1745,7 @@
         sheet.querySelectorAll('.menu-row').forEach(row => row.addEventListener('click', () => {
           const act = row.dataset.act;
           if (act === 'text') { openCoverTextSheet(); }
+          else if (act === 'notext') { cover.noText = !cover.noText; renderSlots(); openCoverMenu(); }
           else if (act === 'font') { openFontSheet(); }
           else if (act === 'edit') { closeSheet(); openEditPhoto('cover'); }
           else if (act === 'photo') { closeSheet(); selectedTrayId = null; pendingPickPos = 'cover'; document.getElementById('photo-input').click(); }
@@ -1700,6 +1753,32 @@
           else if (act === 'remove') { slots['cover'] = null; closeSheet(); render(); }
         }));
       }
+      // Back-cover layout: bled photo or an inset one, with a live preview.
+      function openBackCoverLayoutSheet() {
+        const seg = (name, opts, cur) => `<div class="bc-seg">${opts.map(o => `<button class="bc-seg-btn${cur === o.id ? ' active' : ''}" data-seg="${name}" data-val="${o.id}">${o.label}</button>`).join('')}</div>`;
+        openSheet(`
+          <h2>Back cover</h2>
+          <p class="sheet-sub">A photo bled to the edges, or an inset photo above the Popcode logo and your link.</p>
+          <div class="bc-preview-wrap" id="bc-preview"></div>
+          <div class="field-label">Photo style</div>
+          ${seg('mode', [{ id: 'inset', label: 'Inset photo' }, { id: 'fullbleed', label: 'Full bleed' }], backCover.mode)}
+          ${backCover.mode === 'inset' ? `<div class="field-label" style="margin-top:14px">Shape</div>${seg('shape', [{ id: 'landscape', label: 'Landscape' }, { id: 'portrait', label: 'Portrait' }, { id: 'square', label: 'Square' }], backCover.shape)}` : ''}
+          <div class="sheet-actions"><button class="btn-primary" id="bc-done">Done</button></div>
+        `);
+        const paint = () => {
+          const el = document.getElementById('bc-preview');
+          el.innerHTML = slotFaceHTML('back_cover', slots['back_cover'], null, { static: true });
+          layoutAllSlotPhotos(el);
+        };
+        paint();
+        sheet.querySelectorAll('.bc-seg-btn').forEach(b => b.addEventListener('click', () => {
+          backCover[b.dataset.seg] = b.dataset.val;
+          renderSlots();
+          openBackCoverLayoutSheet();          // re-open so the Shape row appears
+        }));
+        document.getElementById('bc-done').addEventListener('click', () => { closeSheet(); render(); });
+      }
+
       function openCoverTextSheet() {
         openSheet(`
           <h2>Cover text</h2>
@@ -1772,7 +1851,7 @@
           : (t ? 'A text page. Add a photo and it becomes the background.'
                : 'Put a photo here, or make this a page of text.');
         const photoRows = p ? `
-          ${isBack ? '' : `<div class="menu-row" data-act="popcode"><div class="menu-ic"><img src="/assets/popcode_symbol_color.svg" style="width:20px;height:20px"/></div><div><div>${has ? 'Edit Popcode' : 'Add a Popcode'}</div><div class="menu-sub">${has ? 'Change or remove the linked media' : 'Link a video or audio recording'}</div></div></div>`}
+          ${isBack ? `<div class="menu-row" data-act="bclayout"><div class="menu-ic">${MENU_IC.photo}</div><div><div>Layout</div><div class="menu-sub">${backCover.mode === 'fullbleed' ? 'Full bleed' : 'Inset photo · ' + backCover.shape}</div></div></div>` : `<div class="menu-row" data-act="popcode"><div class="menu-ic"><img src="/assets/popcode_symbol_color.svg" style="width:20px;height:20px"/></div><div><div>${has ? 'Edit Popcode' : 'Add a Popcode'}</div><div class="menu-sub">${has ? 'Change or remove the linked media' : 'Link a video or audio recording'}</div></div></div>`}
           <div class="menu-row" data-act="edit"><div class="menu-ic">${MENU_IC.edit}</div><div><div>Edit photo</div><div class="menu-sub">Fill / fit, zoom, reposition, rotate</div></div></div>
           <div class="menu-row" data-act="swap"><div class="menu-ic">${MENU_IC.swap}</div><div><div>Move / swap</div><div class="menu-sub">Then tap another page to swap places</div></div></div>
           <div class="menu-row" data-act="replace"><div class="menu-ic">${MENU_IC.replace}</div><div><div>Replace photo</div><div class="menu-sub">Upload a different image here</div></div></div>`
@@ -1781,13 +1860,14 @@
           <h2>${positionLabel(pos)}</h2>
           <p class="sheet-sub">${sub}</p>
           ${photoRows}
-          <div class="menu-row" data-act="text"><div class="menu-ic">${MENU_IC.text}</div><div><div>${t ? 'Edit text' : 'Add text'}</div><div class="menu-sub">${t ? 'Wording, type, size and colours' : 'Type, size and background colour'}</div></div></div>
-          ${p ? `<div class="menu-row destructive" data-act="remove"><div class="menu-ic">${MENU_IC.remove}</div><div><div>Remove photo from page</div><div class="menu-sub">Sends the photo back to your tray</div></div></div>` : ''}
-          ${t ? `<div class="menu-row destructive" data-act="rmtext"><div class="menu-ic">${MENU_IC.remove}</div><div><div>Remove text</div><div class="menu-sub">Leaves the page${p ? ' as just the photo' : ' empty'}</div></div></div>` : ''}
+          ${isBack ? '' : `<div class="menu-row" data-act="text"><div class="menu-ic">${MENU_IC.text}</div><div><div>${t ? 'Edit text' : 'Add text'}</div><div class="menu-sub">${t ? 'Wording, type, size and colours' : 'Type, size and background colour'}</div></div></div>`}
+          ${p ? `<div class="menu-row destructive" data-act="remove"><div class="menu-ic">${MENU_IC.remove}</div><div><div>Remove photo from ${isBack ? 'the back cover' : 'page'}</div><div class="menu-sub">Sends the photo back to your tray</div></div></div>` : ''}
+          ${t && !isBack ? `<div class="menu-row destructive" data-act="rmtext"><div class="menu-ic">${MENU_IC.remove}</div><div><div>Remove text</div><div class="menu-sub">Leaves the page${p ? ' as just the photo' : ' empty'}</div></div></div>` : ''}
         `);
         sheet.querySelectorAll('.menu-row').forEach(row => row.addEventListener('click', () => {
           const act = row.dataset.act;
           if (act === 'popcode') { closeSheet(); openPopcodeSheet(pos); }
+          else if (act === 'bclayout') { openBackCoverLayoutSheet(); }
           else if (act === 'edit') { closeSheet(); openEditPhoto(pos); }
           else if (act === 'swap') { swapSource = pos; closeSheet(); showToast('Now tap another page to swap.'); render(); }
           else if (act === 'replace') { closeSheet(); replaceSlotPhoto(pos); }
@@ -2113,7 +2193,11 @@
         const photo = photos.get(slots[pos]);
         if (!photo) return;
         photo.adjust = photo.adjust || DEFAULT_ADJUST();
-        editPhotoState = { pos, photo, a: { ...normalizeAdjust(photo.adjust) }, gridOn: false, ar: '1 / 1' };
+        // The inset back cover crops to its frame's shape, every other face is square.
+        const ar = (pos === 'back_cover' && backCover.mode === 'inset')
+          ? ({ landscape: '854 / 627', portrait: '3 / 4', square: '1 / 1' })[backCover.shape]
+          : '1 / 1';
+        editPhotoState = { pos, photo, a: { ...normalizeAdjust(photo.adjust) }, gridOn: false, ar };
         renderEditPhoto();
       }
       function renderEditPhoto() {
@@ -2583,7 +2667,8 @@
             product: 'boardbook',
             variantId: 'bb-6x6',
             title,
-            cover: { title: cover.title || null, subtitle: cover.subtitle || null, font: cover.font },
+            cover: { title: cover.title || null, subtitle: cover.subtitle || null, font: cover.font, no_text: !!cover.noText },
+            back: { mode: backCover.mode, shape: backCover.shape },
             slots: POSITIONS.map(pos => ({
               position: pos,
               photo_url: photoUrlByPos[pos] || null,
@@ -2822,11 +2907,23 @@
       // under the type, then the brand block — the same geometry the builder
       // previews, in pixels instead of cqw.
       async function drawBackCover(ctx, x, w, h) {
-        const hasPhoto = !!slots['back_cover'];
-        await drawPageInto(ctx, 'back_cover', x, w, h);
+        const photo = photos.get(slots['back_cover']);
+        const full = backCover.mode === 'fullbleed';
         const b = BC_BOARD, px = (inches) => (inches / PAGE_IN) * w;
+        if (full) {
+          await drawPageInto(ctx, 'back_cover', x, w, h);
+        } else {
+          // White page with the photo inside its frame — same rect the preview
+          // lays out from BC_INSET.
+          ctx.fillStyle = '#fff'; ctx.fillRect(x, 0, w, h);
+          const ih = px(BC_INSET.h), iw = ih * bcShapeAr();
+          const ix = x + (w - iw) / 2, iy = px(BC_INSET.top);
+          if (photo) drawPhotoAdjusted(ctx, await loadPhotoImg(photo), photo.adjust, ix, iy, iw, ih);
+          else { ctx.fillStyle = '#ededed'; ctx.fillRect(ix, iy, iw, ih); }
+        }
+        const reversed = full && !!photo;
         ctx.save();
-        if (hasPhoto) {
+        if (reversed) {
           const g = ctx.createLinearGradient(0, h * 0.54, 0, h);
           g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.55)');
           ctx.fillStyle = g; ctx.fillRect(x, h * 0.54, w, h * 0.46);
@@ -2834,7 +2931,7 @@
         const cx = x + w / 2;
         let y = px(bcBlockTopIn());
         try {
-          const logo = await loadImg(hasPhoto ? BC_LOGO_LIGHT : BC_LOGO_DARK);
+          const logo = await loadImg(reversed ? BC_LOGO_LIGHT : BC_LOGO_DARK);
           const lw = px(b.logoW), lh = lw * BC_LOGO_ASPECT;
           ctx.drawImage(logo, cx - lw / 2, y, lw, lh);
           y += lh;
@@ -2843,7 +2940,7 @@
         // Two centred lines with a bold slug. CSS centres the glyphs in the line
         // box, so the baseline sits a little past the middle of the leading.
         const fs = px(b.textPt / 72), lead = px(b.leadPt / 72);
-        ctx.fillStyle = hasPhoto ? '#ffffff' : '#1a1a1a';
+        ctx.fillStyle = reversed ? '#ffffff' : '#1a1a1a';
         ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
         const font = (wt) => `${wt} ${fs}px 'Inter', sans-serif`;
         const line = (segs, baseY) => {
@@ -2866,6 +2963,7 @@
       // Overlay the cover title + subtitle on the front square (scrim + wrapped text in
       // the chosen font), matching the builder's on-cover preview.
       function drawCoverTitle(ctx, x, y, w, h) {
+        if (cover.noText) return;                        // photo-only cover
         const title = (cover.title || '').trim(), subtitle = (cover.subtitle || '').trim();
         if (!title && !subtitle) return;
         const fam = coverFontStack(cover.font);
