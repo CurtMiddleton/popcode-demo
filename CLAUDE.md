@@ -2582,3 +2582,98 @@ Ruled out while in there: printing the URL on a product's reverse. `GLOBAL-FAP-5
 - **Per-parcel insert cost vs the cheap end of the catalogue** — a 5×7 nets ~$1.50 on one parcel and loses money on two. Worth a look once a few real orders exist.
 - **ST-120 resale certificate for Prodigi** — they charge us sales tax our quote never sees ($6.13 on this order).
 - Unchanged from earlier: `analytics.html` still gated to `curtmid@gmail.com` only (five sessions); re-enable Vercel Deployment Protection on previews (six sessions); shipping options as cards with prices and delivery estimates is still the biggest Popsa gap.
+
+### 2026-09-22 — Board book brought up to the photo book's level, then the scan screen names the Popcode
+
+**Nine commits, each fast-forwarded to `main` and verified live: `78d79df`, `a4984f9`, `1f592fa`, `ec3e698`, `beab531`, `a81cc0e`, `cece49e`, `3c89da2`, `46da471`.** No PRs, no migrations — every board-book setting added this session lives inside the existing `book_layout` jsonb. Two parallel-session commits (`3644533`, `da71d05`) landed in the middle and rebased clean; no file overlap.
+
+Most of the session was closing the gap between `boardbook.html` and `book.html`. It ended on the viewer's scan screen.
+
+#### THE ONE THAT MATTERED: every board book printed so far has a blank back cover and a blank spine
+
+`compositeCoverWrap` only ever drew the **front** square of the wraparound. The back cover didn't exist in the builder either — nothing to edit, nothing to draw. So the back and the spine went to Printify as white.
+
+That's worse on this product than it would be anywhere else: **Printify has no `branding` mechanism**, so a board book ships with no companion card in the box. Until this commit, `popcode.app/{slug}` appeared **nowhere on the finished object**. A board book was the one product you could buy and then have no way of scanning.
+
+It's a real page face now, taking a photo like any other, carrying the same branded panel the photo book has (wordmark, "Go to popcode.app/{slug} on your phone", symbol). Details worth not relearning:
+
+- **Sizes are inches on the 6" page**, rendered as `cqw` in the builder and as pixels in the bake, so the preview is the physical size that prints. Works because `.slot` is `container-type: inline-size` on a square page, so `cqw` doubles as `cqh`.
+- **The printed sentence is stored once**, as runs (`BC_LINE1` / `BC_LINE2`), and rendered both as markup and onto canvas from that one source. Two hand-written copies of a sentence that goes on a physical object will drift.
+- **`drawSpineBridge`** lerps row by row between the back cover's right edge pixels and the front cover's left edge, so the spine follows the two photos instead of printing a bright stripe between them, and stays white when both covers are. Wrapped in try/catch — a tainted canvas leaves it white rather than throwing.
+- **The back cover is deliberately kept out of the `.mind` and offered no Popcode.** The scan badge composites exactly where the wordmark goes, and the same photo may also be on an interior page, which would compile twice.
+- **It's also not offered page text** — the panel occupies the bottom of the page and the bake never drew text there, so that menu row only promised something that wouldn't print.
+
+Then two rounds of refinement, both driven by the user's eye rather than by measurement:
+
+- **Full-bleed or inset**, matching the album. Full bleed keeps the scrim and reverses the panel to white; inset leaves the page white with a dark panel. A photo in the inset cover-fits **its own frame**, not the page, so `layoutAllSlotPhotos` measures the nearest frame and Edit Photo crops to that frame's shape instead of assuming square.
+- **The inset I first shipped was 48% of the page against the album's 44%.** The user said it was too big and was right — I'd sized it from a measurement rather than against the thing it was supposed to match. There's a small/medium/large control now, medium = the album's proportion and the default, and the photo is **centred between the top edge and the wordmark** (`bcInsetTop = (bcBlockTopIn() - bcInsetH()) / 2`) rather than pinned to a fixed top margin — with a fixed margin a smaller photo just pushes the white space to the bottom and reads as dropped.
+
+The front cover can now carry **no type at all** — the title still names the book and drives its link, it just isn't printed, and the scrim that existed only to make type legible goes with it.
+
+#### Ordering: the board book is a normal product now
+
+Saving a board book dropped straight into "Order your printed board book" with the address fields open, and the **only** Add to cart button was at the bottom of that form. The photo book gets this right — Add to cart is the first thing a finished book offers — so the result screen now matches it, with the address form closed behind "Or order just this one now".
+
+**That also un-gated ordering.** The button had been sitting inside the admin-only order panel, so everyone else saw a "coming soon" note and no way to buy. **Supersedes the standing "board-book ordering is still admin-gated" note from 2026-09-02.**
+
+#### Save Changes no longer ejects you from the editor
+
+Re-saving a book you were already editing sent you to the result screen, so carrying on meant going back through My Designs and reopening it. The result screen is for finishing a **new** book. The primary button now stays put when `editingCollection` is set and says "Changes saved". That would have stranded Add to cart (which only lived on the screen you no longer land on), so Options offers it too once the book is saved — with the save flow's progress panel, because building eleven print files takes a while and a sheet has no button to watch.
+
+#### Proof PDF (board book) — and why it's better than the photo book's
+
+Admin-only, from Options, same as the album's. **It differs in a way worth keeping: the board book already renders its print files to canvas, so the proof IS those files bound into a PDF**, not a separate html2canvas pass over the builder. It cannot drift from what Printify receives, and none of `book.html`'s proof fixups (pinning `aspect-ratio` boxes, re-laying the vertical spine, swapping transformed `<img>`s for background divs — all html2canvas 1.4.1 limitations) are needed.
+
+Pages take their size from the print pixels: cover wrap 12.36×6", each spread 11.76×6". Images go in at **150 DPI rather than the full 312.5** — a proof is for reading, and it's two seconds and 126KB instead of a minute and several MB. Verified with **pymupdf** (11 pages, correct dimensions, cover wrap reading back | spine | front).
+
+#### Font weights (`a4984f9`)
+
+Picking DM Sans or Inter for a photo book cover rendered the title at **400**, because `.cv-title` hard-coded that weight for every face, and at cover size both read thin. The calendar asked for **600, which DM Sans has no face for at all**, so it was being synthesised into a fake bold. The board book set a family and no weight and fell back to 400 the same way. All three now pick the weight per font from the table the board book already had for page text — 700 for the sans faces, 600 for Cormorant, 400 for Cooper — and **only weights we load a real face for**, so nothing is fake-bolded. The calendar also sets its variables up front, so a new calendar gets Filson Pro's weight rather than a CSS fallback that had only been matching by luck.
+
+#### The scan screen now names the Popcode (`cece49e`)
+
+The viewer's start screen showed the brand and nothing about what you were holding. It sets the Popcode's name in Cooper between the wordmark and the disc; the wordmark lifts 40px and the disc re-centres against the name's bottom edge. Measured at 402×874: 74px above the disc, 74px below it.
+
+- **`--name-gap` and `--name-h` both default to 0**, so a Popcode with no name lays out byte-for-byte as before (tap top 425 either way — checked).
+- **`--name-h` is measured, and the first measurement is wrong.** CooperBT is a base64 `@font-face` in view.html, so `offsetHeight` on the first frame lands on the fallback's metrics: a name that really wraps to three lines (104px) measured 69. A **ResizeObserver** re-reads it, which also covers rotation and resize. Any layout that keys off measured text in this file needs the same treatment.
+- **The embedded face is Cooper Lt BT Light, declared `font-weight: 300`** — one face, so a 400 request still selects it. `document.fonts.check('400 30px CooperBT')` is true and it measures 168px against Georgia's 162, which is how you tell it actually loaded rather than trusting the computed `font-family` string.
+
+**The white-label cover had kept the old flat "Scan image" pill**, months after the default screen moved to the animated mark. It now carries the same disc, halos and spin-in with the caption below, and **the markup is cloned from the default button** (`wlBtn.innerHTML = document.getElementById('start-btn').innerHTML`) rather than written twice, so the two can't drift again. The animation selectors moved from `#start-btn` to a shared `.pop-tap` class, reduced-motion block included.
+
+The disc is ~125px taller than the pill it replaced, and `#wl-cover .wl-text` is **absolutely positioned** and can be two lines of 112px Cormorant — so the CTA group's bottom margin is the only thing keeping them apart. The first version left the subtitle sitting on a halo; gap 18→14 and margin 36→20 buys 13px of clearance. **Any future growth in that group collides with the designer's own title.**
+
+**`desktop-note.js` had to follow, and the second half is the 2026-09-17 bug repeating.** Its hide rule named `.wl-scan-btn` — and `scan.html` still has the older bare button, so retargeting alone would have left scan.html's control visible next to a note telling you to open the link on your phone. It names both. The name also goes back into flow there, or it would have floated over the panel.
+
+`scan.html` was deliberately left alone: it shares the start-screen markup but it's the dormant handle flow, with no single collection name to show up front.
+
+#### The view notice: reworded, extended to covers, and the privacy policy caught up (`3c89da2`, `46da471`)
+
+User asked whether "Whoever shared this can see when it's viewed" was needed. Answer: keep it, and it was **understating** what happens. A creator sees **when, the city, the device, how far through the media you got** — and with a `?r=` personal link, or if the viewer is signed in, **your name**. That's a read receipt with a location on it, not page analytics.
+
+- Wording is now **"The sender can see when this is opened."**
+- **It only existed on the default splash.** A Popcode with a custom cover collected exactly the same thing and disclosed none of it. The node is **moved** into the cover rather than copied, so there's one wording, and it goes on hiding with whichever screen it sits in (verified: gone once the scanner starts).
+- **`privacy.html:86` had drifted behind the feature** — it said device/browser and which target matched, with no mention of city, progress, or name attribution. Rewritten from the migration and the `get_my_view_events` RPC rather than from memory. Last updated bumped to September 22, on the grounds that a disclosure catching up with a shipped feature is material.
+
+#### GOTCHAS
+
+- **`cdnjs.cloudflare.com` is NOT "CDN-blocked in the sandbox"** — the note elsewhere in this file is wrong about the cause. `curl` fetches it fine; **headless Chromium gets `ERR_CERT_AUTHORITY_INVALID`** because it doesn't trust the agent proxy's CA. So jsPDF/html2canvas can't load in a browser test unless you serve them locally via `page.route`. My first proof test hung for 180s because the failure was swallowed into a toast.
+- **A stubbed collection needs at least one item.** `loadCollection` bails to the error screen on `!mindUrl || Object.keys(mediaMap).length === 0`, so `items: []` makes every element report a zero rect and looks like a layout bug. Cost a debugging round.
+- **Headless Chromium is the DESKTOP path by default** — no coarse pointer, so `desktop-note.js` mounts and hides `#start-tap`. Use `?desktopnote=0` for the phone layout and `=1` to test the note deliberately. Worth testing both: the desktop path is where the 2026-09-17 `insertBefore` throw hid.
+- **An element's computed `font-family` is not proof a webfont loaded.** `document.fonts.check()` plus a width comparison against the fallback is.
+- Two mistakes of mine worth the warning: I referenced `MENU_IC.download` / `MENU_IC.cart` before adding them, and left a `hasPhoto` reference behind after renaming a parameter — both caught only by driving the page, neither by `node --check`. **`node --check` cannot see an undefined identifier.**
+
+#### macOS detour (user's Mac, no code)
+
+The user's desktop icons vanished mid-session. Root cause: **Dropbox Backup was disabled for the Mac**, stranding a 2022 symlink `~/Desktop → ~/Dropbox/Mac/Desktop` pointing at a folder that no longer existed locally. A **third** Desktop in iCloud was what the file dialogs had been showing. All three merged with `ditto`, real directory restored, Chrome's download location and the Finder sidebar favourite repointed.
+
+**Standing constraints the user set — do not undo:**
+- **Never delete `~/Dropbox/Mac`** — `~/Documents` and `~/Downloads` still symlink into it.
+- **Leave iCloud's "Desktop & Documents Folders" switched off.**
+
+Two calls I got wrong and owned: I said the files were fine on the strength of `ls ~/Desktop | wc -l` returning 1 (a dangling symlink returns 0, and I couldn't account for the 1), and I read `ls -ld`'s **link count** of 69 as an item count and told them to expect 69 when the real number was 65. **Don't assert from a count you can't explain.**
+
+#### STILL OPEN
+
+- **Place a real board book order.** There's a standing comment in `compositeCoverWrap` flagging the unverified assumption about **which square of the wrap Printify treats as front vs back**. Everything else about the back cover is measured; that one isn't.
+- **Delete the redundant `claude/boardbook-ungate` branch.**
+- Unchanged from earlier sessions: `analytics.html` still gated to `curtmid@gmail.com` only (six sessions now); re-enable Vercel Deployment Protection on previews (seven); the companion postcard brief (`docs/postcard-brief.md`); the design audit's type-scale and card-token items (`docs/design-audit-brief.md`); shipping options as cards with prices and estimates.
