@@ -88,6 +88,10 @@
         </select>
       </label>
       <button class="btn btn-primary" id="compile">Compile targets</button>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" id="dl-mind" disabled>Download .mind</button>
+      <button class="btn" id="dl-json" disabled>Download .json</button>
       <button class="btn" id="dl-print" disabled>Download A2 print sheet</button>
     </div>
     <div class="bar"><i id="pbar"></i></div>
@@ -119,7 +123,7 @@
   const ART_W_MM = A2_W_MM - MARGIN_MM * 2;
 
   const $ = id => document.getElementById(id);
-  let img = null, regions = [], compiled = null;
+  let img = null, regions = [], compiled = null, mindBlob = null, manifestBlob = null;
 
   // ── Region proposal ────────────────────────────────────────────────────────
   // Connected components is the wrong tool for this class of artwork. A wave band
@@ -384,13 +388,15 @@
       };
       compiled = manifest;
 
-      save(new Blob([buf]), 'track-test-target.mind');
-      save(new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' }),
-           'track-test-target.json');
-      $('dl-print').disabled = false;
-      $('status').innerHTML = 'Done. Downloaded <code>track-test-target.mind</code> and '
-        + '<code>track-test-target.json</code> — commit both into <code>public/</code>, '
-        + 'then print the A2 sheet.';
+      mindBlob = new Blob([buf], { type: 'application/octet-stream' });
+      manifestBlob = new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' });
+      const mb = (mindBlob.size / 1048576).toFixed(1);
+      $('dl-mind').textContent = `Download .mind (${mb} MB)`;
+      ['dl-mind', 'dl-json', 'dl-print'].forEach(id => { $(id).disabled = false; });
+      $('status').innerHTML = `Compiled ${picked.length} targets. Download all three below `
+        + '— then AirDrop the <code>.mind</code> and <code>.json</code> to the phone, and '
+        + 'print the A2 sheet at 100%.'
+        + (mindBlob.size < 50000 ? ' <b>Warning: the .mind looks too small — recompile.</b>' : '');
     } catch (err) {
       $('status').textContent = 'Compile failed — ' + (err && err.message || err);
     } finally {
@@ -406,6 +412,9 @@
   }
 
   // ── A2 print sheet ─────────────────────────────────────────────────────────
+  $('dl-mind').onclick = () => mindBlob && save(mindBlob, 'track-test-target.mind');
+  $('dl-json').onclick = () => manifestBlob && save(manifestBlob, 'track-test-target.json');
+
   $('dl-print').onclick = () => {
     const c = document.createElement('canvas');
     c.width = Math.round(A2_W_MM * MM); c.height = Math.round(A2_H_MM * MM);
