@@ -147,6 +147,8 @@
       jit: [],
       firstFound: null,
       found: 0, lost: 0,
+      frames: 0, visFrames: 0, heldMs: 0,   // session totals, not a sliding window
+      recent: [],                            // short ring, to median out pose spikes
       peak: 0,
       dist: null,
       visible: false
@@ -165,14 +167,32 @@
     t.hist.push({ t: now, v: vis ? 1 : 0 });
     while (t.hist.length && now - t.hist[0].t > 5000) t.hist.shift();
 
-    if (!vis) { t.p0 = t.p1 = null; t.dist = null; return; }
+    // Session totals, counted only from the first detection — "once it found the
+    // target, how much of the time did it keep it". The 5 s window above drives
+    // the live HUD, but quoting it in a summary is meaningless: by the time anyone
+    // taps Results they have stopped aiming, so it always reads 0%.
+    if (t.firstFound != null) {
+      t.frames++;
+      if (vis) { t.visFrames++; t.heldMs += t.lastTick ? Math.min(now - t.lastTick, 200) : 0; }
+    }
+    t.lastTick = now;
+
+    if (!vis) { t.p0 = t.p1 = null; t.dist = null; t.recent = []; return; }
 
     // matrixAutoUpdate is false and MindAR writes object3D.matrix directly, so the
     // translation has to come out of the matrix, not .position (which is stale).
     const e = el.object3D.matrix.elements;
     const p = { x: e[12], y: e[13], z: e[14] };
     t.dist = Math.hypot(p.x, p.y, p.z) / t.pxW * t.mm;
-    if (t.dist > t.peak) t.peak = t.dist;
+
+    // Peak is a maximum, so one bad pose estimate inflates it permanently. Take the
+    // median of a short ring instead, which a single spike cannot move.
+    t.recent.push(t.dist);
+    if (t.recent.length > 9) t.recent.shift();
+    if (t.recent.length >= 5) {
+      const med = t.recent.slice().sort((a, b) => a - b)[t.recent.length >> 1];
+      if (med > t.peak) t.peak = med;
+    }
 
     if (t.pendingFound) {
       t.pendingFound = false;
@@ -250,9 +270,12 @@
       L.push(`   detections      ${t.found}   losses ${t.lost}`);
       L.push(`   first detect    ${t.firstFound == null ? 'never' : Math.round(t.firstFound) + ' ms'}`);
       L.push(`   peak distance   ${t.peak ? Math.round(t.peak / 10) + ' cm' : '—'}`);
-      L.push(`   hold (last 5s)  ${t.hist.length ? Math.round(hold(t) * 100) + '%' : '—'}`);
+      L.push(`   held           ${t.frames
+        ? Math.round(t.visFrames / t.frames * 100) + '% of ' + (t.heldMs / 1000).toFixed(0)
+          + 's since first detect' : '—'}`);
       const n = noise(t);
-      L.push(`   tracking noise  ${n == null ? '—' : n.toFixed(2) + ' mm rms'}`);
+      L.push(`   motion noise    ${n == null ? '—' : n.toFixed(2) + ' mm rms'}`
+        + '   (includes operator movement — only comparable when held still)');
       L.push('');
     });
     L.push('EVENT LOG'); L.push(...log);
