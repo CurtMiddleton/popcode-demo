@@ -1251,6 +1251,12 @@
         { id: 'libre', name: 'Libre Baskerville', stack: "'Libre Baskerville', Georgia, serif" },
       ];
       const coverFontStack = (id) => (COVER_FONTS.find(f => f.id === id) || COVER_FONTS[0]).stack;
+      // A cover title is a headline, so the sans faces need to be bold -- Inter or
+      // DM Sans at 400 reads thin at cover size. Only ask for a weight we load a
+      // face for (see the Google Fonts link above); a weight with no face gets
+      // synthesised into a fake bold. Cooper has one weight and is chunky already.
+      const COVER_WEIGHT = { cooper: 400, cormorant: 600, dmsans: 700, inter: 700, filson: 700, libre: 700 };
+      const coverFontWeight = (id) => COVER_WEIGHT[id] || 400;
       // Title size (as cqw = % of cover width) by title length — mirrors Bashō's
       // titleFontSize (80/62/48/38/30pt on an 842pt page).
       function coverTitleCqw(t) {
@@ -1937,10 +1943,11 @@
         // clickable to add a photo; the rest of the cover still opens the editor.
         const pickBtn = !url ? `<div class="cv-pick" data-cv="pick"><span class="cv-pick-btn">${IC_PHOTO_PH}</span></div>` : '';
         const ff = coverFontStack(cover.font);
+        const fw = coverFontWeight(cover.font);
         const ed = (name, plc) => editable ? ` contenteditable="plaintext-only" data-cv="${name}" data-ph="${plc}" spellcheck="false"` : '';
         const block = (light) => {
           const eyeHtml = (editable || cover.eyebrow) ? `<div class="cv-eyebrow"${ed('eyebrow', 'Add a small headline')} style="font-family:${ff}">${escapeHtml(cover.eyebrow)}</div>` : '';
-          const titHtml = `<div class="cv-title${editable ? '' : ph}"${ed('title', 'Enter a book title')} style="font-size:${tf}cqw;font-family:${ff}">${escapeHtml(editable ? cover.title : title)}</div>`;
+          const titHtml = `<div class="cv-title${editable ? '' : ph}"${ed('title', 'Enter a book title')} style="font-size:${tf}cqw;font-family:${ff};font-weight:${fw}">${escapeHtml(editable ? cover.title : title)}</div>`;
           const subHtml = (editable || cover.subtitle) ? `<div class="cv-dates"${ed('subtitle', 'Add a date or subtitle')}>${escapeHtml(cover.subtitle)}</div>` : '';
           return `<div class="cv-block ${light ? 'cv-light' : 'cv-dark'}">${eyeHtml}${titHtml}${subHtml}</div>`;
         };
@@ -1974,7 +1981,7 @@
         const spine = `<div class="cv-spine">
           <span class="cv-spine-title">
             ${cover.eyebrow ? `<span class="cv-spine-eyebrow" style="font-family:${ff}">${escapeHtml(cover.eyebrow)}</span>` : ''}
-            <span class="cv-spine-big${ph}" style="font-family:${ff}">${escapeHtml(title)}</span>
+            <span class="cv-spine-big${ph}" style="font-family:${ff};font-weight:${fw}">${escapeHtml(title)}</span>
           </span>
           <span class="cv-spine-year">${escapeHtml(year)}</span>
         </div>`;
@@ -2067,7 +2074,8 @@
         const ph = !cover.title ? ' cv-ph' : '';
         const year = coverYear(cover.subtitle);
         const ff = coverFontStack(cover.font);
-        sp.innerHTML = `<span class="cv-spine-title">${cover.eyebrow ? `<span class="cv-spine-eyebrow" style="font-family:${ff}">${escapeHtml(cover.eyebrow)}</span>` : ''}<span class="cv-spine-big${ph}" style="font-family:${ff}">${escapeHtml(title)}</span></span><span class="cv-spine-year">${escapeHtml(year)}</span>`;
+        const fw = coverFontWeight(cover.font);
+        sp.innerHTML = `<span class="cv-spine-title">${cover.eyebrow ? `<span class="cv-spine-eyebrow" style="font-family:${ff}">${escapeHtml(cover.eyebrow)}</span>` : ''}<span class="cv-spine-big${ph}" style="font-family:${ff};font-weight:${fw}">${escapeHtml(title)}</span></span><span class="cv-spine-year">${escapeHtml(year)}</span>`;
       }
 
       // Wire the contenteditable cover text: sync to state, block newlines, keep
@@ -3100,7 +3108,7 @@
         const cards = COVER_FONTS.map(f => `
           <div class="font-card${cover.font === f.id ? ' active' : ''}" data-font="${f.id}">
             <div class="font-card-name">${escapeHtml(f.name)}</div>
-            <div class="font-card-prev" style="font-family:${f.stack}">
+            <div class="font-card-prev" style="font-family:${f.stack};font-weight:${coverFontWeight(f.id)}">
               <div>ABCDEFGHIJKLM NOPQRSTUVWXYZ</div>
               <div>abcdefghijklm nopqrstuvwxyz</div>
               <div>1234567890</div>

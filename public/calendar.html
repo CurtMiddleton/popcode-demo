@@ -245,7 +245,7 @@
       .cf-tint { position: absolute; left: 0; right: 0; bottom: 0; height: 46%; background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.45)); }
       .cf-text { position: absolute; left: 90px; bottom: 70px; color: #fff; z-index: 2; }
       .cf-year { font-family: var(--cal-font, 'FilsonPro', 'Inter', sans-serif); font-weight: 700; font-size: 150px; line-height: 1; letter-spacing: -0.01em; text-shadow: 0 2px 14px rgba(0,0,0,0.25); }
-      .cf-title { font-family: var(--cal-font, 'Inter', sans-serif); font-weight: 600; font-size: 40px; margin-top: 14px; opacity: 0.95; text-shadow: 0 1px 8px rgba(0,0,0,0.3); }
+      .cf-title { font-family: var(--cal-font, 'Inter', sans-serif); font-weight: var(--cal-title-weight, 600); font-size: 40px; margin-top: 14px; opacity: 0.95; text-shadow: 0 1px 8px rgba(0,0,0,0.3); }
       .cf-title.ph { opacity: 0.55; }
 
       /* ── Back cover ────────────────────────────────────────────── */
@@ -707,10 +707,20 @@
       ];
       let calFont = 'filson';
       const calFontStack = () => (CAL_FONTS.find(f => f.id === calFont) || CAL_FONTS[0]).stack;
+      // The cover title is a headline, so the sans faces need to be bold -- Inter or
+      // DM Sans at 600 reads thin there, and DM Sans has no 600 face at all, so it
+      // was being synthesised into a fake bold. Only ask for a weight we load a face
+      // for (see the Google Fonts link above). Cooper has one weight, already chunky.
+      const CAL_TITLE_WEIGHT = { cooper: 400, cormorant: 600, dmsans: 700, inter: 700, filson: 700, libre: 700 };
+      const calTitleWeight = (id) => CAL_TITLE_WEIGHT[id] || 600;
       function applyCalFont(id) {
         calFont = CAL_FONTS.some(f => f.id === id) ? id : 'filson';
         document.documentElement.style.setProperty('--cal-font', calFontStack());
+        document.documentElement.style.setProperty('--cal-title-weight', calTitleWeight(calFont));
       }
+      // Set them once up front so a brand-new calendar gets Filson Pro's weight
+      // rather than the CSS fallback, which only matched by luck.
+      applyCalFont(calFont);
 
       // ── Undo / redo (see /undo.js) ─────────────────────────────────
       // Every change to the design (photos, months, cover, year, font) is a
@@ -2060,7 +2070,7 @@
         const cards = CAL_FONTS.map(f => `
           <div class="font-card${calFont === f.id ? ' active' : ''}" data-font="${f.id}">
             <div class="font-card-name">${escapeHtml(f.name)}</div>
-            <div class="font-card-prev" style="font-family:${f.stack}">
+            <div class="font-card-prev" style="font-family:${f.stack};font-weight:${calTitleWeight(f.id)}">
               <div>ABCDEFGHIJKLM NOPQRSTUVWXYZ</div>
               <div>abcdefghijklm nopqrstuvwxyz</div>
               <div>1234567890</div>
