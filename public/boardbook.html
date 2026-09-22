@@ -1456,11 +1456,15 @@
           <p class="sheet-sub">The outside of the book — what people see before they open it.</p>
           <div class="menu-row" data-act="cover"><div class="menu-ic">${MENU_IC.photo}</div><div><div>Front cover</div><div class="menu-sub">${escapeHtml([cover.title, cover.subtitle].filter(Boolean).join(' · ')) || 'Photo, title and font'}</div></div></div>
           <div class="menu-row" data-act="back"><div class="menu-ic">${MENU_IC.edit}</div><div><div>Back cover</div><div class="menu-sub">${backPhoto ? 'Photo, with your link printed underneath' : 'Add a photo — your link prints here either way'}</div></div></div>
+          ${savedSlug ? `<div class="menu-row" data-act="cart"><div class="menu-ic">${MENU_IC.cart}</div><div><div>Add to cart</div><div class="menu-sub">Order the printed 6×6″ board book</div></div></div>` : ''}
+          ${isProofAdmin() ? `<div class="menu-row" data-act="proof"><div class="menu-ic">${MENU_IC.download}</div><div><div>Proof PDF</div><div class="menu-sub">The cover wrap and all ${PRINT_SPREADS.length} spreads, exactly as they print</div></div></div>` : ''}
         `);
         sheet.querySelectorAll('.menu-row').forEach(row => row.addEventListener('click', () => {
           const act = row.dataset.act;
           if (act === 'cover') openCoverMenu();
           else if (act === 'back') openSlotMenu('back_cover');
+          else if (act === 'cart') { closeSheet(); addBoardBookToCart(); }
+          else if (act === 'proof') { closeSheet(); buildBoardBookProof(); }
         }));
       }
 
@@ -1837,6 +1841,8 @@
 
       // Icons for the Photo options menu (mirrors the photo book).
       const MENU_IC = {
+        download: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+        cart: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>',
         edit: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>',
         swap: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>',
         replace: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
@@ -2501,7 +2507,10 @@
       }
       function yieldToPaint() { return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); }
 
-      document.getElementById('create-btn').addEventListener('click', () => saveBoardBook());
+      // Creating a book finishes on the result screen (link, share, cart). Saving
+      // one you're already editing should NOT -- you're mid-edit and want to carry
+      // on, not be sent back through My Designs to reopen it.
+      document.getElementById('create-btn').addEventListener('click', () => saveBoardBook({ quiet: !!editingCollection }));
       // Save design: same save, but it leaves you in the editor instead of
       // finishing on the result screen — so you can stop and come back later.
       document.getElementById('save-design-btn').addEventListener('click', async () => {
@@ -2729,7 +2738,7 @@
           if (quiet) {
             savedSlug = slug; savedCollectionId = collectionId;
             document.getElementById('progress').classList.remove('visible');
-            showToast('Design saved — you can close this and come back any time.');
+            showToast(editingCollection ? 'Changes saved' : 'Design saved — you can close this and come back any time.');
             updateSummary();
             return;
           }
@@ -2811,8 +2820,12 @@
         if (!savedSlug || !savedCollectionId) { showToast('Save your board book first.'); return; }
         const btn = document.getElementById('cart-btn');
         if (btn) { btn.disabled = true; btn.textContent = 'Preparing your book…'; }
+        const hidePanel = () => document.getElementById('progress').classList.remove('visible');
         try {
+          setProgress('Preparing your book for print…', 25);
+          await yieldToPaint();
           const assetUrls = await buildBoardBookPrintAssets();
+          setProgress('Adding to your cart…', 85);
           const coverId = slots['cover'] || slots[POSITIONS[0]];
           const coverPhoto = coverId ? photos.get(coverId) : null;
           const thumb = coverPhoto && (coverPhoto.existingUrl || coverPhoto.url);
@@ -2827,12 +2840,14 @@
             thumbUrl: (typeof thumb === 'string' && /^https?:/i.test(thumb)) ? thumb : null,
             options: { sizeLabel: '6×6″ board book', orientationLabel: `${PAGE_COUNT} pages` },
           });
+          hidePanel();
           showToast('Added to your cart.');
           if (btn) btn.textContent = 'Added to cart ✓';
           return true;
         } catch (err) {
           console.error(err);
           if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          hidePanel();
           showToast(err.message || 'Could not add to cart.');
           if (btn) { btn.disabled = false; btn.textContent = 'Add to cart'; }
           return false;
@@ -2862,18 +2877,20 @@
         ctx.restore();
       }
       // A two-page spread = left page | right page (each ~square). White where empty.
-      async function compositeSpread(sp) {
+      async function spreadCanvas(sp) {
         const [W, H] = PX_SPREAD; const half = W / 2;
         const c = document.createElement('canvas'); c.width = W; c.height = H;
         const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
         await drawPageInto(ctx, sp.left, 0, half, H);
         await drawPageInto(ctx, sp.right, half, half, H);
-        return new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
+        return c;
       }
+      function toJpegBlob(c) { return new Promise(r => c.toBlob(r, 'image/jpeg', 0.92)); }
+      async function compositeSpread(sp) { return toJpegBlob(await spreadCanvas(sp)); }
       // Cover wrap (back | spine | front). The front-cover photo goes on the RIGHT
       // square (front). NOTE: which half prints as the front should be confirmed with
       // one test order; if it's mirrored, swap the x origin below.
-      async function compositeCoverWrap() {
+      async function coverWrapCanvas() {
         const [W, H] = PX_COVER;
         const fx = W - H;                                // front = right square
         const c = document.createElement('canvas'); c.width = W; c.height = H;
@@ -2882,8 +2899,9 @@
         drawCoverTitle(ctx, fx, 0, H, H);
         await drawBackCover(ctx, 0, H, H);               // back = left square
         drawSpineBridge(ctx, H, fx, H);
-        return new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
+        return c;
       }
+      async function compositeCoverWrap() { return toJpegBlob(await coverWrapCanvas()); }
       // The spine is the ~9mm strip between the two squares. Left white it prints as
       // a bright stripe between two photos, so bridge it row by row from the edge
       // pixels either side -- seamless whatever the two covers are, and it stays
@@ -3004,6 +3022,89 @@
           for (const ln of lines) { ctx.fillText(ln, lx, by); by += lh; }
         }
         ctx.restore();
+      }
+
+      // ── Proof PDF ─────────────────────────────────────────
+      // The board book already renders its print files to canvas, so the proof is
+      // those exact files bound into a PDF rather than a separate re-render of the
+      // builder (which is what the photo book has to do). It cannot drift from what
+      // Printify receives, because it IS what Printify receives.
+      const PROOF_ADMINS = ['curtmid@gmail.com', 'curt@theworkshop.works'];
+      const isProofAdmin = () => currentUser && PROOF_ADMINS.includes((currentUser.email || '').toLowerCase());
+      const PROOF_DPI = PX_SPREAD[1] / PAGE_IN;          // 1875px / 6″ = 312.5
+      const proofIn = (px) => +(px / PROOF_DPI).toFixed(4);
+      // A proof is for reading, not for printing from, so the pages go into the PDF
+      // at 150 DPI rather than the full 312.5. Same geometry, a quarter of the
+      // pixels to JPEG-encode — the difference between a few seconds and a minute,
+      // and a file you can actually email.
+      const PROOF_OUT_DPI = 150;
+      function proofPageCanvas(src) {
+        const scale = PROOF_OUT_DPI / PROOF_DPI;
+        const c = document.createElement('canvas');
+        c.width = Math.round(src.width * scale);
+        c.height = Math.round(src.height * scale);
+        const ctx = c.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(src, 0, 0, c.width, c.height);
+        return c;
+      }
+
+      let proofLibPromise = null;
+      function loadProofLib() {
+        if (proofLibPromise) return proofLibPromise;
+        proofLibPromise = new Promise((res, rej) => {
+          const el = document.createElement('script');
+          el.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+          el.onload = res;
+          el.onerror = () => rej(new Error('Could not load the PDF library.'));
+          document.head.appendChild(el);
+        }).catch(e => { proofLibPromise = null; throw e; });
+        return proofLibPromise;
+      }
+
+      async function buildBoardBookProof() {
+        const hidePanel = () => document.getElementById('progress').classList.remove('visible');
+        try {
+          setProgress('Loading the PDF library…', 4);
+          await loadProofLib();
+          // Never proof a page in a fallback face — same reason the print path waits.
+          setProgress('Loading fonts…', 8);
+          await ensureTextFonts();
+
+          const { jsPDF } = window.jspdf;
+          const total = 1 + PRINT_SPREADS.length;
+          let doc = null;
+
+          // The cover wrap is wider than a spread (it carries the spine), so each
+          // page takes its own format straight from the print pixel sizes.
+          const addPage = (printCanvas) => {
+            const w = proofIn(printCanvas.width), h = proofIn(printCanvas.height);
+            if (!doc) doc = new jsPDF({ unit: 'in', format: [w, h], orientation: 'landscape', compress: true });
+            else doc.addPage([w, h], 'landscape');
+            doc.addImage(proofPageCanvas(printCanvas).toDataURL('image/jpeg', 0.88), 'JPEG', 0, 0, w, h);
+          };
+
+          setProgress(`Rendering the cover — 1 of ${total}…`, 12);
+          await yieldToPaint();
+          addPage(await coverWrapCanvas());
+
+          for (let i = 0; i < PRINT_SPREADS.length; i++) {
+            setProgress(`Rendering spread ${i + 1} — ${i + 2} of ${total}…`, 12 + ((i + 1) / total) * 84);
+            await yieldToPaint();
+            addPage(await spreadCanvas(PRINT_SPREADS[i]));
+          }
+
+          setProgress('Saving…', 98);
+          const name = (cover.title || 'Board book').replace(/[\\/:*?"<>|]/g, '').trim() || 'Board book';
+          doc.save(`${name} — board book proof.pdf`);
+          hidePanel();
+          showToast('Proof downloaded');
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          hidePanel();
+          showToast(err.message || 'Could not build the proof.');
+        }
       }
 
       // Live price: re-quote (base cost + live shipping) whenever the address is
