@@ -1063,7 +1063,11 @@
            shows the part you would actually be looking at. */
         const wrapV = (typeof giftArtOpts === 'function') ? giftArtOpts() : {};
         const artUrl = await compositeBadgedImage(photoUrl, Object.assign(
-          { scale: opts.scale, aspect: wrapV.wrap ? opts.aspect : r.w / r.h }, wrapV));
+          // `adjust` is the crop and reposition from Edit Photo. Without it the
+          // preview silently ignores everything done in that dialog while the
+          // print file honours it — the worst combination, since what you are
+          // shown is not what you would receive.
+          { scale: opts.scale, aspect: wrapV.wrap ? opts.aspect : r.w / r.h, adjust: opts.adjust || null }, wrapV));
         const art = new Image(); await new Promise((res, rej) => { art.onload = res; art.onerror = rej; art.src = artUrl; });
         // Reinforce a cast shadow for borderless prints so they read as a physical
         // object lifted off the wall (the template's baked shadow washes out on a
@@ -1755,7 +1759,18 @@
         // No thumbnail strip / scenes. The product reshapes to the selected size's aspect
         // ratio and portrait/landscape (photo cropped to fit); the tile + stage stay put.
         document.getElementById('view-row').innerHTML = '';
-        /* Products whose shape IS the product get their real mockup here, not the
+        await renderProductPreview(cv, aspect);
+        updateDetailCta();
+        renderPopcodeCta();
+      }
+
+      /* Paint the chosen product, with the chosen photo and crop, into a canvas.
+
+         Shared by the detail screen, the review screen and Edit Photo's save,
+         so all three agree. They used to each do their own thing, which is how a
+         mug ended up photoreal on one screen and a bare panorama on the next. */
+      async function renderProductPreview(cv, aspect) {
+        /* Products whose shape IS the product get their real mockup, not the
            drawn one. renderProductOnly paints the artwork as a bare rectangle
            with a drop shadow, which reads correctly for a print, a canvas or a
            tile — they ARE flat rectangles. A mug is not: that path showed its
@@ -1767,7 +1782,8 @@
           // mockup — otherwise a blocked Unsplash silently drops the product
           // back to a bare rectangle.
           const src = state.selectedPhoto ? state.selectedPhoto.url : SAMPLE_PHOTO;
-          const opts = { scale: state.scale, mockup: mk, aspect };
+          const opts = { scale: state.scale, mockup: mk, aspect,
+                         adjust: state.selectedPhoto ? state.photoAdjust : null };
           try {
             await renderProductMockup(cv, src, opts);
           } catch (_) {
@@ -1782,8 +1798,6 @@
           const art = await getArtImage(aspect);
           renderProductOnly(cv, art, aspect);
         }
-        updateDetailCta();
-        renderPopcodeCta();
       }
       // Repaint main preview + the 4 view thumbnails from an already-loaded art image
       // (scene switching reuses this — no re-compositing).
@@ -1883,8 +1897,7 @@
         state.photoAdjust = normalizeAdjust(editPhotoState.a);
         closeAdjustPhoto();
         if (state.step === 'review') {
-          const aspect = currentAspect();
-          getArtImage(aspect).then(art => renderProductOnly(document.getElementById('review-canvas'), art, aspect));
+          renderProductPreview(document.getElementById('review-canvas'), currentAspect());
         } else renderDetailPreview();
         epToast('Photo updated');
       }
@@ -2350,10 +2363,7 @@
         showStep('review');
         renderPopcodeCta();
         // aspect-true product with the chosen photo composited in
-        const aspect = currentAspect();
-        const art = await getArtImage(aspect);
-        const cv = document.getElementById('review-canvas');
-        renderProductOnly(cv, art, aspect);
+        await renderProductPreview(document.getElementById('review-canvas'), currentAspect());
         // price
         const pe = document.getElementById('review-price');
         pe.textContent = '…';
