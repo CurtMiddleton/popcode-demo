@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Tracking test</title>
+<style>
+  :root { --ok:#22d37f; --warn:#ffc53d; --bad:#ff5b52; --pad:env(safe-area-inset-bottom,0px); }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; background:#000; color:#fff; overflow:hidden;
+    font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif; }
+  a-scene { position:fixed; inset:0; }
+
+  #hud { position:fixed; inset:0; pointer-events:none; z-index:10;
+         display:flex; flex-direction:column; justify-content:space-between; }
+  #top { padding:calc(env(safe-area-inset-top,0px) + 12px) 14px 0; }
+  #pill { display:inline-flex; align-items:center; gap:9px; padding:9px 16px; border-radius:999px;
+          background:rgba(0,0,0,.62); backdrop-filter:blur(8px); font-weight:700; font-size:14px;
+          letter-spacing:.02em; }
+  #dot { width:11px; height:11px; border-radius:50%; background:var(--bad); }
+  #dot.on { background:var(--ok); }
+
+  #bottom { padding:0 14px calc(14px + var(--pad)); }
+  #dist { font-size:60px; font-weight:800; letter-spacing:-.03em; line-height:1;
+          text-shadow:0 2px 18px rgba(0,0,0,.85); font-variant-numeric:tabular-nums; }
+  #dist small { font-size:22px; font-weight:600; opacity:.72; margin-left:6px; }
+  #distlbl { font-size:11px; text-transform:uppercase; letter-spacing:.1em; opacity:.68;
+             margin-bottom:4px; text-shadow:0 1px 8px #000; }
+
+  .grid { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-top:12px; }
+  .m { background:rgba(0,0,0,.62); backdrop-filter:blur(8px); border-radius:11px; padding:9px 10px; }
+  .m b { display:block; font-size:19px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .m span { font-size:9.5px; text-transform:uppercase; letter-spacing:.07em; opacity:.62; }
+  .m.good b { color:var(--ok); } .m.warn b { color:var(--warn); } .m.bad b { color:var(--bad); }
+
+  .btns { display:flex; gap:8px; margin-top:10px; pointer-events:auto; }
+  .btn { flex:1; height:46px; border:0; border-radius:999px; font:inherit; font-weight:700; font-size:14px;
+         background:rgba(255,255,255,.17); backdrop-filter:blur(8px); color:#fff; }
+  .btn.pri { background:#fff; color:#000; }
+
+  #start, #err { position:fixed; inset:0; z-index:20; background:#0b0b0d;
+                 display:flex; flex-direction:column; align-items:center; justify-content:center;
+                 text-align:center; padding:28px; gap:14px; }
+  #err { display:none; }
+  h1 { font-size:26px; margin:0; letter-spacing:-.02em; }
+  p.lede { margin:0; max-width:24em; opacity:.72; font-size:15px; }
+  #tap { margin-top:10px; height:54px; padding:0 34px; border:0; border-radius:999px;
+         background:#fff; color:#000; font:inherit; font-weight:700; font-size:17px; }
+  #cfg { font-size:12.5px; opacity:.5; max-width:30em; }
+  #wmm { width:110px; height:38px; border-radius:9px; border:1px solid #333; background:#141416;
+         color:#fff; text-align:center; font:inherit; font-size:15px; }
+
+  #sheet { position:fixed; inset:0; z-index:30; background:#0b0b0d; display:none;
+           flex-direction:column; padding:calc(env(safe-area-inset-top,0px) + 16px) 16px
+           calc(16px + var(--pad)); }
+  #sheet pre { flex:1; overflow:auto; background:#141416; border-radius:12px; padding:14px;
+               font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap;
+               margin:12px 0; -webkit-overflow-scrolling:touch; }
+</style>
+</head>
+<body>
+
+<div id="start">
+  <h1>Tracking test</h1>
+  <p class="lede">Point at the printed sheet. Then walk backwards slowly and watch where it lets go.</p>
+  <div style="display:flex; align-items:center; gap:10px; margin-top:6px;">
+    <label style="font-size:13px; opacity:.6">Target width</label>
+    <input id="wmm" type="number" inputmode="decimal" step="1">
+    <span style="font-size:13px; opacity:.6">mm</span>
+  </div>
+  <button id="tap">Start camera</button>
+  <button id="pick" style="background:none;border:0;color:#8a86ff;font:inherit;font-size:14px;
+          text-decoration:underline;padding:6px">Load .mind + .json from Files</button>
+  <input id="files" type="file" accept=".mind,.json,application/json" multiple hidden>
+  <p id="cfg"></p>
+</div>
+
+<div id="err"><h1>Camera unavailable</h1><p class="lede" id="errmsg"></p></div>
+
+<div id="hud" style="display:none">
+  <div id="top"><div id="pill"><i id="dot"></i><span id="status">Scanning…</span></div></div>
+  <div id="bottom">
+    <div id="distlbl">Distance</div>
+    <div id="dist">—<small>cm</small></div>
+    <div class="grid">
+      <div class="m" id="m-hold"><b>—</b><span>Hold 5s</span></div>
+      <div class="m" id="m-jit"><b>—</b><span>Noise mm</span></div>
+      <div class="m" id="m-peak"><b>—</b><span>Peak cm</span></div>
+      <div class="m" id="m-det"><b>—</b><span>Detect ms</span></div>
+    </div>
+    <div class="btns">
+      <button class="btn" id="reset">Reset</button>
+      <button class="btn pri" id="showlog">Results</button>
+    </div>
+  </div>
+</div>
+
+<div id="sheet">
+  <h1 style="font-size:20px">Results</h1>
+  <pre id="logtext"></pre>
+  <div class="btns" style="pointer-events:auto">
+    <button class="btn" id="closelog">Back</button>
+    <button class="btn pri" id="copylog">Copy</button>
+  </div>
+</div>
+
+<script src="/vendor/aframe/1.4.2/aframe.min.js"></script>
+<script src="/vendor/mindar/1.2.2-popcode.1/mindar-image-aframe.prod.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const qs = new URLSearchParams(location.search);
+  let MIND = qs.get('mind') || '/track-test-target.mind';
+  const MANIFEST = qs.get('manifest') || '/track-test-target.json';
+
+  // MindAR's postMatrix scales the anchor by the target's width, so one scene unit
+  // IS the target's width (the documented `<a-plane width="1">` convention, and
+  // confirmed in setupMarker). Everything below converts unit distances to mm by
+  // multiplying by the target's printed width — which is why the print sheet
+  // carries a ruler and says DO NOT SCALE.
+  let manifest = null, targets = [], started = 0, log = [];
+
+  function push(line) {
+    log.push(`[${((performance.now() - started) / 1000).toFixed(1)}s] ${line}`);
+  }
+
+  // ── Per-target metrics ─────────────────────────────────────────────────────
+  function blank(i, meta) {
+    return {
+      index: i,
+      label: meta.label || ('T' + i),
+      name: meta.name || '',
+      mm: meta.printedWidthMm || 0,
+      aspect: meta.aspect || 1,
+      el: null,
+      hist: [],            // {t,v} visibility samples, pruned to a 5 s window
+      p0: null, p1: null,  // last two positions, for the second difference
+      jit: [],
+      firstFound: null,
+      found: 0, lost: 0,
+      peak: 0,
+      dist: null,
+      visible: false
+    };
+  }
+
+  // Driven by A-Frame's tick, NOT by MindAR's per-target update event: that event
+  // only fires for a target that is currently showing (plus once when it drops),
+  // so counting it would make every hold ratio read 100%. tick runs every render
+  // frame whatever the tracker is doing, which is what a hold ratio needs.
+  function sample(t, now) {
+    const el = t.el;
+    if (!el || !el.object3D) return;
+    const vis = el.object3D.visible;
+    t.visible = vis;
+    t.hist.push({ t: now, v: vis ? 1 : 0 });
+    while (t.hist.length && now - t.hist[0].t > 5000) t.hist.shift();
+
+    if (!vis) { t.p0 = t.p1 = null; t.dist = null; return; }
+
+    // matrixAutoUpdate is false and MindAR writes object3D.matrix directly, so the
+    // translation has to come out of the matrix, not .position (which is stale).
+    const e = el.object3D.matrix.elements;
+    const p = { x: e[12], y: e[13], z: e[14] };
+    t.dist = Math.hypot(p.x, p.y, p.z) * t.mm;
+    if (t.dist > t.peak) t.peak = t.dist;
+
+    if (t.pendingFound) {
+      t.pendingFound = false;
+      push(`FOUND ${t.label} at ${Math.round(t.dist / 10)}cm`);
+    }
+
+    // A-Frame ticks at display rate while MindAR updates at camera rate, so the
+    // same pose repeats across several ticks. Feeding those duplicates into the
+    // jitter estimate would drag it towards zero, so only real updates count.
+    if (t.p1 && p.x === t.p1.x && p.y === t.p1.y && p.z === t.p1.z) return;
+
+    // Second difference kills smooth hand drift (constant velocity) and leaves the
+    // high-frequency component, which is tracking noise rather than the operator.
+    if (t.p0 && t.p1) {
+      t.jit.push(Math.hypot(
+        p.x - 2 * t.p1.x + t.p0.x,
+        p.y - 2 * t.p1.y + t.p0.y,
+        p.z - 2 * t.p1.z + t.p0.z) * t.mm);
+      if (t.jit.length > 90) t.jit.shift();
+    }
+    t.p0 = t.p1; t.p1 = p;
+  }
+
+  const hold = t => t.hist.length
+    ? t.hist.reduce((a, b) => a + b.v, 0) / t.hist.length : 0;
+  const noise = t => t.jit.length
+    ? Math.sqrt(t.jit.reduce((a, b) => a + b * b, 0) / t.jit.length) : null;
+
+  // ── HUD ────────────────────────────────────────────────────────────────────
+  function cls(el, v, good, ok) {
+    el.classList.remove('good', 'warn', 'bad');
+    if (v == null) return;
+    el.classList.add(v >= good ? 'good' : v >= ok ? 'warn' : 'bad');
+  }
+
+  function render() {
+    const live = targets.filter(t => t.visible).sort((a, b) => hold(b) - hold(a))[0];
+    $('dot').classList.toggle('on', !!live);
+    $('status').textContent = live
+      ? `Locked ${live.label}${live.name ? ' · ' + live.name : ''}`
+      : 'Scanning…';
+
+    const t = live || targets.find(x => x.peak > 0) || targets[0];
+    if (!t) return;
+
+    $('dist').innerHTML = live && t.dist != null
+      ? Math.round(t.dist / 10) + '<small>cm</small>'
+      : '—<small>cm</small>';
+
+    const h = hold(t), n = noise(t);
+    $('m-hold').querySelector('b').textContent = t.hist.length ? Math.round(h * 100) + '%' : '—';
+    cls($('m-hold'), t.hist.length ? h : null, 0.9, 0.6);
+
+    $('m-jit').querySelector('b').textContent = n == null ? '—' : n.toFixed(1);
+    cls($('m-jit'), n == null ? null : -n, -1.5, -4);     // lower is better
+
+    $('m-peak').querySelector('b').textContent = t.peak ? Math.round(t.peak / 10) : '—';
+    $('m-det').querySelector('b').textContent = t.firstFound == null ? '—' : Math.round(t.firstFound);
+    cls($('m-det'), t.firstFound == null ? null : -t.firstFound, -1500, -4000);
+  }
+
+  // ── Results ────────────────────────────────────────────────────────────────
+  function results() {
+    const L = [
+      'POPCODE TRACKING TEST',
+      new Date().toISOString(),
+      navigator.userAgent,
+      `mind: ${MIND}`,
+      `manifest: ${manifest ? 'loaded' : 'MISSING — widths entered by hand'}`,
+      ''
+    ];
+    targets.forEach(t => {
+      L.push(`${t.label}  ${t.name}`);
+      L.push(`   printed width   ${t.mm} mm`);
+      L.push(`   detections      ${t.found}   losses ${t.lost}`);
+      L.push(`   first detect    ${t.firstFound == null ? 'never' : Math.round(t.firstFound) + ' ms'}`);
+      L.push(`   peak distance   ${t.peak ? Math.round(t.peak / 10) + ' cm' : '—'}`);
+      L.push(`   hold (last 5s)  ${t.hist.length ? Math.round(hold(t) * 100) + '%' : '—'}`);
+      const n = noise(t);
+      L.push(`   tracking noise  ${n == null ? '—' : n.toFixed(2) + ' mm rms'}`);
+      L.push('');
+    });
+    L.push('EVENT LOG'); L.push(...log);
+    return L.join('\n');
+  }
+
+  function fail(msg) {
+    $('start').style.display = 'none';
+    $('hud').style.display = 'none';
+    $('err').style.display = 'flex';
+    $('errmsg').textContent = msg;
+  }
+
+  // A .mind that 404s or is truncated makes MindAR throw from inside its loader,
+  // leaving the HUD on "Scanning…" forever with nothing to explain it. Checking
+  // it up front turns the worst failure mode in this repo's history — a silent
+  // infinite spinner — into a sentence.
+  async function preflight(url) {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`Target file ${url} returned HTTP ${r.status}.`);
+    const n = (await r.arrayBuffer()).byteLength;
+    if (n < 1024) throw new Error(`Target file ${url} is only ${n} bytes — not a .mind.`);
+  }
+
+  // ── Scene ──────────────────────────────────────────────────────────────────
+  async function boot() {
+    if (!manifest) {
+      try {
+        const r = await fetch(MANIFEST, { cache: 'no-store' });
+        if (r.ok) manifest = await r.json();
+      } catch (e) { /* hand-entered width below is the fallback */ }
+    }
+
+    const w = parseFloat($('wmm').value);
+    const metas = manifest && manifest.targets && manifest.targets.length
+      ? manifest.targets
+      : [{ index: 0, label: 'T0', name: 'single target', printedWidthMm: w || 564, aspect: 0.5 }];
+
+    // A manually entered width overrides the manifest, so a sheet that printed at
+    // the wrong scale can still be measured once it's been checked with a ruler.
+    // Take the ratio BEFORE mutating anything — metas[0] is the denominator, and
+    // rewriting it inside the loop would rescale every later target by the wrong
+    // factor.
+    if (w > 0) {
+      const ratio = manifest && metas[0].printedWidthMm ? w / metas[0].printedWidthMm : 1;
+      metas.forEach(m => { m.printedWidthMm = manifest ? m.printedWidthMm * ratio : w; });
+    }
+
+    // Production leaves maxTrack at 1, so whichever region locks first would
+    // monopolise the whole run and the others would never get a chance to be
+    // compared. Raising it lets all four compete in a single walk-back. This is
+    // deliberately NOT how view.html runs — ?maxtrack=1 reproduces production.
+    const maxTrack = parseInt(qs.get('maxtrack'), 10) || metas.length;
+    try { await preflight(MIND); }
+    catch (e) {
+      fail(e.message + ' Build one on a desktop at /track-build.html, then load '
+         + 'the .mind and .json with the Files button.');
+      return;
+    }
+
+    const scene = document.createElement('a-scene');
+    scene.setAttribute('mindar-image',
+      `imageTargetSrc: ${MIND}; autoStart: false; warmupTolerance: 2; missTolerance: 10; ` +
+      `maxTrack: ${maxTrack}; uiScanning: no; uiLoading: no; uiError: no;`);
+    scene.setAttribute('embedded', '');
+    scene.setAttribute('vr-mode-ui', 'enabled: false');
+    scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
+    scene.setAttribute('track-probe', '');
+
+    const cam = document.createElement('a-camera');
+    cam.setAttribute('position', '0 0 0');
+    cam.setAttribute('look-controls', 'enabled: false');
+    scene.appendChild(cam);
+
+    targets = metas.map((m, i) => blank(m.index != null ? m.index : i, m));
+
+    AFRAME.registerComponent('track-probe', {
+      tick: function () {
+        const now = performance.now();
+        for (const t of targets) sample(t, now);
+      }
+    });
+
+    targets.forEach(t => {
+      const el = document.createElement('a-entity');
+      el.setAttribute('mindar-image-target', `targetIndex: ${t.index}`);
+
+      // A width-1 plane should sit exactly over the printed region. If it doesn't,
+      // the unit convention is off and every distance on screen is wrong — so this
+      // outline is the test's own calibration check, not decoration.
+      const plane = document.createElement('a-plane');
+      plane.setAttribute('width', 1);
+      plane.setAttribute('height', t.aspect);
+      plane.setAttribute('material', 'color:#22d37f; wireframe:true; wireframeLinewidth:3');
+      el.appendChild(plane);
+
+      el.addEventListener('targetFound', () => {
+        t.found++;
+        if (t.firstFound == null) t.firstFound = performance.now() - started;
+        t.pendingFound = true;   // MindAR writes the matrix after this event fires
+      });
+      el.addEventListener('targetLost', () => {
+        t.lost++;
+        push(`LOST  ${t.label} at ${t.dist ? Math.round(t.dist / 10) + 'cm' : '?'}`);
+      });
+      t.el = el;
+      scene.appendChild(el);
+    });
+
+    scene.addEventListener('arError', () => fail(
+      'MindAR could not start the camera. On iOS this needs HTTPS and camera permission.'));
+
+    // "Scanning…" forever is ambiguous: it looks identical whether the tracker is
+    // healthy and simply not aimed at anything, or died during startup. The camera
+    // video element separates the two — so record any error, but only surface it
+    // once the watchdog confirms the video never came up. That way a working
+    // session is never interrupted by a warning it does not need.
+    let lastError = '';
+    const note = m => { lastError = String(m || '').slice(0, 160); };
+    window.addEventListener('error', ev => note(ev.message));
+    window.addEventListener('unhandledrejection', ev =>
+      note(ev.reason && ev.reason.message || ev.reason));
+
+    setTimeout(() => {
+      if ($('err').style.display === 'flex') return;
+      const v = document.querySelector('a-scene video');
+      if (v && v.readyState >= 2 && v.videoWidth > 0) return;    // camera is live
+      fail('The camera never started'
+        + (lastError ? ' — ' + lastError.replace(/\.?$/, '.') : '.')
+        + ' On iOS this page must be served over HTTPS with camera permission granted.');
+    }, 9000);
+
+    document.body.appendChild(scene);
+
+    const go = () => {
+      const sys = scene.systems && scene.systems['mindar-image-system'];
+      if (!sys) { $('errmsg').textContent = 'MindAR system not registered.';
+                  $('err').style.display = 'flex'; return; }
+      started = performance.now();
+      push('scan started');
+      sys.start();
+      $('start').style.display = 'none';
+      $('hud').style.display = 'flex';
+      setInterval(render, 100);
+    };
+    // Calling start() before A-Frame has registered its systems gives a black
+    // screen — the 2026-04-14 lesson. Wait for `loaded` when it hasn't fired yet.
+    if (scene.hasLoaded) go(); else scene.addEventListener('loaded', go);
+  }
+
+  // ── Wiring ─────────────────────────────────────────────────────────────────
+  fetch(MANIFEST, { cache: 'no-store' })
+    .then(r => r.ok ? r.json() : null)
+    .then(m => {
+      if (!m) { $('cfg').textContent = 'Nothing committed at ' + MANIFEST
+        + ' — build on a desktop at /track-build.html, then load the two files here.'; return; }
+      manifest = m;
+      $('wmm').value = m.targets[0].printedWidthMm;
+      $('cfg').textContent = `${m.targets.length} targets · sheet ${m.sheet.widthMm}×`
+        + `${m.sheet.heightMm} mm · artwork ${m.sheet.artWidthMm} mm wide`;
+    })
+    .catch(() => { $('cfg').textContent = 'Manifest failed to load — enter width by hand.'; });
+
+  // AirDropping the pair onto the phone beats a deploy cycle per artwork change.
+  $('pick').onclick = () => $('files').click();
+  $('files').onchange = async e => {
+    for (const f of e.target.files) {
+      if (/\.mind$/i.test(f.name)) MIND = URL.createObjectURL(f);
+      else if (/\.json$/i.test(f.name)) {
+        try { manifest = JSON.parse(await f.text()); } catch (err) { alert('Bad manifest JSON.'); }
+      }
+    }
+    if (manifest && manifest.targets && manifest.targets.length) {
+      $('wmm').value = manifest.targets[0].printedWidthMm;
+      $('cfg').textContent = `Loaded from Files · ${manifest.targets.length} targets · `
+        + `artwork ${manifest.sheet.artWidthMm} mm wide`;
+    } else {
+      $('cfg').textContent = 'Loaded .mind from Files — enter the printed width by hand.';
+    }
+  };
+
+  $('tap').onclick = () => {
+    $('tap').disabled = true;
+    boot().catch(e => fail(String(e && e.message || e)));
+  };
+  $('reset').onclick = () => {
+    targets.forEach(t => Object.assign(t, {
+      hist: [], p0: null, p1: null, jit: [], firstFound: null,
+      found: 0, lost: 0, peak: 0, dist: null
+    }));
+    log = []; started = performance.now(); push('reset');
+  };
+  $('showlog').onclick = () => { $('logtext').textContent = results(); $('sheet').style.display = 'flex'; };
+  $('closelog').onclick = () => { $('sheet').style.display = 'none'; };
+  $('copylog').onclick = async () => {
+    const txt = results();
+    try { await navigator.clipboard.writeText(txt); $('copylog').textContent = 'Copied'; }
+    catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = txt; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove(); $('copylog').textContent = 'Copied';
+    }
+    setTimeout(() => { $('copylog').textContent = 'Copy'; }, 1600);
+  };
+})();
+</script>
+</body>
+</html>

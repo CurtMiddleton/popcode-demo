@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Tracking test builder</title>
+<style>
+  :root { --ink:#1a1a1a; --mut:#6b6b6b; --line:#e3e3e3; --bg:#f9f9f9; --acc:#4b3cba; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif; }
+  .wrap { max-width:1080px; margin:0 auto; padding:28px 20px 80px; }
+  h1 { font-size:30px; margin:0 0 4px; letter-spacing:-.02em; }
+  .sub { color:var(--mut); margin:0 0 26px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:20px; margin-bottom:18px; }
+  .card h2 { font-size:15px; text-transform:uppercase; letter-spacing:.08em; color:var(--mut); margin:0 0 14px; }
+  #drop { border:2px dashed #cfcfcf; border-radius:14px; padding:44px 20px; text-align:center;
+          color:var(--mut); cursor:pointer; background:#fcfcfc; }
+  #drop.over { border-color:var(--acc); background:#f5f3ff; color:var(--acc); }
+  .stage { position:relative; display:inline-block; max-width:100%; line-height:0; }
+  .stage img { max-width:100%; height:auto; border-radius:8px;
+               -webkit-user-drag:none; user-select:none; }
+  .stage { cursor:crosshair; touch-action:none; }
+  .stage svg { position:absolute; inset:0; width:100%; height:100%; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th,td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); }
+  th { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--mut); font-weight:600; }
+  td.num { font-variant-numeric:tabular-nums; }
+  tr.off { opacity:.4; }
+  .verdict { font-weight:600; }
+  .v-good { color:#137a4a; } .v-ok { color:#9a6b00; } .v-bad { color:#b3261e; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; height:44px; padding:0 22px;
+         border-radius:999px; border:1px solid transparent; font:inherit; font-weight:600; font-size:15px;
+         cursor:pointer; background:#fff; color:var(--ink); border-color:var(--line); }
+  .btn-primary { background:var(--ink); color:#fff; }
+  .btn:disabled { opacity:.45; cursor:default; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .bar { height:8px; background:var(--line); border-radius:99px; overflow:hidden; margin:12px 0 4px; }
+  .bar i { display:block; height:100%; width:0; background:var(--acc); transition:width .2s; }
+  .hint { font-size:13px; color:var(--mut); margin-top:10px; }
+  label.ck { display:flex; align-items:center; gap:8px; font-size:14px; cursor:pointer; }
+  .warn { background:#fff8e6; border:1px solid #f0dca8; border-radius:10px; padding:12px 14px;
+          font-size:14px; margin-top:14px; }
+  code { background:#f1f1f1; padding:1px 5px; border-radius:4px; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Tracking test builder</h1>
+  <p class="sub">Slices artwork into candidate tracking regions, scores each one, and produces the
+  <code>.mind</code> plus an A2 print sheet. Desktop Chrome or Safari.</p>
+
+  <div class="card">
+    <h2>1 · Artwork</h2>
+    <div id="drop">Drop the mural image here, or click to choose</div>
+    <input id="file" type="file" accept="image/*" hidden>
+    <div id="art" style="display:none; margin-top:16px;">
+      <div class="stage"><img id="preview" alt=""><svg id="ov" preserveAspectRatio="none"></svg></div>
+      <div class="hint" id="dims"></div>
+    </div>
+  </div>
+
+  <div class="card" id="regions-card" style="display:none;">
+    <h2>2 · Candidate regions</h2>
+    <p class="hint" style="margin-top:-6px">Detected by clustering non-white ink. Untick anything you
+    don't want compiled, or drag on the artwork to add your own. Keypoint counts appear after compiling — those are what predict whether a
+    region can be found and held.</p>
+    <table id="tbl"><thead><tr>
+      <th style="width:38px"></th><th>Region</th><th>Size on print</th>
+      <th class="num">Detect pts</th><th class="num">Track pts</th><th>Verdict</th>
+    </tr></thead><tbody></tbody></table>
+    <div class="warn" id="print-size">
+      Artwork will print <b id="pw">—</b> wide on A2 landscape. A region's own printed width is what
+      sets how far away it can be found, so the small ones will drop out first.
+    </div>
+  </div>
+
+  <div class="card" id="build-card" style="display:none;">
+    <h2>3 · Build</h2>
+    <div class="row">
+      <label class="ck" style="margin-right:6px">Compile at
+        <select id="dim" style="height:38px;border-radius:9px;border:1px solid var(--line);
+                font:inherit;padding:0 8px;background:#fff">
+          <option value="640" selected>640 px — production</option>
+          <option value="1024">1024 px</option>
+          <option value="1536">1536 px</option>
+        </select>
+      </label>
+      <button class="btn btn-primary" id="compile">Compile targets</button>
+      <button class="btn" id="dl-print" disabled>Download A2 print sheet</button>
+    </div>
+    <div class="bar"><i id="pbar"></i></div>
+    <div class="hint" id="status">Compiling runs entirely in this browser and takes a minute or two.</div>
+  </div>
+</div>
+
+<script>
+  // The compiler ships inside the image-aframe build, which exports MINDAR before
+  // registering its A-Frame components. Stub AFRAME so the bundle loads without
+  // booting a real WebGL renderer — same reasoning as create.html. Nothing renders
+  // on this page; track-test.html loads real A-Frame for the AR scene.
+  window.AFRAME = window.AFRAME || {
+    registerSystem(){}, registerComponent(){}, registerShader(){},
+    registerGeometry(){}, registerPrimitive(){}, registerElement(){}
+  };
+</script>
+<script src="/vendor/mindar/1.2.2/mindar-image-aframe.prod.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ── A2 landscape, and the margin we leave round the art. The scan page turns a
+  // region's printed width into real distances, so these two numbers are the
+  // calibration for the whole test: if the print shop scales the sheet, every
+  // distance the phone reports is wrong by the same factor. Hence the ruler.
+  const A2_W_MM = 594, A2_H_MM = 420, MARGIN_MM = 15, DPI = 300;
+  const MM = DPI / 25.4;                       // px per mm
+  const ART_W_MM = A2_W_MM - MARGIN_MM * 2;
+
+  const $ = id => document.getElementById(id);
+  let img = null, regions = [], compiled = null;
+
+  // ── Region proposal ────────────────────────────────────────────────────────
+  // Connected components is the wrong tool for this class of artwork. A wave band
+  // or a ground line spans the full width and welds every other element into one
+  // blob, while individual butterflies survive as separate "regions" 30 mm across
+  // that could never be tracked. So: find the full-width band first and take it as
+  // a region in its own right, then segment what is left by column density.
+  function proposeRegions(image) {
+    const W = 480, H = Math.max(1, Math.round(W * image.height / image.width));
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(image, 0, 0, W, H);
+    const px = ctx.getImageData(0, 0, W, H).data;
+
+    // "Ink" is distance from white on the least-bright channel, so pale yellows
+    // and greys register as content while true white does not.
+    const ink = new Uint8Array(W * H);
+    for (let i = 0, q = 0; i < W * H; i++, q += 4) {
+      ink[i] = (255 - Math.min(px[q], px[q + 1], px[q + 2])) > 20 ? 1 : 0;
+    }
+    const at = (x, y) => ink[y * W + x];
+
+    // Full-width band, scanned up from the bottom.
+    let bandTop = H;
+    for (let y = H - 1; y >= 0; y--) {
+      let n = 0;
+      for (let x = 0; x < W; x++) n += at(x, y);
+      if (n / W > 0.55) bandTop = y; else if (bandTop < H) break;
+    }
+    const hasBand = bandTop < H - H * 0.04;
+
+    // Column profile of everything above the band.
+    const col = new Float32Array(W);
+    let peak = 0;
+    for (let x = 0; x < W; x++) {
+      let n = 0;
+      for (let y = 0; y < bandTop; y++) n += at(x, y);
+      col[x] = n; if (n > peak) peak = n;
+    }
+
+    const MIN_W = Math.round(W * 0.10);   // ~60 mm on A2 — below that a region is
+    const GAP   = Math.round(W * 0.04);   // not a credible mural target
+    const THR   = peak * 0.12;            // ignores insects and stray specks
+
+    const runs = [];
+    let s0 = -1, gap = 0;
+    for (let x = 0; x < W; x++) {
+      if (col[x] > THR) { if (s0 < 0) s0 = x; gap = 0; }
+      else if (s0 >= 0 && ++gap > GAP) { runs.push([s0, x - gap]); s0 = -1; gap = 0; }
+    }
+    if (s0 >= 0) runs.push([s0, W - 1]);
+
+    const sx = image.width / W, sy = image.height / H;
+    const pad = Math.round(W * 0.012);
+    const out = [];
+    for (const [a, b] of runs) {
+      if (b - a + 1 < MIN_W) continue;
+      let y0 = bandTop, y1 = 0;
+      for (let y = 0; y < bandTop; y++) {
+        for (let x = a; x <= b; x++) {
+          if (at(x, y)) { if (y < y0) y0 = y; if (y > y1) y1 = y; break; }
+        }
+      }
+      if (y1 - y0 + 1 < H * 0.08) continue;
+      const x0 = Math.max(0, a - pad), x1 = Math.min(W - 1, b + pad);
+      const ty = Math.max(0, y0 - pad), by = Math.min(bandTop - 1, y1 + pad);
+      out.push({ x: Math.round(x0 * sx), y: Math.round(ty * sy),
+                 w: Math.round((x1 - x0 + 1) * sx), h: Math.round((by - ty + 1) * sy) });
+    }
+    out.sort((a, b) => b.w * b.h - a.w * a.h);
+
+    // Target 0 is always the whole artwork — the control every cropped region gets
+    // measured against.
+    const list = [{ name: 'Full artwork', x: 0, y: 0, w: image.width, h: image.height, on: true }];
+    if (hasBand) list.push({
+      name: 'Band, full width', x: 0, y: Math.round(bandTop * sy),
+      w: image.width, h: Math.round((H - bandTop) * sy), on: true
+    });
+    out.slice(0, 4).forEach((r, i) =>
+      list.push(Object.assign({ name: 'Cluster ' + (i + 1), on: true }, r)));
+    return list;
+  }
+
+  // Whatever the proposal decides, the region worth testing might be "just the
+  // bear". Dragging a box on the artwork adds one.
+  (function enableDraw() {
+    const stage = document.querySelector('.stage');
+    let ax = 0, ay = 0, box = null;
+    const toImg = e => {
+      const r = $('preview').getBoundingClientRect();
+      return { x: (e.clientX - r.left) / r.width * img.width,
+               y: (e.clientY - r.top) / r.height * img.height };
+    };
+    stage.addEventListener('pointerdown', e => {
+      if (!img) return;
+      e.preventDefault();
+      const p = toImg(e); ax = p.x; ay = p.y;
+      box = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      box.setAttribute('fill', 'rgba(75,60,186,.16)');
+      box.setAttribute('stroke', '#4b3cba');
+      box.setAttribute('stroke-width', Math.max(2, img.width / 340));
+      $('ov').appendChild(box);
+      stage.setPointerCapture(e.pointerId);
+    });
+    stage.addEventListener('pointermove', e => {
+      if (!box) return;
+      const p = toImg(e);
+      box.setAttribute('x', Math.min(ax, p.x)); box.setAttribute('y', Math.min(ay, p.y));
+      box.setAttribute('width', Math.abs(p.x - ax)); box.setAttribute('height', Math.abs(p.y - ay));
+    });
+    stage.addEventListener('pointerup', e => {
+      if (!box) return;
+      const p = toImg(e);
+      box.remove(); box = null;
+      const r = {
+        x: Math.round(Math.max(0, Math.min(ax, p.x))), y: Math.round(Math.max(0, Math.min(ay, p.y))),
+        w: Math.round(Math.abs(p.x - ax)), h: Math.round(Math.abs(p.y - ay))
+      };
+      if (r.w < img.width * 0.04 || r.h < img.height * 0.04) return;   // a click, not a drag
+      r.w = Math.min(r.w, img.width - r.x); r.h = Math.min(r.h, img.height - r.y);
+      regions.push(Object.assign({ name: 'Custom', on: true }, r));
+      drawTable(); drawOverlay();
+    });
+  })();
+
+  // ── Rendering ──────────────────────────────────────────────────────────────
+  function drawOverlay() {
+    const ov = $('ov');
+    ov.setAttribute('viewBox', `0 0 ${img.width} ${img.height}`);
+    ov.innerHTML = regions.map((r, i) => i === 0 || !r.on ? '' :
+      `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="none"
+             stroke="#4b3cba" stroke-width="${Math.max(2, img.width / 340)}"/>
+       <text x="${r.x + 8}" y="${r.y + img.width / 42}" fill="#4b3cba"
+             font-size="${img.width / 40}" font-weight="700">T${i}</text>`).join('');
+  }
+
+  function regionMm(r) { return ART_W_MM * r.w / img.width; }
+
+  function verdict(det) {
+    if (det == null) return ['', ''];
+    if (det >= 400) return ['Strong', 'v-good'];
+    if (det >= 150) return ['Usable', 'v-ok'];
+    return ['Too sparse', 'v-bad'];
+  }
+
+  function drawTable() {
+    $('tbl').querySelector('tbody').innerHTML = regions.map((r, i) => {
+      const [vt, vc] = verdict(r.detect);
+      return `<tr class="${r.on ? '' : 'off'}">
+        <td><label class="ck"><input type="checkbox" data-i="${i}" ${r.on ? 'checked' : ''}></label></td>
+        <td><b>T${i}</b> · ${r.name}</td>
+        <td class="num">${Math.round(regionMm(r))} × ${Math.round(regionMm(r) * r.h / r.w)} mm</td>
+        <td class="num">${r.detect ?? '—'}</td>
+        <td class="num">${r.track ?? '—'}</td>
+        <td class="verdict ${vc}">${vt}</td></tr>`;
+    }).join('');
+    $('tbl').querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.onchange = () => { regions[+cb.dataset.i].on = cb.checked; drawTable(); drawOverlay(); };
+    });
+  }
+
+  // ── Load ───────────────────────────────────────────────────────────────────
+  function load(file) {
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => {
+      img = im;
+      $('preview').src = url;
+      $('art').style.display = '';
+      $('dims').textContent = `${im.width} × ${im.height} px · aspect ${(im.width / im.height).toFixed(2)}`;
+      $('pw').textContent = ART_W_MM + ' mm';
+      regions = proposeRegions(im);
+      drawTable(); drawOverlay();
+      $('regions-card').style.display = '';
+      $('build-card').style.display = '';
+    };
+    im.onerror = () => alert('Could not read that image.');
+    im.src = url;
+  }
+
+  $('drop').onclick = () => $('file').click();
+  $('file').onchange = e => e.target.files[0] && load(e.target.files[0]);
+  ['dragenter', 'dragover'].forEach(t => $('drop').addEventListener(t, e => {
+    e.preventDefault(); $('drop').classList.add('over');
+  }));
+  ['dragleave', 'drop'].forEach(t => $('drop').addEventListener(t, e => {
+    e.preventDefault(); $('drop').classList.remove('over');
+  }));
+  $('drop').addEventListener('drop', e => e.dataTransfer.files[0] && load(e.dataTransfer.files[0]));
+
+  // ── Compile ────────────────────────────────────────────────────────────────
+  // create.html caps compile input at 640 px on the longest side, so a region
+  // compiled here at full resolution would score far better than the same artwork
+  // ever does in production. Match that cap by default and make it adjustable —
+  // for a 594 mm print, 640 px is ~0.93 mm per pixel, so whether it is enough is
+  // one of the things this test exists to answer.
+  function crop(r, maxDim) {
+    const s = Math.min(1, maxDim / Math.max(r.w, r.h));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(r.w * s));
+    c.height = Math.max(1, Math.round(r.h * s));
+    c.getContext('2d').drawImage(img, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height);
+    return c;
+  }
+
+  // matchingData/trackingData nest differently by version, so rather than assume a
+  // shape, walk it and total every keypoint array found. Over-counting a level is
+  // harmless here; the figure is only ever read as "relative to the other regions".
+  function countPoints(node, keys, depth) {
+    if (!node || depth > 4) return 0;
+    if (Array.isArray(node)) return node.reduce((n, v) => n + countPoints(v, keys, depth + 1), 0);
+    if (typeof node !== 'object') return 0;
+    let n = 0;
+    for (const k of Object.keys(node)) {
+      const v = node[k];
+      if (keys.includes(k) && Array.isArray(v)) n += v.length;
+      else if (v && typeof v === 'object') n += countPoints(v, keys, depth + 1);
+    }
+    return n;
+  }
+
+  $('compile').onclick = async () => {
+    const picked = regions.map((r, i) => ({ r, i })).filter(o => o.r.on);
+    if (!picked.length) { alert('Tick at least one region.'); return; }
+    if (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler) {
+      $('status').textContent = 'MindAR failed to load — check the vendor path.'; return;
+    }
+    const dim = parseInt($('dim').value, 10) || 640;
+    $('compile').disabled = true;
+    $('status').textContent = `Compiling ${picked.length} targets at ${dim} px…`;
+    try {
+      const compiler = new MINDAR.IMAGE.Compiler();
+      await compiler.compileImageTargets(picked.map(o => crop(o.r, dim)), p => {
+        $('pbar').style.width = p + '%';
+        $('status').textContent = `Compiling ${picked.length} targets at ${dim} px… ${Math.round(p)}%`;
+      });
+      const buf = await compiler.exportData();
+
+      picked.forEach((o, n) => {
+        const d = (compiler.data || [])[n] || {};
+        o.r.detect = countPoints(d.matchingData, ['maximaPoints', 'minimaPoints'], 0);
+        o.r.track  = countPoints(d.trackingData, ['points'], 0);
+      });
+      regions.forEach(r => { if (!r.on) { r.detect = null; r.track = null; } });
+      drawTable();
+
+      // targetIndex is the position within the compiled set, NOT the row number in
+      // the table — an unticked region shifts everything after it. The manifest is
+      // what keeps the scan page's distance maths pointed at the right region.
+      const manifest = {
+        artwork: { w: img.width, h: img.height },
+        compileDim: dim,
+        sheet: { widthMm: A2_W_MM, heightMm: A2_H_MM, artWidthMm: ART_W_MM, marginMm: MARGIN_MM },
+        targets: picked.map((o, n) => ({
+          index: n, label: 'T' + o.i, name: o.r.name,
+          printedWidthMm: +regionMm(o.r).toFixed(1),
+          aspect: +(o.r.h / o.r.w).toFixed(4),
+          rect: { x: o.r.x, y: o.r.y, w: o.r.w, h: o.r.h },
+          detectPoints: o.r.detect, trackPoints: o.r.track
+        }))
+      };
+      compiled = manifest;
+
+      save(new Blob([buf]), 'track-test-target.mind');
+      save(new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' }),
+           'track-test-target.json');
+      $('dl-print').disabled = false;
+      $('status').innerHTML = 'Done. Downloaded <code>track-test-target.mind</code> and '
+        + '<code>track-test-target.json</code> — commit both into <code>public/</code>, '
+        + 'then print the A2 sheet.';
+    } catch (err) {
+      $('status').textContent = 'Compile failed — ' + (err && err.message || err);
+    } finally {
+      $('compile').disabled = false;
+    }
+  };
+
+  function save(blob, name) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+
+  // ── A2 print sheet ─────────────────────────────────────────────────────────
+  $('dl-print').onclick = () => {
+    const c = document.createElement('canvas');
+    c.width = Math.round(A2_W_MM * MM); c.height = Math.round(A2_H_MM * MM);
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+
+    const aw = ART_W_MM * MM, ah = aw * img.height / img.width;
+    const ax = MARGIN_MM * MM, ay = 26 * MM;
+    g.drawImage(img, ax, ay, aw, ah);
+
+    // Crop marks sit outside the art so the printed target is pixel-identical to
+    // what was compiled — a line across the artwork would change its features.
+    g.strokeStyle = '#000'; g.lineWidth = Math.max(1, 0.25 * MM);
+    const t = 6 * MM, gap = 3 * MM;
+    [[ax, ay], [ax + aw, ay], [ax, ay + ah], [ax + aw, ay + ah]].forEach(([x, y], i) => {
+      const sx = i % 2 ? 1 : -1, sy = i < 2 ? -1 : 1;
+      g.beginPath();
+      g.moveTo(x + sx * gap, y); g.lineTo(x + sx * (gap + t), y);
+      g.moveTo(x, y + sy * gap); g.lineTo(x, y + sy * (gap + t));
+      g.stroke();
+    });
+
+    const by = ay + ah + 22 * MM;
+    g.fillStyle = '#000';
+    g.font = `700 ${5.5 * MM}px -apple-system, Helvetica, Arial, sans-serif`;
+    g.fillText('PRINT AT 100% — DO NOT SCALE TO FIT', ax, by);
+    g.font = `${3.6 * MM}px -apple-system, Helvetica, Arial, sans-serif`;
+    g.fillText(`A2 landscape 594 × 420 mm · artwork ${ART_W_MM} mm wide · `
+      + `${(compiled ? compiled.targets.length : 0)} tracking targets`, ax, by + 6 * MM);
+
+    // A physical ruler is the only way to catch a shop that scaled the sheet
+    // anyway. Every distance the phone reports scales with this bar.
+    const rx = ax, ry = by + 13 * MM, rw = 100 * MM;
+    g.lineWidth = Math.max(1, 0.4 * MM);
+    g.beginPath(); g.moveTo(rx, ry); g.lineTo(rx + rw, ry); g.stroke();
+    for (let i = 0; i <= 10; i++) {
+      const x = rx + rw * i / 10, hgt = (i % 5 === 0 ? 4 : 2.2) * MM;
+      g.beginPath(); g.moveTo(x, ry); g.lineTo(x, ry + hgt); g.stroke();
+    }
+    g.font = `${3.2 * MM}px -apple-system, Helvetica, Arial, sans-serif`;
+    g.fillText('100 mm — check with a ruler before you trust any distance reading',
+               rx + rw + 5 * MM, ry + 4 * MM);
+
+    // Region key, drawn as a small map in the margin rather than over the art.
+    if (compiled) {
+      const kw = 70 * MM, kh = kw * img.height / img.width;
+      const kx = c.width - MARGIN_MM * MM - kw, ky = by - 4 * MM;
+      g.globalAlpha = .55; g.drawImage(img, kx, ky, kw, kh); g.globalAlpha = 1;
+      g.strokeStyle = '#4b3cba'; g.fillStyle = '#4b3cba';
+      g.lineWidth = Math.max(1, 0.4 * MM);
+      g.font = `700 ${3 * MM}px -apple-system, Helvetica, Arial, sans-serif`;
+      compiled.targets.forEach(t2 => {
+        // Skip only the whole-artwork frame. A full-width band is still worth
+        // drawing, so testing width alone would wrongly hide it.
+        if (t2.rect.w >= img.width && t2.rect.h >= img.height) return;
+        const s = kw / img.width;
+        g.strokeRect(kx + t2.rect.x * s, ky + t2.rect.y * s, t2.rect.w * s, t2.rect.h * s);
+        g.fillText(t2.label, kx + t2.rect.x * s + 1.5 * MM, ky + t2.rect.y * s + 4 * MM);
+      });
+      g.fillStyle = '#000';
+      g.font = `${3 * MM}px -apple-system, Helvetica, Arial, sans-serif`;
+      g.fillText('Target map', kx, ky - 2 * MM);
+    }
+
+    c.toBlob(b => save(b, 'track-test-A2.png'), 'image/png');
+  };
+})();
+</script>
+</body>
+</html>
