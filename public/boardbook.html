@@ -218,7 +218,7 @@
       .slot .bc-full-mode { justify-content: flex-start; padding: 0; }
       .slot .bc-inset-mode { justify-content: flex-start; padding: 0 9%; }
       .slot .bc-photo-full { position: absolute; inset: 0; overflow: hidden; }
-      .slot .bc-inset { position: relative; overflow: hidden; background: #ededed; flex: 0 0 auto; margin-top: 9.167cqw; height: 48.333cqw; box-shadow: 0 1px 8px rgba(0,0,0,0.08); }
+      .slot .bc-inset { position: relative; overflow: hidden; background: #ededed; flex: 0 0 auto; box-shadow: 0 1px 8px rgba(0,0,0,0.08); }
       .slot .bc-inset.bc-landscape { aspect-ratio: 854 / 627; }
       .slot .bc-inset.bc-portrait { aspect-ratio: 3 / 4; }
       .slot .bc-inset.bc-square { aspect-ratio: 1 / 1; }
@@ -726,12 +726,18 @@
       let cover = { title: '', subtitle: '', font: 'cooper', noText: false };
       // Back cover, the same two styles the photo book offers: a photo bled to the
       // edges, or an inset photo sitting above the brand panel on white.
-      let backCover = { mode: 'fullbleed', shape: 'landscape' };
+      let backCover = { mode: 'fullbleed', shape: 'landscape', size: 'medium' };
       const BC_SHAPES = { landscape: 854 / 627, portrait: 3 / 4, square: 1 };
       const bcShapeAr = () => BC_SHAPES[backCover.shape] || BC_SHAPES.landscape;
-      // Inches on the 6″ page. The panel starts 4.25″ down, so a 2.9″ box 0.55″
-      // from the top leaves a clear 0.8″ between the photo and the wordmark.
-      const BC_INSET = { top: 0.55, h: 2.9, padPct: 9 };
+      // Inset photo height, in inches on the 6″ page. Medium is the photo book's
+      // proportion (it sets 44.2% of its cover height); small and large step
+      // either side of it.
+      const BC_INSET_SIZES = { small: 2.1, medium: 2.65, large: 3.1 };
+      const bcInsetH = () => BC_INSET_SIZES[backCover.size] || BC_INSET_SIZES.medium;
+      // Centred in the space above the brand panel rather than pinned to a fixed
+      // top margin, so a smaller photo stays balanced instead of stranding all
+      // the white space underneath it.
+      const bcInsetTop = () => (bcBlockTopIn() - bcInsetH()) / 2;
 
       // ── Page text ──────────────────────────────────────────────────
       // A page can carry a line of text as well as (or instead of) a photo. With no
@@ -911,6 +917,7 @@
           if (bk) backCover = {
             mode: bk.mode === 'inset' ? 'inset' : 'fullbleed',
             shape: BC_SHAPES[bk.shape] ? bk.shape : 'landscape',
+            size: BC_INSET_SIZES[bk.size] ? bk.size : 'medium',
           };
 
           document.getElementById('title-input').value = col.name || '';
@@ -1639,7 +1646,7 @@
         const img = p ? `<img class="slot-img" src="${p.url}" crossorigin="anonymous" draggable="false" data-adj='${JSON.stringify(normalizeAdjust(p.adjust))}'/>` : '';
         const body = full
           ? `<div class="bc-photo-full">${img}</div>`
-          : `<div class="bc-inset bc-${backCover.shape}">${img}</div>`;
+          : `<div class="bc-inset bc-${backCover.shape}" style="margin-top:${(bcInsetTop() / PAGE_IN * 100).toFixed(3)}cqw;height:${(bcInsetH() / PAGE_IN * 100).toFixed(3)}cqw">${img}</div>`;
         // Only a bled photo needs white type; an inset one leaves the page white.
         const reversed = full && !!p;
         // In inset style the grey frame is the add-a-photo affordance, so the
@@ -1762,7 +1769,8 @@
           <div class="bc-preview-wrap" id="bc-preview"></div>
           <div class="field-label">Photo style</div>
           ${seg('mode', [{ id: 'inset', label: 'Inset photo' }, { id: 'fullbleed', label: 'Full bleed' }], backCover.mode)}
-          ${backCover.mode === 'inset' ? `<div class="field-label" style="margin-top:14px">Shape</div>${seg('shape', [{ id: 'landscape', label: 'Landscape' }, { id: 'portrait', label: 'Portrait' }, { id: 'square', label: 'Square' }], backCover.shape)}` : ''}
+          ${backCover.mode === 'inset' ? `<div class="field-label" style="margin-top:14px">Shape</div>${seg('shape', [{ id: 'landscape', label: 'Landscape' }, { id: 'portrait', label: 'Portrait' }, { id: 'square', label: 'Square' }], backCover.shape)}
+          <div class="field-label" style="margin-top:14px">Size</div>${seg('size', [{ id: 'small', label: 'Small' }, { id: 'medium', label: 'Medium' }, { id: 'large', label: 'Large' }], backCover.size)}` : ''}
           <div class="sheet-actions"><button class="btn-primary" id="bc-done">Done</button></div>
         `);
         const paint = () => {
@@ -1851,7 +1859,7 @@
           : (t ? 'A text page. Add a photo and it becomes the background.'
                : 'Put a photo here, or make this a page of text.');
         const photoRows = p ? `
-          ${isBack ? `<div class="menu-row" data-act="bclayout"><div class="menu-ic">${MENU_IC.photo}</div><div><div>Layout</div><div class="menu-sub">${backCover.mode === 'fullbleed' ? 'Full bleed' : 'Inset photo · ' + backCover.shape}</div></div></div>` : `<div class="menu-row" data-act="popcode"><div class="menu-ic"><img src="/assets/popcode_symbol_color.svg" style="width:20px;height:20px"/></div><div><div>${has ? 'Edit Popcode' : 'Add a Popcode'}</div><div class="menu-sub">${has ? 'Change or remove the linked media' : 'Link a video or audio recording'}</div></div></div>`}
+          ${isBack ? `<div class="menu-row" data-act="bclayout"><div class="menu-ic">${MENU_IC.photo}</div><div><div>Layout</div><div class="menu-sub">${backCover.mode === 'fullbleed' ? 'Full bleed' : `Inset photo · ${backCover.shape} · ${backCover.size}`}</div></div></div>` : `<div class="menu-row" data-act="popcode"><div class="menu-ic"><img src="/assets/popcode_symbol_color.svg" style="width:20px;height:20px"/></div><div><div>${has ? 'Edit Popcode' : 'Add a Popcode'}</div><div class="menu-sub">${has ? 'Change or remove the linked media' : 'Link a video or audio recording'}</div></div></div>`}
           <div class="menu-row" data-act="edit"><div class="menu-ic">${MENU_IC.edit}</div><div><div>Edit photo</div><div class="menu-sub">Fill / fit, zoom, reposition, rotate</div></div></div>
           <div class="menu-row" data-act="swap"><div class="menu-ic">${MENU_IC.swap}</div><div><div>Move / swap</div><div class="menu-sub">Then tap another page to swap places</div></div></div>
           <div class="menu-row" data-act="replace"><div class="menu-ic">${MENU_IC.replace}</div><div><div>Replace photo</div><div class="menu-sub">Upload a different image here</div></div></div>`
@@ -2668,7 +2676,7 @@
             variantId: 'bb-6x6',
             title,
             cover: { title: cover.title || null, subtitle: cover.subtitle || null, font: cover.font, no_text: !!cover.noText },
-            back: { mode: backCover.mode, shape: backCover.shape },
+            back: { mode: backCover.mode, shape: backCover.shape, size: backCover.size },
             slots: POSITIONS.map(pos => ({
               position: pos,
               photo_url: photoUrlByPos[pos] || null,
@@ -2913,11 +2921,11 @@
         if (full) {
           await drawPageInto(ctx, 'back_cover', x, w, h);
         } else {
-          // White page with the photo inside its frame — same rect the preview
-          // lays out from BC_INSET.
+          // White page with the photo inside its frame — the same rect the preview
+          // lays out, from bcInsetH/bcInsetTop.
           ctx.fillStyle = '#fff'; ctx.fillRect(x, 0, w, h);
-          const ih = px(BC_INSET.h), iw = ih * bcShapeAr();
-          const ix = x + (w - iw) / 2, iy = px(BC_INSET.top);
+          const ih = px(bcInsetH()), iw = ih * bcShapeAr();
+          const ix = x + (w - iw) / 2, iy = px(bcInsetTop());
           if (photo) drawPhotoAdjusted(ctx, await loadPhotoImg(photo), photo.adjust, ix, iy, iw, ih);
           else { ctx.fillStyle = '#ededed'; ctx.fillRect(ix, iy, iw, ih); }
         }
