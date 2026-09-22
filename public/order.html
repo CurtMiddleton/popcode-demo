@@ -505,10 +505,10 @@
           { id: 'mag-6in', size: '6×6"', aspect: 1, minCopies: 3 },
         ],
         sticker: [
-          { id: 'sti-3x4', size: '3×4"',     aspect: 66.9 / 95.3, minCopies: 3, format: 'png' },
-          { id: 'sti-5_5', size: '5.5×5.5"', aspect: 1,           minCopies: 3, format: 'png' },
-          { id: 'sti-8_5', size: '8.5×8.5"', aspect: 1,           minCopies: 3, format: 'png' },
-          { id: 'sti-14',  size: '14×14"',   aspect: 1,           minCopies: 3, format: 'png' },
+          { id: 'sti-3x4', size: '3×4"',     aspect: 3 / 4, minCopies: 3, format: 'png', padPx: 30, maxPx: { w: 900,  h: 1200 } },
+          { id: 'sti-5_5', size: '5.5×5.5"', aspect: 1,     minCopies: 3, format: 'png', padPx: 30, maxPx: { w: 1650, h: 1650 } },
+          { id: 'sti-8_5', size: '8.5×8.5"', aspect: 1,     minCopies: 3, format: 'png', padPx: 30, maxPx: { w: 2550, h: 2550 } },
+          { id: 'sti-14',  size: '14×14"',   aspect: 1,     minCopies: 3, format: 'png', padPx: 30, maxPx: { w: 4200, h: 4200 } },
         ],
         ornament: [
           { id: 'orn-alum-rect', size: 'Aluminium 4×3"', aspect: 102 / 75, minCopies: 3 },
@@ -647,6 +647,8 @@
         const o = {};
         if (v.round) o.round = true;
         if (v.format) o.format = v.format;
+        if (v.maxPx) o.maxPx = v.maxPx;
+        if (v.padPx) o.padPx = v.padPx;
         if (v.wrap) {
           o.wrap = v.wrap;
           const slug = (photo || state.selectedPhoto || {}).slug;
@@ -815,11 +817,29 @@
         // Full-res output (the actual print asset). JPEG keeps the file small so
         // compositing + upload at checkout is fast (no transparency needed once
         // the badge is flattened onto the photo).
+        //
+        // Kiss-cut stickers are the one product with a MAXIMUM accepted pixel
+        // size as well as a minimum (900x1200 for the 3x4", 2550 square for the
+        // 8.5"). A phone photo cropped square is about 3000px, so the cap bites
+        // on ordinary input and the asset is scaled down to fit it. Aspect is
+        // preserved — a single ratio, so the crop stays exactly what was
+        // previewed.
+        var srcCropW = cropW, srcCropH = cropH;
+        if (opts.maxPx && opts.maxPx.w && opts.maxPx.h) {
+          var capScale = Math.min(1, opts.maxPx.w / cropW, opts.maxPx.h / cropH);
+          if (capScale < 1) {
+            cropW = Math.max(1, Math.floor(cropW * capScale));
+            cropH = Math.max(1, Math.floor(cropH * capScale));
+          }
+        }
         var c = document.createElement('canvas');
         c.width = cropW; c.height = cropH;
         var ctx = c.getContext('2d');
         if (adjust) drawPhotoAdjusted(ctx, img, adjust, 0, 0, cropW, cropH);
-        else ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+        // Source rect stays the crop we chose off the original; only the
+        // DESTINATION shrinks when a pixel cap applies, so capping resamples
+        // rather than re-cropping.
+        else ctx.drawImage(img, sx, sy, srcCropW, srcCropH, 0, 0, cropW, cropH);
         // Brighten/pop the photo for print before the badge goes on top.
         var corr = opts.correction || correctionByKey(ACTIVE_CORRECTION);
         applyCorrection(ctx, cropW, cropH, corr);
@@ -846,6 +866,14 @@
         var minSide = Math.min(w, h);
         var size = Math.round(minSide * scale);
         var pad = Math.round(minSide * 0.025);
+        // A kiss-cut sticker is trimmed 2.5mm (30px at 300 DPI) in from the
+        // file edge, and the usual 2.5% margin is under that on the smaller
+        // sizes — so the badge would be cut through. Take whichever margin is
+        // larger, scaled if the asset was capped below its nominal size.
+        if (opts && opts.padPx) {
+          var nominal = (opts.maxPx && opts.maxPx.w) ? Math.min(opts.maxPx.w, opts.maxPx.h) : minSide;
+          pad = Math.max(pad, Math.ceil(opts.padPx * (minSide / nominal)));
+        }
         var x = w - size - pad, y = h - size - pad;
         if (opts && opts.round) {
           // Centre of the badge on the 45 degree diagonal, far enough in that the

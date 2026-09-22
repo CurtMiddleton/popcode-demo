@@ -45,6 +45,35 @@ if (isSandboxUrl !== looksSandboxKey) {
     + `  Reading the catalogue is a pure lookup either way — it places no orders.\n`);
 }
 
+/* What to say on a 401.
+
+   The old message blamed the base URL outright — and on 2026-09-22 it said that
+   sixteen times to a key that was perfectly valid and merely had the thirteen
+   characters of a copy-paste placeholder stuck to the front of it. Twenty
+   minutes went on the wrong question because the tool sounded certain.
+
+   So describe the key's SHAPE first. Length and the first and last few
+   characters give away a mangled paste instantly, and reveal nothing worth
+   protecting. Only then mention the host, and as a possibility rather than a
+   verdict. */
+function keyHint() {
+  const shape = `length ${KEY.length}, starts "${KEY.slice(0, 4)}", ends "${KEY.slice(-4)}"`;
+  const lines = [`  (401 — the key was rejected by ${BASE}. The key you passed is ${shape}.`];
+  // A Prodigi key is a 36-character GUID, or test_ + a GUID on sandbox.
+  const plausible = /^(test_)?[0-9a-f-]{30,40}$/i.test(KEY);
+  if (!plausible) {
+    lines.push('   That does NOT look like a Prodigi key, which is a 36-character GUID');
+    lines.push('   (sandbox keys add a test_ prefix). Check for placeholder text left in');
+    lines.push('   front of it, a missing character, or a stray space — that is far more');
+    lines.push('   often the cause than the wrong host.');
+  } else {
+    lines.push(`   The shape looks right, so this is most likely the wrong environment:`);
+    lines.push(`   sandbox and live keys differ, and a ${looksSandboxKey ? 'sandbox' : 'live'} key only works`);
+    lines.push(`   against the ${looksSandboxKey ? 'sandbox' : 'live'} base URL.`);
+  }
+  return lines.join('\n') + ')';
+}
+
 let failed = 0;
 
 for (const sku of skus) {
@@ -61,11 +90,7 @@ for (const sku of skus) {
   const text = await resp.text();
   if (!resp.ok) {
     // 401 here almost always means key/base-URL mismatch rather than a bad SKU.
-    const hint = resp.status === 401
-      ? `  (401 — this key is not valid for ${BASE}. Sandbox and live keys differ;`
-        + ` a ${looksSandboxKey ? 'sandbox' : 'live'} key only works against the`
-        + ` ${looksSandboxKey ? 'sandbox' : 'live'} base URL.)`
-      : '';
+    const hint = resp.status === 401 ? keyHint() : '';
     console.log(`\n✗ ${sku}\n  HTTP ${resp.status} ${text.slice(0, 200)}${hint ? '\n' + hint : ''}`);
     failed++;
     continue;
