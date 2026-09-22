@@ -8,9 +8,11 @@
 <style>
   :root { --ok:#22d37f; --warn:#ffc53d; --bad:#ff5b52; --pad:env(safe-area-inset-bottom,0px); }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  html,body { margin:0; height:100%; background:#000; color:#fff; overflow:hidden;
+  html,body { margin:0; height:100%; color:#fff; overflow:hidden;
     font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif; }
-  a-scene { position:fixed; inset:0; }
+  body { background:#000; }        /* on body ONLY — see note above */
+  a-scene { width:100vw; height:100vh; }
+  canvas { width:100vw !important; height:100vh !important; }
 
   #hud { position:fixed; inset:0; pointer-events:none; z-index:10;
          display:flex; flex-direction:column; justify-content:space-between; }
@@ -137,6 +139,7 @@
       label: meta.label || ('T' + i),
       name: meta.name || '',
       mm: meta.printedWidthMm || 0,
+      pxW: meta.pxW || 0,          // compiled pixel width — the unit of the pose
       aspect: meta.aspect || 1,
       el: null,
       hist: [],            // {t,v} visibility samples, pruned to a 5 s window
@@ -168,7 +171,7 @@
     // translation has to come out of the matrix, not .position (which is stale).
     const e = el.object3D.matrix.elements;
     const p = { x: e[12], y: e[13], z: e[14] };
-    t.dist = Math.hypot(p.x, p.y, p.z) * t.mm;
+    t.dist = Math.hypot(p.x, p.y, p.z) / t.pxW * t.mm;
     if (t.dist > t.peak) t.peak = t.dist;
 
     if (t.pendingFound) {
@@ -187,7 +190,7 @@
       t.jit.push(Math.hypot(
         p.x - 2 * t.p1.x + t.p0.x,
         p.y - 2 * t.p1.y + t.p0.y,
-        p.z - 2 * t.p1.z + t.p0.z) * t.mm);
+        p.z - 2 * t.p1.z + t.p0.z) / t.pxW * t.mm);
       if (t.jit.length > 90) t.jit.shift();
     }
     t.p0 = t.p1; t.p1 = p;
@@ -324,6 +327,17 @@
     cam.setAttribute('look-controls', 'enabled: false');
     scene.appendChild(cam);
 
+    // The builder records pxW; manifests built before it did still yield the same
+    // number from compileDim and the region rect, using crop()'s own formula.
+    const dim = (manifest && manifest.compileDim) || 640;
+    metas.forEach(m => {
+      if (!m.pxW && m.rect) {
+        const k = Math.min(1, dim / Math.max(m.rect.w, m.rect.h));
+        m.pxW = Math.max(1, Math.round(m.rect.w * k));
+      }
+      if (!m.pxW) m.pxW = dim;
+    });
+
     targets = metas.map((m, i) => blank(m.index != null ? m.index : i, m));
 
     AFRAME.registerComponent('track-probe', {
@@ -373,14 +387,17 @@
     window.addEventListener('unhandledrejection', ev =>
       note(ev.reason && ev.reason.message || ev.reason));
 
-    setTimeout(() => {
-      if ($('err').style.display === 'flex') return;
-      const v = document.querySelector('a-scene video');
-      if (v && v.readyState >= 2 && v.videoWidth > 0) return;    // camera is live
+    const deadline = Date.now() + 30000;   // the iOS permission prompt is untimed
+    const watchdog = setInterval(() => {
+      if ($('err').style.display === 'flex') { clearInterval(watchdog); return; }
+      const v = document.querySelector('video');   // MindAR appends it to body
+      if (v && v.readyState >= 2 && v.videoWidth > 0) { clearInterval(watchdog); return; }
+      if (Date.now() < deadline) return;           // still waiting on Allow
+      clearInterval(watchdog);
       fail('The camera never started'
         + (lastError ? ' — ' + lastError.replace(/\.?$/, '.') : '.')
         + ' On iOS this page must be served over HTTPS with camera permission granted.');
-    }, 9000);
+    }, 1000);
 
     document.body.appendChild(scene);
 
