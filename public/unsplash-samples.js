@@ -156,6 +156,12 @@
   // keeps products the same visual size on the storefront cards and the
   // detail pages.
   const CARD_MOCKUPS = {
+    /* 11oz mug. `cutout` because the template is the real product photo with its
+       printed area erased — the art goes under it, so the cylinder's arcs at top
+       and bottom mask the photo correctly. Built from Prodigi's own product
+       shot; the design it carried was removed pixel by pixel, which is also why
+       there is no third-party artwork in the asset. */
+    mug: { template: '/assets/mockups/mug.png', rect: { x: 0.1850, y: 0.1767, w: 0.5596, h: 0.6778 }, cutout: true, cylinder: true },
     print:  { template: '/assets/mockups/print.jpg',  rect: { x: 0.190, y: 0.113, w: 0.626, h: 0.782 }, crop: { x: 0.168, y: 0.089, w: 0.667, h: 0.823 } },
     tile:   { template: '/assets/mockups/tile.jpg',   rect: { x: 0.280, y: 0.206, w: 0.427, h: 0.598 }, crop: { x: 0.242, y: 0.167, w: 0.521, h: 0.696 } },
     canvas: { template: '/assets/mockups/canvas.jpg', rect: { x: 0.190, y: 0.112, w: 0.670, h: 0.804 }, crop: { x: 0.168, y: 0.094, w: 0.709, h: 0.869 } },
@@ -187,12 +193,12 @@
     // The gift products have no photoreal template in /assets/mockups, so their
     // storefront cards are drawn. Without an entry here the card renders an
     // empty grey box, which is worse than a drawn approximation.
-    mug: { kind: 'mug' },
+    // mug is a photoreal cutout template now (CARD_MOCKUPS), not drawn.
     ornament: { kind: 'ornament' },
     magnet: { kind: 'magnet' },
     sticker: { kind: 'sticker' },
   };
-  const GIFT_KINDS = new Set(['mug', 'ornament', 'magnet', 'sticker']);
+  const GIFT_KINDS = new Set(['ornament', 'magnet', 'sticker']);
   async function loadCardPhoto(photoUrl, fallbackUrl) {
     try { return await loadImg(photoUrl, true); }
     catch (_) { if (fallbackUrl) { try { return await loadImg(fallbackUrl, true); } catch (_) {} } }
@@ -296,48 +302,6 @@
     const ctx = cv.getContext('2d');
     const shadow = () => { ctx.shadowColor = 'rgba(0,0,0,0.22)'; ctx.shadowBlur = 30; ctx.shadowOffsetX = 8; ctx.shadowOffsetY = 20; };
 
-    if (kind === 'mug') {
-      // Body is a cylinder seen face-on: straight sides, an elliptical rim, and
-      // a handle on the right. The photo wraps the body, so it is drawn to the
-      // full body width and clipped to it.
-      const bw = S * 0.62, bh = S * 0.56;
-      const x = M + S * 0.10, y = M + (S - bh) / 2;
-      const ry = bh * 0.085;
-      // handle first, so the body overlaps its inner edge
-      ctx.save(); shadow();
-      ctx.strokeStyle = '#d8d8d8'; ctx.lineWidth = S * 0.045; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.ellipse(x + bw, y + bh * 0.52, S * 0.115, S * 0.15, 0, -Math.PI / 2.1, Math.PI / 2.1);
-      ctx.stroke(); ctx.restore();
-      ctx.save(); shadow();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath(); ctx.rect(x, y, bw, bh); ctx.fill(); ctx.restore();
-      ctx.save();
-      ctx.beginPath(); ctx.rect(x, y, bw, bh); ctx.clip();
-      coverDraw(ctx, photo, x, y, bw, bh);
-      // The link, set vertically beside the handle — the real product's only
-      // place for it, so the card shows it rather than implying a clean photo.
-      const fp = Math.round(bh * 0.085);
-      const barW = fp * 1.9, barX = x + bw - barW - S * 0.012;
-      const g = ctx.createLinearGradient(barX, 0, barX + barW, 0);
-      g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.45, 'rgba(0,0,0,0.42)'); g.addColorStop(1, 'rgba(0,0,0,0.42)');
-      ctx.fillStyle = g; ctx.fillRect(barX, y, barW, bh);
-      ctx.translate(barX + barW / 2, y + bh / 2); ctx.rotate(-Math.PI / 2);
-      ctx.font = '600 ' + fp + 'px Inter, sans-serif'; ctx.fillStyle = '#fff';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('popcode.app/yourcode', 0, 0);
-      ctx.restore();
-      // rim + inner colour (the product's coloured inner is its selling point)
-      ctx.save();
-      ellipse(ctx, x + bw / 2, y, bw / 2, ry); ctx.fillStyle = '#f2f2f2'; ctx.fill();
-      ellipse(ctx, x + bw / 2, y, bw / 2 - S * 0.022, ry * 0.78); ctx.fillStyle = '#d9d9d9'; ctx.fill();
-      ctx.restore();
-      ctx.save();
-      ctx.beginPath(); ctx.ellipse(x + bw / 2, y + bh, bw / 2, ry, 0, 0, Math.PI); ctx.clip();
-      ellipse(ctx, x + bw / 2, y + bh, bw / 2, ry); ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fill();
-      ctx.restore();
-      return;
-    }
-
     if (kind === 'ornament') {
       const r = S * 0.34, cx = M + S / 2, cy = M + S * 0.58;
       ctx.save();  // hanging ribbon
@@ -425,14 +389,34 @@
     cv.width = Math.round(tpl.naturalWidth * s);
     cv.height = Math.round(tpl.naturalHeight * s);
     const ctx = cv.getContext('2d');
-    ctx.drawImage(tpl, 0, 0, cv.width, cv.height);
     const r = { x: mk.rect.x * cv.width, y: mk.rect.y * cv.height, w: mk.rect.w * cv.width, h: mk.rect.h * cv.height };
+    /* A CUTOUT template is the product photographed with its printed area
+       erased to transparency, so the art goes UNDERNEATH and the template's own
+       pixels mask it. That is what lets a mug work: its print area is not a
+       rectangle but a cylinder, arcing at top and bottom, and no rect clip can
+       describe that shape. Every other template is opaque and takes the art on
+       top, clipped to a plain rectangle. */
+    if (!mk.cutout) ctx.drawImage(tpl, 0, 0, cv.width, cv.height);
     ctx.save();
     ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
     const pa = photo.naturalWidth / photo.naturalHeight, ra = r.w / r.h;
     let dw, dh;
     if (pa > ra) { dh = r.h; dw = dh * pa; } else { dw = r.w; dh = dw / pa; }
     ctx.drawImage(photo, r.x + (r.w - dw) / 2, r.y + (r.h - dh) / 2, dw, dh);
+    /* Shade the art like the curved surface it is printed on — darker where the
+       cylinder turns away at each side, a soft highlight left of centre. Without
+       it a photo sitting in a mug-shaped hole reads as a flat sticker. */
+    if (mk.cylinder) {
+      const cyl = ctx.createLinearGradient(r.x, 0, r.x + r.w, 0);
+      cyl.addColorStop(0,    'rgba(0,0,0,0.30)');
+      cyl.addColorStop(0.10, 'rgba(0,0,0,0.10)');
+      cyl.addColorStop(0.32, 'rgba(255,255,255,0.10)');
+      cyl.addColorStop(0.62, 'rgba(0,0,0,0.02)');
+      cyl.addColorStop(0.88, 'rgba(0,0,0,0.16)');
+      cyl.addColorStop(1,    'rgba(0,0,0,0.34)');
+      ctx.fillStyle = cyl; ctx.fillRect(r.x, r.y, r.w, r.h);
+    }
+    if (mk.cutout) { ctx.restore(); ctx.drawImage(tpl, 0, 0, cv.width, cv.height); ctx.save(); }
     if (mk.hinge) {
       // Redraw the cover hinge over the photo's left edge: a soft highlight
       // strip fading into a faint crease shadow (mimics the template's own

@@ -550,7 +550,7 @@
            which is why the specs say so plainly: they arrive separately from
            anything else in the same order, and they take longer. Better said on
            the product page than discovered at the door. */
-        mug:      { name: 'Photo Mugs',  tagline: '11oz coloured photo mugs',  desc: 'A photo wrapped the whole way round an 11oz ceramic mug, with your Popcode link set discreetly beside the handle.', specs: ['Ceramic, dishwasher tested', 'Nine-colour handle and inner', 'Link printed beside the handle', 'Made and posted from the UK'] },
+        mug:      { name: 'Photo Mugs',  tagline: '11oz white photo mug',  desc: 'A photo wrapped the whole way round an 11oz white ceramic mug, with the Popcode symbol on the front and your link set discreetly beside the handle.', specs: ['White ceramic, dishwasher tested', 'Photo wraps the full 229mm', 'Link printed beside the handle', 'Made and posted locally'] },
         ornament: { name: 'Ornaments',   tagline: 'Christmas tree ornaments',  desc: 'Aluminium, glass, ceramic or a shatterproof bauble — a photo on the tree that plays when someone points a phone at it.', specs: ['Aluminium, glass, ceramic or bauble', 'Ribbon or string to hang', 'Single-sided print', 'Made and posted from the UK'] },
         magnet:   { name: 'Photo Magnets', tagline: 'Fridge magnets',          desc: 'A photo on the fridge that comes to life — sold in sets of three.', specs: ['Silver-halide print on magnetic board', 'Sets of three', 'Made and posted from the UK'] },
         sticker:  { name: 'Stickers',    tagline: 'Kiss-cut vinyl stickers',   desc: 'Durable kiss-cut vinyl stickers on a peel-away backing — sold in sets of three.', specs: ['Premium vinyl, matt finish', 'Kiss-cut on a backing sheet', 'Sets of three', 'Made and posted from the UK'] },
@@ -571,6 +571,10 @@
         // makes renderProductMockup cast a real drop shadow so it reads as a
         // physical print lifted off the wall.
         print:  { template: '/assets/mockups/print.jpg',  rect: { x: 0.190,  y: 0.113, w: 0.626, h: 0.782 }, shadow: true },
+        // Made from Prodigi's own product shot with the design it carried erased
+        // pixel by pixel, so the asset holds no third-party artwork. `cutout`
+        // puts the art under the template, letting the cylinder's arcs mask it.
+        mug:    { template: '/assets/mockups/mug.png',    rect: { x: 0.1850, y: 0.1767, w: 0.5596, h: 0.6778 }, cutout: true, cylinder: true },
       };
 
       // Per-product product-photo GALLERY (like Prodigi's own product-page galleries).
@@ -585,6 +589,7 @@
         print:  [ MOCKUPS.print ],
         canvas: [ MOCKUPS.canvas ],
         tile:   [ MOCKUPS.tile ],
+        mug:    [ MOCKUPS.mug ],
       };
       const galleryFor = p => (GALLERY[p] || []).filter(Boolean);
 
@@ -619,6 +624,9 @@
       const COLOR_ROW_LABEL = {};
       const frameColorsFor = (t) => FRAME_COLORS[t] || null;
       const ORIENTATION_LOCKED = new Set(['mug', 'ornament', 'magnet', 'sticker']);
+      // What one of a thing is called on the price line. "per print" is wrong
+      // for anything you do not hang on a wall.
+      const UNIT_NOUN = { mug: 'mug', ornament: 'ornament', magnet: 'magnet', sticker: 'sticker' };
       function frameColorHex() {
         const list = frameColorsFor(state.productType);
         const c = list && list.find(x => x.id === state.frameColor);
@@ -883,7 +891,15 @@
           pad = Math.max(pad, Math.ceil(opts.padPx * (minSide / nominal)));
         }
         var x = w - size - pad, y = h - size - pad;
-        if (opts && opts.round) {
+        if (opts && opts.wrap) {
+          /* A wrap has no corners you ever see. The artwork runs the whole way
+             round the mug, so its right-hand edge finishes beside the handle and
+             a badge placed there faces away from whoever is holding it. Put it
+             at the foot of the MIDDLE of the wrap, which is the face of the mug
+             — the part pointing at you when the handle is in your hand. */
+          x = Math.round(w / 2 - size / 2);
+          y = h - size - Math.round(h * 0.055);
+        } else if (opts && opts.round) {
           // Centre of the badge on the 45 degree diagonal, far enough in that the
           // whole badge (plus its own half-diagonal) clears the circle's edge.
           var r = minSide / 2;
@@ -909,16 +925,34 @@
          so type any closer can be trimmed. */
       function drawWrapUrl(ctx, w, h, text, wrap) {
         var safe = Math.round((wrap.safeMm / wrap.widthMm) * w);
-        var fontPx = Math.max(12, Math.round(h * 0.052));
-        var barW = Math.round(fontPx * 1.9);
+        var fontPx = Math.max(12, Math.round(h * 0.044));
+        var barW = Math.round(fontPx * 1.7);
         ctx.save();
         ctx.translate(w - safe - barW, 0);
-        var grad = ctx.createLinearGradient(0, 0, barW, 0);
+        /* A whisper of a scrim, not a black band. The type has to stay legible
+           over whatever photo is behind it, but this strip sits beside the
+           handle on a real mug and a hard dark bar there reads as a printing
+           fault rather than a credit. Feathered at both ends so it fades into
+           the picture instead of ending on a line. */
+        // Built on its own canvas: the vertical fade uses destination-in, which
+        // acts on a WHOLE canvas rather than the rectangle just drawn, so doing
+        // it inline would erase the photo either side of the strip.
+        var strip = document.createElement('canvas');
+        strip.width = Math.max(1, barW); strip.height = Math.max(1, h);
+        var sx = strip.getContext('2d');
+        var grad = sx.createLinearGradient(0, 0, barW, 0);
         grad.addColorStop(0, 'rgba(0,0,0,0)');
-        grad.addColorStop(0.45, 'rgba(0,0,0,0.42)');
-        grad.addColorStop(1, 'rgba(0,0,0,0.42)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, barW, h);
+        grad.addColorStop(0.5, 'rgba(0,0,0,0.20)');
+        grad.addColorStop(1, 'rgba(0,0,0,0.24)');
+        sx.fillStyle = grad; sx.fillRect(0, 0, barW, h);
+        var fade = sx.createLinearGradient(0, 0, 0, h);
+        fade.addColorStop(0, 'rgba(0,0,0,0)');
+        fade.addColorStop(0.16, 'rgba(0,0,0,1)');
+        fade.addColorStop(0.84, 'rgba(0,0,0,1)');
+        fade.addColorStop(1, 'rgba(0,0,0,0)');
+        sx.globalCompositeOperation = 'destination-in';
+        sx.fillStyle = fade; sx.fillRect(0, 0, barW, h);
+        ctx.drawImage(strip, 0, 0);
         // Rotate so the baseline runs up the mug: reading bottom-to-top puts the
         // text upright when the handle is on the right.
         ctx.translate(barW / 2, h / 2);
@@ -994,7 +1028,12 @@
         // Landscape orientation: rotate the (portrait) template 90° so the frame
         // itself reads landscape, then place an upright landscape-cropped photo in
         // the rotated opening. (A portrait 8×10 frame turned 90° IS a 10×8.)
-        const landscape = !!(opts.aspect && opts.aspect > 1);
+        /* A portrait 8x10 frame turned 90 degrees IS a 10x8, so a wide aspect
+           means rotate the template. That reasoning does not carry to a product
+           with a fixed orientation: a mug's wrap is 2.41 wide, and rotating it
+           would stand the mug on its handle. Cutout templates are real product
+           photographs and always sit the way they were shot. */
+        const landscape = !!(opts.aspect && opts.aspect > 1) && !mk.cutout;
         const ctx = targetCanvas.getContext('2d');
         if (landscape) {
           targetCanvas.width = th; targetCanvas.height = tw;
@@ -1002,16 +1041,29 @@
           r = { x: th - r.y - r.h, y: r.x, w: r.h, h: r.w };
         } else {
           targetCanvas.width = tw; targetCanvas.height = th;
-          ctx.drawImage(tpl, 0, 0, tw, th);
+          /* A CUTOUT template is the product photographed with its printed area
+             erased to transparency: the art goes UNDERNEATH and the template's
+             own pixels mask it. A mug needs this — its print area arcs at top
+             and bottom with the curve of the cylinder, and no rectangle can
+             describe that shape. Opaque templates keep taking the art on top. */
+          if (!mk.cutout) ctx.drawImage(tpl, 0, 0, tw, th);
         }
         // Cover the template's stock sample photo with a neutral placeholder so
         // there's no flash of the sample (leopard) image while the user's photo
-        // composites in (the photo load below is async).
-        ctx.fillStyle = '#e9e9ec';
-        ctx.fillRect(r.x, r.y, r.w, r.h);
+        // composites in (the photo load below is async). A cutout template has
+        // no stock photo to hide, and filling here would paint a grey block
+        // outside the product's silhouette.
+        if (!mk.cutout) { ctx.fillStyle = '#e9e9ec'; ctx.fillRect(r.x, r.y, r.w, r.h); }
         // Crop the badged art to the OPENING's exact aspect so the badge always
         // lands in the corner of what's shown (no cover-crop clipping it off).
-        const artUrl = await compositeBadgedImage(photoUrl, { scale: opts.scale, aspect: r.w / r.h });
+        /* A wrap keeps its OWN aspect rather than the opening's: a mug's artwork
+           runs 229mm round the cylinder while the opening shows only the ~130mm
+           facing the camera, so cropping to the opening would squeeze the whole
+           panorama onto the front. Cover-cropping the real wrap into the opening
+           shows the part you would actually be looking at. */
+        const wrapV = (typeof giftArtOpts === 'function') ? giftArtOpts() : {};
+        const artUrl = await compositeBadgedImage(photoUrl, Object.assign(
+          { scale: opts.scale, aspect: wrapV.wrap ? opts.aspect : r.w / r.h }, wrapV));
         const art = new Image(); await new Promise((res, rej) => { art.onload = res; art.onerror = rej; art.src = artUrl; });
         // Reinforce a cast shadow for borderless prints so they read as a physical
         // object lifted off the wall (the template's baked shadow washes out on a
@@ -1028,7 +1080,28 @@
           ctx.restore();
         }
         ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
-        ctx.drawImage(art, r.x, r.y, r.w, r.h); ctx.restore();
+        if (mk.cutout && art.naturalWidth / art.naturalHeight > r.w / r.h) {
+          // Cover-fit: fill the opening's height and centre the wrap, so what
+          // shows is the middle of the artwork — the face of the mug.
+          const dh = r.h, dw = dh * (art.naturalWidth / art.naturalHeight);
+          ctx.drawImage(art, r.x + (r.w - dw) / 2, r.y, dw, dh);
+        } else {
+          ctx.drawImage(art, r.x, r.y, r.w, r.h);
+        }
+        if (mk.cylinder) {
+          // Shade the art like the curved surface it is printed on, or it reads
+          // as a flat sticker pasted into a mug-shaped hole.
+          const cyl = ctx.createLinearGradient(r.x, 0, r.x + r.w, 0);
+          cyl.addColorStop(0,    'rgba(0,0,0,0.30)');
+          cyl.addColorStop(0.10, 'rgba(0,0,0,0.10)');
+          cyl.addColorStop(0.32, 'rgba(255,255,255,0.10)');
+          cyl.addColorStop(0.62, 'rgba(0,0,0,0.02)');
+          cyl.addColorStop(0.88, 'rgba(0,0,0,0.16)');
+          cyl.addColorStop(1,    'rgba(0,0,0,0.34)');
+          ctx.fillStyle = cyl; ctx.fillRect(r.x, r.y, r.w, r.h);
+        }
+        ctx.restore();
+        if (mk.cutout) ctx.drawImage(tpl, 0, 0, tw, th);
       }
 
       function dataUrlToBlob(dataUrl) {
@@ -1724,7 +1797,7 @@
           // something sold in threes would advertise a price that does not exist.
           const d = await quoteFor(state.productType, orderVariantId(), { copies: pack });
           el.textContent = 'From ' + formatMoney(d.printing_minor, d.currency);
-          note.textContent = (pack > 1 ? `per set of ${pack}` : 'per print') + ', plus shipping at cost';
+          note.textContent = (pack > 1 ? `per set of ${pack}` : `per ${UNIT_NOUN[state.productType] || 'print'}`) + ', plus shipping at cost';
         } catch (e) { el.textContent = '—'; note.textContent = 'Pricing unavailable: ' + e.message; }
       }
       document.getElementById('orientation-toggle').addEventListener('click', e => {
