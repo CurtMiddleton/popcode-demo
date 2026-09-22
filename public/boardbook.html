@@ -737,7 +737,13 @@
       // Centred in the space above the brand panel rather than pinned to a fixed
       // top margin, so a smaller photo stays balanced instead of stranding all
       // the white space underneath it.
-      const bcInsetTop = () => (bcBlockTopIn() - bcInsetH()) / 2;
+      const bcInsetTop = () => {
+        const centred = (bcBlockTopIn() - bcInsetH()) / 2;
+        // Sit a little lower than dead-centre (the photo reads high otherwise),
+        // but never within 0.25" of the brand block below.
+        const maxTop = bcBlockTopIn() - bcInsetH() - 0.25;
+        return Math.max(centred, Math.min(centred + 0.35, maxTop));
+      };
 
       // ── Page text ──────────────────────────────────────────────────
       // A page can carry a line of text as well as (or instead of) a photo. With no
@@ -2919,7 +2925,13 @@
           for (let y = 0; y < h; y++) {
             const li = y * 4, ri = y * 4, ro = y * w * 4;
             for (let x = 0; x < w; x++) {
-              const t = w === 1 ? 0.5 : x / (w - 1), o = ro + x * 4;
+              // Keep each cover's colour SOLID across its half of the spine and
+              // only cross over in a narrow band at the centre (the physical
+              // fold). A full-width ramp made a white back cover fade across the
+              // whole spine and read as a blurry light band beside the front
+              // photo; this keeps the front (and back) meeting the spine cleanly.
+              const f = w === 1 ? 0.5 : x / (w - 1);
+              const t = Math.max(0, Math.min(1, (f - 0.38) / 0.24)), o = ro + x * 4;
               d[o]     = left[li]     + (right[ri]     - left[li])     * t;
               d[o + 1] = left[li + 1] + (right[ri + 1] - left[li + 1]) * t;
               d[o + 2] = left[li + 2] + (right[ri + 2] - left[li + 2]) * t;
