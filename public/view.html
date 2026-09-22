@@ -89,7 +89,15 @@
         --logo-lift: 92px;
         --cta-bottom: 12%;
         --cta-h: 80px;
+        /* Both zero unless the Popcode has a name, so a nameless one lays out
+           exactly as it did before. --name-h is measured, not guessed, because a
+           long name wraps to two lines. */
+        --name-gap: 0px;
+        --name-h: 0px;
       }
+      /* The wordmark lifts to make room; the tap target re-centres itself
+         against the name's bottom edge rather than the wordmark's. */
+      #start-screen.has-name { --logo-lift: 132px; --name-gap: 16px; }
       /* Pinned on its own, independent of the button. */
       #start-screen img.splash-logo {
         position: absolute; bottom: calc(50% + var(--logo-lift));
@@ -100,18 +108,29 @@
       /* The tap target is the mark on a disc, sitting where the Scan pill used
          to. Soft filled halos swell out of it while the screen is idle, one a
          second; they stack, and the overlap is what reads as concentric bands. */
+      #start-name {
+        position: absolute; left: 50%; transform: translateX(-50%);
+        top: calc(50% - var(--logo-lift) + var(--name-gap));
+        width: var(--splash-w); max-width: var(--splash-max);
+        display: none; text-align: center;
+        font-family: 'CooperBT', Georgia, serif; font-weight: 400;
+        font-size: 30px; line-height: 1.15; color: #fff;
+        text-shadow: 0 2px 14px rgba(0,0,0,0.34);
+      }
+      #start-screen.has-name #start-name { display: block; }
       #start-tap {
         position: absolute; left: 50%;
-        top: calc(((50% - var(--logo-lift)) + (100% - var(--cta-bottom) - var(--cta-h))) / 2);
+        top: calc(((50% - var(--logo-lift) + var(--name-gap) + var(--name-h)) + (100% - var(--cta-bottom) - var(--cta-h))) / 2);
         transform: translate(-50%, -50%);
         display: flex; flex-direction: column; align-items: center; gap: 22px;
       }
-      #start-btn {
+      .pop-tap {
         position: relative; width: 141px; height: 141px;
         border: none; background: none; padding: 0; border-radius: 50%;
         cursor: pointer; display: flex; align-items: center; justify-content: center;
+        flex: 0 0 auto;
       }
-      #start-btn:focus-visible { outline: 3px solid #fff; outline-offset: 6px; }
+      .pop-tap:focus-visible { outline: 3px solid #fff; outline-offset: 6px; }
       #start-caption {
         color: #fff; font-family: 'DM Sans', sans-serif;
         font-size: 19px; font-weight: 700; letter-spacing: -0.01em;
@@ -132,13 +151,13 @@
       }
       @keyframes pop-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
       @keyframes pop-spinin  { from { transform: rotate(0); } to { transform: rotate(360deg); } }
-      #start-btn .pop-halo { animation: pop-swell 5s linear 1s infinite; }
-      #start-btn .h2 { animation-delay: 2s; }
-      #start-btn .h3 { animation-delay: 3s; }
-      #start-btn .h4 { animation-delay: 4s; }
-      #start-btn .h5 { animation-delay: 5s; }
-      #start-btn .pop-disc { animation: pop-breathe 2.6s ease-in-out 1s infinite; }
-      #start-btn .pop-mark { animation: pop-spinin 1.05s cubic-bezier(.45,.05,.2,1) both; }
+      .pop-tap .pop-halo { animation: pop-swell 5s linear 1s infinite; }
+      .pop-tap .h2 { animation-delay: 2s; }
+      .pop-tap .h3 { animation-delay: 3s; }
+      .pop-tap .h4 { animation-delay: 4s; }
+      .pop-tap .h5 { animation-delay: 5s; }
+      .pop-tap .pop-disc { animation: pop-breathe 2.6s ease-in-out 1s infinite; }
+      .pop-tap .pop-mark { animation: pop-spinin 1.05s cubic-bezier(.45,.05,.2,1) both; }
 
       /* One mark, two places: the start disc and the scanner overlay. */
       .pop-mark {
@@ -236,15 +255,20 @@
         width: 100%; max-width: 240px;
         display: flex; flex-direction: column; align-items: center; gap: 14px;
       }
-      #wl-cover .wl-scan-btn {
-        width: 100%; padding: 16px 20px;
-        border: none; border-radius: 999px;
-        background: #1a1a1a; color: white;
-        font-family: 'DM Sans', sans-serif;
-        font-weight: 700; font-size: 19px;
-        cursor: pointer;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.25);
-        margin-bottom: 40px;
+      /* The tap target is .pop-tap, the same disc and animation the default
+         scan screen uses — a custom cover is still a Popcode, and the mark is
+         how someone learns what to point their phone at. */
+      /* The disc is ~125px taller than the pill it replaced, and the cover's
+         title block is absolutely positioned and can be two lines of 112px, so
+         the room below is what keeps the two apart. */
+      #wl-cover .wl-scan-wrap {
+        display: flex; flex-direction: column; align-items: center; gap: 14px;
+        margin-bottom: 20px;
+      }
+      #wl-cover .wl-scan-caption {
+        color: #fff; font-family: 'DM Sans', sans-serif;
+        font-size: 19px; font-weight: 700; letter-spacing: -0.01em;
+        text-shadow: 0 2px 14px rgba(0,0,0,0.34);
       }
       #wl-cover .wl-code-block { width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 10px; margin-bottom: 40px; }
       #wl-cover .wl-code-label {
@@ -273,7 +297,7 @@
         box-shadow: 0 8px 32px rgba(0,0,0,0.25);
       }
       #wl-cover[data-cta-mode="tap"] .wl-code-block { display: none; }
-      #wl-cover[data-cta-mode="code"] .wl-scan-btn { display: none; }
+      #wl-cover[data-cta-mode="code"] .wl-scan-wrap { display: none; }
       #wl-cover .wl-create-btn {
         position: relative; bottom: 30px;
         width: auto; padding: 16px 28px;
@@ -336,11 +360,11 @@
       #scan-mark.found { animation: pop-bloom 0.36s cubic-bezier(.35,0,.7,1) 0.52s forwards; }
 
       @media (prefers-reduced-motion: reduce) {
-        #start-btn .pop-halo, #start-btn .pop-disc, #start-btn .pop-mark,
+        .pop-tap .pop-halo, .pop-tap .pop-disc, .pop-tap .pop-mark,
         #scan-mark, #scan-mark .p {
           animation: none !important; opacity: 1 !important; transform: none !important;
         }
-        #start-btn .pop-halo { opacity: 0 !important; }
+        .pop-tap .pop-halo { opacity: 0 !important; }
       }
 
       #fullscreen-video { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 9000; background: black; }
@@ -534,8 +558,9 @@
     </div>
     <div id="start-screen">
       <img class="splash-logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
+      <div id="start-name"></div>
       <div id="start-tap">
-        <button id="start-btn" aria-label="Tap to scan">
+        <button id="start-btn" class="pop-tap" aria-label="Tap to scan">
           <span class="pop-halo h1"></span><span class="pop-halo h2"></span><span class="pop-halo h3"></span><span class="pop-halo h4"></span><span class="pop-halo h5"></span>
           <span class="pop-disc"></span>
           <svg class="pop-mark" viewBox="0 0 302 302" aria-hidden="true">
@@ -569,7 +594,10 @@
           <div class="wl-subtitle"></div>
         </div>
         <div class="wl-cta">
-          <button class="wl-scan-btn" id="wl-scan-btn">Scan image</button>
+          <div class="wl-scan-wrap">
+            <button class="wl-scan-btn pop-tap" id="wl-scan-btn" aria-label="Scan image"></button>
+            <div class="wl-scan-caption">Scan image</div>
+          </div>
           <div class="wl-code-block">
             <div class="wl-code-label">Have a code? Enter it here.</div>
             <form class="wl-code-row" id="wl-code-form">
@@ -856,6 +884,7 @@
 
         mindUrl = col.mind_file_url;
         applyCoverConfig(col.cover_config);
+        setStartName(col.name);
         (col.items || []).forEach(item => {
           mediaMap[item.target_index] = {
             type: item.media_type === 'audio' ? 'audio' : 'video',
@@ -878,7 +907,11 @@
         logEvent('scan_open');
 
         document.getElementById('start-btn').addEventListener('click', handleStartTap);
-        document.getElementById('wl-scan-btn').addEventListener('click', handleStartTap);
+        // The custom cover's tap target is the default one's, cloned: halos, disc
+        // and mark all come across, so the two can never drift apart.
+        const wlBtn = document.getElementById('wl-scan-btn');
+        wlBtn.innerHTML = document.getElementById('start-btn').innerHTML;
+        wlBtn.addEventListener('click', handleStartTap);
       }
 
       function handleStartTap() {
@@ -1009,6 +1042,28 @@
         const dark = cfg.bg_darkness !== undefined && cfg.bg_darkness !== null && cfg.bg_darkness !== '' ? Number(cfg.bg_darkness) : 1;
         overlay.style.setProperty('--bg-d', isFinite(dark) ? dark : 1);
       }
+      // The Popcode's name, between the wordmark and the tap target, so a viewer
+      // knows what they're about to point their phone at. The layout centres the
+      // tap target against the name's bottom edge, and a long name wraps, so the
+      // height is measured rather than assumed.
+      function setStartName(name) {
+        const screen = document.getElementById('start-screen');
+        const el = document.getElementById('start-name');
+        const text = (name || '').trim();
+        el.textContent = text;
+        screen.classList.toggle('has-name', !!text);
+        if (!text) { screen.style.removeProperty('--name-h'); return; }
+        const measure = () => screen.style.setProperty('--name-h', el.offsetHeight + 'px');
+        // offsetHeight needs the element laid out, which it is once the class is on.
+        requestAnimationFrame(measure);
+        // CooperBT is a base64 @font-face, so the first measurement can land on
+        // the fallback's metrics and a name that really wraps to three lines is
+        // measured at two. Re-measure whenever the box actually changes: the
+        // font arriving, a rotation, a resize.
+        if (window.ResizeObserver) new ResizeObserver(measure).observe(el);
+        else if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
+      }
+
       function showStartScreen() {
         if (coverConfig) {
           document.getElementById('start-screen').style.display = 'none';

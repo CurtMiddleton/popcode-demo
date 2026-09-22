@@ -41,6 +41,10 @@
       // is scan.html, which still has a bare button.
       '.popcode-desktop #start-tap,' +
       '.popcode-desktop #start-btn,' +
+      // .wl-scan-wrap is view.html's disc + caption group; the bare button is
+      // scan.html, which still has the older markup. Both, so retargeting one
+      // can't leave the other's control showing next to this note.
+      '.popcode-desktop #wl-cover .wl-scan-wrap,' +
       '.popcode-desktop #wl-cover .wl-scan-btn { display: none !important; }' +
       // The splash logo is absolutely positioned against the vertical centre,
       // which is fine above a small disc but puts it straight behind this
@@ -48,6 +52,12 @@
       // the mark rather than on top of it.
       '.popcode-desktop #start-screen img.splash-logo {' +
       '  position: static; margin: 0 0 30px; }' +
+      // The Popcode's name hangs off the vertical centre too, so it would sit
+      // on top of the panel. Back in flow, under the wordmark, where it reads
+      // as what this link is.
+      '.popcode-desktop #start-screen #start-name {' +
+      '  position: static; transform: none; margin: 0 0 24px; }' +
+      '.popcode-desktop #start-screen.has-name img.splash-logo { margin-bottom: 16px; }' +
       // The cover's CTA column is sized for a single pill button; the note
       // needs room to set its lines without wrapping into a tower.
       '.popcode-desktop #wl-cover .wl-cta { max-width: 330px; }' +
