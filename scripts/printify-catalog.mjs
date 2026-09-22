@@ -33,12 +33,22 @@ if (!TOKEN) {
   process.exit(2);
 }
 
-async function get(path) {
-  const r = await fetch(BASE + path, { headers: { Authorization: `Bearer ${TOKEN}` } });
-  const text = await r.text();
-  let json = null; try { json = JSON.parse(text); } catch (_) {}
-  if (!r.ok) throw new Error(`${r.status} on ${path}: ${text.slice(0, 200)}`);
-  return json;
+// A just-created token can take a moment to propagate, and the catalog API
+// throttles rapid back-to-back calls — both surface as an intermittent 401/429
+// (an identical call can succeed on retry). So retry transient statuses with
+// backoff and space the calls out a little.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function get(path, tries = 5) {
+  let last = '';
+  for (let i = 0; i < tries; i++) {
+    const r = await fetch(BASE + path, { headers: { Authorization: `Bearer ${TOKEN}` } });
+    const text = await r.text();
+    if (r.ok) { try { return JSON.parse(text); } catch (_) { return null; } }
+    last = `${r.status} on ${path}: ${text.slice(0, 160)}`;
+    if (![401, 403, 429, 500, 502, 503, 504].includes(r.status)) break;
+    await sleep(900 * (i + 1));
+  }
+  throw new Error(last);
 }
 
 // US-fulfilled providers keep shipping domestic (like the board book's District
