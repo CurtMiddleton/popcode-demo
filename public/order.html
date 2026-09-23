@@ -140,6 +140,15 @@
       .summary-bar .s-title { font-size:17px; font-weight:600; }
       .summary-bar .s-sub { color:#777; font-size:13px; margin-top:2px; }
       .photo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:14px; margin-top:12px; }
+      /* The cards already carry their own padding and shadow, so the column just
+         stacks them; the first needs no extra top margin under the grid gap. */
+      .photo-right { display:flex; flex-direction:column; gap:6px; }
+      .photo-right .linkback { align-self:flex-start; margin:0 0 2px; }
+      /* Serif, like the product name it replaces — this is the step's title, and
+         the rows below carry their own cards, so there is no outer card. */
+      .step-head { font-family:'CooperBT', Georgia, serif; font-size:34px; font-weight:400;
+        color:#1a1a1a; margin:0 0 14px; line-height:1.15; }
+      @media (max-width: 860px) { .step-head { font-size:28px; } }
       .pop-row { display:flex; align-items:center; gap:14px; width:100%; text-align:left; cursor:pointer;
         background:#fff; border:1px solid #e4e2dd; border-radius:16px; padding:12px 14px; margin-top:10px;
         font-family:'Inter',sans-serif; }
@@ -149,18 +158,12 @@
       .pop-row .pr-name { display:block; font-size:15px; font-weight:700; color:#1a1a1a;
         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
       .pop-row .pr-meta { display:block; font-size:13px; color:#8a857d; margin-top:2px; }
-      .pop-row.new { border-style:dashed; color:#8a857d; justify-content:center; font-weight:700; font-size:15px;
-        text-decoration:none; }
-      .pick { display:flex; align-items:center; gap:14px; width:100%; text-align:left; cursor:pointer;
-        background:#fff; border:1px solid #e4e2dd; border-radius:16px; padding:18px; margin-top:12px;
+
+      /* The explanation sits under its button rather than inside it, so each choice
+         reads as an action first. */
+      .pick-note { font-size:13px; color:#8a857d; margin:8px 0 20px; text-align:center;
         font-family:'Inter',sans-serif; }
-      .pick:hover { border-color:#c9c6bf; background:#fcfcfc; }
-      .pick[disabled] { opacity:.5; cursor:default; }
-      .pick-text { flex:1; min-width:0; }
-      .pick-title { display:block; font-size:16px; font-weight:700; color:#1a1a1a; }
-      .pick-sub { display:block; font-size:13px; color:#8a857d; margin-top:3px; }
       .pick-arrow { font-size:18px; color:#b5b1a9; flex-shrink:0; }
-      #photo-tray .linkback { margin-bottom:10px; }
       .photo-cell { position:relative; border:3px solid transparent; border-radius:12px; overflow:hidden; cursor:pointer; aspect-ratio:1; background:#efefef; }
       .photo-cell.selected { border-color:#7657FC; }
       .photo-cell canvas, .photo-cell img { width:100%; height:100%; object-fit:cover; display:block; }
@@ -340,35 +343,37 @@
            thumbnail, so someone making their first Popcode used to wait through
            megabytes of photos they had no use for. -->
       <div id="step-photo" style="display:none;">
-        <button class="linkback" id="photo-back">&larr; Back to product</button>
-        <div class="card" id="photo-choice">
-          <h2>Add your photo</h2>
-          <p class="muted">A Popcode is a photo plus the video or audio it plays when someone scans it.</p>
-          <button type="button" class="pick" id="pick-new">
-            <span class="pick-text"><span class="pick-title">Create a new Popcode</span>
-              <span class="pick-sub">Add a photo and the video or audio it plays</span></span>
-            <span class="pick-arrow">&rarr;</span>
-          </button>
-          <button type="button" class="pick" id="pick-existing">
-            <span class="pick-text"><span class="pick-title">Use one I&rsquo;ve already made</span>
-              <span class="pick-sub" id="pick-existing-sub">Choose from your Popcodes</span></span>
-            <span class="pick-arrow">&rarr;</span>
-          </button>
+
+        <!-- Same grid as the detail and review steps. Choosing a photo used to go
+             full width, so the product you were buying disappeared for the whole
+             step — the one point in the flow where it is easiest to lose your
+             place, since the next tap can leave the page entirely. -->
+        <div class="detail">
+          <div class="detail-left">
+            <div class="detail-preview"><div class="detail-stage"><canvas id="photo-canvas" width="400" height="400"></canvas></div></div>
+          </div>
+          <div class="photo-right">
+            <!-- One back and one heading for the whole step: they retitle as the
+                 panes change, so there is always a way back exactly one screen. -->
+            <button class="linkback" id="photo-step-back">&larr; Back</button>
+            <h2 class="step-head" id="photo-step-title">Add a Popcode</h2>
+        <div id="photo-choice">
+          <button type="button" class="btn btn-lg btn-block btn-primary" id="pick-new">Create a new Popcode</button>
+          <p class="pick-note">Add a photo and the video or audio it plays</p>
+          <button type="button" class="btn btn-lg btn-block btn-secondary" id="pick-existing">Use one I&rsquo;ve already made</button>
+          <p class="pick-note" id="pick-existing-sub">Choose from your Popcodes</p>
         </div>
         <!-- Your Popcodes, then the photos inside one. A flat grid of every photo
              you own gave no clue where one Popcode ended and the next began, and
              it loaded all of them at once. -->
-        <div class="card" id="photo-tray" style="display:none;">
-          <button class="linkback" id="tray-back">&larr; Back</button>
-          <h2>Your Popcodes</h2>
-          <p class="muted">Newest first. Pick one, then choose a photo from it.</p>
+        <div id="photo-tray" style="display:none;">
           <div id="tray-list"></div>
         </div>
-        <div class="card" id="photo-photos" style="display:none;">
-          <button class="linkback" id="photos-back">&larr; All Popcodes</button>
-          <h2 id="photos-title">Choose a photo</h2>
+        <div id="photo-photos" style="display:none;">
           <div class="photo-grid" id="tray-grid"></div>
         </div>
+          </div><!-- /.photo-right -->
+        </div><!-- /.detail -->
       </div>
 
       <!-- Step: checkout -->
@@ -1347,11 +1352,21 @@
         document.getElementById('loading').style.display = 'none';
       }
 
+      const SHOP_SUBTITLE = document.getElementById('project-name').textContent;
       function showStep(step) {
         state.step = step;
         document.getElementById('step-category').style.display = step === 'category' ? 'block' : 'none';
         document.getElementById('step-detail').style.display   = step === 'detail'   ? 'block' : 'none';
         document.getElementById('step-photo').style.display    = step === 'photo'    ? 'block' : 'none';
+        /* On the photo step the page belongs to the product, matching the create
+           page this step can hand off to — otherwise the three screens in that
+           sequence each announce themselves differently. */
+        const meta = CATEGORY_META[state.productType] || {};
+        const inPhoto = step === 'photo';
+        document.querySelector('h1').textContent = inPhoto ? (meta.name || 'Shop') : 'Shop';
+        document.getElementById('project-name').textContent = inPhoto
+          ? 'Add the photo you\u2019ll print and the video or audio it plays when someone scans it.'
+          : SHOP_SUBTITLE;
         document.getElementById('step-review').style.display   = step === 'review'   ? 'block' : 'none';
         document.getElementById('step-create').style.display   = step === 'create'   ? 'block' : 'none';
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2407,11 +2422,22 @@
         const straightToTray = (opts && opts.tray) || (state.selectedPhoto && photos.length);
         if (straightToTray) showTray(); else showPhotoChoice();
         showStep('photo');
+        // Same product, same frame as the create page this step can lead to.
+        renderProductPreview(document.getElementById('photo-canvas'), currentAspect());
+      }
+      /* One heading and one back for the whole step. `back` is always exactly one
+         screen, so the sequence product -> choose -> list -> photos can be walked
+         in either direction without the product ever leaving the page. */
+      let photoStepBack = () => showStep('detail');
+      function setPhotoStep(title, back) {
+        document.getElementById('photo-step-title').textContent = title;
+        photoStepBack = back;
       }
       function showPhotoChoice() {
         document.getElementById('photo-choice').style.display = '';
         document.getElementById('photo-tray').style.display = 'none';
         document.getElementById('photo-photos').style.display = 'none';
+        setPhotoStep('Add a Popcode', () => showStep('detail'));
         // Nothing to choose from yet: say so rather than offering a dead option.
         const btn = document.getElementById('pick-existing');
         const none = !photos.length;
@@ -2426,6 +2452,7 @@
         document.getElementById('photo-choice').style.display = 'none';
         document.getElementById('photo-photos').style.display = 'none';
         document.getElementById('photo-tray').style.display = '';
+        setPhotoStep('Use a past Popcode', showPhotoChoice);
         renderTray();
       }
       /* A tile used to be a <canvas> with the badge composited in, which meant
@@ -2456,7 +2483,9 @@
         list.innerHTML = '';
         const mk = document.createElement('button');
         mk.type = 'button';
-        mk.className = 'pop-row new';
+        // A real button, not a dashed row — greyed dashes read as disabled.
+        mk.className = 'btn btn-lg btn-block btn-secondary';
+        mk.style.marginBottom = '4px';
         mk.textContent = '+ Create a new Popcode';
         mk.addEventListener('click', goCreateNewPopcode);
         list.appendChild(mk);
@@ -2485,7 +2514,7 @@
       function showProjectPhotos(collectionId) {
         const proj = trayProjects().find(p => p.id === collectionId);
         if (!proj) return;
-        document.getElementById('photos-title').textContent = proj.name;
+        setPhotoStep(proj.name, showTray);
         const grid = document.getElementById('tray-grid');
         grid.innerHTML = '';
         proj.items.forEach(p => {
@@ -2502,9 +2531,7 @@
         document.getElementById('photo-tray').style.display = 'none';
         document.getElementById('photo-photos').style.display = '';
       }
-      document.getElementById('photo-back').addEventListener('click', () => showStep('detail'));
-      document.getElementById('tray-back').addEventListener('click', showPhotoChoice);
-      document.getElementById('photos-back').addEventListener('click', showTray);
+      document.getElementById('photo-step-back').addEventListener('click', () => photoStepBack());
       document.getElementById('pick-existing').addEventListener('click', showTray);
       /* Hand the product across to create.html so it can keep showing what you're
          making instead of dropping you on a bare form. The rendered preview is
