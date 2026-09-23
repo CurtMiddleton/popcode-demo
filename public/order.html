@@ -1160,8 +1160,15 @@
           const cm = /^(.+)-(white|natural)$/.exec(savedVid || '');
           if (cm && variantOf(pc.productType, cm[1])) { savedVid = cm[1]; savedColor = cm[2]; }
           if (!CATEGORIES.includes(pc.productType) || !variantOf(pc.productType, savedVid)) return false;
-          // Order against the saved design's own collection (owned by the user).
-          state.selectedPhoto = { url: pc.photoUrl, slug, collectionId: col.id, target_index: 0, name: '' };
+          // Order against the SOURCE photo's project, never the design's own row.
+          // The companion card prints popcode.app/{slug} of whichever collection the
+          // order names, and a design row is saved with mind_file_url '' — so naming
+          // it would print a link that answers "Experience not found". Same reason
+          // loadCartItem re-finds the source below.
+          const src = photos.find(p => p.slug === pc.sourceSlug
+            && String(p.target_index) === String(pc.sourceTargetIndex));
+          state.selectedPhoto = src
+            || { url: pc.photoUrl, slug: '', collectionId: col.id, target_index: 0, name: '' };
           openCategory(pc.productType);
           state.variantId = savedVid;
           state.frameColor = savedColor;
@@ -1218,9 +1225,15 @@
       async function loadUserPhotos() {
         try {
           const { data: cols } = await db.from('collections')
-            .select('id, slug, name, kind').eq('user_id', currentUser.id)
+            .select('id, slug, name, kind, mind_file_url').eq('user_id', currentUser.id)
             .order('created_at', { ascending: false });
-          const src = (cols || []).filter(c => !['book', 'print', 'tile', 'canvas', 'framed', 'framedcanvas', 'acrylic', 'calendar'].includes(c.kind));
+          // A tray photo is a real Popcode target, so the project must be SCANNABLE.
+          // Naming kinds alone drifts — every product added to the shop since has to
+          // be remembered here — and a saved design that slips through would be
+          // offered as a source photo and print a companion card pointing at a row
+          // with no .mind. mind_file_url is the property that actually matters.
+          const src = (cols || []).filter(c => c.mind_file_url
+            && !['book', 'print', 'tile', 'canvas', 'framed', 'framedcanvas', 'acrylic', 'calendar'].includes(c.kind));
           photos = [];
           if (src.length) {
             const ids = src.map(c => c.id);

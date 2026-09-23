@@ -118,7 +118,7 @@ export default async function handler(req, res) {
     const collectionIds = [...new Set(lines.map((l) => l.collectionId).filter(Boolean))];
     if (!collectionIds.length) return res.status(400).json({ error: 'Nothing to order' });
     const { data: collections, error: colErr } = await admin
-      .from('collections').select('id, user_id, name, slug').in('id', collectionIds);
+      .from('collections').select('id, user_id, name, slug, mind_file_url').in('id', collectionIds);
     if (colErr) throw colErr;
     const byId = new Map((collections || []).map((c) => [c.id, c]));
     for (const id of collectionIds) {
@@ -147,7 +147,12 @@ export default async function handler(req, res) {
     let postcardUrl = null;
     if (COMPANION_INSERT.enabled) {
       const cardFor = companionInsertCollectionId(lines);
-      const slug = cardFor && byId.get(cardFor)?.slug;
+      const col = cardFor && byId.get(cardFor);
+      /* Only a SCANNABLE collection earns a card. A saved print design is a
+         collections row with mind_file_url '' — printing its slug would put
+         "Experience not found" on a physical card. Better no card than a dead
+         one, and the dashboard's generic set still ships. */
+      const slug = col && col.mind_file_url ? col.slug : null;
       if (slug) {
         // The client uploads this best-effort, so it can legitimately be missing.
         const url = PUBLIC_ASSET_PREFIX + companionInsertPath(slug);
