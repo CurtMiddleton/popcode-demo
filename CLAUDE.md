@@ -2582,3 +2582,124 @@ Ruled out while in there: printing the URL on a product's reverse. `GLOBAL-FAP-5
 - **Per-parcel insert cost vs the cheap end of the catalogue** — a 5×7 nets ~$1.50 on one parcel and loses money on two. Worth a look once a few real orders exist.
 - **ST-120 resale certificate for Prodigi** — they charge us sales tax our quote never sees ($6.13 on this order).
 - Unchanged from earlier: `analytics.html` still gated to `curtmid@gmail.com` only (five sessions); re-enable Vercel Deployment Protection on previews (six sessions); shipping options as cards with prices and delivery estimates is still the biggest Popsa gap.
+
+### 2026-09-22 → 09-23 — Four new Prodigi product lines: mugs LIVE, magnets/stickers/ornaments built and held back
+
+**Branch `claude/determined-planck-fqj14e`, merged to `main` in five fast-forwards: `c81e2e6` → `be73ac5`.** All live in prod. No PRs, no migrations, no env changes. Task was "add magnets, kiss-cut stickers, Christmas, coloured photo mugs — and see if we can print the address on the mugs (sideways around the handle?) and the back of ornaments."
+
+Short version: **all four are built and correct; only mugs are on the shop.** The other three have no US print lab at Prodigi and quoted $33.18 of transatlantic postage on $3.21 of stickers, which is not a product. Mugs moved to a different SKU and are now the best margin in the shop.
+
+#### The two questions the task asked
+
+**Mugs — the URL CAN go on, and then we took it off.** A mug has ONE wrap-around print area (228.6 × 94.83 mm, aspect 2.41, stated exactly by the API), so there is no back and the only place for an address is inside the artwork. Built it: `popcode.app/{slug}` set vertically at the trailing edge, which is the panel beside the handle. Then removed it at the user's call — the companion card carries the URL like it does for a print or canvas, and a line of type up a photograph was not worth the picture. `drawWrapUrl` is deleted, not left unreachable.
+
+**Ornaments — NO, and this is settled, not open.** Prodigi's own product pages state **"Single-sided print"** for the aluminium, ceramic and glass ornaments. The plastic bauble says "double-sided", but its description explains what that means: *"your design showcased on both sides for a 360-degree display"* — ONE artwork shown twice on a card insert, not a second print area you can put something different on. Don't re-litigate this without checking `printAreas` on the SKU.
+
+#### THE FINDING THAT SHAPED EVERYTHING: these categories are UK-only at Prodigi
+
+Verified from Prodigi's own product pages, then confirmed by live quotes. Magnets UK. Kiss-cut stickers UK/EU. All Christmas UK. Coloured mugs UK/SE. **No US lab, and no `GLOBAL-*` SKU for any of them** (the kiss-cut page advertises a `GLOBAL-STI` prefix but its fulfilment is still UK/EU).
+
+Live price list to a US address, 3 copies, 2026-09-22 — **Budget and Standard are identical, there is one international rate**:
+
+| | goods | shipping | customer pays |
+|---|---|---|---|
+| 3 × 3×4" stickers | $3.21 | $33.18 | **$44** |
+| 3 × 4" magnets | $15.99 | $33.18 | **$73** |
+| 3 × ceramic ornaments | $31.98 | $25.65 | **$81** |
+| **9 of 16 SKUs** | — | **no US route at all** | — |
+
+Margin was never the problem — every priced row cleared its inserts on a SINGLE copy. $33 of the price is postage passed through at cost, which no markup touches. And it compounds: a print plus a magnet is two parcels on two continents, so two shipping charges AND two sets of branded inserts (~$3.75 each, billed per shipment, in no quote).
+
+#### MUGS ARE SOLVED — `GLOBAL-MUG-W`
+
+Prodigi's `GLOBAL-*` products route to the lab nearest the customer, exactly like the `GLOBAL-FAP` prints. Switching the coloured 11oz mug (`H-MUG-11OZ-*`, UK-only, zero US shipping options) for the white one changed everything:
+
+| | goods | shipping | customer | net after inserts |
+|---|---|---|---|---|
+| **11oz white mug** | $10.00 | **$6.45** | **$26** | **$5.80** |
+| 5×7 print (for scale) | $6.00 | $10.75 | $22 | ~$1.50 |
+| UK coloured mug | — | no US route | — | — |
+
+**Roughly four times the net of a small print.** Trade-off: white only, no coloured handle. The five coloured SKUs stay in the catalogue as `hidden: true` — verified, resolvable so a saved design still works, ready if Popcode ever sells into the UK/EU.
+
+#### What's live, what's held back, how to flip it
+
+- **Live:** `mug` (GLOBAL-MUG-W).
+- **Built, priced, NOT listed:** `magnet`, `sticker`, `ornament`. Everything about them works. To offer one: remove its name from `NO_US_FULFILMENT` in `order.html` AND drop its `ukOnly: true` in `shop.html`'s PRODUCTS. Two places, one line each.
+- **The real fix for that category is a US provider.** `PRODUCT_PROVIDER`/`providerFor` exists for exactly this, and Printify already fulfils the board book from District Photo in the US. Only SKUs and aspects change — none of the handling below is Prodigi-specific. A parallel session has already started `scripts/printify-catalog.mjs` (a Printify catalogue inspector for ornament blueprints), which is the right next step.
+
+#### SKU verification — all 16 resolved, and it corrected three things
+
+`PRODIGI_API_KEY=… node scripts/verify-prodigi-sku.mjs <SKU>...` against the LIVE catalogue. Every one resolved with exactly ONE required `default` print area, so the single asset this app builds is right for all of them and none can hit MissingRequiredAssets.
+
+What it caught, all in the stickers:
+- **Aspect was wrong.** I'd used the die-cut print area (66.9×95.3mm, 0.70). It should be the SHEET — Prodigi's accepted pixel sizes for the 3×4" run 360×480 to 900×1200, both exactly **3:4**. The die takes the sticker out of the middle.
+- **Two of four max pixel sizes were guesses and wrong** — 8.5" is 2550 square not 2475, 14" is 4200 not 4125.
+- **Those caps were stored and never enforced.** A phone photo cropped square is ~3000px, which busts the 5.5" and 8.5" ceilings on ordinary input. The builder now scales down to fit, and the badge clears the 2.5mm (30px) the die trims.
+
+**Attributes are single-valued on these SKUs** (mugs: color + size; aluminium ornaments: style), meaning the SKU already fixes them — unlike the classic frames whose `color` comes back as a pipe-separated list of eight and must be chosen. So `attributes: {}` is correct here; sending a field Prodigi doesn't expect is its own rejection.
+
+**Only single-image magnets are offered.** `MAG-4-*` and `MAG-9-*` are collage magnets declaring 4 and 9 required print areas against our one asset.
+
+#### Pack sizes (`minCopies`) — built, and the data said they weren't needed
+
+Asked whether to require a minimum of three per order. Recommended **per-product pack sizes, not a per-order rule** (a per-order minimum would block someone buying one framed print, which works fine today), implemented so the quantity box starts at the pack size and can't go below — the customer never meets a rejection. Server clamps to the same number via `catalog.normalizeCopies`, used by the quote, cart and checkout paths.
+
+Then the real prices came in and **every row showed `min qty ✓ 1`** — each product covers its own inserts on a single copy. The pack-of-3 was a guess made before there were numbers. Mugs sell singly; the machinery stays on the three hidden products where it'd be right if they're ever sold from the UK.
+
+#### THE MUG MOCKUP — a reusable technique worth knowing about
+
+The drawn canvas mug was poor and the detail page showed a flat panorama with no mug in it. Both fixed with a new kind of template.
+
+**`cutout` templates.** Every existing mockup in `MOCKUPS`/`CARD_MOCKUPS` is an opaque product photo that takes the art ON TOP, clipped to a rectangle. A mug's print area is a cylinder that arcs at top and bottom, and no rectangle describes that. A cutout template is the product photograph with its printed area **erased to transparency**: the art goes UNDERNEATH and the template's own pixels mask it, so the curve comes free. `cylinder: true` shades the art as a curved surface. Both renderers (`renderProductMockup` in order.html, `drawProductCardMockup` in unsplash-samples.js) understand the flag.
+
+**How `public/assets/mockups/mug.png` was made** (repeatable for any product photo):
+1. Started from a Prodigi product shot the user supplied — a mug with third-party pop-art on it. Removing the design pixel by pixel is also what makes the asset safe to ship: no third-party artwork survives, and **it means you don't need a blank product photo**.
+2. Detect design pixels as `saturation > 22 OR sum(rgb) < 120`. Saturation alone misses the comic's BLACK outlines; "darker than white" alone sweeps in the mug's own neutral grey base shading (sum 474–717) and flattens the bottom arc.
+3. Take topmost/bottommost design pixel **per COLUMN, not per row**. Row-wise min..max correctly fills interior white patches (a collar, a sleeve) but at the top the design exists only at the far left and right — the rim dips lowest in the middle — so it bridges straight across and cuts the rim off.
+4. **Fit a quartic** to the top and bottom boundaries by least squares, robustly (drop outliers, refit). Per-column integers step 1–2px, which on a curve against white reads as a torn edge. A few columns near the handle sit wildly off (one reported its base 370px high) and drag the curve if not dropped. Residuals: 0.62px rms rim, 1.21px base.
+5. **Anti-alias**: coverage = the fraction of each pixel inside the fitted curves. A binary mask on a curve is what looks torn.
+6. Grow the hole outward past the design, then despeckle: anything still coloured inside the print region can only be the design, since mug, handle and background are all neutral.
+
+Final: 881×900, ~101KB, rect `{ x: 0.1850, y: 0.1767, w: 0.5596, h: 0.6778 }`, arcs 42px top / 39px bottom, max sub-pixel step between columns 0.78px.
+
+#### Fit vs Fill on a wrap, and where the picture belongs
+
+**Mugs default to `fit`, not `fill`** (`defaultAdjustFor(type)`; prints keep fill). A 2.41-wide band is far wider than any ordinary photo, so Fill crops away most of it — a test elephant came out as a pair of legs — and a customer who never opens Adjust photo would order that unknowingly.
+
+**That change needed a white ground first.** `compositeBadgedImage` draws onto a fresh, transparent canvas and Fit deliberately leaves the sides uncovered; exported as JPEG that transparency becomes **BLACK**. Switching the default alone would have printed two black bands either side of the picture on a white mug. There is now an explicit white fill before the photo in both the full-res and preview paths.
+
+**Where the picture sits: centred, which on a mug means opposite the handle.** The band is 229mm of a ~258mm circumference, so the ~29mm gap is the handle and the band's two ends finish either side of it. The MIDDLE of the band therefore sits directly opposite the handle — the one spot that faces outward whichever hand holds the mug and that the handle never splits. "Away from the drinker" isn't available as a choice: a right-hander and a left-hander present opposite faces. Fit gives this for free — photo centred (~23% margin each end), unprinted ceramic falling either side of the handle, which is how a commercial photo mug looks. Same reasoning puts the **badge at the foot of the MIDDLE of the band**, not a corner: a wrap has no corner anyone sees.
+
+#### Bugs found and fixed along the way
+
+- **SkuNotFound read as "we can't ship there".** Prodigi answers an unknown SKU with 404, which sat in `UNSERVABLE_STATUSES` — so a typo in this catalogue would have told every customer we don't ship to their country and raised nothing in Sentry. Now classified separately (`err.skuNotFound`, `err.noRetry`), named in the message, and both retry loops honour `noRetry`.
+- **Round products lose their badge.** A bauble or ceramic ornament is die-cut from a square asset, so the bottom-right corner — where the badge has always gone — is exactly what's thrown away. Measured: 776px from centre on a 600px radius. `round: true` moves it inside the inscribed circle (540px).
+- **Detail preview rotated the mug 90°.** That branch exists because a portrait 8×10 frame turned on its side IS a 10×8; a mug's 2.41 wrap made it stand the mug on its handle. Cutout templates never rotate.
+- **Adjust photo had no effect on a mug.** I routed the mug preview through `renderProductMockup` and never passed it `adjust`. Worse: `buildPrintAsset` DOES pass it, so the mug would have printed with the customer's crop while the screen showed something else. Detail, review and Edit Photo's save now share one `renderProductPreview`.
+- **The detail copy described the product I'd removed** — "nine-colour handle", "made and posted from the UK" — live in prod for about an hour after the SKU switch.
+
+#### METHOD LESSONS (four eye-checks, four wrong)
+
+Worth internalising: **for "is this the right shape", instrument the geometry — never inspect the picture.** Same rule as the 8×8 square-crop bug in August. Four failures this session, each caught by choosing a measurement that isolates the thing in question:
+
+- **Flat base arc.** Called two renders correct by eye. Measuring the lowest printed row at five positions across the base settled it: 0px of curve before, 31px after.
+- **Flat top arc.** Measuring the topmost SATURATED pixel of a composited render gave 91px and non-monotone — it was finding the photo's own pale sky, not the mask. **Compositing a flat magenta rectangle** isolates geometry from content and gives a clean curve.
+- **"7px sawtooth"** after anti-aliasing — that was a hard colour threshold flipping across a soft edge. A **sub-pixel centroid** of the colour transition gave the truth: 0.78px max, 0.13px mean.
+- **A deploy reported live that wasn't.** My poll compared `shop.html`, which that commit never touched, so it matched instantly. **Poll on something that exists only in the new build** — a 404 → 200 on a new asset is unambiguous. Byte-compare with `cmp` against the local file.
+
+**Also: three defects in a row came from adding a SECOND rendering path instead of extending the one that existed** (flat panorama on detail, bare rectangle on review, ignored crop). Consolidating behind `renderProductPreview` should stop it recurring — watch for it when the next product type arrives.
+
+#### Smaller gotchas
+
+- **A 401 on every SKU is usually the KEY, not the host.** A copy-paste placeholder stayed glued to the front of the key (`your-key-here` + 36-char GUID = 49 chars) and `verify-prodigi-sku.mjs` confidently blamed the base URL sixteen times. Its 401 message now describes the key's SHAPE first — `starts "your"` would have ended it in one line. Recovery without re-pasting: `export PRODIGI_API_KEY=${PRODIGI_API_KEY#your-key-here}`.
+- A key visible in the user's own terminal is fine; the risk is pasting into chat. `read -rs VAR` avoids `~/.zsh_history`, but if the whole block is pasted at once `read` swallows the next line instead.
+- **No numpy in the sandbox; PIL installs via `pip install pillow`.** Least-squares fits were done with hand-rolled Gaussian elimination.
+- `mcp__claude-code-remote` has no Prodigi credentials — SKU verification and pricing must be run by the user on their Mac.
+
+#### STILL OPEN
+
+- **Order one mug.** The only way to judge the real thing, and the one question I can't answer from here.
+- **Parcel count on a mug-plus-print order.** Both `GLOBAL-*` and US-made, but Prodigi groups shipments by LAB — two labs means a second parcel and a second ~$3.75 of inserts. The cart's shipping breakdown shows it.
+- **Printify for magnets, stickers, ornaments** — blueprint selection plus a `send_to_production: false` test order, the way the board book went. `scripts/printify-catalog.mjs` is the start.
+- Unchanged from before: re-enable Vercel Deployment Protection on previews; `analytics.html` still gated to `curtmid@gmail.com` only; shipping options as cards with prices and estimates (biggest remaining Popsa gap).
