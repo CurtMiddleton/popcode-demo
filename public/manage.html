@@ -159,7 +159,11 @@
       .design-mat.book-mat { background: #ffffff; padding: 10px; }
       .design-mat .book-canvas { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; }
       .design-mat .design-photo { max-width: 100%; max-height: 100%; border-radius: 2px; box-shadow: 0 2px 8px rgba(0,0,0,0.16); }
-      .design-date { font-size: 13px; color: #a09a90; margin-top: 20px; font-family: 'Inter', sans-serif; }
+      /* One line, like .design-title: this carries "· plays <project>" and a long
+         project name would otherwise wrap and make that card taller than the ones
+         beside it. */
+      .design-date { font-size: 13px; color: #a09a90; margin-top: 20px; font-family: 'Inter', sans-serif;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
       /* ⋯ menu popover */
       .design-menu {
@@ -643,6 +647,10 @@
          field distinguishes them. Between the two, adding a product type to the
          shop can no longer strand its designs in the wrong tab. */
       const hasPrintDesign = (c) => !!(c && c.book_layout && c.book_layout.print);
+      // Does this row have a compiled .mind, i.e. is it an experience in its own
+      // right? A book or calendar does; a saved print design is a config row
+      // stored with mind_file_url '' and plays its SOURCE photo's project.
+      const isScannable = (c) => !!(c && c.mind_file_url && c.mind_file_url !== '');
       const isDesignKind = (c) => {
         const row = (c && typeof c === 'object') ? c : null;
         return PRODUCT_KINDS.includes(row ? row.kind : c) || hasPrintDesign(row);
@@ -729,7 +737,6 @@
         // Designs tab = every physical product. Popcodes tab = standalone AR
         // collections PLUS any product that's actually scannable (a popcoded
         // book/calendar has a compiled .mind, so it IS a Popcode too).
-        const isScannable = (c) => !!(c.mind_file_url && c.mind_file_url !== '');
         const list = allCollections.filter(c => isDesigns ? isDesignKind(c) : (!isDesignKind(c) || isScannable(c)));
         if (!list.length) { content.className = 'collections-list'; content.appendChild(buildEmptyState(activeTab)); return; }
         if (isDesigns) list.forEach(col => content.appendChild(buildDesignCard(col, photoMap[col.id] || null)));
@@ -957,7 +964,22 @@
            the small grey line. */
         const kindNoun = PRODUCT_NOUN[col.kind] || (kindLabel.split(' · ')[0] || 'Design');
         const kindDetail = kindLabel.includes(' · ') ? kindLabel.slice(kindLabel.indexOf(' · ') + 3) : '';
-        const viewUrl = `https://popcode.app/${col.slug}`;
+        /* The link that actually scans. A book, calendar or board book compiles
+           its own .mind, so its own slug IS the experience. A print design is a
+           config row saved with mind_file_url '' — it plays the SOURCE photo's
+           project, and its own slug answers "Experience not found". Sharing that
+           was the only link a saved design offered, so the experience behind a
+           printed mug had nowhere to be reached from here. */
+        const printCfg = col.book_layout && col.book_layout.print;
+        const source = printCfg && printCfg.sourceSlug
+          ? allCollections.find(c => c.slug === printCfg.sourceSlug) : null;
+        const scanSlug = isScannable(col) ? col.slug : (isScannable(source) ? source.slug : '');
+        const viewUrl = scanSlug ? `https://popcode.app/${scanSlug}` : '';
+        /* Named on the card so the experience can be found in My Popcodes. Only
+           when the design isn't its own experience — "plays Our Story" on the
+           book called Our Story says nothing. It shares the date's line rather
+           than adding one, so every card keeps the same height. */
+        const playsName = (!isScannable(col) && source) ? (source.name || source.slug) : '';
         // Books edit in the book builder, calendars in the calendar maker; print
         // designs reopen their saved config in order.html.
         const isCalendar = col.kind === 'calendar';
@@ -1008,13 +1030,16 @@
             </button>
           </div>
           <div class="design-mat${isBook ? ' book-mat' : ''}">${mat}</div>
-          <div class="design-date">${escapeHtml(relTime(col.created_at))}</div>
+          <div class="design-date">${escapeHtml(relTime(col.created_at))}${playsName ? ' &middot; plays ' + escapeHtml(playsName) : ''}</div>
           <div class="design-menu">
-            ${isBoardbook
+            ${viewUrl
               ? `<a class="dmenu-item" href="${viewUrl}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>Open viewer</a>`
+              : ''}
+            ${isBoardbook
+              ? ''
               : `<a class="dmenu-item" href="${orderHref}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>Order This ${escapeHtml(noun)}</a>
             <a class="dmenu-item" href="${editHref}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit This ${escapeHtml(noun)}</a>`}
-            <button class="dmenu-item dm-share"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>Share</button>
+            ${!viewUrl ? '' : `<button class="dmenu-item dm-share"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>Share</button>`}
             <div class="dmenu-sep"></div>
             <button class="dmenu-item danger dm-delete"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>Delete This ${escapeHtml(noun)}</button>
           </div>`;
@@ -1029,7 +1054,8 @@
         });
         // Tapping the product opens the editor.
         card.querySelector('.design-mat').addEventListener('click', () => { window.location.href = editHref; });
-        card.querySelector('.dm-share').addEventListener('click', (e) => { e.stopPropagation(); closeAllDesignMenus(); shareDesign(viewUrl, title); });
+        const shareBtn = card.querySelector('.dm-share');
+        if (shareBtn) shareBtn.addEventListener('click', (e) => { e.stopPropagation(); closeAllDesignMenus(); shareDesign(viewUrl, title); });
         card.querySelector('.dm-delete').addEventListener('click', (e) => {
           e.stopPropagation(); closeAllDesignMenus();
           confirmDelete(card, col.id, col.slug, title, dots);
