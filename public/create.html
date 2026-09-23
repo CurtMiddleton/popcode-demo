@@ -332,6 +332,24 @@
          next move is finishing the product you were making. */
       #continue-btn { display: none; width: 100%; box-sizing: border-box; background: #1a1a1a; color: white; border: none; border-radius: 24px; padding: 14px; font-size: 15px; cursor: pointer; font-weight: 700; text-decoration: none; text-align: center; margin-bottom: 10px; font-family: 'Inter', sans-serif; }
       #continue-btn:hover { opacity: 0.92; }
+      /* Breadcrumb back to the product, shown only in shop mode. An escape hatch
+         that doesn't create anything — otherwise the only way out of here is the
+         nav, which reads as abandoning the product you were making. */
+      /* Same width/gutter pattern as .page-top-bar and .subtitle so it lines up with
+         the heading instead of sitting flush to the viewport edge. It takes over the
+         header's 80px of top space, which the heading then gives up. */
+      #shop-back { display: none; width: 100%; max-width: 1040px; margin: 0 auto; box-sizing: border-box;
+        padding: 80px 28px 0; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 700;
+        color: #888; text-decoration: none; }
+      #shop-back:hover { color: #1a1a1a; }
+      body.from-shop #shop-back { display: block; }
+      body.from-shop .page-top-bar { padding-top: 14px; }
+      body.from-shop #add-page-btn { display: none; }
+      /* Both belong to the multi-page model. With one page and no way to add
+         another, the "1" numbers nothing — and removePage() has no last-page
+         guard, so deleting here would strand the form with nothing to create
+         and no button to bring a page back. */
+      body.from-shop .page-header { display: none; }
       #result.has-next #continue-btn { display: block; }
       #result.has-next #view-btn { background: transparent; color: #1a1a1a; border: 1px solid #e0e0e0; padding: 13px; }
       #share-btn { display: block; width: 100%; box-sizing: border-box; background: transparent; color: #1a1a1a; border: 1px solid #e0e0e0; border-radius: 24px; padding: 13px; font-size: 15px; cursor: pointer; font-weight: 700; font-family: 'Inter', sans-serif; }
@@ -399,6 +417,7 @@
       </div>
     </div>
 
+    <a id="shop-back" href="#">&larr; Back to your product</a>
     <div class="page-top-bar">
       <h1>New Popcode</h1>
     </div>
@@ -498,6 +517,28 @@
         if (u.origin !== location.origin) return '';
         return u.pathname + u.search;
       }
+
+      /* The product label the Shop sent along, e.g. "Photo Mugs". Capped and only
+         ever written with textContent — it arrives in a link like ?next= does. */
+      function nextLabel() {
+        return (new URLSearchParams(location.search).get('nextLabel') || '').slice(0, 40);
+      }
+
+      /* Arriving from the Shop, this page is one step of making a product, not a
+         standalone project. So: no "+ Add another Popcode" (these products print a
+         single photo, and offering a second page mid-order is the confusing part),
+         copy about the photo you're printing, and a way back that creates nothing. */
+      (function applyShopMode() {
+        const back = returnTo();
+        if (!back) return;
+        document.body.classList.add('from-shop');
+        const label = nextLabel();
+        const crumb = document.getElementById('shop-back');
+        crumb.href = back;
+        crumb.textContent = label ? ('\u2190 Back to ' + label) : '\u2190 Back to your product';
+        document.querySelector('.subtitle').textContent =
+          'Add the photo you\u2019ll print and the video or audio it plays when someone scans it.';
+      })();
 
       // Auth check
       let currentUser = null;
@@ -1007,7 +1048,9 @@
         // "Generate" (not "Create") = build the scan matches for everything added;
         // singular/plural by count so it reads as one item or the whole set.
         const btn = document.getElementById('create-btn');
-        if (btn) btn.textContent = labels.length === 1 ? 'Generate Popcode' : 'Generate Popcodes';
+        if (btn) btn.textContent = document.body.classList.contains('from-shop')
+          ? 'Create and continue'
+          : (labels.length === 1 ? 'Generate Popcode' : 'Generate Popcodes');
       }
 
       document.getElementById('add-page-btn').addEventListener('click', () => {
@@ -1389,6 +1432,8 @@
           const label = (new URLSearchParams(location.search).get('nextLabel') || '').slice(0, 40);
           btn.textContent = label ? ('Back to ' + label) : 'Back to your product';
           document.getElementById('result').classList.add('has-next');
+          document.querySelector('#result p').textContent =
+            'Your photo is ready to print \u2014 it plays when someone scans it.';
         }
         document.getElementById('result').style.display = 'block';
 
