@@ -327,7 +327,10 @@
             <div class="detail-price" id="detail-price">From —</div>
             <div class="detail-price-note" id="detail-price-note">plus shipping</div>
             <ul class="specs" id="detail-specs"></ul>
-            <button class="btn btn-lg btn-block primary-btn" id="create-btn">Choose a photo</button>
+            <!-- Label is set synchronously by updateDetailCta() the moment a product
+                 is opened. Hard-coding one here made it flash the wrong text until
+                 the first (async) preview render finished. -->
+            <button class="btn btn-lg btn-block primary-btn" id="create-btn"></button>
           </div>
         </div>
       </div>
@@ -1389,6 +1392,14 @@
         state.mounted = false;
         state.orientation = 'portrait';
         state.galleryIndex = 0; // reset to the hero product shot when switching products
+        /* The crop belongs to the product, not to the session: a mug's wrap wants
+           'fit' or a portrait photo is cropped to a 2.41 band and heads come off.
+           Every other per-product choice above is reset here; this one was missed,
+           so the default 'fill' survived into the mug and its sample preview. */
+        state.photoAdjust = defaultAdjustFor(type);
+        // Name the product before the async preview runs, or the button shows
+        // whatever it last said for a beat.
+        updateDetailCta();
         const meta = CATEGORY_META[type];
         document.getElementById('detail-name').textContent = meta.name;
         document.getElementById('detail-tagline').textContent = meta.tagline;
@@ -1809,8 +1820,13 @@
           // mockup — otherwise a blocked Unsplash silently drops the product
           // back to a bare rectangle.
           const src = state.selectedPhoto ? state.selectedPhoto.url : SAMPLE_PHOTO;
+          /* The sample gets the product's default crop too, not null. Passing
+             null fell back to fill, so a mug showed a portrait sample cropped to
+             its 2.41 wrap and took the tops of heads off — and the preview then
+             disagreed with what the same photo does once actually chosen. */
           const opts = { scale: state.scale, mockup: mk, aspect,
-                         adjust: state.selectedPhoto ? state.photoAdjust : null };
+                         adjust: state.selectedPhoto ? state.photoAdjust
+                                                     : defaultAdjustFor(state.productType) };
           try {
             await renderProductMockup(cv, src, opts);
           } catch (_) {
