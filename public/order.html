@@ -140,9 +140,30 @@
       .summary-bar .s-title { font-size:17px; font-weight:600; }
       .summary-bar .s-sub { color:#777; font-size:13px; margin-top:2px; }
       .photo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:14px; margin-top:12px; }
+      .pop-row { display:flex; align-items:center; gap:14px; width:100%; text-align:left; cursor:pointer;
+        background:#fff; border:1px solid #e4e2dd; border-radius:16px; padding:12px 14px; margin-top:10px;
+        font-family:'Inter',sans-serif; }
+      .pop-row:hover { border-color:#c9c6bf; background:#fcfcfc; }
+      .pop-row img { width:56px; height:56px; border-radius:10px; object-fit:cover; background:#efefef; flex-shrink:0; }
+      .pop-row .pr-text { flex:1; min-width:0; }
+      .pop-row .pr-name { display:block; font-size:15px; font-weight:700; color:#1a1a1a;
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .pop-row .pr-meta { display:block; font-size:13px; color:#8a857d; margin-top:2px; }
+      .pop-row.new { border-style:dashed; color:#8a857d; justify-content:center; font-weight:700; font-size:15px;
+        text-decoration:none; }
+      .pick { display:flex; align-items:center; gap:14px; width:100%; text-align:left; cursor:pointer;
+        background:#fff; border:1px solid #e4e2dd; border-radius:16px; padding:18px; margin-top:12px;
+        font-family:'Inter',sans-serif; }
+      .pick:hover { border-color:#c9c6bf; background:#fcfcfc; }
+      .pick[disabled] { opacity:.5; cursor:default; }
+      .pick-text { flex:1; min-width:0; }
+      .pick-title { display:block; font-size:16px; font-weight:700; color:#1a1a1a; }
+      .pick-sub { display:block; font-size:13px; color:#8a857d; margin-top:3px; }
+      .pick-arrow { font-size:18px; color:#b5b1a9; flex-shrink:0; }
+      #photo-tray .linkback { margin-bottom:10px; }
       .photo-cell { position:relative; border:3px solid transparent; border-radius:12px; overflow:hidden; cursor:pointer; aspect-ratio:1; background:#efefef; }
       .photo-cell.selected { border-color:#7657FC; }
-      .photo-cell canvas { width:100%; height:100%; object-fit:cover; display:block; }
+      .photo-cell canvas, .photo-cell img { width:100%; height:100%; object-fit:cover; display:block; }
       .photo-cell.tray-new { border:2px dashed #d7d4cd; background:#fafafa; display:flex; align-items:center; justify-content:center; text-decoration:none; color:#8a857d; }
       .photo-cell.tray-new:hover { border-color:#7657FC; color:#7657FC; }
       .tray-new-inner { display:flex; flex-direction:column; align-items:center; gap:6px; font-size:12px; font-weight:600; font-family:'Inter',sans-serif; text-align:center; }
@@ -311,12 +332,38 @@
         </div>
       </div>
 
-      <!-- Step: choose a photo (tray of the user's Popcode photos) -->
+      <!-- Step: choose a photo. The tray sits BEHIND a choice rather than in front
+           of it: every tile downloads a full-resolution original to paint a 200px
+           thumbnail, so someone making their first Popcode used to wait through
+           megabytes of photos they had no use for. -->
       <div id="step-photo" style="display:none;">
         <button class="linkback" id="photo-back">&larr; Back to product</button>
-        <div class="card">
-          <h2>Choose a photo</h2>
-          <p class="muted">Pick one of your Popcode photos to print, or start a new one.</p>
+        <div class="card" id="photo-choice">
+          <h2>Add your photo</h2>
+          <p class="muted">A Popcode is a photo plus the video or audio it plays when someone scans it.</p>
+          <button type="button" class="pick" id="pick-new">
+            <span class="pick-text"><span class="pick-title">Create a new Popcode</span>
+              <span class="pick-sub">Add a photo and the video or audio it plays</span></span>
+            <span class="pick-arrow">&rarr;</span>
+          </button>
+          <button type="button" class="pick" id="pick-existing">
+            <span class="pick-text"><span class="pick-title">Use one I&rsquo;ve already made</span>
+              <span class="pick-sub" id="pick-existing-sub">Choose from your Popcodes</span></span>
+            <span class="pick-arrow">&rarr;</span>
+          </button>
+        </div>
+        <!-- Your Popcodes, then the photos inside one. A flat grid of every photo
+             you own gave no clue where one Popcode ended and the next began, and
+             it loaded all of them at once. -->
+        <div class="card" id="photo-tray" style="display:none;">
+          <button class="linkback" id="tray-back">&larr; Back</button>
+          <h2>Your Popcodes</h2>
+          <p class="muted">Newest first. Pick one, then choose a photo from it.</p>
+          <div id="tray-list"></div>
+        </div>
+        <div class="card" id="photo-photos" style="display:none;">
+          <button class="linkback" id="photos-back">&larr; All Popcodes</button>
+          <h2 id="photos-title">Choose a photo</h2>
           <div class="photo-grid" id="tray-grid"></div>
         </div>
       </div>
@@ -540,20 +587,20 @@
       const ALL_CATEGORIES = ['print', 'tile', 'canvas', 'framed', 'framedcanvas', 'acrylic', 'mug', 'ornament', 'magnet', 'sticker'];
       const CATEGORIES = ALL_CATEGORIES.filter(t => !NO_US_FULFILMENT.has(t));
       const CATEGORY_META = {
-        print:  { name: 'Prints',        tagline: 'Classic fine-art prints',  desc: 'Museum-quality enhanced matte giclée prints — perfect for any photo.', specs: ['Enhanced matte art paper, 200gsm', 'Giclée print', 'Ships worldwide'] },
-        tile:   { name: 'Photo Tiles',   tagline: 'Framed photo tiles',       desc: 'Ready-to-hang framed tiles — great on their own or in a cluster.',     specs: ['Black or white frame', 'Ready to hang', 'Ships worldwide'] },
-        canvas: { name: 'Canvas',        tagline: 'Stretched canvas',         desc: 'Gallery-style stretched canvas with mirror-wrapped edges.',           specs: ['Stretched canvas', 'Mirror-wrapped edges', 'Ships worldwide'] },
-        framed: { name: 'Framed Prints', tagline: 'Classic framed prints',    desc: 'Fine-art print in a classic frame behind perspex glaze — black, white or natural wood, with an optional conservation mount.', specs: ['Fine-art paper + perspex glaze', 'Black, white or natural frame', 'Optional conservation mount', 'Ships worldwide'] },
-        framedcanvas: { name: 'Framed Canvas', tagline: 'Canvas in a classic frame', desc: '38mm stretched cotton canvas set inside the classic frame — gallery presentation, ready to hang.', specs: ['400gsm artist-grade canvas', 'Black, white or natural frame', 'Ships worldwide'] },
-        acrylic: { name: 'Acrylic Prints', tagline: 'High-gloss acrylic panels', desc: 'Your photo hand-mounted behind 10mm high-gloss acrylic with diamond-polished edges — floats off the wall.', specs: ['10mm acrylic, polished edges', 'Invisible floating subframe', 'Ships worldwide'] },
+        print:  { noun: 'Print', name: 'Prints',        tagline: 'Classic fine-art prints',  desc: 'Museum-quality enhanced matte giclée prints — perfect for any photo.', specs: ['Enhanced matte art paper, 200gsm', 'Giclée print', 'Ships worldwide'] },
+        tile:   { noun: 'Photo Tile', name: 'Photo Tiles',   tagline: 'Framed photo tiles',       desc: 'Ready-to-hang framed tiles — great on their own or in a cluster.',     specs: ['Black or white frame', 'Ready to hang', 'Ships worldwide'] },
+        canvas: { noun: 'Canvas', name: 'Canvas',        tagline: 'Stretched canvas',         desc: 'Gallery-style stretched canvas with mirror-wrapped edges.',           specs: ['Stretched canvas', 'Mirror-wrapped edges', 'Ships worldwide'] },
+        framed: { noun: 'Framed Print', name: 'Framed Prints', tagline: 'Classic framed prints',    desc: 'Fine-art print in a classic frame behind perspex glaze — black, white or natural wood, with an optional conservation mount.', specs: ['Fine-art paper + perspex glaze', 'Black, white or natural frame', 'Optional conservation mount', 'Ships worldwide'] },
+        framedcanvas: { noun: 'Framed Canvas', name: 'Framed Canvas', tagline: 'Canvas in a classic frame', desc: '38mm stretched cotton canvas set inside the classic frame — gallery presentation, ready to hang.', specs: ['400gsm artist-grade canvas', 'Black, white or natural frame', 'Ships worldwide'] },
+        acrylic: { noun: 'Acrylic Print', name: 'Acrylic Prints', tagline: 'High-gloss acrylic panels', desc: 'Your photo hand-mounted behind 10mm high-gloss acrylic with diamond-polished edges — floats off the wall.', specs: ['10mm acrylic, polished edges', 'Invisible floating subframe', 'Ships worldwide'] },
         /* Gift products. Every one of these is made and posted from the UK,
            which is why the specs say so plainly: they arrive separately from
            anything else in the same order, and they take longer. Better said on
            the product page than discovered at the door. */
-        mug:      { name: 'Photo Mugs',  tagline: '11oz white photo mug',  desc: 'Your photo printed across an 11oz white ceramic mug, sitting opposite the handle so it faces whoever is looking — with the Popcode symbol on the front.', specs: ['White ceramic, dishwasher tested', 'Prints across the full 229mm', 'Sits opposite the handle', 'Made and posted locally'] },
-        ornament: { name: 'Ornaments',   tagline: 'Christmas tree ornaments',  desc: 'Aluminium, glass, ceramic or a shatterproof bauble — a photo on the tree that plays when someone points a phone at it.', specs: ['Aluminium, glass, ceramic or bauble', 'Ribbon or string to hang', 'Single-sided print', 'Made and posted from the UK'] },
-        magnet:   { name: 'Photo Magnets', tagline: 'Fridge magnets',          desc: 'A photo on the fridge that comes to life — sold in sets of three.', specs: ['Silver-halide print on magnetic board', 'Sets of three', 'Made and posted from the UK'] },
-        sticker:  { name: 'Stickers',    tagline: 'Kiss-cut vinyl stickers',   desc: 'Durable kiss-cut vinyl stickers on a peel-away backing — sold in sets of three.', specs: ['Premium vinyl, matt finish', 'Kiss-cut on a backing sheet', 'Sets of three', 'Made and posted from the UK'] },
+        mug:      { noun: 'Mug', name: 'Photo Mugs',  tagline: '11oz white photo mug',  desc: 'Your photo printed across an 11oz white ceramic mug, sitting opposite the handle so it faces whoever is looking — with the Popcode symbol on the front.', specs: ['White ceramic, dishwasher tested', 'Prints across the full 229mm', 'Sits opposite the handle', 'Made and posted locally'] },
+        ornament: { noun: 'Ornament', name: 'Ornaments',   tagline: 'Christmas tree ornaments',  desc: 'Aluminium, glass, ceramic or a shatterproof bauble — a photo on the tree that plays when someone points a phone at it.', specs: ['Aluminium, glass, ceramic or bauble', 'Ribbon or string to hang', 'Single-sided print', 'Made and posted from the UK'] },
+        magnet:   { noun: 'Photo Magnet', name: 'Photo Magnets', tagline: 'Fridge magnets',          desc: 'A photo on the fridge that comes to life — sold in sets of three.', specs: ['Silver-halide print on magnetic board', 'Sets of three', 'Made and posted from the UK'] },
+        sticker:  { noun: 'Sticker', name: 'Stickers',    tagline: 'Kiss-cut vinyl stickers',   desc: 'Durable kiss-cut vinyl stickers on a peel-away backing — sold in sets of three.', specs: ['Premium vinyl, matt finish', 'Kiss-cut on a backing sheet', 'Sets of three', 'Made and posted from the UK'] },
       };
 
       // Photorealistic mockups (Route B): a face-on product photo + the rectangle
@@ -1241,7 +1288,16 @@
             const { data: items } = await db.from('collection_items')
               .select('collection_id, photo_url, target_index, media_type, video_url, audio_url').in('collection_id', ids).order('target_index');
             const seen = new Set();
-            (items || []).forEach(it => {
+            /* The collections query asks for newest first, but items come back
+               ordered by target_index ALONE — so walking them in that order threw
+               that away and produced every project's page 1, then every project's
+               page 2, with no defined order inside a group. Group by project in
+               the order the collections query returned, then by page. */
+            const order = new Map(src.map((c, i) => [c.id, i]));
+            const sorted = (items || []).slice().sort((a, b) =>
+              (order.get(a.collection_id) - order.get(b.collection_id))
+              || (a.target_index - b.target_index));
+            sorted.forEach(it => {
               if (!it.photo_url || it.target_index == null) return;
               const key = it.collection_id + ':' + it.target_index;
               if (seen.has(key)) return; seen.add(key);
@@ -1787,7 +1843,14 @@
       }
       function updateDetailCta() {
         const has = !!state.selectedPhoto;
-        document.getElementById('create-btn').textContent = has ? 'Continue' : 'Choose a photo';
+        /* "Design a Mug" rather than "Choose a photo" — books and calendars already
+           lead with "Design a Book"/"Design a Calendar", and naming the product is
+           what tells you what the button is for. CATEGORY_META.name is plural
+           ("Photo Mugs"), so the singular noun sits beside it. */
+        const n = (CATEGORY_META[state.productType] || {}).noun || 'Design';
+        document.getElementById('create-btn').textContent = has
+          ? 'Continue'
+          : 'Design ' + (/^[aeiou]/i.test(n) ? 'an ' : 'a ') + n;
         document.getElementById('detail-photo-actions').style.display = has ? '' : 'none';
       }
       // The advertised price is the PRODUCT only. Shipping depends on where it's
@@ -2292,39 +2355,120 @@
       }
 
       // ---- choose a photo (tray of the user's Popcode photos) ----
-      function openPhotoStep() { if (!currentUser) { goSignUp(); return; } renderTray(); showStep('photo'); }
+      /* Changing a photo you've already picked goes straight to the tray — the
+         choice screen is there to orient someone who hasn't chosen yet, and the
+         tray carries its own "New Popcode" tile for the other direction. */
+      function openPhotoStep(opts) {
+        if (!currentUser) { goSignUp(); return; }
+        const straightToTray = (opts && opts.tray) || (state.selectedPhoto && photos.length);
+        if (straightToTray) showTray(); else showPhotoChoice();
+        showStep('photo');
+      }
+      function showPhotoChoice() {
+        document.getElementById('photo-choice').style.display = '';
+        document.getElementById('photo-tray').style.display = 'none';
+        document.getElementById('photo-photos').style.display = 'none';
+        // Nothing to choose from yet: say so rather than offering a dead option.
+        const btn = document.getElementById('pick-existing');
+        const none = !photos.length;
+        btn.disabled = none;
+        document.getElementById('pick-existing-sub').textContent = none
+          ? 'You haven\u2019t made any yet'
+          : ('Choose from your ' + photos.length + ' photo' + (photos.length === 1 ? '' : 's'));
+      }
+      // Rendering the tray is what downloads the photos, so it happens here and
+      // not before — see the note on #step-photo.
+      function showTray() {
+        document.getElementById('photo-choice').style.display = 'none';
+        document.getElementById('photo-photos').style.display = 'none';
+        document.getElementById('photo-tray').style.display = '';
+        renderTray();
+      }
+      /* A tile used to be a <canvas> with the badge composited in, which meant
+         downloading the full stored original (~2MB at 2560px) to paint 200px, for
+         every photo you own, all at once. A plain lazy <img> lets the browser
+         fetch only what's on screen, decode it off-thread and cache it — and the
+         badge told you nothing at that size, since the detail and review previews
+         show it properly anyway. */
+      function photoThumb(url, alt) {
+        const im = document.createElement('img');
+        im.loading = 'lazy'; im.decoding = 'async';
+        im.src = url; im.alt = alt || '';
+        return im;
+      }
+
+      // The user's Popcodes, newest first — `photos` is already in that order.
+      function trayProjects() {
+        const by = new Map();
+        photos.forEach(p => {
+          if (!by.has(p.collectionId)) by.set(p.collectionId, { name: p.name, slug: p.slug, items: [] });
+          by.get(p.collectionId).items.push(p);
+        });
+        return [...by.entries()].map(([id, v]) => ({ id, ...v }));
+      }
+
       function renderTray() {
-        const grid = document.getElementById('tray-grid');
-        grid.innerHTML = '';
-        /* "New Popcode" tile — start a fresh image + video/audio pair. This leaves
-           the Shop, so carry a return path: create.html appends the new slug and
-           offers a button back here, landing on this same product with the new
-           photo already selected. Without it you finish on the create result
-           screen and have to find your way back and start the product again. */
+        const list = document.getElementById('tray-list');
+        list.innerHTML = '';
         const mk = document.createElement('a');
-        mk.className = 'photo-cell tray-new';
+        mk.className = 'pop-row new';
         const back = '/order.html?type=' + encodeURIComponent(state.productType);
         mk.href = '/create.html?next=' + encodeURIComponent(back)
           + '&nextLabel=' + encodeURIComponent((CATEGORY_META[state.productType] || {}).name || 'your product');
-        mk.innerHTML = '<span class="tray-new-inner"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Popcode</span>';
-        grid.appendChild(mk);
-        photos.forEach(p => {
-          const cell = document.createElement('div');
-          cell.className = 'photo-cell' + (state.selectedPhoto && state.selectedPhoto.url === p.url ? ' selected' : '');
-          const cv = document.createElement('canvas'); cv.width = 200; cv.height = 200;
-          cell.appendChild(cv);
-          cell.onclick = () => { state.selectedPhoto = p; state.photoAdjust = defaultAdjustFor(state.productType); renderDetailPreview(); showStep('detail'); };
-          grid.appendChild(cell);
-          compositeBadgedImage(p.url, { scale: state.scale, aspect: 1, previewCanvas: cv, returnDataUrl: false }).catch(() => {});
+        mk.textContent = '+ Create a new Popcode';
+        list.appendChild(mk);
+        trayProjects().forEach(proj => {
+          const row = document.createElement('button');
+          row.type = 'button'; row.className = 'pop-row';
+          row.appendChild(photoThumb(proj.items[0].url, proj.name));
+          const t = document.createElement('span'); t.className = 'pr-text';
+          const n = document.createElement('span'); n.className = 'pr-name'; n.textContent = proj.name;
+          const m = document.createElement('span'); m.className = 'pr-meta';
+          m.textContent = proj.items.length + ' photo' + (proj.items.length === 1 ? '' : 's');
+          t.appendChild(n); t.appendChild(m); row.appendChild(t);
+          const a = document.createElement('span'); a.className = 'pick-arrow'; a.textContent = '\u2192';
+          row.appendChild(a);
+          row.addEventListener('click', () => showProjectPhotos(proj.id));
+          list.appendChild(row);
         });
         if (!photos.length) {
           const note = document.createElement('div');
-          note.className = 'muted'; note.style.gridColumn = '1 / -1'; note.style.padding = '6px 0';
-          note.textContent = 'No photos yet — create a Popcode first, then come back to print it.';
-          grid.appendChild(note);
+          note.className = 'muted'; note.style.padding = '10px 0';
+          note.textContent = 'No photos yet \u2014 create a Popcode first, then come back to print it.';
+          list.appendChild(note);
         }
       }
+
+      function showProjectPhotos(collectionId) {
+        const proj = trayProjects().find(p => p.id === collectionId);
+        if (!proj) return;
+        document.getElementById('photos-title').textContent = proj.name;
+        const grid = document.getElementById('tray-grid');
+        grid.innerHTML = '';
+        proj.items.forEach(p => {
+          const cell = document.createElement('div');
+          cell.className = 'photo-cell' + (state.selectedPhoto && state.selectedPhoto.url === p.url ? ' selected' : '');
+          cell.appendChild(photoThumb(p.url, p.name));
+          cell.onclick = () => {
+            state.selectedPhoto = p;
+            state.photoAdjust = defaultAdjustFor(state.productType);
+            renderDetailPreview(); showStep('detail');
+          };
+          grid.appendChild(cell);
+        });
+        document.getElementById('photo-tray').style.display = 'none';
+        document.getElementById('photo-photos').style.display = '';
+      }
       document.getElementById('photo-back').addEventListener('click', () => showStep('detail'));
+      document.getElementById('tray-back').addEventListener('click', showPhotoChoice);
+      document.getElementById('photos-back').addEventListener('click', showTray);
+      document.getElementById('pick-existing').addEventListener('click', showTray);
+      document.getElementById('pick-new').addEventListener('click', () => {
+        // Same return trip as the tray's "New Popcode" tile.
+        const back = '/order.html?type=' + encodeURIComponent(state.productType);
+        window.location.href = '/create.html?next=' + encodeURIComponent(back)
+          + '&nextLabel=' + encodeURIComponent((CATEGORY_META[state.productType] || {}).name || 'your product');
+      });
 
       // ---- review (see it in the product) → Save to My Designs or Order ----
       function randomSlug() { let s = ''; const a = 'abcdefghijklmnopqrstuvwxyz0123456789'; for (let i = 0; i < 8; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
