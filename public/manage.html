@@ -129,7 +129,13 @@
         display: grid; grid-template-columns: repeat(auto-fill, 384px); gap: 36px;
         justify-content: start; align-items: start; align-content: start;
       }
-      @media (max-width: 480px) { .designs-grid { grid-template-columns: 1fr; } }
+      /* minmax(0, 1fr), not 1fr. A bare `1fr` is minmax(AUTO, 1fr), and an auto
+         minimum floors the track at its content's min-content — so on a narrow
+         phone the column stayed ~322px inside a 280px container and the card ran
+         off the right edge. The card itself is happy at 280 (squeeze it and
+         nothing inside overflows); it was the track that would not shrink.
+         Same fix as the .detail grid in order.html. */
+      @media (max-width: 480px) { .designs-grid { grid-template-columns: minmax(0, 1fr); } }
       .design-card {
         background: #ffffff; border-radius: var(--pc-radius-card); padding: 26px;
         box-shadow: var(--pc-shadow-card);
@@ -619,8 +625,28 @@
 
       // Designs = physical products bought from us; everything else is a Popcode
       // (a standalone AR experience — museum exhibit, grandma's album, etc.).
-      const PRODUCT_KINDS = ['book', 'print', 'tile', 'canvas', 'framed', 'framedcanvas', 'acrylic', 'calendar', 'boardbook'];
-      const isDesignKind = (k) => PRODUCT_KINDS.includes(k);
+      const PRODUCT_KINDS = ['book', 'print', 'tile', 'canvas', 'framed', 'framedcanvas', 'acrylic',
+                             'calendar', 'boardbook', 'mug', 'magnet', 'sticker', 'ornament'];
+      /* Is this row a saved shop design rather than a Popcode?
+
+         The kind list alone was the test, and it silently broke the moment a new
+         product type appeared: a saved mug came back kind:'mug', failed the
+         list, and was filed under My Popcodes — where its View button led to
+         "Experience not found", because a print design has no .mind file to
+         scan. It is a list of names that has to be updated in lockstep with the
+         catalogue, in a different file, and nothing fails loudly when it isn't.
+
+         So check the DATA too. order.html saves every single-image design with
+         `book_layout.print`, which no Popcode ever has, so a row carrying it is
+         a design whatever its kind says. The list still catches books,
+         calendars and board books — those are designs AND scannable, so no
+         field distinguishes them. Between the two, adding a product type to the
+         shop can no longer strand its designs in the wrong tab. */
+      const hasPrintDesign = (c) => !!(c && c.book_layout && c.book_layout.print);
+      const isDesignKind = (c) => {
+        const row = (c && typeof c === 'object') ? c : null;
+        return PRODUCT_KINDS.includes(row ? row.kind : c) || hasPrintDesign(row);
+      };
       let allCollections = [], countMap = {}, photoMap = {};
       let activeTab = (new URLSearchParams(location.search).get('tab') === 'designs') ? 'designs' : 'popcodes';
 
@@ -704,7 +730,7 @@
         // collections PLUS any product that's actually scannable (a popcoded
         // book/calendar has a compiled .mind, so it IS a Popcode too).
         const isScannable = (c) => !!(c.mind_file_url && c.mind_file_url !== '');
-        const list = allCollections.filter(c => isDesigns ? isDesignKind(c.kind) : (!isDesignKind(c.kind) || isScannable(c)));
+        const list = allCollections.filter(c => isDesigns ? isDesignKind(c) : (!isDesignKind(c) || isScannable(c)));
         if (!list.length) { content.className = 'collections-list'; content.appendChild(buildEmptyState(activeTab)); return; }
         if (isDesigns) list.forEach(col => content.appendChild(buildDesignCard(col, photoMap[col.id] || null)));
         else list.forEach(col => content.appendChild(buildCard(col, countMap[col.id] || 0, photoMap[col.id] || null)));
@@ -728,7 +754,7 @@
         const title = coverTitle || col.name || 'Untitled';
         const isBook = col.kind === 'book';
         const isCalendar = col.kind === 'calendar';
-        const isProduct = isDesignKind(col.kind);   // scannable product shown in this tab
+        const isProduct = isDesignKind(col);   // scannable product shown in this tab
         const kindPill = isProduct ? (PRODUCT_NOUN[col.kind] || 'Design') : null;
         /* A board book is scannable, so it appears in this tab too -- but it
            had no branch here, which sent both its Edit and its Shop button to
@@ -885,8 +911,8 @@
       }
 
       // Product naming for the Popsa-style menu / label.
-      const PRODUCT_NOUN = { book: 'Book', tile: 'Tile', print: 'Print', canvas: 'Canvas', framed: 'Framed Print', framedcanvas: 'Framed Canvas', acrylic: 'Acrylic Print', calendar: 'Calendar', boardbook: 'Board Book' };
-      const PRODUCT_LABEL = { book: 'Photo Book', tile: 'Photo Tiles', print: 'Prints', canvas: 'Canvas', framed: 'Framed Prints', framedcanvas: 'Framed Canvas', acrylic: 'Acrylic Prints', calendar: 'Calendar', boardbook: 'Board Book' };
+      const PRODUCT_NOUN = { book: 'Book', tile: 'Tile', print: 'Print', canvas: 'Canvas', framed: 'Framed Print', framedcanvas: 'Framed Canvas', acrylic: 'Acrylic Print', calendar: 'Calendar', boardbook: 'Board Book', mug: 'Mug', magnet: 'Magnet', sticker: 'Sticker', ornament: 'Ornament' };
+      const PRODUCT_LABEL = { book: 'Photo Book', tile: 'Photo Tiles', print: 'Prints', canvas: 'Canvas', framed: 'Framed Prints', framedcanvas: 'Framed Canvas', acrylic: 'Acrylic Prints', calendar: 'Calendar', boardbook: 'Board Book', mug: 'Photo Mugs', magnet: 'Photo Magnets', sticker: 'Stickers', ornament: 'Ornaments' };
       function relTime(iso) {
         if (!iso) return '';
         const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -925,6 +951,12 @@
           kindLabel = col.name.slice(0, i);
           title = col.name.slice(i + 3);
         }
+        /* "Photo Mugs · 11oz" splits into the pill and the size beneath it. The
+           product name goes in the pill from PRODUCT_NOUN where we know the kind,
+           so it stays consistent with the Popcode cards; only the size is left as
+           the small grey line. */
+        const kindNoun = PRODUCT_NOUN[col.kind] || (kindLabel.split(' · ')[0] || 'Design');
+        const kindDetail = kindLabel.includes(' · ') ? kindLabel.slice(kindLabel.indexOf(' · ') + 3) : '';
         const viewUrl = `https://popcode.app/${col.slug}`;
         // Books edit in the book builder, calendars in the calendar maker; print
         // designs reopen their saved config in order.html.
@@ -963,7 +995,12 @@
         card.innerHTML = `
           <div class="design-top">
             <div>
-              <div class="design-kind">${escapeHtml(kindLabel)}</div>
+              <!-- The product is a pill, the way it is on a Popcode card. It used
+                   to be grey text above the title, and for a saved print design —
+                   whose name is stored as "Photo Mugs · 11oz — Happy 20th Max!" —
+                   that read as one long run-on heading. -->
+              <div class="pop-pill product">${escapeHtml(kindNoun)}</div>
+              ${kindDetail ? `<div class="design-kind">${escapeHtml(kindDetail)}</div>` : ''}
               <div class="design-title">${escapeHtml(title)}</div>
             </div>
             <button class="dots-btn" title="More" aria-label="More">
