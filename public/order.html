@@ -550,7 +550,7 @@
            which is why the specs say so plainly: they arrive separately from
            anything else in the same order, and they take longer. Better said on
            the product page than discovered at the door. */
-        mug:      { name: 'Photo Mugs',  tagline: '11oz white photo mug',  desc: 'A photo wrapped the whole way round an 11oz white ceramic mug, with the Popcode symbol on the front and your link set discreetly beside the handle.', specs: ['White ceramic, dishwasher tested', 'Photo wraps the full 229mm', 'Link printed beside the handle', 'Made and posted locally'] },
+        mug:      { name: 'Photo Mugs',  tagline: '11oz white photo mug',  desc: 'Your photo printed across an 11oz white ceramic mug, sitting opposite the handle so it faces whoever is looking — with the Popcode symbol on the front.', specs: ['White ceramic, dishwasher tested', 'Prints across the full 229mm', 'Sits opposite the handle', 'Made and posted locally'] },
         ornament: { name: 'Ornaments',   tagline: 'Christmas tree ornaments',  desc: 'Aluminium, glass, ceramic or a shatterproof bauble — a photo on the tree that plays when someone points a phone at it.', specs: ['Aluminium, glass, ceramic or bauble', 'Ribbon or string to hang', 'Single-sided print', 'Made and posted from the UK'] },
         magnet:   { name: 'Photo Magnets', tagline: 'Fridge magnets',          desc: 'A photo on the fridge that comes to life — sold in sets of three.', specs: ['Silver-halide print on magnetic board', 'Sets of three', 'Made and posted from the UK'] },
         sticker:  { name: 'Stickers',    tagline: 'Kiss-cut vinyl stickers',   desc: 'Durable kiss-cut vinyl stickers on a peel-away backing — sold in sets of three.', specs: ['Premium vinyl, matt finish', 'Kiss-cut on a backing sheet', 'Sets of three', 'Made and posted from the UK'] },
@@ -665,11 +665,14 @@
         if (v.format) o.format = v.format;
         if (v.maxPx) o.maxPx = v.maxPx;
         if (v.padPx) o.padPx = v.padPx;
-        if (v.wrap) {
-          o.wrap = v.wrap;
-          const slug = (photo || state.selectedPhoto || {}).slug;
-          if (slug) o.wrapText = 'popcode.app/' + slug;
-        }
+        /* `wrap` still marks the product as a 360 band — it decides where the
+           badge goes, and that the artwork keeps its own aspect rather than the
+           mockup opening's. What it no longer does is print the popcode.app
+           address on the mug: that lives on the companion card in the box, the
+           same as it does for a print or a canvas. A line of type running up a
+           photograph beside the handle was the only place a mug could take one,
+           and it was not worth the picture. */
+        if (v.wrap) o.wrap = v.wrap;
         return o;
       }
 
@@ -750,6 +753,18 @@
       // the Edit Photo stage (layoutEp) and the print/preview bake below, so what you
       // position in the editor is exactly what the product shows and prints.
       const DEFAULT_ADJUST = () => ({ fit: 'fill', scale: 1, ox: 0, oy: 0, rot: 0 });
+      /* Fill is right for a print: the photo covers the paper and the sides are
+         trimmed, which is what anyone ordering a 5x7 expects. A mug is the
+         opposite. Its artwork is a 229mm band at aspect 2.41, so Fill on an
+         ordinary photo throws away most of the picture — the elephant became a
+         pair of legs — and a customer who never opens Adjust photo would order
+         that without realising. Fit shows the whole photo instead, and the
+         white it leaves at each end is unprinted ceramic falling either side of
+         the handle, which is how a photo mug looks anyway. */
+      const defaultAdjustFor = (type) => {
+        const v = variantOf(type, (PRODUCTS[type] || [{}])[0].id);
+        return Object.assign(DEFAULT_ADJUST(), (v && v.wrap) ? { fit: 'fit' } : {});
+      };
       function normalizeAdjust(a) {
         const d = DEFAULT_ADJUST();
         if (!a || typeof a !== 'object') return d;
@@ -825,6 +840,8 @@
           previewCanvas.width = pw; previewCanvas.height = ph;
           var pc = previewCanvas.getContext('2d');
           pc.clearRect(0, 0, pw, ph);
+          // Same white ground as the print, so the preview matches it.
+          pc.fillStyle = '#ffffff'; pc.fillRect(0, 0, pw, ph);
           if (adjust) drawPhotoAdjusted(pc, img, adjust, 0, 0, pw, ph);
           else pc.drawImage(img, sx, sy, cropW, cropH, 0, 0, pw, ph);
           placeBadge(pc, iconImg, pw, ph, scale, opts);
@@ -851,6 +868,12 @@
         var c = document.createElement('canvas');
         c.width = cropW; c.height = cropH;
         var ctx = c.getContext('2d');
+        /* White behind the photo. A fresh canvas is transparent, and Fit
+           deliberately leaves the sides uncovered — exported as JPEG that
+           transparency becomes BLACK, which on a white mug would be two black
+           bands either side of the picture. White is also what the bare product
+           actually is: unprinted ceramic, unprinted paper. */
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cropW, cropH);
         if (adjust) drawPhotoAdjusted(ctx, img, adjust, 0, 0, cropW, cropH);
         // Source rect stays the crop we chose off the original; only the
         // DESTINATION shrinks when a pixel cap applies, so capping resamples
@@ -860,9 +883,6 @@
         var corr = opts.correction || correctionByKey(ACTIVE_CORRECTION);
         applyCorrection(ctx, cropW, cropH, corr);
         placeBadge(ctx, iconImg, cropW, cropH, scale, opts);
-        // A 360 wrap has no back to print on, so the popcode.app URL is set into
-        // the artwork itself, up the trailing edge (see drawWrapUrl).
-        if (opts.wrap && opts.wrapText) drawWrapUrl(ctx, cropW, cropH, opts.wrapText, opts.wrap);
         // Stickers are die-cut from a PNG and Prodigi rejects a JPEG for them;
         // everything else stays JPEG so the checkout upload stays small.
         return opts.format === 'png' ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.92);
@@ -910,68 +930,6 @@
         ctx.drawImage(iconImg, x, y, size, size);
       }
 
-      /* The popcode.app URL up the trailing edge of a wrap-around mug.
-
-         A mug has ONE print area that goes all the way round, so there is no
-         back and no margin to put an address on — it has to live in the picture.
-         The template's left and right edges are the two sides of the handle, so
-         text set vertically at the right edge finishes beside it rather than
-         across the photo, and reads the right way up when the mug is turned.
-
-         A dark translucent bar sits under it because the artwork behind is the
-         customer's photo and could be any colour; white type alone is legible on
-         some photos and invisible on others. `safeMm` keeps everything clear of
-         the edge — Prodigi allows 1-2mm of artwork movement during production,
-         so type any closer can be trimmed. */
-      function drawWrapUrl(ctx, w, h, text, wrap) {
-        var safe = Math.round((wrap.safeMm / wrap.widthMm) * w);
-        var fontPx = Math.max(12, Math.round(h * 0.044));
-        var barW = Math.round(fontPx * 1.7);
-        ctx.save();
-        ctx.translate(w - safe - barW, 0);
-        /* A whisper of a scrim, not a black band. The type has to stay legible
-           over whatever photo is behind it, but this strip sits beside the
-           handle on a real mug and a hard dark bar there reads as a printing
-           fault rather than a credit. Feathered at both ends so it fades into
-           the picture instead of ending on a line. */
-        // Built on its own canvas: the vertical fade uses destination-in, which
-        // acts on a WHOLE canvas rather than the rectangle just drawn, so doing
-        // it inline would erase the photo either side of the strip.
-        var strip = document.createElement('canvas');
-        strip.width = Math.max(1, barW); strip.height = Math.max(1, h);
-        var sx = strip.getContext('2d');
-        var grad = sx.createLinearGradient(0, 0, barW, 0);
-        grad.addColorStop(0, 'rgba(0,0,0,0)');
-        grad.addColorStop(0.5, 'rgba(0,0,0,0.20)');
-        grad.addColorStop(1, 'rgba(0,0,0,0.24)');
-        sx.fillStyle = grad; sx.fillRect(0, 0, barW, h);
-        var fade = sx.createLinearGradient(0, 0, 0, h);
-        fade.addColorStop(0, 'rgba(0,0,0,0)');
-        fade.addColorStop(0.16, 'rgba(0,0,0,1)');
-        fade.addColorStop(0.84, 'rgba(0,0,0,1)');
-        fade.addColorStop(1, 'rgba(0,0,0,0)');
-        sx.globalCompositeOperation = 'destination-in';
-        sx.fillStyle = fade; sx.fillRect(0, 0, barW, h);
-        ctx.drawImage(strip, 0, 0);
-        // Rotate so the baseline runs up the mug: reading bottom-to-top puts the
-        // text upright when the handle is on the right.
-        ctx.translate(barW / 2, h / 2);
-        ctx.rotate(-Math.PI / 2);
-        ctx.font = '600 ' + fontPx + 'px Inter, Helvetica, Arial, sans-serif';
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
-        ctx.shadowBlur = Math.round(fontPx * 0.35);
-        // Never let a long slug run past the mug's height.
-        var maxLen = h - safe * 2;
-        while (ctx.measureText(text).width > maxLen && fontPx > 9) {
-          fontPx -= 1;
-          ctx.font = '600 ' + fontPx + 'px Inter, Helvetica, Arial, sans-serif';
-        }
-        ctx.fillText(text, 0, 0);
-        ctx.restore();
-      }
 
       // Build a single labeled calibration sheet: the same photo shown at every
       // correction preset side-by-side, so ONE printed tile settles which preset
@@ -1997,7 +1955,7 @@
         else if (act === 'rotate') a.rot = (a.rot + 90) % 360;
         else if (act === 'zin') a.scale = Math.min(3, Math.round((a.scale + 0.1) * 10) / 10);
         else if (act === 'zout') a.scale = Math.max(1, Math.round((a.scale - 0.1) * 10) / 10);
-        else if (act === 'reset') { editPhotoState.a = DEFAULT_ADJUST(); editPhotoState.gridOn = false; updateEp(); return; }
+        else if (act === 'reset') { editPhotoState.a = defaultAdjustFor(state.productType); editPhotoState.gridOn = false; updateEp(); return; }
         else if (act === 'change') { closeAdjustPhoto(); openPhotoStep(); return; }
         updateEp();
       }
@@ -2336,7 +2294,7 @@
           cell.className = 'photo-cell' + (state.selectedPhoto && state.selectedPhoto.url === p.url ? ' selected' : '');
           const cv = document.createElement('canvas'); cv.width = 200; cv.height = 200;
           cell.appendChild(cv);
-          cell.onclick = () => { state.selectedPhoto = p; state.photoAdjust = DEFAULT_ADJUST(); renderDetailPreview(); showStep('detail'); };
+          cell.onclick = () => { state.selectedPhoto = p; state.photoAdjust = defaultAdjustFor(state.productType); renderDetailPreview(); showStep('detail'); };
           grid.appendChild(cell);
           compositeBadgedImage(p.url, { scale: state.scale, aspect: 1, previewCanvas: cv, returnDataUrl: false }).catch(() => {});
         });
