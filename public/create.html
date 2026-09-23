@@ -327,6 +327,13 @@
       #result-url { background: #f1f1f1; border-radius: var(--pc-radius-inner); padding: 10px 14px; font-size: 12px; word-break: break-all; color: #333; margin-bottom: 12px; }
       #view-btn { display: block; width: 100%; box-sizing: border-box; background: #1a1a1a; color: white; border: none; border-radius: 24px; padding: 14px; font-size: 15px; cursor: pointer; font-weight: 700; text-decoration: none; text-align: center; margin-bottom: 10px; font-family: 'Inter', sans-serif; }
       #view-btn:hover { opacity: 0.92; }
+      /* Shown only when create.html was opened from the Shop (?next=). It takes the
+         primary slot and #view-btn steps down to the outline style, so the obvious
+         next move is finishing the product you were making. */
+      #continue-btn { display: none; width: 100%; box-sizing: border-box; background: #1a1a1a; color: white; border: none; border-radius: 24px; padding: 14px; font-size: 15px; cursor: pointer; font-weight: 700; text-decoration: none; text-align: center; margin-bottom: 10px; font-family: 'Inter', sans-serif; }
+      #continue-btn:hover { opacity: 0.92; }
+      #result.has-next #continue-btn { display: block; }
+      #result.has-next #view-btn { background: transparent; color: #1a1a1a; border: 1px solid #e0e0e0; padding: 13px; }
       #share-btn { display: block; width: 100%; box-sizing: border-box; background: transparent; color: #1a1a1a; border: 1px solid #e0e0e0; border-radius: 24px; padding: 13px; font-size: 15px; cursor: pointer; font-weight: 700; font-family: 'Inter', sans-serif; }
       #share-btn:hover { background: #f7f7f7; }
       .result-share-wrap { position: relative; }
@@ -459,6 +466,7 @@
     <div id="result">
       <h3>Popcode created!</h3>
       <p>Your Popcode is live — anyone can scan a photo to play its video or audio.</p>
+      <a id="continue-btn" href="#">Back to your product</a>
       <a id="view-btn" target="_blank" rel="noopener" href="#">View Popcode</a>
       <div class="result-share-wrap">
         <button id="share-btn" type="button">Share</button>
@@ -473,6 +481,23 @@
 
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      /* Where to go after creating, when the Shop sent us here. ?next= arrives in
+         a link, so treat it as hostile: anything that doesn't resolve back to this
+         origin is refused. Resolving with URL rather than pattern-matching is what
+         makes that safe — the browser normalises a backslash like a slash, so
+         "/\evil.com" is off-site despite its single leading "/", and a hand-rolled
+         startsWith('//') check lets it straight through (verified in Chromium).
+         Returning the parsed pathname + search also hands back a normalised string
+         rather than echoing whatever was passed in. */
+      function returnTo() {
+        const raw = new URLSearchParams(location.search).get('next') || '';
+        if (!raw.startsWith('/')) return '';
+        let u;
+        try { u = new URL(raw, location.origin); } catch (e) { return ''; }
+        if (u.origin !== location.origin) return '';
+        return u.pathname + u.search;
+      }
 
       // Auth check
       let currentUser = null;
@@ -1352,6 +1377,19 @@
         // alongside the result. The result screen replaces it.
         document.getElementById('progress').style.display = 'none';
         document.getElementById('view-btn').href = viewUrl;
+        /* Came from the Shop's "New Popcode" tile: offer the way back, with the
+           slug appended so the product reopens with this photo already selected
+           (order.html reads ?id & ?photo). returnTo() has already checked the
+           path is a relative same-origin one, so this cannot redirect off-site. */
+        const back = returnTo();
+        if (back) {
+          const btn = document.getElementById('continue-btn');
+          btn.href = back + (back.includes('?') ? '&' : '?')
+            + 'id=' + encodeURIComponent(slug) + '&photo=0';
+          const label = (new URLSearchParams(location.search).get('nextLabel') || '').slice(0, 40);
+          btn.textContent = label ? ('Back to ' + label) : 'Back to your product';
+          document.getElementById('result').classList.add('has-next');
+        }
         document.getElementById('result').style.display = 'block';
 
         // Share button → Copy link / Email / Message popup (matches Manage).

@@ -2296,10 +2296,16 @@
       function renderTray() {
         const grid = document.getElementById('tray-grid');
         grid.innerHTML = '';
-        // "New Popcode" tile — start a fresh image + video/audio pair.
+        /* "New Popcode" tile — start a fresh image + video/audio pair. This leaves
+           the Shop, so carry a return path: create.html appends the new slug and
+           offers a button back here, landing on this same product with the new
+           photo already selected. Without it you finish on the create result
+           screen and have to find your way back and start the product again. */
         const mk = document.createElement('a');
         mk.className = 'photo-cell tray-new';
-        mk.href = '/create.html';
+        const back = '/order.html?type=' + encodeURIComponent(state.productType);
+        mk.href = '/create.html?next=' + encodeURIComponent(back)
+          + '&nextLabel=' + encodeURIComponent((CATEGORY_META[state.productType] || {}).name || 'your product');
         mk.innerHTML = '<span class="tray-new-inner"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Popcode</span>';
         grid.appendChild(mk);
         photos.forEach(p => {

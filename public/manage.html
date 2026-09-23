@@ -217,6 +217,10 @@
       .pop-pill { align-self: flex-start; display: inline-block; font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600; color: #656565; background: #ededed; border-radius: 999px; padding: 3px 9px; letter-spacing: 0.03em; text-transform: uppercase; margin-bottom: 8px; }
       .pop-pill.product { color: #fff; background: linear-gradient(135deg,#7657FC,#589AF9); font-weight: 700; }
       .card-meta { font-size: 12px; color: #888; margin-top: auto; }
+      /* Inherits the meta line's size and colour so it reads as part of the
+         sentence, not a button competing with the card's actions. */
+      .card-products { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+      .card-products:hover { color: #1a1a1a; }
       .card-id { font-size: 12px; color: #aaa; margin-top: 12px; }
       .card-id strong { color: #1a1a1a; font-weight: 700; }
       /* Two children only: the button group, and delete. The group wraps
@@ -656,6 +660,20 @@
         return PRODUCT_KINDS.includes(row ? row.kind : c) || hasPrintDesign(row);
       };
       let allCollections = [], countMap = {}, photoMap = {};
+      /* How many saved products were made from each Popcode, for the "2 products"
+         link on a Popcode card — the other half of the design card's "plays X", so
+         the pair reads as connected rather than duplicated. Built once per render;
+         scanning per card would be O(n^2). Only print designs record a source: a
+         book or calendar carries its own photos and isn't made FROM another
+         Popcode. */
+      let productsBySlug = {};
+      function buildProductIndex() {
+        productsBySlug = {};
+        allCollections.forEach(c => {
+          const src = c.book_layout && c.book_layout.print && c.book_layout.print.sourceSlug;
+          if (src) productsBySlug[src] = (productsBySlug[src] || 0) + 1;
+        });
+      }
       let activeTab = (new URLSearchParams(location.search).get('tab') === 'designs') ? 'designs' : 'popcodes';
 
       async function loadCollections() {
@@ -737,6 +755,7 @@
         // Designs tab = every physical product. Popcodes tab = standalone AR
         // collections PLUS any product that's actually scannable (a popcoded
         // book/calendar has a compiled .mind, so it IS a Popcode too).
+        buildProductIndex();
         const list = allCollections.filter(c => isDesigns ? isDesignKind(c) : (!isDesignKind(c) || isScannable(c)));
         if (!list.length) { content.className = 'collections-list'; content.appendChild(buildEmptyState(activeTab)); return; }
         if (isDesigns) list.forEach(col => content.appendChild(buildDesignCard(col, photoMap[col.id] || null)));
@@ -783,7 +802,7 @@
               ${kindPill ? `<div class="pop-pill product">${escapeHtml(kindPill)}</div>` : isCollection ? '<div class="pop-pill">Collection</div>' : ''}
               <div class="card-title">${escapeHtml(title)}</div>
               ${viewsLineHtml(col)}
-              <div class="card-meta">Created ${formatDate(col.created_at)} &nbsp;/&nbsp; ${isBook ? 'photo book' : isCalendar ? 'photo calendar' : isProduct ? PRODUCT_LABEL[col.kind].toLowerCase() : pageCount + ' image' + (pageCount !== 1 ? 's' : '')}</div>
+              <div class="card-meta">Created ${formatDate(col.created_at)} &nbsp;/&nbsp; ${isBook ? 'photo book' : isCalendar ? 'photo calendar' : isProduct ? PRODUCT_LABEL[col.kind].toLowerCase() : pageCount + ' image' + (pageCount !== 1 ? 's' : '')}${productsBySlug[col.slug] ? ` &nbsp;/&nbsp; <a class="card-products" href="?tab=designs">${productsBySlug[col.slug]} product${productsBySlug[col.slug] === 1 ? '' : 's'}</a>` : ''}</div>
               <div class="card-id" style="position:relative;">ID: <strong>${escapeHtml(col.slug)}</strong>
               <div class="share-popup" id="share-popup-${escapeHtml(col.slug)}">
                 <div class="share-popup-title">Share options</div>
