@@ -861,6 +861,15 @@
         const dw = iw * fitScale, dh = ih * fitScale;
         ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
         ctx.restore();
+        /* Where the photo actually landed, clipped to the box. Under 'fit' it is
+           letterboxed, so the badge has to sit in the corner of the PHOTO — the
+           corner of the box is bare ceramic. Rotation is ignored here: it is not
+           used on the products that letterbox. */
+        const cx = x + w / 2 + (a.ox / 100) * w, cy = y + h / 2 + (a.oy / 100) * h;
+        const sw2 = dw * a.scale / 2, sh2 = dh * a.scale / 2;
+        return { x: Math.max(x, cx - sw2), y: Math.max(y, cy - sh2),
+                 w: Math.min(x + w, cx + sw2) - Math.max(x, cx - sw2),
+                 h: Math.min(y + h, cy + sh2) - Math.max(y, cy - sh2) };
       }
 
       // ---- badge compositor (inlined; never depends on a separate file) ----
@@ -892,9 +901,9 @@
           pc.clearRect(0, 0, pw, ph);
           // Same white ground as the print, so the preview matches it.
           pc.fillStyle = '#ffffff'; pc.fillRect(0, 0, pw, ph);
-          if (adjust) drawPhotoAdjusted(pc, img, adjust, 0, 0, pw, ph);
-          else pc.drawImage(img, sx, sy, cropW, cropH, 0, 0, pw, ph);
-          placeBadge(pc, iconImg, pw, ph, scale, opts);
+          var pbox = adjust ? drawPhotoAdjusted(pc, img, adjust, 0, 0, pw, ph) : null;
+          if (!adjust) pc.drawImage(img, sx, sy, cropW, cropH, 0, 0, pw, ph);
+          placeBadge(pc, iconImg, pw, ph, scale, Object.assign({}, opts, { box: pbox }));
           if (!returnDataUrl) return null;
         }
         // Full-res output (the actual print asset). JPEG keeps the file small so
@@ -924,7 +933,8 @@
            bands either side of the picture. White is also what the bare product
            actually is: unprinted ceramic, unprinted paper. */
         ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cropW, cropH);
-        if (adjust) drawPhotoAdjusted(ctx, img, adjust, 0, 0, cropW, cropH);
+        var box = null;
+        if (adjust) box = drawPhotoAdjusted(ctx, img, adjust, 0, 0, cropW, cropH);
         // Source rect stays the crop we chose off the original; only the
         // DESTINATION shrinks when a pixel cap applies, so capping resamples
         // rather than re-cropping.
@@ -932,7 +942,8 @@
         // Brighten/pop the photo for print before the badge goes on top.
         var corr = opts.correction || correctionByKey(ACTIVE_CORRECTION);
         applyCorrection(ctx, cropW, cropH, corr);
-        placeBadge(ctx, iconImg, cropW, cropH, scale, opts);
+        // Same box as the preview path above, so what prints matches what you saw.
+        placeBadge(ctx, iconImg, cropW, cropH, scale, Object.assign({}, opts, { box: box }));
         // Stickers are die-cut from a PNG and Prodigi rejects a JPEG for them;
         // everything else stays JPEG so the checkout upload stays small.
         return opts.format === 'png' ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.92);
@@ -961,15 +972,15 @@
           pad = Math.max(pad, Math.ceil(opts.padPx * (minSide / nominal)));
         }
         var x = w - size - pad, y = h - size - pad;
-        if (opts && opts.wrap) {
-          /* A wrap has no corners you ever see. The artwork runs the whole way
-             round the mug, so its right-hand edge finishes beside the handle and
-             a badge placed there faces away from whoever is holding it. Put it
-             at the foot of the MIDDLE of the wrap, which is the face of the mug
-             — the part pointing at you when the handle is in your hand. */
-          x = Math.round(w / 2 - size / 2);
-          y = h - size - Math.round(h * 0.055);
-        } else if (opts && opts.round) {
+        /* Lower right of the PHOTO, the same corner every other product uses. On
+           a wrap under 'fit' the photo is letterboxed inside the print area, so
+           the box's own corner is bare ceramic beside the handle — `box` is the
+           rect the photo was actually drawn into. */
+        if (opts && opts.box && opts.box.w > size && opts.box.h > size) {
+          x = Math.round(opts.box.x + opts.box.w - size - pad);
+          y = Math.round(opts.box.y + opts.box.h - size - pad);
+        }
+        if (opts && opts.round) {
           // Centre of the badge on the 45 degree diagonal, far enough in that the
           // whole badge (plus its own half-diagonal) clears the circle's edge.
           var r = minSide / 2;
