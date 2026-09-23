@@ -1320,13 +1320,40 @@
           return;
         }
 
+      /* Every storage upload in the save flow goes through here.
+
+         upsert: without it a create that dies after ANY file has landed can never
+         be retried — the next attempt gets "The resource already exists" at that
+         step. And because the collections row is written last, the slug still
+         reads as available, so nothing tells you the name is the problem. Seen in
+         the wild: target.mind and photo_0 both uploaded, no row, Try Again stuck
+         on step 3 forever. Re-uploading our own files is harmless; a slug that
+         already belongs to a project is rejected by the availability check before
+         we get here.
+
+         retry: a dropped response on mobile surfaces as Safari's bare "Load
+         failed" and otherwise throws away a compile the user just sat through.
+         Only transport failures are repeated — a rejection won't change. */
+      async function uploadToStorage(path, body, contentType) {
+        let last;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (attempt) await new Promise(r => setTimeout(r, 800 * attempt));
+          const { error } = await db.storage.from('experiences')
+            .upload(path, body, { contentType, upsert: true });
+          if (!error) return;
+          last = error;
+          if (!/load failed|network|fetch|timed? ?out/i.test(error.message || '')) break;
+        }
+        const msg = (last && last.message) || 'upload failed';
+        throw new Error(/load failed|network|fetch/i.test(msg)
+          ? 'the connection dropped mid-upload \u2014 check your signal and try again'
+          : msg);
+      }
+
         let mindUrl;
         try {
           setProgress('Saving your Popcode…', 55);
-          const { error: mindError } = await db.storage
-            .from('experiences')
-            .upload(`${slug}/target.mind`, mindBlob, { contentType: 'application/octet-stream' });
-          if (mindError) throw mindError;
+          await uploadToStorage(`${slug}/target.mind`, mindBlob, 'application/octet-stream');
           mindUrl = db.storage.from('experiences').getPublicUrl(`${slug}/target.mind`).data.publicUrl + `?v=${Date.now()}`;
         } catch (err) {
           showError('Step 3 failed (uploading image targets) — ' + (err.message || 'Upload error. Check your internet connection and try again.'));
@@ -1344,10 +1371,9 @@
               if (pair.video.size === 0) {
                 throw new Error(`Video ${i+1} ("${pair.video.name}") is empty — it may have expired. Please remove and re-add it.`);
               }
-              const { error: vErr } = await db.storage
-                .from('experiences')
-                .upload(`${slug}/video_${i}.mp4`, pair.video, { contentType: pair.video.type || 'video/mp4' });
-              if (vErr) throw new Error(`Video ${i+1} ("${pair.video.name}"): ${vErr.message}`);
+              try {
+                await uploadToStorage(`${slug}/video_${i}.mp4`, pair.video, pair.video.type || 'video/mp4');
+              } catch (e) { throw new Error(`Video ${i+1} ("${pair.video.name}"): ${e.message}`); }
               item.video_url = db.storage.from('experiences').getPublicUrl(`${slug}/video_${i}.mp4`).data.publicUrl;
             } else {
               if (pair.audio.size === 0) {
@@ -1355,18 +1381,16 @@
               }
               const audioExt = (pair.audio.name && pair.audio.name.split('.').pop()) || 'webm';
               const audioPath = `${slug}/audio_${i}.${audioExt}`;
-              const { error: aErr } = await db.storage
-                .from('experiences')
-                .upload(audioPath, pair.audio, { contentType: pair.audio.type || 'audio/webm' });
-              if (aErr) throw new Error(`Audio ${i+1}: ${aErr.message}`);
+              try {
+                await uploadToStorage(audioPath, pair.audio, pair.audio.type || 'audio/webm');
+              } catch (e) { throw new Error(`Audio ${i+1}: ${e.message}`); }
               item.audio_url = db.storage.from('experiences').getPublicUrl(audioPath).data.publicUrl;
             }
 
             const photoExt = pair.photo.name.split('.').pop() || 'jpg';
-            const { error: pErr } = await db.storage
-              .from('experiences')
-              .upload(`${slug}/photo_${i}.${photoExt}`, pair.photo, { contentType: pair.photo.type || 'image/jpeg' });
-            if (pErr) throw new Error(`Photo ${i+1}: ${pErr.message}`);
+            try {
+              await uploadToStorage(`${slug}/photo_${i}.${photoExt}`, pair.photo, pair.photo.type || 'image/jpeg');
+            } catch (e) { throw new Error(`Photo ${i+1}: ${e.message}`); }
             item.photo_url = db.storage.from('experiences').getPublicUrl(`${slug}/photo_${i}.${photoExt}`).data.publicUrl;
 
             mediaItems.push(item);
