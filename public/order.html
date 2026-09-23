@@ -707,11 +707,20 @@
          a 360 wrap (set the popcode.app URL beside the handle, since there is no
          back to print it on), and PNG output where Prodigi demands it.
          Returns {} for everything else, so the existing products are untouched. */
+      /* How much of a mug's 229mm band you actually see head-on. The mockup
+         cover-fits the wrap into its opening, so the visible share is the
+         opening's aspect over the wrap's: (0.5596*881)/(0.6778*900) = 0.808,
+         divided by 228.6/94.83 = 2.41 -> 0.335, i.e. the middle third, spanning
+         0.332 to 0.668. Past that the ceramic turns toward the handle, which is
+         where the badge went when it simply took the photo's far corner. */
+      const WRAP_FACE_FRAC = 0.335;
+
       function giftArtOpts(photo) {
         const v = variantOf(state.productType, state.variantId);
         if (!v) return {};
         const o = {};
         if (v.round) o.round = true;
+        if (v.wrap) o.faceFrac = WRAP_FACE_FRAC;
         if (v.format) o.format = v.format;
         if (v.maxPx) o.maxPx = v.maxPx;
         if (v.padPx) o.padPx = v.padPx;
@@ -974,11 +983,19 @@
         var x = w - size - pad, y = h - size - pad;
         /* Lower right of the PHOTO, the same corner every other product uses. On
            a wrap under 'fit' the photo is letterboxed inside the print area, so
-           the box's own corner is bare ceramic beside the handle — `box` is the
-           rect the photo was actually drawn into. */
+           the box's own corner is bare ceramic — `box` is the rect the photo was
+           actually drawn into. */
         if (opts && opts.box && opts.box.w > size && opts.box.h > size) {
           x = Math.round(opts.box.x + opts.box.w - size - pad);
           y = Math.round(opts.box.y + opts.box.h - size - pad);
+        }
+        /* ...but never past the part of a wrap that faces you. A photo wider than
+           the mug's front third has its own corner rotated toward the handle, so
+           the badge would print out of sight. Pull it in to the right-hand edge of
+           what's visible: still the lower right, still in view. */
+        if (opts && opts.wrap && opts.faceFrac) {
+          var faceRight = w / 2 + (w * opts.faceFrac) / 2;
+          x = Math.min(x, Math.round(faceRight - size - pad));
         }
         if (opts && opts.round) {
           // Centre of the badge on the 45 degree diagonal, far enough in that the
