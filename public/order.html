@@ -2410,12 +2410,11 @@
       function renderTray() {
         const list = document.getElementById('tray-list');
         list.innerHTML = '';
-        const mk = document.createElement('a');
+        const mk = document.createElement('button');
+        mk.type = 'button';
         mk.className = 'pop-row new';
-        const back = '/order.html?type=' + encodeURIComponent(state.productType);
-        mk.href = '/create.html?next=' + encodeURIComponent(back)
-          + '&nextLabel=' + encodeURIComponent((CATEGORY_META[state.productType] || {}).name || 'your product');
         mk.textContent = '+ Create a new Popcode';
+        mk.addEventListener('click', goCreateNewPopcode);
         list.appendChild(mk);
         trayProjects().forEach(proj => {
           const row = document.createElement('button');
@@ -2463,12 +2462,34 @@
       document.getElementById('tray-back').addEventListener('click', showPhotoChoice);
       document.getElementById('photos-back').addEventListener('click', showTray);
       document.getElementById('pick-existing').addEventListener('click', showTray);
-      document.getElementById('pick-new').addEventListener('click', () => {
-        // Same return trip as the tray's "New Popcode" tile.
+      /* Hand the product across to create.html so it can keep showing what you're
+         making instead of dropping you on a bare form. The rendered preview is
+         already on screen, so a scaled snapshot costs nothing and needs none of
+         order.html's ~290-line mockup renderer over there — which would have to be
+         duplicated or extracted, and drifts the moment either copy changes. */
+      function carryProductToCreate() {
+        const meta = CATEGORY_META[state.productType] || {};
+        const payload = { name: meta.name || '', tagline: meta.tagline || '', img: '' };
+        try {
+          const src = document.getElementById('detail-canvas');
+          if (src && src.width) {
+            const side = 480;
+            const c = document.createElement('canvas');
+            c.width = side; c.height = Math.round(side * (src.height / src.width));
+            c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+            payload.img = c.toDataURL('image/png');
+          }
+        } catch (e) { /* tainted or unsupported: the pane just won't show */ }
+        try { sessionStorage.setItem('popcodeShopProduct', JSON.stringify(payload)); }
+        catch (e) { /* quota or private mode: same, it degrades to no pane */ }
+      }
+      function goCreateNewPopcode() {
+        carryProductToCreate();
         const back = '/order.html?type=' + encodeURIComponent(state.productType);
         window.location.href = '/create.html?next=' + encodeURIComponent(back)
           + '&nextLabel=' + encodeURIComponent((CATEGORY_META[state.productType] || {}).name || 'your product');
-      });
+      }
+      document.getElementById('pick-new').addEventListener('click', goCreateNewPopcode);
 
       // ---- review (see it in the product) → Save to My Designs or Order ----
       function randomSlug() { let s = ''; const a = 'abcdefghijklmnopqrstuvwxyz0123456789'; for (let i = 0; i < 8; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
