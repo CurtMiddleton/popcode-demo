@@ -29,7 +29,7 @@
              goes underneath and the template's own pixels — gold string, the hole,
              the rim shading, the drop shadow — sit on top. Not `cylinder`: it is
              flat, so there is no curvature to shade. */
-          ornament: { template: '/assets/mockups/ornament.png', rect: { x: 0.2000, y: 0.3212, w: 0.6115, h: 0.6115 }, cutout: true },
+          ornament: { template: '/assets/mockups/ornament.png', rect: { x: 0.1990, y: 0.3240, w: 0.6000, h: 0.6000 }, cutout: true },
           mug:    { template: '/assets/mockups/mug.png',    rect: { x: 0.1850, y: 0.1767, w: 0.5596, h: 0.6778 }, cutout: true, cylinder: true },
         };
 
