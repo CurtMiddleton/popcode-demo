@@ -33,9 +33,11 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 3. `PRINTIFY_DRY_RUN` is still `true` — one real test ornament order, then flip it
    in Production scope and redeploy.
 4. Order one mug and one ornament to check the real products.
-5. Carried over: re-enable Vercel Deployment Protection on previews; let
-   `curt@theworkshop.works` open `analytics.html`; ST-120 resale certificate for
-   Prodigi; shipping options as cards (biggest Popsa gap).
+5. Carried over: let `curt@theworkshop.works` open `analytics.html`; ST-120
+   resale certificate for Prodigi; shipping options as cards (biggest Popsa gap).
+
+Done: Vercel Deployment Protection is on for previews (user confirmed
+2026-09-24) — ignore the older entries below that list it as open.
 
 ## Session history
 
