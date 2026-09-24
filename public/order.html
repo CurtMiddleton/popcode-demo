@@ -18,6 +18,7 @@
     <script src="/audio-wav.js"></script>
     <script src="/activity.js"></script>
     <script src="/unsplash-samples.js"></script>
+    <script src="/product-preview.js"></script>
     <script src="/countries.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="stylesheet" href="/ui.css">
@@ -298,6 +299,7 @@
       <!-- Step 2: product detail -->
       <div id="step-detail" style="display:none;">
         <button class="linkback" id="to-category">&larr; All products</button>
+        <button class="linkback" id="detail-back" style="display:none;">&larr; Back</button>
         <div class="detail">
           <div class="detail-left">
             <div class="detail-preview" id="detail-preview"><div class="detail-stage"><canvas id="detail-canvas" width="400" height="400"></canvas></div></div>
@@ -598,6 +600,11 @@
          (Printify already fulfils the board book from District Photo in the US,
          and PRODUCT_PROVIDER exists for exactly this). */
       const NO_US_FULFILMENT = new Set(['magnet', 'sticker', 'ornament']);
+      /* The preview renderer now lives in /product-preview.js so the create page
+         can draw the same product. Bound to the old names here, so every call
+         site below is unchanged. */
+      const { MOCKUPS, compositeBadgedImage, renderProductMockup, renderProductOnly, placeProduct, placeBadge, drawPhotoAdjusted, normalizeAdjust, clampPan, roundRectPath, correctionByKey, applyCorrection, DEFAULT_ADJUST, CORRECTION_PRESETS, ACTIVE_CORRECTION, WRAP_FACE_FRAC, WRAP_BADGE_SCALE, WRAP_BADGE_LIFT } = window.PopcodePreview;
+
       const ALL_CATEGORIES = ['print', 'tile', 'canvas', 'framed', 'framedcanvas', 'acrylic', 'mug', 'ornament', 'magnet', 'sticker'];
       const CATEGORIES = ALL_CATEGORIES.filter(t => !NO_US_FULFILMENT.has(t));
       const CATEGORY_META = {
@@ -623,20 +630,7 @@
       // product shot; otherwise it falls back to the framed-canvas CSS preview.
       // Add per product as templates land in /assets/mockups/.
       // rect = art opening as FRACTIONS of the template (resolution-independent).
-      const MOCKUPS = {
-        canvas: { template: '/assets/mockups/canvas.jpg', rect: { x: 0.190,  y: 0.112, w: 0.670, h: 0.804 } },
-        framed: { template: '/assets/mockups/framed.jpg', rect: { x: 0.208,  y: 0.111, w: 0.582, h: 0.778 } },
-        tile:   { template: '/assets/mockups/tile.jpg',   rect: { x: 0.280,  y: 0.206, w: 0.427, h: 0.598 } },
-        // A borderless print has no frame/depth of its own, and the template's wall
-        // is near-white, so it washes out on the white storefront card. `shadow`
-        // makes renderProductMockup cast a real drop shadow so it reads as a
-        // physical print lifted off the wall.
-        print:  { template: '/assets/mockups/print.jpg',  rect: { x: 0.190,  y: 0.113, w: 0.626, h: 0.782 }, shadow: true },
-        // Made from Prodigi's own product shot with the design it carried erased
-        // pixel by pixel, so the asset holds no third-party artwork. `cutout`
-        // puts the art under the template, letting the cylinder's arcs mask it.
-        mug:    { template: '/assets/mockups/mug.png',    rect: { x: 0.1850, y: 0.1767, w: 0.5596, h: 0.6778 }, cutout: true, cylinder: true },
-      };
+      
 
       // Per-product product-photo GALLERY (like Prodigi's own product-page galleries).
       // Each entry is a product shot. If it has a `rect` (art opening, fractions of the
@@ -724,16 +718,16 @@
          divided by 228.6/94.83 = 2.41 -> 0.335, i.e. the middle third, spanning
          0.332 to 0.668. Past that the ceramic turns toward the handle, which is
          where the badge went when it simply took the photo's far corner. */
-      const WRAP_FACE_FRAC = 0.335;
+      
       /* The badge is 6% of the print area's SHORTEST side. On an 11oz mug that
          side is the band's 94.8mm height, so the rule produced 5.7mm — the
          smallest badge in the shop, against 7.6mm on a 5x7 print and 15.2mm on a
          10x10. Size a wrap's off its own number: 0.095 * 94.8 = 9.0mm. */
-      const WRAP_BADGE_SCALE = 0.095;
+      
       /* And lift it off the bottom. The mug's lower edge curves away from the
          camera, so a badge on the artwork's usual 2.5% margin is clipped by the
          rim — worse toward the sides, which is exactly where it sits. */
-      const WRAP_BADGE_LIFT = 0.10;
+      
 
       function giftArtOpts(photo) {
         const v = variantOf(state.productType, state.variantId);
@@ -789,49 +783,20 @@
       // contrast/saturation are multipliers around neutral. Order a calibration
       // tile (add ?calibrate=1 to the URL) to compare all of them printed, then
       // set ACTIVE_CORRECTION to whichever panel looks right in hand.
-      const CORRECTION_PRESETS = [
-        { key: 'off',    label: 'Off',    gamma: 1.00, contrast: 1.00, saturation: 1.00 },
-        { key: 'light',  label: 'Light',  gamma: 1.10, contrast: 1.02, saturation: 1.06 },
-        { key: 'medium', label: 'Medium', gamma: 1.16, contrast: 1.04, saturation: 1.10 },
-        { key: 'strong', label: 'Strong', gamma: 1.22, contrast: 1.06, saturation: 1.16 },
-        { key: 'max',    label: 'Max',    gamma: 1.30, contrast: 1.08, saturation: 1.22 },
-      ];
+      
       // The correction baked into real orders. Change this after the calibration
       // tile tells us which preset matches.
-      const ACTIVE_CORRECTION = 'medium';
-      function correctionByKey(key) {
-        return CORRECTION_PRESETS.find(p => p.key === key) || CORRECTION_PRESETS[0];
-      }
+      
+      
       // Apply a correction to the pixels already drawn into ctx (w×h region from 0,0).
-      function applyCorrection(ctx, w, h, corr) {
-        if (!corr || (corr.gamma === 1 && corr.contrast === 1 && corr.saturation === 1)) return;
-        // Precompute a 256-entry LUT for the per-channel gamma+contrast curve
-        // (both are independent of the other channels; saturation is not).
-        const invG = 1 / corr.gamma, con = corr.contrast, sat = corr.saturation;
-        const lut = new Uint8ClampedArray(256);
-        for (let i = 0; i < 256; i++) {
-          let v = Math.pow(i / 255, invG);        // gamma lift (midtone brighten)
-          v = (v - 0.5) * con + 0.5;              // contrast around mid
-          lut[i] = Math.max(0, Math.min(255, Math.round(v * 255)));
-        }
-        const imgd = ctx.getImageData(0, 0, w, h), d = imgd.data;
-        for (let i = 0; i < d.length; i += 4) {
-          let r = lut[d[i]], g = lut[d[i + 1]], b = lut[d[i + 2]];
-          if (sat !== 1) {                        // saturation around per-pixel luma
-            const l = 0.299 * r + 0.587 * g + 0.114 * b;
-            r = l + (r - l) * sat; g = l + (g - l) * sat; b = l + (b - l) * sat;
-          }
-          d[i] = r; d[i + 1] = g; d[i + 2] = b;
-        }
-        ctx.putImageData(imgd, 0, 0);
-      }
+      
 
       // ---- crop / zoom / reposition model (ported from book.html Edit Photo) ------
       // A photo is drawn at its cover/contain-fit size, centered in the crop box,
       // then panned by a fraction of the box and scaled/rotated. Same math used by
       // the Edit Photo stage (layoutEp) and the print/preview bake below, so what you
       // position in the editor is exactly what the product shows and prints.
-      const DEFAULT_ADJUST = () => ({ fit: 'fill', scale: 1, ox: 0, oy: 0, rot: 0 });
+      
       /* Fill is right for a print: the photo covers the paper and the sides are
          trimmed, which is what anyone ordering a 5x7 expects. A mug is the
          opposite. Its artwork is a 229mm band at aspect 2.41, so Fill on an
@@ -844,139 +809,20 @@
         const v = variantOf(type, (PRODUCTS[type] || [{}])[0].id);
         return Object.assign(DEFAULT_ADJUST(), (v && v.wrap) ? { fit: 'fit' } : {});
       };
-      function normalizeAdjust(a) {
-        const d = DEFAULT_ADJUST();
-        if (!a || typeof a !== 'object') return d;
-        return {
-          fit: a.fit === 'fit' ? 'fit' : 'fill',
-          scale: Math.max(1, Math.min(3, +a.scale || 1)),
-          ox: Math.max(-80, Math.min(80, +a.ox || 0)),
-          oy: Math.max(-80, Math.min(80, +a.oy || 0)),
-          rot: ((Math.round((+a.rot || 0) / 90) * 90) % 360 + 360) % 360,
-        };
-      }
+      
       function printQuality(w, h, scale) {
         if (!w || !h) return 10;
         const eff = Math.min(w, h) / (scale || 1);
         return Math.max(1, Math.min(10, Math.round(eff / 170)));
       }
       // Clamp the pan so the photo always covers the crop box (no background bleed).
-      function clampPan(a, boxW, boxH, iw, ih) {
-        if (!iw || !ih || !boxW || !boxH) return a;
-        if (a.fit === 'fit') { a.ox = 0; a.oy = 0; return a; }
-        const fitScale = Math.max(boxW / iw, boxH / ih);
-        const rotated = (a.rot % 180) !== 0;
-        const imgW = (rotated ? ih : iw) * fitScale * a.scale;
-        const imgH = (rotated ? iw : ih) * fitScale * a.scale;
-        const maxOx = Math.max(0, (imgW - boxW) / (2 * boxW) * 100);
-        const maxOy = Math.max(0, (imgH - boxH) / (2 * boxH) * 100);
-        a.ox = Math.max(-maxOx, Math.min(maxOx, a.ox));
-        a.oy = Math.max(-maxOy, Math.min(maxOy, a.oy));
-        return a;
-      }
+      
       // Canvas bake: draw `img` into rect (x,y,w,h) honoring crop/zoom/rotate. At the
       // default adjust this is exactly a center-crop, so un-edited photos are unchanged.
-      function drawPhotoAdjusted(ctx, img, adjust, x, y, w, h) {
-        const a = normalizeAdjust(adjust);
-        const iw = img.naturalWidth, ih = img.naturalHeight;
-        if (!iw || !ih) return;
-        clampPan(a, w, h, iw, ih);
-        const fitScale = a.fit === 'fit' ? Math.min(w / iw, h / ih) : Math.max(w / iw, h / ih);
-        ctx.save();
-        ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
-        ctx.translate(x + w / 2 + (a.ox / 100) * w, y + h / 2 + (a.oy / 100) * h);
-        ctx.scale(a.scale, a.scale);
-        ctx.rotate(a.rot * Math.PI / 180);
-        const dw = iw * fitScale, dh = ih * fitScale;
-        ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
-        ctx.restore();
-        /* Where the photo actually landed, clipped to the box. Under 'fit' it is
-           letterboxed, so the badge has to sit in the corner of the PHOTO — the
-           corner of the box is bare ceramic. Rotation is ignored here: it is not
-           used on the products that letterbox. */
-        const cx = x + w / 2 + (a.ox / 100) * w, cy = y + h / 2 + (a.oy / 100) * h;
-        const sw2 = dw * a.scale / 2, sh2 = dh * a.scale / 2;
-        return { x: Math.max(x, cx - sw2), y: Math.max(y, cy - sh2),
-                 w: Math.min(x + w, cx + sw2) - Math.max(x, cx - sw2),
-                 h: Math.min(y + h, cy + sh2) - Math.max(y, cy - sh2) };
-      }
+      
 
       // ---- badge compositor (inlined; never depends on a separate file) ----
-      async function compositeBadgedImage(photoUrl, opts) {
-        opts = opts || {};
-        var scale = typeof opts.scale === 'number' ? opts.scale : 0.06;
-        var aspect = (typeof opts.aspect === 'number' && opts.aspect > 0) ? opts.aspect : null;
-        var adjust = opts.adjust || null;
-        var previewCanvas = opts.previewCanvas || null;
-        var img = new Image(); img.crossOrigin = 'anonymous';
-        await new Promise(function (res, rej) { img.onload = res; img.onerror = rej; img.src = photoUrl; });
-        var iconImg = new Image();
-        await new Promise(function (res, rej) { iconImg.onload = res; iconImg.onerror = rej; iconImg.src = '/assets/popcode_symbol_color.svg'; });
-        var returnDataUrl = opts.returnDataUrl !== false; // previews pass false
-        var sw = img.naturalWidth, sh = img.naturalHeight;
-        var cropW = sw, cropH = sh, sx = 0, sy = 0;
-        if (aspect) {
-          if (sw / sh > aspect) { cropH = sh; cropW = Math.round(sh * aspect); sx = Math.round((sw - cropW) / 2); }
-          else { cropW = sw; cropH = Math.round(sw / aspect); sy = Math.round((sh - cropH) / 2); }
-        }
-        // Fast preview path: draw the crop straight into a small canvas (no full-res
-        // intermediate, no toDataURL) so the grid/detail stay snappy.
-        if (previewCanvas) {
-          var maxDim = 500;
-          var s = Math.min(1, maxDim / Math.max(cropW, cropH));
-          var pw = Math.max(1, Math.round(cropW * s)), ph = Math.max(1, Math.round(cropH * s));
-          previewCanvas.width = pw; previewCanvas.height = ph;
-          var pc = previewCanvas.getContext('2d');
-          pc.clearRect(0, 0, pw, ph);
-          // Same white ground as the print, so the preview matches it.
-          pc.fillStyle = '#ffffff'; pc.fillRect(0, 0, pw, ph);
-          var pbox = adjust ? drawPhotoAdjusted(pc, img, adjust, 0, 0, pw, ph) : null;
-          if (!adjust) pc.drawImage(img, sx, sy, cropW, cropH, 0, 0, pw, ph);
-          placeBadge(pc, iconImg, pw, ph, scale, Object.assign({}, opts, { box: pbox }));
-          if (!returnDataUrl) return null;
-        }
-        // Full-res output (the actual print asset). JPEG keeps the file small so
-        // compositing + upload at checkout is fast (no transparency needed once
-        // the badge is flattened onto the photo).
-        //
-        // Kiss-cut stickers are the one product with a MAXIMUM accepted pixel
-        // size as well as a minimum (900x1200 for the 3x4", 2550 square for the
-        // 8.5"). A phone photo cropped square is about 3000px, so the cap bites
-        // on ordinary input and the asset is scaled down to fit it. Aspect is
-        // preserved — a single ratio, so the crop stays exactly what was
-        // previewed.
-        var srcCropW = cropW, srcCropH = cropH;
-        if (opts.maxPx && opts.maxPx.w && opts.maxPx.h) {
-          var capScale = Math.min(1, opts.maxPx.w / cropW, opts.maxPx.h / cropH);
-          if (capScale < 1) {
-            cropW = Math.max(1, Math.floor(cropW * capScale));
-            cropH = Math.max(1, Math.floor(cropH * capScale));
-          }
-        }
-        var c = document.createElement('canvas');
-        c.width = cropW; c.height = cropH;
-        var ctx = c.getContext('2d');
-        /* White behind the photo. A fresh canvas is transparent, and Fit
-           deliberately leaves the sides uncovered — exported as JPEG that
-           transparency becomes BLACK, which on a white mug would be two black
-           bands either side of the picture. White is also what the bare product
-           actually is: unprinted ceramic, unprinted paper. */
-        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cropW, cropH);
-        var box = null;
-        if (adjust) box = drawPhotoAdjusted(ctx, img, adjust, 0, 0, cropW, cropH);
-        // Source rect stays the crop we chose off the original; only the
-        // DESTINATION shrinks when a pixel cap applies, so capping resamples
-        // rather than re-cropping.
-        else ctx.drawImage(img, sx, sy, srcCropW, srcCropH, 0, 0, cropW, cropH);
-        // Brighten/pop the photo for print before the badge goes on top.
-        var corr = opts.correction || correctionByKey(ACTIVE_CORRECTION);
-        applyCorrection(ctx, cropW, cropH, corr);
-        // Same box as the preview path above, so what prints matches what you saw.
-        placeBadge(ctx, iconImg, cropW, cropH, scale, Object.assign({}, opts, { box: box }));
-        // Stickers are die-cut from a PNG and Prodigi rejects a JPEG for them;
-        // everything else stays JPEG so the checkout upload stays small.
-        return opts.format === 'png' ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.92);
-      }
+      
 
       /* Where the Popcode badge sits on the artwork.
 
@@ -988,49 +834,7 @@
          moves down the bottom-right diagonal to sit inside the inscribed
          circle, which is the nearest position to the corner that actually
          survives the cut. */
-      function placeBadge(ctx, iconImg, w, h, scale, opts) {
-        var minSide = Math.min(w, h);
-        var size = Math.round(minSide * ((opts && opts.wrap) ? WRAP_BADGE_SCALE : scale));
-        var pad = Math.round(minSide * 0.025);
-        // A kiss-cut sticker is trimmed 2.5mm (30px at 300 DPI) in from the
-        // file edge, and the usual 2.5% margin is under that on the smaller
-        // sizes — so the badge would be cut through. Take whichever margin is
-        // larger, scaled if the asset was capped below its nominal size.
-        if (opts && opts.padPx) {
-          var nominal = (opts.maxPx && opts.maxPx.w) ? Math.min(opts.maxPx.w, opts.maxPx.h) : minSide;
-          pad = Math.max(pad, Math.ceil(opts.padPx * (minSide / nominal)));
-        }
-        var x = w - size - pad, y = h - size - pad;
-        /* Lower right of the PHOTO, the same corner every other product uses. On
-           a wrap under 'fit' the photo is letterboxed inside the print area, so
-           the box's own corner is bare ceramic — `box` is the rect the photo was
-           actually drawn into. */
-        if (opts && opts.box && opts.box.w > size && opts.box.h > size) {
-          x = Math.round(opts.box.x + opts.box.w - size - pad);
-          y = Math.round(opts.box.y + opts.box.h - size - pad);
-        }
-        /* ...but never past the part of a wrap that faces you. A photo wider than
-           the mug's front third has its own corner rotated toward the handle, so
-           the badge would print out of sight. Pull it in to the right-hand edge of
-           what's visible: still the lower right, still in view. */
-        if (opts && opts.wrap) {
-          if (opts.faceFrac) {
-            var faceRight = w / 2 + (w * opts.faceFrac) / 2;
-            x = Math.min(x, Math.round(faceRight - size - pad));
-          }
-          var bottom = (opts.box && opts.box.h > size) ? (opts.box.y + opts.box.h) : h;
-          y = Math.round(bottom - size - Math.max(pad, h * WRAP_BADGE_LIFT));
-        }
-        if (opts && opts.round) {
-          // Centre of the badge on the 45 degree diagonal, far enough in that the
-          // whole badge (plus its own half-diagonal) clears the circle's edge.
-          var r = minSide / 2;
-          var reach = Math.max(0, r - size * 0.71 - pad);
-          x = Math.round(w / 2 + reach * 0.707 - size / 2);
-          y = Math.round(h / 2 + reach * 0.707 - size / 2);
-        }
-        ctx.drawImage(iconImg, x, y, size, size);
-      }
+      
 
 
       // Build a single labeled calibration sheet: the same photo shown at every
@@ -1077,96 +881,7 @@
         return sheet.toDataURL('image/jpeg', 0.92);
       }
       // Composite the badged photo into a real product mockup's art rectangle.
-      async function renderProductMockup(targetCanvas, photoUrl, opts) {
-        const mk = opts.mockup;
-        const tpl = new Image(); tpl.crossOrigin = 'anonymous';
-        await new Promise((res, rej) => { tpl.onload = res; tpl.onerror = rej; tpl.src = mk.template; });
-        const maxDim = 900;
-        const s = Math.min(1, maxDim / Math.max(tpl.naturalWidth, tpl.naturalHeight));
-        const tw = Math.round(tpl.naturalWidth * s), th = Math.round(tpl.naturalHeight * s);
-        let r = { x: mk.rect.x * tw, y: mk.rect.y * th, w: mk.rect.w * tw, h: mk.rect.h * th };
-        // Landscape orientation: rotate the (portrait) template 90° so the frame
-        // itself reads landscape, then place an upright landscape-cropped photo in
-        // the rotated opening. (A portrait 8×10 frame turned 90° IS a 10×8.)
-        /* A portrait 8x10 frame turned 90 degrees IS a 10x8, so a wide aspect
-           means rotate the template. That reasoning does not carry to a product
-           with a fixed orientation: a mug's wrap is 2.41 wide, and rotating it
-           would stand the mug on its handle. Cutout templates are real product
-           photographs and always sit the way they were shot. */
-        const landscape = !!(opts.aspect && opts.aspect > 1) && !mk.cutout;
-        const ctx = targetCanvas.getContext('2d');
-        if (landscape) {
-          targetCanvas.width = th; targetCanvas.height = tw;
-          ctx.save(); ctx.translate(th, 0); ctx.rotate(Math.PI / 2); ctx.drawImage(tpl, 0, 0, tw, th); ctx.restore();
-          r = { x: th - r.y - r.h, y: r.x, w: r.h, h: r.w };
-        } else {
-          targetCanvas.width = tw; targetCanvas.height = th;
-          /* A CUTOUT template is the product photographed with its printed area
-             erased to transparency: the art goes UNDERNEATH and the template's
-             own pixels mask it. A mug needs this — its print area arcs at top
-             and bottom with the curve of the cylinder, and no rectangle can
-             describe that shape. Opaque templates keep taking the art on top. */
-          if (!mk.cutout) ctx.drawImage(tpl, 0, 0, tw, th);
-        }
-        // Cover the template's stock sample photo with a neutral placeholder so
-        // there's no flash of the sample (leopard) image while the user's photo
-        // composites in (the photo load below is async). A cutout template has
-        // no stock photo to hide, and filling here would paint a grey block
-        // outside the product's silhouette.
-        if (!mk.cutout) { ctx.fillStyle = '#e9e9ec'; ctx.fillRect(r.x, r.y, r.w, r.h); }
-        // Crop the badged art to the OPENING's exact aspect so the badge always
-        // lands in the corner of what's shown (no cover-crop clipping it off).
-        /* A wrap keeps its OWN aspect rather than the opening's: a mug's artwork
-           runs 229mm round the cylinder while the opening shows only the ~130mm
-           facing the camera, so cropping to the opening would squeeze the whole
-           panorama onto the front. Cover-cropping the real wrap into the opening
-           shows the part you would actually be looking at. */
-        const wrapV = (typeof giftArtOpts === 'function') ? giftArtOpts() : {};
-        const artUrl = await compositeBadgedImage(photoUrl, Object.assign(
-          // `adjust` is the crop and reposition from Edit Photo. Without it the
-          // preview silently ignores everything done in that dialog while the
-          // print file honours it — the worst combination, since what you are
-          // shown is not what you would receive.
-          { scale: opts.scale, aspect: wrapV.wrap ? opts.aspect : r.w / r.h, adjust: opts.adjust || null }, wrapV));
-        const art = new Image(); await new Promise((res, rej) => { art.onload = res; art.onerror = rej; art.src = artUrl; });
-        // Reinforce a cast shadow for borderless prints so they read as a physical
-        // object lifted off the wall (the template's baked shadow washes out on a
-        // white page). Paint a shadowed white rect under the art, then draw the art
-        // on top so only the soft halo around the print edges shows.
-        if (mk.shadow) {
-          ctx.save();
-          ctx.shadowColor = 'rgba(0,0,0,0.30)';
-          ctx.shadowBlur = Math.round(tw * 0.022);
-          ctx.shadowOffsetX = Math.round(tw * 0.012);
-          ctx.shadowOffsetY = Math.round(th * 0.016);
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(r.x, r.y, r.w, r.h);
-          ctx.restore();
-        }
-        ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
-        if (mk.cutout && art.naturalWidth / art.naturalHeight > r.w / r.h) {
-          // Cover-fit: fill the opening's height and centre the wrap, so what
-          // shows is the middle of the artwork — the face of the mug.
-          const dh = r.h, dw = dh * (art.naturalWidth / art.naturalHeight);
-          ctx.drawImage(art, r.x + (r.w - dw) / 2, r.y, dw, dh);
-        } else {
-          ctx.drawImage(art, r.x, r.y, r.w, r.h);
-        }
-        if (mk.cylinder) {
-          // Shade the art like the curved surface it is printed on, or it reads
-          // as a flat sticker pasted into a mug-shaped hole.
-          const cyl = ctx.createLinearGradient(r.x, 0, r.x + r.w, 0);
-          cyl.addColorStop(0,    'rgba(0,0,0,0.30)');
-          cyl.addColorStop(0.10, 'rgba(0,0,0,0.10)');
-          cyl.addColorStop(0.32, 'rgba(255,255,255,0.10)');
-          cyl.addColorStop(0.62, 'rgba(0,0,0,0.02)');
-          cyl.addColorStop(0.88, 'rgba(0,0,0,0.16)');
-          cyl.addColorStop(1,    'rgba(0,0,0,0.34)');
-          ctx.fillStyle = cyl; ctx.fillRect(r.x, r.y, r.w, r.h);
-        }
-        ctx.restore();
-        if (mk.cutout) ctx.drawImage(tpl, 0, 0, tw, th);
-      }
+      
 
       function dataUrlToBlob(dataUrl) {
         var parts = dataUrl.split(',');
@@ -1380,6 +1095,12 @@
         /* On the photo step the page belongs to the product, matching the create
            page this step can hand off to — otherwise the three screens in that
            sequence each announce themselves differently. */
+        /* Arriving on the product from the photo step, "All products" is two steps
+           away — every other screen offers exactly one step back, so this does too
+           once a photo has been chosen. */
+        const chosen = step === 'detail' && !!state.selectedPhoto;
+        document.getElementById('detail-back').style.display = chosen ? '' : 'none';
+        document.getElementById('to-category').style.display = chosen ? 'none' : '';
         const meta = CATEGORY_META[state.productType] || {};
         const inPhoto = step === 'photo';
         document.querySelector('h1').textContent = inPhoto ? (meta.name || 'Shop') : 'Shop';
@@ -1393,12 +1114,7 @@
 
       // ---- dynamic-aspect preview: draw the product at the SELECTED size's aspect
       // (square size → square) with a neutral placeholder until a photo is picked. --
-      function roundRectPath(ctx, x, y, w, h, r) {
-        ctx.beginPath();
-        ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r);
-        ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r);
-        ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
-      }
+      
       function drawImageIcon(ctx, cx, cy, size) {
         const s = size / 24, ox = cx - size / 2, oy = cy - size / 2;
         const X = v => ox + v * s, Y = v => oy + v * s;
@@ -1441,7 +1157,7 @@
           const cv = card.querySelector('canvas');
           const fallback = () => compositeBadgedImage(firstPhoto, { scale: 0.06, aspect: first.aspect, previewCanvas: cv, returnDataUrl: false }).catch(() => {});
           if (hasMockup) {
-            renderProductMockup(cv, firstPhoto, { scale: 0.06, aspect: first.aspect, mockup: mk }).catch(fallback);
+            renderProductMockup(cv, firstPhoto, { scale: 0.06, aspect: first.aspect, mockup: mk, art: giftArtOpts() }).catch(fallback);
           } else { fallback(); }
         });
       }
@@ -1633,78 +1349,7 @@
 
       // Draw the product (art or gray placeholder) with its frame treatment + a soft
       // shadow inside box {x,y,w,h}. `frame` = frame border width (0 = borderless).
-      function placeProduct(ctx, art, box, id, product, frame) {
-        const { x, y, w, h } = box;
-        const contact = (id === 'shelf');
-
-        // Shelf: pool a soft contact shadow under the base so it reads as resting on
-        // the shelf (not floating). Everything else: a soft cast drop shadow.
-        if (contact) {
-          const cxb = x + w / 2, cyb = y + h + frame;
-          ctx.save();
-          const rg = ctx.createRadialGradient(cxb, cyb, w * 0.04, cxb, cyb, w * 0.6);
-          rg.addColorStop(0, 'rgba(0,0,0,0.30)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx.fillStyle = rg; ctx.translate(cxb, cyb); ctx.scale(1, 0.15);
-          ctx.beginPath(); ctx.arc(0, 0, w * 0.6, 0, 2 * Math.PI); ctx.fill();
-          ctx.restore();
-        }
-        ctx.save();
-        ctx.shadowColor = contact ? 'rgba(0,0,0,0.16)' : 'rgba(0,0,0,0.22)';
-        ctx.shadowBlur = w * (contact ? 0.028 : 0.055);
-        ctx.shadowOffsetX = w * (contact ? 0.004 : 0.016);
-        ctx.shadowOffsetY = h * (contact ? 0.006 : 0.04);
-        const hasFrame = (product === 'framed' || product === 'tile' || product === 'framedcanvas');
-        ctx.fillStyle = hasFrame ? frameColorHex() : '#ffffff';
-        // Tiles have SQUARE corners (like the real product) — no rounding.
-        ctx.fillRect(x - frame, y - frame, w + 2 * frame, h + 2 * frame);
-        // Light frames (white/natural) need a hairline edge to read against the
-        // pale stage background.
-        if (hasFrame && isLightFrame()) {
-          ctx.shadowColor = 'transparent';
-          ctx.strokeStyle = 'rgba(0,0,0,0.14)';
-          ctx.lineWidth = Math.max(1, w * 0.003);
-          ctx.strokeRect(x - frame, y - frame, w + 2 * frame, h + 2 * frame);
-        }
-        ctx.restore();
-        ctx.save();
-        // Mounted framed print: the conservation mount sits between frame and
-        // image — fill the opening with mount white, inset the art.
-        let ax = x, ay = y, aw = w, ah = h;
-        if (product === 'framed' && state.mounted) {
-          ctx.fillStyle = '#faf9f6'; ctx.fillRect(x, y, w, h);
-          const m = w * 0.13;
-          ax = x + m; ay = y + m; aw = w - 2 * m; ah = h - 2 * m;
-          ctx.save();
-          ctx.strokeStyle = 'rgba(0,0,0,0.16)'; ctx.lineWidth = Math.max(1, w * 0.0035);
-          ctx.strokeRect(ax, ay, aw, ah); // mount bevel line
-          ctx.restore();
-        }
-        // Framed canvas: a small shadowed gap between frame and canvas face.
-        if (product === 'framedcanvas') {
-          ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(x, y, w, h);
-          const g = w * 0.022;
-          ax = x + g; ay = y + g; aw = w - 2 * g; ah = h - 2 * g;
-        }
-        if (art) ctx.drawImage(art, ax, ay, aw, ah);
-        else { ctx.fillStyle = '#ededed'; ctx.fillRect(ax, ay, aw, ah); drawImageIcon(ctx, ax + aw / 2, ay + ah / 2, Math.min(aw, ah) * 0.2); }
-        // Acrylic: glossy diagonal sheen + a bright polished edge.
-        if (product === 'acrylic') {
-          const sheen = ctx.createLinearGradient(x, y, x + w, y + h);
-          sheen.addColorStop(0, 'rgba(255,255,255,0.16)');
-          sheen.addColorStop(0.35, 'rgba(255,255,255,0.02)');
-          sheen.addColorStop(0.55, 'rgba(255,255,255,0.10)');
-          sheen.addColorStop(1, 'rgba(255,255,255,0)');
-          ctx.fillStyle = sheen; ctx.fillRect(x, y, w, h);
-          ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = Math.max(1.5, w * 0.005);
-          ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
-        }
-        ctx.restore();
-        if (product === 'canvas') { // gallery-wrap depth edge
-          ctx.fillStyle = 'rgba(0,0,0,0.10)'; ctx.fillRect(x + w - w * 0.014, y, w * 0.014, h);
-          ctx.fillStyle = 'rgba(0,0,0,0.06)'; ctx.fillRect(x, y + h - h * 0.011, w, h * 0.011);
-        }
-        if (product === 'framed') { ctx.strokeStyle = isLightFrame() ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.10)'; ctx.lineWidth = Math.max(1, w * 0.004); ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1); }
-      }
+      
 
       // ── Photoreal backdrops (Path B) ──────────────────────────────────────────
       // Real Prodigi scene renders. As backdrops are added to /assets/mockups/scenes/,
@@ -1783,7 +1428,7 @@
       // art `rect`, composite it in; otherwise show the clean product shot as-is.
       async function renderGalleryView(cv, view, aspect) {
         if (view.rect && state.selectedPhoto) {
-          try { await renderProductMockup(cv, state.selectedPhoto.url, { scale: state.scale, aspect, mockup: view }); return; }
+          try { await renderProductMockup(cv, state.selectedPhoto.url, { scale: state.scale, aspect, mockup: view, art: giftArtOpts() }); return; }
           catch (_) { /* fall through to plain product shot */ }
         }
         await showMockupTemplate(cv, view);
@@ -1839,20 +1484,7 @@
       // Draw JUST the product (frame/print/canvas/tile) at the selected aspect, with a
       // soft drop shadow, on a transparent canvas — it floats on the gray stage behind it.
       // Only the product reshapes; the white tile + gray stage stay fixed.
-      function renderProductOnly(cv, art, aspect) {
-        const S = 900;
-        cv.width = S; cv.height = S;
-        const ctx = cv.getContext('2d');
-        ctx.clearRect(0, 0, S, S);
-        // 0.84 (was 0.62) so the product's on-screen size in the 400px stage
-        // matches the storefront cards' cropped mockups (~340px tall).
-        const maxW = S * 0.84, maxH = S * 0.84;
-        let w = maxW, h = w / aspect;
-        if (h > maxH) { h = maxH; w = h * aspect; }
-        const frame = (state.productType === 'framed' || state.productType === 'framedcanvas') ? w * 0.055 : (state.productType === 'tile' ? w * 0.05 : 0);
-        const x = S / 2 - w / 2, y = S / 2 - h / 2;
-        placeProduct(ctx, art, { x, y, w, h }, 'plain', state.productType, frame);
-      }
+      
       async function renderDetailPreview() {
         const aspect = currentAspect();
         const cv = document.getElementById('detail-canvas');
@@ -1886,7 +1518,11 @@
              null fell back to fill, so a mug showed a portrait sample cropped to
              its 2.41 wrap and took the tops of heads off — and the preview then
              disagreed with what the same photo does once actually chosen. */
-          const opts = { scale: state.scale, mockup: mk, aspect,
+          /* The wrap options used to be fetched inside renderProductMockup by
+             reaching for this page's giftArtOpts(). The renderer is shared now, so
+             they are passed in — a module that reads another file's globals only
+             works on the page it came from. */
+          const opts = { scale: state.scale, mockup: mk, aspect, art: giftArtOpts(),
                          adjust: state.selectedPhoto ? state.photoAdjust
                                                      : defaultAdjustFor(state.productType) };
           try {
@@ -2546,6 +2182,7 @@
         document.getElementById('photo-photos').style.display = '';
       }
       document.getElementById('photo-step-back').addEventListener('click', () => photoStepBack());
+      document.getElementById('detail-back').addEventListener('click', () => openPhotoStep());
       document.getElementById('pick-existing').addEventListener('click', showTray);
       /* Hand the product across to create.html so it can keep showing what you're
          making instead of dropping you on a bare form. The rendered preview is
@@ -2554,7 +2191,13 @@
          duplicated or extracted, and drifts the moment either copy changes. */
       function carryProductToCreate() {
         const meta = CATEGORY_META[state.productType] || {};
-        const payload = { name: meta.name || '', tagline: meta.tagline || '', img: '' };
+        const payload = { name: meta.name || '', tagline: meta.tagline || '', img: '',
+          /* Enough for the create page to draw this product itself, now that the
+             renderer is shared: it redraws with your photo as you pick it instead
+             of showing the snapshot below forever. */
+          render: { productType: state.productType, aspect: currentAspect(),
+                    scale: state.scale, adjust: defaultAdjustFor(state.productType),
+                    art: giftArtOpts() } };
         try {
           const src = document.getElementById('detail-canvas');
           if (src && src.width) {

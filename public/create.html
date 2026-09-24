@@ -23,6 +23,7 @@
     <script src="/activity.js"></script>
     <script src="/referral.js"></script>
     <script src="/slug.js"></script>
+    <script src="/product-preview.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/image-source.js"></script>
     <script src="/montage-music.js"></script>
@@ -361,7 +362,7 @@
       .sp-tile { background: #fff; border-radius: var(--pc-radius-card); box-shadow: var(--pc-shadow-card); padding: 18px; }
       .sp-stage { background: #f2f2f2; border-radius: var(--pc-radius-inner); aspect-ratio: 1;
         display: flex; align-items: center; justify-content: center; overflow: hidden; }
-      #sp-img { max-width: 92%; max-height: 92%; object-fit: contain; display: block; }
+      #sp-img, #sp-canvas { max-width: 92%; max-height: 92%; object-fit: contain; display: block; }
       /* One column on a phone: the product reads as a header above the form. */
       @media (max-width: 860px) {
         body.from-shop #shop-split { grid-template-columns: minmax(0, 1fr); gap: 22px; }
@@ -473,7 +474,10 @@
          a snapshot order.html took of the preview you were already looking at. -->
     <div id="shop-split">
       <div id="shop-product">
-        <div class="sp-tile"><div class="sp-stage"><img id="sp-img" alt=""></div></div>
+        <div class="sp-tile"><div class="sp-stage">
+          <img id="sp-img" alt="">
+          <canvas id="sp-canvas" width="600" height="600" style="display:none"></canvas>
+        </div></div>
       </div>
     <div class="form-col">
       <!-- Shop only: the same back-then-heading the product page's photo step
@@ -578,6 +582,42 @@
 
       /* The product label the Shop sent along, e.g. "Photo Mugs". Capped and only
          ever written with textContent — it arrives in a link like ?next= does. */
+      /* What the Shop handed over to draw its product with. Null on a direct
+         visit, in which case none of this runs. */
+      let shopRender = null;
+
+      /* Redraw the product with the photo just chosen. The Shop and this page run
+         the same renderer (/product-preview.js), so what you see here is what the
+         product page will show — previously this pane was a fixed snapshot taken
+         before you arrived and never changed. Best-effort throughout: any failure
+         leaves the snapshot in place, which is what was here before. */
+      async function renderShopProduct(file) {
+        const P = window.PopcodePreview;
+        if (!shopRender || !P || !file) return;
+        const cv = document.getElementById('sp-canvas');
+        const url = URL.createObjectURL(file);
+        try {
+          const mk = P.MOCKUPS[shopRender.productType];
+          const opts = { scale: shopRender.scale, aspect: shopRender.aspect,
+                         adjust: shopRender.adjust, art: shopRender.art || {} };
+          if (mk) {
+            await P.renderProductMockup(cv, url, Object.assign({ mockup: mk }, opts));
+          } else {
+            const dataUrl = await P.compositeBadgedImage(url, Object.assign(
+              { scale: opts.scale, aspect: opts.aspect, adjust: opts.adjust }, opts.art));
+            const im = new Image();
+            await new Promise((res, rej) => { im.onload = res; im.onerror = rej; im.src = dataUrl; });
+            P.renderProductOnly(cv, im, opts.aspect);
+          }
+          cv.style.display = '';
+          document.getElementById('sp-img').style.display = 'none';
+        } catch (e) {
+          /* keep the snapshot */
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      }
+
       function nextLabel() {
         return (new URLSearchParams(location.search).get('nextLabel') || '').slice(0, 40);
       }
@@ -612,6 +652,7 @@
           document.querySelector('.page-top-bar h1').textContent = carried.name;
         }
         // A data: URL from our own canvas — never markup, and never a remote src.
+        shopRender = (carried && carried.render) || null;
         if (carried && typeof carried.img === 'string' && carried.img.startsWith('data:image/')) {
           const im = document.getElementById('sp-img');
           im.src = carried.img;
@@ -1032,6 +1073,8 @@
         if (msgEl) { msgEl.style.display = 'none'; msgEl.innerHTML = ''; }
 
         pairs[n][type] = file;
+        // Shop only, and only the photo: the product pane redraws with it.
+        if (type === 'photo') renderShopProduct(file);
         const btn = document.getElementById(`${type}-btn-${n}`);
         btn.classList.add('selected');
         // Fill the whole card with the thumbnail and reveal the eye/pencil controls.
