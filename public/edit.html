@@ -774,6 +774,7 @@
           </div>
           <h3 class="success-title">Popcode updated!</h3>
           <p class="success-sub">Your Popcode is live and ready to scan.</p>
+          <a class="modal-primary-btn" id="continue-btn" href="#" style="display:none;">Back to your product</a>
           <a class="modal-primary-btn" id="view-btn" target="_blank" rel="noopener" href="#">View Popcode</a>
           <div class="result-share-wrap">
             <button type="button" class="modal-secondary-btn" id="share-btn">Share</button>
@@ -828,6 +829,15 @@
 
       const params = new URLSearchParams(location.search);
       const slug = params.get('id');
+      /* Arrived from the Shop's create step ("Edit this Popcode"): ?next is where
+         to go back to. It comes in a link, so only a same-origin path is accepted
+         — resolved with URL, the same check create.html uses. */
+      function returnTo() {
+        const raw = params.get('next') || '';
+        if (!raw.startsWith('/')) return '';
+        let u; try { u = new URL(raw, location.origin); } catch (e) { return ''; }
+        return u.origin === location.origin ? u.pathname + u.search : '';
+      }
 
       let currentUser = null;
       let collectionId = null;
@@ -2470,6 +2480,19 @@
         setProgress('Done!', 100);
         const viewUrl = `https://popcode.app/${slug}`;
         document.getElementById('view-btn').href = viewUrl;
+        {
+          const back = returnTo();
+          if (back) {
+            const cb = document.getElementById('continue-btn');
+            cb.href = back + (back.includes('?') ? '&' : '?') + 'id=' + encodeURIComponent(slug) + '&photo=0&created=1';
+            const label = (params.get('nextLabel') || '').slice(0, 40);
+            cb.textContent = label ? 'Back to ' + label : 'Back to your product';
+            cb.style.display = '';
+            // The way back is the main action here; viewing steps down.
+            const vb = document.getElementById('view-btn');
+            vb.style.background = 'transparent'; vb.style.color = '#1a1a1a'; vb.style.border = '1px solid #e0e0e0';
+          }
+        }
 
         // Share button → Copy link / Email / Message popup (matches New Popcode).
         const shareTitle = (document.getElementById('name-input').value.trim() || 'My Popcode');

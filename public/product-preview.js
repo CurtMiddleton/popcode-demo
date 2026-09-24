@@ -29,7 +29,7 @@
              goes underneath and the template's own pixels — gold string, the hole,
              the rim shading, the drop shadow — sit on top. Not `cylinder`: it is
              flat, so there is no curvature to shade. */
-          ornament: { template: '/assets/mockups/ornament.png', rect: { x: 0.1155, y: 0.1030, w: 0.7585, h: 0.7670 }, cutout: true },
+          ornament: { template: '/assets/mockups/ornament.png', rect: { x: 0.1127, y: 0.1132, w: 0.7728, h: 0.7728 }, cutout: true },
           mug:    { template: '/assets/mockups/mug.png',    rect: { x: 0.1850, y: 0.1767, w: 0.5596, h: 0.6778 }, cutout: true, cylinder: true },
         };
 
@@ -435,8 +435,87 @@
           placeProduct(ctx, art, { x, y, w, h }, 'plain', state.productType, frame);
         }
 
+  /* ── Ornament back panel ──────────────────────────────────────────────────
+     The reverse of the double-sided ornament (Printify 1747, 2.9" round, print
+     area 938px). Printify has no insert, so this is where the link lives. It is
+     the same brand block as the book / album back cover — wordmark, the
+     instruction, the Popcode symbol — with the book's proportions between them
+     (logo 10x the type size, symbol 2.9x, gaps ~1.1-1.4x) so it reads as the
+     same family, just scaled to a 2.9" disc. The copy is written for the object
+     in hand: the photo that plays is on the other side, not "photos with the
+     symbol". Everything sits well inside the die-cut circle and clear of the
+     hanging hole at the top. Shared by the product page, the create page and
+     the print asset, so the preview is the file that prints. */
+  const ORNAMENT_BACK_PX = 938;
+  const _backImgs = {};
+  function loadSameOrigin(src) {
+    if (!_backImgs[src]) _backImgs[src] = new Promise((res, rej) => {
+      const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src;
+    });
+    return _backImgs[src];
+  }
+  async function drawOrnamentBack(slug, S) {
+    S = S || ORNAMENT_BACK_PX;
+    const url = 'popcode.app/' + (slug || 'yourlink');
+    try { if (document.fonts) await Promise.all([document.fonts.load("500 40px Inter"), document.fonts.load("700 40px Inter")]); } catch (e) { /* fall back */ }
+    const [logo, sym] = await Promise.all([
+      loadSameOrigin('/assets/Popcode_logo.png'),
+      loadSameOrigin('/assets/popcode_symbol_color.svg'),
+    ]);
+    const c = document.createElement('canvas'); c.width = S; c.height = S;
+    const x = c.getContext('2d');
+    x.fillStyle = '#ffffff'; x.fillRect(0, 0, S, S);
+    const cx = S / 2, cy = S / 2, R = S / 2;
+    const FONT = (w, px) => w + ' ' + Math.round(px) + 'px Inter, system-ui, sans-serif';
+
+    // Type size drives everything, as on the book back.
+    const F = S * 0.041;                 // ~9pt on a 2.9" disc
+    const lead = F * 1.6;
+    const logoW = F * 10, logoH = logoW * logo.height / logo.width;
+    const gapLogo = F * 1.35, gapSym = F * 1.15, symW = F * 2.9;
+    const lineW = (segs, px) => segs.reduce((w, s) => { x.font = FONT(s.b ? 700 : 500, px); return w + x.measureText(s.t).width; }, 0);
+    const chord = (dy) => 2 * Math.sqrt(Math.max(0, (R * 0.80) ** 2 - dy * dy));
+
+    // Fewest lines that fit at full size: the link beside "Go to … on your
+    // phone"; else "Go to <link>" on its own line; else the link alone. A long
+    // link gets its own line rather than being shrunk until it can't be read.
+    const room = chord(0) * 0.96;
+    const layouts = [
+      [[{ t: 'Go to ' }, { t: url, b: true }, { t: ' on your phone' }],
+       [{ t: 'and point it at the other side.' }]],
+      [[{ t: 'Go to ' }, { t: url, b: true }],
+       [{ t: 'on your phone and point it' }],
+       [{ t: 'at the other side.' }]],
+      [[{ t: 'Go to' }],
+       [{ t: url, b: true }],
+       [{ t: 'on your phone and point it' }],
+       [{ t: 'at the other side.' }]],
+    ];
+    let lines = layouts.find(L => L.every(segs => lineW(segs, F) <= room)) || layouts[2];
+    const textH = lead * (lines.length - 1) + F;
+    const blockH = logoH + gapLogo + textH + gapSym + symW;
+    let top = cy - blockH / 2 + S * 0.03;   // a touch low: the hole is at the top
+
+    x.drawImage(logo, cx - logoW / 2, top, logoW, logoH);
+    let y = top + logoH + gapLogo + F * 0.8;
+    x.fillStyle = '#1a1a1a'; x.textBaseline = 'alphabetic'; x.textAlign = 'left';
+    for (const segs of lines) {
+      // Shrink a line only if a very long link still overruns the circle.
+      let px = F; const room = chord(y - cy);
+      while (lineW(segs, px) > room && px > F * 0.7) px -= 1;
+      let lx = cx - lineW(segs, px) / 2;
+      for (const s of segs) { x.font = FONT(s.b ? 700 : 500, px); x.fillText(s.t, lx, y); lx += x.measureText(s.t).width; }
+      y += lead;
+    }
+    const symTop = top + logoH + gapLogo + textH + gapSym;
+    x.drawImage(sym, cx - symW / 2, symTop, symW, symW);
+    return c.toDataURL('image/png');
+  }
+
   window.PopcodePreview = {
     MOCKUPS: MOCKUPS,
+    drawOrnamentBack: drawOrnamentBack,
+    ORNAMENT_BACK_PX: ORNAMENT_BACK_PX,
     compositeBadgedImage: compositeBadgedImage,
     renderProductMockup: renderProductMockup,
     renderProductOnly: renderProductOnly,

@@ -322,7 +322,19 @@
       #try-again-btn { display: none; margin-top: 14px; background: white; color: #1a1a1a; border: 1px solid #d8d8d8; border-radius: 24px; padding: 10px 24px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s, border-color 0.2s; font-family: 'Inter', sans-serif; }
       #try-again-btn:hover { background: #f5f5f5; border-color: #c8c8c8; }
 
-      #result { display: none; width: 100%; max-width: 420px; margin-top: 24px; background: white; border-radius: var(--pc-radius-card); padding: 24px; text-align: center; box-shadow: var(--pc-shadow-card); }
+      /* A dialog, not a card at the foot of the form: it used to render below
+         the fold on a laptop, so the Popcode was made and nobody saw it — and the
+         natural next move, pressing Create again, hit "that link is taken". */
+      #result-overlay { display: none; position: fixed; inset: 0; z-index: 9500; background: rgba(20,20,20,0.38);
+        align-items: center; justify-content: center; padding: 20px; }
+      #result-overlay.open { display: flex; }
+      #result { position: relative; width: 100%; max-width: 420px; max-height: calc(100vh - 40px); overflow-y: auto;
+        background: white; border-radius: var(--pc-radius-card); padding: 28px 24px 22px; text-align: center; box-shadow: 0 18px 60px rgba(0,0,0,0.22); }
+      #result-close { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; border-radius: 50%; border: none;
+        background: #f1f1f1; color: #1a1a1a; font-size: 20px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+      #result-close:hover { background: #e7e7e7; }
+      #edit-btn { display: block; width: 100%; box-sizing: border-box; background: transparent; color: #1a1a1a; border: 1px solid #e0e0e0; border-radius: 24px; padding: 13px; font-size: 15px; font-weight: 700; text-decoration: none; text-align: center; margin-bottom: 10px; font-family: 'Inter', sans-serif; }
+      #edit-btn:hover { background: #f7f7f7; }
       #result h3 { font-size: 18px; margin-bottom: 8px; color: #1a1a1a; }
       #result p { font-size: 13px; color: #888; margin-bottom: 16px; }
       #result-url { background: #f1f1f1; border-radius: var(--pc-radius-inner); padding: 10px 14px; font-size: 12px; word-break: break-all; color: #333; margin-bottom: 12px; }
@@ -363,6 +375,12 @@
       .sp-stage { background: #f2f2f2; border-radius: var(--pc-radius-inner); aspect-ratio: 1;
         display: flex; align-items: center; justify-content: center; overflow: hidden; }
       #sp-img, #sp-canvas { max-width: 92%; max-height: 92%; object-fit: contain; display: block; }
+      #sp-side { display: none; justify-content: center; margin-top: 14px; }
+      #sp-side.on { display: flex; }
+      .sp-side-toggle { display: inline-flex; background: #eee; border-radius: 16px; padding: 3px; gap: 2px; }
+      .sp-side-toggle button { border: none; background: none; border-radius: 14px; padding: 8px 16px; font-size: 13px;
+        font-weight: 500; color: #666; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .sp-side-toggle button.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 4px rgba(0,0,0,0.12); font-weight: 600; }
       /* One column on a phone: the product reads as a header above the form. */
       @media (max-width: 860px) {
         body.from-shop #shop-split { grid-template-columns: minmax(0, 1fr); gap: 22px; }
@@ -477,7 +495,13 @@
         <div class="sp-tile"><div class="sp-stage">
           <img id="sp-img" alt="">
           <canvas id="sp-canvas" width="600" height="600" style="display:none"></canvas>
-        </div></div>
+        </div>
+          <!-- Double-sided products only (the ornament): flip to the back to see
+               the link panel that prints there, with the link typed below. -->
+          <div id="sp-side"><div class="sp-side-toggle">
+            <button type="button" data-side="front" class="active">Front</button><button type="button" data-side="back">Back</button>
+          </div></div>
+        </div>
       </div>
     <div class="form-col">
       <!-- Shop only: the same back-then-heading the product page's photo step
@@ -544,10 +568,13 @@
       <button id="try-again-btn">Try Again</button>
     </div>
 
+    <div id="result-overlay" role="dialog" aria-modal="true" aria-labelledby="result-title">
     <div id="result">
-      <h3>Popcode created!</h3>
+      <button type="button" id="result-close" aria-label="Close">&times;</button>
+      <h3 id="result-title">Popcode created!</h3>
       <p>Your Popcode is live — anyone can scan a photo to play its video or audio.</p>
       <a id="continue-btn" href="#">Back to your product</a>
+      <a id="edit-btn" href="#">Edit this Popcode</a>
       <a id="view-btn" target="_blank" rel="noopener" href="#">View Popcode</a>
       <div class="result-share-wrap">
         <button id="share-btn" type="button">Share</button>
@@ -559,9 +586,14 @@
         </div>
       </div>
     </div>
+    </div><!-- /#result-overlay -->
 
     <script>
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      // Set once the Popcode is made; the Create button then reopens the result
+      // dialog instead of making a second copy. Declared up here so nothing that
+      // runs earlier in this script can hit it before it exists.
+      let createdSlug = null;
 
       /* Where to go after creating, when the Shop sent us here. ?next= arrives in
          a link, so treat it as hostile: anything that doesn't resolve back to this
@@ -591,9 +623,50 @@
          product page will show — previously this pane was a fixed snapshot taken
          before you arrived and never changed. Best-effort throughout: any failure
          leaves the snapshot in place, which is what was here before. */
+      /* Double-sided products: the Back view draws the link panel that prints on
+         the reverse (the same function builds the print file), filled with the
+         link from the URL field below so it updates as you type. */
+      const DOUBLE_SIDED = new Set(['ornament']);
+      let spFile = null;
+      let spSide = 'front';
+      async function renderShopBack() {
+        const P = window.PopcodePreview;
+        if (!shopRender || !P || !P.drawOrnamentBack) return;
+        const cv = document.getElementById('sp-canvas');
+        // slugField is a const further down; a try (not typeof) survives its TDZ.
+        let slug = '';
+        try { slug = slugField.get(); } catch (e) { /* not ready yet */ }
+        try {
+          const data = await P.drawOrnamentBack(slug);
+          if (spSide !== 'back') return;              // flipped back mid-draw
+          await P.renderProductMockup(cv, data, { mockup: P.MOCKUPS[shopRender.productType], aspect: 1 });
+          cv.style.display = '';
+          document.getElementById('sp-img').style.display = 'none';
+        } catch (e) { /* leave whatever is showing */ }
+      }
+      let _backTimer = null;
+      function refreshShopBack() {
+        if (spSide !== 'back') return;
+        clearTimeout(_backTimer); _backTimer = setTimeout(renderShopBack, 150);
+      }
+      function showShopSide(side) {
+        spSide = side;
+        document.querySelectorAll('#sp-side button').forEach(b => b.classList.toggle('active', b.dataset.side === side));
+        if (side === 'back') { renderShopBack(); return; }
+        if (spFile) { renderShopProduct(spFile); return; }
+        // No photo chosen yet: the product page's snapshot is the front.
+        document.getElementById('sp-canvas').style.display = 'none';
+        document.getElementById('sp-img').style.display = '';
+      }
+      document.getElementById('sp-side').addEventListener('click', e => {
+        const b = e.target.closest('button'); if (b) showShopSide(b.dataset.side);
+      });
+
       async function renderShopProduct(file) {
         const P = window.PopcodePreview;
         if (!shopRender || !P || !file) return;
+        spFile = file;
+        if (spSide === 'back') return;   // keep showing the back; front redraws on flip
         const cv = document.getElementById('sp-canvas');
         const url = URL.createObjectURL(file);
         try {
@@ -653,6 +726,9 @@
         }
         // A data: URL from our own canvas — never markup, and never a remote src.
         shopRender = (carried && carried.render) || null;
+        if (shopRender && DOUBLE_SIDED.has(shopRender.productType)) {
+          document.getElementById('sp-side').classList.add('on');
+        }
         if (carried && typeof carried.img === 'string' && carried.img.startsWith('data:image/')) {
           const im = document.getElementById('sp-img');
           im.src = carried.img;
@@ -1137,7 +1213,7 @@
       }
       function checkReady() {
         const hasComplete = Object.values(pairs).some(pageHasMedia);
-        document.getElementById('create-btn').classList.toggle('ready', hasComplete);
+        document.getElementById('create-btn').classList.toggle('ready', hasComplete && !createdSlug);
       }
 
       function removePage(n) {
@@ -1249,6 +1325,7 @@
         classes: { base: 'field-hint', ok: 'ok', err: 'err' },
         onChange: (slug) => {
           urlSlug.textContent = slug;
+          refreshShopBack();
           // No link yet means nothing to edit — offering it before the name is
           // typed reads like the URL is the thing you fill in first.
           if (editBtn) editBtn.style.display = slug ? '' : 'none';
@@ -1318,11 +1395,18 @@
         document.getElementById('quota-overlay').classList.remove('visible');
       });
 
+      function openResult() { document.getElementById('result-overlay').classList.add('open'); }
+      function closeResult() { document.getElementById('result-overlay').classList.remove('open'); }
+      document.getElementById('result-close').addEventListener('click', closeResult);
+      document.getElementById('result-overlay').addEventListener('click', e => { if (e.target.id === 'result-overlay') closeResult(); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') closeResult(); });
+
       document.getElementById('create-btn').addEventListener('click', async () => {
+        if (createdSlug) { openResult(); return; }
         // The name is what the link is built from, so there's no Popcode
         // without one.
         if (!nameInput.value.trim()) {
-          alert('Give your Popcode a name — it becomes its link.');
+          alert('Give your Popcode a name.');
           nameInput.focus();
           nameInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
           return;
@@ -1392,7 +1476,7 @@
         createBtn.classList.remove('ready');
         document.getElementById('try-again-btn').style.display = 'none';
         document.getElementById('progress').style.display = 'block';
-        document.getElementById('result').style.display = 'none';
+        document.getElementById('result-overlay').classList.remove('open');
 
         let images;
         try {
@@ -1568,6 +1652,7 @@
         // alongside the result. The result screen replaces it.
         document.getElementById('progress').style.display = 'none';
         document.getElementById('view-btn').href = viewUrl;
+        createdSlug = slug;
         /* Came from the Shop's "New Popcode" tile: offer the way back, with the
            slug appended so the product reopens with this photo already selected
            (order.html reads ?id & ?photo). returnTo() has already checked the
@@ -1576,14 +1661,27 @@
         if (back) {
           const btn = document.getElementById('continue-btn');
           btn.href = back + (back.includes('?') ? '&' : '?')
-            + 'id=' + encodeURIComponent(slug) + '&photo=0';
+            + 'id=' + encodeURIComponent(slug) + '&photo=0&created=1';
           const label = (new URLSearchParams(location.search).get('nextLabel') || '').slice(0, 40);
           btn.textContent = label ? ('Back to ' + label) : 'Back to your product';
           document.getElementById('result').classList.add('has-next');
           document.querySelector('#result p').textContent =
             'Your photo is ready to print \u2014 it plays when someone scans it.';
         }
-        document.getElementById('result').style.display = 'block';
+        /* Edit goes to the real editor for what now exists; with a Shop return
+           it carries ?next so the editor can send you back to the product. */
+        {
+          const eb = document.getElementById('edit-btn');
+          let href = '/edit.html?id=' + encodeURIComponent(slug);
+          if (back) href += '&next=' + encodeURIComponent(back) + '&nextLabel=' + encodeURIComponent(nextLabel());
+          eb.href = href;
+        }
+        openResult();
+        // The Popcode exists now: the Create button reopens these options rather
+        // than making a second copy under a new link.
+        const cb = document.getElementById('create-btn');
+        cb.disabled = false; cb.classList.remove('ready');
+        cb.textContent = 'Popcode created \u2713';
 
         // Share button → Copy link / Email / Message popup (matches Manage).
         const shareTitle = (document.getElementById('name-input').value.trim() || 'My Popcode');

@@ -168,7 +168,7 @@
        corners into a round shape. Keeps the storefront card identical to the
        order.html preview. rect must stay in sync with MOCKUPS.ornament in
        product-preview.js. */
-    ornament: { template: '/assets/mockups/ornament.png', rect: { x: 0.1155, y: 0.1030, w: 0.7585, h: 0.7670 }, cutout: true },
+    ornament: { template: '/assets/mockups/ornament.png', rect: { x: 0.1127, y: 0.1132, w: 0.7728, h: 0.7728 }, cutout: true },
     print:  { template: '/assets/mockups/print.jpg',  rect: { x: 0.190, y: 0.113, w: 0.626, h: 0.782 }, crop: { x: 0.168, y: 0.089, w: 0.667, h: 0.823 } },
     tile:   { template: '/assets/mockups/tile.jpg',   rect: { x: 0.280, y: 0.206, w: 0.427, h: 0.598 }, crop: { x: 0.242, y: 0.167, w: 0.521, h: 0.696 } },
     canvas: { template: '/assets/mockups/canvas.jpg', rect: { x: 0.190, y: 0.112, w: 0.670, h: 0.804 }, crop: { x: 0.168, y: 0.094, w: 0.709, h: 0.869 } },
