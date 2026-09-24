@@ -116,6 +116,8 @@
       .toggle { display:inline-flex; background:#eee; border-radius:16px; padding:3px; gap:2px; }
       .toggle button { border:none; background:none; border-radius:14px; padding:8px 16px; font-size:13px; font-weight:500; color:#666; cursor:pointer; font-family:'Inter',sans-serif; }
       .toggle button.active { background:#fff; color:#1a1a1a; box-shadow:0 1px 4px rgba(0,0,0,0.12); font-weight:600; }
+      #side-toggle { display:none; justify-content:center; margin-top:16px; }
+      #side-toggle.on { display:flex; }
       .detail-price { font-size:20px; font-weight:600; margin:30px 0 4px; }
       .detail-price-note { color:#888; font-size:12px; margin-bottom:24px; }
       .specs { border-top:1px solid #eee; padding-top:22px; margin-top:10px; }
@@ -302,7 +304,9 @@
         <button class="linkback" id="detail-back" style="display:none;">&larr; Back</button>
         <div class="detail">
           <div class="detail-left">
-            <div class="detail-preview" id="detail-preview"><div class="detail-stage"><canvas id="detail-canvas" width="400" height="400"></canvas></div></div>
+            <div class="detail-preview" id="detail-preview"><div class="detail-stage"><canvas id="detail-canvas" width="400" height="400"></canvas></div>
+              <div id="side-toggle"><div class="toggle"><button type="button" data-side="front" class="active">Front</button><button type="button" data-side="back">Back</button></div></div>
+            </div>
             <div class="preview-actions" id="detail-photo-actions" style="display:none;">
               <button type="button" class="change-photo-btn" id="adjust-photo-btn">Adjust photo</button>
               <button type="button" class="change-photo-btn" id="change-photo-btn">Change photo</button>
@@ -652,7 +656,7 @@
       let currentUser = null;
       let collection = null;
       let photos = [];
-      let state = { step: 'detail', productType: null, variantId: null, frameColor: 'black', mounted: false, orientation: 'portrait', scale: 0.06, selectedPhoto: null, scene: 'plain', galleryIndex: 0, photoAdjust: { fit: 'fill', scale: 1, ox: 0, oy: 0, rot: 0 } };
+      let state = { step: 'detail', productType: null, variantId: null, frameColor: 'black', mounted: false, orientation: 'portrait', scale: 0.06, selectedPhoto: null, scene: 'plain', galleryIndex: 0, previewSide: 'front', photoAdjust: { fit: 'fill', scale: 1, ox: 0, oy: 0, rot: 0 } };
 
       // Frame colours per product (mirrors the server catalog: one variant per
       // size × colour, where black keeps the bare size id).
@@ -1176,6 +1180,12 @@
            Every other per-product choice above is reset here; this one was missed,
            so the default 'fill' survived into the mug and its sample preview. */
         state.photoAdjust = defaultAdjustFor(type);
+        // Double-sided products (the ornament) get a Front/Back preview toggle so
+        // the buyer can see the branded link panel that prints on the reverse.
+        state.previewSide = 'front';
+        const sideToggle = document.getElementById('side-toggle');
+        sideToggle.classList.toggle('on', HAS_BACK_PANEL.has(type));
+        sideToggle.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.side === 'front'));
         // Name the product before the async preview runs, or the button shows
         // whatever it last said for a beat.
         updateDetailCta();
@@ -1509,6 +1519,16 @@
            tile — they ARE flat rectangles. A mug is not: that path showed its
            229mm wrap as a flat panorama with no mug anywhere in sight. */
         const mk = MOCKUPS[state.productType];
+        // Double-sided products: the Back view renders the branded link panel
+        // (the same artwork that prints on the reverse) through the mockup.
+        if (mk && mk.cutout && HAS_BACK_PANEL.has(state.productType) && state.previewSide === 'back') {
+          const slug = (state.selectedPhoto && state.selectedPhoto.slug) || 'yourlink';
+          try {
+            const back = await drawOrnamentBack(slug, 938);
+            await renderProductMockup(cv, back, { mockup: mk, aspect: 1 });
+          } catch (_) { renderProductOnly(cv, await getArtImage(aspect), aspect); }
+          return;
+        }
         if (mk && mk.cutout) {
           // Same fallback ladder as getArtImage: the sample is a random Unsplash
           // shot, so retry once with the bundled copy before giving up on the
@@ -1592,6 +1612,12 @@
         const btn = e.target.closest('button'); if (!btn) return;
         state.orientation = btn.dataset.orientation;
         document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b === btn));
+        renderDetailPreview();
+      });
+      document.getElementById('side-toggle').addEventListener('click', e => {
+        const btn = e.target.closest('button'); if (!btn) return;
+        state.previewSide = btn.dataset.side;
+        document.querySelectorAll('#side-toggle button').forEach(b => b.classList.toggle('active', b === btn));
         renderDetailPreview();
       });
       // "All products" goes back to the Shop; the funnel now starts on detail.
@@ -2330,38 +2356,58 @@
 
       /* The back of a double-sided ornament. Printify has no insert mechanism, so
          this is where the URL lives for the one product that ships without a
-         companion card. The ornament is die-cut round out of a 938x938 square, so
-         everything has to sit inside the inscribed circle — text placed on the
-         square's own margins would be cut away. */
+         companion card. Matches the board book / album branded back panel:
+         Popcode wordmark, "Go to popcode.app/{slug} on your phone." + "Scan photos
+         with the Popcode symbol.", then the Popcode symbol. The ornament is
+         die-cut round out of a 938x938 square, so everything sits inside the
+         inscribed circle — anything on the square's margins would be cut away. */
+      const _bkImg = {};
+      function loadBackImg(src) {
+        if (_bkImg[src]) return _bkImg[src];
+        _bkImg[src] = new Promise((res, rej) => { const i = new Image();
+          i.onload = () => res(i); i.onerror = rej; i.src = src; });
+        return _bkImg[src];
+      }
       async function drawOrnamentBack(slug, S) {
         const c = document.createElement('canvas'); c.width = S; c.height = S;
         const x = c.getContext('2d');
         x.fillStyle = '#ffffff'; x.fillRect(0, 0, S, S);
         const cx = S / 2, cy = S / 2, r = S / 2;
-        // Shrink to the chord available at this height, not the full width: the
-        // circle is narrower than the square everywhere except the centre line.
-        const fitAt = (text, dy, weight, start) => {
-          const half = Math.sqrt(Math.max(0, (r * 0.86) ** 2 - dy * dy));
-          let size = start;
-          do {
-            x.font = weight + ' ' + Math.round(size) + "px Inter, system-ui, sans-serif";
-            if (x.measureText(text).width <= half * 2) break;
+        // Half-chord available at a given vertical offset from centre (the circle
+        // is narrower than the square everywhere except the centre line).
+        const halfAt = (dy) => Math.sqrt(Math.max(0, (r * 0.88) ** 2 - dy * dy));
+        const [logo, sym] = await Promise.all([
+          loadBackImg('/assets/Popcode_logo.png'),
+          loadBackImg('/assets/popcode_symbol_color.svg'),
+        ]);
+        // Wordmark (gradient), centred in the upper third, clear of the hole.
+        const lw = Math.round(S * 0.44), lh = Math.round(lw * logo.height / logo.width);
+        const logoCy = cy - S * 0.205;
+        x.drawImage(logo, cx - lw / 2, logoCy - lh / 2, lw, lh);
+        // Two instruction lines; sentence 1 carries the bold URL inline.
+        x.textAlign = 'left'; x.textBaseline = 'alphabetic';
+        const drawMixed = (segs, dy, start, minSize) => {
+          const half = halfAt(dy);
+          let size = start, w = 0;
+          for (;;) {
+            w = 0;
+            for (const s of segs) { x.font = (s.b ? '700 ' : '400 ') + Math.round(size) + "px Inter, system-ui, sans-serif"; w += x.measureText(s.t).width; }
+            if (w <= half * 2 || size <= minSize) break;
             size -= 2;
-          } while (size > 10);
+          }
+          let px = cx - w / 2;
+          for (const s of segs) {
+            x.font = (s.b ? '700 ' : '400 ') + Math.round(size) + "px Inter, system-ui, sans-serif";
+            x.fillStyle = '#1a1a1a'; x.fillText(s.t, px, cy + dy + size * 0.34);
+            px += x.measureText(s.t).width;
+          }
           return size;
         };
-        const icon = new Image();
-        await new Promise((res, rej) => { icon.onload = res; icon.onerror = rej;
-          icon.src = '/assets/popcode_symbol_color.svg'; });
-        const ic = Math.round(S * 0.18);
-        x.drawImage(icon, cx - ic / 2, cy - r * 0.60, ic, ic);
-        x.textAlign = 'center'; x.textBaseline = 'alphabetic'; x.fillStyle = '#1a1a1a';
-        const l1 = 'Point your phone';
-        const l2 = 'at the photo';
-        fitAt(l1, -r * 0.06, '600', S * 0.070); x.fillText(l1, cx, cy + S * 0.010);
-        fitAt(l2,  r * 0.02, '600', S * 0.070); x.fillText(l2, cx, cy + S * 0.092);
-        const url = 'popcode.app/' + slug;
-        fitAt(url, r * 0.40, '700', S * 0.068); x.fillText(url, cx, cy + r * 0.46);
+        drawMixed([{ t: 'Go to ' }, { t: 'popcode.app/' + slug, b: true }, { t: ' on your phone.' }], S * 0.02, S * 0.052, S * 0.030);
+        drawMixed([{ t: 'Scan photos with the Popcode symbol.' }], S * 0.105, S * 0.052, S * 0.028);
+        // Popcode symbol below the copy.
+        const sw = Math.round(S * 0.15);
+        x.drawImage(sym, cx - sw / 2, cy + S * 0.20, sw, sw);
         return c.toDataURL('image/png');
       }
 
