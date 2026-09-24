@@ -2739,7 +2739,7 @@ The user asked for an audit "as if you were someone ordering from start to finis
 - Noted, not a bug: My Designs cards show the plain photo, not a product mockup.
 
 #### Ornament provider — 1747 stays (decided)
-Another session claimed `catalog.mjs` had a duplicate `ornament` key and a blueprint 1623 entry. **Neither exists on `main` or on any branch** (`git log --all -S 112678` finds nothing). `PRODUCTS.ornament` evaluates to 1747 / provider 80 / variant 118761. That session was reading a stale local copy. The two were compared with the user's real Printify token:
+Another session claimed `catalog.mjs` had a duplicate `ornament` key and a blueprint 1623 entry. **Neither exists on `main` or on any branch** (`git log --all -S 112678` finds nothing). `PRODUCTS.ornament` evaluates to 1747 / provider 80 / variant 118761. The report was **accurate when written** and is not a phantom — see the corrected account in the (later) entry below. It does not change this decision, which was settled on its own evidence: the two were compared with the user's real Printify token:
 
 | | 1623 Imagine Your Photos | **1747 M.i.A Merchandise (live)** |
 |---|---|---|
@@ -2760,7 +2760,7 @@ The local `main` was at `f3f306a`, and `git pull` failed with "divergent branche
 - `trek-folio/` (the Bashō repo, nested inside this folder) was added to `.git/info/exclude`.
 - Four untracked `public/assets/mockups/framed-*.png` turned out to be the **2500px originals** of the 2000px committed `scenes/framed-*.png` (from `30517aa`, Sept 18). They were moved to `~/Dropbox/Popcode X/mockup-originals/`.
 
-**Why this matters:** the other session's phantom "duplicate key / 1623" description almost certainly came from that stale Mac checkout. A new start-of-session rule (see `## Session workflow`) makes every session report its commit and how far it is behind `origin/main` before making claims.
+**Why this matters:** a stale checkout makes any claim about the repo unreliable, so a new start-of-session rule (see `## Session workflow`) makes every session report its commit and how far it is behind `origin/main` before making claims. **Correction:** the stale Mac was *not* the source of the "duplicate key / 1623" report — `f3f306a` is from 2026-07-14 and that code was written 2026-09-24, so a July checkout could not contain it. Those commits were genuinely pushed to `claude/shop-cards-book-design-3uaneo` and then orphaned by a reset, which is why `git log --all` no longer finds them. Full account in the (later) entry.
 
 #### Gotchas
 - **Tokens on the user's Mac:** `export PRINTIFY_API_TOKEN=$(pbpaste)`. Paste the line, don't press Return, copy the token, then press Return (`$(pbpaste)` reads at Return time). Check with `echo ${#PRINTIFY_API_TOKEN}` and `unset` when done. Never paste a token into chat. Printify tokens live at printify.com → profile → Connections → API tokens (`/app/account/api`) and are shown only once, so make a throwaway token and delete it afterwards. **Don't rotate the one Vercel uses.**
@@ -2771,3 +2771,70 @@ The local `main` was at `f3f306a`, and `git pull` failed with "divergent branche
 - **Order one ornament**, to see the real back panel and the artwork.
 - 1623 packs/hearts, only if wanted.
 - Unchanged: re-enable Vercel Deployment Protection on previews; `analytics.html` is gated to one email; shipping options as cards.
+
+### 2026-09-24 (later) — Shop flow rebuilt around the product; ornaments to a US lab; and a cross-session message that was right when sent and wrong when read
+
+**Branch `claude/determined-planck-fqj14e`, ~20 commits fast-forwarded to `main` through the day.** No PRs, no migrations. Two threads: finishing the Shop's create/choose flow (from the mug work), and moving ornaments off Prodigi's UK-only range onto Printify. Ended with a cross-session collision that produced the most useful lesson in the session — see the last part, it is a method lesson, not a git one.
+
+#### THE TAXONOMY QUESTION THAT STARTED IT (worth keeping, it is a product decision)
+
+User: *"if i want to find the experience to scan my mug i need a place to go... you can't find it in My Designs."* Then the rule, in their words: **My Popcodes is every experience you created; My Designs is the products you created.**
+
+The discriminator is **scannability**, not product type:
+- Books, calendars, board books compile their own `.mind` → they ARE experiences → My Popcodes, with a pill.
+- Single-image products (mug, print, tile, ornament) point at a **source project's** `.mind` → they are products → My Designs only.
+- But a mug made from a *new* photo+video creates a real collection, so that collection belongs in My Popcodes while the mug design stays in My Designs. Both, not either.
+
+Implemented in `manage.html`: `PRODUCT_KINDS` extended, plus a data-based `hasPrintDesign()` fallback so a row is classified by what it *contains*, not by a hardcoded list that will drift. Design cards resolve `viewUrl` from `book_layout.print.sourceSlug`, and hide Open viewer / Share when there is no live source.
+
+**Three bugs of one shape, all "a design slug treated as a Popcode slug":** saved mug designs 404'd from My Popcodes; a design card's Share copied a dead URL; and a reopened design printed a dead companion-card URL (`loadSavedDesign` used `col.id`). Fixed client-side, in the photo-tray filter, and server-side in `create-checkout` — which now selects `mind_file_url` and only earns a companion card when the collection is genuinely scannable.
+
+#### Shop create/choose flow (the four-screen sequence)
+
+Driven by the user's mockups and a lot of tight iteration. The product mockup stays on the left through **every** step so you never lose your place. Photo tray no longer auto-loads — it sits behind a choice ("Create a Popcode" / "Use a past Popcode"), because loading every past thumbnail was slow and presumptuous. Back link in a consistent place and wording on each screen, including after a past-Popcode selection.
+
+- **`public/product-preview.js` (NEW)** — the renderer extracted out of `order.html` so the create page draws the real product with your photo. Its one external dependency (`giftArtOpts()`) became `opts.art`.
+- **`create.html` shop mode** (`body.from-shop`) with `returnTo()` validated via `new URL()` + origin comparison. The naive `startsWith('//')` check let `/\evil.com` through — **Chromium normalises a backslash like a second slash**, so that resolves to `http://evil.com/`. Verified 12 cases.
+- **Upload retry**: no `upsert` on any save-flow upload, so "Step 3 failed — Load failed" was a permanent dead end with orphaned files and no DB row. `uploadToStorage()` now upserts and retries.
+
+**The extraction's single most valuable catch: a pixel-hash baseline.** Hashed all 9 product previews before the move, re-hashed after — 8 matched, the mug differed, because call sites were not passing `art`. No eye check would have found that. **Baseline-hash any refactor that claims to be behaviour-preserving.**
+
+#### Ornaments: Prodigi UK → Printify US
+
+Prodigi has **no US lab for ornaments** — 3 ceramic ornaments quoted $31.98 goods + $25.65 shipping. Printify's blueprint **1747 / provider 80 / variant 118761** is US-made at **$8.01/unit → $14.00** at the 1.7× markup. `PRODUCT_PROVIDER.ornament = 'printify'`.
+
+**Printify cannot print inserts**, so `ornament` was REMOVED from `COMPANION_INSERT_FOR` and the URL goes on the **back panel** instead (the 1747 product is double-sided; `positions: ['front','back']`). Same reasoning as the board book.
+
+**The round cutout mockup.** The ornament had no mockup and fell back to a drawn rectangle — square and flat. Built `public/assets/mockups/ornament.png` from the product photo with PIL: the disc erased to transparency so the photo goes *underneath* and the template's own pixels (gold string, hole, rim shading, drop shadow) sit on top. `cutout: true` but **not** `cylinder` — an ornament is flat, there is no curvature to shade. A parallel session then rebuilt the PNG six more times from better source photos and retuned the rect (disc 0.58 → 0.77, edge-to-edge); **the cutout mechanism and its comment survived verbatim**, which is the part that mattered.
+
+Also fixed stale specs copy still describing the Prodigi range ("aluminium, glass or bauble / single-sided / posted from the UK").
+
+#### THE CROSS-SESSION EPISODE — read this one
+
+The user asked me to tell a parallel session to pull before committing. `ListAgents` was empty (all other cloud sessions disconnected), so I could not send anything; I wrote a message for the user to paste by hand. I had read `origin/claude/shop-cards-book-design-3uaneo` and found 4 pushed ornament commits, a **duplicate `ornament:` key** in `PRODUCTS` (lines 223 and 357 — verified by brace-matching AND by evaluating the module), and a different blueprint (1623/112678).
+
+The other session replied that **none of it matched the repo** and suggested I was reading an uncommitted copy.
+
+**Both of us were right, about different moments.** The four commits existed and were pushed — I could not have invented them, I fetched them from origin, and `git cat-file -e` still finds all four. Between my write and their read, **the branch was reset onto `main`, orphaning them.** That is exactly why their `git log --all -S 112678` found nothing: `--all` walks *reachable* refs only.
+
+**The error was mine, and it was one of method.** I described a branch by its moving ref, in a message a human would hand over at an unknown later time, without naming the commit I was describing. Had I written "as of `946b792`" the mismatch would have been obvious to both sides instantly instead of reading as one of us hallucinating.
+
+**Rules that follow:**
+- **Any message that outlives the moment must name a commit SHA, never a branch name.** A branch ref is a moving target.
+- **`git log --all` is not "all commits"** — it is all *reachable* commits. After a reset or force-push, real history becomes invisible to it. `git cat-file -e <sha>` and `git merge-base --is-ancestor` are how you tell "never existed" from "no longer reachable". Do not accept "--all finds nothing" as proof a commit never existed.
+- When two sessions disagree about the repo, **check object existence and reachability separately** before anyone deletes anything.
+
+Net: nothing lost, nothing to fix. The other session's `8664424` built on top of my work; I fast-forwarded (was 15 behind, 0 ahead).
+
+#### Other things settled this session
+
+- **A Sentry alert is not always current.** `POST /api/prodigi-quote — Printify base cost not configured for orn-ceramic`, production, looked live. It fired at **22:32:31 EDT** and the fix committed at **22:33:22 EDT** — 51 seconds later. **Check an alert's timestamp against the fix commit before investigating.**
+- **Ornament and board book both return `shipping_minor: 0` on a product detail page** — Printify only quotes shipping against a full address, so it appears at the cart. Consistent across both Printify products, not an ornament bug. Prodigi products (mug: $6.45) do show it.
+- **Deploy verification gave a false reading again, twice in one session.** First a 5-minute poll that was genuinely stale (real 404), then a byte-compare that reported `product-preview.js DIFFERS (163907)` — 163,907 is `order.html`'s size, i.e. the sandbox proxy returned the wrong body. A direct re-fetch was byte-identical. **A single odd size is a transfer artifact until a second fetch agrees; and a 79-byte "NOT_FOUND" body is a real 404 while a 70-byte truncation is not — check `size_download` and the status code, not just one of them.**
+- **This clone is SHALLOW (110 commits).** `git log --diff-filter=D` silently finds nothing for anything removed before that horizon — which is why I could confirm `marketing/`, `demo.mp4` and `.DS_Store` are absent from `main` but could not date their removal. Absence from the tip is verifiable here; history questions are not.
+
+#### STILL OPEN
+
+- **Blueprint 1623 vs 1747 for the ornament.** Only 1747 is built and live. 1623 (provider 59) is ~$0.28/unit cheaper and also double-sided. Compare back panel and production time before the test order — `PRINTIFY_API_TOKEN=<token> node scripts/printify-catalog.mjs 1623 1747`, run in a terminal, never pasted into chat.
+- **`PRINTIFY_DRY_RUN` is still `true`.** One test order confirms `baseCostMinor: 801` against the real `line_item.cost`; if it is off, every ornament quote is wrong by that margin. Then `PRINTIFY_DRY_RUN=false` in Production scope — and **Vercel env changes only apply to the next build**, so it needs a redeploy.
+- Unchanged: order one mug; parcel count on a mug-plus-print order; re-enable Vercel Deployment Protection on previews; `analytics.html` still gated to `curtmid@gmail.com` only.
