@@ -22,6 +22,7 @@
     <script src="/undo.js"></script>
     <script src="/activity.js"></script>
     <script src="/slug.js"></script>
+    <script src="/storage-copy.js"></script>
     <script src="/postcard-render.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
@@ -3242,7 +3243,28 @@
       // Reuses the real page/cover renderers so crops, fonts and the cover match.
       // "pages" = one book page per PDF page (11.7×8.3"); "spreads" = facing
       // pages together (23.4×8.3").
-      async function buildProof(mode) {
+
+      /* #proof is ONE scratch container shared by every print render on this
+         page, and each render clears it on entry. Two overlapping renders
+         therefore detach each other's pages mid-loop, and html2canvas reports
+         that as "Unable to find element in cloned iframe" — a real production
+         error, because the admin proof path only showed a toast, leaving the UI
+         live for the ~30s a full render takes. One at a time; the finally also
+         means a failed render can't leave stale pages behind for the next one. */
+      let printRenderBusy = false;
+      async function withProofStage(fn) {
+        if (printRenderBusy) throw new Error('Already preparing a print file — let that one finish.');
+        printRenderBusy = true;
+        try { return await fn(); }
+        finally {
+          printRenderBusy = false;
+          const p = document.getElementById('proof');
+          if (p) { p.innerHTML = ''; p.className = ''; }
+        }
+      }
+
+      async function buildProof(mode) { return withProofStage(() => buildProofInner(mode)); }
+      async function buildProofInner(mode) {
         try {
           showToast('Preparing PDF…');
           await loadProofLibs();
@@ -3405,7 +3427,8 @@
         return c.toDataURL('image/png');
       }
 
-      async function buildBookPrintPdf() {
+      async function buildBookPrintPdf() { return withProofStage(buildBookPrintPdfInner); }
+      async function buildBookPrintPdfInner() {
         await loadProofLibs();
         const proof = document.getElementById('proof');
         proof.innerHTML = '';
@@ -3506,7 +3529,8 @@
         return { eyebrow, big, year };
       }
       // Render the spine strip to a single-page PDF Blob at 300 DPI.
-      async function buildSpinePdf(widthMm, parts) {
+      async function buildSpinePdf(widthMm, parts) { return withProofStage(() => buildSpinePdfInner(widthMm, parts)); }
+      async function buildSpinePdfInner(widthMm, parts) {
         await loadProofLibs();
         const H_MM = 210;
         const usablePt = Math.max(0, (widthMm - 4) * SPINE_PT_PER_MM);   // 2mm safety each long edge
@@ -4803,6 +4827,13 @@
         const title = document.getElementById('title-input').value.trim() || null;
         const bucket = 'experiences';
         const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+        /* A duplicate arrives carrying the ORIGINAL's asset URLs. Re-home anything
+           that isn't already under this book's own slug, server-side, so deleting
+           the original can't gut the copy. A no-op on an ordinary edit, where
+           every path is already this slug's. */
+        const remapAsset = PopcodeStorageCopy.makeRemapper(db, bucket, slug, {
+          onError: (err) => { console.error('Asset copy failed', err); if (window.Sentry) try { Sentry.captureException(err); } catch (e) {} },
+        });
 
         try {
           // 0. New books: make sure the chosen link isn't already taken.
@@ -4822,7 +4853,10 @@
           let done = 0;
           for (const id of uploadIds) {
             const p = photos.get(id);
-            if (p.existingUrl && (!p.file || p._uploadedFile === p.file)) { photoUrlById[id] = p.existingUrl; done++; continue; }
+            if (p.existingUrl && (!p.file || p._uploadedFile === p.file)) {
+              p.existingUrl = await remapAsset(p.existingUrl);
+              photoUrlById[id] = p.existingUrl; done++; continue;
+            }
             const ext = (p.file.name && p.file.name.split('.').pop().toLowerCase()) || 'jpg';
             const safeExt = /^[a-z0-9]+$/.test(ext) ? ext : 'jpg';
             const path = `${slug}/book/${id}.${safeExt}`;
@@ -4843,6 +4877,8 @@
             const { error } = await db.storage.from(bucket).upload(cpath, cover.photo.file, { contentType: cover.photo.file.type || 'image/jpeg', upsert: true });
             if (error) throw new Error('Cover upload failed: ' + error.message);
             coverPhotoUrl = pub(cpath) + `?v=${Date.now()}`;
+          } else if (cover.photo) {
+            coverPhotoUrl = cover.photo.existingUrl = await remapAsset(coverPhotoUrl);
           }
 
           // 1c. Upload the back-cover photo (new File only; reuse existing URL otherwise).
@@ -4852,6 +4888,8 @@
             const { error } = await db.storage.from(bucket).upload(bpath, backCover.photo.file, { contentType: backCover.photo.file.type || 'image/jpeg', upsert: true });
             if (error) throw new Error('Back cover upload failed: ' + error.message);
             backCoverPhotoUrl = pub(bpath) + `?v=${Date.now()}`;
+          } else if (backCover.photo) {
+            backCoverPhotoUrl = backCover.photo.existingUrl = await remapAsset(backCoverPhotoUrl);
           }
 
           // 2. Compile popcoded photos into a .mind target — but ONLY when the
@@ -4907,7 +4945,7 @@
                 if (error) throw new Error(`Video ${i + 1} upload failed: ${error.message}`);
                 row.video_url = pub(vpath) + `?v=${Date.now()}`;
               } else {
-                row.video_url = pc.existingVideoUrl;
+                row.video_url = pc.existingVideoUrl = await remapAsset(pc.existingVideoUrl);
               }
             } else {
               if (pc.audio) {
@@ -4917,7 +4955,7 @@
                 if (error) throw new Error(`Audio ${i + 1} upload failed: ${error.message}`);
                 row.audio_url = pub(apath) + `?v=${Date.now()}`;
               } else {
-                row.audio_url = pc.existingAudioUrl;
+                row.audio_url = pc.existingAudioUrl = await remapAsset(pc.existingAudioUrl);
               }
             }
             itemRows.push(row);

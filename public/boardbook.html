@@ -20,6 +20,7 @@
     <script src="/undo.js"></script>
     <script src="/activity.js"></script>
     <script src="/slug.js"></script>
+    <script src="/storage-copy.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
     <!-- Board book only needs MINDAR.IMAGE.Compiler (compile popcoded photos into a
@@ -2593,6 +2594,12 @@
         const bucket = 'experiences';
         const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
         const isIdentityAdjust = (a) => { const n = normalizeAdjust(a); return n.fit === 'fill' && n.scale === 1 && n.ox === 0 && n.oy === 0 && n.rot === 0; };
+        /* A duplicate arrives carrying the ORIGINAL's asset URLs. Re-home anything
+           that isn't already under this book's own slug, server-side, so deleting
+           the original can't gut the copy. A no-op on an ordinary edit. */
+        const remapAsset = PopcodeStorageCopy.makeRemapper(db, bucket, slug, {
+          onError: (err) => { console.error('Asset copy failed', err); if (window.Sentry) try { Sentry.captureException(err); } catch (e) {} },
+        });
         document.getElementById('create-btn').disabled = true;
 
         try {
@@ -2615,7 +2622,10 @@
           const trayUrls = [];
           for (let i = 0; i < trayPhotos.length; i++) {
             const p = trayPhotos[i];
-            if (p.existingUrl && p.existingUrl.includes('/board/tray-')) { trayUrls.push(p.existingUrl); continue; }
+            if (p.existingUrl && p.existingUrl.includes('/board/tray-')) {
+              p.existingUrl = await remapAsset(p.existingUrl);
+              trayUrls.push(p.existingUrl); continue;
+            }
             let blob = p.file;
             if (!blob) {
               const img = await loadPhotoImg(p);
@@ -2650,6 +2660,7 @@
               photoUrlByPos[pos] = pub(path) + `?v=${Date.now()}`;
               recroppedPos.add(pos);
             } else {
+              p.existingUrl = await remapAsset(p.existingUrl);
               photoUrlByPos[pos] = p.existingUrl;
             }
             done++;
@@ -2700,6 +2711,9 @@
                 const { error } = await uploadWithRetry(bucket, apath, pc.audio, { contentType: pc.audio.type || 'audio/webm', upsert: true });
                 if (error) throw new Error(`Audio ${i + 1} upload failed: ${error.message}`);
                 audioUrl = pub(apath) + `?v=${Date.now()}`;
+              } else {
+                // Reusing stored audio: re-home it if it's still the original's.
+                audioUrl = pc.existingAudioUrl = (await remapAsset(audioUrl)) || null;
               }
               itemRows.push({ target_index: i, media_type: 'audio', video_url: null, audio_url: audioUrl, photo_url: photoUrlByPos[pos] });
             } else {
@@ -2709,6 +2723,9 @@
                 const { error } = await uploadWithRetry(bucket, vpath, pc.video, { contentType: pc.video.type || 'video/mp4', upsert: true });
                 if (error) throw new Error(`Video ${i + 1} upload failed: ${error.message}`);
                 videoUrl = pub(vpath) + `?v=${Date.now()}`;
+              } else {
+                // Reusing stored video: re-home it if it's still the original's.
+                videoUrl = pc.existingVideoUrl = (await remapAsset(videoUrl)) || null;
               }
               itemRows.push({ target_index: i, media_type: 'video', video_url: videoUrl, audio_url: null, photo_url: photoUrlByPos[pos] });
             }

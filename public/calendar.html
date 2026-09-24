@@ -22,6 +22,7 @@
     <script src="/undo.js"></script>
     <script src="/activity.js"></script>
     <script src="/slug.js"></script>
+    <script src="/storage-copy.js"></script>
     <script src="/postcard-render.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
@@ -2086,8 +2087,12 @@
         const pr = document.querySelector('#sheet [data-act="proof"]');
         if (pr) pr.addEventListener('click', async () => {
           closeSheet();
+          // The blocking panel, not just a toast: a 26-page render takes ~30s and
+          // the render already reports per-page progress into it. Without it the
+          // page looked idle, so it got clicked again — and a second render
+          // clears the #proof stage out from under the first (see withProofStage).
+          openPrintProgress('Building the print PDF', 'Rendering every page at print resolution.');
           try {
-            showToast('Building the print PDF…');
             const { blob } = await buildCalendarPrintPdf();
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
@@ -2098,6 +2103,8 @@
             console.error(err);
             if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
             showToast('Could not build the PDF — please try again.');
+          } finally {
+            closePrintProgress();
           }
         });
       });
@@ -2172,6 +2179,12 @@
         const slug = editing ? editingCollection.slug : chosenSlug();
         const bucket = 'experiences';
         const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+        /* A duplicate arrives carrying the ORIGINAL's asset URLs. Re-home anything
+           that isn't already under this calendar's own slug, server-side, so
+           deleting the original can't gut the copy. A no-op on an ordinary edit. */
+        const remapAsset = PopcodeStorageCopy.makeRemapper(db, bucket, slug, {
+          onError: (err) => { console.error('Asset copy failed', err); if (window.Sentry) try { Sentry.captureException(err); } catch (e) {} },
+        });
         const title = (document.getElementById('title-input').value || '').trim() || `${calYear} Calendar`;
         const popcodedIds = popcodedIdsInOrder();
         if (popcodedIds.length && (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler)) {
@@ -2205,6 +2218,9 @@
               if (error) throw new Error('Photo upload failed: ' + error.message);
               urlById[id] = pub(path) + `?v=${Date.now()}`;
             } else {
+              // Existing photo: re-home it if it still lives in the folder this
+              // calendar was duplicated from.
+              if (p.existingUrl) p.existingUrl = await remapAsset(p.existingUrl);
               urlById[id] = p.existingUrl || p.url;
             }
             done++;
@@ -2255,7 +2271,7 @@
                 if (error) throw new Error(`Video ${i + 1} upload failed: ${error.message}`);
                 row.video_url = pub(vpath) + `?v=${Date.now()}`;
               } else {
-                row.video_url = pc.existingVideoUrl;
+                row.video_url = pc.existingVideoUrl = await remapAsset(pc.existingVideoUrl);
               }
             } else {
               if (pc.audio) {
@@ -2265,7 +2281,7 @@
                 if (error) throw new Error(`Audio ${i + 1} upload failed: ${error.message}`);
                 row.audio_url = pub(apath) + `?v=${Date.now()}`;
               } else {
-                row.audio_url = pc.existingAudioUrl;
+                row.audio_url = pc.existingAudioUrl = await remapAsset(pc.existingAudioUrl);
               }
             }
             itemRows.push(row);
@@ -2387,7 +2403,28 @@
         return window._proofLibs;
       }
 
-      async function buildCalendarPrintPdf() {
+
+      /* #proof is ONE scratch container shared by every print render on this
+         page, and each render clears it on entry. Two overlapping renders
+         therefore detach each other's pages mid-loop, and html2canvas reports
+         that as "Unable to find element in cloned iframe" — a real production
+         error, because the admin proof path only showed a toast, leaving the UI
+         live for the ~30s a full render takes. One at a time; the finally also
+         means a failed render can't leave stale pages behind for the next one. */
+      let printRenderBusy = false;
+      async function withProofStage(fn) {
+        if (printRenderBusy) throw new Error('Already preparing a print file — let that one finish.');
+        printRenderBusy = true;
+        try { return await fn(); }
+        finally {
+          printRenderBusy = false;
+          const p = document.getElementById('proof');
+          if (p) { p.innerHTML = ''; p.className = ''; }
+        }
+      }
+
+      async function buildCalendarPrintPdf() { return withProofStage(buildCalendarPrintPdfInner); }
+      async function buildCalendarPrintPdfInner() {
         await loadProofLibs();
         const proof = document.getElementById('proof');
         proof.innerHTML = '';
@@ -2461,7 +2498,6 @@
           if (i > 0) doc.addPage(fmt, 'landscape');
           doc.addImage(data, 'JPEG', 0, 0, fmt[0], fmt[1]);
         }
-        proof.innerHTML = '';
         return { blob: doc.output('blob'), pageCount: units.length };
       }
 
