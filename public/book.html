@@ -664,6 +664,21 @@
       }
       .rp-half.draggable:hover .rp-move { opacity: 1; transform: translate(-50%, -50%) scale(1); }
       .rp-half.dragging .rp-move { opacity: 0; }
+      .rp-del {
+        position: absolute; top: 10px; right: 10px; transform: scale(0.82);
+        width: 34px; height: 34px; border-radius: 50%; background: rgba(20,20,20,0.55);
+        border: 0; padding: 0; display: flex; align-items: center; justify-content: center;
+        color: #fff; z-index: 4; cursor: pointer; opacity: 0; pointer-events: none;
+        transition: opacity 0.14s ease, transform 0.14s ease, background 0.14s ease;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+      }
+      .rp-half.draggable:hover .rp-del { opacity: 1; transform: scale(1); pointer-events: auto; }
+      .rp-del:hover { background: #d1344b; }
+      .rp-half.dragging .rp-del { opacity: 0; pointer-events: none; }
+      /* Coarse pointers get no hover, so keep delete permanently visible there. */
+      @media (hover: none) {
+        .rp-del { opacity: 1; transform: scale(1); pointer-events: auto; }
+      }
       .rp-half.empty { background: transparent; }
       .rp-half .page-canvas { pointer-events: none; }
       .rp-spread .page-canvas { box-shadow: none; border-radius: 0; }
@@ -931,7 +946,7 @@
       <div class="rp-body"><div class="rp-grid" id="rp-grid"></div></div>
       <div class="rp-tip" id="rp-tip">
         <h4>Rearrange Pages</h4>
-        <p>To change the order of your book, drag the pages around until they are in the position you want.</p>
+        <p>Drag the pages around until they are in the order you want, or use the × on a page to delete it.</p>
       </div>
     </div>
 
@@ -1141,7 +1156,8 @@
           // `order=1` is kept for any link already out there and still means
           // check out with just this one.
           const q = new URLSearchParams(location.search);
-          if (q.get('cart') === '1') addBookToCart().then(ok => { if (ok) location.href = '/cart.html'; });
+          if (q.get('duplicate') === '1') duplicateBook();
+          else if (q.get('cart') === '1') addBookToCart().then(ok => { if (ok) location.href = '/cart.html'; });
           else if (q.get('order') === '1') orderPrintedBook();
         } catch (err) {
           console.error(err);
@@ -1255,7 +1271,10 @@
       // DM Sans at 400 reads thin at cover size. Only ask for a weight we load a
       // face for (see the Google Fonts link above); a weight with no face gets
       // synthesised into a fake bold. Cooper has one weight and is chunky already.
-      const COVER_WEIGHT = { cooper: 400, cormorant: 600, dmsans: 700, inter: 700, filson: 700, libre: 700 };
+      // Cormorant Garamond stays at 400 ON PURPOSE: it's a high-contrast display
+      // serif whose light weight is the whole look, and bolding it along with the
+      // sans faces flattened it. Don't fold it back into the 700s.
+      const COVER_WEIGHT = { cooper: 400, cormorant: 400, dmsans: 700, inter: 700, filson: 700, libre: 700 };
       const coverFontWeight = (id) => COVER_WEIGHT[id] || 400;
       // Title size (as cqw = % of cover width) by title length — mirrors Bashō's
       // titleFontSize (80/62/48/38/30pt on an 842pt page).
@@ -1638,8 +1657,8 @@
       // Size each slot's Popcode badge exactly like the print bake: a fixed 1/2"
       // square inset 1/4" from the corner, scaled off the PAGE (not the slot), so
       // every badge in the book is the same size on paper.
-      function sizeSlotBadges() {
-        document.querySelectorAll('.slot .slot-badge').forEach(badge => {
+      function sizeSlotBadges(root) {
+        (root || document).querySelectorAll('.slot .slot-badge').forEach(badge => {
           const pw = slotPageWidth(badge.parentElement);
           if (!pw) return;
           const { size, pad } = badgeBoxPx(pw);
@@ -1647,7 +1666,7 @@
           badge.style.right = badge.style.bottom = pad + 'px';
         });
       }
-      window.addEventListener('resize', () => requestAnimationFrame(sizeSlotBadges));
+      window.addEventListener('resize', () => requestAnimationFrame(() => sizeSlotBadges()));
 
       // Endpapers. The book always opens with a blank inside-front cover
       // ([blank | Page 1]) and always ends with a blank inside-back cover on the
@@ -1657,7 +1676,10 @@
       // final spread ([empty | blank]) so the endpaper is always on the right.
       // Rebuilds from the content pages each render (idempotent) — content objects
       // are preserved; only the blank endpapers are regenerated.
-      function ensureBookEndpapers() {
+      function ensureBookEndpapers() { ensureEndpapers(pages); }
+      // Same rule applied to any page list, so the Rearrange preview can keep its
+      // endpapers honest after a delete instead of stranding two blanks together.
+      function ensureEndpapers(pages) {
         const content = pages.filter(p => p.layout !== 'blank');
         if (!content.length) return; // nothing placed yet
         pages.length = 0;
@@ -2902,9 +2924,29 @@
           move.className = 'rp-move';
           move.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>';
           half.appendChild(move);
+          const del = document.createElement('button');
+          del.className = 'rp-del'; del.type = 'button';
+          del.title = 'Delete this page'; del.setAttribute('aria-label', 'Delete this page');
+          del.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>';
+          // Swallow pointerdown so pressing delete never starts a drag.
+          del.addEventListener('pointerdown', (e) => e.stopPropagation());
+          del.addEventListener('click', (e) => { e.stopPropagation(); rpDeletePage(pg); });
+          half.appendChild(del);
           attachRpDrag(half, pg);
         }
         return half;
+      }
+
+      // Delete a page from this view. A photo spanning both pages goes as a pair.
+      // Photos aren't destroyed — an unplaced photo returns to the tray — and the
+      // blank endpapers are rebuilt by render() when the change is saved.
+      function rpDeletePage(pg) {
+        const unit = spreadUnit(rpPages, pg);
+        const at = rpPages.indexOf(unit[0]);
+        if (at < 0) return;
+        rpPages.splice(at, unit.length);
+        ensureEndpapers(rpPages);
+        renderRearrange();
       }
 
       // The standalone front-cover cell: empty left half, cover on the right.
@@ -2919,6 +2961,24 @@
         const c = document.createElement('div'); c.className = 'page-canvas cover'; c.appendChild(buildCoverCanvas());
         coverHalf.appendChild(c);
         spread.append(emptyHalf, fold, coverHalf);
+        wrap.append(labels, spread);
+        return wrap;
+      }
+
+      // The standalone back-cover cell: back cover on the left, empty right half —
+      // the mirror of the front cover, and where the book actually ends. Shown so
+      // this view represents the whole book; it can't be reordered.
+      function rpBackCoverCell() {
+        const wrap = document.createElement('div'); wrap.className = 'rp-spread-wrap';
+        const labels = document.createElement('div'); labels.className = 'rp-spread-labels';
+        labels.innerHTML = `<span class="rp-label locked">Back Cover</span><span class="rp-label locked"></span>`;
+        const spread = document.createElement('div'); spread.className = 'rp-spread cover-cell';
+        const backHalf = document.createElement('div'); backHalf.className = 'rp-half locked';
+        const c = document.createElement('div'); c.className = 'page-canvas backcover'; c.appendChild(buildBackCoverCanvas());
+        backHalf.appendChild(c);
+        const fold = document.createElement('div'); fold.className = 'rp-fold';
+        const emptyHalf = document.createElement('div'); emptyHalf.className = 'rp-half empty';
+        spread.append(backHalf, fold, emptyHalf);
         wrap.append(labels, spread);
         return wrap;
       }
@@ -2947,6 +3007,12 @@
         for (let i = 0; i < rpPages.length; i += 2) {          // then connected spreads
           grid.appendChild(rpSpreadCell(rpPages[i], rpPages[i + 1] || null, i));
         }
+        grid.appendChild(rpBackCoverCell());                   // back cover standalone
+        // Photos and scan badges are sized in JS, not CSS (see layoutPhotoInSlot
+        // and sizeSlotBadges), so this view has to run them too — without it
+        // every badge stretches to fill its slot and cover photos render at
+        // natural size, way outside their cell.
+        requestAnimationFrame(() => { sizeSlotBadges(grid); layoutAllSlotPhotos(grid); });
       }
 
       // Render-based drag: reorder rpPages on hover and re-render (rebuilds spreads),

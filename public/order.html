@@ -950,8 +950,10 @@
         if (uName) document.getElementById('user-greeting').textContent = 'Hi, ' + uName + '!';
         await loadUserPhotos();
         // Reopen a saved design (My Designs → Order/Edit) → restore its config + review.
+        // `duplicate=1` opens it editable but unattached, so Save writes a NEW design.
         const designSlug = qs.get('design');
-        if (designSlug && await loadSavedDesign(designSlug, qs.get('edit') === '1')) return;
+        const dupDesign = qs.get('duplicate') === '1';
+        if (designSlug && await loadSavedDesign(designSlug, dupDesign || qs.get('edit') === '1', dupDesign)) return;
         // Cart → "Edit design": reopen that exact cart line on the editable screen.
         const cartItemId = qs.get('cartItem');
         if (cartItemId && await loadCartItem(cartItemId)) return;
@@ -970,7 +972,7 @@
       let editingDesign = null;
       // Load a saved print design (collections.book_layout.print). With `edit`, land on
       // the editable product screen (size / orientation / photo); otherwise jump to review.
-      async function loadSavedDesign(slug, edit) {
+      async function loadSavedDesign(slug, edit, duplicate) {
         try {
           const { data: col } = await db.from('collections')
             .select('id, user_id, kind, book_layout').eq('slug', slug).single();
@@ -1000,7 +1002,14 @@
           state.photoAdjust = normalizeAdjust(pc.adjust);
           renderSizeChips(); renderFrameChips(); renderMountChips(); updateOrientationVisibility();
           document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b.dataset.orientation === state.orientation));
-          if (edit) { editingDesign = { id: col.id, slug }; renderDetailPreview(); refreshDetailPrice(); }
+          // Duplicating deliberately leaves editingDesign null: saveDesign() then
+          // inserts a new row with its own slug instead of updating this one.
+          if (edit) {
+            if (!duplicate) editingDesign = { id: col.id, slug };
+            renderDetailPreview(); refreshDetailPrice();
+            // Say so, since a copy looks identical to the design it came from.
+            if (duplicate) setTimeout(() => epToast('Duplicated — Save design to keep the copy.'), 400);
+          }
           else { await goReview(); }
           return true;
         } catch (e) { return false; }

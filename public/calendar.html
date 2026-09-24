@@ -249,10 +249,12 @@
       .cf-title.ph { opacity: 0.55; }
 
       /* ── Back cover ────────────────────────────────────────────── */
-      .back-frame .page-inner { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 20px; padding-bottom: 140px; }
-      .back-frame .bk-logo { height: 42px; width: auto; display: block; }
-      .back-frame .bk-line { font-family: 'Inter', sans-serif; font-size: 23px; color: #8a857c; }
-      .back-frame .bk-line strong { font-weight: 700; color: #5a564f; }
+      /* Mirrors .bc-brand in book.html — same block, same place on the page. */
+      .bk-brand { position: absolute; left: 0; right: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; }
+      .bk-logo { width: auto; height: auto; display: block; }   /* width set inline */
+      .bk-inst { font-family: 'Inter', sans-serif; font-weight: 600; text-align: center; color: #1a1a1a; }
+      .bk-inst b { color: #1a1a1a; font-weight: 600; }
+      .bk-symbol { display: block; height: auto; }   /* width + margin set inline */
 
       /* ── Sticky create bar ─────────────────────────────────────── */
       .create-bar {
@@ -711,7 +713,7 @@
       // DM Sans at 600 reads thin there, and DM Sans has no 600 face at all, so it
       // was being synthesised into a fake bold. Only ask for a weight we load a face
       // for (see the Google Fonts link above). Cooper has one weight, already chunky.
-      const CAL_TITLE_WEIGHT = { cooper: 400, cormorant: 600, dmsans: 700, inter: 700, filson: 700, libre: 700 };
+      const CAL_TITLE_WEIGHT = { cooper: 400, cormorant: 400, dmsans: 700, inter: 700, filson: 700, libre: 700 };
       const calTitleWeight = (id) => CAL_TITLE_WEIGHT[id] || 600;
       function applyCalFont(id) {
         calFont = CAL_FONTS.some(f => f.id === id) ? id : 'filson';
@@ -1044,12 +1046,38 @@
         }
       }
 
+      // Back-cover branding block — the SAME panel the photo book prints, so a
+      // calendar and a book from the same account look like one product. Measured
+      // in inches on the finished page (type in points) and converted to canvas
+      // pixels here; the calendar page is 11.6929 x 8.2677", identical to the
+      // book's A4 landscape, so these numbers mean the same physical thing in
+      // both. Keep in step with BC_BRAND_DEFAULTS in book.html.
+      const BK_BRAND = {
+        top:     6.4075,  // in - top of the block, from the top edge of the page
+        logoW:   1.4,     // in - Popcode wordmark width
+        gapLogo: 0.19,    // in - wordmark -> copy
+        textPt:  10,      // pt - instruction copy
+        leadPt:  16,      // pt - leading
+        gapSym:  0.152,   // in - copy -> symbol
+        symW:    0.4,     // in - Popcode symbol width
+      };
+      // Px per inch on the fixed 1400x993 page canvas. Px (not cqw) because
+      // html2canvas renders this canvas for the print PDF.
+      const BK_PPI = PRINT.PXW / PRINT.wIn;
+      const bkIn = (inches) => +(inches * BK_PPI).toFixed(2);
+      const bkPt = (pt) => bkIn(pt / 72);
+
       function buildBackInner(inner) {
-        const slug = (editingCollection && editingCollection.slug) || chosenSlug() || '';
-        const url = 'popcode.app' + (slug ? '/' + slug : '');
+        const slug = (editingCollection && editingCollection.slug) || chosenSlug() || 'yourlink';
+        const B = BK_BRAND;
         inner.innerHTML =
-          '<img class="bk-logo" src="/assets/Popcode_logo.png" alt="Popcode"/>' +
-          `<div class="bk-line">To bring this calendar to life, visit <strong>${escapeHtml(url)}</strong></div>`;
+          `<div class="bk-brand" style="top:${bkIn(B.top)}px">` +
+            `<img class="bk-logo" style="width:${bkIn(B.logoW)}px" src="/assets/Popcode_logo.png" alt="Popcode"/>` +
+            `<div class="bk-inst" style="margin-top:${bkIn(B.gapLogo)}px;font-size:${bkPt(B.textPt)}px;line-height:${(B.leadPt / B.textPt).toFixed(3)}">` +
+              `Go to <b>popcode.app/${escapeHtml(slug)}</b> on your phone.<br>Scan photos with the Popcode symbol.` +
+            `</div>` +
+            `<img class="bk-symbol" style="margin-top:${bkIn(B.gapSym)}px;width:${bkIn(B.symW)}px" src="/assets/popcode_symbol_color.svg" alt=""/>` +
+          `</div>`;
       }
 
       // ── Rendering ───────────────────────────────────────────────
@@ -2029,6 +2057,14 @@
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
             <div><div>Year &amp; holidays</div><div class="menu-sub">${calYear} · US holidays ${holidaysOn ? 'on' : 'off'}</div></div>
           </div>
+          <div class="menu-row" data-act="duplicate">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></div>
+            <div><div>Duplicate this calendar</div><div class="menu-sub">Start a new calendar from this one</div></div>
+          </div>
+          <div class="menu-row" data-act="share">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></div>
+            <div><div>Share</div><div class="menu-sub">Send the scan link</div></div>
+          </div>
           ${isProofAdmin() ? `
           <div class="menu-row" data-act="proof">
             <div class="menu-ic" style="background:#f3f0ff;color:#5b3fd6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/></svg></div>
@@ -2045,6 +2081,8 @@
         });
         document.querySelector('#sheet [data-act="font"]').addEventListener('click', openCalFontSheet);
         document.querySelector('#sheet [data-act="events"]').addEventListener('click', openEventsSheet);
+        document.querySelector('#sheet [data-act="duplicate"]').addEventListener('click', duplicateCalendar);
+        document.querySelector('#sheet [data-act="share"]').addEventListener('click', shareCalendar);
         const pr = document.querySelector('#sheet [data-act="proof"]');
         if (pr) pr.addEventListener('click', async () => {
           closeSheet();
@@ -2602,6 +2640,37 @@
         }
       }
 
+      // Turn the loaded calendar into an unsaved copy: forget which row we were
+      // editing, hand it a fresh editable link, and let the next Create insert a
+      // new one. Mirrors duplicateBook() in book.html.
+      function duplicateCalendar() {
+        editingCollection = null; // so the next Create saves a brand-new calendar
+        // Photos uploaded this session live in the original's folder — upload them
+        // again under the copy's link.
+        photos.forEach(p => { if (p._uploadedFile) { p._uploadedFile = null; p.existingUrl = null; } });
+        slugField.unlock();      // a copy gets its own (editable) Popcode link
+        const inp = document.getElementById('title-input');
+        inp.value = ((inp.value || 'Untitled').trim()) + ' (copy)';
+        document.querySelector('.wrap h1').textContent = 'Design a Calendar';
+        document.getElementById('create-btn').textContent = 'Create Calendar';
+        closeSheet(); updateSummary();
+        showToast('Duplicated — tap Create Calendar to save the copy.');
+      }
+
+      async function shareCalendar() {
+        if (!editingCollection || !editingCollection.slug) {
+          closeSheet();
+          showToast('Create your calendar first, then you can share it.');
+          return;
+        }
+        const url = `https://popcode.app/${editingCollection.slug}`;
+        const title = (document.getElementById('title-input').value || '').trim() || 'My Popcode calendar';
+        closeSheet();
+        if (navigator.share) { try { await navigator.share({ title, url }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+        try { await navigator.clipboard.writeText(url); showToast('Link copied!'); }
+        catch (e) { if (window.popcodeCopyLink) popcodeCopyLink(url); }
+      }
+
       // ── Load an existing calendar (edit mode) ───────────────────
       async function loadCalendarForEdit(slug) {
         try {
@@ -2668,7 +2737,8 @@
           // See book.html: `cart=1` is the Order action, `order=1` is the older
           // skip-the-cart link and still works.
           const q = new URLSearchParams(location.search);
-          if (q.get('cart') === '1') addCalendarToCart().then(ok => { if (ok) location.href = '/cart.html'; });
+          if (q.get('duplicate') === '1') duplicateCalendar();
+          else if (q.get('cart') === '1') addCalendarToCart().then(ok => { if (ok) location.href = '/cart.html'; });
           else if (q.get('order') === '1') orderPrintedCalendar();
         } catch (err) {
           console.error(err);

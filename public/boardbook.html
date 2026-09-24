@@ -721,7 +721,7 @@
       // to be bold, since Inter or DM Sans at 400 reads thin at title size. Only use
       // a weight we actually load a face for — asking for 700 where there is none
       // gets a synthesised fake bold. Cooper has one weight and is chunky already.
-      const TEXT_WEIGHT = { cooper: 400, cormorant: 600, dmsans: 700, inter: 700, filson: 700, libre: 700 };
+      const TEXT_WEIGHT = { cooper: 400, cormorant: 400, dmsans: 700, inter: 700, filson: 700, libre: 700 };
       const textWeight = (id) => TEXT_WEIGHT[id] || 400;
       let cover = { title: '', subtitle: '', font: 'cooper', noText: false };
       // Back cover, the same two styles the photo book offers: a photo bled to the
@@ -940,7 +940,9 @@
           undoStack.reset();   // the loaded book is where undo starts
           // Order action from My Designs. Board books had no deep-link branch,
           // so that button used to open order.html's single-image print flow.
-          if (new URLSearchParams(location.search).get('cart') === '1')
+          const q = new URLSearchParams(location.search);
+          if (q.get('duplicate') === '1') duplicateBoardBook();
+          else if (q.get('cart') === '1')
             addBoardBookToCart().then(ok => { if (ok) location.href = '/cart.html'; });
         } catch (err) {
           console.error(err);
@@ -1463,6 +1465,8 @@
           <div class="menu-row" data-act="cover"><div class="menu-ic">${MENU_IC.photo}</div><div><div>Front cover</div><div class="menu-sub">${escapeHtml([cover.title, cover.subtitle].filter(Boolean).join(' · ')) || 'Photo, title and font'}</div></div></div>
           <div class="menu-row" data-act="back"><div class="menu-ic">${MENU_IC.edit}</div><div><div>Back cover</div><div class="menu-sub">${backPhoto ? 'Photo, with your link printed underneath' : 'Add a photo — your link prints here either way'}</div></div></div>
           ${savedSlug ? `<div class="menu-row" data-act="cart"><div class="menu-ic">${MENU_IC.cart}</div><div><div>Add to cart</div><div class="menu-sub">Order the printed 6×6″ board book</div></div></div>` : ''}
+          <div class="menu-row" data-act="duplicate"><div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></div><div><div>Duplicate this book</div><div class="menu-sub">Start a new board book from this one</div></div></div>
+          ${savedSlug ? `<div class="menu-row" data-act="share"><div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></div><div><div>Share</div><div class="menu-sub">Send the scan link</div></div></div>` : ''}
           ${isProofAdmin() ? `<div class="menu-row" data-act="proof"><div class="menu-ic">${MENU_IC.download}</div><div><div>Proof PDF</div><div class="menu-sub">The cover wrap and all ${PRINT_SPREADS.length} spreads, exactly as they print</div></div></div>` : ''}
         `);
         sheet.querySelectorAll('.menu-row').forEach(row => row.addEventListener('click', () => {
@@ -1470,8 +1474,36 @@
           if (act === 'cover') openCoverMenu();
           else if (act === 'back') openSlotMenu('back_cover');
           else if (act === 'cart') { closeSheet(); addBoardBookToCart(); }
+          else if (act === 'duplicate') duplicateBoardBook();
+          else if (act === 'share') shareBoardBook();
           else if (act === 'proof') { closeSheet(); buildBoardBookProof(); }
         }));
+      }
+
+      // Turn the loaded board book into an unsaved copy: forget which row we were
+      // editing, hand it a fresh editable link, and let the next Create insert a
+      // new one. Mirrors duplicateBook() in book.html.
+      function duplicateBoardBook() {
+        editingCollection = null;
+        savedSlug = null; savedCollectionId = null;  // the copy isn't saved yet
+        slugField.unlock();                          // its own editable Popcode link
+        const inp = document.getElementById('title-input');
+        if (inp) inp.value = ((inp.value || cover.title || 'Untitled').trim()) + ' (copy)';
+        const h1 = document.querySelector('#builder .page-top-bar h1, #builder h1');
+        if (h1) h1.textContent = 'Design a Board Book';
+        document.getElementById('create-btn').textContent = 'Create Board Book';
+        closeSheet(); updateSummary();
+        showToast('Duplicated — tap Create Board Book to save the copy.');
+      }
+
+      async function shareBoardBook() {
+        if (!savedSlug) { closeSheet(); showToast('Create your board book first, then you can share it.'); return; }
+        const url = `https://popcode.app/${savedSlug}`;
+        const title = (document.getElementById('title-input').value || '').trim() || cover.title || 'My Popcode board book';
+        closeSheet();
+        if (navigator.share) { try { await navigator.share({ title, url }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+        try { await navigator.clipboard.writeText(url); showToast('Link copied!'); }
+        catch (e) { if (window.popcodeCopyLink) popcodeCopyLink(url); }
       }
 
       // ── Rearrange Pages ───────────────────────────────────

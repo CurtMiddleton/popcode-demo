@@ -1026,6 +1026,12 @@
           : isCalendar ? ('/calendar.html?id=' + encodeURIComponent(col.slug) + '&cart=1')
           : isBoardbook ? ('/boardbook.html?id=' + encodeURIComponent(col.slug) + '&cart=1')
           : ('/order.html?design=' + encodeURIComponent(col.slug));
+        // Duplicate: open the same editor, but unattached from this row, so the
+        // next Create/Save writes a brand-new design with its own Popcode link.
+        const dupHref = isBoardbook ? ('/boardbook.html?id=' + encodeURIComponent(col.slug) + '&duplicate=1')
+          : isBook ? ('/book.html?id=' + encodeURIComponent(col.slug) + '&duplicate=1')
+          : isCalendar ? ('/calendar.html?id=' + encodeURIComponent(col.slug) + '&duplicate=1')
+          : ('/order.html?design=' + encodeURIComponent(col.slug) + '&duplicate=1');
         const bookCover = (isBook && col.book_layout && col.book_layout.cover) || {};
         const coverPhoto = (bookCover.photo_url) || thumbUrl || '';
         const coverText = { eyebrow: bookCover.eyebrow || '', title: bookCover.title || title, subtitle: bookCover.subtitle || '' };
@@ -1054,10 +1060,10 @@
             ${viewUrl
               ? `<a class="dmenu-item" href="${viewUrl}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>Open viewer</a>`
               : ''}
-            ${isBoardbook
-              ? ''
-              : `<a class="dmenu-item" href="${orderHref}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>Order This ${escapeHtml(noun)}</a>
-            <a class="dmenu-item" href="${editHref}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit This ${escapeHtml(noun)}</a>`}
+            ${isBoardbook ? '' : `<a class="dmenu-item" href="${orderHref}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>Order This ${escapeHtml(noun)}</a>`}
+            <!-- Board books get Edit too; ordering is what stays gated for them. -->
+            <a class="dmenu-item" href="${editHref}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit This ${escapeHtml(noun)}</a>
+            <a class="dmenu-item" href="${dupHref}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Duplicate This ${escapeHtml(noun)}</a>
             ${!viewUrl ? '' : `<button class="dmenu-item dm-share"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>Share</button>`}
             <div class="dmenu-sep"></div>
             <button class="dmenu-item danger dm-delete"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>Delete This ${escapeHtml(noun)}</button>
