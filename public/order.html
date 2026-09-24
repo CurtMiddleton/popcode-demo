@@ -1645,13 +1645,13 @@
         const el = document.getElementById('detail-price');
         const note = document.getElementById('detail-price-note');
         const pack = minCopies();
-        el.textContent = 'From …'; note.textContent = 'plus shipping';
+        el.textContent = activeSizeList().length > 1 ? 'From …' : '…'; note.textContent = 'plus shipping';
         try {
           // Pack products are quoted at the pack size, so the headline price is
           // the price of the thing you can actually buy. Quoting one of
           // something sold in threes would advertise a price that does not exist.
           const d = await quoteFor(state.productType, orderVariantId(), { copies: pack });
-          el.textContent = 'From ' + formatMoney(d.printing_minor, d.currency);
+          el.textContent = (activeSizeList().length > 1 ? 'From ' : '') + formatMoney(d.printing_minor, d.currency);
           note.textContent = (pack > 1 ? `per set of ${pack}` : `per ${UNIT_NOUN[state.productType] || 'print'}`) + ', plus shipping at cost';
         } catch (e) { el.textContent = '—'; note.textContent = 'Pricing unavailable: ' + e.message; }
       }
@@ -2284,7 +2284,7 @@
             const fcl = frameColorsFor(state.productType);
             const fcn = fcl ? fcl.find(c => c.id === state.frameColor) : null;
             return {
-              namePrefix: (meta.name || '') + ' · ' + (v ? v.size : '') + (fcn && fcn.id !== 'black' ? ' ' + fcn.name : ''),
+              namePrefix: (meta.noun || meta.name || '') + ' · ' + (v ? v.size : '') + (fcn && fcn.id !== 'black' ? ' ' + fcn.name : ''),
               print: { productType: state.productType, variantId: orderVariantId(), orientation: state.orientation,
                        scale: state.scale, adjust: normalizeAdjust(defaultAdjustFor(state.productType)) },
             };
@@ -2322,7 +2322,7 @@
       async function goReview() {
         const v = variantOf(state.productType, state.variantId);
         const meta = CATEGORY_META[state.productType];
-        document.getElementById('review-name').textContent = meta.name;
+        document.getElementById('review-name').textContent = meta.noun || meta.name;
         document.getElementById('review-sub').textContent = ORIENTATION_LOCKED.has(state.productType) ? v.size
           : v.size + ' · ' + (baseAspect() !== 1 ? (state.orientation === 'landscape' ? 'Landscape' : 'Portrait') : 'Square');
         {
@@ -2376,7 +2376,7 @@
           const slug = randomSlug();
           const fcl = frameColorsFor(state.productType);
           const fcn = fcl ? fcl.find(c => c.id === state.frameColor) : null;
-          const name = meta.name + ' · ' + v.size + (fcn && fcn.id !== 'black' ? ' ' + fcn.name : '') + (state.selectedPhoto.name ? ' — ' + state.selectedPhoto.name : '');
+          const name = (meta.noun || meta.name) + ' · ' + v.size + (fcn && fcn.id !== 'black' ? ' ' + fcn.name : '') + (state.selectedPhoto.name ? ' — ' + state.selectedPhoto.name : '');
           const printConfig = {
             productType: state.productType, variantId: orderVariantId(), orientation: state.orientation,
             scale: state.scale, photoUrl: state.selectedPhoto.url,
@@ -2462,6 +2462,9 @@
         if (!HAS_BACK_PANEL.has(state.productType)) {
           return [{ target_index: photo.target_index, print_area: 'default', url: frontUrl }];
         }
+        // The back prints this photo's link. Without one (a saved design whose
+        // Popcode was since deleted) it would print a placeholder — refuse.
+        if (!photo.slug) throw new Error('this photo\'s Popcode no longer exists, so there is no link to print on the back. Choose the photo again.');
         const side = BACK_PANEL_PX;
         const blob = dataUrlToBlob(await drawOrnamentBack(photo.slug, side));
         const path = photo.slug + '/print-' + photo.target_index + '-back.png';
@@ -2501,11 +2504,12 @@
             // number, so adding 1 would only surprise the customer in the cart.
             copies: copiesValue(),
             assetUrls: await buildAssetUrls(publicUrl),
-            title: meta.name + ' · ' + v.size + (fcn && fcn.id !== 'black' ? ' ' + fcn.name : ''),
+            title: (meta.noun || meta.name) + ' · ' + v.size + (fcn && fcn.id !== 'black' ? ' ' + fcn.name : ''),
             thumbUrl: photo.url,
             options: {
               sizeLabel: v.size,
-              orientationLabel: baseAspect() !== 1 ? (state.orientation === 'landscape' ? 'Landscape' : 'Portrait') : 'Square',
+              orientationLabel: ORIENTATION_LOCKED.has(state.productType) ? ''
+                : baseAspect() !== 1 ? (state.orientation === 'landscape' ? 'Landscape' : 'Portrait') : 'Square',
               orientation: state.orientation, scale: state.scale, frameColor: state.frameColor,
               adjust: state.photoAdjust,
             },
@@ -2533,8 +2537,9 @@
         const v = variantOf(state.productType, state.variantId);
         const fcList = frameColorsFor(state.productType);
         const fc = fcList ? fcList.find(c => c.id === state.frameColor) : null;
-        document.getElementById('summary-title').textContent = CATEGORY_META[state.productType].name + ' · ' + v.size + (fc ? ' · ' + fc.name + ' frame' : '');
-        document.getElementById('summary-sub').textContent = (baseAspect() !== 1 ? (state.orientation === 'landscape' ? 'Landscape' : 'Portrait') : 'Square');
+        document.getElementById('summary-title').textContent = (CATEGORY_META[state.productType].noun || CATEGORY_META[state.productType].name) + ' · ' + v.size + (fc ? ' · ' + fc.name + ' frame' : '');
+        document.getElementById('summary-sub').textContent = ORIENTATION_LOCKED.has(state.productType) ? ''
+          : (baseAspect() !== 1 ? (state.orientation === 'landscape' ? 'Landscape' : 'Portrait') : 'Square');
         renderChosenThumb();
         showStep('create');
         requestQuote();

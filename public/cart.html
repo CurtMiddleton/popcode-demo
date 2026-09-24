@@ -353,6 +353,12 @@
            shadow. */
         book:         { template: '/assets/mockups/book.jpg', rect: { x: 0.133, y: 0.253, w: 0.747, h: 0.539 },
                         crop: { x: 0.100, y: 0.222, w: 0.830, h: 0.622 }, noRotate: true, spine: true },
+        /* Cutout templates (the product photo with its print area erased): the
+           photo goes UNDER the template, whose own pixels shape it — the round
+           disc and hanging hole, the mug's curved wrap. Same assets and rects as
+           MOCKUPS in product-preview.js; re-measure both together. */
+        ornament:     { template: '/assets/mockups/ornament.png', rect: { x: 0.1127, y: 0.1132, w: 0.7728, h: 0.7728 }, cutout: true, noRotate: true },
+        mug:          { template: '/assets/mockups/mug.png',      rect: { x: 0.1850, y: 0.1767, w: 0.5596, h: 0.6778 }, cutout: true, noRotate: true },
       };
 
       /* The size label is the only thing on a stored line that carries the shape
@@ -486,8 +492,32 @@
         el.appendChild(cv);
       }
 
+      /* The framed templates are photographs of a BLACK frame, so a white or
+         natural frame used to show black in the cart. Those are drawn instead:
+         the photo in a frame of the chosen colour, with a soft shadow. */
+      const FRAME_HEX = { white: '#f7f6f3', natural: '#c9a97e' };
+      async function drawColouredFrameThumb(el, r, hex) {
+        const photo = await loadImg(r.thumb_url);
+        const S = 420, cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+        const ctx = cv.getContext('2d');
+        const a = thumbAspect(r);
+        let w = S * 0.72, h = w / a; if (h > S * 0.8) { h = S * 0.8; w = h * a; }
+        const x = (S - w) / 2, y = (S - h) / 2, f = Math.max(w, h) * 0.07;
+        ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.28)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 8;
+        ctx.fillStyle = hex; ctx.fillRect(x - f, y - f, w + 2 * f, h + 2 * f); ctx.restore();
+        ctx.strokeStyle = 'rgba(0,0,0,0.14)'; ctx.lineWidth = 1;
+        ctx.strokeRect(x - f + .5, y - f + .5, w + 2 * f - 1, h + 2 * f - 1);
+        ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); drawCovered(ctx, photo, x, y, w, h); ctx.restore();
+        ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.strokeRect(x + .5, y + .5, w - 1, h - 1);
+        el.style.backgroundImage = ''; el.classList.add('has-render'); el.innerHTML = ''; el.appendChild(cv);
+      }
+
       async function renderLineThumb(el, r) {
         if (r.product_type === 'calendar') return drawCalendarThumb(el, r);
+        const fcol = (r.options || {}).frameColor || (/-(white|natural)$/.exec(r.variant_id || '') || [])[1];
+        if ((r.product_type === 'framed' || r.product_type === 'framedcanvas') && FRAME_HEX[fcol] && r.thumb_url) {
+          return drawColouredFrameThumb(el, r, FRAME_HEX[fcol]);
+        }
         const mk = THUMB_MOCKUPS[r.product_type];
         if (!mk || !r.thumb_url) return;                 // keep the plain photo
         const [tpl, photo] = await Promise.all([loadImg(mk.template), loadImg(r.thumb_url)]);
@@ -510,12 +540,20 @@
           cv.width = tw; cv.height = th;
           ctx.drawImage(tpl, 0, 0, tw, th);
         }
+        if (mk.cutout) {
+          ctx.clearRect(0, 0, cv.width, cv.height);
+          ctx.save(); ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
+          drawCovered(ctx, photo, rect.x, rect.y, rect.w, rect.h);
+          ctx.restore();
+          ctx.drawImage(tpl, 0, 0, cv.width, cv.height);
+        } else {
         /* Hide the template's own stock photo before the real one lands. */
         ctx.fillStyle = '#e9e9ec';
         ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
         ctx.save(); ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
         drawCovered(ctx, photo, rect.x, rect.y, rect.w, rect.h);
         ctx.restore();
+        }
         /* A hardcover's cover is almost entirely photograph, and the template's
            own cast shadow is too soft to survive at 132px -- so once the user's
            photo is in, the book reads as a bare picture. Put the object back:
@@ -556,7 +594,10 @@
         list.innerHTML = rows.map(r => {
           const d = designs.get(r.collection_id);
           const opts = r.options || {};
-          const bits = [opts.sizeLabel, opts.orientationLabel, r.page_count ? r.page_count + ' pages' : null]
+          // The title already carries the size ("Ornament · 2.9″ × 2.9″"), so
+          // don't say it twice on the line underneath.
+          const sizeBit = opts.sizeLabel && !(r.title || '').includes(opts.sizeLabel) ? opts.sizeLabel : null;
+          const bits = [sizeBit, opts.orientationLabel, r.page_count ? r.page_count + ' pages' : null]
             .filter(Boolean).join(' · ');
           const href = editHref(r);
           return `
