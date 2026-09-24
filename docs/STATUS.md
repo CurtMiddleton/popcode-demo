@@ -18,13 +18,13 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   (blueprint 1747) with a printed back panel. Magnets, stickers and UK ornaments
   built but hidden (no US lab).
 
-**Unmerged branches (as of 2026-09-24)**
-- `claude/exciting-brahmagupta-gbqh76` (`65f0607`) — My Popcodes shows a product
-  pill (Ornament, Mug) from designs made from a Popcode; a book's pencil opens
-  edit.html locked to media only. Reviewed: recommended to merge after the user
-  checks it on the preview.
-- `claude/determined-planck-fqj14e` — session-note correction; merged into this
-  file 2026-09-24, branch can be deleted.
+**Merged 2026-09-24**
+- PR #74 (`claude/exciting-brahmagupta-gbqh76`): My Popcodes shows a product label
+  (Ornament, Mug) on a Popcode that products were made from; a book's pencil in
+  My Popcodes opens edit.html limited to media (what each photo plays), with a
+  link to the book builder for pages, photos and cover.
+- PR #73: session history moved here from CLAUDE.md, including the corrected
+  notes from `claude/determined-planck-fqj14e` (branch can be deleted).
 
 **Next**
 1. Iterate on `/nonprofits` per the user's review; fill the booking URL; re-run
