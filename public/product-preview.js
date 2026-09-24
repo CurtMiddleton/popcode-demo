@@ -347,7 +347,16 @@
           ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
         }
 
-  function placeProduct(ctx, art, box, id, product, frame) {
+  function placeProduct(ctx, art, box, id, product, frame, st) {
+          st = st || pageState();
+          /* Frame colour/lightness come from the options passed in, or from the
+             page's own helpers when there are some (order.html). create.html has
+             neither helper, and calling them bare threw — so the product pane
+             there never redrew with the chosen photo. */
+          const lightFrame = st.frameHex
+            ? (() => { const h = st.frameHex.replace('#', ''); const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
+                       return (0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) > 150; })()
+            : (typeof isLightFrame === 'function' ? isLightFrame() : false);
           const { x, y, w, h } = box;
           const contact = (id === 'shelf');
 
@@ -368,12 +377,12 @@
           ctx.shadowOffsetX = w * (contact ? 0.004 : 0.016);
           ctx.shadowOffsetY = h * (contact ? 0.006 : 0.04);
           const hasFrame = (product === 'framed' || product === 'tile' || product === 'framedcanvas');
-          ctx.fillStyle = hasFrame ? frameColorHex() : '#ffffff';
+          ctx.fillStyle = hasFrame ? (st.frameHex || (typeof frameColorHex === 'function' ? frameColorHex() : '#141414')) : '#ffffff';
           // Tiles have SQUARE corners (like the real product) — no rounding.
           ctx.fillRect(x - frame, y - frame, w + 2 * frame, h + 2 * frame);
           // Light frames (white/natural) need a hairline edge to read against the
           // pale stage background.
-          if (hasFrame && isLightFrame()) {
+          if (hasFrame && lightFrame) {
             ctx.shadowColor = 'transparent';
             ctx.strokeStyle = 'rgba(0,0,0,0.14)';
             ctx.lineWidth = Math.max(1, w * 0.003);
@@ -384,7 +393,7 @@
           // Mounted framed print: the conservation mount sits between frame and
           // image — fill the opening with mount white, inset the art.
           let ax = x, ay = y, aw = w, ah = h;
-          if (product === 'framed' && state.mounted) {
+          if (product === 'framed' && st.mounted) {
             ctx.fillStyle = '#faf9f6'; ctx.fillRect(x, y, w, h);
             const m = w * 0.13;
             ax = x + m; ay = y + m; aw = w - 2 * m; ah = h - 2 * m;
@@ -400,7 +409,7 @@
             ax = x + g; ay = y + g; aw = w - 2 * g; ah = h - 2 * g;
           }
           if (art) ctx.drawImage(art, ax, ay, aw, ah);
-          else { ctx.fillStyle = '#ededed'; ctx.fillRect(ax, ay, aw, ah); drawImageIcon(ctx, ax + aw / 2, ay + ah / 2, Math.min(aw, ah) * 0.2); }
+          else { ctx.fillStyle = '#ededed'; ctx.fillRect(ax, ay, aw, ah); if (typeof drawImageIcon === 'function') drawImageIcon(ctx, ax + aw / 2, ay + ah / 2, Math.min(aw, ah) * 0.2); }
           // Acrylic: glossy diagonal sheen + a bright polished edge.
           if (product === 'acrylic') {
             const sheen = ctx.createLinearGradient(x, y, x + w, y + h);
@@ -417,10 +426,15 @@
             ctx.fillStyle = 'rgba(0,0,0,0.10)'; ctx.fillRect(x + w - w * 0.014, y, w * 0.014, h);
             ctx.fillStyle = 'rgba(0,0,0,0.06)'; ctx.fillRect(x, y + h - h * 0.011, w, h * 0.011);
           }
-          if (product === 'framed') { ctx.strokeStyle = isLightFrame() ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.10)'; ctx.lineWidth = Math.max(1, w * 0.004); ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1); }
+          if (product === 'framed') { ctx.strokeStyle = lightFrame ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.10)'; ctx.lineWidth = Math.max(1, w * 0.004); ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1); }
         }
 
-  function renderProductOnly(cv, art, aspect) {
+  /* The page's own `state` (order.html) when there is one; create.html has none,
+     so the product and its options are passed in there. Reading `state` bare
+     threw on that page, and the catch kept the sample snapshot on screen. */
+  function pageState() { return (typeof state !== 'undefined' && state) ? state : {}; }
+  function renderProductOnly(cv, art, aspect, opts) {
+          const st = Object.assign({}, pageState(), opts || {});
           const S = 900;
           cv.width = S; cv.height = S;
           const ctx = cv.getContext('2d');
@@ -430,9 +444,9 @@
           const maxW = S * 0.84, maxH = S * 0.84;
           let w = maxW, h = w / aspect;
           if (h > maxH) { h = maxH; w = h * aspect; }
-          const frame = (state.productType === 'framed' || state.productType === 'framedcanvas') ? w * 0.055 : (state.productType === 'tile' ? w * 0.05 : 0);
+          const frame = (st.productType === 'framed' || st.productType === 'framedcanvas') ? w * 0.055 : (st.productType === 'tile' ? w * 0.05 : 0);
           const x = S / 2 - w / 2, y = S / 2 - h / 2;
-          placeProduct(ctx, art, { x, y, w, h }, 'plain', state.productType, frame);
+          placeProduct(ctx, art, { x, y, w, h }, 'plain', st.productType, frame, st);
         }
 
   /* ── Ornament back panel ──────────────────────────────────────────────────

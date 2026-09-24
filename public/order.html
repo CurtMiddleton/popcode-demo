@@ -965,11 +965,49 @@
         }
         const wantType = qs.get('type');
         openCategory(CATEGORIES.includes(wantType) ? wantType : 'print');
+        applyCarriedOptions();
         /* Back from create.html with the Popcode just made (?created=1): carry on
            where you left off — reviewing this product with that photo — instead
-           of starting the product page over, which read as the design vanishing. */
-        if (qs.get('created') && state.selectedPhoto) goReview();
+           of starting the product page over, which read as the design vanishing.
+           With &add=cart (the create page's "Add to cart") it goes straight in
+           and on to the cart. */
+        if (qs.get('created') && state.selectedPhoto) {
+          await adoptCreatedDesign(qs.get('d'));
+          await goReview();
+          if (qs.get('add') === 'cart' && await addToCart()) window.location.href = '/cart.html';
+        }
       });
+
+      // The create page already filed this product in My Designs (?d=slug). Make
+      // it the design being edited, so review's autosave and Save update that
+      // row instead of adding a second copy.
+      async function adoptCreatedDesign(dslug) {
+        if (!dslug || editingDesign) return;
+        try {
+          const { data: col } = await db.from('collections').select('id, user_id, slug')
+            .eq('slug', dslug).single();
+          if (col && col.user_id === currentUser.id) editingDesign = { id: col.id, slug: col.slug };
+        } catch (e) { /* not found: review's autosave just files a new one */ }
+      }
+
+      // Restore the options goCreateNewPopcode() carried in the URL. Every value
+      // is checked against this product's own lists; anything else is ignored.
+      function applyCarriedOptions() {
+        const fc = qs.get('fc'), v = qs.get('v'), o = qs.get('o');
+        const colors = frameColorsFor(state.productType);
+        if (fc && colors && colors.some(c => c.id === fc)) state.frameColor = fc;
+        const cv = v && variantOf(state.productType, v);
+        if (cv) {
+          state.variantId = v;
+          // Framed sizes come in a plain list and a mounted list; the variant says which.
+          if (state.productType === 'framed') state.mounted = !!cv.mounted;
+        }
+        if ((o === 'landscape' || o === 'portrait') && !ORIENTATION_LOCKED.has(state.productType)) state.orientation = o;
+        if (!(fc || v || o)) return;
+        document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b.dataset.orientation === state.orientation));
+        renderSizeChips(); renderFrameChips(); renderMountChips(); updateOrientationVisibility();
+        renderDetailPreview(); refreshDetailPrice();
+      }
 
       // The saved design currently being edited — set so Save updates it in place
       // instead of creating a duplicate.
@@ -2234,7 +2272,23 @@
              of showing the snapshot below forever. */
           render: { productType: state.productType, aspect: currentAspect(),
                     scale: state.scale, adjust: defaultAdjustFor(state.productType),
-                    art: giftArtOpts() } };
+                    art: giftArtOpts(),
+                    // Drawn products (framed canvas, acrylic…) need these too; the
+                    // create page has no `state` of its own to read them from.
+                    frameHex: frameColorHex(), mounted: !!state.mounted },
+          /* What create.html needs to file this product in My Designs the moment
+             the Popcode exists — a design must not depend on the buyer finding
+             their way back here afterwards. Same shape saveDesign() writes. */
+          design: (() => {
+            const v = variantOf(state.productType, state.variantId);
+            const fcl = frameColorsFor(state.productType);
+            const fcn = fcl ? fcl.find(c => c.id === state.frameColor) : null;
+            return {
+              namePrefix: (meta.name || '') + ' · ' + (v ? v.size : '') + (fcn && fcn.id !== 'black' ? ' ' + fcn.name : ''),
+              print: { productType: state.productType, variantId: orderVariantId(), orientation: state.orientation,
+                       scale: state.scale, adjust: normalizeAdjust(defaultAdjustFor(state.productType)) },
+            };
+          })() };
         try {
           const src = document.getElementById('detail-canvas');
           if (src && src.width) {
@@ -2250,7 +2304,14 @@
       }
       function goCreateNewPopcode() {
         carryProductToCreate();
-        const back = '/order.html?type=' + encodeURIComponent(state.productType);
+        /* The size, frame and orientation you picked ride along, so coming back
+           (or "Add to cart" from the create page) is this exact product — the
+           bare ?type= used to reset you to the first size. */
+        const back = '/order.html?type=' + encodeURIComponent(state.productType)
+          + '&v=' + encodeURIComponent(state.variantId || '')
+          + '&fc=' + encodeURIComponent(state.frameColor || '')
+          + (state.mounted ? '&m=1' : '')
+          + '&o=' + encodeURIComponent(state.orientation || 'portrait');
         window.location.href = '/create.html?next=' + encodeURIComponent(back)
           + '&nextLabel=' + encodeURIComponent((CATEGORY_META[state.productType] || {}).name || 'your product');
       }
@@ -2458,10 +2519,12 @@
           await PopcodeCart.add(line);
           btn.textContent = 'Added to cart ✓';
           msg.innerHTML = 'Added. <a class="linkback" href="/cart.html" style="margin:0">View cart &rarr;</a>';
+          return true;
         } catch (e) {
           btn.disabled = false; btn.textContent = editingCartItem ? 'Update cart' : 'Add to cart';
           msg.textContent = 'Could not add to cart — ' + (e.message || 'try again'); msg.classList.add('err');
           if (window.Sentry) Sentry.captureException(e);
+          return false;
         }
       }
 
