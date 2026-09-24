@@ -93,7 +93,9 @@ for (const bp of BLUEPRINTS) {
       const profs = ship.profiles || [];
       const hit = profs.find(p => (p.countries || []).includes(SHIP_TO)) || profs.find(p => (p.countries || []).includes('REST_OF_THE_WORLD'));
       if (hit) {
-        const money = (m) => m && m.amount != null ? `$${(m.amount / 100).toFixed(2)} ${m.currency || ''}`.trim() : '—';
+        // Printify's shipping profiles give the price as `cost` (minor units),
+        // not `amount` — reading `amount` printed "—" for every provider.
+        const money = (m) => { const c = m && (m.cost ?? m.amount); return c != null ? `$${(c / 100).toFixed(2)} ${m.currency || ''}`.trim() : '—'; };
         console.log(`     ship ${SHIP_TO}: first ${money(hit.first_item)}, +item ${money(hit.additional_items)}  (handling ${ship.handling_time?.value ?? '?'} ${ship.handling_time?.unit || 'days'})`);
       } else {
         console.log(`     ship ${SHIP_TO}: no matching profile (ships to: ${[...new Set(profs.flatMap(p => p.countries || []))].slice(0, 12).join(',')}…)`);
