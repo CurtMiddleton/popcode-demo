@@ -162,6 +162,13 @@
        shot; the design it carried was removed pixel by pixel, which is also why
        there is no third-party artwork in the asset. */
     mug: { template: '/assets/mockups/mug.png', rect: { x: 0.1850, y: 0.1767, w: 0.5596, h: 0.6778 }, cutout: true, cylinder: true },
+    /* Round ceramic ornament. Same cutout approach as the mug: the real Printify
+       product photo with its white printable disc erased to transparency, so the
+       art sits under it and the opaque #f2f2f2 surround masks the photo's square
+       corners into a round shape. Keeps the storefront card identical to the
+       order.html preview. rect must stay in sync with MOCKUPS.ornament in
+       product-preview.js. */
+    ornament: { template: '/assets/mockups/ornament.png', rect: { x: 0.2080, y: 0.2974, w: 0.5840, h: 0.5840 }, cutout: true },
     print:  { template: '/assets/mockups/print.jpg',  rect: { x: 0.190, y: 0.113, w: 0.626, h: 0.782 }, crop: { x: 0.168, y: 0.089, w: 0.667, h: 0.823 } },
     tile:   { template: '/assets/mockups/tile.jpg',   rect: { x: 0.280, y: 0.206, w: 0.427, h: 0.598 }, crop: { x: 0.242, y: 0.167, w: 0.521, h: 0.696 } },
     canvas: { template: '/assets/mockups/canvas.jpg', rect: { x: 0.190, y: 0.112, w: 0.670, h: 0.804 }, crop: { x: 0.168, y: 0.094, w: 0.709, h: 0.869 } },
@@ -193,12 +200,11 @@
     // The gift products have no photoreal template in /assets/mockups, so their
     // storefront cards are drawn. Without an entry here the card renders an
     // empty grey box, which is worse than a drawn approximation.
-    // mug is a photoreal cutout template now (CARD_MOCKUPS), not drawn.
-    ornament: { kind: 'ornament' },
+    // mug and ornament are photoreal cutout templates now (CARD_MOCKUPS), not drawn.
     magnet: { kind: 'magnet' },
     sticker: { kind: 'sticker' },
   };
-  const GIFT_KINDS = new Set(['ornament', 'magnet', 'sticker']);
+  const GIFT_KINDS = new Set(['magnet', 'sticker']);
   async function loadCardPhoto(photoUrl, fallbackUrl) {
     try { return await loadImg(photoUrl, true); }
     catch (_) { if (fallbackUrl) { try { return await loadImg(fallbackUrl, true); } catch (_) {} } }
