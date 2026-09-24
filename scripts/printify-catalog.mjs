@@ -97,6 +97,9 @@ for (const bp of BLUEPRINTS) {
         // not `amount` — reading `amount` printed "—" for every provider.
         const money = (m) => { const c = m && (m.cost ?? m.amount); return c != null ? `$${(c / 100).toFixed(2)} ${m.currency || ''}`.trim() : '—'; };
         console.log(`     ship ${SHIP_TO}: first ${money(hit.first_item)}, +item ${money(hit.additional_items)}  (handling ${ship.handling_time?.value ?? '?'} ${ship.handling_time?.unit || 'days'})`);
+        // If the price still can't be read, show the raw profile rather than a
+        // dash — a guessed field name is what hid this number the first time.
+        if (money(hit.first_item) === '—') console.log('     raw shipping profile:', JSON.stringify(hit).slice(0, 400));
       } else {
         console.log(`     ship ${SHIP_TO}: no matching profile (ships to: ${[...new Set(profs.flatMap(p => p.countries || []))].slice(0, 12).join(',')}…)`);
       }
