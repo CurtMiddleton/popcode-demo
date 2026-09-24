@@ -476,22 +476,14 @@
     const lineW = (segs, px) => segs.reduce((w, s) => { x.font = FONT(s.b ? 700 : 500, px); return w + x.measureText(s.t).width; }, 0);
     const chord = (dy) => 2 * Math.sqrt(Math.max(0, (R * 0.80) ** 2 - dy * dy));
 
-    // Fewest lines that fit at full size: the link beside "Go to … on your
-    // phone"; else "Go to <link>" on its own line; else the link alone. A long
-    // link gets its own line rather than being shrunk until it can't be read.
+    // "Go to <link>" / "on your phone and scan the other side." — or, when a
+    // long link won't fit beside "Go to", the link gets a line of its own
+    // rather than being shrunk until it can't be read.
     const room = chord(0) * 0.96;
-    const layouts = [
-      [[{ t: 'Go to ' }, { t: url, b: true }, { t: ' on your phone' }],
-       [{ t: 'and point it at the other side.' }]],
-      [[{ t: 'Go to ' }, { t: url, b: true }],
-       [{ t: 'on your phone and point it' }],
-       [{ t: 'at the other side.' }]],
-      [[{ t: 'Go to' }],
-       [{ t: url, b: true }],
-       [{ t: 'on your phone and point it' }],
-       [{ t: 'at the other side.' }]],
-    ];
-    let lines = layouts.find(L => L.every(segs => lineW(segs, F) <= room)) || layouts[2];
+    const tail = [{ t: 'on your phone and scan the other side.' }];
+    const lines = lineW([{ t: 'Go to ' }, { t: url, b: true }], F) <= room
+      ? [[{ t: 'Go to ' }, { t: url, b: true }], tail]
+      : [[{ t: 'Go to' }], [{ t: url, b: true }], tail];
     const textH = lead * (lines.length - 1) + F;
     const blockH = logoH + gapLogo + textH + gapSym + symW;
     let top = cy - blockH / 2 + S * 0.03;   // a touch low: the hole is at the top
