@@ -252,6 +252,14 @@
       .video-msg-banner a { color: #1a1a1a; font-weight: 700; text-decoration: underline; }
       .compressed-badge { font-size: 10px; color: #16a34a; font-weight: 700; }
       .existing-badge { display: none; }
+      /* A book's Popcodes, opened from My Popcodes: what each photo plays is
+         editable here; which photos there are belongs to the book's layout, so
+         adding, removing and replacing them happens in the book builder. */
+      body.media-only .remove-page-btn, body.media-only #add-page-btn { display: none !important; }
+      body.media-only .upload-btn.replaceable[id^="photo-btn-"] { cursor: default; }
+      .media-only-note { display: none; width: 100%; max-width: 420px; margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; background: #f4f4f4; font-size: 14px; line-height: 1.45; color: #555; }
+      .media-only-note a { color: #1a1a1a; font-weight: 600; }
+      body.media-only .media-only-note { display: block; }
 
       /* ── Square media cards for add-a-page tiles (matches New Popcode) ──
          Label on top, upload area centered, media dropdown pinned at bottom.
@@ -568,6 +576,7 @@
         </div>
         <div class="field-hint" id="code-hint" style="font-size:12px;color:#888;margin:6px 0 24px;width:100%;max-width:420px;text-align:left;min-height:16px;line-height:1.3;">Your shareable link. Tap Edit to change it.</div>
 
+        <div class="media-only-note" id="media-only-note"></div>
         <div class="pages" id="pages"></div>
 
       <div class="confirm-overlay" id="quota-overlay">
@@ -841,6 +850,7 @@
 
       let currentUser = null;
       let collectionId = null;
+      let mediaOnly = false;   // a book's Popcodes: media editable, photos fixed
       // existingItems: array of {id, target_index, media_type, video_url, audio_url, transcript, photo_url} from DB
       let existingItems = [];
       // deletedExistingIds: set of item IDs the user removed
@@ -1352,6 +1362,16 @@
         const { data: col } = await db.from('collections').select('*').eq('slug', slug).single();
         if (!col) { popcodeDialog({ message: 'Project not found.' }).then(() => { window.location.href = '/manage.html'; }); return; }
         collectionId = col.id;
+        if (col.kind === 'book') {
+          mediaOnly = true;
+          document.body.classList.add('media-only');
+          const note = document.getElementById('media-only-note');
+          note.textContent = 'These are the photos in your book that play something when scanned. To change pages, photos or the cover, ';
+          const a = document.createElement('a');
+          a.href = '/book.html?id=' + encodeURIComponent(slug);
+          a.textContent = 'open the book';
+          note.append(a, '.');
+        }
         document.getElementById('name-input').value = col.name || '';
         document.getElementById('code-input').value = slug;
         document.getElementById('url-slug').textContent = slug;
@@ -1432,7 +1452,7 @@
             <div class="upload-wrapper">
               <div class="media-card filled">
                 <div class="media-card-label">Image to scan</div>
-                <div class="upload-btn selected replaceable" id="photo-btn-${key}" role="button" tabindex="0" title="Tap to replace photo">
+                <div class="upload-btn selected replaceable" id="photo-btn-${key}" role="button" tabindex="0" title="${mediaOnly ? 'Photo in your book' : 'Tap to replace photo'}">
                   <img class="preview-img" id="photo-preview-${key}" src="${escapeHtml(photoThumb)}" style="display:block;"/>
                   ${photoThumb ? `<button type="button" class="tile-eye" data-preview-kind="photo" data-preview-url="${escapeHtml(photoThumb)}" title="Preview photo">${IC_EYE}</button>` : ''}
                 </div>
@@ -1501,6 +1521,7 @@
         // sits inside this tile, so let its own handler have that click.
         page.querySelector('#photo-btn-' + key).addEventListener('click', (e) => {
           if (e.target.closest('.tile-eye')) return;
+          if (mediaOnly) return;
           openScanImageMenu((file) => applyExistingPhoto(item, key, file));
         });
 
@@ -2315,6 +2336,8 @@
 
         // Kept existing items — reuse existing URLs, or upload replacements if chosen
         for (const item of keptItems) {
+          // A book's slots point at these target indexes; never renumber them.
+          if (mediaOnly) idx = item.target_index;
           let video_url = item.video_url;
           let audio_url = item.audio_url;
           let photo_url = item.photo_url;

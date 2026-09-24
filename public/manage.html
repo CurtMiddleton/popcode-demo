@@ -666,12 +666,20 @@
          scanning per card would be O(n^2). Only print designs record a source: a
          book or calendar carries its own photos and isn't made FROM another
          Popcode. */
-      let productsBySlug = {};
+      let productsBySlug = {}, productKindsBySlug = {};
       function buildProductIndex() {
-        productsBySlug = {};
+        productsBySlug = {}; productKindsBySlug = {};
         allCollections.forEach(c => {
           const src = c.book_layout && c.book_layout.print && c.book_layout.print.sourceSlug;
-          if (src) productsBySlug[src] = (productsBySlug[src] || 0) + 1;
+          if (!src) return;
+          productsBySlug[src] = (productsBySlug[src] || 0) + 1;
+          /* Which products this Popcode was made for, for the pill above its
+             title — "Ornament", "Mug". The design row is the record of that; a
+             Popcode row carries no product of its own. First-seen order, so the
+             newest product (the list is newest first) leads. */
+          const k = c.kind || (c.book_layout.print.productType);
+          const list = productKindsBySlug[src] || (productKindsBySlug[src] = []);
+          if (k && !list.includes(k)) list.push(k);
         });
       }
       let activeTab = (new URLSearchParams(location.search).get('tab') === 'designs') ? 'designs' : 'popcodes';
@@ -781,12 +789,22 @@
         const isBook = col.kind === 'book';
         const isCalendar = col.kind === 'calendar';
         const isProduct = isDesignKind(col);   // scannable product shown in this tab
-        const kindPill = isProduct ? (PRODUCT_NOUN[col.kind] || 'Design') : null;
+        /* The pill says what a Popcode IS for: its own kind when it is itself
+           a scannable product (a book), otherwise the product(s) made from it. */
+        const madeFor = (productKindsBySlug[col.slug] || []).map(k => PRODUCT_NOUN[k]).filter(Boolean);
+        const kindPill = isProduct ? (PRODUCT_NOUN[col.kind] || 'Design')
+          : madeFor.length ? madeFor.slice(0, 2).join(' · ') + (madeFor.length > 2 ? ' +' + (madeFor.length - 2) : '')
+          : null;
         /* A board book is scannable, so it appears in this tab too -- but it
            had no branch here, which sent both its Edit and its Shop button to
            /edit.html, the Popcode editor. Wrong product. */
-        const editHref = isBook ? '/book.html' : isCalendar ? '/calendar.html'
+        /* In My Popcodes the pencil edits the POPCODES: for a book that's the
+           photos it links and what they play (edit.html, locked to media only).
+           The book itself — layout, pages, cover — is edited from My Designs.
+           Shop still goes to the book builder, which owns ordering. */
+        const shopHref = isBook ? '/book.html' : isCalendar ? '/calendar.html'
           : col.kind === 'boardbook' ? '/boardbook.html' : '/edit.html';
+        const editHref = isBook ? '/edit.html' : shopHref;
         const isCollection = !isProduct && pageCount > 1;
         // Download the badged photos: available for plain projects AND for board
         // books / calendars (multi-photo scannable products). Not for single-image
@@ -833,7 +851,7 @@
             <span class="act"><button class="btn btn-sm btn-icon icon-btn btn-share-id" data-slug="${escapeHtml(col.slug)}" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button><span class="act-label">Share</span></span>
             ${showDownload ? `<span class="act"><button class="btn btn-sm btn-icon icon-btn btn-download" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><span class="act-label">Download</span></span>` : ''}
             ${isProduct
-              ? `<a class="btn btn-sm shop-btn" href="${editHref}?id=${escapeHtml(col.slug)}&cart=1" title="Add a printed copy to your cart"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`
+              ? `<a class="btn btn-sm shop-btn" href="${shopHref}?id=${escapeHtml(col.slug)}&cart=1" title="Add a printed copy to your cart"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`
               : `<a class="btn btn-sm shop-btn" href="/shop.html?id=${escapeHtml(col.slug)}" title="Shop products with this Popcode"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`}
             </div>
             <span class="act act-delete"><button class="btn btn-sm btn-icon btn-delete" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button><span class="act-label">Delete</span></span>
