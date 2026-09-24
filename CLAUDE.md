@@ -2739,7 +2739,7 @@ The user asked for an audit "as if you were someone ordering from start to finis
 - Noted, not a bug: My Designs cards show the plain photo, not a product mockup.
 
 #### Ornament provider — 1747 stays (decided)
-Another session claimed `catalog.mjs` had a duplicate `ornament` key and a blueprint 1623 entry. **Neither exists on `main` or on any branch** (`git log --all -S 112678` finds nothing). `PRODUCTS.ornament` evaluates to 1747 / provider 80 / variant 118761. That session was reading a stale local copy. The two were compared with the user's real Printify token:
+Another session claimed `catalog.mjs` had a duplicate `ornament` key and a blueprint 1623 entry. **Neither exists on `main` or on any branch** (`git log --all -S 112678` finds nothing). `PRODUCTS.ornament` evaluates to 1747 / provider 80 / variant 118761. The report was **accurate when written** and is not a phantom — see the corrected account in the (later) entry below. It does not change this decision, which was settled on its own evidence: the two were compared with the user's real Printify token:
 
 | | 1623 Imagine Your Photos | **1747 M.i.A Merchandise (live)** |
 |---|---|---|
@@ -2760,7 +2760,7 @@ The local `main` was at `f3f306a`, and `git pull` failed with "divergent branche
 - `trek-folio/` (the Bashō repo, nested inside this folder) was added to `.git/info/exclude`.
 - Four untracked `public/assets/mockups/framed-*.png` turned out to be the **2500px originals** of the 2000px committed `scenes/framed-*.png` (from `30517aa`, Sept 18). They were moved to `~/Dropbox/Popcode X/mockup-originals/`.
 
-**Why this matters:** the other session's phantom "duplicate key / 1623" description almost certainly came from that stale Mac checkout. A new start-of-session rule (see `## Session workflow`) makes every session report its commit and how far it is behind `origin/main` before making claims.
+**Why this matters:** a stale checkout makes any claim about the repo unreliable, so a new start-of-session rule (see `## Session workflow`) makes every session report its commit and how far it is behind `origin/main` before making claims. **Correction:** the stale Mac was *not* the source of the "duplicate key / 1623" report — `f3f306a` is from 2026-07-14 and that code was written 2026-09-24, so a July checkout could not contain it. Those commits were genuinely pushed to `claude/shop-cards-book-design-3uaneo` and then orphaned by a reset, which is why `git log --all` no longer finds them. Full account in the (later) entry.
 
 #### Gotchas
 - **Tokens on the user's Mac:** `export PRINTIFY_API_TOKEN=$(pbpaste)`. Paste the line, don't press Return, copy the token, then press Return (`$(pbpaste)` reads at Return time). Check with `echo ${#PRINTIFY_API_TOKEN}` and `unset` when done. Never paste a token into chat. Printify tokens live at printify.com → profile → Connections → API tokens (`/app/account/api`) and are shown only once, so make a throwaway token and delete it afterwards. **Don't rotate the one Vercel uses.**
