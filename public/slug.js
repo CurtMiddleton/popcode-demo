@@ -30,7 +30,7 @@
     'qr-test', 'reset', 'scan', 'sentry-init', 'shop', 'slug', 'terms', 'view',
     'views', 'audio-wav', 'image-source', 'unsplash-samples',
     'admin', 'api', 'app', 'assets', 'static', 'public', 'vendor', 'video',
-    'about', 'dashboard', 'help', 'home', 'login', 'logout', 'new', 'popcode',
+    'about', 'nonprofits', 'dashboard', 'help', 'home', 'login', 'logout', 'new', 'popcode',
     'pricing', 'profile', 'settings', 'signin', 'signup', 'support', 'www'
   ]);
 

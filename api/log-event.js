@@ -27,7 +27,9 @@ export default async function handler(req, res) {
     // is optional. Everything project-scoped still has to name one.
     // A montage is rendered before the project exists (and may be abandoned),
     // so it is logged against the account rather than a slug.
-    const ACCOUNT_EVENTS = ['signup', 'create_montage'];
+    // book_demo_click comes from the /nonprofits landing page: a marketing
+    // click, before any account or project exists.
+    const ACCOUNT_EVENTS = ['signup', 'create_montage', 'book_demo_click'];
     if (!event_type) return res.status(400).json({ error: 'Missing fields' });
     if (!slug && !ACCOUNT_EVENTS.includes(event_type)) {
       return res.status(400).json({ error: 'Missing fields' });
