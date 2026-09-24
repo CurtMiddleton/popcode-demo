@@ -26,8 +26,8 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage as nd
 
-# Geometry of the blank, in pixels of the 2048 x 2048 source photo.
-DISC = (1021.5, 1023.5, 790.0)   # centre x, centre y, radius
+# Fallback hanging-hole geometry (centre x, y, radius), only used if the hole
+# can't be auto-detected. Auto-detection (detect_hole) runs first for any blank.
 HOLE = (1023.0, 406.0, 46.0)
 
 
@@ -44,6 +44,57 @@ def disc_geometry(blank_rgb):
     cy = (ys.min() + ys.max()) / 2.0
     r = ((xs.max() - xs.min()) + (ys.max() - ys.min())) / 4.0
     return cx, cy, r
+
+
+def detect_hole(blank_rgb, cx, cy, r):
+    """Locate the hanging hole automatically, so no per-blank constant is needed.
+
+    The hole sits in the upper third of the disc where the gold string threads
+    through. It reads as a small, compact, low-saturation blob that stands out
+    from the flat ceramic face — either brighter (the background showing through)
+    or darker (a shadowed grommet). Returns (hx, hy, hr) or None.
+    """
+    H, W, _ = blank_rgb.shape
+    lum = blank_rgb.mean(2)
+    sat = blank_rgb.max(2) - blank_rgb.min(2)
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+
+    # Flat-face reference tone, sampled from the lower-centre (never the hole).
+    face = (np.hypot(xx - cx, yy - cy) < 0.70 * r) & (yy > cy)
+    if not face.any():
+        return None
+    tone = float(np.median(lum[face]))
+
+    # The hole always sits in a tight band at the top of the disc, on the vertical
+    # axis. Restricting to that band is what keeps stray specks from winning.
+    top = cy - r
+    band = (np.abs(xx - cx) < 0.20 * r) & (yy > top + 0.02 * r) & (yy < top + 0.42 * r)
+    # It reads as brighter (background through the hole) or darker (a grommet),
+    # and never as saturated gold (that's the string, which sits on top).
+    cand = band & (np.abs(lum - tone) > 6) & (sat < 45)
+    cand = nd.binary_closing(cand, np.ones((9, 9)))
+    cand = nd.binary_fill_holes(cand)
+    cand = nd.binary_opening(cand, np.ones((3, 3)))
+
+    lab, n = nd.label(cand)
+    if n == 0:
+        return None
+    # The hole is the largest compact blob in the band.
+    best = None
+    for i in range(1, n + 1):
+        ys, xs = np.where(lab == i)
+        area = xs.size
+        if area < (0.03 * r) ** 2 * np.pi:           # ignore tiny specks
+            continue
+        bw, bh = np.ptp(xs) + 1, np.ptp(ys) + 1
+        roundish = min(bw, bh) / max(bw, bh)
+        score = area * (0.5 + roundish)
+        if best is None or score > best[0]:
+            best = (score, xs.mean(), ys.mean(), float(np.sqrt(area / np.pi)))
+    if best is None:
+        return None
+    _, hx, hy, hr = best
+    return hx, hy, float(np.clip(hr, 0.02 * r, 0.09 * r))
 
 
 def load_art_cover(path, size):
@@ -72,10 +123,16 @@ def build(art_path, blank_path, out_path, gloss=0.10, side="front"):
     lum = blank.mean(2)
     sat = blank.max(2) - blank.min(2)
 
-    cx, cy, r = disc_geometry(blank) if blank.shape[:2] != (2048, 2048) else DISC
-    hx, hy, hr = HOLE
-    if mirrored:
-        hx = W - hx
+    cx, cy, r = disc_geometry(blank)
+    # The hole is auto-detected on the (already mirrored) blank, so it lands on
+    # the correct side with no per-blank constant. HOLE is only a fallback.
+    hole = detect_hole(blank, cx, cy, r)
+    if hole is not None:
+        hx, hy, hr = hole
+    else:
+        hx, hy, hr = HOLE
+        if mirrored:
+            hx = W - hx
 
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
     dist = np.hypot(xx - cx, yy - cy)
