@@ -79,6 +79,8 @@ After writing the entry, commit CLAUDE.md with a message like `Add session notes
 
 **At the start of every session**, read `## Session history` (at least the most recent 2–3 entries) before doing anything else — that's how context persists across sessions in this repo.
 
+**Then, before saying anything about what the code does or doesn't contain**, run `git fetch origin && git status -sb && git rev-list --count HEAD..origin/main` and report the commit you're on (`git log -1 --oneline`) and how far behind `origin/main` it is. If behind, get current first. Several sessions and two Macs push to this repo; a stale checkout has repeatedly produced confident, wrong claims (2026-09-01: 483 commits behind; 2026-09-24: the user's Mac was 524 behind and another session described code that was never committed). When relaying a claim from another session, verify it against `origin/main` before acting on it.
+
 ## Queued briefs
 
 - **`docs/design-audit-brief.md`** — a site-wide visual audit, measured over 20
@@ -2703,3 +2705,69 @@ Worth internalising: **for "is this the right shape", instrument the geometry �
 - **Parcel count on a mug-plus-print order.** Both `GLOBAL-*` and US-made, but Prodigi groups shipments by LAB — two labs means a second parcel and a second ~$3.75 of inserts. The cart's shipping breakdown shows it.
 - **Printify for magnets, stickers, ornaments** — blueprint selection plus a `send_to_production: false` test order, the way the board book went. `scripts/printify-catalog.mjs` is the start.
 - Unchanged from before: re-enable Vercel Deployment Protection on previews; `analytics.html` still gated to `curtmid@gmail.com` only; shipping options as cards with prices and estimates (biggest remaining Popsa gap).
+
+### 2026-09-24 — Ornament order-flow audit, designs filed from the create step, all-products audit, ornament provider settled, Mac git cleanup
+
+**Branch `claude/shop-cards-book-design-3uaneo`, each commit fast-forwarded to `main` and live:** `78a88e7`, `0571aba`, `9f19a70`, `8664424`, `edf4fe7`, `de76db4`. No PRs, no migrations, no env changes.
+
+#### Ornament order flow (`78a88e7`, `0571aba`)
+The user walked the ornament order on a real device and listed problems. Fixed:
+- **Product page:** no Front/Back toggle (it lives on review now). Size reads **2.9″ × 2.9″** (Printify blueprint 1747's real size); the server label is `'Ceramic Ornament 2.9" × 2.9"'`.
+- **Create page:** the name alert reads "Give your Popcode a name." "Popcode created" is now a centred dialog (`#result-overlay`) with a close ×, Edit, View and Share, and it closes on Esc or the backdrop. **The first BowieXmas wasn't lost.** It saved to My Popcodes, but the old result message rendered below the fold, so the user made it a second time.
+- **Back panel:** `drawOrnamentBack(slug, S)` in `public/product-preview.js`, shared by order.html and create.html. Wordmark, then "Go to **popcode.app/{slug}** / on your phone and scan the other side." (the user's exact copy), then the symbol. There's a Front/Back toggle on the create page (`#sp-side`) and on review (`#side-toggle`). **The back preview and the printed back use the same link.** The user asked for that and it was already the case.
+- **Artwork:** `public/assets/mockups/ornament.png` rebuilt analytically by `scratchpad/build_orn7.py`. The circle is fitted to Printify's blank (residual 0.8px, where the old threshold mask left a ragged left crescent), the hole is found from the enclosed white region, and there's a ceramic shading overlay. The rect `{x:0.1127,y:0.1132,w:0.7728,h:0.7728}` is shared by product-preview.js, unsplash-samples.js and cart.html.
+- The user's generator is `scripts/ornament-mockup/ornament_mockup.py`. It uses `detect_hole()` and `np.ptp` (`ndarray.ptp` was removed in numpy 2).
+
+#### Every product now lands in My Designs (`9f19a70`)
+The user reported "I hit back to ornaments and it disappeared" and "when you create a product it needs to live in my designs as well". Designs had only been saved when someone pressed Save on review.
+- **Review autosaves.** `goReview()` ends with `saveDesign({ auto: true })`. The first save inserts a row and sets `editingDesign`, so every later save updates that same row. The Edit Photo save also autosaves. `loadSavedDesign` always sets `editingDesign` (as `null` when it's a Duplicate, merged with a parallel session's `duplicate` param).
+- **The create step files the design too.** `create.html saveShopDesign()` inserts the design row plus a `collection_items` thumbnail. The payload comes from `sessionStorage.popcodeShopProduct.design`, which `order.html carryProductToCreate` fills.
+- **Coming back from create lands on review, not page 1.** The back URL carries `&v=&fc=&m=1&o=` (size, frame colour, mount, orientation), applied by `applyCarriedOptions()`, so options no longer reset to the first size. The return link is `…&id=<popcode>&photo=0&created=1&d=<design slug>`, and `adoptCreatedDesign()` picks up that design row.
+- **Add to cart straight from the create page.** The dialog's primary button in shop mode is "Add to cart" (`…&add=cart` → order.html adds the line, then goes to `/cart.html`). `edit.html` got the same "Back to {product}" continue link.
+- **Bug found along the way:** `renderProductOnly`/`placeProduct` read order.html page globals (`state`, `isLightFrame`, `drawImageIcon`), so create.html never redrew drawn products like Framed Canvas. They now take options (`pageState()`, `st.frameHex`, `st.mounted`), with guarded fallbacks. **Shared renderer code must never read a host page's globals.**
+
+#### All-products customer audit (`8664424`)
+The user asked for an audit "as if you were someone ordering from start to finish" for every product. The harness is `scratchpad/audit_all.mjs` + `audit2.mjs`, with `stub_supa.js` logging writes to `window.__ops`, supporting `.eq`/`.in`, and holding saved designs and cart lines. For print, tile, canvas, framed, framedcanvas, acrylic, mug and ornament: the preview paints, review saves (`insert:<kind>`), the correct variant goes to the cart (the ornament sends `front+back`), checkout opens, and there are 0 page errors. Fixed:
+- Mug and ornament showed "Portrait" on checkout and in the cart; orientation is now empty for `ORIENTATION_LOCKED` types.
+- Plural names ("Ornaments") are now singular (`meta.noun || meta.name`) on review, design names, cart titles, checkout and `namePrefix`.
+- "From $X" only shows when `activeSizeList().length > 1`.
+- `buildAssetUrls` throws if the photo has no slug, so the back can't print a blank link.
+- **Cart thumbnails:**
+  - Ornament and mug use their cutout templates.
+  - White and natural framed/framedcanvas lines draw a frame in that colour (`drawColouredFrameThumb`; the `framed.jpg` template is black).
+  - The size isn't repeated under a title that already contains it.
+- Noted, not a bug: My Designs cards show the plain photo, not a product mockup.
+
+#### Ornament provider — 1747 stays (decided)
+Another session claimed `catalog.mjs` had a duplicate `ornament` key and a blueprint 1623 entry. **Neither exists on `main` or on any branch** (`git log --all -S 112678` finds nothing). `PRODUCTS.ornament` evaluates to 1747 / provider 80 / variant 118761. That session was reading a stale local copy. The two were compared with the user's real Printify token:
+
+| | 1623 Imagine Your Photos | **1747 M.i.A Merchandise (live)** |
+|---|---|---|
+| back print area | yes | yes |
+| handling | 10 days | 10 days |
+| unit / first ship / +item ship | $7.73 / $6.19 / $1.99 | $8.01 / $5.89 / $0.69 |
+| 1 / 3 / 5 ornaments | $13.92 / $33.36 / $52.80 | **$13.90 / $31.30 / $48.70** |
+
+It's a tie for one ornament, and 1747 is cheaper from the second on. 1623's only edge is **packs** (3/5/10-pc variants, e.g. `112679`, whose price isn't in the catalog API) and a **heart** shape. Revisit only to sell those. **The 10-day handling on both means an early Christmas cutoff**, which should be stated on the product page by mid-November.
+
+`scripts/printify-catalog.mjs` printed "—" for shipping because it read `.amount`, but Printify returns `{ cost, currency }` (`edf4fe7`). It now also dumps the raw profile if no price is readable (`de76db4`).
+
+#### The user's Mac was 524 commits behind — cleaned up
+The local `main` was at `f3f306a`, and `git pull` failed with "divergent branches" on whatever branch was checked out. Resolved without touching that branch:
+- A stray staged `scripts/printify-catalog.mjs` was moved to `/tmp/printify-catalog-backup.mjs`.
+- `git checkout -- node_modules/.package-lock.json`
+- `git checkout main && git pull --ff-only` → `de76db4`.
+- `trek-folio/` (the Bashō repo, nested inside this folder) was added to `.git/info/exclude`.
+- Four untracked `public/assets/mockups/framed-*.png` turned out to be the **2500px originals** of the 2000px committed `scenes/framed-*.png` (from `30517aa`, Sept 18). They were moved to `~/Dropbox/Popcode X/mockup-originals/`.
+
+**Why this matters:** the other session's phantom "duplicate key / 1623" description almost certainly came from that stale Mac checkout. A new start-of-session rule (see `## Session workflow`) makes every session report its commit and how far it is behind `origin/main` before making claims.
+
+#### Gotchas
+- **Tokens on the user's Mac:** `export PRINTIFY_API_TOKEN=$(pbpaste)`. Paste the line, don't press Return, copy the token, then press Return (`$(pbpaste)` reads at Return time). Check with `echo ${#PRINTIFY_API_TOKEN}` and `unset` when done. Never paste a token into chat. Printify tokens live at printify.com → profile → Connections → API tokens (`/app/account/api`) and are shown only once, so make a throwaway token and delete it afterwards. **Don't rotate the one Vercel uses.**
+- `scripts/printify-catalog.mjs` has no imports, so it can run from a copy: `git show origin/main:scripts/printify-catalog.mjs > /tmp/x.mjs`.
+- This container's clone is **shallow** too, so neither sandbox can date old deletions. The user's Mac has full history.
+
+#### Still open
+- **Order one ornament**, to see the real back panel and the artwork.
+- 1623 packs/hearts, only if wanted.
+- Unchanged: re-enable Vercel Deployment Protection on previews; `analytics.html` is gated to one email; shipping options as cards.
