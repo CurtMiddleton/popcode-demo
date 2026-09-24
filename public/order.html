@@ -573,12 +573,10 @@
           { id: 'sti-8_5', size: '8.5×8.5"', aspect: 1,     minCopies: 3, format: 'png', padPx: 30, maxPx: { w: 2550, h: 2550 } },
           { id: 'sti-14',  size: '14×14"',   aspect: 1,     minCopies: 3, format: 'png', padPx: 30, maxPx: { w: 4200, h: 4200 } },
         ],
+        // One Printify variant (blueprint 1747 / M.i.A Merchandise, USA). Keep the
+        // id and aspect in step with lib/print/catalog.mjs — the server decides.
         ornament: [
-          { id: 'orn-alum-rect', size: 'Aluminium 4×3"', aspect: 102 / 75, minCopies: 3 },
-          { id: 'orn-alum-sq',   size: 'Aluminium 3×3"', aspect: 1,        minCopies: 3 },
-          { id: 'orn-glass-sq',  size: 'Glass 3×3"',     aspect: 1,        minCopies: 3 },
-          { id: 'orn-ceramic',   size: 'Ceramic 3×3"',   aspect: 1,        minCopies: 3, round: true },
-          { id: 'orn-bauble',    size: 'Bauble',         aspect: 79 / 84,  minCopies: 3, round: true },
+          { id: 'orn-ceramic', size: 'Round', aspect: 1 },
         ],
         mug: [
           { id: 'mug-11oz', size: '11oz', aspect: 228.6 / 94.83, wrap: { widthMm: 228.6, heightMm: 94.83, safeMm: 4 } },
@@ -599,7 +597,10 @@
          either Popcode sells into the UK/EU or these move to a US provider
          (Printify already fulfils the board book from District Photo in the US,
          and PRODUCT_PROVIDER exists for exactly this). */
-      const NO_US_FULFILMENT = new Set(['magnet', 'sticker', 'ornament']);
+      // Ornaments came off this list when they moved to Printify: blueprint 1747 is
+      // fulfilled by M.i.A Merchandise in the USA. Magnets and stickers are still
+      // Prodigi UK-only.
+      const NO_US_FULFILMENT = new Set(['magnet', 'sticker']);
       /* The preview renderer now lives in /product-preview.js so the create page
          can draw the same product. Bound to the old names here, so every call
          site below is unchanged. */
@@ -2319,6 +2320,72 @@
         return db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
       }
 
+      /* Products whose lab takes a SEPARATE back image, and the size of it. The
+         Printify ids and position names live in lib/print/catalog.mjs, which is
+         authoritative; the client only needs to know a back exists so it can draw
+         one, and how big. Deliberately not mirrored from the variant — duplicating
+         the Printify block here would be one more thing to drift. */
+      const HAS_BACK_PANEL = new Set(['ornament']);
+      const BACK_PANEL_PX = 938;
+
+      /* The back of a double-sided ornament. Printify has no insert mechanism, so
+         this is where the URL lives for the one product that ships without a
+         companion card. The ornament is die-cut round out of a 938x938 square, so
+         everything has to sit inside the inscribed circle — text placed on the
+         square's own margins would be cut away. */
+      async function drawOrnamentBack(slug, S) {
+        const c = document.createElement('canvas'); c.width = S; c.height = S;
+        const x = c.getContext('2d');
+        x.fillStyle = '#ffffff'; x.fillRect(0, 0, S, S);
+        const cx = S / 2, cy = S / 2, r = S / 2;
+        // Shrink to the chord available at this height, not the full width: the
+        // circle is narrower than the square everywhere except the centre line.
+        const fitAt = (text, dy, weight, start) => {
+          const half = Math.sqrt(Math.max(0, (r * 0.86) ** 2 - dy * dy));
+          let size = start;
+          do {
+            x.font = weight + ' ' + Math.round(size) + "px Inter, system-ui, sans-serif";
+            if (x.measureText(text).width <= half * 2) break;
+            size -= 2;
+          } while (size > 10);
+          return size;
+        };
+        const icon = new Image();
+        await new Promise((res, rej) => { icon.onload = res; icon.onerror = rej;
+          icon.src = '/assets/popcode_symbol_color.svg'; });
+        const ic = Math.round(S * 0.18);
+        x.drawImage(icon, cx - ic / 2, cy - r * 0.60, ic, ic);
+        x.textAlign = 'center'; x.textBaseline = 'alphabetic'; x.fillStyle = '#1a1a1a';
+        const l1 = 'Point your phone';
+        const l2 = 'at the photo';
+        fitAt(l1, -r * 0.06, '600', S * 0.070); x.fillText(l1, cx, cy + S * 0.010);
+        fitAt(l2,  r * 0.02, '600', S * 0.070); x.fillText(l2, cx, cy + S * 0.092);
+        const url = 'popcode.app/' + slug;
+        fitAt(url, r * 0.40, '700', S * 0.068); x.fillText(url, cx, cy + r * 0.46);
+        return c.toDataURL('image/png');
+      }
+
+      /* What goes to the lab. Most products are one image in the 'default' print
+         area; a Printify product with named positions gets one asset per position,
+         which is what carries the ornament's URL onto its back. */
+      async function buildAssetUrls(frontUrl) {
+        const photo = state.selectedPhoto;
+        if (!HAS_BACK_PANEL.has(state.productType)) {
+          return [{ target_index: photo.target_index, print_area: 'default', url: frontUrl }];
+        }
+        const side = BACK_PANEL_PX;
+        const blob = dataUrlToBlob(await drawOrnamentBack(photo.slug, side));
+        const path = photo.slug + '/print-' + photo.target_index + '-back.png';
+        const up = await db.storage.from('experiences').upload(path, blob,
+          { contentType: 'image/png', upsert: true });
+        if (up.error) throw new Error('Could not prepare the back of the ornament: ' + up.error.message);
+        const backUrl = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+        return [
+          { target_index: photo.target_index, print_area: 'front', url: frontUrl },
+          { target_index: photo.target_index, print_area: 'back', url: backUrl },
+        ];
+      }
+
       // ---- add to cart ----
       document.getElementById('addcart-btn').addEventListener('click', addToCart);
 
@@ -2344,7 +2411,7 @@
             // Pack-size products go in as a set; the server clamps to the same
             // number, so adding 1 would only surprise the customer in the cart.
             copies: copiesValue(),
-            assetUrls: [{ target_index: photo.target_index, print_area: 'default', url: publicUrl }],
+            assetUrls: await buildAssetUrls(publicUrl),
             title: meta.name + ' · ' + v.size + (fcn && fcn.id !== 'black' ? ' ' + fcn.name : ''),
             thumbUrl: photo.url,
             options: {
@@ -2501,7 +2568,7 @@
               copies: copiesValue(),
               shippingMethod: document.getElementById('shipping').value,
               recipient,
-              assetUrls: [{ target_index: photo.target_index, print_area: 'default', url: publicUrl }],
+              assetUrls: await buildAssetUrls(publicUrl),
             }),
           });
           const data = await resp.json();
