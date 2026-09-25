@@ -44,7 +44,11 @@ export default async function handler(req, res) {
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data?.response) {
-      return res.status(502).json({ error: data?.message || `Status check failed (${resp.status})` });
+      const msg = data?.message || `Status check failed (${resp.status})`;
+      // The builder retries these, but record them so a run of them is visible.
+      Sentry.captureException(new Error(`Shotstack status check failed (id ${id}, HTTP ${resp.status}): ${msg}`));
+      await Sentry.flush(2000);
+      return res.status(502).json({ error: msg });
     }
     const status = mapStatus(data.response.status);
     if (status === 'failed') {
@@ -54,7 +58,11 @@ export default async function handler(req, res) {
       Sentry.captureException(new Error(`Shotstack render failed (id ${id}): ${data.response.error || data.response.status || 'unknown'}`));
       await Sentry.flush(2000);
     }
-    res.status(200).json({ status, url: status === 'done' ? (data.response.url || null) : null, dryRun: false });
+    res.status(200).json({
+      status, url: status === 'done' ? (data.response.url || null) : null, dryRun: false,
+      // Shotstack's reason for a failed render, shown to the creator.
+      reason: status === 'failed' ? String(data.response.error || '').slice(0, 200) || null : null,
+    });
   } catch (e) {
     console.error('montage-status error:', e);
     Sentry.captureException(e);
