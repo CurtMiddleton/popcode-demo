@@ -65,7 +65,7 @@
            smears over the photo, so it's off (body's extra specificity: nav.js
            appends its sheet after this one). ── */
       body .site-header::after { display: none; }
-      .np-hero { position: relative; overflow: hidden; background: #1a1a1a; color: #fff; padding: 56px 0 380px; }
+      .np-hero { position: relative; overflow: hidden; background: #1a1a1a; color: #fff; padding: 56px 0 430px; }
       .hero-bg { position: absolute; inset: 0; z-index: 0; }
       .hero-bg img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 60%; }
       .hero-bg::after {
@@ -116,7 +116,7 @@
       .stage { position: relative; height: 580px; }
       /* Common Tide's appeal postcard, lying nearly flat. */
       .card {
-        position: absolute; right: -90px; top: 70px; width: 600px; aspect-ratio: 3 / 2;
+        position: absolute; right: -130px; top: 70px; width: 600px; aspect-ratio: 3 / 2;
         display: block; border-radius: 6px; overflow: hidden;
         box-shadow: 0 30px 70px rgba(0,0,0,.4), 0 3px 10px rgba(0,0,0,.15);
         transform: rotate(-1.5deg);
@@ -126,7 +126,7 @@
       /* The phone: the home page's, with the real Popcode start screen. It
          shows the start screen for a moment, then the story plays. */
       .phone {
-        position: absolute; z-index: 3; left: -44px; top: 290px;
+        position: absolute; z-index: 3; left: -44px; top: 340px;
         width: 262px; height: 528px;
         background: #16121f; border-radius: 48px; padding: 12px;
         box-shadow: 0 40px 80px rgba(0, 0, 0, .5);
@@ -767,6 +767,117 @@
           timer = setTimeout(play, 1800);
         });
         io.observe(phone);
+      })();
+    </script>
+    <!-- Layout tweaker: popcode.app/nonprofits?tweak. Drag the eyebrow, headline,
+         postcard or phone, or use the sliders, then Copy and paste the values to Claude.
+         Never loads for a normal visit. -->
+    <script>
+      (function () {
+        if (!/[?&]tweak\b/.test(location.search)) return;
+        var card = document.querySelector('.card'), phone = document.getElementById('phone'),
+            sound = document.getElementById('sound-btn'),
+            eyebrow = document.querySelector('.np-hero .eyebrow'), h1 = document.querySelector('.np-hero h1');
+        var num = function (el, prop) { return parseFloat(getComputedStyle(el)[prop]) || 0; };
+        var rot = (function () {
+          var m = getComputedStyle(card).transform.match(/matrix\(([^,]+),\s*([^,]+)/);
+          return m ? Math.round(Math.atan2(+m[2], +m[1]) * 180 / Math.PI * 10) / 10 : 0;
+        })();
+        var v = {
+          cardRight: num(card, 'right'), cardTop: num(card, 'top'), cardWidth: num(card, 'width'), cardRotate: rot,
+          phoneLeft: num(phone, 'left'), phoneTop: num(phone, 'top'), phoneScale: 1,
+          soundTop: sound ? num(sound, 'top') : 0,
+          eyebrowX: 0, eyebrowY: 0, eyebrowSize: num(eyebrow, 'fontSize'),
+          h1X: 0, h1Y: 0, h1Size: num(h1, 'fontSize')
+        };
+        var controls = [
+          ['Eyebrow', null],
+          ['eyebrowX', 'Left/right', -300, 600, 1], ['eyebrowY', 'Up/down', -200, 300, 1], ['eyebrowSize', 'Size', 9, 28, 0.5],
+          ['Headline', null],
+          ['h1X', 'Left/right', -300, 600, 1], ['h1Y', 'Up/down', -200, 300, 1], ['h1Size', 'Size', 28, 110, 1],
+          ['Postcard', null],
+          ['cardRight', 'Right edge', -400, 300, 1], ['cardTop', 'Top', -200, 500, 1],
+          ['cardWidth', 'Width', 200, 900, 1], ['cardRotate', 'Rotate', -15, 15, 0.1],
+          ['Phone', null],
+          ['phoneLeft', 'Left', -300, 600, 1], ['phoneTop', 'Top', -100, 700, 1], ['phoneScale', 'Scale', 0.5, 1.6, 0.01],
+          ['Sound button', null],
+          ['soundTop', 'Top', 0, 900, 1]
+        ];
+        function apply() {
+          card.style.right = v.cardRight + 'px'; card.style.top = v.cardTop + 'px';
+          card.style.width = v.cardWidth + 'px'; card.style.transform = 'rotate(' + v.cardRotate + 'deg)';
+          phone.style.left = v.phoneLeft + 'px'; phone.style.top = v.phoneTop + 'px';
+          phone.style.transformOrigin = 'top left'; phone.style.transform = v.phoneScale === 1 ? '' : 'scale(' + v.phoneScale + ')';
+          if (sound) sound.style.top = v.soundTop + 'px';
+          eyebrow.style.translate = v.eyebrowX + 'px ' + v.eyebrowY + 'px'; eyebrow.style.fontSize = v.eyebrowSize + 'px';
+          h1.style.translate = v.h1X + 'px ' + v.h1Y + 'px'; h1.style.fontSize = v.h1Size + 'px';
+          controls.forEach(function (c) {
+            if (!c[1]) return;
+            var r = panel.querySelector('[data-k="' + c[0] + '"]'); r.value = v[c[0]];
+            r.nextElementSibling.textContent = v[c[0]];
+          });
+          out.value = css();
+        }
+        function css() {
+          var w = innerWidth, bp = w > 1100 ? 'desktop (wider than 1100px)' : w > 900 ? '901–1100px' : w > 640 ? '641–900px' : 'phone (640px and under)';
+          return '/* nonprofits hero, ' + bp + ', viewed at ' + w + 'px */\n' +
+            '.card  { right: ' + v.cardRight + 'px; top: ' + v.cardTop + 'px; width: ' + v.cardWidth + 'px; transform: rotate(' + v.cardRotate + 'deg); }\n' +
+            '.phone { left: ' + v.phoneLeft + 'px; top: ' + v.phoneTop + 'px;' + (v.phoneScale !== 1 ? ' scale: ' + v.phoneScale + ';' : '') + ' }\n' +
+            (sound ? '.sound-btn { top: ' + v.soundTop + 'px; }\n' : '') +
+            '.np-hero .eyebrow { font-size: ' + v.eyebrowSize + 'px;' + (v.eyebrowX || v.eyebrowY ? ' translate: ' + v.eyebrowX + 'px ' + v.eyebrowY + 'px;' : '') + ' }\n' +
+            '.np-hero h1 { font-size: ' + v.h1Size + 'px;' + (v.h1X || v.h1Y ? ' translate: ' + v.h1X + 'px ' + v.h1Y + 'px;' : '') + ' }\n';
+        }
+
+        var panel = document.createElement('div');
+        panel.style.cssText = 'position:fixed;z-index:9999;right:16px;bottom:16px;width:280px;max-height:calc(100vh - 32px);overflow:auto;' +
+          'background:#fff;color:#1a1a1a;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.35);padding:14px 16px;font:13px/1.3 system-ui,sans-serif;';
+        var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>Hero tweaker</b>' +
+          '<button data-act="min" style="border:none;background:none;font-size:18px;cursor:pointer">–</button></div><div data-body>' +
+          '<div style="color:#666;margin-bottom:8px">Drag the eyebrow, headline, postcard or phone, or use the sliders.</div>';
+        controls.forEach(function (c) {
+          if (!c[1]) { html += '<div style="font-weight:700;margin:10px 0 4px">' + c[0] + '</div>'; return; }
+          html += '<label style="display:grid;grid-template-columns:70px 1fr 44px;gap:6px;align-items:center;margin:3px 0">' + c[1] +
+            '<input type="range" data-k="' + c[0] + '" min="' + c[2] + '" max="' + c[3] + '" step="' + c[4] + '"><span style="text-align:right;font-variant-numeric:tabular-nums"></span></label>';
+        });
+        html += '<textarea readonly rows="7" style="width:100%;margin-top:10px;font:11px/1.35 ui-monospace,monospace;border:1px solid #ddd;border-radius:6px;padding:6px;box-sizing:border-box;resize:vertical"></textarea>' +
+          '<div style="display:flex;gap:8px;margin-top:8px"><button data-act="copy" style="flex:1;padding:8px;border:none;border-radius:8px;background:#1a1a1a;color:#fff;font-weight:600;cursor:pointer">Copy values</button>' +
+          '<button data-act="reset" style="padding:8px 12px;border:1px solid #ccc;border-radius:8px;background:#fff;cursor:pointer">Reset</button></div></div>';
+        panel.innerHTML = html;
+        document.body.appendChild(panel);
+        var out = panel.querySelector('textarea'), start = JSON.parse(JSON.stringify(v));
+        panel.addEventListener('input', function (e) {
+          var k = e.target.getAttribute('data-k'); if (!k) return;
+          v[k] = parseFloat(e.target.value); apply();
+        });
+        panel.addEventListener('click', function (e) {
+          var a = e.target.getAttribute('data-act');
+          if (a === 'copy') {
+            out.select();
+            (navigator.clipboard ? navigator.clipboard.writeText(out.value) : Promise.reject()).catch(function () { document.execCommand('copy'); });
+            e.target.textContent = 'Copied'; setTimeout(function () { e.target.textContent = 'Copy values'; }, 1200);
+          } else if (a === 'reset') { v = JSON.parse(JSON.stringify(start)); apply(); }
+          else if (a === 'min') { var b = panel.querySelector('[data-body]'); b.hidden = !b.hidden; e.target.textContent = b.hidden ? '+' : '–'; }
+        });
+
+        // Dragging. The card is anchored by its right edge, so moving right shrinks `right`.
+        function draggable(el, onMove) {
+          el.style.cursor = 'grab'; el.style.touchAction = 'none';
+          el.addEventListener('pointerdown', function (e) {
+            if (e.button) return;
+            e.preventDefault(); el.setPointerCapture(e.pointerId); el.style.cursor = 'grabbing';
+            var x0 = e.clientX, y0 = e.clientY, s = JSON.parse(JSON.stringify(v));
+            function move(ev) { onMove(s, ev.clientX - x0, ev.clientY - y0); apply(); }
+            function up() { el.style.cursor = 'grab'; el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); }
+            el.addEventListener('pointermove', move); el.addEventListener('pointerup', up);
+          }, true);
+          el.addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); }, true);
+        }
+        draggable(card, function (s, dx, dy) { v.cardRight = Math.round(s.cardRight - dx); v.cardTop = Math.round(s.cardTop + dy); });
+        draggable(eyebrow, function (s, dx, dy) { v.eyebrowX = Math.round(s.eyebrowX + dx); v.eyebrowY = Math.round(s.eyebrowY + dy); });
+        draggable(h1, function (s, dx, dy) { v.h1X = Math.round(s.h1X + dx); v.h1Y = Math.round(s.h1Y + dy); });
+        draggable(phone, function (s, dx, dy) { v.phoneLeft = Math.round(s.phoneLeft + dx); v.phoneTop = Math.round(s.phoneTop + dy); });
+        card.querySelectorAll('img').forEach(function (i) { i.draggable = false; });
+        apply();
       })();
     </script>
   </body>
