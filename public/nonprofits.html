@@ -960,17 +960,27 @@
         var fmt = function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
         dash.classList.add('dash-armed');
         vals.forEach(function (v) { v.el.textContent = v.pre + '0' + v.post; });
-        var io = new IntersectionObserver(function (entries) {
-          if (!entries[0].isIntersecting) return;
-          io.disconnect();
-          void dash.offsetWidth;                  // start from the armed state
+        // Plays, holds the finished numbers for 4s, then plays again, but only
+        // while it's on screen, so someone who scrolled past the first run
+        // still sees it.
+        var PLAY_MS = 2800, HOLD_MS = 4000, timer = null, raf = null;
+        function play() {
+          cancelAnimationFrame(raf);
+          dash.classList.remove('dash-play');     // back to empty, instantly (no transition off)
+          vals.forEach(function (v) { v.el.textContent = v.pre + '0' + v.post; });
+          void dash.offsetWidth;
           dash.classList.add('dash-play');
           var t0 = performance.now(), dur = 1400;
           (function tick(now) {
             var k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
             vals.forEach(function (v) { v.el.textContent = k < 1 ? v.pre + fmt(Math.round(v.n * e)) + v.post : v.text; });
-            if (k < 1) requestAnimationFrame(tick);
+            if (k < 1) raf = requestAnimationFrame(tick);
           })(t0);
+          timer = setTimeout(play, PLAY_MS + HOLD_MS);
+        }
+        var io = new IntersectionObserver(function (entries) {
+          if (entries[0].isIntersecting) { if (!timer) play(); }
+          else { clearTimeout(timer); timer = null; }
         }, { threshold: 0.35 });
         io.observe(dash);
       })();
