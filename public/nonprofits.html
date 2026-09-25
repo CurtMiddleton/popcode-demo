@@ -219,9 +219,51 @@
       .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 36px;
                list-style: none; margin: 0; padding: 0; counter-reset: step; }
       .steps li { counter-increment: step; min-width: 0; }
-      .step-shot { position: relative; aspect-ratio: 3 / 2; border-radius: 18px; overflow: hidden; margin: 0 0 22px;
-                   background: #222; box-shadow: var(--pc-shadow-raised, 0 18px 40px rgba(0,0,0,.18)); }
-      .step-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      /* The art: one short sequence, played in order when the section scrolls in —
+         the address types, the photo is scanned and becomes the video, the
+         buttons arrive. No boxes around 1 and 3; only the photo is a picture. */
+      .step-art { height: 210px; display: flex; align-items: center; justify-content: center; margin: 0 0 22px; }
+      /* 1: an address bar */
+      .url-bar { width: min(100%, 340px); height: 52px; border-radius: 999px; background: #fff; display: flex; align-items: center; gap: 10px;
+                 padding: 0 20px; box-shadow: 0 10px 30px rgba(26,26,26,.10), 0 1px 3px rgba(26,26,26,.08); font-size: 16px; color: var(--ink); }
+      .url-bar svg { flex: none; width: 14px; height: 14px; color: var(--faint); }
+      .url-text { white-space: nowrap; overflow: hidden; }
+      @media (max-width: 1100px) { .url-bar { font-size: 14px; gap: 8px; padding: 0 16px; } }
+      @media (min-width: 861px) and (max-width: 960px) { .url-bar { font-size: 13px; padding: 0 12px; } }
+      .url-caret { flex: none; width: 2px; height: 20px; margin-left: -8px; background: var(--accent); animation: caret 1s steps(1) infinite; }
+      @keyframes caret { 50% { opacity: 0; } }
+      /* 2: the photo, scanned, becoming the video */
+      .scan-shot { position: relative; width: min(100%, 300px); aspect-ratio: 3 / 2; border-radius: 16px; overflow: hidden;
+                   box-shadow: 0 14px 34px rgba(26,26,26,.16); background: #222; }
+      .scan-shot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+      .scan-shot .shot-video { opacity: 0; transition: opacity .6s ease; }
+      .scan-shot .dim { position: absolute; inset: 0; background: rgba(0,0,0,.28); transition: opacity .5s ease; }
+      .scan-shot .scan-mark { position: absolute; z-index: 1; left: 50%; top: 50%; width: 32%; aspect-ratio: 1; translate: -50% -50%;
+                              filter: drop-shadow(0 2px 10px rgba(0,0,0,.35)); }
+      .scan-shot .scan-mark use { fill: #fff; }
+      .scan-shot .scan-mark .p { opacity: 0; }
+      .steps.scanning .scan-mark .p { animation: step-comet 1.4s linear infinite; animation-delay: calc(var(--i) * .175s); }
+      @keyframes step-comet { 0% { opacity: 0; } 6% { opacity: 1; } 46% { opacity: .5; } 72%, 100% { opacity: 0; } }
+      .steps.found .scan-mark .p { opacity: 1; transition: opacity .15s; }
+      .steps.found .scan-mark { animation: step-bloom .5s cubic-bezier(.35,0,.7,1) .25s forwards; }
+      @keyframes step-bloom { to { transform: scale(4); opacity: 0; } }
+      .steps.playing .shot-video { opacity: 1; }
+      .steps.playing .dim { opacity: 0; }
+      .steps.playing .scan-mark { opacity: 0; }
+      .scan-shot .cap { position: absolute; left: 50%; bottom: 12px; translate: -50% 6px; white-space: nowrap; opacity: 0;
+                        background: rgba(0,0,0,.72); color: #fff; font-size: 12px; font-weight: 500; padding: 4px 8px; border-radius: 4px;
+                        transition: opacity .4s ease .5s, translate .4s ease .5s; }
+      .steps.playing .scan-shot .cap { opacity: 1; translate: -50% 0; }
+      /* 3: the buttons, one at a time */
+      .cta-stack { width: min(100%, 320px); display: flex; flex-direction: column; gap: 10px; }
+      .cta-stack span { display: block; text-align: center; padding: 12px 14px; border-radius: 999px; font-size: 14px; font-weight: 700; line-height: 1.25; text-wrap: balance;
+                        background: #fff; color: var(--ink); border: 1.5px solid var(--ink);
+                        opacity: 0; translate: 0 14px; transition: opacity .45s ease, translate .45s cubic-bezier(.2,.8,.3,1.2); }
+      .cta-stack span:first-child { background: var(--ink); color: #fff; }
+      .steps.cta1 .cta-stack span:nth-child(1), .steps.cta2 .cta-stack span:nth-child(2), .steps.cta3 .cta-stack span:nth-child(3) { opacity: 1; translate: 0 0; }
+      @media (prefers-reduced-motion: reduce) {
+        .url-caret, .steps .scan-mark .p { animation: none !important; }
+      }
       .step-text { display: flex; gap: 16px; align-items: flex-start; }
       .step-text::before {
         content: counter(step); flex: none; font-family: var(--serif); font-size: 96px; line-height: 1;
@@ -233,21 +275,6 @@
       .steps b { display: block; font-family: var(--serif); font-weight: 400; font-size: 25px; line-height: 1.15; margin-bottom: 6px; color: var(--ink); }
       .steps p { margin: 0; font-size: 16px; line-height: 1.55; color: var(--muted); }
       .steps p em { color: var(--ink); }
-      /* 2: the viewer's own scanning mark, orbiting, over the card as the camera sees it. */
-      .step-shot.scan::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,.28); }
-      .step-shot .scan-mark { position: absolute; z-index: 1; left: 50%; top: 50%; width: 30%; aspect-ratio: 1; translate: -50% -50%;
-                              filter: drop-shadow(0 2px 10px rgba(0,0,0,.35)); }
-      .step-shot .scan-mark use { fill: #fff; }
-      .step-shot .scan-mark .p { opacity: 0; animation: step-comet 1.4s linear infinite; animation-delay: calc(var(--i) * .175s); }
-      @keyframes step-comet { 0% { opacity: 0; } 6% { opacity: 1; } 46% { opacity: .5; } 72%, 100% { opacity: 0; } }
-      /* 3: Meg's video, with its caption and the ask that comes after. */
-      .step-shot .cap { position: absolute; left: 50%; bottom: 14px; translate: -50% 0; white-space: nowrap;
-                        background: rgba(0,0,0,.72); color: #fff; font-size: 13px; font-weight: 500; padding: 4px 9px; border-radius: 4px; }
-      .step-shot .ask { position: absolute; right: 14px; top: 14px; background: #fff; color: var(--ink); font-size: 13px; font-weight: 700;
-                        padding: 8px 14px; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
-      .step-shot .bar { position: absolute; left: 14px; right: 14px; bottom: 6px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.35); }
-      .step-shot .bar::before { content: ''; position: absolute; inset: 0 62% 0 0; border-radius: 2px; background: #fff; }
-      @media (prefers-reduced-motion: reduce) { .step-shot .scan-mark .p { animation: none; opacity: 1; } }
       @media (max-width: 960px) { .step-text::before { font-size: 80px; } .steps { gap: 26px; } }
       @media (max-width: 860px) { .steps { grid-template-columns: 1fr; gap: 40px; max-width: 520px; margin-inline: auto; } }
 
@@ -444,17 +471,28 @@
       <section class="np-body" aria-labelledby="how-h">
         <div class="wrap">
           <div class="sec-head"><h2 id="how-h">How it works</h2></div>
-          <ol class="steps">
+          <ol class="steps" id="steps">
             <li>
-              <div class="step-shot"><picture><source type="image/webp" srcset="/assets/nonprofits-step-address.webp"><img src="/assets/nonprofits-step-address.jpg" width="721" height="457" loading="lazy" alt="Close-up of the Common Tide postcard: Meg Holloway's photo and the line 'Go to commontide.org/givingtuesday and scan this card for a message from Meg.'"></picture></div>
+              <div class="step-art" aria-hidden="true">
+                <div class="url-bar">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>
+                  <span class="url-text" id="url-text">commontide.org/givingtuesday</span><span class="url-caret"></span>
+                </div>
+              </div>
               <div class="step-text"><div>
                 <b>Type the address.</b>
                 <p>Visitors go to a short address printed on the piece, like <em>yourorg.org/story</em>.</p>
               </div></div>
             </li>
             <li>
-              <div class="step-shot scan"><picture><source type="image/webp" srcset="/assets/nonprofits-step-scan.webp"><img src="/assets/nonprofits-step-scan.jpg" width="720" height="480" loading="lazy" alt="The Common Tide postcard seen through a phone camera, with Popcode's scanning mark over it."></picture>
-                <svg class="scan-mark" viewBox="0 0 302 302" aria-hidden="true"><g transform="rotate(0 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 0;"/></g><g transform="rotate(45 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 1;"/></g><g transform="rotate(90 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 2;"/></g><g transform="rotate(135 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 3;"/></g><g transform="rotate(180 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 4;"/></g><g transform="rotate(225 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 5;"/></g><g transform="rotate(270 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 6;"/></g><g transform="rotate(315 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 7;"/></g></svg>
+              <div class="step-art" aria-hidden="true">
+                <div class="scan-shot">
+                  <picture><source type="image/webp" srcset="/assets/nonprofits-step-scan.webp"><img src="/assets/nonprofits-step-scan.jpg" width="720" height="480" loading="lazy" alt=""></picture>
+                  <picture><source type="image/webp" srcset="/assets/nonprofits-step-story.webp"><img class="shot-video" src="/assets/nonprofits-step-story.jpg" width="720" height="480" loading="lazy" alt=""></picture>
+                  <span class="dim"></span>
+                  <svg class="scan-mark" viewBox="0 0 302 302"><g transform="rotate(0 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 0;"/></g><g transform="rotate(45 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 1;"/></g><g transform="rotate(90 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 2;"/></g><g transform="rotate(135 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 3;"/></g><g transform="rotate(180 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 4;"/></g><g transform="rotate(225 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 5;"/></g><g transform="rotate(270 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 6;"/></g><g transform="rotate(315 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 7;"/></g></svg>
+                  <span class="cap">I'm Meg Holloway with Common Tide.</span>
+                </div>
               </div>
               <div class="step-text"><div>
                 <b>Scan the photo.</b>
@@ -462,10 +500,8 @@
               </div></div>
             </li>
             <li>
-              <div class="step-shot"><picture><source type="image/webp" srcset="/assets/nonprofits-step-story.webp"><img src="/assets/nonprofits-step-story.jpg" width="720" height="480" loading="lazy" alt="Meg Holloway, Common Tide's CEO, speaking in her video, with a Give today button."></picture>
-                <span class="ask" aria-hidden="true">Give today</span>
-                <span class="cap" aria-hidden="true">I'm Meg Holloway with Common Tide.</span>
-                <span class="bar" aria-hidden="true"></span>
+              <div class="step-art" aria-hidden="true">
+                <div class="cta-stack"><span>Double your gift today</span><span>Hear from Marisol</span><span>Become a Tide Keeper, $10 a month</span></div>
               </div>
               <div class="step-text"><div>
                 <b>The story plays.</b>
@@ -810,6 +846,38 @@
           timer = setTimeout(play, 1800);
         });
         io.observe(phone);
+      })();
+    </script>
+    <!-- How it works: type, scan, play, buttons; then hold and loop. -->
+    <script>
+      (function () {
+        var steps = document.getElementById('steps'), url = document.getElementById('url-text');
+        if (!steps || !url) return;
+        var full = url.textContent, states = ['scanning', 'found', 'playing', 'cta1', 'cta2', 'cta3'];
+        var finalState = function () { steps.classList.add('playing', 'cta1', 'cta2', 'cta3'); url.textContent = full; };
+        if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) { finalState(); return; }
+        var timers = [];
+        function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
+        function run() {
+          timers.forEach(clearTimeout); timers = [];
+          states.forEach(function (c) { steps.classList.remove(c); });
+          url.textContent = '';
+          for (var i = 1; i <= full.length; i++) (function (n) { at(400 + n * 70, function () { url.textContent = full.slice(0, n); }); })(i);
+          var t = 400 + full.length * 70 + 500;                 // ≈ 2.9s: typed
+          at(t, function () { steps.classList.add('scanning'); });
+          at(t + 2200, function () { steps.classList.add('found'); });
+          at(t + 2900, function () { steps.classList.remove('scanning'); steps.classList.add('playing'); });
+          at(t + 4000, function () { steps.classList.add('cta1'); });
+          at(t + 4600, function () { steps.classList.add('cta2'); });
+          at(t + 5200, function () { steps.classList.add('cta3'); });
+          at(t + 9500, run);                                     // hold, then again
+        }
+        url.textContent = '';
+        if (!('IntersectionObserver' in window)) { run(); return; }
+        var started = false;
+        new IntersectionObserver(function (entries) {
+          if (entries[0].isIntersecting && !started) { started = true; run(); }
+        }, { threshold: 0.2 }).observe(steps);
       })();
     </script>
     <!-- Layout tweaker: popcode.app/nonprofits?tweak. Drag anything in the hero,
