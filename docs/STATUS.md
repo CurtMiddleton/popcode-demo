@@ -11,7 +11,7 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 **Live and recent**
 - `popcode.app/nonprofits` — Popcode for Nonprofits landing page, PR #72 merged
   2026-09-24. Not linked from the site. Placeholders in its `CONFIG` block:
-  `BOOKING_URL` (buttons email info@ until set), `DEMO_VIDEO` / `DEMO_CAPTIONS`
+  `BOOKING_URL` (Calendly 30-min, set 2026-09-25), `DEMO_VIDEO` / `DEMO_CAPTIONS`
   (hero shows a stand-in family photo), `SHOW_CASE_STUDY` (off). The user has
   reviewed it and is iterating on changes.
 - Mugs live on the shop (`GLOBAL-MUG-W`). Ornaments live via Printify
