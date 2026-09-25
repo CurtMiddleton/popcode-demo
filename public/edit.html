@@ -2883,7 +2883,7 @@
       // Builds an Apple-Photos-style memory video from a set of photos, renders
       // it via /api/create-montage (Shotstack), and links the resulting MP4 to
       // this page's photo — flowing through the normal save path unchanged.
-      const MTG_MAX_PHOTOS = 40;      // photos + clips combined (matches the API)
+      const MTG_MAX_PHOTOS = 100;     // photos + clips combined (matches the API)
       const MTG_MAX_CLIP_SECONDS = 10; // a clip plays its opening seconds, up to this (lib/montage/timeline.mjs)
       const MTG_MAX_SOURCE_SECONDS = 60; // longer videos are refused — trim first
       const MTG_MAX_VIDEO_MB = 200;
@@ -2944,21 +2944,37 @@
         setTimeout(() => URL.revokeObjectURL(url), 15000);
       }
 
+      function mtgNewId() {
+        return (crypto.randomUUID ? crypto.randomUUID() : 'm' + Date.now() + Math.random().toString(36).slice(2));
+      }
       function openMontage(n) {
         if (montageBusy) return;
-        montageState = { page: n, photos: [], perSec: 3, transition: 'kenburns', aspect: 'portrait', musicId: 'none' };
-        mtgSecRender();
-        mtgSetSeg('mtg-transition', 'kenburns');
-        mtgSetSeg('mtg-aspect', 'portrait');
-        mtgRenderMusic();
+        montageState = { page: n, photos: [], perSec: 3, transition: 'kenburns', aspect: 'portrait', musicId: 'none',
+                         draftId: mtgNewId(), savedSig: null };
+        mtgSyncControls();
         mtgRenderStrip();
         mtgStatus('');
+        mtgHideCrop();
         mtgHidePreview(true); // reset to the builder view in case a preview was left open
         document.getElementById('mtg-overlay').classList.add('open');
         document.body.style.overflow = 'hidden';
+        mtgLoadDraftList();
       }
-      function closeMontage() {
+      // Put the settings controls in line with montageState (new or loaded draft).
+      function mtgSyncControls() {
+        mtgSecRender();
+        mtgSetSeg('mtg-transition', montageState.transition);
+        mtgSetSeg('mtg-aspect', montageState.aspect);
+        mtgRenderMusic();
+      }
+      async function closeMontage() {
         if (montageBusy) return;
+        // Unsaved work: offer to keep it as a saved montage before closing.
+        if (montageState && montageState.photos.length && !montageResult && mtgSig() !== montageState.savedSig) {
+          const keep = await popcodeConfirm('Save it and you can open it again from Make a montage, to change photos, order, framing or music.',
+            { title: 'Save this montage?', confirmText: 'Save', cancelText: "Don't save" });
+          if (keep && !(await mtgSaveDraft())) return; // save failed: stay open, the error is showing
+        }
         // Don't lose a rendered montage the user didn't explicitly "Use": if a
         // preview is still showing on close, keep it by applying it to the page.
         if (montageResult && montageState) mtgApplyToPage(montageState.page, montageResult);
@@ -3034,13 +3050,13 @@
           v.addEventListener('seeked', () => {
             let thumb = '';
             try {
-              const w = v.videoWidth || 160, h = v.videoHeight || 160, s = 240 / Math.max(w, h);
+              const w = v.videoWidth || 160, h = v.videoHeight || 160, s = 480 / Math.max(w, h);
               const c = document.createElement('canvas');
               c.width = Math.max(1, Math.round(w * s)); c.height = Math.max(1, Math.round(h * s));
               c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
               thumb = c.toDataURL('image/jpeg', 0.8);
             } catch (e) {}
-            finish({ url, duration: v.duration, thumb });
+            finish({ url, duration: v.duration, thumb, w: v.videoWidth, h: v.videoHeight });
           });
           v.addEventListener('error', () => { URL.revokeObjectURL(url); finish(null); });
           v.src = url;
@@ -3070,6 +3086,7 @@
               id: newId, kind: 'video', file: f, url: probe.url, thumb: probe.thumb,
               seconds: +Math.min(MTG_MAX_CLIP_SECONDS, probe.duration).toFixed(2),
               trimmed: probe.duration > MTG_MAX_CLIP_SECONDS,
+              w: probe.w, h: probe.h,
             });
             continue;
           }
@@ -3080,7 +3097,9 @@
           // need to match the video output size; keeps uploads + render fast).
           const opt = await optimizePhotoDim(f, 1920);
           if (!opt) { skipped++; continue; }
-          montageState.photos.push({ id: newId, kind: 'image', file: opt, url: URL.createObjectURL(opt) });
+          const url = URL.createObjectURL(opt);
+          const dim = await mtgImageSize(url);
+          montageState.photos.push({ id: newId, kind: 'image', file: opt, url, w: dim.w, h: dim.h });
         }
         if (skipped) problems.push(`${skipped} photo(s) couldn't be read and were skipped.`);
         mtgStatus(problems.join(' '), null, problems.length ? 'err' : '');
@@ -3193,7 +3212,8 @@
           const X_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
           strip.innerHTML = photos.map((p, i) => `
             <div class="mtg-thumb${mtgDragId === p.id ? ' dragging' : ''}" data-id="${p.id}">
-              <img src="${p.kind === 'video' ? p.thumb : p.url}" alt="" draggable="false"/>
+              <img src="${p.kind === 'video' ? p.thumb : p.url}" alt="" draggable="false"${p.crop ? ` style="object-position:${(p.crop.cx * 100).toFixed(1)}% ${(p.crop.cy * 100).toFixed(1)}%"` : ''}/>
+              ${p.crop ? '<span class="mtg-framed" title="Framing set"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg></span>' : ''}
               <span class="mtg-order">${i + 1}</span>
               ${p.kind === 'video' ? `<span class="mtg-clip" title="${p.trimmed ? `Uses the first ${MTG_MAX_CLIP_SECONDS}s` : 'Video clip'}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>${p.seconds.toFixed(0)}s</span>` : ''}
               <button type="button" class="mtg-del" title="Remove" onclick="mtgRemove(${i})">${X_ICON}</button>
@@ -3203,12 +3223,13 @@
             if (el) mtgEnableDrag(el, p.id);
           });
         }
+        mtgRenderDrafts();
         const hint = document.getElementById('mtg-reorder-hint');
         if (hint) {
           hint.style.display = photos.length > 1 ? 'block' : 'none';
           hint.textContent = photos.some(p => p.kind === 'video')
-            ? `Drag to reorder. Videos play up to ${MTG_MAX_CLIP_SECONDS}s each.`
-            : 'Drag the photos to reorder them.';
+            ? `Tap one to frame it, drag to reorder. Videos play up to ${MTG_MAX_CLIP_SECONDS}s each.`
+            : 'Tap a photo to frame it, drag to reorder.';
         }
         mtgUpdateEstimate();
       }
@@ -3268,6 +3289,7 @@
             const wasDragging = dragging;
             mtgDragId = null;
             if (wasDragging) mtgRenderStrip();
+            else if (!montageBusy) mtgOpenCrop(photoId);   // a tap, not a drag: frame it
           };
           document.addEventListener('pointermove', move);
           document.addEventListener('pointerup', endDrag);
@@ -3319,7 +3341,7 @@
 
       async function mtgPoll(renderId) {
         const start = Date.now();
-        const TIMEOUT_MS = 4 * 60 * 1000;
+        const TIMEOUT_MS = 10 * 60 * 1000; // up to 100 items makes for a long render
         while (Date.now() - start < TIMEOUT_MS) {
           const r = await fetch('/api/montage-status?id=' + encodeURIComponent(renderId)).then(x => x.json());
           if (r.error) throw new Error(r.error);
@@ -3343,35 +3365,10 @@
         createBtn.disabled = true; closeBtn.disabled = true;
 
         try {
-          // 1. Upload source photos to a temp folder in the experiences bucket so
-          //    the renderer can fetch them by public URL.
-          const sessionId = (crypto.randomUUID ? crypto.randomUUID() : 'm' + Date.now() + Math.random().toString(36).slice(2));
-          // Upload the source photos in parallel (capped concurrency) so the
-          // pre-render wait is the slowest few uploads, not the sum of every one.
-          // Order is preserved by writing into urls[i] by index.
-          const urls = new Array(st.photos.length);
-          let uploaded = 0;
-          const upNoun = st.photos.some(p => p.kind === 'video') ? 'photos and videos' : 'photos';
-          mtgStatus(`Uploading ${upNoun}… (0 of ${st.photos.length})`, 0, '');
-          const uploadOne = async (i) => {
-            const item = st.photos[i];
-            const f = item.file;
-            const isVid = item.kind === 'video';
-            const ext = ((f.name.split('.').pop() || (isVid ? 'mp4' : 'jpg')).toLowerCase().replace(/[^a-z0-9]/g, '')) || (isVid ? 'mp4' : 'jpg');
-            const path = `montage-src/${sessionId}/${isVid ? 'clip' : 'img'}_${i}.${ext}`;
-            const contentType = f.type || (isVid ? (ext === 'mov' ? 'video/quicktime' : 'video/mp4') : 'image/jpeg');
-            const { error } = await db.storage.from('experiences').upload(path, f, { contentType, upsert: true });
-            if (error) throw new Error('Upload failed: ' + error.message);
-            urls[i] = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
-            uploaded++;
-            mtgStatus(`Uploading ${upNoun}… (${uploaded} of ${st.photos.length})`, Math.round((uploaded / st.photos.length) * 50), '');
-          };
-          let nextUpload = 0;
-          await Promise.all(
-            Array.from({ length: Math.min(6, st.photos.length) }, async () => {
-              while (nextUpload < st.photos.length) { const i = nextUpload++; await uploadOne(i); }
-            })
-          );
+          // 1. Upload the sources into this montage's saved folder (only the
+          //    ones not already there) so the renderer can fetch them.
+          await mtgUploadSources(50);
+          const urls = st.photos.map(p => p.remote);
 
           // 2. Kick off the render.
           mtgStatus('Starting render…', 55, '');
@@ -3379,9 +3376,14 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              items: st.photos.map((p, i) => p.kind === 'video'
-                ? { type: 'video', url: urls[i], seconds: p.seconds }
-                : { type: 'image', url: urls[i] }),
+              items: st.photos.map((p, i) => {
+                const it = p.kind === 'video'
+                  ? { type: 'video', url: urls[i], seconds: p.seconds }
+                  : { type: 'image', url: urls[i] };
+                const crop = mtgCropRect(p, st.aspect);
+                if (crop) it.crop = crop;
+                return it;
+              }),
               perImageSeconds: st.perSec,
               transition: st.transition,
               musicUrl: mtgMusicUrl(st.musicId),
@@ -3389,6 +3391,10 @@
             }),
           }).then(r => r.json());
           if (startRes.error) throw new Error(startRes.error);
+
+          // Everything is uploaded now, so saving the montage is just its
+          // recipe — do it quietly, so it can be reopened and changed later.
+          mtgWriteDraft().catch(e => console.warn('montage save failed', e));
 
           // 3. Poll for completion.
           const done = await mtgPoll(startRes.renderId);
@@ -3415,6 +3421,259 @@
           mtgStatus('Something went wrong: ' + e.message, null, 'err');
           montageBusy = false; createBtn.disabled = false; closeBtn.disabled = false;
         }
+      }
+
+      // ── Framing: which part of each photo/clip shows in the montage's frame ──
+      // Stored as a centre point + zoom (so it survives a change of Shape) and
+      // turned into Shotstack's per-side crop fractions at render time.
+      const MTG_ASPECT = { portrait: 720 / 1280, square: 1, landscape: 1280 / 720 };
+      function mtgImageSize(url) {
+        return new Promise(res => {
+          const im = new Image();
+          im.onload = () => res({ w: im.naturalWidth, h: im.naturalHeight });
+          im.onerror = () => res({ w: 0, h: 0 });
+          im.src = url;
+        });
+      }
+      // The visible region, as fractions of the source: { x, y, w, h }.
+      function mtgFrameOf(item, aspect) {
+        const A = MTG_ASPECT[aspect] || MTG_ASPECT.portrait;
+        if (!item.w || !item.h) return null;
+        const c = item.crop || { cx: 0.5, cy: 0.5, z: 1 };
+        let fw, fh;
+        if (item.w / item.h > A) { fh = 1; fw = (item.h * A) / item.w; } else { fw = 1; fh = (item.w / A) / item.h; }
+        fw /= c.z || 1; fh /= c.z || 1;
+        const x = Math.min(1 - fw, Math.max(0, c.cx - fw / 2));
+        const y = Math.min(1 - fh, Math.max(0, c.cy - fh / 2));
+        return { x, y, w: fw, h: fh };
+      }
+      // Per-side crop for the renderer, or null to keep its default centre crop.
+      function mtgCropRect(item, aspect) {
+        if (!item.crop) return null;
+        const f = mtgFrameOf(item, aspect);
+        if (!f) return null;
+        const r = v => Math.max(0, +v.toFixed(4));
+        return { left: r(f.x), right: r(1 - f.x - f.w), top: r(f.y), bottom: r(1 - f.y - f.h) };
+      }
+
+      let mtgCropId = null;
+      function mtgCropItem() { return montageState && montageState.photos.find(p => p.id === mtgCropId); }
+      async function mtgOpenCrop(id) {
+        const item = montageState && montageState.photos.find(p => p.id === id);
+        if (!item) return;
+        if (!item.w || !item.h) { const d = await mtgImageSize(item.kind === 'video' ? item.thumb : item.url); item.w = d.w; item.h = d.h; }
+        if (!item.w) { mtgStatus("That one can't be framed.", null, 'err'); return; }
+        mtgCropId = id;
+        const img = document.getElementById('mtg-crop-img');
+        img.src = item.kind === 'video' ? item.thumb : item.url;
+        document.getElementById('mtg-crop-note').textContent = item.kind === 'video'
+          ? 'Drag to choose what shows in the frame. The whole clip is framed the same way.'
+          : 'Drag to choose what shows in the frame.';
+        document.getElementById('mtg-crop-zoom').value = (item.crop && item.crop.z) || 1;
+        document.getElementById('mtg-body-scroll').style.display = 'none';
+        document.getElementById('mtg-foot').style.display = 'none';
+        document.getElementById('mtg-crop').style.display = 'flex';
+        mtgDrawFrame();
+      }
+      function mtgHideCrop() {
+        if (!document.getElementById('mtg-crop')) return;
+        document.getElementById('mtg-crop').style.display = 'none';
+        if (mtgCropId !== null) {
+          document.getElementById('mtg-body-scroll').style.display = '';
+          document.getElementById('mtg-foot').style.display = '';
+          mtgCropId = null;
+          if (montageState) mtgRenderStrip();
+        }
+      }
+      function mtgResetCrop() {
+        const item = mtgCropItem();
+        if (!item) return;
+        delete item.crop;
+        document.getElementById('mtg-crop-zoom').value = 1;
+        mtgDrawFrame();
+      }
+      function mtgDrawFrame() {
+        const item = mtgCropItem();
+        if (!item) return;
+        const f = mtgFrameOf(item, montageState.aspect);
+        const fr = document.getElementById('mtg-crop-frame');
+        fr.style.left = f.x * 100 + '%'; fr.style.top = f.y * 100 + '%';
+        fr.style.width = f.w * 100 + '%'; fr.style.height = f.h * 100 + '%';
+      }
+      // Keep the stored centre inside the reachable range, so a later drag
+      // responds at once instead of first "unwinding" past the edge.
+      function mtgSetCrop(item, cx, cy, z) {
+        const base = mtgFrameOf({ w: item.w, h: item.h, crop: { cx: 0.5, cy: 0.5, z } }, montageState.aspect);
+        const hw = base.w / 2, hh = base.h / 2;
+        item.crop = { cx: Math.min(1 - hw, Math.max(hw, cx)), cy: Math.min(1 - hh, Math.max(hh, cy)), z };
+      }
+      document.addEventListener('input', (e) => {
+        if (e.target.id !== 'mtg-crop-zoom') return;
+        const item = mtgCropItem();
+        if (!item) return;
+        const c = item.crop || { cx: 0.5, cy: 0.5 };
+        mtgSetCrop(item, c.cx, c.cy, +e.target.value);
+        mtgDrawFrame();
+      });
+      document.addEventListener('pointerdown', (e) => {
+        const pic = e.target.closest && e.target.closest('#mtg-crop-pic');
+        const item = pic && mtgCropItem();
+        if (!item) return;
+        e.preventDefault();
+        const box = pic.getBoundingClientRect();
+        const c0 = item.crop || { cx: 0.5, cy: 0.5, z: 1 };
+        // Start from where the frame actually is (it may be pinned to an edge).
+        const f0 = mtgFrameOf(item, montageState.aspect);
+        const start = { x: e.clientX, y: e.clientY, cx: f0.x + f0.w / 2, cy: f0.y + f0.h / 2, z: c0.z || 1 };
+        const move = (ev) => {
+          mtgSetCrop(item, start.cx + (ev.clientX - start.x) / box.width, start.cy + (ev.clientY - start.y) / box.height, start.z);
+          mtgDrawFrame();
+        };
+        const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up); };
+        document.addEventListener('pointermove', move);
+        document.addEventListener('pointerup', up);
+        document.addEventListener('pointercancel', up);
+      });
+      // Changing Shape while framing redraws the frame at the new shape.
+      document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('#mtg-aspect')) setTimeout(mtgDrawFrame, 0); });
+
+      // ── Saved montages ──
+      // Kept in the storage bucket, per account: montage-drafts/{user}/{id}/
+      // holds the uploaded photos and clips plus draft.json (order, framing,
+      // settings). Rendering uploads into the same folder, so a rendered
+      // montage is saved without uploading anything twice.
+      function mtgDraftDir(id) { return `montage-drafts/${currentUser.id}/${id || montageState.draftId}`; }
+      function mtgSig() {
+        const st = montageState;
+        return JSON.stringify([st.photos.map(p => [p.id, p.crop || 0]), st.perSec, st.transition, st.aspect, st.musicId]);
+      }
+      async function mtgUploadSources(pctSpan) {
+        const st = montageState;
+        const todo = st.photos.filter(p => !p.remote);
+        if (!todo.length) return;
+        let uploaded = 0;
+        const noun = todo.some(p => p.kind === 'video') ? 'photos and videos' : 'photos';
+        mtgStatus(`Uploading ${noun}… (0 of ${todo.length})`, 0, '');
+        const one = async (item) => {
+          const f = item.file;
+          const isVid = item.kind === 'video';
+          const ext = ((f.name.split('.').pop() || (isVid ? 'mp4' : 'jpg')).toLowerCase().replace(/[^a-z0-9]/g, '')) || (isVid ? 'mp4' : 'jpg');
+          const path = `${mtgDraftDir()}/${item.id}.${ext}`;
+          const contentType = f.type || (isVid ? (ext === 'mov' ? 'video/quicktime' : 'video/mp4') : 'image/jpeg');
+          const { error } = await db.storage.from('experiences').upload(path, f, { contentType, upsert: true });
+          if (error) throw new Error('Upload failed: ' + error.message);
+          item.remote = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+          uploaded++;
+          mtgStatus(`Uploading ${noun}… (${uploaded} of ${todo.length})`, Math.round((uploaded / todo.length) * pctSpan), '');
+        };
+        // Capped concurrency: the wait is the slowest few uploads, not the sum.
+        let next = 0;
+        await Promise.all(Array.from({ length: Math.min(6, todo.length) }, async () => {
+          while (next < todo.length) await one(todo[next++]);
+        }));
+      }
+      async function mtgWriteDraft() {
+        const st = montageState;
+        const draft = {
+          v: 1, id: st.draftId, updatedAt: new Date().toISOString(),
+          perSec: st.perSec, transition: st.transition, aspect: st.aspect, musicId: st.musicId,
+          items: st.photos.map(p => ({ id: p.id, kind: p.kind, url: p.remote, thumb: p.kind === 'video' ? p.thumb : undefined,
+                                        seconds: p.seconds, trimmed: p.trimmed, w: p.w, h: p.h, crop: p.crop })),
+        };
+        const blob = new Blob([JSON.stringify(draft)], { type: 'application/json' });
+        const { error } = await db.storage.from('experiences').upload(`${mtgDraftDir(st.draftId)}/draft.json`, blob, { contentType: 'application/json', upsert: true });
+        if (error) throw new Error(error.message);
+        st.savedSig = mtgSig();
+      }
+      async function mtgSaveDraft() {
+        if (montageBusy || !montageState) return false;
+        if (!currentUser) { mtgStatus('Sign in to save a montage.', null, 'err'); return false; }
+        if (!montageState.photos.length) { mtgStatus('Add a photo or video first.', null, 'err'); return false; }
+        montageBusy = true;
+        const btns = ['mtg-save-draft', 'mtg-create', 'mtg-close-btn'].map(id => document.getElementById(id));
+        btns.forEach(b => b && (b.disabled = true));
+        try {
+          await mtgUploadSources(90);
+          await mtgWriteDraft();
+          mtgStatus('✓ Saved. Open it again any time from Make a montage.', null, 'ok');
+          return true;
+        } catch (e) {
+          console.error('montage save error:', e);
+          mtgStatus("Couldn't save: " + e.message, null, 'err');
+          return false;
+        } finally {
+          montageBusy = false;
+          btns.forEach(b => b && (b.disabled = false));
+        }
+      }
+
+      let mtgDrafts = [];
+      async function mtgLoadDraftList() {
+        const wrap = document.getElementById('mtg-drafts');
+        wrap.hidden = true;
+        mtgDrafts = [];
+        if (!currentUser) return;
+        const forState = montageState;
+        try {
+          const dir = `montage-drafts/${currentUser.id}`;
+          const { data, error } = await db.storage.from('experiences').list(dir, { limit: 100 });
+          if (error || !data) return;
+          const got = await Promise.all(data.filter(d => !d.id).map(async (d) => {
+            const url = db.storage.from('experiences').getPublicUrl(`${dir}/${d.name}/draft.json`).data.publicUrl;
+            try { const r = await fetch(url + '?t=' + Date.now()); return r.ok ? await r.json() : null; } catch (e) { return null; }
+          }));
+          if (montageState !== forState) return; // closed or reopened meanwhile
+          mtgDrafts = got.filter(d => d && Array.isArray(d.items) && d.items.length)
+                         .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+          mtgRenderDrafts();
+        } catch (e) { console.warn('montage list failed', e); }
+      }
+      function mtgRenderDrafts() {
+        const wrap = document.getElementById('mtg-drafts');
+        if (!montageState || montageState.photos.length || !mtgDrafts.length) { wrap.hidden = true; return; }
+        const X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        wrap.innerHTML = '<p class="mtg-drafts-h">Your saved montages</p><div class="mtg-drafts-list">' + mtgDrafts.map((d, i) => {
+          const first = d.items[0];
+          const nv = d.items.filter(it => it.kind === 'video').length, np = d.items.length - nv;
+          const parts = [];
+          if (np) parts.push(`${np} photo${np === 1 ? '' : 's'}`);
+          if (nv) parts.push(`${nv} video${nv === 1 ? '' : 's'}`);
+          const when = d.updatedAt ? new Date(d.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+          return `<div class="mtg-draft" role="button" tabindex="0" onclick="mtgOpenDraft(${i})">
+              <img src="${esc(first.kind === 'video' ? first.thumb : first.url)}" alt=""/>
+              <span class="mtg-draft-txt"><b>${parts.join(' · ')}</b><span>Saved ${esc(when)}</span></span>
+              <button type="button" class="mtg-draft-del" title="Delete" aria-label="Delete this montage" onclick="event.stopPropagation(); mtgDeleteDraft(${i})">${X}</button>
+            </div>`;
+        }).join('') + '</div>';
+        wrap.hidden = false;
+      }
+      function mtgOpenDraft(i) {
+        const d = mtgDrafts[i];
+        if (!d || !montageState || montageBusy) return;
+        Object.assign(montageState, {
+          draftId: d.id, perSec: d.perSec || 3, transition: d.transition === 'fade' ? 'fade' : 'kenburns',
+          aspect: MTG_ASPECT[d.aspect] ? d.aspect : 'portrait', musicId: d.musicId || 'none',
+          photos: d.items.map(it => ({ ...it, url: it.url, remote: it.url })),
+        });
+        montageState.savedSig = mtgSig();
+        mtgSyncControls();
+        mtgRenderStrip();
+        mtgRenderDrafts();
+        mtgStatus('');
+      }
+      async function mtgDeleteDraft(i) {
+        const d = mtgDrafts[i];
+        if (!d) return;
+        const ok = await popcodeConfirm('Its photos and videos are removed from the saved copy. Any Popcode already using this montage keeps playing it.',
+          { title: 'Delete this saved montage?', confirmText: 'Delete', danger: true });
+        if (!ok) return;
+        const dir = mtgDraftDir(d.id);
+        const { data } = await db.storage.from('experiences').list(dir, { limit: 1000 });
+        const paths = (data || []).map(f => `${dir}/${f.name}`);
+        if (paths.length) await db.storage.from('experiences').remove(paths);
+        mtgDrafts.splice(i, 1);
+        mtgRenderDrafts();
       }
 
       // Drop a finished montage MP4 into a page's video slot, mirroring the DOM
@@ -3541,6 +3800,38 @@
       font-size: 11px; font-weight: 700; font-family: 'Inter', sans-serif; pointer-events: none;
     }
     .mtg-clip svg { width: 11px; height: 11px; }
+    .mtg-framed { position: absolute; right: 6px; bottom: 6px; width: 20px; height: 20px; border-radius: 50%; background: rgba(0,0,0,.6);
+      color: #fff; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+    .mtg-framed svg { width: 11px; height: 11px; }
+    /* Saved montages: shown when the builder opens empty. */
+    .mtg-drafts { margin: 0 0 18px; }
+    .mtg-drafts-h { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #1a1a1a; margin: 0 0 10px; font-family: 'Inter', sans-serif; }
+    .mtg-drafts-list { display: flex; flex-direction: column; gap: 8px; }
+    .mtg-draft { display: flex; align-items: center; gap: 12px; padding: 8px; border: 1px solid #e4e2dc; border-radius: 14px; background: #fff; cursor: pointer; text-align: left; font-family: 'Inter', sans-serif; width: 100%; }
+    .mtg-draft:hover { border-color: #cfcbc2; }
+    .mtg-draft img { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; flex: none; background: #ededed; }
+    .mtg-draft-txt { flex: 1; min-width: 0; }
+    .mtg-draft-txt b { display: block; font-size: 14px; color: #1a1a1a; }
+    .mtg-draft-txt span { display: block; font-size: 12px; color: #8a8a8a; margin-top: 2px; }
+    .mtg-draft-del { flex: none; width: 32px; height: 32px; border-radius: 50%; border: none; background: #f3f3f3; color: #555; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .mtg-draft-del svg { width: 12px; height: 12px; }
+    .mtg-foot-btns { display: flex; gap: 8px; align-items: center; }
+    .mtg-foot-btns button { white-space: nowrap; }
+    @media (max-width: 460px) { .mtg-foot-btns .mtg-create, .mtg-save-draft { padding-left: 16px; padding-right: 16px; } }
+    .mtg-save-draft { border: 1px solid #e4e2dc; background: #fff; color: #1a1a1a; border-radius: 999px; font-weight: 700; font-size: 15px;
+      padding: 13px 20px; cursor: pointer; font-family: 'Inter', sans-serif; }
+    .mtg-save-draft:hover { border-color: #cfcbc2; }
+    .mtg-save-draft:disabled { opacity: .4; cursor: default; }
+    /* Framing a photo or clip: the part inside the frame is what plays. */
+    .mtg-crop { display: none; flex-direction: column; flex: 1; min-height: 0; padding: 12px 24px 20px; }
+    .mtg-crop-note { font-size: 14px; color: #8a8a8a; font-family: 'Inter', sans-serif; margin: 0 0 12px; text-align: center; }
+    .mtg-crop-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+    .mtg-crop-pic { position: relative; overflow: hidden; border-radius: 10px; touch-action: none; cursor: grab; user-select: none; line-height: 0; }
+    .mtg-crop-pic img { display: block; max-width: 100%; max-height: 52vh; width: auto; height: auto; -webkit-user-drag: none; }
+    .mtg-crop-frame { position: absolute; border: 2px solid #fff; border-radius: 4px; box-shadow: 0 0 0 9999px rgba(0,0,0,.55); pointer-events: none; }
+    .mtg-crop-zoom { display: flex; align-items: center; gap: 10px; margin: 16px auto 4px; width: min(100%, 320px); color: #8a8a8a; }
+    .mtg-crop-zoom svg { width: 18px; height: 18px; flex: none; }
+    .mtg-crop-zoom input { flex: 1; accent-color: #1a1a1a; }
 
     .mtg-add {
       display: inline-flex; align-items: center; gap: 7px; margin: 6px 0 26px;
@@ -3631,6 +3922,7 @@
       <div class="mtg-body" id="mtg-body-scroll">
         <p class="mtg-sub">Pick photos and short videos, set the order, add music. We'll turn them into a memory video and link it to this page's photo.</p>
 
+        <div class="mtg-drafts" id="mtg-drafts" hidden></div>
         <div class="mtg-strip" id="mtg-strip"></div>
         <div class="mtg-reorder-hint" id="mtg-reorder-hint" style="display:none;">Drag the photos to reorder them.</div>
         <label class="mtg-add">
@@ -3673,7 +3965,23 @@
       </div>
       <div class="mtg-foot" id="mtg-foot">
         <div class="mtg-est" id="mtg-est">Add at least 2 photos</div>
-        <button type="button" class="mtg-create" id="mtg-create" onclick="mtgCreate()">Create montage</button>
+        <div class="mtg-foot-btns">
+          <button type="button" class="mtg-save-draft" id="mtg-save-draft" onclick="mtgSaveDraft()">Save</button>
+          <button type="button" class="mtg-create" id="mtg-create" onclick="mtgCreate()">Create montage</button>
+        </div>
+      </div>
+      <div class="mtg-crop" id="mtg-crop">
+        <p class="mtg-crop-note" id="mtg-crop-note">Drag to choose what shows in the frame.</p>
+        <div class="mtg-crop-stage"><div class="mtg-crop-pic" id="mtg-crop-pic"><img id="mtg-crop-img" alt="" draggable="false"/><div class="mtg-crop-frame" id="mtg-crop-frame"></div></div></div>
+        <div class="mtg-crop-zoom">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+          <input type="range" id="mtg-crop-zoom" min="1" max="3" step="0.01" value="1" aria-label="Zoom"/>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/><line x1="8" y1="11" x2="14" y2="11"/><line x1="11" y1="8" x2="11" y2="14"/></svg>
+        </div>
+        <div class="mtg-preview-actions">
+          <button type="button" class="mtg-redo" onclick="mtgResetCrop()">Reset</button>
+          <button type="button" class="mtg-use" onclick="mtgHideCrop()">Done</button>
+        </div>
       </div>
       <div class="mtg-preview" id="mtg-preview">
         <div class="mtg-preview-inner">

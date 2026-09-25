@@ -3,7 +3,8 @@
 // Body: {
 //   items:   [{ type: 'image'|'video', url, seconds? }],
 //                                  // ordered, public URLs (Supabase experiences bucket);
-//                                  // `seconds` is a video clip's length (capped at 10s)
+//                                  // `seconds` is a video clip's length (capped at 10s);
+//                                  // `crop` {top,bottom,left,right} is an optional framing
 //   images?: [{ url }],            // legacy photos-only form of `items`
 //   perImageSeconds?: number,      // default 3 (photos only)
 //   transition?: 'kenburns'|'fade',
@@ -25,7 +26,7 @@ const SHOTSTACK_BASE_URL = (process.env.SHOTSTACK_BASE_URL || 'https://api.shots
 const SHOTSTACK_API_KEY = (process.env.SHOTSTACK_API_KEY || '').trim();
 const DRY_RUN = process.env.MONTAGE_DRY_RUN === 'true' || !SHOTSTACK_API_KEY;
 
-const MAX_ITEMS = 40;
+const MAX_ITEMS = 100;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
