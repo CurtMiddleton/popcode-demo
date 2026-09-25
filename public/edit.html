@@ -1824,6 +1824,7 @@
                 replacements[item.id].video = compFile;
                 setVideoPreview(`video-preview-${key}`, compFile);
                 badge.textContent = `✓ Compressed (${compMB.toFixed(1)} MB)`;
+                markUnsaved('Video replaced');
               } else {
                 badge.textContent = 'Too large — try clideo.com';
               }
@@ -1836,6 +1837,7 @@
           replacements[item.id].video = file;
           setVideoPreview(`video-preview-${key}`, file);
           document.getElementById(`video-badge-${key}`).textContent = '✓ Replaced';
+          markUnsaved('Video replaced');
         };
 
         page.querySelector('.remove-page-btn').addEventListener('click', () => {
@@ -1843,7 +1845,7 @@
             deletedExistingIds.add(item.id);
             page.remove();
             renumberPages();
-            document.getElementById('unsaved-banner').style.display = 'block';
+            markUnsaved('Page removed', 'confirm');
           });
         });
       }
@@ -1865,6 +1867,13 @@
           onAudio: () => switchExistingMedia(item, key, 'audio')
         });
       }
+      // The yellow "unsaved" note names what changed, so it matches what the
+      // creator just did (it used to always say "Page removed").
+      function markUnsaved(what, keep) {
+        const b = document.getElementById('unsaved-banner');
+        b.innerHTML = `${what} &mdash; tap <strong>Save Changes</strong> to ${keep || 'keep it'}.`;
+        b.style.display = 'block';
+      }
       function switchExistingMedia(item, key, mode) {
         if (!replacements[item.id]) replacements[item.id] = {};
         replacements[item.id].mediaType = mode;
@@ -1872,7 +1881,7 @@
         const as = document.getElementById(`audio-slot-${key}`);
         if (vs) vs.style.display = mode === 'video' ? '' : 'none';
         if (as) as.style.display = mode === 'audio' ? '' : 'none';
-        document.getElementById('unsaved-banner').style.display = 'block';
+        markUnsaved(mode === 'audio' ? 'Now plays a voice recording' : 'Now plays a video');
         // Switching TO audio when the item had none originally shows the empty recorder.
         if (mode === 'audio') renderExistingAudioTile(item, key, item.audio_url || '');
       }
@@ -2016,7 +2025,7 @@
           if (!replacements[item.id]) replacements[item.id] = {};
           replacements[item.id].audio = file;
           replacements[item.id].mediaType = 'audio';
-          document.getElementById('unsaved-banner').style.display = 'block';
+          markUnsaved('Recording added');
           renderExistingAudioTile(item, key, item.audio_url || '');
         });
       }
@@ -2141,7 +2150,7 @@
             delete newPairs[n];
             page.remove();
             renumberPages();
-            document.getElementById('unsaved-banner').style.display = 'block';
+            markUnsaved('Page removed', 'confirm');
           });
         });
         document.getElementById('pages').appendChild(page);
@@ -2180,7 +2189,7 @@
         const as = document.getElementById(`audio-slot-new-${n}`);
         if (vs) vs.style.display = mode === 'video' ? '' : 'none';
         if (as) as.style.display = mode === 'audio' ? '' : 'none';
-        document.getElementById('unsaved-banner').style.display = 'block';
+        markUnsaved(mode === 'audio' ? 'Now plays a voice recording' : 'Now plays a video');
       }
 
       function confirmDeletePage(msg, onConfirm) {
@@ -2338,7 +2347,7 @@
         if (preview) preview.src = URL.createObjectURL(file);
         const badge = document.getElementById(`photo-badge-${key}`);
         if (badge) badge.textContent = '✓ Replaced';
-        document.getElementById('unsaved-banner').style.display = 'block';
+        markUnsaved('Photo replaced');
       }
 
       async function handleFile(input, type, n) {
@@ -3787,7 +3796,7 @@
         setVideoPreview(`video-preview-${key}`, file);
         const badge = document.getElementById(`video-badge-${key}`);
         if (badge) badge.textContent = '✓ Replaced';
-        document.getElementById('unsaved-banner').style.display = 'block';
+        markUnsaved('New montage added', 'put it on this Popcode');
       }
 
       // Drop a finished montage MP4 into a NEW page's video slot, mirroring the
@@ -3819,7 +3828,7 @@
           if (prev) prev.src = c.toDataURL('image/jpeg');
         });
         videoEl.load();
-        document.getElementById('unsaved-banner').style.display = 'block';
+        markUnsaved('New montage added', 'put it on this Popcode');
       }
     </script>
   <style>
