@@ -86,6 +86,26 @@
       .hero-sub strong { font-weight: 700; }
       .btn-on-grad { background: #fff; color: var(--ink); }
       .btn-on-grad:hover { background: #f1f1f1; }
+      /* Secondary action on the photo: outlined in white. */
+      .btn-ghost-light { background: transparent; color: #fff; border-color: rgba(255,255,255,.75); }
+      .btn-ghost-light:hover { background: rgba(255,255,255,.12); border-color: #fff; }
+      .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; max-width: min(460px, calc(100% - 30px)); }
+      @media (max-width: 900px) { .hero-actions { max-width: none; } }
+
+      /* ── Try it yourself ── */
+      .try { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 48px; align-items: center; }
+      @media (max-width: 860px) { .try { grid-template-columns: minmax(0, 1fr); gap: 28px; } }
+      .try-meta { display: block; font-size: 12.5px; color: var(--faint); margin-top: 8px; }
+      .try-card img { width: 100%; height: auto; display: block; border-radius: 6px; box-shadow: var(--pc-shadow-raised); }
+      .try h2 { margin-bottom: 10px; }
+      .try .lede-l { font-size: 17px; line-height: 1.6; color: var(--muted); margin: 0 0 22px; }
+      .try-steps { list-style: none; margin: 0 0 26px; padding: 0; counter-reset: t; }
+      .try-steps li { counter-increment: t; display: flex; gap: 14px; align-items: baseline; font-size: 16px; line-height: 1.5; margin-bottom: 12px; }
+      .try-steps li::before { content: counter(t); flex: none; width: 28px; height: 28px; border-radius: 50%;
+        background: var(--ink); color: #fff; font-size: 14px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;
+        transform: translateY(-2px); }
+      .try-steps b { font-weight: 700; }
+      .try-note { font-size: 13.5px; line-height: 1.55; color: var(--faint); margin: 18px 0 0; max-width: 34em; }
       .hero-curve {
         position: absolute; left: -2%; bottom: -1px; width: 104%; height: 190px;
         z-index: 2; display: block; pointer-events: none;
@@ -339,7 +359,10 @@
           <p class="eyebrow">Popcode for Nonprofits</p>
           <h1><span class="l">Stories that move.</span> <span class="l">Proof that it works.</span></h1>
           <p class="hero-sub">Popcode brings your printed appeal to life. Donors simply scan the photos and instantly hear from the people you serve. And you'll see exactly who watched, tapped, and gave. <strong>No app. No QR code.</strong></p>
-          <a class="btn btn-lg btn-on-grad book-demo" href="#">Book a 15-minute demo</a>
+          <div class="hero-actions">
+            <a class="btn btn-lg btn-on-grad book-demo" href="#">Book a 15-minute demo</a>
+            <a class="btn btn-lg btn-ghost-light" href="#try">Try it yourself</a>
+          </div>
         </div>
 
         <div class="stage" id="hero-stage">
@@ -402,6 +425,28 @@
             <li><span>They point their phone at the photo.</span></li>
             <li><span>The story plays, followed by the next step you choose: donate, volunteer, sign up, or share.</span></li>
           </ol>
+        </div>
+      </section>
+
+      <!-- Try it -->
+      <section id="try" aria-labelledby="try-h" style="padding-top:0;">
+        <div class="wrap try">
+          <div class="try-card">
+            <img src="/assets/nonprofits-postcard.jpg" width="1440" height="960" loading="lazy"
+                 alt="The Common Tide Giving Tuesday postcard">
+          </div>
+          <div>
+            <h2 id="try-h">Try it yourself</h2>
+            <p class="lede-l">See it the way a donor would. It takes about a minute.</p>
+            <ol class="try-steps">
+              <li><span>Download the postcard. Print it, or just open it on your computer screen.</span></li>
+              <li><span>On your phone, go to <b>popcode.app/commontide</b>.</span></li>
+              <li><span>Point your phone at the postcard, and Meg&rsquo;s message plays.</span></li>
+            </ol>
+            <a class="btn btn-lg btn-primary try-download" href="/assets/common-tide-postcard.pdf" download="Common-Tide-postcard.pdf">Download the postcard</a>
+            <span class="try-meta">PDF · 2 MB · 9 × 6 in</span>
+            <p class="try-note">Common Tide is a fictional nonprofit we created to show how Popcode works. On a real card, your own address, like commontide.org/givingtuesday, simply forwards to your Popcode.</p>
+          </div>
         </div>
       </section>
 
@@ -611,14 +656,14 @@
         } catch (e) { return CONFIG.BOOKING_URL; }
       }
 
-      function logDemoClick() {
+      function logEvent(type) {
         try {
           var ua = navigator.userAgent || '';
           fetch('/api/log-event', {
             method: 'POST', keepalive: true,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              event_type: 'book_demo_click',
+              event_type: type,
               device_type: /iPad|iPhone|iPod/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : 'Desktop',
               user_agent: ua
             })
@@ -626,10 +671,14 @@
         } catch (e) {}
       }
 
+      document.querySelectorAll('.try-download').forEach(function (a) {
+        a.addEventListener('click', function () { logEvent('demo_postcard_download'); });
+      });
+
       document.querySelectorAll('.book-demo').forEach(function (a) {
         a.href = bookingHref();
         if (CONFIG.BOOKING_URL) { a.target = '_blank'; a.rel = 'noopener'; }
-        a.addEventListener('click', logDemoClick);   // never blocks the navigation
+        a.addEventListener('click', function () { logEvent('book_demo_click'); });   // never blocks the navigation
       });
 
       // ── FAQ ──
