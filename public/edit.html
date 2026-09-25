@@ -521,6 +521,33 @@
       .wl-preview-link { display: block; text-align: center; margin-top: 10px; font-size: 13px; font-weight: 600; color: #7657FC; text-decoration: none; }
       .wl-preview-link:hover { text-decoration: underline; }
       .wl-status { font-size: 12px; margin-top: 8px; min-height: 16px; }
+      /* After video tab: shares the cover's side panel and styles; one section at a time. */
+      .edit-container.mode-end #wl-section { display: none !important; }
+      .edit-container:not(.mode-end) #end-section { display: none !important; }
+      .end-btn-row { border: 1px solid #e0d6ff; border-radius: 12px; background: #fff; padding: 12px 12px 2px; margin-bottom: 12px; }
+      .end-btn-row h5 { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #7657FC; margin: 0 0 8px; }
+      .end-btn-row input[type="text"], .end-btn-row input[type="url"] { margin-bottom: 10px; }
+      #end-section input[type="text"] { max-width: none; }
+      .wl-section input[type="url"] { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #e0d6ff; font-size: 14px; color: #1a1a1a;
+        background: white; font-family: 'Inter', sans-serif; outline: none; margin-bottom: 12px; }
+      .wl-section input[type="url"]:focus { border-color: #7657FC; }
+      .end-note { font-size: 12px; color: #888; margin: -4px 0 12px; line-height: 1.4; }
+      /* Preview: the viewer's end screen at preview scale. */
+      .end-preview { position: relative; width: 100%; aspect-ratio: 9 / 19.5; border-radius: 10px; overflow: hidden; background: #16121f; color: #fff;
+        font-family: 'Inter', sans-serif; }
+      .end-preview .ep-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+      .end-preview .ep-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.45) 0%, rgba(0,0,0,.2) 35%, rgba(0,0,0,.55) 65%, rgba(0,0,0,.8) 100%); }
+      .end-preview .ep-inner { position: relative; height: 100%; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 16px 12px 12px; }
+      .end-preview .ep-logo { max-width: 90px; max-height: 40px; object-fit: contain; margin-top: 10px; }
+      .end-preview .ep-title { font-family: 'CooperBT', Georgia, serif; font-size: 19px; line-height: 1.1; margin: auto 0 6px; }
+      .end-preview .ep-sub { font-size: 9.5px; line-height: 1.35; opacity: .92; margin: 0 0 14px; }
+      .end-preview .ep-title:empty, .end-preview .ep-sub:empty { display: none; }
+      .end-preview .ep-btns { width: 100%; display: flex; flex-direction: column; gap: 7px; margin-top: auto; }
+      .end-preview .ep-title:not(:empty) ~ .ep-btns, .end-preview .ep-sub:not(:empty) ~ .ep-btns { margin-top: 0; }
+      .end-preview .ep-btn { padding: 8px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,.9); font-size: 10px; font-weight: 700; line-height: 1.25; }
+      .end-preview .ep-btn:first-child { background: #fff; color: #1a1a1a; }
+      .end-preview .ep-btn small { display: block; font-size: 8px; font-weight: 500; opacity: .75; margin-top: 2px; }
+      .end-preview .ep-foot { font-size: 9px; font-weight: 600; opacity: .85; margin-top: 12px; text-decoration: underline; }
       .wl-status.ok { color: #16a34a; }
       .wl-status.err { color: #dc2626; }
     </style>
@@ -568,6 +595,7 @@
         <div class="seg">
           <button type="button" class="mode-btn active" data-mode="pairs">Popcodes</button>
           <button type="button" class="mode-btn" data-mode="cover">Cover</button>
+          <button type="button" class="mode-btn" data-mode="end">After video</button>
         </div>
       </div>
     </div>
@@ -779,6 +807,61 @@
             </div>
           </div>
         </div>
+
+        <div class="wl-section" id="end-section">
+          <div class="wl-head">
+            <h3>After the Video</h3>
+            <span class="wl-admin-pill">Admin</span>
+          </div>
+          <p class="wl-help">When a video plays to the end, show up to three buttons: give, hear another story, sign up. Every tap is counted, and links to other sites get tracking tags so gifts can be traced back to this piece.</p>
+
+          <div class="wl-section-inner">
+            <div class="wl-controls-col">
+              <div class="wl-toggle-row">
+                <input type="checkbox" id="end-enabled"/>
+                <label for="end-enabled" style="margin:0;">Show buttons after the video</label>
+              </div>
+
+              <label for="end-title">Headline (optional)</label>
+              <input type="text" id="end-title" maxlength="60" placeholder="Thank you for watching."/>
+              <label for="end-subtitle">Line under it (optional)</label>
+              <input type="text" id="end-subtitle" maxlength="90" placeholder="Help bring back the next marsh."/>
+
+              <div class="wl-image-row">
+                <label>Background image</label>
+                <p class="end-note" id="end-bg-note">None chosen: the cover image is used if there is one.</p>
+                <input type="file" id="end-bg-input" accept="image/*" style="display:none;"/>
+                <button type="button" class="wl-pick-btn" id="end-bg-pick">Choose image</button>
+                <button type="button" class="wl-clear-btn" id="end-bg-clear">Clear</button>
+              </div>
+
+              <div id="end-btn-rows"></div>
+
+              <div class="wl-toggle-row">
+                <input type="checkbox" id="end-replay" checked/>
+                <label for="end-replay" style="margin:0;">Offer &ldquo;Watch again&rdquo;</label>
+              </div>
+
+              <button type="button" class="wl-save-btn" id="end-save-btn">Save After the Video</button>
+              <a class="wl-preview-link" id="end-preview-link" target="_blank" rel="noopener" href="#">Preview it on your phone &rarr;</a>
+              <div class="wl-status" id="end-status"></div>
+            </div>
+
+            <div class="wl-preview-col">
+              <div class="end-preview" id="end-preview">
+                <img class="ep-bg" id="ep-bg" alt="" style="display:none;"/>
+                <div class="ep-shade"></div>
+                <div class="ep-inner">
+                  <img class="ep-logo" id="ep-logo" alt="" style="display:none;"/>
+                  <div class="ep-title" id="ep-title"></div>
+                  <div class="ep-sub" id="ep-sub"></div>
+                  <div class="ep-btns" id="ep-btns"></div>
+                  <div class="ep-foot" id="ep-foot">Watch again &nbsp; Scan another photo</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </aside>
     </div>
 
@@ -911,6 +994,10 @@
       let wlExistingUrl = null;    // url already saved in DB
       let wlOrgLogoPickedFile = null;
       let wlOrgLogoExistingUrl = null;
+      // Everything saved in collections.cover_config. The cover and After the
+      // Video both live in it; each save merges into this, so neither wipes
+      // the other's settings.
+      let wlCoverCfg = {};
 
       function isAdmin() {
         return currentUser && (currentUser.email || '').toLowerCase() === ADMIN_EMAIL;
@@ -1060,6 +1147,7 @@
           const cc = { ...col.cover_config };
           if (cc.image_url) cc.image_url = rewrite(cc.image_url);
           if (cc.org_logo_url) cc.org_logo_url = rewrite(cc.org_logo_url);
+          if (cc.end && cc.end.bg_url) cc.end = { ...cc.end, bg_url: rewrite(cc.end.bg_url) };
           colPatch.cover_config = cc;
         }
         const { error: colErr, data: updated } = await db.from('collections').update(colPatch).eq('id', collectionId).select();
@@ -1079,14 +1167,17 @@
         const container = document.getElementById('edit-ui');
         const side = document.getElementById('edit-side');
         const sub = document.getElementById('edit-subtitle');
-        const isCover = mode === 'cover';
+        const isCover = mode === 'cover' || mode === 'end';
         container.classList.toggle('mode-cover', isCover);
+        container.classList.toggle('mode-end', mode === 'end');
         container.style.display = isCover ? 'block' : 'flex';
         side.style.display = isCover ? 'block' : 'none';
         document.querySelectorAll('.mode-btn').forEach(b => {
           b.classList.toggle('active', b.dataset.mode === mode);
         });
-        if (sub) sub.textContent = isCover
+        if (sub) sub.textContent = mode === 'end'
+          ? 'Choose what viewers can do when a video finishes.'
+          : isCover
           ? 'Customize the scan screen viewers see for this Popcode.'
           : 'Tap any photo or video to replace it. Add or remove pages.';
       }
@@ -1107,6 +1198,8 @@
         initModeToggle();
 
         const cfg = coverConfig || {};
+        wlCoverCfg = { ...cfg };
+        initEndSection(cfg);
         document.getElementById('wl-enabled').checked = !!cfg.enabled;
         const variant = cfg.variant === 'org' ? 'org' : 'consumer';
         document.querySelector(`input[name="wl-variant"][value="${variant}"]`).checked = true;
@@ -1347,6 +1440,7 @@
           const ctaMode = ctaSel === 'code' || ctaSel === 'both' ? ctaSel : 'tap';
           const alignSel = (document.querySelector('input[name="wl-align"]:checked') || {}).value || 'center';
           const cfg = {
+            ...wlCoverCfg,
             enabled: document.getElementById('wl-enabled').checked,
             variant: variant,
             cta_mode: ctaMode,
@@ -1372,10 +1466,168 @@
           if (!data || data.length === 0) {
             throw new Error('No row updated. The admin trigger may have blocked the write — check that you are signed in as ' + ADMIN_EMAIL + '.');
           }
+          wlCoverCfg = cfg;
+          updateEndPreview();
           setStatus('Saved. Open the Popcode URL to see it.', 'ok');
         } catch (err) {
           console.error(err);
           setStatus('Save failed: ' + (err.message || 'unknown error'), 'err');
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      // ── After the Video (admin only) ──────────────────────────────────────────
+      // Saved as cover_config.end = { enabled, title, subtitle, bg_url, replay,
+      // buttons: [{ label, sub, url }] }; view.html shows it when a video ends.
+      const END_DEFAULT_BUTTONS = [
+        { label: 'Double your gift today', sub: 'Every dollar matched through Giving Tuesday', url: '' },
+        { label: 'Hear from Marisol', sub: '', url: '' },
+        { label: 'Become a Tide Keeper, $10 a month', sub: '', url: '' }
+      ];
+      let endBgPickedFile = null;
+      let endBgExistingUrl = null;
+      let endBgPreviewUrl = null;
+
+      function initEndSection(cfg) {
+        const e = (cfg && cfg.end) || null;
+        document.getElementById('end-section').style.display = 'block';
+        document.getElementById('end-preview-link').href = '/' + slug + '?preview=end';
+        document.getElementById('end-enabled').checked = !!(e && e.enabled);
+        document.getElementById('end-title').value = (e && e.title) || '';
+        document.getElementById('end-subtitle').value = (e && e.subtitle) || '';
+        document.getElementById('end-replay').checked = !(e && e.replay === false);
+        endBgExistingUrl = (e && e.bg_url) || null;
+        endBgPreviewUrl = endBgExistingUrl;
+        const saved = e && Array.isArray(e.buttons) ? e.buttons : END_DEFAULT_BUTTONS;
+        const rows = document.getElementById('end-btn-rows');
+        rows.textContent = '';
+        for (let i = 0; i < 3; i++) {
+          const b = saved[i] || {};
+          const row = document.createElement('div');
+          row.className = 'end-btn-row';
+          row.innerHTML =
+            '<h5>Button ' + (i + 1) + (i === 0 ? ' (the main one)' : '') + '</h5>' +
+            '<label>Label</label><input type="text" class="eb-label" maxlength="48">' +
+            '<label>Small line under it (optional)</label><input type="text" class="eb-sub" maxlength="60">' +
+            '<label>Link</label><input type="url" class="eb-url" maxlength="500" placeholder="https://yourorg.org/give">';
+          row.querySelector('.eb-label').value = b.label || '';
+          row.querySelector('.eb-sub').value = b.sub || '';
+          row.querySelector('.eb-url').value = b.url || '';
+          rows.appendChild(row);
+        }
+        rows.addEventListener('input', updateEndPreview);
+        ['end-title', 'end-subtitle'].forEach(id => document.getElementById(id).addEventListener('input', updateEndPreview));
+        document.getElementById('end-replay').addEventListener('change', updateEndPreview);
+        document.getElementById('end-bg-pick').addEventListener('click', () => document.getElementById('end-bg-input').click());
+        document.getElementById('end-bg-input').addEventListener('change', (ev) => {
+          const f = ev.target.files && ev.target.files[0];
+          if (!f) return;
+          if (f.size > 8 * 1024 * 1024) { setEndStatus('Image is over 8 MB — please pick a smaller one.', 'err'); return; }
+          endBgPickedFile = f;
+          endBgPreviewUrl = URL.createObjectURL(f);
+          setEndStatus('');
+          updateEndPreview();
+        });
+        document.getElementById('end-bg-clear').addEventListener('click', () => {
+          endBgPickedFile = null; endBgExistingUrl = null; endBgPreviewUrl = null;
+          document.getElementById('end-bg-input').value = '';
+          updateEndPreview();
+        });
+        document.getElementById('end-save-btn').addEventListener('click', saveEndSection);
+        updateEndPreview();
+      }
+
+      function readEndButtons() {
+        return Array.from(document.querySelectorAll('#end-btn-rows .end-btn-row')).map(r => ({
+          label: r.querySelector('.eb-label').value.trim(),
+          sub: r.querySelector('.eb-sub').value.trim(),
+          url: r.querySelector('.eb-url').value.trim()
+        }));
+      }
+
+      function updateEndPreview() {
+        const bgUrl = endBgPreviewUrl || (wlCoverCfg.enabled && wlCoverCfg.image_url) || null;
+        const bg = document.getElementById('ep-bg');
+        if (bgUrl) { bg.src = bgUrl; bg.style.display = 'block'; } else { bg.removeAttribute('src'); bg.style.display = 'none'; }
+        document.getElementById('end-bg-note').textContent = endBgPreviewUrl
+          ? 'Using the image you chose.'
+          : 'None chosen: the cover image is used if there is one.';
+        const logo = document.getElementById('ep-logo');
+        if (wlCoverCfg.org_logo_url) { logo.src = wlCoverCfg.org_logo_url; logo.style.display = 'block'; } else { logo.style.display = 'none'; }
+        document.getElementById('ep-title').textContent = document.getElementById('end-title').value.trim();
+        document.getElementById('ep-sub').textContent = document.getElementById('end-subtitle').value.trim();
+        const wrap = document.getElementById('ep-btns');
+        wrap.textContent = '';
+        readEndButtons().filter(b => b.label).forEach(b => {
+          const d = document.createElement('div');
+          d.className = 'ep-btn';
+          d.textContent = b.label;
+          if (b.sub) { const sm = document.createElement('small'); sm.textContent = b.sub; d.appendChild(sm); }
+          wrap.appendChild(d);
+        });
+        document.getElementById('ep-foot').innerHTML = document.getElementById('end-replay').checked
+          ? 'Watch again &nbsp; Scan another photo' : 'Scan another photo';
+      }
+
+      function setEndStatus(msg, kind) {
+        const el = document.getElementById('end-status');
+        el.textContent = msg || '';
+        el.className = 'wl-status' + (kind ? ' ' + kind : '');
+      }
+
+      function isWebUrl(u) {
+        try { const x = new URL(u); return x.protocol === 'https:' || x.protocol === 'http:'; } catch (e) { return false; }
+      }
+
+      async function saveEndSection() {
+        const btn = document.getElementById('end-save-btn');
+        const enabled = document.getElementById('end-enabled').checked;
+        const buttons = readEndButtons().filter(b => b.label || b.url);
+        for (let i = 0; i < buttons.length; i++) {
+          const b = buttons[i];
+          if (!b.label) { setEndStatus('A button has a link but no label.', 'err'); return; }
+          if (!isWebUrl(b.url)) { setEndStatus('"' + b.label + '" needs a full link, starting with https://', 'err'); return; }
+        }
+        if (enabled && !buttons.length) { setEndStatus('Add at least one button with a label and a link.', 'err'); return; }
+        btn.disabled = true;
+        setEndStatus('Saving…');
+        try {
+          let bgUrl = endBgExistingUrl;
+          if (endBgPickedFile) {
+            const ext = (endBgPickedFile.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+            const path = `${slug}/end_bg.${ext}`;
+            const { error: upErr } = await db.storage.from('experiences')
+              .upload(path, endBgPickedFile, { upsert: true, contentType: endBgPickedFile.type || 'image/jpeg' });
+            if (upErr) throw upErr;
+            const { data: pub } = db.storage.from('experiences').getPublicUrl(path);
+            bgUrl = pub.publicUrl + '?v=' + Date.now();
+            endBgPickedFile = null;
+            endBgExistingUrl = bgUrl;
+            endBgPreviewUrl = bgUrl;
+          }
+          const cfg = {
+            ...wlCoverCfg,
+            end: {
+              enabled,
+              title: document.getElementById('end-title').value.trim() || null,
+              subtitle: document.getElementById('end-subtitle').value.trim() || null,
+              bg_url: bgUrl || null,
+              replay: document.getElementById('end-replay').checked,
+              buttons: buttons.map(b => ({ label: b.label, sub: b.sub || null, url: b.url }))
+            }
+          };
+          const { error: dbErr, data } = await db.from('collections')
+            .update({ cover_config: cfg }).eq('id', collectionId).select();
+          if (dbErr) throw dbErr;
+          if (!data || data.length === 0) {
+            throw new Error('No row updated. The admin trigger may have blocked the write — check that you are signed in as ' + ADMIN_EMAIL + '.');
+          }
+          wlCoverCfg = cfg;
+          setEndStatus(enabled ? 'Saved. Play a video to the end to see it, or use the preview link.' : 'Saved (turned off).', 'ok');
+        } catch (err) {
+          console.error(err);
+          setEndStatus('Save failed: ' + (err.message || 'unknown error'), 'err');
         } finally {
           btn.disabled = false;
         }
