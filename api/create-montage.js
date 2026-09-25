@@ -1,8 +1,11 @@
 // POST /api/create-montage — kick off a Shotstack render of a photo montage.
 //
 // Body: {
-//   images:  [{ url }],            // ordered, public URLs (Supabase experiences bucket)
-//   perImageSeconds?: number,      // default 3
+//   items:   [{ type: 'image'|'video', url, seconds? }],
+//                                  // ordered, public URLs (Supabase experiences bucket);
+//                                  // `seconds` is a video clip's length (capped at 10s)
+//   images?: [{ url }],            // legacy photos-only form of `items`
+//   perImageSeconds?: number,      // default 3 (photos only)
 //   transition?: 'kenburns'|'fade',
 //   musicUrl?: string|null,        // public URL of a bundled track, or null
 //   aspect?: 'portrait'|'landscape'|'square'
@@ -22,7 +25,7 @@ const SHOTSTACK_BASE_URL = (process.env.SHOTSTACK_BASE_URL || 'https://api.shots
 const SHOTSTACK_API_KEY = (process.env.SHOTSTACK_API_KEY || '').trim();
 const DRY_RUN = process.env.MONTAGE_DRY_RUN === 'true' || !SHOTSTACK_API_KEY;
 
-const MAX_IMAGES = 40;
+const MAX_ITEMS = 40;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -32,16 +35,23 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   try {
-    const { images, perImageSeconds, transition, musicUrl, aspect } = req.body || {};
-    if (!Array.isArray(images) || images.length < 2) {
-      return res.status(400).json({ error: 'A montage needs at least 2 photos.' });
+    const body = req.body || {};
+    const { perImageSeconds, transition, musicUrl, aspect } = body;
+    const items = Array.isArray(body.items) ? body.items
+      : Array.isArray(body.images) ? body.images.map(img => ({ ...img, type: 'image' }))
+      : null;
+    if (!items || items.length < 2) {
+      return res.status(400).json({ error: 'A montage needs at least 2 photos or videos.' });
     }
-    if (images.length > MAX_IMAGES) {
-      return res.status(400).json({ error: `A montage can have at most ${MAX_IMAGES} photos.` });
+    if (items.length > MAX_ITEMS) {
+      return res.status(400).json({ error: `A montage can have at most ${MAX_ITEMS} photos and videos.` });
     }
-    for (const img of images) {
-      if (!img || typeof img.url !== 'string' || !/^https:\/\//.test(img.url)) {
-        return res.status(400).json({ error: 'Each photo must have a public https URL.' });
+    for (const it of items) {
+      if (!it || typeof it.url !== 'string' || !/^https:\/\//.test(it.url)) {
+        return res.status(400).json({ error: 'Each photo or video must have a public https URL.' });
+      }
+      if (it.type !== undefined && it.type !== 'image' && it.type !== 'video') {
+        return res.status(400).json({ error: 'Unknown montage item type.' });
       }
     }
 
@@ -59,7 +69,7 @@ export default async function handler(req, res) {
 
     const { buildShotstackEdit } = await import('../lib/montage/timeline.mjs');
     const { edit } = buildShotstackEdit({
-      images,
+      items,
       perImageSeconds,
       transition: transition === 'fade' ? 'fade' : 'kenburns',
       musicUrl: finalMusic,

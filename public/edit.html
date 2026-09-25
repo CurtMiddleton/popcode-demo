@@ -2603,7 +2603,10 @@
       // Builds an Apple-Photos-style memory video from a set of photos, renders
       // it via /api/create-montage (Shotstack), and links the resulting MP4 to
       // this page's photo — flowing through the normal save path unchanged.
-      const MTG_MAX_PHOTOS = 40;
+      const MTG_MAX_PHOTOS = 40;      // photos + clips combined (matches the API)
+      const MTG_MAX_CLIP_SECONDS = 10; // a clip plays its opening seconds, up to this (lib/montage/timeline.mjs)
+      const MTG_MAX_SOURCE_SECONDS = 60; // longer videos are refused — trim first
+      const MTG_MAX_VIDEO_MB = 200;
       let montageState = null;
       let montageBusy = false;
       let montageResult = null; // rendered montage File awaiting the user's confirm
@@ -2615,7 +2618,7 @@
         const note = document.querySelector('.mtg-preview-note');
         if (note) note.textContent = musicSkipped
           ? "Here's your montage — the chosen music isn't available yet, so it's silent for now. Use it, or start over."
-          : "Here's your montage. Use it, or start over to change photos, order, or music.";
+          : "Here's your montage. Use it, or start over to change photos, videos, order, or music.";
         const vid = document.getElementById('mtg-preview-video');
         vid.src = URL.createObjectURL(file);
         document.getElementById('mtg-body-scroll').style.display = 'none';
@@ -2733,12 +2736,63 @@
         });
       }
 
+      // Read a video clip's length and grab a poster frame for its thumbnail.
+      // Resolves null when the browser can't decode it (e.g. HEVC on some
+      // desktop browsers) — Shotstack could, but we'd have no length to give it.
+      function mtgProbeVideo(file) {
+        return new Promise((resolve) => {
+          const url = URL.createObjectURL(file);
+          const v = document.createElement('video');
+          v.muted = true; v.playsInline = true; v.preload = 'auto';
+          let done = false;
+          const finish = (val) => { if (done) return; done = true; clearTimeout(timer); v.removeAttribute('src'); v.load(); resolve(val); };
+          const timer = setTimeout(() => { URL.revokeObjectURL(url); finish(null); }, 15000);
+          v.addEventListener('loadedmetadata', () => {
+            if (!isFinite(v.duration) || v.duration <= 0) { URL.revokeObjectURL(url); finish(null); return; }
+            v.currentTime = Math.min(0.5, v.duration / 2);
+          });
+          v.addEventListener('seeked', () => {
+            let thumb = '';
+            try {
+              const w = v.videoWidth || 160, h = v.videoHeight || 160, s = 240 / Math.max(w, h);
+              const c = document.createElement('canvas');
+              c.width = Math.max(1, Math.round(w * s)); c.height = Math.max(1, Math.round(h * s));
+              c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+              thumb = c.toDataURL('image/jpeg', 0.8);
+            } catch (e) {}
+            finish({ url, duration: v.duration, thumb });
+          });
+          v.addEventListener('error', () => { URL.revokeObjectURL(url); finish(null); });
+          v.src = url;
+        });
+      }
+
       async function mtgAddPhotos(input) {
         const files = Array.from(input.files || []);
         input.value = '';
+        const problems = [];
         let skipped = 0;
         for (const f of files) {
-          if (montageState.photos.length >= MTG_MAX_PHOTOS) { mtgStatus(`Up to ${MTG_MAX_PHOTOS} photos.`, null, 'err'); break; }
+          if (montageState.photos.length >= MTG_MAX_PHOTOS) { problems.push(`Up to ${MTG_MAX_PHOTOS} photos and videos.`); break; }
+          const newId = 'p' + Math.random().toString(36).slice(2, 8);
+          const isVid = f.type.startsWith('video/') || /\.(mov|mp4|m4v|webm)$/i.test(f.name);
+          if (isVid) {
+            if (f.size / (1024 * 1024) > MTG_MAX_VIDEO_MB) { problems.push(`"${f.name}" is over ${MTG_MAX_VIDEO_MB} MB.`); continue; }
+            mtgStatus('Reading video…', null, '');
+            const probe = await mtgProbeVideo(f);
+            if (!probe) { problems.push(`"${f.name}" couldn't be played here.`); continue; }
+            if (probe.duration > MTG_MAX_SOURCE_SECONDS) {
+              URL.revokeObjectURL(probe.url);
+              problems.push(`"${f.name}" is ${Math.round(probe.duration)}s — use clips under a minute (trim it in Photos first).`);
+              continue;
+            }
+            montageState.photos.push({
+              id: newId, kind: 'video', file: f, url: probe.url, thumb: probe.thumb,
+              seconds: +Math.min(MTG_MAX_CLIP_SECONDS, probe.duration).toFixed(2),
+              trimmed: probe.duration > MTG_MAX_CLIP_SECONDS,
+            });
+            continue;
+          }
           const isImg = f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name);
           if (!isImg) continue;
           mtgStatus('Optimizing photos…', null, '');
@@ -2746,9 +2800,10 @@
           // need to match the video output size; keeps uploads + render fast).
           const opt = await optimizePhotoDim(f, 1920);
           if (!opt) { skipped++; continue; }
-          montageState.photos.push({ id: 'p' + Math.random().toString(36).slice(2, 8), file: opt, url: URL.createObjectURL(opt) });
+          montageState.photos.push({ id: newId, kind: 'image', file: opt, url: URL.createObjectURL(opt) });
         }
-        mtgStatus(skipped ? `${skipped} photo(s) couldn't be read and were skipped.` : '', null, skipped ? 'err' : '');
+        if (skipped) problems.push(`${skipped} photo(s) couldn't be read and were skipped.`);
+        mtgStatus(problems.join(' '), null, problems.length ? 'err' : '');
         mtgRenderStrip();
       }
 
@@ -2853,13 +2908,14 @@
         const strip = document.getElementById('mtg-strip');
         const photos = montageState.photos;
         if (!photos.length) {
-          strip.innerHTML = `<div class="mtg-empty">No photos yet. Add photos to build your montage.</div>`;
+          strip.innerHTML = `<div class="mtg-empty">Nothing yet. Add photos or short videos to build your montage.</div>`;
         } else {
           const X_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
           strip.innerHTML = photos.map((p, i) => `
             <div class="mtg-thumb${mtgDragId === p.id ? ' dragging' : ''}" data-id="${p.id}">
-              <img src="${p.url}" alt="" draggable="false"/>
+              <img src="${p.kind === 'video' ? p.thumb : p.url}" alt="" draggable="false"/>
               <span class="mtg-order">${i + 1}</span>
+              ${p.kind === 'video' ? `<span class="mtg-clip" title="${p.trimmed ? `Uses the first ${MTG_MAX_CLIP_SECONDS}s` : 'Video clip'}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>${p.seconds.toFixed(0)}s</span>` : ''}
               <button type="button" class="mtg-del" title="Remove" onclick="mtgRemove(${i})">${X_ICON}</button>
             </div>`).join('');
           photos.forEach(p => {
@@ -2868,7 +2924,12 @@
           });
         }
         const hint = document.getElementById('mtg-reorder-hint');
-        if (hint) hint.style.display = photos.length > 1 ? 'block' : 'none';
+        if (hint) {
+          hint.style.display = photos.length > 1 ? 'block' : 'none';
+          hint.textContent = photos.some(p => p.kind === 'video')
+            ? `Drag to reorder. Videos play up to ${MTG_MAX_CLIP_SECONDS}s each.`
+            : 'Drag the photos to reorder them.';
+        }
         mtgUpdateEstimate();
       }
 
@@ -2893,7 +2954,7 @@
           const startDrag = (x, y) => {
             if (dragging) return;
             clearTimeout(holdTimer); dragging = true; mtgDragId = photoId;
-            ghost = mtgMakeGhost(photo.url, x, y);
+            ghost = mtgMakeGhost(photo.kind === 'video' ? photo.thumb : photo.url, x, y);
             document.body.style.userSelect = 'none';
             const c = document.querySelector(`.mtg-thumb[data-id="${photoId}"]`);
             if (c) c.classList.add('dragging');
@@ -2950,11 +3011,17 @@
       function mtgUpdateEstimate() {
         const el = document.getElementById('mtg-est');
         if (!montageState) return;
-        const n = montageState.photos.length;
-        if (n < 2) { el.textContent = 'Add at least 2 photos'; return; }
-        // Matches the crossfade overlap in lib/montage/timeline.mjs (0.5s).
-        const total = (n - 1) * (montageState.perSec - 0.5) + montageState.perSec;
-        el.textContent = `${n} photos · ~${total.toFixed(0)}s video`;
+        const items = montageState.photos;
+        const n = items.length;
+        if (n < 2) { el.textContent = 'Add at least 2 photos or videos'; return; }
+        // Matches lib/montage/timeline.mjs: photos last perSec, clips their own
+        // (capped) length, and each join overlaps by the 0.5s crossfade.
+        const total = items.reduce((t, p) => t + (p.kind === 'video' ? p.seconds : montageState.perSec), 0) - (n - 1) * 0.5;
+        const nv = items.filter(p => p.kind === 'video').length, np = n - nv;
+        const parts = [];
+        if (np) parts.push(`${np} photo${np === 1 ? '' : 's'}`);
+        if (nv) parts.push(`${nv} video${nv === 1 ? '' : 's'}`);
+        el.textContent = `${parts.join(' · ')} · ~${total.toFixed(0)}s video`;
       }
 
       function mtgStatus(msg, pct, kind) {
@@ -2977,7 +3044,7 @@
           const r = await fetch('/api/montage-status?id=' + encodeURIComponent(renderId)).then(x => x.json());
           if (r.error) throw new Error(r.error);
           if (r.status === 'done') return r;
-          if (r.status === 'failed') throw new Error('The render failed. Try fewer photos or a different track.');
+          if (r.status === 'failed') throw new Error('The render failed. Try fewer photos or videos, or a different track.');
           const secs = Math.round((Date.now() - start) / 1000);
           mtgStatus(`Rendering your video… (${secs}s)`, 60 + Math.min(30, secs), '');
           await new Promise(res => setTimeout(res, 3000));
@@ -2988,7 +3055,7 @@
       async function mtgCreate() {
         if (montageBusy || !montageState) return;
         const st = montageState;
-        if (st.photos.length < 2) { mtgStatus('Add at least 2 photos.', null, 'err'); return; }
+        if (st.photos.length < 2) { mtgStatus('Add at least 2 photos or videos.', null, 'err'); return; }
 
         montageBusy = true;
         const createBtn = document.getElementById('mtg-create');
@@ -3004,16 +3071,20 @@
           // Order is preserved by writing into urls[i] by index.
           const urls = new Array(st.photos.length);
           let uploaded = 0;
-          mtgStatus(`Uploading photos… (0 of ${st.photos.length})`, 0, '');
+          const upNoun = st.photos.some(p => p.kind === 'video') ? 'photos and videos' : 'photos';
+          mtgStatus(`Uploading ${upNoun}… (0 of ${st.photos.length})`, 0, '');
           const uploadOne = async (i) => {
-            const f = st.photos[i].file;
-            const ext = ((f.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '')) || 'jpg';
-            const path = `montage-src/${sessionId}/img_${i}.${ext}`;
-            const { error } = await db.storage.from('experiences').upload(path, f, { contentType: f.type || 'image/jpeg', upsert: true });
+            const item = st.photos[i];
+            const f = item.file;
+            const isVid = item.kind === 'video';
+            const ext = ((f.name.split('.').pop() || (isVid ? 'mp4' : 'jpg')).toLowerCase().replace(/[^a-z0-9]/g, '')) || (isVid ? 'mp4' : 'jpg');
+            const path = `montage-src/${sessionId}/${isVid ? 'clip' : 'img'}_${i}.${ext}`;
+            const contentType = f.type || (isVid ? (ext === 'mov' ? 'video/quicktime' : 'video/mp4') : 'image/jpeg');
+            const { error } = await db.storage.from('experiences').upload(path, f, { contentType, upsert: true });
             if (error) throw new Error('Upload failed: ' + error.message);
             urls[i] = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
             uploaded++;
-            mtgStatus(`Uploading photos… (${uploaded} of ${st.photos.length})`, Math.round((uploaded / st.photos.length) * 50), '');
+            mtgStatus(`Uploading ${upNoun}… (${uploaded} of ${st.photos.length})`, Math.round((uploaded / st.photos.length) * 50), '');
           };
           let nextUpload = 0;
           await Promise.all(
@@ -3028,7 +3099,9 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              images: urls.map(u => ({ url: u })),
+              items: st.photos.map((p, i) => p.kind === 'video'
+                ? { type: 'video', url: urls[i], seconds: p.seconds }
+                : { type: 'image', url: urls[i] }),
               perImageSeconds: st.perSec,
               transition: st.transition,
               musicUrl: mtgMusicUrl(st.musicId),
@@ -3182,6 +3255,12 @@
       display: flex; align-items: center; justify-content: center;
     }
     .mtg-del svg { width: 10px; height: 10px; }
+    .mtg-clip {
+      position: absolute; left: 6px; bottom: 6px; display: inline-flex; align-items: center; gap: 2px;
+      background: rgba(0,0,0,.6); color: #fff; border-radius: 999px; padding: 2px 7px 2px 4px;
+      font-size: 11px; font-weight: 700; font-family: 'Inter', sans-serif; pointer-events: none;
+    }
+    .mtg-clip svg { width: 11px; height: 11px; }
 
     .mtg-add {
       display: inline-flex; align-items: center; gap: 7px; margin: 6px 0 26px;
@@ -3270,13 +3349,13 @@
         <button type="button" class="mtg-close" id="mtg-close-btn" onclick="closeMontage()" title="Close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
       <div class="mtg-body" id="mtg-body-scroll">
-        <p class="mtg-sub">Pick photos, set the order, add music. We'll turn them into a memory video and link it to this page's photo.</p>
+        <p class="mtg-sub">Pick photos and short videos, set the order, add music. We'll turn them into a memory video and link it to this page's photo.</p>
 
         <div class="mtg-strip" id="mtg-strip"></div>
         <div class="mtg-reorder-hint" id="mtg-reorder-hint" style="display:none;">Drag the photos to reorder them.</div>
         <label class="mtg-add">
-          <input type="file" accept="image/*" multiple onchange="mtgAddPhotos(this)"/>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add photos
+          <input type="file" accept="image/*,video/*" multiple onchange="mtgAddPhotos(this)"/>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add photos &amp; videos
         </label>
 
         <div class="mtg-field">
@@ -3319,7 +3398,7 @@
       <div class="mtg-preview" id="mtg-preview">
         <div class="mtg-preview-inner">
           <video id="mtg-preview-video" playsinline controls muted loop></video>
-          <p class="mtg-preview-note">Here's your montage. Use it, or start over to change photos, order, or music.</p>
+          <p class="mtg-preview-note">Here's your montage. Use it, or start over to change photos, videos, order, or music.</p>
           <button type="button" class="mtg-save-link" onclick="mtgSaveVideo()"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Save video to your photos</button>
         </div>
         <div class="mtg-preview-actions">
