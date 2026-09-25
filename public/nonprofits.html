@@ -85,7 +85,8 @@
             .hero-sub { font-size: 16px; line-height: 1.45; margin: 0 0 28px; max-width: min(440px, calc(100% - 30px)); color: #fff; }
       /* The phone overlaps the copy column by 44px from the right; the
          subhead stops short of it. */
-      .hero-sub strong { font-weight: 700; }
+      /* "No app. No QR code." wraps as one piece, never split across lines. */
+      .hero-sub strong { font-weight: 700; white-space: nowrap; }
       .btn-on-grad { background: #fff; color: var(--ink); }
       .btn-on-grad:hover { background: #f1f1f1; }
       /* Secondary action on the photo: outlined in white. */
@@ -97,7 +98,12 @@
       /* ── Try it yourself ── */
       /* A small, quiet panel: the steps are already shown above in How it works. */
       .try { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 36px; align-items: center; max-width: 860px; }
-      @media (max-width: 700px) { .try { grid-template-columns: minmax(0, 1fr); gap: 22px; } .try-card { max-width: 300px; } }
+      @media (max-width: 700px) {
+        .try { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+        .try-card { width: 100%; max-width: 230px; margin: 0 auto; }
+        .try h2 { text-align: center; }
+        .try-download { display: flex; width: fit-content; margin: 18px auto 0; }
+      }
       .try-card img { width: 100%; height: auto; display: block; border-radius: 5px; box-shadow: var(--pc-shadow-raised); }
       .try h2 { font-size: 30px; margin-bottom: 10px; }
       .try-copy { font-size: 16px; line-height: 1.55; color: var(--ink); margin: 0 0 8px; }
@@ -219,10 +225,15 @@
         .np-body { margin-top: -30px; }
         .stage { height: 520px; }
         .card { width: 300px; right: -6px; top: 0; }
-        .phone { left: 0; top: 156px; width: 176px; height: 356px; border-radius: 34px; padding: 8px; }
+        .hero-actions { justify-content: center; }
+        /* A tight shadow: the big one ran past the hero's clipped bottom and
+           left a gray edge across the arch. */
+        .phone { left: 0; top: 156px; width: 176px; height: 356px; border-radius: 34px; padding: 8px;
+                 box-shadow: 0 10px 18px rgba(0,0,0,.35); }
         .phone-screen { border-radius: 27px; }
         .phone-notch { width: 60px; height: 16px; top: 8px; }
-        .sound-btn { right: 0; left: auto; top: 250px; }
+        /* Beside the phone, not across the stage. */
+        .sound-btn { left: 190px; right: auto; top: 316px; }
       }
 
       /* ── How it works: a real picture of each step, then its number and words. ── */
@@ -286,7 +297,14 @@
       .steps p { margin: 0; font-size: 16px; line-height: 1.55; color: var(--muted); }
       .steps p em { color: var(--ink); }
       @media (max-width: 960px) { .step-text::before { font-size: 80px; } .steps { gap: 26px; } }
-      @media (max-width: 860px) { .steps { grid-template-columns: 1fr; gap: 40px; max-width: 520px; margin-inline: auto; } }
+      /* One column: each picture takes only its own height, and every gap —
+         heading to picture, picture to words, words to the next picture — is
+         the same. */
+      @media (max-width: 860px) {
+        .steps { grid-template-columns: 1fr; gap: 40px; max-width: 520px; margin-inline: auto; }
+        .np-body .sec-head { margin-bottom: 28px; }
+        .step-art { height: auto; margin-bottom: 28px; }
+      }
 
       /* ── What you get ── */
       /* The well photo behind it, dark enough that white type reads anywhere;
@@ -432,12 +450,21 @@
       .pc-sign .legs { position: absolute; left: 50%; bottom: 0; width: 70px; height: 40px; translate: -50% 0;
                        background: linear-gradient(to bottom right, transparent calc(50% - 1.5px), #8b6b45 calc(50% - 1.5px), #8b6b45 calc(50% + 1.5px), transparent calc(50% + 1.5px)) left / 50% 100% no-repeat,
                                    linear-gradient(to bottom left, transparent calc(50% - 1.5px), #8b6b45 calc(50% - 1.5px), #8b6b45 calc(50% + 1.5px), transparent calc(50% + 1.5px)) right / 50% 100% no-repeat; }
+      .pieces-dots { display: none; }
+      .pieces-dots button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 50%; background: rgba(255,255,255,.45); cursor: pointer; }
+      .pieces-dots button[aria-current="true"] { background: #fff; }
+      /* Phones: a swipe carousel, one piece centred with the next peeking in. */
       @media (max-width: 700px) {
-        .pieces { gap: 30px 18px; }
-        .pc { width: calc(50% - 9px); }
-        .pc:last-child { width: 100%; }
+        .pieces { flex-wrap: nowrap; justify-content: flex-start; gap: 0 18px; overflow-x: auto; overscroll-behavior-x: contain;
+                  scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+                  margin: 0 -20px; padding: 16px calc(50% - 110px) 6px; }
+        .pieces::-webkit-scrollbar { display: none; }
+        .pc { flex: 0 0 220px; width: 220px; scroll-snap-align: center; }
+        .pc:hover .obj { transform: none; }
+        .pc p { font-size: 18px; }
+        .pieces-dots { display: flex; justify-content: center; gap: 8px; margin-top: 18px; }
       }
-      @media (max-width: 420px) { .pc .obj { zoom: .74; } .pc p { font-size: 17px; } }
+      @media (min-width: 561px) and (max-width: 700px) { .pieces { margin: 0 -28px; } }
       @media (prefers-reduced-motion: reduce) { .pc .sym::after { animation: none; opacity: 0; } }
 
       /* ── Pricing ── */
@@ -755,6 +782,7 @@
               <p>Event signage</p>
             </li>
           </ul>
+          <div class="pieces-dots" id="pieces-dots"></div>
         </div>
       </section>
 
@@ -1012,6 +1040,34 @@
         document.getElementById('case-study-slot')
           .appendChild(document.getElementById('case-study-tpl').content.cloneNode(true));
       }
+
+      // ── Where to use it: dots for the phone carousel (hidden on wider
+      // screens, where the pieces sit in rows). ──
+      (function () {
+        var list = document.querySelector('.pieces');
+        var dots = document.getElementById('pieces-dots');
+        if (!list || !dots) return;
+        var items = Array.prototype.slice.call(list.children);
+        items.forEach(function (li, i) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.setAttribute('aria-label', 'Show ' + li.querySelector('p').textContent);
+          b.addEventListener('click', function () {
+            list.scrollTo({ left: li.offsetLeft - (list.clientWidth - li.offsetWidth) / 2, behavior: 'smooth' });
+          });
+          dots.appendChild(b);
+        });
+        function mark() {
+          var mid = list.scrollLeft + list.clientWidth / 2, best = 0, bestD = Infinity;
+          items.forEach(function (li, i) {
+            var d = Math.abs(li.offsetLeft + li.offsetWidth / 2 - mid);
+            if (d < bestD) { bestD = d; best = i; }
+          });
+          Array.prototype.forEach.call(dots.children, function (b, i) { b.setAttribute('aria-current', i === best ? 'true' : 'false'); });
+        }
+        list.addEventListener('scroll', function () { requestAnimationFrame(mark); }, { passive: true });
+        mark();
+      })();
 
       // ── The hero phone: the Popcode start screen for a moment, then the
       // story plays (muted, like the home page), then back to the start screen
