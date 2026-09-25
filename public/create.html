@@ -1779,6 +1779,8 @@
       const MTG_MAX_CLIP_SECONDS = 10; // a clip plays its opening seconds, up to this (lib/montage/timeline.mjs)
       const MTG_MAX_SOURCE_SECONDS = 60; // longer videos are refused — trim first
       const MTG_MAX_VIDEO_MB = 200;
+      const MTG_END_HOLD = 1.5;          // the last photo rests this much longer (lib/montage/timeline.mjs)
+      const MTG_PHOTO_SEC = [1.5, 10];   // a photo's own time on screen, min/max
       let montageState = null;
       let montageBusy = false;
       let montageResult = null; // rendered montage File awaiting the user's confirm
@@ -2108,6 +2110,7 @@
               ${p.crop ? '<span class="mtg-framed" title="Framing set"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg></span>' : ''}
               <span class="mtg-order">${i + 1}</span>
               ${p.kind === 'video' ? `<span class="mtg-clip" title="${p.trimmed ? `Uses the first ${MTG_MAX_CLIP_SECONDS}s` : 'Video clip'}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>${p.seconds.toFixed(0)}s</span>` : ''}
+              ${p.kind !== 'video' && p.secs ? `<span class="mtg-clip" title="On screen for ${p.secs}s"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>${p.secs % 1 ? p.secs.toFixed(1) : p.secs}s</span>` : ''}
               <button type="button" class="mtg-del" title="Remove" onclick="mtgRemove(${i})">${X_ICON}</button>
             </div>`).join('');
           photos.forEach(p => {
@@ -2120,8 +2123,8 @@
         if (hint) {
           hint.style.display = photos.length > 1 ? 'block' : 'none';
           hint.textContent = photos.some(p => p.kind === 'video')
-            ? `Tap one to frame it, drag to reorder. Videos play up to ${MTG_MAX_CLIP_SECONDS}s each.`
-            : 'Tap a photo to frame it, drag to reorder.';
+            ? `Tap one to frame it or change its time, drag to reorder. Videos play up to ${MTG_MAX_CLIP_SECONDS}s each.`
+            : 'Tap a photo to frame it or change its time, drag to reorder.';
         }
         mtgUpdateEstimate();
       }
@@ -2210,7 +2213,8 @@
         if (n < 2) { el.textContent = 'Add at least 2 photos or videos'; return; }
         // Matches lib/montage/timeline.mjs: photos last perSec, clips their own
         // (capped) length, and each join overlaps by the 0.5s crossfade.
-        const total = items.reduce((t, p) => t + (p.kind === 'video' ? p.seconds : montageState.perSec), 0) - (n - 1) * 0.5;
+        const total = items.reduce((t, p) => t + (p.kind === 'video' ? p.seconds : (p.secs || montageState.perSec)), 0) - (n - 1) * 0.5
+          + (items[n - 1].kind === 'video' ? 0 : MTG_END_HOLD);
         const nv = items.filter(p => p.kind === 'video').length, np = n - nv;
         const parts = [];
         if (np) parts.push(`${np} photo${np === 1 ? '' : 's'}`);
@@ -2295,7 +2299,7 @@
             items: st.photos.map((p, i) => {
               const it = p.kind === 'video'
                 ? { type: 'video', url: urls[i], seconds: p.seconds }
-                : { type: 'image', url: urls[i] };
+                : { type: 'image', url: urls[i], ...(p.secs ? { seconds: p.secs } : {}) };
               const frame = p.kind === 'video' ? mtgVideoFrame(p, st.aspect) : null;
               if (frame) it.frame = frame;
               return it;
@@ -2424,7 +2428,9 @@
         img.src = item.kind === 'video' ? item.thumb : item.url;
         document.getElementById('mtg-crop-note').textContent = item.kind === 'video'
           ? 'Drag to choose what shows in the frame. The whole clip is framed the same way.'
-          : 'Drag to choose what shows in the frame.';
+          : 'Drag to choose what shows in the frame, and set how long it stays on screen.';
+        document.getElementById('mtg-crop-time').style.display = item.kind === 'video' ? 'none' : '';
+        mtgItemSecRender();
         document.getElementById('mtg-crop-zoom').value = (item.crop && item.crop.z) || 1;
         document.getElementById('mtg-body-scroll').style.display = 'none';
         document.getElementById('mtg-foot').style.display = 'none';
@@ -2441,10 +2447,34 @@
           if (montageState) mtgRenderStrip();
         }
       }
+      // A photo's own time on screen. Unset means "use Seconds per photo".
+      function mtgItemSecStep(delta) {
+        const item = mtgCropItem();
+        if (!item || !montageState) return;
+        const cur = item.secs || montageState.perSec;
+        const next = Math.min(MTG_PHOTO_SEC[1], Math.max(MTG_PHOTO_SEC[0], +(cur + delta).toFixed(1)));
+        item.secs = next === montageState.perSec ? undefined : next;
+        if (!item.secs) delete item.secs;
+        mtgItemSecRender();
+      }
+      function mtgItemSecRender() {
+        const item = mtgCropItem();
+        if (!item || !montageState) return;
+        const v = item.secs || montageState.perSec;
+        const isLast = montageState.photos[montageState.photos.length - 1] === item;
+        document.getElementById('mtg-item-sec').textContent = v.toFixed(1) + 's';
+        document.getElementById('mtg-item-sec-dec').disabled = v <= MTG_PHOTO_SEC[0];
+        document.getElementById('mtg-item-sec-inc').disabled = v >= MTG_PHOTO_SEC[1];
+        document.getElementById('mtg-item-sec-note').textContent = item.secs
+          ? (isLast ? `The last photo also rests ${MTG_END_HOLD}s longer at the end.` : '')
+          : (isLast ? `Same as the others, plus a ${MTG_END_HOLD}s rest at the end.` : 'Same as the others.');
+      }
       function mtgResetCrop() {
         const item = mtgCropItem();
         if (!item) return;
         delete item.crop;
+        delete item.secs;
+        mtgItemSecRender();
         document.getElementById('mtg-crop-zoom').value = 1;
         mtgDrawFrame();
       }
@@ -2501,7 +2531,7 @@
       function mtgDraftDir(id) { return `montage-drafts/${currentUser.id}/${id || montageState.draftId}`; }
       function mtgSig() {
         const st = montageState;
-        return JSON.stringify([st.photos.map(p => [p.id, p.crop || 0]), st.perSec, st.transition, st.aspect, st.musicId]);
+        return JSON.stringify([st.photos.map(p => [p.id, p.crop || 0, p.secs || 0]), st.perSec, st.transition, st.aspect, st.musicId]);
       }
       async function mtgUploadSources(pctSpan) {
         const st = montageState;
@@ -2534,7 +2564,7 @@
           v: 1, id: st.draftId, updatedAt: new Date().toISOString(),
           perSec: st.perSec, transition: st.transition, aspect: st.aspect, musicId: st.musicId,
           items: st.photos.map(p => ({ id: p.id, kind: p.kind, url: p.remote, thumb: p.kind === 'video' ? p.thumb : undefined,
-                                        seconds: p.seconds, trimmed: p.trimmed, w: p.w, h: p.h, crop: p.crop, framed: p.framed })),
+                                        seconds: p.seconds, secs: p.secs, trimmed: p.trimmed, w: p.w, h: p.h, crop: p.crop, framed: p.framed })),
         };
         const blob = new Blob([JSON.stringify(draft)], { type: 'application/json' });
         const { error } = await db.storage.from('experiences').upload(`${mtgDraftDir(st.draftId)}/draft.json`, blob, { contentType: 'application/json', upsert: true });
@@ -2762,6 +2792,10 @@
     .mtg-crop-zoom { display: flex; align-items: center; gap: 10px; margin: 16px auto 4px; width: min(100%, 320px); color: #8a8a8a; }
     .mtg-crop-zoom svg { width: 18px; height: 18px; flex: none; }
     .mtg-crop-zoom input { flex: 1; accent-color: #1a1a1a; }
+    .mtg-crop-time { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 14px; margin: 10px 0 16px; font-family: 'Inter', sans-serif; }
+    .mtg-crop-time-l { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #1a1a1a; }
+    #mtg-item-sec { min-width: 64px; text-align: center; font-weight: 700; color: #1a1a1a; font-size: 15px; }
+    .mtg-crop-time-note { flex-basis: 100%; text-align: center; font-size: 12px; color: #8a8a8a; min-height: 1em; }
 
     .mtg-add {
       display: inline-flex; align-items: center; gap: 7px; margin: 6px 0 26px;
@@ -2907,6 +2941,15 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
           <input type="range" id="mtg-crop-zoom" min="1" max="3" step="0.01" value="1" aria-label="Zoom"/>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/><line x1="8" y1="11" x2="14" y2="11"/><line x1="11" y1="8" x2="11" y2="14"/></svg>
+        </div>
+        <div class="mtg-crop-time" id="mtg-crop-time">
+          <span class="mtg-crop-time-l">Time on screen</span>
+          <div class="mtg-stepper">
+            <button type="button" class="mtg-step" id="mtg-item-sec-dec" onclick="mtgItemSecStep(-0.5)" aria-label="Less time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <span id="mtg-item-sec">3.0s</span>
+            <button type="button" class="mtg-step" id="mtg-item-sec-inc" onclick="mtgItemSecStep(0.5)" aria-label="More time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
+          <span class="mtg-crop-time-note" id="mtg-item-sec-note"></span>
         </div>
         <div class="mtg-preview-actions">
           <button type="button" class="mtg-redo" onclick="mtgResetCrop()">Reset</button>
