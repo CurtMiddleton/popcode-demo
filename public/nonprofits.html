@@ -65,7 +65,7 @@
            smears over the photo, so it's off (body's extra specificity: nav.js
            appends its sheet after this one). ── */
       body .site-header::after { display: none; }
-      .np-hero { position: relative; overflow: hidden; background: #1a1a1a; color: #fff; padding: 56px 0 430px; }
+      .np-hero { position: relative; overflow: hidden; background: #1a1a1a; color: #fff; padding: 32px 0 430px; }
       .hero-bg { position: absolute; inset: 0; z-index: 0; }
       .hero-bg img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 60%; }
       .hero-bg::after {
@@ -115,10 +115,10 @@
       .np-body { position: relative; z-index: 3; margin-top: -90px; padding-top: 0; }
 
       /* ── The stage: the postcard behind, the phone in front of it. ── */
-      .stage { position: relative; height: 580px; }
+      .stage { position: relative; height: 464px; }
       /* Common Tide's appeal postcard, lying nearly flat. */
       .card {
-        position: absolute; right: -130px; top: 70px; width: 600px; aspect-ratio: 3 / 2;
+        position: absolute; right: -130px; top: 10px; width: 600px; aspect-ratio: 3 / 2;
         display: block; border-radius: 6px; overflow: hidden;
         box-shadow: 0 30px 70px rgba(0,0,0,.4), 0 3px 10px rgba(0,0,0,.15);
         transform: rotate(-1.5deg);
@@ -128,7 +128,7 @@
       /* The phone: the home page's, with the real Popcode start screen. It
          shows the start screen for a moment, then the story plays. */
       .phone {
-        position: absolute; z-index: 3; left: -44px; top: 340px;
+        position: absolute; z-index: 3; left: -44px; top: 240px;
         width: 262px; height: 528px;
         background: #16121f; border-radius: 48px; padding: 12px;
         box-shadow: 0 40px 80px rgba(0, 0, 0, .5);
@@ -174,14 +174,14 @@
         .phone-scan .pop-halo { opacity: 0; }
       }
       /* Hear it: the video plays muted until someone asks for sound. */
-      .sound-btn { position: absolute; z-index: 4; right: 20px; top: 500px; }
+      .sound-btn { position: absolute; z-index: 4; right: 20px; top: 448px; }
 
       @media (max-width: 1100px) {
         .np-hero h1 { font-size: 62px; }
         .hero-sub { font-size: 15px; }
         .card { width: 480px; right: -60px; }
-        .phone { top: 300px; left: -44px; }
-        .sound-btn { top: 440px; }
+        .phone { top: 220px; left: -44px; }
+        .sound-btn { top: 380px; }
       }
       @media (max-width: 900px) {
         .hero-grid { grid-template-columns: 1fr; gap: 24px; }
@@ -810,82 +810,108 @@
         io.observe(phone);
       })();
     </script>
-    <!-- Layout tweaker: popcode.app/nonprofits?tweak. Drag the eyebrow, headline,
-         postcard or phone, or use the sliders, then Copy and paste the values to Claude.
-         Never loads for a normal visit. -->
+    <!-- Layout tweaker: popcode.app/nonprofits?tweak. Drag anything in the hero,
+         or use the sliders, then Copy and paste the values to Claude. Never
+         loads for a normal visit. -->
     <script>
       (function () {
         if (!/[?&]tweak\b/.test(location.search)) return;
-        var card = document.querySelector('.card'), phone = document.getElementById('phone'),
-            sound = document.getElementById('sound-btn'),
-            eyebrow = document.querySelector('.np-hero .eyebrow'), h1 = document.querySelector('.np-hero h1');
+        var $ = function (q) { return document.querySelector(q); };
         var num = function (el, prop) { return parseFloat(getComputedStyle(el)[prop]) || 0; };
+        var card = $('.card'), phone = $('#phone'), sound = $('#sound-btn');
         var rot = (function () {
           var m = getComputedStyle(card).transform.match(/matrix\(([^,]+),\s*([^,]+)/);
           return m ? Math.round(Math.atan2(+m[2], +m[1]) * 180 / Math.PI * 10) / 10 : 0;
         })();
+
+        // Things in the page flow: moved with `translate`, so nothing around them reflows.
+        var movers = [
+          { k: 'copy', label: 'Whole text column', el: $('.hero-copy'), css: '.hero-copy' },
+          { k: 'eyebrow', label: 'Eyebrow', el: $('.np-hero .eyebrow'), css: '.np-hero .eyebrow', size: [9, 28, 0.5] },
+          { k: 'h1', label: 'Headline', el: $('.np-hero h1'), css: '.np-hero h1', size: [28, 110, 1] },
+          { k: 'sub', label: 'Subhead', el: $('.hero-sub'), css: '.hero-sub', size: [12, 24, 0.5] },
+          { k: 'btns', label: 'Buttons (both)', el: $('.hero-actions'), css: '.hero-actions' },
+          { k: 'btn1', label: 'Book a demo button', el: $('.hero-actions .book-demo'), css: '.hero-actions .book-demo' },
+          { k: 'btn2', label: 'Try it yourself button', el: $('.hero-actions .btn-ghost-light'), css: '.hero-actions .btn-ghost-light' }
+        ].filter(function (m) { return m.el; });
+
         var v = {
           cardRight: num(card, 'right'), cardTop: num(card, 'top'), cardWidth: num(card, 'width'), cardRotate: rot,
           phoneLeft: num(phone, 'left'), phoneTop: num(phone, 'top'), phoneScale: 1,
-          soundTop: sound ? num(sound, 'top') : 0,
-          eyebrowX: 0, eyebrowY: 0, eyebrowSize: num(eyebrow, 'fontSize'),
-          h1X: 0, h1Y: 0, h1Size: num(h1, 'fontSize')
+          soundRight: sound ? num(sound, 'right') : 0, soundTop: sound ? num(sound, 'top') : 0,
+          heroTop: num($('.np-hero'), 'paddingTop'), heroBottom: num($('.np-hero'), 'paddingBottom'), stageH: num($('#hero-stage'), 'height')
         };
-        var controls = [
-          ['Eyebrow', null],
-          ['eyebrowX', 'Left/right', -300, 600, 1], ['eyebrowY', 'Up/down', -200, 300, 1], ['eyebrowSize', 'Size', 9, 28, 0.5],
-          ['Headline', null],
-          ['h1X', 'Left/right', -300, 600, 1], ['h1Y', 'Up/down', -200, 300, 1], ['h1Size', 'Size', 28, 110, 1],
+        movers.forEach(function (m) { v[m.k + 'X'] = 0; v[m.k + 'Y'] = 0; if (m.size) v[m.k + 'Size'] = num(m.el, 'fontSize'); });
+
+        var controls = [];
+        movers.forEach(function (m) {
+          controls.push([m.label, null]);
+          controls.push([m.k + 'X', 'Left/right', -400, 700, 1], [m.k + 'Y', 'Up/down', -300, 400, 1]);
+          if (m.size) controls.push([m.k + 'Size', 'Size', m.size[0], m.size[1], m.size[2]]);
+        });
+        controls.push(
           ['Postcard', null],
           ['cardRight', 'Right edge', -400, 300, 1], ['cardTop', 'Top', -200, 500, 1],
           ['cardWidth', 'Width', 200, 900, 1], ['cardRotate', 'Rotate', -15, 15, 0.1],
           ['Phone', null],
-          ['phoneLeft', 'Left', -300, 600, 1], ['phoneTop', 'Top', -100, 700, 1], ['phoneScale', 'Scale', 0.5, 1.6, 0.01],
-          ['Sound button', null],
-          ['soundTop', 'Top', 0, 900, 1]
-        ];
+          ['phoneLeft', 'Left', -300, 600, 1], ['phoneTop', 'Top', -100, 700, 1], ['phoneScale', 'Scale', 0.5, 1.6, 0.01]);
+        if (sound) controls.push(['Play with sound button', null], ['soundRight', 'Right edge', -200, 600, 1], ['soundTop', 'Top', 0, 900, 1]);
+        controls.push(['Hero height', null],
+          ['heroTop', 'Space above', 0, 200, 1], ['stageH', 'Middle', 300, 800, 1], ['heroBottom', 'Space below', 100, 600, 1]);
+
         function apply() {
           card.style.right = v.cardRight + 'px'; card.style.top = v.cardTop + 'px';
           card.style.width = v.cardWidth + 'px'; card.style.transform = 'rotate(' + v.cardRotate + 'deg)';
           phone.style.left = v.phoneLeft + 'px'; phone.style.top = v.phoneTop + 'px';
           phone.style.transformOrigin = 'top left'; phone.style.transform = v.phoneScale === 1 ? '' : 'scale(' + v.phoneScale + ')';
-          if (sound) sound.style.top = v.soundTop + 'px';
-          eyebrow.style.translate = v.eyebrowX + 'px ' + v.eyebrowY + 'px'; eyebrow.style.fontSize = v.eyebrowSize + 'px';
-          h1.style.translate = v.h1X + 'px ' + v.h1Y + 'px'; h1.style.fontSize = v.h1Size + 'px';
+          if (sound) { sound.style.right = v.soundRight + 'px'; sound.style.top = v.soundTop + 'px'; }
+          $('.np-hero').style.paddingTop = v.heroTop + 'px'; $('.np-hero').style.paddingBottom = v.heroBottom + 'px';
+          $('#hero-stage').style.height = v.stageH + 'px';
+          movers.forEach(function (m) {
+            m.el.style.translate = v[m.k + 'X'] + 'px ' + v[m.k + 'Y'] + 'px';
+            if (m.size) m.el.style.fontSize = v[m.k + 'Size'] + 'px';
+          });
           controls.forEach(function (c) {
             if (!c[1]) return;
             var r = panel.querySelector('[data-k="' + c[0] + '"]'); r.value = v[c[0]];
             r.nextElementSibling.textContent = v[c[0]];
           });
+          readout.textContent = 'Hero is ' + Math.round($('.np-hero').getBoundingClientRect().height) + 'px tall';
           out.value = css();
         }
         function css() {
           var w = innerWidth, bp = w > 1100 ? 'desktop (wider than 1100px)' : w > 900 ? '901–1100px' : w > 640 ? '641–900px' : 'phone (640px and under)';
-          return '/* nonprofits hero, ' + bp + ', viewed at ' + w + 'px */\n' +
-            '.card  { right: ' + v.cardRight + 'px; top: ' + v.cardTop + 'px; width: ' + v.cardWidth + 'px; transform: rotate(' + v.cardRotate + 'deg); }\n' +
-            '.phone { left: ' + v.phoneLeft + 'px; top: ' + v.phoneTop + 'px;' + (v.phoneScale !== 1 ? ' scale: ' + v.phoneScale + ';' : '') + ' }\n' +
-            (sound ? '.sound-btn { top: ' + v.soundTop + 'px; }\n' : '') +
-            '.np-hero .eyebrow { font-size: ' + v.eyebrowSize + 'px;' + (v.eyebrowX || v.eyebrowY ? ' translate: ' + v.eyebrowX + 'px ' + v.eyebrowY + 'px;' : '') + ' }\n' +
-            '.np-hero h1 { font-size: ' + v.h1Size + 'px;' + (v.h1X || v.h1Y ? ' translate: ' + v.h1X + 'px ' + v.h1Y + 'px;' : '') + ' }\n';
+          var lines = ['/* nonprofits hero, ' + bp + ', viewed at ' + w + 'px */',
+            '.np-hero { padding-top: ' + v.heroTop + 'px; padding-bottom: ' + v.heroBottom + 'px; }  .stage { height: ' + v.stageH + 'px; }',
+            '.card { right: ' + v.cardRight + 'px; top: ' + v.cardTop + 'px; width: ' + v.cardWidth + 'px; transform: rotate(' + v.cardRotate + 'deg); }',
+            '.phone { left: ' + v.phoneLeft + 'px; top: ' + v.phoneTop + 'px;' + (v.phoneScale !== 1 ? ' scale: ' + v.phoneScale + ';' : '') + ' }'];
+          if (sound) lines.push('.sound-btn { right: ' + v.soundRight + 'px; top: ' + v.soundTop + 'px; }');
+          movers.forEach(function (m) {
+            var moved = v[m.k + 'X'] || v[m.k + 'Y'], sized = m.size && v[m.k + 'Size'] !== start[m.k + 'Size'];
+            if (!moved && !sized) return;
+            lines.push(m.css + ' {' + (sized ? ' font-size: ' + v[m.k + 'Size'] + 'px;' : '') + (moved ? ' translate: ' + v[m.k + 'X'] + 'px ' + v[m.k + 'Y'] + 'px;' : '') + ' }');
+          });
+          return lines.join('\n');
         }
 
         var panel = document.createElement('div');
-        panel.style.cssText = 'position:fixed;z-index:9999;right:16px;bottom:16px;width:280px;max-height:calc(100vh - 32px);overflow:auto;' +
+        panel.style.cssText = 'position:fixed;z-index:9999;right:16px;bottom:16px;width:290px;max-height:calc(100vh - 32px);overflow:auto;' +
           'background:#fff;color:#1a1a1a;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.35);padding:14px 16px;font:13px/1.3 system-ui,sans-serif;';
         var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>Hero tweaker</b>' +
           '<button data-act="min" style="border:none;background:none;font-size:18px;cursor:pointer">–</button></div><div data-body>' +
-          '<div style="color:#666;margin-bottom:8px">Drag the eyebrow, headline, postcard or phone, or use the sliders.</div>';
+          '<div style="color:#666;margin-bottom:4px">Drag anything in the hero, or use the sliders. Hold Shift to drag a button\'s pair, or the whole text column. Buttons don\'t click while this is open.</div>' +
+          '<div data-readout style="font-weight:600;margin-bottom:6px"></div>';
         controls.forEach(function (c) {
           if (!c[1]) { html += '<div style="font-weight:700;margin:10px 0 4px">' + c[0] + '</div>'; return; }
-          html += '<label style="display:grid;grid-template-columns:70px 1fr 44px;gap:6px;align-items:center;margin:3px 0">' + c[1] +
+          html += '<label style="display:grid;grid-template-columns:74px 1fr 44px;gap:6px;align-items:center;margin:3px 0">' + c[1] +
             '<input type="range" data-k="' + c[0] + '" min="' + c[2] + '" max="' + c[3] + '" step="' + c[4] + '"><span style="text-align:right;font-variant-numeric:tabular-nums"></span></label>';
         });
-        html += '<textarea readonly rows="7" style="width:100%;margin-top:10px;font:11px/1.35 ui-monospace,monospace;border:1px solid #ddd;border-radius:6px;padding:6px;box-sizing:border-box;resize:vertical"></textarea>' +
+        html += '<textarea readonly rows="8" style="width:100%;margin-top:10px;font:11px/1.35 ui-monospace,monospace;border:1px solid #ddd;border-radius:6px;padding:6px;box-sizing:border-box;resize:vertical"></textarea>' +
           '<div style="display:flex;gap:8px;margin-top:8px"><button data-act="copy" style="flex:1;padding:8px;border:none;border-radius:8px;background:#1a1a1a;color:#fff;font-weight:600;cursor:pointer">Copy values</button>' +
           '<button data-act="reset" style="padding:8px 12px;border:1px solid #ccc;border-radius:8px;background:#fff;cursor:pointer">Reset</button></div></div>';
         panel.innerHTML = html;
         document.body.appendChild(panel);
-        var out = panel.querySelector('textarea'), start = JSON.parse(JSON.stringify(v));
+        var out = panel.querySelector('textarea'), readout = panel.querySelector('[data-readout]'), start = JSON.parse(JSON.stringify(v));
         panel.addEventListener('input', function (e) {
           var k = e.target.getAttribute('data-k'); if (!k) return;
           v[k] = parseFloat(e.target.value); apply();
@@ -900,24 +926,33 @@
           else if (a === 'min') { var b = panel.querySelector('[data-body]'); b.hidden = !b.hidden; e.target.textContent = b.hidden ? '+' : '–'; }
         });
 
-        // Dragging. The card is anchored by its right edge, so moving right shrinks `right`.
-        function draggable(el, onMove) {
+        // Dragging. The thing under the pointer moves: a button, the headline.
+        // With Shift held, its group moves instead: both buttons, or the
+        // whole text column.
+        function draggable(el, onMove, isParent) {
           el.style.cursor = 'grab'; el.style.touchAction = 'none';
           el.addEventListener('pointerdown', function (e) {
             if (e.button) return;
-            e.preventDefault(); el.setPointerCapture(e.pointerId); el.style.cursor = 'grabbing';
+            if (isParent && !e.shiftKey && e.target !== el) return;
+            if (el === copyEl && e.shiftKey && e.target.closest('.hero-actions')) return;  // Shift on a button: the buttons
+            e.preventDefault(); e.stopPropagation();
+            el.setPointerCapture(e.pointerId); el.style.cursor = 'grabbing';
             var x0 = e.clientX, y0 = e.clientY, s = JSON.parse(JSON.stringify(v));
             function move(ev) { onMove(s, ev.clientX - x0, ev.clientY - y0); apply(); }
             function up() { el.style.cursor = 'grab'; el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); }
             el.addEventListener('pointermove', move); el.addEventListener('pointerup', up);
-          }, true);
+          }, isParent);
           el.addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); }, true);
         }
+        var copyEl = $('.hero-copy');
+        movers.forEach(function (m) {
+          draggable(m.el, function (s, dx, dy) { v[m.k + 'X'] = Math.round(s[m.k + 'X'] + dx); v[m.k + 'Y'] = Math.round(s[m.k + 'Y'] + dy); },
+                    m.k === 'copy' || m.k === 'btns');
+        });
         draggable(card, function (s, dx, dy) { v.cardRight = Math.round(s.cardRight - dx); v.cardTop = Math.round(s.cardTop + dy); });
-        draggable(eyebrow, function (s, dx, dy) { v.eyebrowX = Math.round(s.eyebrowX + dx); v.eyebrowY = Math.round(s.eyebrowY + dy); });
-        draggable(h1, function (s, dx, dy) { v.h1X = Math.round(s.h1X + dx); v.h1Y = Math.round(s.h1Y + dy); });
         draggable(phone, function (s, dx, dy) { v.phoneLeft = Math.round(s.phoneLeft + dx); v.phoneTop = Math.round(s.phoneTop + dy); });
-        card.querySelectorAll('img').forEach(function (i) { i.draggable = false; });
+        if (sound) draggable(sound, function (s, dx, dy) { v.soundRight = Math.round(s.soundRight - dx); v.soundTop = Math.round(s.soundTop + dy); });
+        document.querySelectorAll('.np-hero img, .np-hero a').forEach(function (i) { i.draggable = false; });
         apply();
       })();
     </script>
