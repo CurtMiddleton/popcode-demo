@@ -165,6 +165,14 @@
       .phone-signin { font-size: 3.6cqw; color: rgba(255,255,255,.75); }
       .phone-media { position: absolute; inset: 0; opacity: 0; transition: opacity .7s ease; background: #000; }
       .phone-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
+      /* Captions, drawn by the page rather than the browser: native cues size
+         themselves from the video box and the viewer's OS caption settings, so
+         they came out huge on desktop. These scale with the phone screen. */
+      .phone-cc { position: absolute; left: 7cqw; right: 7cqw; bottom: 9cqw; text-align: center;
+        font-family: var(--sans); font-size: max(9px, 5.2cqw); font-weight: 600; line-height: 1.35; color: #fff; }
+      .phone-cc:empty { display: none; }
+      .phone-cc span { background: rgba(0, 0, 0, .62); padding: .12em .4em; border-radius: .3em;
+        -webkit-box-decoration-break: clone; box-decoration-break: clone; }
       .phone.playing .phone-home { opacity: 0; }
       .phone.playing .phone-media { opacity: 1; }
       @media (prefers-reduced-motion: reduce) {
@@ -568,6 +576,7 @@
               <div class="phone-media">
                 <video id="demo-video" muted playsinline preload="none" poster="/assets/nonprofits-demo-poster.jpg"
                        aria-label="Demo: Meg Holloway of Common Tide on the marsh coming back, and a Giving Tuesday ask"></video>
+                <div class="phone-cc" id="phone-cc" aria-hidden="true"></div>
               </div>
               <div class="phone-notch"></div>
             </div>
@@ -1022,7 +1031,20 @@
           t.kind = 'captions'; t.srclang = 'en'; t.label = 'English'; t.default = true;
           t.src = CONFIG.DEMO_CAPTIONS;
           v.appendChild(t);
-          v.addEventListener('loadedmetadata', function () { if (v.textTracks[0]) v.textTracks[0].mode = 'showing'; });
+          // 'hidden' loads the cues without the browser drawing them; the page
+          // draws them in #phone-cc so their size follows the phone, not the OS.
+          var cc = document.getElementById('phone-cc');
+          var track = t.track;
+          track.mode = 'hidden';
+          track.addEventListener('cuechange', function () {
+            var cue = track.activeCues && track.activeCues[0];
+            cc.textContent = '';
+            if (!cue) return;
+            var span = document.createElement('span');
+            span.textContent = cue.text.replace(/<[^>]+>/g, '');
+            cc.appendChild(span);
+          });
+          v.addEventListener('loadedmetadata', function () { track.mode = 'hidden'; });
         }
         function load() { if (!v.getAttribute('src')) v.src = CONFIG.DEMO_VIDEO; }
         function play() {
