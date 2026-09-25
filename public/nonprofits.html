@@ -279,6 +279,21 @@
       @media (max-width: 860px) { .steps { grid-template-columns: 1fr; gap: 40px; max-width: 520px; margin-inline: auto; } }
 
       /* ── What you get ── */
+      /* The well photo behind it, dark enough that white type reads anywhere;
+         darkest on the left, where the list is. The dashboard stays a white card. */
+      .get-band { position: relative; overflow: hidden; background: #141414; color: #fff; }
+      .get-bg { position: absolute; inset: 0; }
+      .get-bg img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 45%; }
+      .get-band::before { content: ''; position: absolute; inset: 0; z-index: 1;
+        background: linear-gradient(90deg, rgba(10,10,10,.86) 0%, rgba(10,10,10,.78) 45%, rgba(10,10,10,.62) 100%); }
+      .get-band .wrap { position: relative; z-index: 2; }
+      .get-band h2 { color: #fff; }
+      .get-band .get-list strong { color: #fff; }
+      .get-band .get-list p { color: rgba(255,255,255,.78); }
+      .get-band .get-list em { color: #fff; }
+      .get-band .get-list li::before { border-color: #b9a9ff; }
+      .get-band .dash { color: var(--ink); }
+      @media (max-width: 960px) { .get-band::before { background: rgba(10,10,10,.8); } }
       .get-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 56px; align-items: start; }
       @media (max-width: 960px) { .get-grid { grid-template-columns: 1fr; gap: 40px; } }
       .get-list { list-style: none; margin: 0; padding: 0; }
@@ -323,19 +338,28 @@
       .funnel .track { height: 9px; background: #eeeeee; border-radius: 5px; overflow: hidden; }
       .funnel .fill { height: 100%; background: var(--ink); border-radius: 5px; }
       .funnel li:last-child .fill { background: var(--accent); }
+      /* Animated in when it scrolls into view (JS adds .dash-armed, then .dash-play). */
+      .dash-armed .bars i { transform: scaleY(0); transform-origin: bottom; }
+      .dash-armed .funnel .fill { transform: scaleX(0); transform-origin: left; }
+      .dash-play .bars i { transform: scaleY(1); transition: transform .5s cubic-bezier(.2,.8,.3,1); transition-delay: calc(var(--i) * 45ms + 300ms); }
+      .dash-play .bars i.peak { transition-duration: .8s; transition-timing-function: cubic-bezier(.2,.9,.3,1.25); }
+      .dash-play .funnel .fill { transform: scaleX(1); transition: transform .9s cubic-bezier(.25,.8,.3,1); transition-delay: calc(var(--i) * 180ms + 1300ms); }
       .dash-foot { font-size: 12px; color: var(--faint); line-height: 1.5; border-top: 1px solid var(--line); padding-top: 12px; margin: 0; }
 
       /* ── Why / Where ── */
-      .why { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; list-style: none; margin: 0; padding: 0; }
-      /* The one dark band on the page: a touch of gravitas for the argument
-         itself, without leaving the brand's palette. */
-      .why-band { background: #1a1a1a; color: #fff; }
-      .why-band h2 { color: #fff; }
-      .why-band .eyebrow { color: #b9a9ff; text-align: center; }
-      .why { gap: 0 56px; }
-      .why li { border-top: 1px solid rgba(255,255,255,.18); padding: 26px 0 30px;
-                font-family: var(--serif); font-size: 27px; line-height: 1.28; letter-spacing: -0.01em; }
-      @media (max-width: 720px) { .why { grid-template-columns: 1fr; } .why li { font-size: 22px; padding: 20px 0 24px; } }
+      /* Proof line: the headline as two lines, the sentence under it as one. */
+      .proof-line .sec-head { max-width: none; }
+      .proof-line h2 .l { display: block; }
+      @media (min-width: 760px) { .proof-line h2 .l { white-space: nowrap; } }
+      @media (min-width: 900px) { .proof-line .sec-head p { white-space: nowrap; } }
+      /* Why it works sits in the What you get panel: four short columns. */
+      .why-in { margin-top: 72px; }
+      .why-in h2 { font-size: 34px; margin-bottom: 22px; }
+      .why { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 32px; list-style: none; margin: 0; padding: 0; }
+      .why li { border-top: 1px solid rgba(255,255,255,.28); padding: 16px 0 4px;
+                font-family: var(--serif); font-size: 19px; line-height: 1.32; color: rgba(255,255,255,.92); }
+      @media (max-width: 960px) { .why { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; } .why li { padding-bottom: 20px; } }
+      @media (max-width: 560px) { .why { grid-template-columns: 1fr; } .why li { font-size: 18px; padding-bottom: 14px; } .why-in { margin-top: 56px; } }
       .uses { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; list-style: none; margin: 0; padding: 0; }
       .uses li { background: var(--paper); border: 1px solid var(--line); border-radius: 999px;
                  padding: 11px 18px; font-size: 15px; font-weight: 600; }
@@ -530,7 +554,12 @@
       </section>
 
       <!-- What you get -->
-      <section aria-labelledby="get-h" style="background:#fff; border-top:1px solid var(--line); border-bottom:1px solid var(--line);">
+      <section class="get-band" aria-labelledby="get-h why-h">
+        <picture class="get-bg">
+          <source type="image/webp" srcset="/assets/nonprofits-well-1000.webp 1000w, /assets/nonprofits-well.webp 2000w" sizes="100vw">
+          <img src="/assets/nonprofits-well-1000.jpg" srcset="/assets/nonprofits-well-1000.jpg 1000w, /assets/nonprofits-well.jpg 2000w" sizes="100vw"
+               width="2000" height="1333" loading="lazy" alt="">
+        </picture>
         <div class="wrap get-grid">
           <div>
             <h2 id="get-h">What you get</h2>
@@ -575,12 +604,10 @@
             <p class="dash-foot">Sample data for illustration. Popcode collects no personal information from donors. Counts are anonymous.</p>
           </figure>
         </div>
-      </section>
 
-      <!-- Why it works -->
-      <section class="why-band" aria-labelledby="why-h">
-        <div class="wrap">
-          <div class="sec-head"><h2 id="why-h">Why it works</h2></div>
+        <!-- Why it works: part of the same panel, over the same photo. -->
+        <div class="wrap why-in">
+          <h2 id="why-h">Why it works</h2>
           <ul class="why">
             <li>A photo shows the work; a voice makes donors feel it.</li>
             <li>It brings the field to the donor's kitchen table.</li>
@@ -594,7 +621,7 @@
       <section class="proof-line" aria-labelledby="proofline-h">
         <div class="wrap">
           <div class="sec-head" style="margin-bottom:0;">
-            <h2 id="proofline-h">You've never known if your print worked. Now you will.</h2>
+            <h2 id="proofline-h"><span class="l">You've never known if your print worked.</span> <span class="l">Now you will.</span></h2>
             <p>Every scan, every story watched, every donate tap, in a dashboard you can put in front of your board.</p>
           </div>
         </div>
@@ -776,12 +803,43 @@
       (function () {
         var vals = [18,42,65,58,40,33,29,24,38,31,22,27,35,44,210,96,61,48,39,30,26,21];
         var box = document.getElementById('dash-bars');
-        vals.forEach(function (v) {
+        vals.forEach(function (v, n) {
           var i = document.createElement('i');
           i.style.height = Math.max(3, Math.round(v / 210 * 100)) + '%';
+          i.style.setProperty('--i', n);
           if (v === 210) i.className = 'peak';
           box.appendChild(i);
         });
+      })();
+
+      // ── Dashboard: counts up, bars grow, funnel fills, when it scrolls in.
+      // The finished numbers are in the HTML; this only animates to them, so
+      // no JS or reduced motion simply shows the final dashboard.
+      (function () {
+        var dash = document.querySelector('.dash');
+        if (!dash || !('IntersectionObserver' in window)) return;
+        if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        dash.querySelectorAll('.funnel .fill').forEach(function (f, n) { f.style.setProperty('--i', n); });
+        var vals = [].map.call(dash.querySelectorAll('.kpi .v'), function (el) {
+          var m = el.textContent.match(/^(\D*)([\d,]+)(\D*)$/);
+          return m ? { el: el, pre: m[1], n: Number(m[2].replace(/,/g, '')), post: m[3], text: el.textContent } : null;
+        }).filter(Boolean);
+        var fmt = function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
+        dash.classList.add('dash-armed');
+        vals.forEach(function (v) { v.el.textContent = v.pre + '0' + v.post; });
+        var io = new IntersectionObserver(function (entries) {
+          if (!entries[0].isIntersecting) return;
+          io.disconnect();
+          void dash.offsetWidth;                  // start from the armed state
+          dash.classList.add('dash-play');
+          var t0 = performance.now(), dur = 1400;
+          (function tick(now) {
+            var k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+            vals.forEach(function (v) { v.el.textContent = k < 1 ? v.pre + fmt(Math.round(v.n * e)) + v.post : v.text; });
+            if (k < 1) requestAnimationFrame(tick);
+          })(t0);
+        }, { threshold: 0.35 });
+        io.observe(dash);
       })();
 
       // ── Case study ──
