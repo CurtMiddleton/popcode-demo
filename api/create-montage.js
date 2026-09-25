@@ -4,7 +4,7 @@
 //   items:   [{ type: 'image'|'video', url, seconds? }],
 //                                  // ordered, public URLs (Supabase experiences bucket);
 //                                  // `seconds` is a video clip's length (capped at 10s);
-//                                  // `crop` {top,bottom,left,right} is an optional framing
+//                                  // `frame` {x,y,scale} optionally reframes a video clip
 //   images?: [{ url }],            // legacy photos-only form of `items`
 //   perImageSeconds?: number,      // default 3 (photos only)
 //   transition?: 'kenburns'|'fade',

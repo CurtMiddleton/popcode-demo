@@ -2264,8 +2264,12 @@
         try {
           // 1. Upload the sources into this montage's saved folder (only the
           //    ones not already there) so the renderer can fetch them.
-          await mtgUploadSources(50);
-          const urls = st.photos.map(p => p.remote);
+          await mtgUploadSources(45);
+          const urls = [];
+          if (st.photos.some(p => p.kind === 'image' && p.crop)) mtgStatus('Framing photos…', 48, '');
+          for (const p of st.photos) {
+            urls.push(p.kind === 'image' && p.crop ? await mtgFramedPhoto(p, st.aspect) : p.remote);
+          }
 
           // 2. Kick off the render.
           mtgStatus('Starting render…', 55, '');
@@ -2277,8 +2281,8 @@
                 const it = p.kind === 'video'
                   ? { type: 'video', url: urls[i], seconds: p.seconds }
                   : { type: 'image', url: urls[i] };
-                const crop = mtgCropRect(p, st.aspect);
-                if (crop) it.crop = crop;
+                const frame = p.kind === 'video' ? mtgVideoFrame(p, st.aspect) : null;
+                if (frame) it.frame = frame;
                 return it;
               }),
               perImageSeconds: st.perSec,
@@ -2344,13 +2348,48 @@
         const y = Math.min(1 - fh, Math.max(0, c.cy - fh / 2));
         return { x, y, w: fw, h: fh };
       }
-      // Per-side crop for the renderer, or null to keep its default centre crop.
-      function mtgCropRect(item, aspect) {
+      // A framed photo is cut to its frame here, in the browser, and that image
+      // is what renders — it fills the frame exactly and Ken Burns moves over
+      // the framed picture. (Shotstack's own asset crop trims the placed image
+      // and leaves black where it cut, so it isn't used.) Cached per framing.
+      async function mtgFramedPhoto(item, aspect) {
+        const key = aspect + ':' + JSON.stringify(item.crop);
+        if (item.framed && item.framed.key === key) return item.framed.url;
+        const img = await new Promise((res, rej) => {
+          const im = new Image();
+          if (!item.file) im.crossOrigin = 'anonymous'; // a saved photo, read back from storage
+          im.onload = () => res(im);
+          im.onerror = () => rej(new Error("couldn't read a photo to frame it"));
+          im.src = item.file ? item.url : item.remote;
+        });
+        const W = img.naturalWidth, H = img.naturalHeight;
+        const f = mtgFrameOf({ w: W, h: H, crop: item.crop }, aspect);
+        const A = MTG_ASPECT[aspect] || MTG_ASPECT.portrait;
+        const outW = Math.max(2, Math.round(Math.min(f.w * W, A >= 1 ? 1920 : 1080)));
+        const outH = Math.max(2, Math.round(outW / A));
+        const c = document.createElement('canvas'); c.width = outW; c.height = outH;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#000'; ctx.fillRect(0, 0, outW, outH);
+        ctx.drawImage(img, f.x * W, f.y * H, f.w * W, f.h * H, 0, 0, outW, outH);
+        const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9));
+        if (!blob) throw new Error("couldn't frame a photo");
+        const path = `${mtgDraftDir()}/${item.id}-framed-${aspect}.jpg`;
+        const { error } = await db.storage.from('experiences').upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+        if (error) throw new Error('Upload failed: ' + error.message);
+        // Same path each time it's reframed, so bust any cached copy.
+        const url = db.storage.from('experiences').getPublicUrl(path).data.publicUrl + '?v=' + Date.now();
+        item.framed = { key, url };
+        return url;
+      }
+      // A framed video clip can't be cut here, so the renderer moves (and, when
+      // zoomed, enlarges) the clip until the frame's centre is on screen centre.
+      // Offsets are in viewport widths/heights, +y up (Shotstack clip offset).
+      function mtgVideoFrame(item, aspect) {
         if (!item.crop) return null;
         const f = mtgFrameOf(item, aspect);
         if (!f) return null;
-        const r = v => Math.max(0, +v.toFixed(4));
-        return { left: r(f.x), right: r(1 - f.x - f.w), top: r(f.y), bottom: r(1 - f.y - f.h) };
+        const cx = f.x + f.w / 2, cy = f.y + f.h / 2;
+        return { x: +((0.5 - cx) / f.w).toFixed(4), y: +((cy - 0.5) / f.h).toFixed(4), scale: +(item.crop.z || 1).toFixed(4) };
       }
 
       let mtgCropId = null;
@@ -2475,7 +2514,7 @@
           v: 1, id: st.draftId, updatedAt: new Date().toISOString(),
           perSec: st.perSec, transition: st.transition, aspect: st.aspect, musicId: st.musicId,
           items: st.photos.map(p => ({ id: p.id, kind: p.kind, url: p.remote, thumb: p.kind === 'video' ? p.thumb : undefined,
-                                        seconds: p.seconds, trimmed: p.trimmed, w: p.w, h: p.h, crop: p.crop })),
+                                        seconds: p.seconds, trimmed: p.trimmed, w: p.w, h: p.h, crop: p.crop, framed: p.framed })),
         };
         const blob = new Blob([JSON.stringify(draft)], { type: 'application/json' });
         const { error } = await db.storage.from('experiences').upload(`${mtgDraftDir(st.draftId)}/draft.json`, blob, { contentType: 'application/json', upsert: true });
