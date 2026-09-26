@@ -722,7 +722,11 @@
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
       const params = new URLSearchParams(location.search);
-      const fromPath = location.pathname.replace(/^\/|\/$/g, '');
+      // popcode.app/{slug}, or popcode.app/{slug}/{segment} for a mailing
+      // segment (vercel.json sends both here). The slug is the first part.
+      const pathParts = location.pathname.replace(/^\/|\/$/g, '').split('/');
+      const fromPath = pathParts[0];
+      const pathSegment = pathParts[1] || null;
       const id = params.get('id') || fromPath;
 
       // Slugs are always stored lowercase, but links get typed by hand now that
@@ -730,7 +734,8 @@
       // on a printed card is usually in title case. Send /MaxChapterOne to
       // /maxchapterone rather than leaving it at a dead end.
       if (!params.get('id') && fromPath && fromPath !== fromPath.toLowerCase()) {
-        location.replace('/' + fromPath.toLowerCase() + location.search); // keep ?r=
+        location.replace('/' + fromPath.toLowerCase() + (pathSegment ? '/' + pathSegment.toLowerCase() : '') +
+          location.search); // keep ?r= and the segment
       }
 
       // Every printed Popcode is an advert sitting in someone's house. Tag the
@@ -820,6 +825,29 @@
         return custom ? 'custom' : 'popcode';
       })();
 
+      // Mailing segment: popcode.app/{slug}/{code} or ?v={code} (an org's own
+      // redirect can add it). Kept for the visit like entry, and taken off the
+      // address so a forwarded link doesn't carry it into someone else's visit.
+      const visitSegment = (() => {
+        const key = 'pc_seg_' + (id || '').toLowerCase();
+        const raw = (params.get('v') || pathSegment || '').toLowerCase();
+        const code = /^[a-z0-9][a-z0-9-]{0,19}$/.test(raw) ? raw : null;
+        let seg = code;
+        try {
+          if (code) sessionStorage.setItem(key, code);
+          else seg = sessionStorage.getItem(key);
+        } catch (e) {}
+        if (params.has('v') || pathSegment) {
+          try {
+            const u = new URL(location.href);
+            u.searchParams.delete('v');
+            if (pathSegment) u.pathname = '/' + fromPath;
+            history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+          } catch (e) {}
+        }
+        return seg;
+      })();
+
       async function logEvent(eventType, targetIndex = null, progressPct = null) {
         if (!id) return;
         try {
@@ -837,7 +865,8 @@
               recipient_code: recipientCode,
               progress_pct: progressPct,
               device_id: deviceId,
-              entry: visitEntry
+              entry: visitEntry,
+              segment: visitSegment
             }),
             // Progress is often reported as the page is being left.
             keepalive: true
@@ -1603,6 +1632,7 @@
         if (!x) return null;
         if (x.origin !== location.origin) {
           const tags = { utm_source: 'popcode', utm_medium: 'print', utm_campaign: id };
+          if (visitSegment) tags.utm_content = visitSegment; // lets the platform split gifts by segment
           Object.keys(tags).forEach(k => { if (!x.searchParams.has(k)) x.searchParams.set(k, tags[k]); });
         }
         return x;

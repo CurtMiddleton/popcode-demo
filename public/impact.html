@@ -218,6 +218,27 @@
                      font-size: 13px; background: var(--bg); padding: 8px 10px; border-radius: 8px; }
       .shares small { color: var(--faint); font-size: 12px; }
       .shares .tool-btn { height: 36px; padding: 0 12px; font-size: 13px; }
+
+      /* Response: what the mailing produced, per piece and per dollar. */
+      .response { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-bottom: 16px; padding: 0; }
+      .response > div { padding: 20px 22px; border-left: 1px solid var(--line); min-width: 0; }
+      .response > div:first-child { border-left: 0; }
+      .response .k { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+      .response .v { font-family: var(--serif); font-size: 32px; line-height: 1.1; margin: 6px 0 4px; }
+      .response .n { font-size: 13px; color: var(--muted); line-height: 1.4; }
+      @media (max-width: 640px) {
+        .response { grid-template-columns: minmax(0, 1fr); }
+        .response > div { border-left: 0; border-top: 1px solid var(--line); padding: 16px 18px; }
+        .response > div:first-child { border-top: 0; }
+      }
+      .seg-card { margin-bottom: 16px; }
+      @media (max-width: 640px) { .stories.segs tr { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+      .seg-rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+      .seg-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+      .seg-row input { font: inherit; font-size: 14px; height: 40px; padding: 0 10px; border: 1px solid #d8d6d0; border-radius: 8px; min-width: 0; }
+      .seg-row .code { width: 110px; } .seg-row .label { flex: 1 1 160px; } .seg-row .pieces { width: 100px; }
+      .seg-row .tool-btn { height: 40px; padding: 0 12px; }
+      .seg-hint { font-size: 12px; color: var(--faint); margin: 4px 0 12px; }
       .state { text-align: center; padding: 80px 16px; color: var(--muted); font-size: 16px; line-height: 1.6; }
       .state h1 { font-family: var(--serif); font-weight: 400; font-size: 32px; color: var(--ink); margin: 0 0 10px; }
 
@@ -234,6 +255,11 @@
         .grid { grid-template-columns: minmax(0, 1fr); }
         .grid .wide { grid-column: auto; }
         .stack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        /* …except the chart and the funnel, which share a row as on screen. */
+        .grid.row1 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .grid.row1 .wide { grid-column: span 2; }
+        .response .v { font-size: 24px; }
+        .response > div { padding: 12px 16px; }
         .bars { height: 130px; }
         /* Tighter than on screen so the report stays at two pages. */
         .title { margin: 16px 0 12px; }
@@ -435,7 +461,15 @@
           days: days, stories: stories, buttons: buttonsBy,
           funnel: { scanned: 764, finished: 471, tapped: buttons.length ? 139 : 0 },
           entry: { custom: 826, popcode: 464 },
-          results: { gifts: 34, amount: 5270, currency: 'USD', source: 'manual' },
+          results: { gifts: 34, amount: 5270, currency: 'USD', source: 'manual', pieces: 5000, cost: 2750 },
+          // Three mailing lists plus visits typed without a code; each column
+          // sums to the totals above.
+          segments: [
+            { code: 'major', label: 'Major donors', pieces: 800, visits: 290, scans: 238, phones: 176, plays: 238, completes: 162, taps: 52 },
+            { code: 'lapsed', label: 'Lapsed donors', pieces: 2200, visits: 395, scans: 311, phones: 231, plays: 311, completes: 171, taps: 38 },
+            { code: 'news', label: 'Newsletter list', pieces: 2000, visits: 440, scans: 356, phones: 262, plays: 356, completes: 206, taps: 51 },
+            { code: null, label: null, pieces: null, visits: 165, scans: 132, phones: 95, plays: 132, completes: 73, taps: 17 },
+          ],
         });
       }
 
@@ -497,7 +531,7 @@
         buttons.forEach((b, i) => { const n = tapsBy[String(i + 1)] || 0; if (n > topN) { topN = n; topLabel = b.label; } });
 
         const has = t.events > 0;
-        const res = d.results || null;
+        const res = d.results && d.results.gifts != null ? d.results : null;
         const kpis = [
           { k: 'Scans', v: has ? num(t.scans) : '—',
             n: t.scans ? 'About ' + num(t.phones) + ' different phone' + (t.phones === 1 ? '' : 's') : 'Each time a photo is scanned and plays' },
@@ -529,14 +563,17 @@
           '<div class="card kpi ' + (k.cls || '') + '"><div class="k">' + k.k + '</div><div class="v">' + esc(k.v) + '</div><div class="n">' + esc(k.n) + '</div></div>'
         ).join('') + '</section>';
 
+        html += responseCard(d);
+
         // Row 1: scans by day + funnel
-        html += '<section class="grid"><div class="card wide">' + daysCard(d) + '</div>' +
+        html += '<section class="grid row1"><div class="card wide">' + daysCard(d) + '</div>' +
           '<div class="card">' + funnelCard(d) + '</div></section>';
 
         // Row 2: stories + (button taps, address split)
         html += '<section class="grid"><div class="card wide">' + storiesCard(d, items, byTi, watchText) + '</div>' +
           '<div class="stack"><div class="card">' + tapsCard(buttons, tapsBy) + '</div>' +
           '<div class="card">' + splitCard(d) + '</div></div></section>';
+        html += segmentsCard(d);
 
         html += '<p class="foot">' + (d.demo ? 'Sample data for illustration, shown over this Popcode’s real photos and buttons. ' : '') +
           'Popcode doesn’t ask donors for their name or email, and doesn’t keep IP addresses. Counts are anonymous.</p>';
@@ -628,7 +665,7 @@
           '<li><div class="row">' + s[0] + ' <span>' + num(s[1]) + ' · ' + pct(s[1], base) + '%</span></div>' +
           '<div class="track"><div class="fill" style="width:' + Math.max(pct(s[1], base), s[1] ? 1 : 0) + '%"></div></div></li>'
         ).join('') +
-          (d.results
+          (d.results && d.results.gifts != null
             ? '<li class="gave"><div class="row">Gave (confirmed) <span>' + num(d.results.gifts) + ' · ' + pct(d.results.gifts, base) + '%</span></div>' +
               '<div class="track"><div class="fill" style="width:' + Math.max(pct(d.results.gifts, base), d.results.gifts ? 1 : 0) + '%"></div></div></li></ul>'
             : '<li class="gave"><div class="row">Gave (confirmed) <span>After the campaign</span></div><div class="track"></div></li></ul>');
@@ -706,22 +743,107 @@
         } catch (e) { return (cur || '') + ' ' + num(Math.round(n || 0)); }
       }
 
+      function money2(n, cur) {
+        try {
+          return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur || 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
+        } catch (e) { return (cur || '') + ' ' + (n || 0).toFixed(2); }
+      }
+      const rate = (a, b) => (b ? (a / b * 100).toFixed(1).replace(/\.0$/, '') + '%' : '—');
+
+      // Pieces mailed: the campaign's figure, else the sum of its segments'.
+      function piecesTotal(d) {
+        const r = d.results || {};
+        if (r.pieces != null) return r.pieces;
+        const sum = (d.segments || []).reduce((a, x) => a + (x.code && x.pieces ? x.pieces : 0), 0);
+        return sum || null;
+      }
+
+      // Response: recipients who scanned (phones ÷ pieces), cost per scan,
+      // cost per dollar raised. Hidden until pieces mailed are known.
+      function responseCard(d) {
+        const P = piecesTotal(d);
+        if (!P) return '';
+        const t = d.totals, r = d.results || {}, cur = r.currency || 'USD';
+        const hasCost = r.cost != null;
+        const cells = [
+          { k: 'Response rate', v: rate(t.phones, P),
+            n: 'About ' + num(t.phones) + ' phone' + (t.phones === 1 ? '' : 's') + ' scanned, from ' + num(P) + ' pieces mailed' },
+          { k: 'Cost per scan', v: hasCost && t.scans ? money2(r.cost / t.scans, cur) : '—',
+            n: hasCost ? 'Print and postage (' + money(r.cost, cur) + ') ÷ scans' : 'Needs the print and postage cost' },
+          { k: 'Cost per $1 raised', v: hasCost && r.amount ? money2(r.cost / r.amount, cur) : '—',
+            n: !hasCost ? 'Needs the print and postage cost' : r.amount ? 'Print and postage ÷ amount raised' : 'Once gifts are entered' },
+        ];
+        return '<section class="card response">' + cells.map((c) =>
+          '<div><div class="k">' + c.k + '</div><div class="v">' + esc(c.v) + '</div><div class="n">' + esc(c.n) + '</div></div>'
+        ).join('') + '</section>';
+      }
+
+      // By segment: one row per mailing list or card version. Only shown once
+      // a segment exists (configured, or seen in the events).
+      function segmentsCard(d) {
+        const segs = d.segments || [];
+        if (!segs.some((x) => x.code)) return '';
+        const slug = d.campaign.slug;
+        let h = '<section class="card seg-card"><div class="card-head"><h2>By segment</h2></div>' +
+          '<table class="stories segs"><thead><tr><th>Segment</th><th>Pieces</th><th>Visits</th><th>Phones</th><th>Response</th>' +
+          '<th>Watched to end</th><th>Button taps</th></tr></thead><tbody>';
+        segs.forEach((x) => {
+          const name = x.code ? (x.label || x.code) : 'No segment code';
+          const sub = x.code ? 'popcode.app/' + slug + '/' + x.code : 'Typed without a code';
+          h += '<tr><td><div class="story"><div><b>' + esc(name) + '</b><small>' + esc(sub) + '</small></div></div></td>' +
+            '<td data-k="Pieces">' + (x.pieces != null ? num(x.pieces) : '—') + '</td>' +
+            '<td data-k="Visits">' + num(x.visits) + '</td>' +
+            '<td data-k="Phones">' + num(x.phones) + '</td>' +
+            '<td data-k="Response">' + (x.pieces ? rate(x.phones, x.pieces) : '—') + '</td>' +
+            '<td data-k="To end">' + (x.plays ? pct(x.completes, x.plays) + '%' : '—') + '</td>' +
+            '<td data-k="Taps">' + num(x.taps) + '</td></tr>';
+        });
+        h += '</tbody></table><p class="note">Response is phones that scanned ÷ pieces mailed to that segment. ' +
+          'To split gifts by segment, filter your donation platform by <code>utm_content</code> (set to the segment code).</p></section>';
+        return h;
+      }
+
+      // Admin: the campaign's segments (code, label, pieces mailed).
+      function segRow(x) {
+        return '<div class="seg-row">' +
+          '<input class="code" name="code" placeholder="code" maxlength="20" pattern="[a-z0-9][a-z0-9-]{0,19}" aria-label="Code" value="' + esc(x.code || '') + '">' +
+          '<input class="label" name="label" placeholder="Label, e.g. Lapsed donors" maxlength="60" aria-label="Label" value="' + esc(x.label || '') + '">' +
+          '<input class="pieces" name="pieces" type="number" min="0" step="1" placeholder="Pieces" aria-label="Pieces mailed" value="' + (x.pieces != null ? x.pieces : '') + '">' +
+          '<button class="tool-btn" type="button" data-remove aria-label="Remove segment">Remove</button></div>';
+      }
+      function segmentsEditor(d) {
+        const slug = d.campaign.slug;
+        const rows = (d.segments || []).filter((x) => x.code);
+        return '<div class="card"><h2>Segments</h2><p class="lede">One code per mailing list or card version. ' +
+          'Print <code>popcode.app/' + esc(slug) + '/{code}</code> on that version, or add <code>?v={code}</code> to an org redirect.</p>' +
+          '<form id="segments-form"><div class="seg-rows" id="seg-rows">' + rows.map(segRow).join('') + '</div>' +
+          '<p class="seg-hint">Codes: lowercase letters, numbers and dashes, up to 20. Short is best: it’s typed by hand.</p>' +
+          '<div class="fields"><button class="tool-btn" type="button" id="seg-add">Add segment</button>' +
+          '<button class="tool-btn primary" type="submit">Save segments</button></div>' +
+          '<p class="tool-msg" id="seg-msg"></p></form></div>';
+      }
+
       // ── Owner / admin tools ──────────────────────────────────────────────
       function manageTools(d) {
         const r = d.results;
         let h = '<section class="manage">';
         if (d.can.edit_results) {
-          h += '<div class="card"><h2>Gift totals</h2><p class="lede">From the org’s donation platform, filtered by ' +
-            '<code>utm_campaign=' + esc(d.campaign.slug) + '</code>. Fills in Gifts, Raised and the last funnel step.</p>' +
+          const val = (k) => (r && r[k] != null ? r[k] : '');
+          h += '<div class="card"><h2>Campaign numbers</h2><p class="lede">Gifts and amount come from the org’s donation platform, ' +
+            'filtered by <code>utm_campaign=' + esc(d.campaign.slug) + '</code>. Pieces and cost give the response rate. ' +
+            'Leave anything blank until it’s known.</p>' +
             '<form class="fields" id="results-form">' +
-            '<label>Gifts<input type="number" name="gifts" min="0" step="1" required value="' + (r ? r.gifts : '') + '"></label>' +
-            '<label>Raised<input type="number" name="amount" min="0" step="0.01" required value="' + (r ? r.amount : '') + '"></label>' +
+            '<label>Pieces mailed<input type="number" name="pieces" min="0" step="1" value="' + val('pieces') + '"></label>' +
+            '<label>Print + postage<input type="number" name="cost" min="0" step="0.01" value="' + val('cost') + '"></label>' +
+            '<label>Gifts<input type="number" name="gifts" min="0" step="1" value="' + val('gifts') + '"></label>' +
+            '<label>Raised<input type="number" name="amount" min="0" step="0.01" value="' + val('amount') + '"></label>' +
             '<label>Currency<input class="cur" name="currency" maxlength="3" pattern="[A-Za-z]{3}" value="' + esc(r ? r.currency : 'USD') + '"></label>' +
             '<button class="tool-btn primary" type="submit">Save</button>' +
             (r ? '<button class="tool-btn" type="button" id="results-clear">Clear</button>' : '') +
             '</form><p class="tool-msg" id="results-msg">' +
             (r ? 'Last updated ' + esc(new Date(r.updated_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })) : 'Not entered yet.') +
             '</p></div>';
+          h += segmentsEditor(d);
         }
         if (d.can.share) {
           h += '<div class="card"><h2>Share with your board</h2><p class="lede">Anyone with a link sees this dashboard, read-only, ' +
@@ -738,8 +860,9 @@
       function drawShares() {
         const ul = $('shares');
         if (!ul) return;
-        const live = (state.shares || []).filter((s) => !s.revoked_at);
-        const off = (state.shares || []).length - live.length;
+        const all = Array.isArray(state.shares) ? state.shares : [];
+        const live = all.filter((s) => !s.revoked_at);
+        const off = all.length - live.length;
         ul.innerHTML = live.length ? live.map((s) =>
           '<li><code>' + esc(shareUrl(s.token)) + '</code>' +
           '<button class="tool-btn" type="button" data-copy="' + esc(s.token) + '">Copy</button>' +
@@ -763,17 +886,42 @@
           form.onsubmit = async (e) => {
             e.preventDefault();
             const b = form.querySelector('button[type=submit]'); b.disabled = true;
-            const r = await db.rpc('set_campaign_results', { p_slug: slug, p_gifts: parseInt(form.gifts.value, 10),
-              p_amount: parseFloat(form.amount.value), p_currency: (form.currency.value || 'USD').toUpperCase() });
+            const n = (el, int) => (el.value === '' ? null : int ? parseInt(el.value, 10) : parseFloat(el.value));
+            const r = await db.rpc('set_campaign_results', { p_slug: slug,
+              p_gifts: n(form.gifts, true), p_amount: n(form.amount), p_currency: (form.currency.value || 'USD').toUpperCase(),
+              p_pieces: n(form.pieces, true), p_cost: n(form.cost) });
             b.disabled = false;
             if (r.error) { $('results-msg').textContent = 'Not saved: ' + r.error.message; return; }
             load(slug);
           };
           const clr = $('results-clear');
           if (clr) clr.onclick = async () => {
-            if (!confirm('Clear the gift totals for this campaign?')) return;
+            if (!confirm('Clear the campaign numbers (pieces, cost, gifts) for this campaign?')) return;
             const r = await db.rpc('clear_campaign_results', { p_slug: slug });
             if (r.error) { $('results-msg').textContent = 'Not cleared: ' + r.error.message; return; }
+            load(slug);
+          };
+        }
+        const sf = $('segments-form');
+        if (sf) {
+          $('seg-add').onclick = () => {
+            $('seg-rows').insertAdjacentHTML('beforeend', segRow({ code: '', label: '', pieces: null }));
+            const last = $('seg-rows').lastElementChild; if (last) last.querySelector('.code').focus();
+          };
+          $('seg-rows').onclick = (e) => { const b = e.target.closest('[data-remove]'); if (b) b.parentElement.remove(); };
+          sf.onsubmit = async (e) => {
+            e.preventDefault();
+            const list = [...sf.querySelectorAll('.seg-row')].map((row) => ({
+              code: row.querySelector('.code').value.trim().toLowerCase(),
+              label: row.querySelector('.label').value.trim(),
+              pieces: row.querySelector('.pieces').value === '' ? null : parseInt(row.querySelector('.pieces').value, 10),
+            })).filter((x) => x.code);
+            const bad = list.find((x) => !/^[a-z0-9][a-z0-9-]{0,19}$/.test(x.code));
+            if (bad) { $('seg-msg').textContent = '“' + bad.code + '” isn’t a valid code.'; return; }
+            const b = sf.querySelector('button[type=submit]'); b.disabled = true;
+            const r = await db.rpc('set_campaign_segments', { p_slug: slug, p_segments: list });
+            b.disabled = false;
+            if (r.error) { $('seg-msg').textContent = 'Not saved: ' + r.error.message; return; }
             load(slug);
           };
         }
