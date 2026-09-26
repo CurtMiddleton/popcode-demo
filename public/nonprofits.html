@@ -8,7 +8,9 @@
       integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
       crossorigin="anonymous" defer></script>
     <script src="/sentry-init.js" defer></script>
-    <script src="/nav.js" defer></script>
+    <!-- No nav.js here: the consumer site nav (My Popcodes, Shop, cart…) would
+         pull a development director out of the pitch. This page has its own
+         header: section anchors and Book a demo. -->
     <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
     <title>Popcode for Nonprofits — Make your mission play</title>
@@ -68,7 +70,29 @@
            with a neutral dark scrim behind the type. nav.js's gray shelf
            smears over the photo, so it's off (body's extra specificity: nav.js
            appends its sheet after this one). ── */
-      body .site-header::after { display: none; }
+      /* ── This page's own header: section anchors + one action. ── */
+      html { scroll-behavior: smooth; }
+      @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+      section[id] { scroll-margin-top: 100px; }
+      /* Laid out exactly like nav.js's .site-header on popcode.app: 100px tall,
+         logo 80px from the left, links 170px after it in the same grey, the one
+         dark pill where Create account sits. */
+      .np-nav { position: sticky; top: 0; z-index: 50; height: 100px; display: flex; align-items: center;
+                padding: 0 28px 0 80px; background: #fff; }
+      .np-brand { display: flex; align-items: center; flex: none; }
+      .np-brand img { height: 35px; width: auto; display: block; }
+      .np-links { display: flex; align-items: center; gap: 6px; margin-left: 170px; }
+      .np-links a { color: #8a8a8a; text-decoration: none; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600;
+                    padding: 8px 12px; border-radius: 8px; white-space: nowrap; transition: color .15s; }
+      .np-links a:hover, .np-links a.on { color: #1a1a1a; }
+      .np-nav-cta { margin-left: auto; flex: none; height: 40px; padding: 0 20px; font-size: 14px; }
+      @media (max-width: 1240px) { .np-links { margin-left: 72px; } }
+      @media (max-width: 1080px) { .np-nav { padding-left: 40px; } .np-links { margin-left: 32px; gap: 0; } }
+      @media (max-width: 959px) {
+        .np-nav { padding: 0 28px; }
+        .np-links { display: none; }
+        .np-nav-cta { height: 36px; padding: 0 13px; font-size: 13px; }
+      }
       .np-hero { position: relative; overflow: hidden; background: #1a1a1a; color: #fff; padding: 32px 0 430px; }
       .hero-bg { position: absolute; inset: 0; z-index: 0; }
       .hero-bg img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 60%; }
@@ -566,6 +590,19 @@
     </style>
   </head>
   <body>
+    <header class="np-nav">
+      <a class="np-brand" href="/nonprofits" aria-label="Popcode for Nonprofits, top of page">
+        <img src="/assets/Popcode_logo.png" alt="Popcode" height="35">
+      </a>
+      <nav class="np-links" aria-label="On this page">
+        <a href="#how">How it works</a>
+        <a href="#try">Try it</a>
+        <a href="#get">What you get</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">Questions</a>
+      </nav>
+      <a class="btn btn-primary book-demo np-nav-cta" href="#">Book a demo</a>
+    </header>
 
     <section class="np-hero">
       <div class="hero-bg" aria-hidden="true">
@@ -655,7 +692,7 @@
 
     <main>
       <!-- How it works -->
-      <section class="np-body" aria-labelledby="how-h">
+      <section class="np-body" id="how" aria-labelledby="how-h">
         <div class="wrap">
           <div class="sec-head"><h2 id="how-h">How it works</h2></div>
           <ol class="steps" id="steps">
@@ -717,7 +754,7 @@
       </section>
 
       <!-- What you get -->
-      <section class="get-band" aria-labelledby="get-h why-h">
+      <section class="get-band" id="get" aria-labelledby="get-h why-h">
         <picture class="get-bg">
           <source type="image/webp" srcset="/assets/nonprofits-well-1000.webp 1000w, /assets/nonprofits-well.webp 2000w" sizes="100vw">
           <img src="/assets/nonprofits-well-1000.jpg" srcset="/assets/nonprofits-well-1000.jpg 1000w, /assets/nonprofits-well.jpg 2000w" sizes="100vw"
@@ -841,7 +878,7 @@
       </template>
 
       <!-- Pricing -->
-      <section aria-labelledby="price-h">
+      <section id="pricing" aria-labelledby="price-h">
         <div class="wrap">
           <div class="sec-head"><h2 id="price-h">Pricing</h2><p>Everything done for you: the design, the stories, the page and the dashboard.</p></div>
           <div class="kits">
@@ -891,7 +928,7 @@
       </section>
 
       <!-- FAQ -->
-      <section aria-labelledby="faq-h" style="background:#fff; border-top:1px solid var(--line);">
+      <section id="faq" aria-labelledby="faq-h" style="background:#fff; border-top:1px solid var(--line);">
         <div class="wrap">
           <div class="sec-head"><h2 id="faq-h">Questions</h2></div>
           <div class="faq" id="faq">
@@ -1017,6 +1054,20 @@
           panel.hidden = open;
         });
       });
+
+      // ── Header: underline the section you're in. ──
+      (function () {
+        var links = [].slice.call(document.querySelectorAll('.np-links a'));
+        if (!links.length || !('IntersectionObserver' in window)) return;
+        var byId = {}; links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) {
+            if (!e.isIntersecting) return;
+            links.forEach(function (a) { a.classList.toggle('on', a === byId[e.target.id]); });
+          });
+        }, { rootMargin: '-45% 0px -50% 0px' });
+        Object.keys(byId).forEach(function (id) { var el = document.getElementById(id); if (el) io.observe(el); });
+      })();
 
       // ── Dashboard sample bars (same series as the dashboard design). ──
       (function () {
