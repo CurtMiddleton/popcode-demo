@@ -27,6 +27,12 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   `/assets/common-tide-postcard.pdf`.
 - Adobe Fonts kit `hdk3gwt` (The Seasons) is loaded on the Common Tide demo pages
   and on `/nonprofits` (for the type printed on the sample pieces).
+- **My Popcodes / My Designs split** (2026-09-24/26): a Popcode made for a shop
+  product shows that product's pill ("Ornament", "Mug"), derived from the design
+  rows whose `book_layout.print.sourceSlug` names it. A book's pencil in My
+  Popcodes opens `edit.html` in **media-only** mode (videos/audio only; photos and
+  pages belong to the book builder, reached from My Designs). The ornament's
+  product page has a Front/Back toggle once a Popcode photo is chosen (PR #105).
 - Mugs live on the shop. Ornaments live via Printify (blueprint 1747). Shop order
   (2026-09-26): Photo Book, Calendar, Board Book, **Ornaments, Photo Mugs**, then
   Framed Prints and the rest.
@@ -44,6 +50,13 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   100 items), **saved montages** (storage `montage-drafts/{user}/{id}/`),
   **framing** per photo/clip, **time on screen** per photo, and the last photo
   rests 1.5s longer. Shotstack is still on the **sandbox** key (watermarked).
+- **Analytics → Map** (PRs #99–#103, 2026-09-26): global reach map —
+  Accounts / Popcodes (all time) / Products / Watched pins, share lines, country
+  shading, time slider, and a **search box to narrow it to one Popcode** (views
+  by experience). The SQL (`2026-09-26-event-coordinates.sql`) **has been run in
+  prod** (newest-first version, verified). Not yet seen with real data. Analytics
+  event reads now page past Supabase's 1000-row cap (All time was stopping at
+  Sep 14).
 
 **Next**
 1. **Calendly:** the demo is 15 minutes and the hero button now says so (the
@@ -54,7 +67,10 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    report, "Your whole year" tag) — user to confirm.
 3. Impact dashboard phase 1, due before ~Nov 3 (`docs/impact-dashboard-handoff.md`).
    Story buttons + tap logging + UTMs are now done (After the Video). Still to
-   build: `?via=org`, and the dashboard itself.
+   build: `?via=org`, and the dashboard itself. **The user plans a fresh session
+   for this** (agreed 2026-09-26). Reuse from the Map: `reach-map.js`'s
+   per-project filter (`setFilter`), `get_reach_events` (admin-only today — an
+   org-facing version needs its own RLS/ownership check), and the paging rule.
 4. `PRINTIFY_DRY_RUN` is still `true` — one real test ornament order, then flip it
    in Production scope and redeploy.
 5. Carried over: let `curt@theworkshop.works` open `analytics.html`; ST-120
@@ -2890,6 +2906,59 @@ Net: nothing lost, nothing to fix. The other session's `8664424` built on top of
 - `pkill -f "http.server"` from the tool shell killed the shell itself (exit 144) — don't.
 - **A Python heredoc with `'EOF'` doesn't expand `$S`** — screenshots landed in a literal `$S/` directory.
 - Headless test harness for the builder (both pages): stub `window.supabase` with an in-memory storage map exposed via `page.exposeFunction` (`upload`/`list`/`remove`/`getPublicUrl` → `/__store/…` served by `page.route`), and generate test video with `MediaRecorder` on a canvas (WebM; the sandbox Chromium has no H.264).
+
+### 2026-09-26 — Analytics Map tab (global reach); "All time" was silently capped at 1,000 events
+
+**PRs: #99 (Map tab), #100 (1000-row paging), #101 (map RPC newest-first) — all merged by Claude at the user's request.** Branch `claude/analytics-global-reach-map-ylbgnp`.
+
+#### Map tab (`public/reach-map.js`, new; hooked into `analytics.html` at `loadReachMap()` :581, tab :441/:456)
+- Layers, each a toggle chip: **Accounts** (per user: the `signup` event's place, else the earliest located event with that `user_id` — covers accounts older than signup logging, 2026-09-09), **Created** (`create_*` events), **Watched** (`scan_open`, minus opens by the project's owner). Extras: **share lines** (owner's account place → viewer place, ≥ `MIN_LINE_KM` 80 km, `reach-map.js:36`), **country shading** (log-scaled), stat cards (countries + newest, cities, accounts placed of total, created, unique viewers, farthest share), **time slider + Replay**, by-country table. Pin popups list account names, created counts by type, top projects watched.
+- **No map tiles.** Leaflet 1.9.4 (cdnjs) + topojson-client + `world-atlas@2/countries-110m.json` (jsdelivr), lazy-loaded when the tab opens. ISO numeric→alpha-2 table embedded (Kosovo/Somaliland/N. Cyprus mapped by name). Ignores the range bar (all-time, own slider).
+- **Coordinates:** `api/log-event.js:49` stores Vercel's `x-vercel-ip-latitude/-longitude` into new `scan_events.latitude/longitude`; if the insert fails naming those columns it retries without them (:80), so no event is lost if the migration is ever missing. **Older events have only city text** → the map uses coords from any other event at the same city|region|country key, else geocodes via **OpenStreetMap Nominatim** (1 req/s, cached in localStorage `pc-reach-geo-v1`; failures cached as null). First open on a new browser takes ~a minute to place old pins.
+- **RPC `get_reach_events(max_rows)`** (`supabase/migrations/2026-09-26-event-coordinates.sql`): admin-gated (curtmid@gmail.com), returns only signup/scan_open/create_*/signed-in events, `visitor` = md5(ip|ua) — raw IPs never leave the DB. All columns cast (`::text`, `::uuid`) because scan_events' types were set in the dashboard and `return query` must match exactly. **Newest first** (#101) so the cap drops the oldest. Falls back to `get_events_with_users` if the RPC is missing. User ran it in prod; verified with `select prosrc like '%created_at desc%' from pg_proc where proname='get_reach_events'` → true.
+
+#### The 1,000-row bug (user: "what happened to the data before Sep 14? Missing all of Zoe's activity")
+- **PostgREST max-rows (1000) applies to RPCs too**, silently. `get_events_with_users` was called once with `max_rows: 50000`, ordered newest-first, so Activity/Overview "All time" and the funnel (`ensureAllEventsOnce`) only ever saw the latest 1000 events (≈ back to Sep 14 at ~80 events/day). Data was never lost.
+- Fix (#100): `fetchAllPages(makeQuery)` / `fetchAllRpc(fn, args)` in `analytics.html:1751`, paging `.range()` until a short page; `fetchAllRows` now delegates to it. The map has its own `allPages` (`reach-map.js:103`). **Rule: any read of scan_events (table or RPC) must page.**
+- Remaining limits, told to the user: Activity RPC caps at 100,000 rows, map at 200,000; the practical limit comes first — sequential 1000-row pages get slow past ~50k events. Then: aggregate in SQL instead of shipping raw events.
+
+#### Lessons
+- Leaflet + GeoJSON: Russia/Fiji rings cross ±180 and draw horizontal stripes across the whole map — `unwrap()` (`reach-map.js:559`) keeps each ring continuous.
+- Share-line arcs that take the "short way" across the date line run off the single drawn world; they're drawn within −180..180 on purpose.
+- Test harness (scratchpad only): stub `window.supabase` via `page.route` on the supabase-js CDN URL, with `rpc()` returning `{ range(), then() }` and a 1000-row cap to reproduce max-rows; CDN libs downloaded with curl and served from `page.route`; Nominatim stubbed.
+- `ensureUsers()` → `get_all_users` still asks for 1000 rows in one call — fine at 11 accounts, needs paging past ~1000 accounts.
+
+#### Later the same day — Popcodes vs Products (#102), per-project search (#103)
+- **User question: "is 26 things created shop products?"** No — it was `create_*` events (projects, books, board books, calendars, montages), which only exist from **2026-09-09**, and `create_project` counts projects not Popcodes. The Accounts tab's "167 Popcodes made" counts photo+video pairs.
+- **#102:** *Created* split into **Popcodes** (pink) and **Products** (amber). Popcodes come from `collections` + `collection_items` with the `popcode_used()` rule (distinct collection|target_index with video or audio) → all history; pinned at the owner's account place, dated by the project; owners with no known place are counted but unpinned ("of N made (rest unplaced)"). Products = `create_*` minus `create_project`. Both tables are read with paging (`allTableRows`). Also: `buildModel` keeps the slider at today when late geocodes rebuild (else the "of N made" note never showed); `.rm-card { min-width: 0 }` — nowrap card subtitles widened the page to 423px on a 390px phone. Cities folded into the Countries card's subtitle. This PR also carried the first session-notes commit into main.
+- **#103:** search box (`<datalist>` of every project, most-opened first; matches title, owner or `popcode.app/slug`). `setFilter(slug)` (`reach-map.js:353`) narrows every layer, card, line and the country table, fits the map to the places, and shows a bar with **Show all Popcodes**. Project names in pin popups are links to the same filter (`projLink`, :440). Filtered cards drop site-wide "of N" subtitles. **Gotcha:** `.rm-project { display:flex }` overrides the `hidden` attribute — needed `.rm-project[hidden] { display: none }`.
+- **Nonprofit dashboard:** user asked whether to build it here; recommended a fresh session (it needs per-org access control, not the admin-only RPC). Suggested opener: *"Build phase 1 of the nonprofit impact dashboard from docs/impact-dashboard-handoff.md. Check it against the code first, including the per-project view on the analytics Map tab."*
+
+### 2026-09-24 → 09-26 — Product pills in My Popcodes, a book's Popcodes, ornament Front/Back on the product page
+
+**Branch `claude/exciting-brahmagupta-gbqh76`.** Commit `65f0607` (pills + book pencil) was pushed to the branch and reached `main` through a later merge. **PR #105** (ornament toggle) was opened and merged by Claude at the user's request, merge commit `c66174a`. Verified live: prod `order.html` matched `origin/main` byte for byte about 90 seconds after the merge. No migrations.
+
+#### The model the user set out (keep this)
+**Anything scannable goes in My Popcodes; anything you'd order goes in My Designs.** A book is both: it shows in My Popcodes with a "Book" pill, and its **pencil there edits its Popcodes**, the photos it links and what they play. The book itself (layout, pages, cover) is edited from My Designs.
+
+#### What shipped
+- **Product pill on a Popcode card** (`public/manage.html`, `buildProductIndex` / `buildCard`): `productKindsBySlug[slug]` collects the kinds of the design rows whose `book_layout.print.sourceSlug` is this Popcode. The pill shows the first two ("Ornament · Mug"), then "+N". A Popcode row stores no product of its own, so **no design row means no pill**.
+- **A book's pencil** → `edit.html?id={slug}` instead of `book.html`. The card's Shop button still goes to `book.html?…&cart=1` (`shopHref`).
+- **`edit.html` media-only mode** (`mediaOnly`, set in `loadCollection` when `col.kind === 'book'`): `body.media-only` hides remove-page and add-page, and the photo tile's click does nothing (the eye preview still works). A note links to `/book.html?id=`. **Save never renumbers `target_index`** (`if (mediaOnly) idx = item.target_index;` in the kept-items loop), because the book's `book_layout` slots point at those indexes. It still recompiles the `.mind` from the same photos in the same order, which is harmless but slow; skipping it for media-only saves would be a safe speed-up.
+- **Ornament Front/Back toggle on the detail page** (`public/order.html`): `#detail-side-toggle` (the class is now `.side-toggle`, shared with review's `#side-toggle`). It shows only when `HAS_BACK_PANEL` has the product **and** `state.selectedPhoto.slug` exists; otherwise the side resets to front. Both toggles share `state.previewSide` via `syncSideToggles()`, and review now keeps the side chosen on the detail page instead of forcing Front. `carryProductToCreate` skips the `detail-canvas` snapshot while the back is showing.
+
+#### Why BowieatXmas, Mug test and scouttest1 had no pill and weren't in My Designs
+The create step that files a Shop product into My Designs (`saveShopDesign`, `9f19a70`) only went live at **13:27 UTC on 09-24**. Mug test (09-23) and probably the other two came before that. scouttest1 was created that same day, so it may have come after, gone through **+ New Popcode**, or hit a failure: `saveShopDesign` swallows its errors (Sentry only). Couldn't tell which without DB access. **Fix for an existing one:** Shop on the card → pick the product → reach review, which autosaves the design, and the pill appears. No SQL backfill was written.
+
+#### Lessons
+- **My branch was 116 commits behind `main`** at the start of the 09-26 turn, even though its only commit was already merged. The start-of-session freshness check caught it; `git checkout -B <branch> origin/main` was the clean fix.
+- **Deploy checks:** the first `curl` after the merge returned the *previous* build with `x-vercel-cache: HIT` and a `last-modified` after the merge time. The new build needed about a minute more. Poll for a string that exists only in the new build (or `cmp` against `git show origin/main:…`); one sample proves nothing.
+- Headless harness reused: the supabase-js stub now answers `.eq` / `.in` / `.single` over in-memory `collections` / `collection_items`, which was enough to drive manage.html, edit.html (book vs plain) and order.html (`?type=ornament&id=…&photo=0`) with no page errors. `$NaN` on the price is only the stubbed `/api/*`.
+
+#### Still open
+- Skip the `.mind` recompile on media-only (book) saves.
+- `saveShopDesign` failures are silent; consider telling the user when the design couldn't be filed.
+- Whether board books and calendars should also get the media-only pencil (only `book` does today; board books still open their own builder).
 
 ### 2026-09-26 (later) — Calendly buttons, Scout's symbol, and My Popcodes / My Designs pictures
 

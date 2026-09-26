@@ -5,7 +5,44 @@
 
 ---
 
-## 1. Look and feel: it must look like Popcode
+## 0. Checked against the code (2026-09-26) — read this before §3
+
+The brief assumes an Express backend and a new `events` table. Neither applies:
+the app is static pages plus Vercel functions (`api/`), and events already go to
+`scan_events` through `api/log-event.js`. **Phase 1 is built on that table.**
+
+| Brief | What the code has |
+|---|---|
+| `events` table | `scan_events` |
+| `page_view` | `scan_open` (logged once the project loads) |
+| `camera_start` | `scan_start` |
+| `recognized` | `target_found` |
+| `video_progress` 25/50/75/100 | `media_progress` with `progress_pct` (0–99, the furthest point, sent when the viewer closes or leaves) + `video_complete` / `audio_complete`. Gives "furthest progress" directly. Video **length is not logged**; get it from the file for avg. watch time. |
+| `button_tap` + `value = button_id` | `cta_tap_1..3` (button position), plus `cta_shown` and `cta_replay` |
+| `story_buttons` table | `collections.cover_config.end.buttons` (After the Video, admin-only, max 3). UTMs added at render time, org's own tags kept (`view.html taggedUrl`). |
+| `platform` | `device_type` (`iOS` / `Android` / `Desktop`) |
+| `image_id` | `target_index` |
+| `collection_id` | **Added** (looked up from the slug in `log-event.js`). Needed because renaming a slug (`edit.html renameProjectSlug`) leaves old events on the old slug, so the Map tab's per-project view and viewer insights lose a renamed project's history. |
+| `device_id` | **Added**: `view.html` keeps a random ID in localStorage (`pc_device`). |
+| `entry` (`?via=org`) | **Added**: `view.html` reads `via=org`, keeps it for the visit in sessionStorage, strips it from the address bar. |
+| `account_id` | Via `collections.user_id`. |
+
+Migration: `supabase/migrations/2026-09-26-impact-events.sql`.
+
+**The Map tab's per-project view already answers part of the phase 2 dashboard.**
+Search a Popcode on Analytics → Map to see where it was opened, by country and
+city, with unique viewers. It is admin-only and its own place for "where": the
+dashboard doesn't need a map. Its caveats: it counts `scan_open` (opens, not
+scans) and its "unique viewers" are a hash of IP + user agent, not `device_id`.
+
+**Conflict to settle before the dashboard's footer ships:** `scan_events` stores
+`ip_address`, the full `user_agent`, and `user_id` when the viewer is signed in.
+The brief says "no IP stored" and the footer says "Popcode collects no personal
+information from donors". The reach map and My Popcodes viewer insights use the
+IP (hashed on the way out, raw in the table). Either stop storing it (and move
+those two onto `device_id`), or reword the footer.
+
+: it must look like Popcode
 
 - Use the repo's existing design system: fonts, colors, spacing, components, wordmark, and the spiral badge. **The repo is the source of truth.** Don't introduce a new palette or typefaces.
 - **Layout reference only:** https://claude.ai/artifact/WwCZF7p7BSrjZrfHNRaJPi. Take the structure and content from it (sections, metrics, order). Ignore its cream palette and fonts; restyle everything in Popcode's brand.
