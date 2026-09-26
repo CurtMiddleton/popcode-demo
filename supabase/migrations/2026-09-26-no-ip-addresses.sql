@@ -12,8 +12,14 @@
 --   get_my_view_events     My Popcodes viewer insights (per-project key, so
 --                          one phone can't be linked across projects)
 --   get_impact_dashboard   already did this (2026-09-26-impact-phase3.sql)
---   get_events_with_users  Analytics → Activity: see the section at the end.
--- Signatures are unchanged, so create or replace is enough.
+--   get_events_with_users  Analytics → Activity: gains a device_id column
+--                          (dropped and recreated — see the section at the end).
+-- The first two keep their signatures, so create or replace is enough.
+--
+-- SECURITY FIX (same file): get_events_with_users, as it stood in prod, was
+-- SECURITY DEFINER with NO caller check and default EXECUTE for everyone — so
+-- the public anon key could read every event with account holders' names,
+-- emails and IPs. It is recreated admin-only, and anon/public lose EXECUTE.
 
 begin;
 
@@ -113,4 +119,46 @@ begin
 end;
 $$;
 
+-- ── Analytics → Activity feed ───────────────────────────────────────────────
+-- The prod definition (read with pg_get_functiondef, 2026-09-26) plus
+-- device_id at the end, an admin check, and no grant to anon. Same columns in
+-- the same order otherwise, so analytics.html needs no change to read it.
+drop function if exists public.get_events_with_users(integer, integer);
+
+create function public.get_events_with_users(days_back integer default 30, max_rows integer default 50000)
+returns table (
+  id uuid, slug text, event_type text, target_index integer, device_type text, browser text,
+  user_agent text, ip_address text, country text, region text, city text,
+  created_at timestamptz, user_id uuid, user_name text, user_email text, device_id text
+)
+language plpgsql security definer set search_path = public, auth
+as $$
+begin
+  if coalesce(auth.jwt() ->> 'email', '') <> 'curtmid@gmail.com' then
+    raise exception 'Unauthorized';
+  end if;
+  return query
+    select
+      e.id::uuid, e.slug::text, e.event_type::text, e.target_index::integer,
+      e.device_type::text, e.browser::text, e.user_agent::text,
+      e.ip_address::text, e.country::text, e.region::text, e.city::text,
+      e.created_at::timestamptz, e.user_id::uuid,
+      (u.raw_user_meta_data->>'full_name')::text as user_name,
+      u.email::text as user_email,
+      e.device_id::text
+    from scan_events e
+    left join auth.users u on u.id = e.user_id
+    where (days_back = 0 or e.created_at >= now() - (days_back || ' days')::interval)
+    order by e.created_at desc
+    limit max_rows;
+end;
+$$;
+
+revoke all on function public.get_events_with_users(integer, integer) from public, anon;
+grant execute on function public.get_events_with_users(integer, integer) to authenticated;
+
 commit;
+
+-- Check (should be false, then true):
+--   select has_function_privilege('anon', 'public.get_events_with_users(integer,integer)', 'execute'),
+--          has_function_privilege('authenticated', 'public.get_events_with_users(integer,integer)', 'execute');
