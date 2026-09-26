@@ -55,7 +55,9 @@ begin
       and (e.event_type in ('signup', 'scan_open')
            or e.event_type like 'create\_%'
            or e.user_id is not null)
-    order by e.created_at
+    -- Newest first: past max_rows it's the oldest events that drop off, not
+    -- this week's. The map doesn't depend on row order.
+    order by e.created_at desc
     limit max_rows;
 end;
 $$;
