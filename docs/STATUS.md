@@ -27,7 +27,17 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   `/assets/common-tide-postcard.pdf`.
 - Adobe Fonts kit `hdk3gwt` (The Seasons) is loaded on the Common Tide demo pages
   and on `/nonprofits` (for the type printed on the sample pieces).
-- Mugs live on the shop. Ornaments live via Printify (blueprint 1747).
+- Mugs live on the shop. Ornaments live via Printify (blueprint 1747). Shop order
+  (2026-09-26): Photo Book, Calendar, Board Book, **Ornaments, Photo Mugs**, then
+  Framed Prints and the rest.
+- **Home-page holiday panel** (seasonal — `#holiday` in `index.html`, remove after
+  the holidays): "Give the gift of memories this holiday season", Scout's ornament
+  on a branch, gift chips, and *Try it yourself* with `/assets/scout-ornament.pdf`
+  (scans via `popcode.app/scout`). Phones get a *Scan Scout's ornament* button.
+- **Montage maker** (still admin-gated): photos **and short video clips** (up to
+  100 items), **saved montages** (storage `montage-drafts/{user}/{id}/`),
+  **framing** per photo/clip, **time on screen** per photo, and the last photo
+  rests 1.5s longer. Shotstack is still on the **sandbox** key (watermarked).
 
 **Next**
 1. **Calendly:** the demo is 15 minutes and the hero button now says so (the
@@ -43,6 +53,14 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    in Production scope and redeploy.
 5. Carried over: let `curt@theworkshop.works` open `analytics.html`; ST-120
    resale certificate for Prodigi; shipping options as cards.
+6. **Montage, real-phone checks still owed:** a render with a framed *video* clip
+   (moved with Shotstack `offset`/`scale` — never seen rendered), and a render
+   where the last photo has its own longer time. Then drop the admin gate and
+   move Shotstack to the production key (`.../edit/v1`).
+7. **Scout's ornament:** scan `/assets/scout-ornament.pdf` and the home-page
+   ornament off a screen to confirm both trigger `popcode.app/scout`. The symbol
+   is lower **left** on Scout's (the user's call); real ornament orders print it
+   lower **right** — decide whether they should match.
 
 ## Session history
 
@@ -2819,4 +2837,35 @@ Net: nothing lost, nothing to fix. The other session's `8664424` built on top of
 - Calendly 15 vs 30 minutes; host name on the booking page.
 - Pricing kit contents are a draft.
 - Home-page nonprofits panel held back by the user's choice (`f4f1183`, closed PR #92).
+
+### 2026-09-25 / 09-26 — Montage maker grows up (clips, saved montages, framing, timing); holiday panel with Scout's ornament; mobile /nonprofits pass
+
+**Branch `claude/cool-sagan-0k8yp3`, merged to `main` directly after each round at the user's say-so (no PRs), ~20 commits.** Every merge verified live by polling for a string only the new build contains.
+
+#### Montage maker (`create.html` + `edit.html` — the builder is DUPLICATED in both; every change was applied to both with one Python patch and tested on both)
+- **Short video clips** alongside photos (`edf4c21`). A clip plays its own length up to **10s** (longer sources use the opening 10s; over 60s refused). No Ken Burns on clips. Clip audio is muted when music is chosen, kept when "No music". `api/create-montage.js` takes `items: [{type, url, seconds, frame}]` and still accepts the old `images`.
+- **Limit 40 → 100 items**, render poll 4 → 10 min (`ce73bd3`).
+- **Saved montages** (`ce73bd3`): stored in the storage bucket, **no migration** — `experiences/montage-drafts/{user_id}/{draftId}/` holds the uploaded sources plus `draft.json` (order, framing, per-photo times, settings). Signed-in users can already list/write the bucket (see 2026-09-04 storage lock). Save button; a "Save this montage?" prompt on close with unsaved changes; saved **before** a render starts (so a failed start can't lose it); listed as *Your saved montages* when the builder opens empty (open / delete). Rendering uploads into the same folder, so nothing uploads twice.
+- **Framing** — tap a thumbnail (tap = frame, press-and-drag = reorder): drag a frame over the photo, zoom slider. Stored as centre + zoom so it survives a Shape change.
+  - **GOTCHA, cost one round:** Shotstack's asset `crop` does NOT choose a region of the source — it trims the *placed* picture and leaves black (user's screenshot: half-black frame). Fixed in `e23ab3f`: **photos are cut to the frame in the browser** (`mtgFramedPhoto`, uploaded as `{id}-framed-{aspect}.jpg?v=…`), **video clips are moved with clip `offset` (fractions of viewport, +y is UP) and `scale`**. Semantics confirmed from Shotstack's OpenAPI source (`raw.githubusercontent.com/shotstack/oas-api-definition/main/schemas/*.yaml` — reachable from the sandbox; their docs site isn't useful to WebFetch). The video path is **still unverified on a real render**.
+- **Time on screen per photo** (`110bc70`): stepper in the tap panel (1.5–10s; unset = Seconds per photo), clock badge on the thumb. **Last photo rests 1.5s longer** (`END_HOLD_SECONDS` in `lib/montage/timeline.mjs`) — the user saw it vanish ~2s after arriving because the closing fade ate it.
+- **Resilience** (`e6ee495`): the user hit a one-off `Internal server error` from Shotstack with 40 items. Now: start retries once on 5xx; status checks retry up to 6 (the render continues at Shotstack regardless); errors name the step; `montage-status` reports failed checks to Sentry and returns Shotstack's `reason` for a failed render.
+- **edit.html unsaved note** said "Page removed" after *every* change (incl. a montage). `markUnsaved(what, keep)` now names it; uploading a replacement video showed no note at all before (`f1c29ad`).
+
+#### Home page
+- **Holiday panel** between *Two ways to experience* and *Three steps* (`c9dac18`, then `d134a9d`, `b95ed01`, `cf3b7a6`). The ornament photo is the user's (`/assets/holiday-ornament.*`, a pale blob in its corner painted out with PIL); the card is that photo's background colour so it melts in, both lifted ×1.08 together. Headline fixed at two lines (break after "memories") with a font size computed from the column width (`(col − padding) / 10.9`) so line one never overflows — measured at 11 widths. *More gifts that play* chips. `#hol-try { scroll-margin-top: 130px }` clears the sticky header.
+- **Scout's ornament PDF** (`/assets/scout-ornament.pdf`): built by rendering an HTML page to PDF in headless Chromium (site's CooperBT from `fonts.css`; Inter from `npm pack @fontsource/inter`), face cut from Scout's real scan photo (`experiences/scout/photo_0.jpeg`, square from the centre). 60% size, gold cord drawn in SVG, **Popcode symbol lower left** placed with `placeBadge`'s round-product geometry (6% of diameter, 45° diagonal). Delivery promise left off on purpose (10-day handling). Build files were in the scratchpad only — regenerate from this description if needed.
+- **Phones can't scan their own screen**, so on touch devices (`@media (hover: none) and (pointer: coarse)`) *Try it yourself* says "open this page on a computer, or print it" with a **Scan Scout's ornament** button to `/scout`.
+
+#### /nonprofits (mobile pass) + shop
+- Hero phone captions drawn by the page (`2283800`) — **superseded**: Safari re-enables a `hidden` track under the OS *Closed Captions + SDH* setting; the other session removed the `<track>` entirely (see their 09-26 entry).
+- Mobile: centred hero buttons, "No app. No QR code." kept together, Play-with-sound beside the phone, tight phone shadow (the big one left a gray edge on the arch), tighter How it works, smaller centred Try card, **Where to use it as a swipe carousel with dots** (`eba3a8e`); footer = home footer minus site links (`ddbe2df`).
+- Shop: Ornaments then Photo Mugs after Board Books (`74b27c2`).
+
+#### Lessons
+- **Playwright + page data:** a `/unsplash/` abort regex also blocked `/unsplash-samples.js` and broke the shop test — match hostnames (`images\.unsplash\.com`), not words. `edit.html` without `?id=` opens a "No project specified" dialog that intercepts clicks; a stub with no session redirects to `/auth.html`.
+- **SVG → PNG in headless Chromium:** `setContent` with an `<img src="file://…">` silently shows a broken image; inline the SVG markup instead.
+- `pkill -f "http.server"` from the tool shell killed the shell itself (exit 144) — don't.
+- **A Python heredoc with `'EOF'` doesn't expand `$S`** — screenshots landed in a literal `$S/` directory.
+- Headless test harness for the builder (both pages): stub `window.supabase` with an in-memory storage map exposed via `page.exposeFunction` (`upload`/`list`/`remove`/`getPublicUrl` → `/__store/…` served by `page.route`), and generate test video with `MediaRecorder` on a canvas (WebM; the sandbox Chromium has no H.264).
 
