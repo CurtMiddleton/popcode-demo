@@ -694,7 +694,10 @@
         try {
           const { data: collections, error } = await db
             .from('collections')
-            .select('id, slug, name, created_at, kind, book_layout, mind_file_url')
+            // impact_cfg: cover_config under another name, read only for the
+            // Impact link below. (buildCard's coverTitle reads col.cover_config,
+            // which this query has never fetched; aliasing keeps titles as they are.)
+            .select('id, slug, name, created_at, kind, book_layout, mind_file_url, impact_cfg:cover_config')
             .eq('user_id', currentUser.id)
             .order('created_at', { ascending: false });
 
@@ -815,6 +818,10 @@
         // books / calendars (multi-photo scannable products). Not for single-image
         // print designs (those live in My Designs and are for ordering, not badging).
         const showDownload = !isProduct || col.kind === 'boardbook' || col.kind === 'calendar' || col.kind === 'book';
+        // Org projects (an org cover or After the Video buttons) get a link to
+        // their impact dashboard (impact.html).
+        const ic = col.impact_cfg || {};
+        const showImpact = !isProduct && !!(ic.enabled || (ic.end && ic.end.enabled));
         const viewUrl = `https://popcode.app/${col.slug}`;
         const shortUrl = `popcode.app/${col.slug}`;
 
@@ -854,6 +861,7 @@
             <span class="act"><a class="btn btn-sm btn-icon icon-btn" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></a><span class="act-label">View</span></span>
             <span class="act"><a class="btn btn-sm btn-icon icon-btn" href="${editHref}?id=${escapeHtml(col.slug)}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></a><span class="act-label">Edit</span></span>
             <span class="act"><button class="btn btn-sm btn-icon icon-btn btn-share-id" data-slug="${escapeHtml(col.slug)}" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button><span class="act-label">Share</span></span>
+            ${showImpact ? `<span class="act"><a class="btn btn-sm btn-icon icon-btn" href="/impact.html?id=${escapeHtml(col.slug)}" title="Impact dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="13"/><line x1="12" y1="20" x2="12" y2="5"/><line x1="18" y1="20" x2="18" y2="10"/></svg></a><span class="act-label">Impact</span></span>` : ''}
             ${showDownload ? `<span class="act"><button class="btn btn-sm btn-icon icon-btn btn-download" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><span class="act-label">Download</span></span>` : ''}
             ${isProduct
               ? `<a class="btn btn-sm shop-btn" href="${shopHref}?id=${escapeHtml(col.slug)}&cart=1" title="Add a printed copy to your cart"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`

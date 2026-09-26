@@ -69,15 +69,15 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    "Popcode" if they don't want their name on the booking page.
 2. **Pricing kit contents are a draft** (up to 3 / up to 8 stories, January board
    report, "Your whole year" tag) — user to confirm.
-3. **Impact dashboard: phases 1 and 2 LIVE (PRs #106, #108, 2026-09-26).**
-   `popcode.app/impact.html?id={slug}` (admin or project owner). Not yet looked
-   at with real data by the user. **Phase 3 next** (due mid-December): gifts
-   entry (`campaign_results` + admin form → Gifts / Raised / "Gave"), and the
-   revocable read-only share link. **Decision owed by the user:** `scan_events`
-   stores `ip_address` (+ full UA, `user_id` when signed in); the brief's
-   footer said "collects no personal information" — the live footer says
-   "never asks donors for their name, email or any account" instead. Stop
-   storing IPs (move Map/viewer insights to `device_id`) or keep that wording.
+3. **Impact dashboard: all three phases LIVE (PRs #106, #108, #110, 2026-09-26).**
+   `popcode.app/impact.html?id={slug}` (admin or owner; gift totals admin-only;
+   share links `?share={token}`). **Demo for pitching:**
+   `popcode.app/impact.html?id=commontide&demo` (sample numbers, real
+   buttons, no DB). Not yet looked at with real data by the user. Open: the
+   **IP decision** (`scan_events.ip_address` vs. the brief's "no personal
+   information"; live footer says "never asks donors for their name, email or
+   any account"), CSV import of gifts, a per-account time zone (`?tz=` today),
+   and Meg's name in the demo's Stories row (public API has no `asset_name`).
 4. `PRINTIFY_DRY_RUN` is still `true` — one real test ornament order, then flip it
    in Production scope and redeploy.
 5. Carried over: let `curt@theworkshop.works` open `analytics.html`; ST-120
@@ -3043,3 +3043,19 @@ The create step that files a Shop product into My Designs (`saveShopDesign`, `9f
 - PyMuPDF (`pip install pymupdf`, `import pymupdf`) rasterises PDFs here; no poppler.
 - Two other sessions appended STATUS.md entries while this PR was open → two conflicts, both "keep both entries". Expect this on every notes-carrying PR.
 - The auto-mode classifier blocked the merge until the user said "merge it" for this specific PR — approval for #106 didn't carry over.
+
+### 2026-09-26 (evening) — Impact dashboard phase 3: gift totals, share links, `?demo`
+
+**PR #110, merged by Claude at the user's say-so (merge `559a8bb`).** Migration `supabase/migrations/2026-09-26-impact-phase3.sql` **run in prod by the user** first (Supabase showed a "destructive operations" warning — only because `delete`/`update`/`revoke` appear inside function bodies and grants; nothing existing is touched). Live check: prod `impact.html` = `origin/main` ~80s after merge; the live demo loaded headless at 390px with no errors and **no Supabase REST or log-event requests**.
+
+#### What shipped
+- **`campaign_results`** (collection_id PK, gifts_count, amount_total numeric(12,2), currency `^[A-Z]{3}$`, source manual|csv, updated_at/by) via `set_campaign_results(slug, gifts, amount, currency)` / `clear_campaign_results(slug)` — **admin only**. Page: *Gift totals* form under the report (not printed); fills Gifts, Raised (avg. gift) and funnel "Gave (confirmed)" (gifts ÷ phones that scanned).
+- **`impact_shares`** (token PK = 24 random bytes base64url via `extensions.gen_random_bytes`, revoked_at) with `create_/list_/revoke_impact_share` (owner or admin) and **`get_impact_dashboard_shared(token, …)` granted to anon**. `?share=` view: no sign-in, no options/tools/selector, owner scans never included; dead token → "This link isn't active". Both tables RLS on with **no policies** — all access through security-definer functions.
+- `get_impact_dashboard()` now returns `results` + `can {edit_results, share}`; body moved to `impact_dashboard_data(uuid, …)` (execute revoked from everyone; called only from the two wrappers). `impact_is_admin()` helper.
+- **`?demo`** (user chose this over seeding fake events, which would have polluted Analytics/Map/viewer insights): reads only `/api/collection`, builds the `/nonprofits` sample campaign (the same 22-day series, sums to 1,037; 764 phones, 612 complete, 158 taps split 121/24/13 over the real buttons, 34 gifts, $5,270, 64% own address) over the project's real photos/buttons. Per-photo rates spread around the totals so a one-photo project's row equals the headline. *Sample data* tag beside Export; footer says so.
+- Phone fixes: tap-button labels get their own line (long ones like "Double your gift today" were truncated).
+
+#### Lessons
+- `curl … && cat > file <<EOF` chains: a flaky proxy fetch (`ws_closed_mid_exchange`) killed the chain and the harness file was never written. Fetch with retries on its own, write files with Write.
+- psql `-At -c "insert … returning"` also prints `INSERT 0 1`; use `-q` when capturing a value.
+- Sandbox Chromium can't read MP4 metadata, so the live demo shows avg. watch as "80%"; phones should show "m:ss of m:ss".
