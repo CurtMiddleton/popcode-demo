@@ -44,9 +44,15 @@ export default async function handler(req, res) {
     const country = req.headers['x-vercel-ip-country'] || null;
     const region  = req.headers['x-vercel-ip-country-region'] || null;
     const city    = decodeURIComponent(req.headers['x-vercel-ip-city'] || '') || null;
+    // City-level coordinates for the analytics reach map. Only written when
+    // Vercel sent them, so local/dev events stay as they were.
+    const lat = parseFloat(req.headers['x-vercel-ip-latitude']);
+    const lon = parseFloat(req.headers['x-vercel-ip-longitude']);
+    const coords = Number.isFinite(lat) && Number.isFinite(lon)
+      ? { latitude: lat, longitude: lon } : {};
 
     const db = createClient(SUPABASE_URL, SUPABASE_KEY);
-    const { error } = await db.from('scan_events').insert({
+    const row = {
       slug:         slug         ?? null,
       event_type,
       target_index: target_index ?? null,
@@ -65,8 +71,14 @@ export default async function handler(req, res) {
         ? { recipient_code } : {}),
       ...(Number.isFinite(progress_pct)
         ? { progress_pct: Math.max(0, Math.min(100, Math.round(progress_pct))) } : {}),
-    });
+    };
 
+    let { error } = await db.from('scan_events').insert({ ...row, ...coords });
+    // Before 2026-09-26-event-coordinates.sql runs, naming latitude/longitude
+    // fails the whole insert. Losing a pin beats losing the event.
+    if (error && Object.keys(coords).length && /latitude|longitude/.test(error.message || '')) {
+      ({ error } = await db.from('scan_events').insert(row));
+    }
     if (error) throw error;
     res.status(200).json({ ok: true });
   } catch (e) {
