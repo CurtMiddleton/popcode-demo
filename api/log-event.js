@@ -22,7 +22,7 @@ export default async function handler(req, res) {
 
   try {
     const { slug, event_type, target_index, device_type, browser, user_agent, user_id,
-            recipient_code, progress_pct } = req.body;
+            recipient_code, progress_pct, device_id, entry } = req.body;
     // Account-level events (signup) belong to a person, not a project, so slug
     // is optional. Everything project-scoped still has to name one.
     // A montage is rendered before the project exists (and may be abandoned),
@@ -73,10 +73,24 @@ export default async function handler(req, res) {
         ? { progress_pct: Math.max(0, Math.min(100, Math.round(progress_pct))) } : {}),
     };
 
-    let { error } = await db.from('scan_events').insert({ ...row, ...coords });
-    // Before 2026-09-26-event-coordinates.sql runs, naming latitude/longitude
-    // fails the whole insert. Losing a pin beats losing the event.
-    if (error && Object.keys(coords).length && /latitude|longitude/.test(error.message || '')) {
+    // Impact-dashboard fields (2026-09-26-impact-events.sql). collection_id is
+    // looked up here rather than sent by the page: it survives a slug rename,
+    // and a viewer can't attribute events to a project it didn't open.
+    const extra = { ...coords };
+    if (typeof device_id === 'string' && /^[a-z0-9-]{8,64}$/i.test(device_id)) extra.device_id = device_id;
+    if (entry === 'custom' || entry === 'popcode') extra.entry = entry;
+    if (slug && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        const { data: col } = await db.from('collections').select('id').eq('slug', slug).maybeSingle();
+        if (col) extra.collection_id = col.id;
+      } catch (e) { /* the event matters more than the id */ }
+    }
+
+    let { error } = await db.from('scan_events').insert({ ...row, ...extra });
+    // Before the migrations that add these columns run, naming one fails the
+    // whole insert. Losing a pin or a device id beats losing the event.
+    if (error && Object.keys(extra).length &&
+        /latitude|longitude|device_id|entry|collection_id/.test(error.message || '')) {
       ({ error } = await db.from('scan_events').insert(row));
     }
     if (error) throw error;

@@ -783,6 +783,43 @@
       const recipientCode = (/^[a-z0-9]{6,16}$/.test((params.get('r') || '').toLowerCase()))
         ? params.get('r').toLowerCase() : null;
 
+      // Impact dashboard (docs/impact-dashboard-handoff.md). A random ID this
+      // browser keeps, so a campaign can show "about N different phones"
+      // without leaning on IP addresses. Not derived from anything about the
+      // device; if storage is blocked it lasts for this page only.
+      const deviceId = (() => {
+        let d = null;
+        try { d = localStorage.getItem('pc_device'); } catch (e) {}
+        if (d) return d;
+        d = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+          : Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+        try { localStorage.setItem('pc_device', d); } catch (e) {}
+        return d;
+      })();
+
+      // Orgs point their own address (yourorg.org/story) at
+      // popcode.app/{slug}?via=org, since a redirect rarely carries a referrer.
+      // The whole visit counts as entry=custom (kept in sessionStorage so a
+      // reload doesn't lose it), and the tag comes off the address bar so it
+      // isn't copied into shares.
+      const visitEntry = (() => {
+        const key = 'pc_entry_' + (id || '').toLowerCase();
+        const viaOrg = params.get('via') === 'org';
+        let custom = viaOrg;
+        try {
+          if (viaOrg) sessionStorage.setItem(key, 'custom');
+          custom = custom || sessionStorage.getItem(key) === 'custom';
+        } catch (e) {}
+        if (params.has('via')) {
+          try {
+            const u = new URL(location.href);
+            u.searchParams.delete('via');
+            history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+          } catch (e) {}
+        }
+        return custom ? 'custom' : 'popcode';
+      })();
+
       async function logEvent(eventType, targetIndex = null, progressPct = null) {
         if (!id) return;
         try {
@@ -798,7 +835,9 @@
               user_agent: navigator.userAgent,
               user_id: session?.user?.id ?? null,
               recipient_code: recipientCode,
-              progress_pct: progressPct
+              progress_pct: progressPct,
+              device_id: deviceId,
+              entry: visitEntry
             }),
             // Progress is often reported as the page is being left.
             keepalive: true
