@@ -6,38 +6,43 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-09-24)
+## Current state (updated 2026-09-26)
 
 **Live and recent**
-- `popcode.app/nonprofits` — Popcode for Nonprofits landing page, PR #72 merged
-  2026-09-24. Not linked from the site. Placeholders in its `CONFIG` block:
-  `BOOKING_URL` (Calendly 30-min, set 2026-09-25), `DEMO_VIDEO` / `DEMO_CAPTIONS`
-  (hero shows a stand-in family photo), `SHOW_CASE_STUDY` (off). The user has
-  reviewed it and is iterating on changes.
-- Mugs live on the shop (`GLOBAL-MUG-W`). Ornaments live via Printify
-  (blueprint 1747) with a printed back panel. Magnets, stickers and UK ornaments
-  built but hidden (no US lab).
-
-**Merged 2026-09-24**
-- PR #74 (`claude/exciting-brahmagupta-gbqh76`): My Popcodes shows a product label
-  (Ornament, Mug) on a Popcode that products were made from; a book's pencil in
-  My Popcodes opens edit.html limited to media (what each photo plays), with a
-  link to the book builder for pages, photos and cover.
-- PR #73: session history moved here from CLAUDE.md, including the corrected
-  notes from `claude/determined-planck-fqj14e` (branch can be deleted).
+- `popcode.app/nonprofits` — the Popcode for Nonprofits page. Not linked from the
+  home page, **on purpose**: the user sends people there directly and wants the
+  home page to stay about the consumer product (a home-page panel was built and
+  held back — closed PR #92, commit `f4f1183`, revivable). Booking buttons go to
+  Calendly (`BOOKING_URL`); the hero phone plays the real `popcode.app/commontide`
+  experience (cover → Meg's video → After the Video buttons); `?tweak` opens a
+  drag-and-slider layout panel for the hero. `SHOW_CASE_STUDY` still off.
+- **After the Video** (admin-only, PR #85): up to three buttons when a video
+  plays to the end, set in edit.html's *After video* tab, stored as
+  `collections.cover_config.end` (no migration; the cover_config admin trigger
+  guards it). Taps log `cta_shown` / `cta_tap_1..3` / `cta_replay`; outbound
+  links get `utm_source=popcode&utm_medium=print&utm_campaign={slug}`.
+- **Common Tide** is the fictional demo org: `popcode.app/commontide` (cover +
+  end screen configured by the user), demo pages at
+  `/demo/commontide/{give,marisol,monthly}.html`, printable card at
+  `/assets/common-tide-postcard.pdf`.
+- Adobe Fonts kit `hdk3gwt` (The Seasons) is loaded on the Common Tide demo pages
+  and on `/nonprofits` (for the type printed on the sample pieces).
+- Mugs live on the shop. Ornaments live via Printify (blueprint 1747).
 
 **Next**
-1. Iterate on `/nonprofits` per the user's review; fill the booking URL; re-run
-   Lighthouse on Vercel (89 performance locally against a 90 target).
-2. Impact dashboard phase 1, due before ~Nov 3 (`docs/impact-dashboard-handoff.md`).
-3. `PRINTIFY_DRY_RUN` is still `true` — one real test ornament order, then flip it
+1. **Calendly mismatch:** the event is **15 min** but the page says "Book a
+   30-minute demo" and the URL is `/30min`. User to pick one; also rename the
+   Calendly profile from "Curt Middleton" to "Popcode" if they don't want their
+   name on the booking page.
+2. **Pricing kit contents are a draft** (up to 3 / up to 8 stories, January board
+   report, "Your whole year" tag) — user to confirm.
+3. Impact dashboard phase 1, due before ~Nov 3 (`docs/impact-dashboard-handoff.md`).
+   Story buttons + tap logging + UTMs are now done (After the Video). Still to
+   build: `?via=org`, and the dashboard itself.
+4. `PRINTIFY_DRY_RUN` is still `true` — one real test ornament order, then flip it
    in Production scope and redeploy.
-4. Order one mug and one ornament to check the real products.
 5. Carried over: let `curt@theworkshop.works` open `analytics.html`; ST-120
-   resale certificate for Prodigi; shipping options as cards (biggest Popsa gap).
-
-Done: Vercel Deployment Protection is on for previews (user confirmed
-2026-09-24) — ignore the older entries below that list it as open.
+   resale certificate for Prodigi; shipping options as cards.
 
 ## Session history
 
@@ -2785,3 +2790,33 @@ Net: nothing lost, nothing to fix. The other session's `8664424` built on top of
 - **Blueprint 1623 vs 1747 for the ornament.** Only 1747 is built and live. 1623 (provider 59) is ~$0.28/unit cheaper and also double-sided. Compare back panel and production time before the test order — `PRINTIFY_API_TOKEN=<token> node scripts/printify-catalog.mjs 1623 1747`, run in a terminal, never pasted into chat.
 - **`PRINTIFY_DRY_RUN` is still `true`.** One test order confirms `baseCostMinor: 801` against the real `line_item.cost`; if it is off, every ornament quote is wrong by that margin. Then `PRINTIFY_DRY_RUN=false` in Production scope — and **Vercel env changes only apply to the next build**, so it needs a redeploy.
 - Unchanged: order one mug; parcel count on a mug-plus-print order; re-enable Vercel Deployment Protection on previews; `analytics.html` still gated to `curtmid@gmail.com` only.
+
+### 2026-09-26 (session of 09-25) — Nonprofits page, iterated to a finished pitch; After the Video buttons; Common Tide as a full demo
+
+**Branch `claude/affectionate-dirac-iwzkid`, reset to `main` after every merge. PRs #72–#91 and #93 merged; #92 closed unmerged (see below).** Every merge was verified on prod byte-for-byte against `origin/main` (not against the local file — see lessons).
+
+#### What was built
+
+- **`/nonprofits`, many rounds of the user's direction.** Full-bleed marsh hero with the Common Tide postcard and a phone; "Stories that move. Proof that it works."; How it works as an animated sequence (URL typing → scan mark over the card → Meg's video → buttons arriving); Try it yourself (small, `#f0f0f0` band, downloadable PDF); What you get + Why it works on one dark panel over the girls-at-the-well photo with a **looping animated dashboard** (counts up, bars, funnel; replays every ~7s while on screen); proof line + Where to use it on one **brand-gradient band** with five printed sample pieces (type in The Seasons, labels in Cooper); pricing as two plan cards in `/pricing.html`'s style; closer "Print gets them to open it. / A voice gets them to give."
+- **Hero phone = the real experience (PR #93).** It shows Common Tide's live `cover_config` (org cover, local copies of its photo and logo in `/assets/nonprofits-cover.*`, `nonprofits-ct-logo.png`), Meg's video, then the After the Video screen, and loops.
+- **`?tweak`** on `/nonprofits`: drag or slide the eyebrow, headline, subhead, buttons, postcard, phone, sound button and hero spacing; *Copy values* gives CSS labelled with its breakpoint. The user used it once (1840px values applied in PR #84).
+- **After the Video (PR #85)** — see Current state. `edit.html:` new *After video* tab; the cover save now **merges** into the saved `cover_config` (`wlCoverCfg`) instead of rebuilding it, so the two saves can't wipe each other; project rename rewrites `end.bg_url`. `view.html:` `#end-screen` (z-index 10000 — above `#wl-cover`'s 9999), `applyEndConfig`, `?preview=end` (counts no taps).
+- **Cover editor preview** shows the animated scan disc (PR #80). **Common Tide demo pages** (PRs #86, #87), each labelled a demo of a fictional org, no payment fields; footer shows the `utm_*` tags the visit arrived with.
+- Postcard PDF: "Give today" moved by editing the PDF content stream's `Tm` operators directly (PyMuPDF), then images re-rendered at the original quality (82 — matched by file size).
+
+#### Lessons worth keeping
+
+- **Safari re-enables a `hidden` text track** when the system's *Closed Captions + SDH* setting is on, and draws its own large captions. Another session's fix (track `hidden`, cues drawn in the page) still showed huge captions for the user. Robust fix: **give the video no `<track>` at all**; fetch the `.vtt`, parse it, draw the cue on `timeupdate` (`nonprofits.html`, hero phone script).
+- **"Merge problem" was not a merge problem.** Prod matched `main` exactly; the old phone screen was simply built before the user configured the Common Tide cover. Compare live to `origin/main` first before suspecting lost work.
+- **Verify deploys against `origin/main`, not the local file** — other sessions merge to main in parallel (holiday panel, montage, footer, mobile tweaks all landed during this one), so a live page can correctly differ from this branch's copy.
+- **Byte-compare flakes:** several first fetches of an asset differed and a re-fetch matched (partial transfers through the sandbox proxy). Retry up to 3× before calling a deploy wrong.
+- **CSS cascade trap:** a new rule `.pc .program b { font-family: the-seasons }` lost to an older, equally specific rule later in the file. Edit the existing rule instead of adding an override.
+- **Adobe Fonts in headless tests:** the kit only serves font files to allowed domains; route `use.typekit.net` through `curl` with `Referer: https://popcode.app/...` to render it locally. `document.fonts.check()` is the quick pass/fail.
+- **Sandbox Chromium can't decode H.264.** To test video flows, transcode to WebM with the bundled ffmpeg (`imageio_ffmpeg`) and route the `.mp4` request to it.
+- The local `python3 -m http.server` dies between Bash calls here; start it in the same command as the test.
+
+#### Still open (also in Current state)
+- Calendly 15 vs 30 minutes; host name on the booking page.
+- Pricing kit contents are a draft.
+- Home-page nonprofits panel held back by the user's choice (`f4f1183`, closed PR #92).
+
