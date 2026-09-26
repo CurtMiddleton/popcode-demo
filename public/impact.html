@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <script
+      src="https://browser.sentry-cdn.com/10.59.0/bundle.min.js"
+      integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
+      crossorigin="anonymous"></script>
+    <script src="/sentry-init.js"></script>
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
+    <meta name="robots" content="noindex">
+    <title>Popcode — Impact</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <link rel="stylesheet" href="/ui.css">
+    <!--
+      Impact dashboard (docs/impact-dashboard-handoff.md). One campaign = one
+      project. Every number comes from get_impact_dashboard()
+      (supabase/migrations/2026-09-26-impact-dashboard.sql); this page only
+      lays it out. Styled after the sample dashboard on /nonprofits so the
+      real one looks like what orgs were shown.
+    -->
+    <style>
+      :root {
+        --ink: #1a1a1a;
+        --muted: #5f5f5f;
+        --faint: #767676;
+        --line: #e7e5e0;
+        --paper: #ffffff;
+        --bg: #f9f9f9;
+        --accent: #7657FC;
+        --accent-ink: #5a3fd6;
+        --bar: #d9d4f5;
+        --serif: 'CooperBT', Georgia, serif;
+        --sans: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; background: var(--bg); color: var(--ink);
+        font-family: var(--sans); -webkit-font-smoothing: antialiased;
+      }
+      .wrap { max-width: 1200px; margin: 0 auto; padding: 0 24px 56px; }
+      @media (max-width: 640px) { .wrap { padding: 0 16px 40px; } }
+
+      /* ── Header ── */
+      .masthead {
+        display: flex; align-items: center; justify-content: space-between; gap: 16px;
+        flex-wrap: wrap; padding: 22px 0 18px; border-bottom: 1px solid var(--line);
+      }
+      .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+      .brand img { display: block; }
+      .brand .org { font-size: 15px; font-weight: 600; padding-left: 14px; border-left: 1px solid var(--line);
+                    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .actions select {
+        font: inherit; font-size: 14px; font-weight: 500; color: var(--ink); background: var(--paper);
+        border: 1px solid #d8d6d0; border-radius: 10px; height: 44px; padding: 0 36px 0 14px; max-width: 260px;
+        appearance: none; -webkit-appearance: none; cursor: pointer;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%231a1a1a' stroke-width='1.6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 14px center;
+      }
+      .btn-export {
+        font: inherit; font-size: 14px; font-weight: 600; color: #fff; background: var(--ink);
+        border: 0; border-radius: 10px; height: 44px; padding: 0 18px; cursor: pointer;
+      }
+      .btn-export:hover { background: #333; }
+      @media (max-width: 640px) {
+        .actions { width: 100%; }
+        .actions select { flex: 1; max-width: none; min-width: 0; }
+      }
+
+      /* ── Title ── */
+      .title { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px 24px;
+               flex-wrap: wrap; margin: 30px 0 22px; }
+      .title h1 { font-family: var(--serif); font-weight: 400; font-size: 44px; line-height: 1.05; margin: 0 0 8px; }
+      .title .sub { font-size: 15px; color: var(--muted); }
+      .title .updated { font-size: 13px; color: var(--faint); }
+      @media (max-width: 640px) { .title h1 { font-size: 32px; } }
+
+      .adjust { margin: -8px 0 22px; font-size: 14px; }
+      .adjust summary { cursor: pointer; color: var(--muted); font-weight: 500; display: inline-block; padding: 6px 0; }
+      .adjust summary:hover { color: var(--ink); }
+      .adjust .row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; margin-top: 10px;
+                     background: var(--paper); border-radius: var(--pc-radius-inner); padding: 14px 16px;
+                     box-shadow: var(--pc-shadow-card); }
+      .adjust label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+      .adjust input[type=date] { font: inherit; font-size: 14px; height: 40px; padding: 0 10px; border: 1px solid #d8d6d0; border-radius: 8px; }
+      .adjust label.check { flex-direction: row; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--ink); min-height: 40px; }
+      .adjust label.check input { width: 18px; height: 18px; accent-color: var(--accent); }
+      .adjust button { font: inherit; font-size: 14px; font-weight: 600; height: 40px; padding: 0 16px; border-radius: 8px;
+                       border: 1px solid #d8d6d0; background: var(--paper); cursor: pointer; }
+
+      /* ── Cards ── */
+      .card { background: var(--paper); border-radius: var(--pc-radius-card); box-shadow: var(--pc-shadow-card);
+              padding: 24px 26px; min-width: 0; }
+      .card h2 { font-family: var(--serif); font-weight: 400; font-size: 24px; line-height: 1.2; margin: 0; }
+      .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+      .card-head .aside { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+      .card-head .aside i { width: 10px; height: 10px; border-radius: 2px; background: var(--accent); display: inline-block; }
+      .empty { font-size: 14px; line-height: 1.55; color: var(--muted); background: var(--bg);
+               border-radius: var(--pc-radius-inner); padding: 16px 18px; margin: 0; }
+      .note { font-size: 13px; color: var(--muted); line-height: 1.5; border-top: 1px solid var(--line); padding-top: 12px; margin: 16px 0 0; }
+      @media (max-width: 640px) { .card { padding: 20px 18px; } }
+
+      .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+      @media (max-width: 960px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+      @media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
+      .kpi { padding: 20px 20px 18px; }
+      .kpi .k { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+      .kpi .v { font-family: var(--serif); font-size: 40px; line-height: 1.05; margin: 8px 0 6px; }
+      .kpi .n { font-size: 13px; line-height: 1.4; color: var(--muted); }
+      .kpi.money .v { color: var(--accent); }
+      .kpi.pending .v { color: #b5b3ae; }
+      @media (max-width: 640px) { .kpi { padding: 16px 14px 14px; } .kpi .v { font-size: 30px; }
+                                  .kpi:last-child { grid-column: 1 / -1; } }
+
+      .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+      .grid .wide { grid-column: span 2; }
+      .stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+      @media (max-width: 960px) { .grid { grid-template-columns: minmax(0, 1fr); } .grid .wide { grid-column: auto; } }
+
+      /* Scans by day */
+      .bars { position: relative; display: flex; align-items: flex-end; gap: 3px; height: 220px;
+              border-bottom: 1px solid var(--line); padding-top: 22px; }
+      .bars .b { flex: 1; min-width: 0; position: relative; height: 100%; display: flex; align-items: flex-end; }
+      .bars .b i { display: block; width: 100%; background: var(--bar); border-radius: 3px 3px 0 0; min-height: 0; }
+      .bars .b.hl i { background: var(--accent); }
+      .bars .b .val { position: absolute; left: 50%; transform: translateX(-50%); font-size: 12px; font-weight: 700;
+                      color: var(--accent-ink); white-space: nowrap; }
+      .xlabels { position: relative; height: 22px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+      .xlabels span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+      .xlabels span.first { transform: none; }
+      .xlabels span.last { transform: translateX(-100%); }
+      .csv { font-size: 13px; color: var(--muted); }
+      .csv:hover { color: var(--ink); }
+      @media (max-width: 640px) { .bars { height: 160px; gap: 2px; } }
+
+      /* Funnel */
+      .funnel { list-style: none; margin: 0; padding: 0; }
+      .funnel li { margin-bottom: 14px; font-size: 14px; }
+      .funnel .row { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+      .funnel .row span { color: var(--muted); white-space: nowrap; }
+      .track { height: 12px; background: #eeeeee; border-radius: 6px; overflow: hidden; }
+      .fill { height: 100%; background: var(--ink); border-radius: 6px; }
+      .funnel li.gave .fill { background: var(--accent); }
+      .funnel li.gave .row span { font-style: italic; }
+
+      /* Stories */
+      .stories { width: 100%; border-collapse: collapse; font-size: 15px; }
+      .stories th { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+                    text-align: right; padding: 0 0 10px 12px; border-bottom: 1px solid var(--line); }
+      .stories th:first-child { text-align: left; padding-left: 0; }
+      .stories td { text-align: right; padding: 12px 0 12px 12px; border-bottom: 1px solid #f0efeb; font-variant-numeric: tabular-nums; }
+      .stories td:first-child { text-align: left; padding-left: 0; }
+      .stories tr:last-child td { border-bottom: 0; }
+      .story { display: flex; align-items: center; gap: 14px; min-width: 0; }
+      .story img, .story .ph { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; flex: none; background: #eeeeee; }
+      .story b { font-weight: 600; display: block; }
+      .story small { font-size: 13px; color: var(--muted); }
+      @media (max-width: 640px) {
+        .stories thead { display: none; }
+        .stories tr { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 6px;
+                      padding: 14px 0; border-bottom: 1px solid #f0efeb; }
+        .stories tr:last-child { border-bottom: 0; }
+        .stories td { border: 0; padding: 0; text-align: left; font-size: 15px; font-weight: 600; }
+        .stories td:first-child { grid-column: 1 / -1; font-weight: 400; }
+        .stories td[data-k]::before { content: attr(data-k); display: block; font-size: 11px; font-weight: 700;
+                                      letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+      }
+
+      /* Button taps */
+      .taps { list-style: none; margin: 0; padding: 0; }
+      .taps li { display: grid; grid-template-columns: minmax(0, 110px) minmax(0, 1fr) 40px; align-items: center; gap: 12px;
+                 font-size: 14px; margin-bottom: 12px; }
+      .taps li:last-child { margin-bottom: 0; }
+      .taps .lab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .taps .track { height: 10px; }
+      .taps li.top .fill { background: var(--accent); }
+      .taps .num { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+      /* Address split */
+      .split { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: #eeeeee; margin-bottom: 12px; }
+      .split .c { background: var(--ink); }
+      .split .p { background: var(--bar); }
+      .split-legend { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+      .split-legend b { font-weight: 700; }
+      .split-legend .r { color: var(--muted); text-align: right; }
+
+      .foot { font-size: 13px; color: var(--faint); margin: 26px 0 0; line-height: 1.5; }
+      .state { text-align: center; padding: 80px 16px; color: var(--muted); font-size: 16px; line-height: 1.6; }
+      .state h1 { font-family: var(--serif); font-weight: 400; font-size: 32px; color: var(--ink); margin: 0 0 10px; }
+
+      /* ── Print: a clean one- or two-page report ── */
+      @media print {
+        @page { margin: 14mm; }
+        body { background: #fff; }
+        .wrap { max-width: none; padding: 0; }
+        .actions, .adjust, .csv { display: none !important; }
+        .card { box-shadow: none; border: 1px solid var(--line); break-inside: avoid; }
+        .kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        /* Letter width is too narrow for three columns: one section per row,
+           the two small cards side by side. */
+        .grid { grid-template-columns: minmax(0, 1fr); }
+        .grid .wide { grid-column: auto; }
+        .stack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .bars { height: 130px; }
+        /* Tighter than on screen so the report stays at two pages. */
+        .title { margin: 16px 0 12px; }
+        .title h1 { font-size: 34px; }
+        .card { padding: 14px 18px; border-radius: 12px; }
+        .card-head { margin-bottom: 10px; }
+        .card h2 { font-size: 20px; }
+        .kpis, .grid { gap: 10px; margin-bottom: 10px; }
+        .stack { gap: 10px; }
+        .kpi .v { font-size: 30px; margin: 4px 0 3px; }
+        .kpi .n { font-size: 12px; }
+        .stories td { padding-top: 7px; padding-bottom: 7px; }
+        .story img, .story .ph { width: 40px; height: 40px; }
+        .funnel li { margin-bottom: 8px; }
+        .note { margin-top: 10px; padding-top: 8px; }
+        .foot { margin-top: 12px; }
+        * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap" id="app">
+      <header class="masthead">
+        <div class="brand">
+          <a href="/"><img src="/assets/Popcode_logo.png" alt="Popcode" width="110" height="35"></a>
+          <span class="org" id="org-name" hidden></span>
+        </div>
+        <div class="actions" id="actions" hidden>
+          <select id="campaign" aria-label="Campaign"></select>
+          <button type="button" class="btn-export" id="export">Export report</button>
+        </div>
+      </header>
+      <main id="main"><div class="state">Loading…</div></main>
+    </div>
+
+    <script>
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      const params = new URLSearchParams(location.search);
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const num = (n) => Number(n || 0).toLocaleString('en-US');
+      const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+      const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+      // Dates arrive as 'YYYY-MM-DD' in the campaign's time zone; keep them as
+      // plain calendar dates (noon UTC) so no local offset shifts the day.
+      const day = (s) => new Date(s + 'T12:00:00Z');
+      const fmtDay = (s, withYear) => day(s).toLocaleDateString('en-US',
+        Object.assign({ month: 'short', day: 'numeric', timeZone: 'UTC' }, withYear ? { year: 'numeric' } : {}));
+      function fmtRange(a, b) {
+        const ya = a.slice(0, 4), yb = b.slice(0, 4);
+        if (a === b) return fmtDay(a, true);
+        return ya === yb ? fmtDay(a) + ' – ' + fmtDay(b, true) : fmtDay(a, true) + ' – ' + fmtDay(b, true);
+      }
+      const clock = (sec) => { sec = Math.round(sec); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); };
+
+      // Giving Tuesday: the Tuesday after US Thanksgiving (4th Thursday of Nov).
+      function givingTuesday(year) {
+        const nov1 = new Date(Date.UTC(year, 10, 1)).getUTCDay();
+        const firstThu = 1 + ((4 - nov1 + 7) % 7);
+        return new Date(Date.UTC(year, 10, firstThu + 21 + 5)).toISOString().slice(0, 10);
+      }
+
+      // Supabase's public image transform for a stored photo: a small thumb
+      // instead of the full-size upload (see manage.html).
+      function thumb(u) {
+        try {
+          const x = new URL(u);
+          if (!x.pathname.includes('/storage/v1/object/public/')) return u;
+          x.pathname = x.pathname.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/');
+          x.searchParams.set('width', '112'); x.searchParams.set('height', '112'); x.searchParams.set('resize', 'cover');
+          return x.toString();
+        } catch (e) { return u; }
+      }
+
+      // Video lengths turn "watched 80% on average" into "0:48 of 1:00".
+      // Only the file's metadata is fetched; anything slow or broken is skipped.
+      function durationOf(url) {
+        return new Promise((resolve) => {
+          if (!url) return resolve(null);
+          const v = document.createElement('video');
+          const done = (d) => { clearTimeout(t); v.removeAttribute('src'); v.load(); resolve(d); };
+          const t = setTimeout(() => done(null), 8000);
+          v.preload = 'metadata'; v.muted = true;
+          v.onloadedmetadata = () => done(isFinite(v.duration) && v.duration > 0 ? v.duration : null);
+          v.onerror = () => done(null);
+          v.src = url;
+        });
+      }
+
+      let state = null;
+
+      async function start() {
+        const { data } = await db.auth.getSession();
+        if (!data.session) {
+          location.href = '/auth.html?next=' + encodeURIComponent(location.pathname + location.search);
+          return;
+        }
+        const camps = await db.rpc('get_impact_campaigns');
+        if (camps.error) return fail(camps.error);
+        const list = camps.data || [];
+        let slug = params.get('id');
+        if (!slug && list.length) slug = list[0].slug;
+        if (!slug) {
+          $('main').innerHTML = '<div class="state"><h1>No campaigns yet</h1>A campaign is one of your Popcodes. Once you have one, its numbers show here.</div>';
+          return;
+        }
+        const sel = $('campaign');
+        const opts = list.slice();
+        if (!opts.some((c) => c.slug === slug)) opts.unshift({ slug: slug, name: slug });
+        sel.innerHTML = opts.map((c) => '<option value="' + esc(c.slug) + '"' + (c.slug === slug ? ' selected' : '') + '>' +
+          esc(c.name || c.slug) + '</option>').join('');
+        sel.onchange = () => { location.search = '?id=' + encodeURIComponent(sel.value); };
+        $('export').onclick = () => window.print();
+        $('actions').hidden = false;
+        load(slug);
+      }
+
+      async function load(slug) {
+        const args = {
+          p_slug: slug,
+          p_from: DATE_RE.test(params.get('from') || '') ? params.get('from') : null,
+          p_to: DATE_RE.test(params.get('to') || '') ? params.get('to') : null,
+          p_tz: params.get('tz') || 'America/New_York',
+          p_include_owner: params.get('own') === '1',
+        };
+        const r = await db.rpc('get_impact_dashboard', args);
+        if (r.error) return fail(r.error);
+        if (!r.data) {
+          $('main').innerHTML = '<div class="state"><h1>Campaign not found</h1>There is no Popcode at popcode.app/' + esc(slug) + '.</div>';
+          return;
+        }
+        state = r.data;
+        state.durations = {};
+        render();
+        // Upgrade watch times once the video lengths are known.
+        const items = (state.campaign.items || []).filter((i) => i.media_type !== 'audio' && i.video_url);
+        const ds = await Promise.all(items.map((i) => durationOf(i.video_url)));
+        items.forEach((i, k) => { if (ds[k]) state.durations[i.ti] = ds[k]; });
+        if (Object.keys(state.durations).length) render();
+      }
+
+      function fail(err) {
+        const msg = /Unauthorized/i.test(err.message || '')
+          ? '<h1>No access</h1>This campaign belongs to another account.'
+          : /get_impact_/.test(err.message || '') && /function|schema cache/i.test(err.message || '')
+            ? '<h1>Not set up yet</h1>The dashboard\'s database functions haven\'t been installed (2026-09-26-impact-dashboard.sql).'
+            : '<h1>Something went wrong</h1>' + esc(err.message || err);
+        $('main').innerHTML = '<div class="state">' + msg + '</div>';
+        if (window.Sentry) Sentry.captureException(err);
+      }
+
+      function render() {
+        const d = state, c = d.campaign, t = d.totals;
+        const items = c.items || [];
+        const buttons = Array.isArray(c.buttons) ? c.buttons : [];
+        const byTi = {};
+        (d.stories || []).forEach((s) => { byTi[s.target_index] = s; });
+
+        const org = c.org_name || '';
+        $('org-name').textContent = org;
+        $('org-name').hidden = !org;
+        document.title = (c.name || c.slug) + ' — Impact · Popcode';
+
+        const photos = items.length;
+        const updated = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+        // Watch time: mean furthest point × length, weighted by plays per photo.
+        function watchText(s, ti) {
+          if (!s || s.avg_pct == null) return '—';
+          const dur = state.durations[ti];
+          return dur ? clock(dur * s.avg_pct / 100) + ' of ' + clock(dur) : s.avg_pct + '%';
+        }
+        let wSum = 0, wDur = 0, wN = 0;
+        (d.stories || []).forEach((s) => {
+          const dur = state.durations[s.target_index];
+          if (dur && s.avg_pct != null && s.plays) { wSum += dur * s.avg_pct / 100 * s.plays; wDur += dur * s.plays; wN += s.plays; }
+        });
+        const avgNote = wN ? 'Avg. watch ' + clock(wSum / wN) + ' of ' + clock(wDur / wN)
+          : t.avg_pct != null ? 'On average, ' + t.avg_pct + '% of the video watched' : 'Of the videos started';
+
+        // Busiest button, named by its label in After the Video.
+        const tapsBy = d.buttons || {};
+        let topN = 0, topLabel = '';
+        buttons.forEach((b, i) => { const n = tapsBy[String(i + 1)] || 0; if (n > topN) { topN = n; topLabel = b.label; } });
+
+        const has = t.events > 0;
+        const kpis = [
+          { k: 'Scans', v: has ? num(t.scans) : '—',
+            n: t.scans ? 'About ' + num(t.phones) + ' different phone' + (t.phones === 1 ? '' : 's') : 'Each time a photo is scanned and plays' },
+          { k: 'Watched to end', v: t.plays ? pct(t.completes, t.plays) + '%' : '—',
+            n: t.plays ? avgNote : 'Share of videos watched all the way through' },
+          { k: 'Button taps', v: buttons.length ? num(t.taps) : '—',
+            n: !buttons.length ? 'No buttons set up after the video' : topN ? num(topN) + ' on ' + topLabel : 'Taps on the buttons after the video' },
+          { k: 'Gifts', v: '—', n: 'From your donation platform, added after the campaign', cls: 'pending' },
+          { k: 'Raised', v: '—', n: 'From your donation platform, added after the campaign', cls: 'pending money' },
+        ];
+
+        let html = '';
+        html += '<section class="title"><div><h1>' + esc(c.name || c.slug) + '</h1>' +
+          '<div class="sub">' + esc(fmtRange(c.from, c.to)) + ' · ' + photos + ' photo' + (photos === 1 ? '' : 's') + ' that play' +
+          ' · popcode.app/' + esc(c.slug) + '</div></div>' +
+          '<div class="updated">Updated ' + esc(updated) + (c.include_owner ? ' · includes your own test scans' : '') + '</div></section>';
+
+        html += '<details class="adjust"' + (params.has('from') || params.has('to') || c.include_owner ? ' open' : '') + '><summary>Dates and options</summary>' +
+          '<form class="row" id="adjust">' +
+          '<label>From<input type="date" name="from" value="' + esc(c.from) + '"></label>' +
+          '<label>To<input type="date" name="to" value="' + esc(c.to) + '"></label>' +
+          '<label class="check"><input type="checkbox" name="own"' + (c.include_owner ? ' checked' : '') + '>Include my own test scans</label>' +
+          '<button type="submit">Apply</button></form></details>';
+
+        html += '<section class="kpis">' + kpis.map((k) =>
+          '<div class="card kpi ' + (k.cls || '') + '"><div class="k">' + k.k + '</div><div class="v">' + esc(k.v) + '</div><div class="n">' + esc(k.n) + '</div></div>'
+        ).join('') + '</section>';
+
+        // Row 1: scans by day + funnel
+        html += '<section class="grid"><div class="card wide">' + daysCard(d) + '</div>' +
+          '<div class="card">' + funnelCard(d) + '</div></section>';
+
+        // Row 2: stories + (button taps, address split)
+        html += '<section class="grid"><div class="card wide">' + storiesCard(d, items, byTi, watchText) + '</div>' +
+          '<div class="stack"><div class="card">' + tapsCard(buttons, tapsBy) + '</div>' +
+          '<div class="card">' + splitCard(d) + '</div></div></section>';
+
+        html += '<p class="foot">Popcode never asks donors for their name, email or any account. Counts are anonymous.</p>';
+        $('main').innerHTML = html;
+
+        $('adjust').onsubmit = (e) => {
+          e.preventDefault();
+          const f = e.target, q = new URLSearchParams({ id: c.slug });
+          if (f.from.value) q.set('from', f.from.value);
+          if (f.to.value) q.set('to', f.to.value);
+          if (f.own.checked) q.set('own', '1');
+          if (params.get('tz')) q.set('tz', params.get('tz'));
+          if (params.get('hl')) q.set('hl', params.get('hl'));
+          location.search = q.toString();
+        };
+        const csv = $('csv');
+        if (csv) csv.onclick = (e) => { e.preventDefault(); downloadCsv(); };
+        placeLabels();
+      }
+
+      function daysCard(d) {
+        const days = d.days || [], t = d.totals;
+        const want = params.get('hl');
+        const hl = DATE_RE.test(want || '') ? want : givingTuesday(+d.campaign.to.slice(0, 4));
+        const hlIn = days.some((x) => x.day === hl);
+        const max = Math.max(1, ...days.map((x) => x.scans));
+        let peak = null;
+        days.forEach((x) => { if (!peak || x.scans > peak.scans) peak = x; });
+
+        let aside = '';
+        if (hlIn) aside = '<span class="aside"><i></i>' + (want ? '' : 'Giving Tuesday, ') + esc(fmtDay(hl)) + '</span>';
+        else if (peak && peak.scans) aside = '<span class="aside">Busiest day: ' + esc(fmtDay(peak.day)) + ', ' + num(peak.scans) + '</span>';
+        let h = '<div class="card-head"><h2>Scans by day</h2>' + aside + '</div>';
+        if (!t.scans) {
+          return h + '<p class="empty">Once people start scanning, each day’s scans show here' +
+            (hlIn ? ', with Giving Tuesday picked out' : '') + '.</p>';
+        }
+        h += '<div class="bars" role="img" aria-label="Scans by day, ' + esc(fmtRange(d.campaign.from, d.campaign.to)) + ', ' +
+          num(t.scans) + ' in all' + (hlIn ? ', ' + num((days.find((x) => x.day === hl) || {}).scans) + ' on ' + esc(fmtDay(hl)) : '') + '.">';
+        days.forEach((x) => {
+          const isHl = x.day === hl;
+          const hPct = x.scans ? Math.max(2, (x.scans / max) * 100) : 0;
+          h += '<div class="b' + (isHl ? ' hl' : '') + '" title="' + esc(fmtDay(x.day) + ': ' + x.scans) + '">' +
+            (isHl && x.scans ? '<span class="val" style="bottom:calc(' + hPct + '% + 4px)">' + num(x.scans) + '</span>' : '') +
+            '<i style="height:' + hPct + '%"></i></div>';
+        });
+        h += '</div><div class="xlabels" id="xlabels" data-n="' + days.length + '"></div>';
+        h += '<a href="#" class="csv" id="csv">Download daily numbers (CSV)</a>';
+        return h;
+      }
+
+      // Date labels under the bars: as many as fit, always the first and last.
+      function placeLabels() {
+        const box = $('xlabels');
+        if (!box) return;
+        const days = state.days, n = days.length;
+        const fit = Math.max(2, Math.floor(box.clientWidth / 64));
+        const every = Math.max(1, Math.ceil(n / fit));
+        let h = '';
+        days.forEach((x, i) => {
+          const last = i === n - 1;
+          if (i % every !== 0 && !last) return;
+          if (!last && n - 1 - i < every * 0.7 && i !== 0) return; // don't crowd the last label
+          const cls = i === 0 ? 'first' : last ? 'last' : '';
+          const left = n === 1 ? 50 : i === 0 ? 0 : last ? 100 : ((i + 0.5) / n) * 100;
+          h += '<span class="' + cls + '" style="left:' + left + '%">' + esc(fmtDay(x.day)) + '</span>';
+        });
+        box.innerHTML = h;
+      }
+      window.addEventListener('resize', () => { if (state) placeLabels(); });
+      // The print layout is a different width; re-fit the labels to it and back.
+      window.matchMedia('print').addEventListener('change', () => { if (state) placeLabels(); });
+      window.addEventListener('beforeprint', () => { if (state) placeLabels(); });
+      window.addEventListener('afterprint', () => { if (state) placeLabels(); });
+
+      function funnelCard(d) {
+        const f = d.funnel, base = f.scanned;
+        let h = '<div class="card-head"><h2>From photo to gift</h2></div>';
+        if (!base) {
+          return h + '<p class="empty">How many phones went from scanning a photo, to watching to the end, to tapping a button, to giving.</p>' +
+            '<p class="note">Gifts and totals come from your donation platform, matched through tracking tags on your donate link.</p>';
+        }
+        const steps = [
+          ['Scanned a photo', f.scanned], ['Watched to the end', f.finished], ['Tapped a button', f.tapped],
+        ];
+        h += '<ul class="funnel">' + steps.map((s) =>
+          '<li><div class="row">' + s[0] + ' <span>' + num(s[1]) + ' · ' + pct(s[1], base) + '%</span></div>' +
+          '<div class="track"><div class="fill" style="width:' + Math.max(pct(s[1], base), s[1] ? 1 : 0) + '%"></div></div></li>'
+        ).join('') +
+          '<li class="gave"><div class="row">Gave (confirmed) <span>After the campaign</span></div><div class="track"></div></li></ul>';
+        h += '<p class="note">Counts are phones, not scans. Gifts and totals come from your donation platform, matched through tracking tags on your donate link.</p>';
+        return h;
+      }
+
+      function storiesCard(d, items, byTi, watchText) {
+        let h = '<div class="card-head"><h2>Stories</h2></div>';
+        if (!items.length) return h + '<p class="empty">This Popcode has no photos yet.</p>';
+        const any = d.totals.scans > 0;
+        h += '<table class="stories"><thead><tr><th>Photo</th><th>Scans</th><th>Avg. watch</th><th>Watched to end</th><th>Button taps</th></tr></thead><tbody>';
+        items.forEach((it, i) => {
+          const s = byTi[it.ti];
+          const name = it.name || 'Photo ' + (i + 1);
+          const img = it.photo_url ? '<img src="' + esc(thumb(it.photo_url)) + '" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'), { className: \'ph\' }))">' : '<span class="ph"></span>';
+          h += '<tr><td><div class="story">' + img + '<div><b>' + esc(name) + '</b><small>' +
+            (it.media_type === 'audio' ? 'Audio story' : 'Video story') + '</small></div></div></td>' +
+            '<td data-k="Scans">' + (s ? num(s.scans) : any ? '0' : '—') + '</td>' +
+            '<td data-k="Avg. watch">' + esc(watchText(s, it.ti)) + '</td>' +
+            '<td data-k="To end">' + (s && s.plays ? pct(s.completes, s.plays) + '%' : '—') + '</td>' +
+            '<td data-k="Taps">' + (s ? num(s.taps) : any ? '0' : '—') + '</td></tr>';
+        });
+        h += '</tbody></table>';
+        if (!any) h += '<p class="note">Each photo’s scans and watch time fill in once people start scanning.</p>';
+        return h;
+      }
+
+      function tapsCard(buttons, tapsBy) {
+        let h = '<div class="card-head"><h2>Button taps</h2></div>';
+        if (!buttons.length) {
+          return h + '<p class="empty">Buttons like Donate or Volunteer can appear when a video ends. None are set up for this campaign yet.</p>';
+        }
+        const counts = buttons.map((b, i) => tapsBy[String(i + 1)] || 0);
+        const max = Math.max(1, ...counts), total = counts.reduce((a, b) => a + b, 0);
+        const top = counts.indexOf(Math.max(...counts));
+        h += '<ul class="taps">' + buttons.map((b, i) =>
+          '<li class="' + (total && i === top ? 'top' : '') + '"><span class="lab" title="' + esc(b.label) + '">' + esc(b.label) + '</span>' +
+          '<div class="track"><div class="fill" style="width:' + (counts[i] / max) * 100 + '%"></div></div>' +
+          '<span class="num">' + num(counts[i]) + '</span></li>'
+        ).join('') + '</ul>';
+        if (!total) h += '<p class="note">Taps show here once viewers reach the end of a video.</p>';
+        return h;
+      }
+
+      function splitCard(d) {
+        const e = d.entry, total = e.custom + e.popcode;
+        let h = '<div class="card-head"><h2>Address donors used</h2></div>';
+        const pop = 'popcode.app/' + esc(d.campaign.slug);
+        const how = 'Visits through your own address (like yourorg.org/story) are counted when it redirects to ' +
+          pop + '?via=org.';
+        if (!total) return h + '<p class="empty">Once people open this campaign, the split between your own address and ' + pop + ' shows here. ' + how + '</p>';
+        const pc = pct(e.custom, total), pp = 100 - pc;
+        h += '<div class="split" role="img" aria-label="' + pc + '% through your own address, ' + pp + '% through ' + pop + '">' +
+          '<div class="c" style="width:' + pc + '%"></div><div class="p" style="width:' + pp + '%"></div></div>' +
+          '<div class="split-legend"><div><b>' + pc + '%</b> your own address</div><div class="r"><b>' + pp + '%</b> ' + pop + '</div></div>';
+        if (!e.custom) h += '<p class="note">' + how + '</p>';
+        return h;
+      }
+
+      function downloadCsv() {
+        const c = state.campaign;
+        const rows = [['date', 'scans']].concat((state.days || []).map((x) => [x.day, x.scans]));
+        const blob = new Blob([rows.map((r) => r.join(',')).join('\n') + '\n'], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = c.slug + '-scans-by-day-' + c.from + '-to-' + c.to + '.csv';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      }
+
+      start().catch(fail);
+    </script>
+  </body>
+</html>

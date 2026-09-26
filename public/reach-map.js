@@ -359,7 +359,8 @@
     bar.hidden = !p;
     if (p) {
       bar.innerHTML = '<div><b>' + esc(p.name) + '</b>' + (p.owner ? ' <span class="muted">by ' + esc(p.owner) + '</span>' : '') +
-        ' · <a href="/' + encodeURIComponent(p.slug) + '" target="_blank" rel="noopener">popcode.app/' + esc(p.slug) + '</a></div>' +
+        ' · <a href="/' + encodeURIComponent(p.slug) + '" target="_blank" rel="noopener">popcode.app/' + esc(p.slug) + '</a>' +
+        ' · <a href="/impact.html?id=' + encodeURIComponent(p.slug) + '" target="_blank" rel="noopener">Impact dashboard</a></div>' +
         '<button type="button" class="btn btn-sm btn-quiet rm-clear">Show all Popcodes</button>';
       bar.querySelector('.rm-clear').onclick = function () { setFilter(null); };
     }
