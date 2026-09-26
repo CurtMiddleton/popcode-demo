@@ -45,8 +45,10 @@ begin
   -- account made before signup events existed (2026-09-09) is placed where it
   -- was first seen.
   return query
-    select e.slug, e.event_type, e.user_id, e.created_at,
-           e.city, e.region, e.country, e.latitude, e.longitude,
+    -- Casts: return query must match the declared types exactly, and this
+    -- table's column types were set in the dashboard, not in this repo.
+    select e.slug::text, e.event_type::text, e.user_id::uuid, e.created_at::timestamptz,
+           e.city::text, e.region::text, e.country::text, e.latitude, e.longitude,
            md5(coalesce(e.ip_address::text, '') || '|' || coalesce(e.user_agent, '')) as visitor
     from scan_events e
     where (e.country is not null or e.latitude is not null)
