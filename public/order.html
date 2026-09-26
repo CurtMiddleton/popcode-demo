@@ -116,8 +116,8 @@
       .toggle { display:inline-flex; background:#eee; border-radius:16px; padding:3px; gap:2px; }
       .toggle button { border:none; background:none; border-radius:14px; padding:8px 16px; font-size:13px; font-weight:500; color:#666; cursor:pointer; font-family:'Inter',sans-serif; }
       .toggle button.active { background:#fff; color:#1a1a1a; box-shadow:0 1px 4px rgba(0,0,0,0.12); font-weight:600; }
-      #side-toggle { display:none; justify-content:center; margin-top:16px; }
-      #side-toggle.on { display:flex; }
+      .side-toggle { display:none; justify-content:center; margin-top:16px; }
+      .side-toggle.on { display:flex; }
       .detail-price { font-size:20px; font-weight:600; margin:30px 0 4px; }
       .detail-price-note { color:#888; font-size:12px; margin-bottom:24px; }
       .specs { border-top:1px solid #eee; padding-top:22px; margin-top:10px; }
@@ -304,7 +304,9 @@
         <button class="linkback" id="detail-back" style="display:none;">&larr; Back</button>
         <div class="detail">
           <div class="detail-left">
-            <div class="detail-preview" id="detail-preview"><div class="detail-stage"><canvas id="detail-canvas" width="400" height="400"></canvas></div></div>
+            <div class="detail-preview" id="detail-preview"><div class="detail-stage"><canvas id="detail-canvas" width="400" height="400"></canvas></div>
+              <div id="detail-side-toggle" class="side-toggle"><div class="toggle"><button type="button" data-side="front" class="active">Front</button><button type="button" data-side="back">Back</button></div></div>
+            </div>
             <div class="preview-actions" id="detail-photo-actions" style="display:none;">
               <button type="button" class="change-photo-btn" id="adjust-photo-btn">Adjust photo</button>
               <button type="button" class="change-photo-btn" id="change-photo-btn">Change photo</button>
@@ -393,7 +395,7 @@
         <div class="detail">
           <div class="detail-left">
             <div class="detail-preview"><div class="detail-stage"><canvas id="review-canvas" width="400" height="400"></canvas></div>
-              <div id="side-toggle"><div class="toggle"><button type="button" data-side="front" class="active">Front</button><button type="button" data-side="back">Back</button></div></div>
+              <div id="side-toggle" class="side-toggle"><div class="toggle"><button type="button" data-side="front" class="active">Front</button><button type="button" data-side="back">Back</button></div></div>
             </div>
             <div class="preview-actions">
               <button type="button" class="change-photo-btn" id="review-adjust-btn">Adjust photo</button>
@@ -1549,7 +1551,13 @@
         // No thumbnail strip / scenes. The product reshapes to the selected size's aspect
         // ratio and portrait/landscape (photo cropped to fit); the tile + stage stay put.
         document.getElementById('view-row').innerHTML = '';
-        await renderProductPreview(cv, aspect);
+        /* Front/Back for a double-sided product, once there's a Popcode to put
+           on the back — before that the back is a placeholder link, not yours. */
+        const hasBack = HAS_BACK_PANEL.has(state.productType) && !!(state.selectedPhoto && state.selectedPhoto.slug);
+        if (!hasBack) state.previewSide = 'front';
+        document.getElementById('detail-side-toggle').classList.toggle('on', hasBack);
+        syncSideToggles();
+        await renderProductPreview(cv, aspect, state.previewSide);
         updateDetailCta();
         renderPopcodeCta();
       }
@@ -1661,11 +1669,23 @@
         document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b === btn));
         renderDetailPreview();
       });
+      // The detail and review screens each have a Front/Back toggle; they share
+      // one state so flipping on one is still flipped on the other.
+      function syncSideToggles() {
+        document.querySelectorAll('.side-toggle button').forEach(b =>
+          b.classList.toggle('active', b.dataset.side === state.previewSide));
+      }
       document.getElementById('side-toggle').addEventListener('click', e => {
         const btn = e.target.closest('button'); if (!btn) return;
         state.previewSide = btn.dataset.side;
-        document.querySelectorAll('#side-toggle button').forEach(b => b.classList.toggle('active', b === btn));
+        syncSideToggles();
         renderProductPreview(document.getElementById('review-canvas'), currentAspect(), state.previewSide);
+      });
+      document.getElementById('detail-side-toggle').addEventListener('click', e => {
+        const btn = e.target.closest('button'); if (!btn) return;
+        state.previewSide = btn.dataset.side;
+        syncSideToggles();
+        renderProductPreview(document.getElementById('detail-canvas'), currentAspect(), state.previewSide);
       });
       // "All products" goes back to the Shop; the funnel now starts on detail.
       document.getElementById('to-category').addEventListener('click', () => { window.location.href = '/shop.html'; });
@@ -2291,7 +2311,8 @@
           })() };
         try {
           const src = document.getElementById('detail-canvas');
-          if (src && src.width) {
+          // Not while it shows the back: the create page wants the product's face.
+          if (src && src.width && state.previewSide !== 'back') {
             const side = 480;
             const c = document.createElement('canvas');
             c.width = side; c.height = Math.round(side * (src.height / src.width));
@@ -2331,11 +2352,11 @@
             (pack > 1 ? `per set of ${pack}` : `per ${UNIT_NOUN[state.productType] || 'print'}`) + ', plus shipping at cost';
         }
         // Double-sided products (the ornament): let the buyer flip to the back and
-        // see the link panel that prints there. Always opens on the front.
-        state.previewSide = 'front';
-        const sideToggle = document.getElementById('side-toggle');
-        sideToggle.classList.toggle('on', HAS_BACK_PANEL.has(state.productType));
-        sideToggle.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.side === 'front'));
+        // see the link panel that prints there. Keeps whichever side the detail
+        // screen was showing.
+        document.getElementById('side-toggle').classList.toggle('on', HAS_BACK_PANEL.has(state.productType));
+        if (!HAS_BACK_PANEL.has(state.productType)) state.previewSide = 'front';
+        syncSideToggles();
         document.getElementById('review-specs').innerHTML = meta.specs.map(s => '<li>' + s + '</li>').join('');
         const sm = document.getElementById('save-msg'); sm.textContent = ''; sm.classList.remove('err');
         const sb = document.getElementById('save-btn'); sb.disabled = false; sb.textContent = 'Save design';
