@@ -40,6 +40,12 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   the holidays): "Give the gift of memories this holiday season", Scout's ornament
   on a branch, gift chips, and *Try it yourself* with `/assets/scout-ornament.pdf`
   (scans via `popcode.app/scout`). Phones get a *Scan Scout's ornament* button.
+- **My Designs cards show the product** (ornament, mug, print, canvas, tile,
+  black frame) via `product-preview.js` `renderProductMockup`, now loaded on
+  `manage.html`. White/natural frames and acrylic keep the plain photo.
+- **Booking:** Tours/galleries → `calendly.com/curt-popcodeapp/popcode-tours`
+  (home + pricing), Studio → `…/popcode-studio` (pricing). No mailto "Talk to
+  us" buttons left; support copy still says info@popcodeapp.com.
 - **Montage maker** (still admin-gated): photos **and short video clips** (up to
   100 items), **saved montages** (storage `montage-drafts/{user}/{id}/`),
   **framing** per photo/clip, **time on screen** per photo, and the last photo
@@ -86,7 +92,7 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 8. **Oversized photos get uploaded as-is.** `create.html applyMediaFile` only
    shrinks a photo over 10 MB, so a 3.3 MB, 24.5 MP iPhone MPO (Scout's) went up
    full size and iOS wouldn't draw it as a My Popcodes thumbnail. Thumbnails now
-   use Supabase's `/render/image/` (2026-09-26), but decide whether to cap the
+   use Supabase's `/render/image/…?width=N&resize=contain` (2026-09-26), but decide whether to cap the
    stored photo by pixels too — check first whether shop products print from
    that stored photo (a 2560px cap would hurt big prints). Image transforms are
    a metered Supabase feature: keep an eye on the usage page.
@@ -2975,3 +2981,16 @@ The create step that files a Shop product into My Designs (`saveShopDesign`, `9f
 #### Lessons
 - Testing log-event.js without DB access: copy it into the scratchpad next to a stub `node_modules/@supabase/supabase-js/index.js` and a stub `_sentry.js`, then call the handler with fake req/res. Cheap and covered the pre-migration retry.
 - Headless viewer test: serve `public/` via `page.route` on a fake host (`popcode.test`), unknown paths → `view.html` (mimics the Vercel `/{slug}` rewrite), capture `/api/log-event` bodies. `crypto.randomUUID` is absent on plain http, so the fallback ID path is what gets exercised there; on the phone it was a real UUID.
+
+### 2026-09-26 (later) — Calendly buttons, Scout's symbol, and My Popcodes / My Designs pictures
+
+**Branch `claude/cool-sagan-0k8yp3`, each change merged to `main` at the user's say-so, no PRs.** Commits `531f60f`, `086da8a`, `30e924f`, `6342d4f`, `67af345`, `f150cf7`, `3253fc1`.
+
+- **Calendly** (`531f60f`, `086da8a`): home galleries panel and pricing galleries panel → `popcode-tours`; pricing Studio card → `popcode-studio`. Buttons now say "Book a call" (were mailto "Talk to us"), new tab.
+- **hello@ address queued** for tomorrow (`30e924f`, Current state → Next): info@popcodeapp.com appears 20 times across 8 files; the user creates the mailbox, then decide which uses switch.
+- **Scout's ornament symbol** (`6342d4f`): the user's mockup — lower right, **12%** of the diameter (orders use 6%), centred at +0.44r, +0.64r, thin white ring. Rebuilt from the clean photo (`scratchpad/orn_branch_fixed.png` — regenerate from `holiday-ornament.jpg` history if needed), and the PDF matched.
+- **My Popcodes blank thumbnail** (`67af345`, `3253fc1`): Scout's `photo_0.jpeg` is a 3.3 MB, **24.5 MP iPhone MPO**; iOS Safari won't draw it as a CSS background. Cards now load Supabase's renderer (`/storage/v1/render/image/public/…`) with fallback to the original. The renderer answers `Access-Control-Allow-Origin: *`, so it can feed a canvas.
+  - **GOTCHA that shipped and had to be fixed:** `?width=480` ALONE makes Supabase keep the original height and **crop** — Scout came back 480×5712, and the cards looked zoomed in. Always pair it with **`&resize=contain`** (480×640; never upscales).
+  - Root cause upstream is still open: `create.html applyMediaFile` only downsizes photos over 10 MB (Next, item 8).
+- **My Designs product pictures** (`f150cf7`): `drawDesignMockup` uses `design.book_layout.print` (`productType`, `orientation`, `scale`, `adjust`, `variantId`), the mug's wrap from order.html's VARIANTS (`228.6×94.83mm`, `WRAP_FACE_FRAC`), and paints the mat in the template's own corner colour (`#f2f2f2`; mug `#f6f6f6`) so there's no pale square.
+- Testing note: the sandbox Chromium rejects Supabase's certificate through the proxy (`ERR_CERT_AUTHORITY_INVALID`) — use a context with `ignoreHTTPSErrors: true` to exercise real storage images, and serve test photos from `public/` for canvas work (remove them after).
