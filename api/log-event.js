@@ -22,7 +22,7 @@ export default async function handler(req, res) {
 
   try {
     const { slug, event_type, target_index, device_type, browser, user_agent, user_id,
-            recipient_code, progress_pct, device_id, entry } = req.body;
+            recipient_code, progress_pct, device_id, entry, segment } = req.body;
     // Account-level events (signup) belong to a person, not a project, so slug
     // is optional. Everything project-scoped still has to name one.
     // A montage is rendered before the project exists (and may be abandoned),
@@ -78,6 +78,7 @@ export default async function handler(req, res) {
     const extra = { ...coords };
     if (typeof device_id === 'string' && /^[a-z0-9-]{8,64}$/i.test(device_id)) extra.device_id = device_id;
     if (entry === 'custom' || entry === 'popcode') extra.entry = entry;
+    if (typeof segment === 'string' && /^[a-z0-9][a-z0-9-]{0,19}$/.test(segment)) extra.segment = segment;
     if (slug && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       try {
         const { data: col } = await db.from('collections').select('id').eq('slug', slug).maybeSingle();
@@ -89,7 +90,7 @@ export default async function handler(req, res) {
     // Before the migrations that add these columns run, naming one fails the
     // whole insert. Losing a pin or a device id beats losing the event.
     if (error && Object.keys(extra).length &&
-        /latitude|longitude|device_id|entry|collection_id/.test(error.message || '')) {
+        /latitude|longitude|device_id|entry|collection_id|segment/.test(error.message || '')) {
       ({ error } = await db.from('scan_events').insert(row));
     }
     if (error) throw error;
