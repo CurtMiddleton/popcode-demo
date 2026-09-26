@@ -288,7 +288,7 @@
       if (!col || !col.user_id) return;
       popTotal++;
       var p = acctPlace[col.user_id];
-      if (p) popcodes.push({ t: Date.parse(col.created_at), place: p, name: col.name || col.slug });
+      if (p) popcodes.push({ t: Date.parse(col.created_at), place: p, name: col.name || col.slug, slug: col.slug });
     });
 
     var products = [], watched = [], lines = {};
@@ -297,7 +297,7 @@
       if (/^create_/.test(e.event_type)) {
         if (e.event_type === 'create_project') return; // counted as Popcodes above, all time
         var p = at(e);
-        if (p) products.push({ t: t, place: p, type: e.event_type });
+        if (p) products.push({ t: t, place: p, type: e.event_type, slug: e.slug });
         return;
       }
       if (e.event_type !== 'scan_open') return;
@@ -312,7 +312,7 @@
         if (d >= MIN_LINE_KM) {
           var lk = o.key + '>' + v.key;
           var L = lines[lk] || (lines[lk] = { from: o, to: v, km: d, items: [] });
-          L.items.push({ t: t, name: nameOf[e.slug] || e.slug });
+          L.items.push({ t: t, name: nameOf[e.slug] || e.slug, slug: e.slug });
         }
       }
     });
@@ -324,12 +324,54 @@
     S.maxT = Date.now();
     if (atEnd) S.through = S.maxT;
     S.model = { accounts: accounts, popcodes: popcodes, popTotal: popTotal, products: products, watched: watched,
-      lines: Object.keys(lines).map(function (k) { return lines[k]; }) };
+      lines: Object.keys(lines).map(function (k) { return lines[k]; }), ownerOf: ownerOf };
+
+    // The project search list: every project, most-opened first.
+    var opens = {};
+    watched.forEach(function (w) { opens[w.slug] = (opens[w.slug] || 0) + 1; });
+    S.projects = S.cols.filter(function (c) { return c.slug; }).map(function (c) {
+      var u = userById[c.user_id];
+      return { slug: c.slug, name: c.name || c.slug, opens: opens[c.slug] || 0,
+        owner: u ? (u.full_name || u.email || '') : '' };
+    }).sort(function (a, b) { return b.opens - a.opens || a.name.localeCompare(b.name); });
+    fillProjectList();
+  }
+
+  // ── One project ─────────────────────────────────────────────────────────
+  // Searching a title narrows every layer, card, line and the country table
+  // to that Popcode: where it was watched, where its owner is.
+  function projectOption(p) {
+    return p.name + (p.owner ? ' — ' + p.owner : '') + ' — popcode.app/' + p.slug;
+  }
+  function fillProjectList() {
+    var dl = S.opts.container.querySelector('#rm-projects');
+    if (!dl) return;
+    dl.innerHTML = S.projects.map(function (p) {
+      return '<option value="' + esc(projectOption(p)) + '">' + (p.opens ? p.opens + ' opens' : 'no opens yet') + '</option>';
+    }).join('');
+  }
+  function setFilter(slug) {
+    S.filter = slug || null;
+    var c = S.opts.container, input = c.querySelector('.rm-search');
+    var p = S.filter && S.projects.filter(function (x) { return x.slug === S.filter; })[0];
+    if (input) input.value = p ? projectOption(p) : '';
+    var bar = c.querySelector('.rm-project');
+    bar.hidden = !p;
+    if (p) {
+      bar.innerHTML = '<div><b>' + esc(p.name) + '</b>' + (p.owner ? ' <span class="muted">by ' + esc(p.owner) + '</span>' : '') +
+        ' · <a href="/' + encodeURIComponent(p.slug) + '" target="_blank" rel="noopener">popcode.app/' + esc(p.slug) + '</a></div>' +
+        '<button type="button" class="btn btn-sm btn-quiet rm-clear">Show all Popcodes</button>';
+      bar.querySelector('.rm-clear').onclick = function () { setFilter(null); };
+    }
+    S.fitNext = !!p;
+    render();
   }
 
   // Everything visible through the slider's date, grouped by place.
   function aggregate() {
-    var T = S.through, places = {}, countries = {};
+    var T = S.through, places = {}, countries = {}, F = S.filter;
+    var owner = F && S.model.ownerOf[F];
+    function out(x) { return x.t > T || (F && x.slug !== F); }
     function P(p) {
       return places[p.key] || (places[p.key] = { p: p, accounts: [], popcodesN: 0, popProjects: {}, products: {}, productsN: 0, watchedN: 0, visitors: {}, projects: {}, first: Infinity });
     }
@@ -337,27 +379,27 @@
       return countries[cc] || (countries[cc] = { cc: cc, accounts: 0, popcodes: 0, products: 0, watched: 0, visitors: {}, first: Infinity });
     }
     S.model.accounts.forEach(function (a) {
-      if (a.t > T) return;
+      if (a.t > T || (F && a.uid !== owner)) return;
       var g = P(a.place); g.accounts.push(a.name); g.first = Math.min(g.first, a.t);
       var c = C(a.place.country); c.accounts++; c.first = Math.min(c.first, a.t);
     });
     S.model.popcodes.forEach(function (x) {
-      if (x.t > T) return;
+      if (out(x)) return;
       var g = P(x.place); g.popcodesN++; g.popProjects[x.name] = (g.popProjects[x.name] || 0) + 1; g.first = Math.min(g.first, x.t);
       var c = C(x.place.country); c.popcodes++; c.first = Math.min(c.first, x.t);
     });
     S.model.products.forEach(function (x) {
-      if (x.t > T) return;
+      if (out(x)) return;
       var g = P(x.place); g.products[x.type] = (g.products[x.type] || 0) + 1; g.productsN++; g.first = Math.min(g.first, x.t);
       var c = C(x.place.country); c.products++; c.first = Math.min(c.first, x.t);
     });
     S.model.watched.forEach(function (x) {
-      if (x.t > T) return;
+      if (out(x)) return;
       var g = P(x.place); g.watchedN++; g.visitors[x.visitor] = 1; g.projects[x.name] = (g.projects[x.name] || 0) + 1; g.first = Math.min(g.first, x.t);
       var c = C(x.place.country); c.watched++; c.visitors[x.visitor] = 1; c.first = Math.min(c.first, x.t);
     });
     var lines = S.model.lines.map(function (L) {
-      var n = L.items.filter(function (i) { return i.t <= T; }).length;
+      var n = L.items.filter(function (i) { return !out(i); }).length;
       return n ? { from: L.from, to: L.to, km: L.km, n: n, names: L.items.map(function (i) { return i.name; }) } : null;
     }).filter(Boolean);
     return { places: places, countries: countries, lines: lines };
@@ -394,6 +436,12 @@
     return pts;
   }
 
+  // Project names in popups narrow the map to that project when tapped.
+  function projLink(name) {
+    var p = S.projects.filter(function (x) { return x.name === name; })[0];
+    return p ? '<a href="#" class="rm-proj" data-slug="' + esc(p.slug) + '">' + esc(name) + '</a>' : esc(name);
+  }
+
   function popupHtml(g) {
     var h = '<div class="rm-pop"><div class="rm-pop-title">' + flag(g.p.country) + ' ' + esc(placeLabel(g.p)) + '</div>';
     if (g.accounts.length) {
@@ -405,7 +453,7 @@
       var tp = Object.keys(g.popProjects).sort(function (a, b) { return g.popProjects[b] - g.popProjects[a]; });
       h += '<div class="rm-pop-row"><span class="rm-dot" style="background:' + COLORS.popcodes + '"></span><b>' + g.popcodesN + '</b> Popcode' + (g.popcodesN === 1 ? '' : 's') +
         ' in ' + tp.length + ' project' + (tp.length === 1 ? '' : 's') + '</div>' +
-        '<div class="rm-pop-sub">' + tp.slice(0, 4).map(function (n) { return esc(n) + ' (' + g.popProjects[n] + ')'; }).join(', ') + (tp.length > 4 ? ' +' + (tp.length - 4) + ' more' : '') + '</div>';
+        '<div class="rm-pop-sub">' + tp.slice(0, 4).map(function (n) { return projLink(n) + ' (' + g.popProjects[n] + ')'; }).join(', ') + (tp.length > 4 ? ' +' + (tp.length - 4) + ' more' : '') + '</div>';
     }
     if (g.productsN) {
       h += '<div class="rm-pop-row"><span class="rm-dot" style="background:' + COLORS.products + '"></span><b>' + g.productsN + '</b> product' + (g.productsN === 1 ? '' : 's') + '</div>' +
@@ -416,7 +464,7 @@
       var top = Object.keys(g.projects).sort(function (a, b) { return g.projects[b] - g.projects[a]; }).slice(0, 4);
       h += '<div class="rm-pop-row"><span class="rm-dot" style="background:' + COLORS.watched + '"></span><b>' + g.watchedN + '</b> open' + (g.watchedN === 1 ? '' : 's') +
         ' · ' + nv + ' viewer' + (nv === 1 ? '' : 's') + '</div>' +
-        '<div class="rm-pop-sub">' + top.map(function (n) { return esc(n) + ' (' + g.projects[n] + ')'; }).join(', ') + '</div>';
+        '<div class="rm-pop-sub">' + top.map(function (n) { return projLink(n) + ' (' + g.projects[n] + ')'; }).join(', ') + '</div>';
     }
     if (isFinite(g.first)) h += '<div class="rm-pop-foot">First activity ' + fmtDate(g.first) + '</div>';
     return h + '</div>';
@@ -490,8 +538,8 @@
     }
     el.innerHTML =
       card(cc.length, 'Countries', cities.length + ' cities' + (newest ? ' · newest ' + flag(newest.cc) + ' ' + esc(countryName(newest.cc)) : '')) +
-      card(nAcct, 'Accounts placed', totalAccts ? 'of ' + totalAccts + ' accounts' : '', COLORS.accounts, 'accounts') +
-      card(nPop, 'Popcodes', S.through >= S.maxT && S.model.popTotal > nPop ? 'of ' + S.model.popTotal + ' made (rest unplaced)' : 'photo + video pairs', COLORS.popcodes, 'popcodes') +
+      card(nAcct, S.filter ? 'Owner placed' : 'Accounts placed', S.filter ? '' : totalAccts ? 'of ' + totalAccts + ' accounts' : '', COLORS.accounts, 'accounts') +
+      card(nPop, 'Popcodes', !S.filter && S.through >= S.maxT && S.model.popTotal > nPop ? 'of ' + S.model.popTotal + ' made (rest unplaced)' : 'photo + video pairs', COLORS.popcodes, 'popcodes') +
       card(nProd, 'Products', 'books, calendars, montages', COLORS.products, 'products') +
       card(Object.keys(viewers).length, 'Viewers', nOpens + ' opens', COLORS.watched, 'watched') +
       card(far ? Math.round(far.km).toLocaleString() + '<span style="font-size:16px"> km</span>' : '—', 'Farthest share',
@@ -542,6 +590,12 @@
     if (!S || !S.model) return;
     var agg = aggregate();
     draw(agg); stats(agg); countryTable(agg); note(); sliderSync();
+    if (S.fitNext) {
+      S.fitNext = false;
+      var pts = Object.keys(agg.places).map(function (k) { return [agg.places[k].p.lat, agg.places[k].p.lon]; });
+      if (pts.length) S.map.fitBounds(pts, { padding: [40, 40], maxZoom: 5 });
+      else S.map.fitBounds([[-50, -150], [72, 165]]);
+    }
   }
   function rebuild() { if (S && S.map) { buildModel(); render(); } }
 
@@ -550,7 +604,12 @@
     function chip(k) {
       return '<button type="button" class="rm-chip active" data-k="' + k + '"><span class="rm-dot" style="background:' + COLORS[k] + '"></span>' + LABELS[k] + '</button>';
     }
-    return '<div class="rm-stats cards"></div>' +
+    return '<div class="rm-searchbar">' +
+        '<input type="search" class="rm-search" list="rm-projects" placeholder="Search a Popcode by title, owner or link…" aria-label="Search a Popcode">' +
+        '<datalist id="rm-projects"></datalist>' +
+      '</div>' +
+      '<div class="rm-project" hidden></div>' +
+      '<div class="rm-stats cards"></div>' +
       '<div class="rm-toolbar">' +
         '<div class="rm-chips">' + chip('accounts') + chip('popcodes') + chip('products') + chip('watched') +
           '<span class="rm-sep"></span>' +
@@ -573,6 +632,30 @@
 
   function wire() {
     var c = S.opts.container;
+    var search = c.querySelector('.rm-search');
+    function pick() {
+      var v = search.value.trim();
+      if (!v) { if (S.filter) setFilter(null); return; }
+      var m = v.match(/popcode\.app\/([^\s]+)$/);
+      var slug = m ? m[1] : null;
+      if (!slug) {
+        // Typed without picking: take the only title that matches, if one does.
+        var q = v.toLowerCase();
+        var hits = S.projects.filter(function (p) { return (p.name + ' ' + p.owner + ' ' + p.slug).toLowerCase().indexOf(q) !== -1; });
+        if (hits.length === 1) slug = hits[0].slug;
+      }
+      if (slug && slug !== S.filter && S.projects.some(function (p) { return p.slug === slug; })) setFilter(slug);
+    }
+    search.addEventListener('change', pick);
+    search.addEventListener('input', function () { if (/popcode\.app\//.test(search.value) || !search.value) pick(); });
+    search.addEventListener('keydown', function (e) { if (e.key === 'Enter') pick(); });
+    c.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('.rm-proj');
+      if (!a) return;
+      e.preventDefault();
+      S.map.closePopup();
+      setFilter(a.dataset.slug);
+    });
     c.querySelectorAll('.rm-chip').forEach(function (b) {
       b.onclick = function () {
         var k = b.dataset.k; S.show[k] = !S.show[k];
