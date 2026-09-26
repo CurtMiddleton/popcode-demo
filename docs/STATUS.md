@@ -67,8 +67,9 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    to stay on info@. Tours and Studio now book via Calendly, not email.
 8. **Scout's ornament:** scan `/assets/scout-ornament.pdf` and the home-page
    ornament off a screen to confirm both trigger `popcode.app/scout`. The symbol
-   is lower **left** on Scout's (the user's call); real ornament orders print it
-   lower **right** — decide whether they should match.
+   on Scout's is lower right at **12%** of the diameter on a white ring (the
+   user's mockup, 2026-09-26); real orders print it at 6% — decide whether
+   orders should get the bigger symbol too.
 
 ## Session history
 
