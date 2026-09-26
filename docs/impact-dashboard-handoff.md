@@ -121,6 +121,13 @@ Orgs point their own address (yourorg.org/story) at their Popcode page with a si
 
 ## 7. Phases
 
+> **Status (2026-09-26):** phase 1 live (PR #106). Phase 2 built: `public/impact.html?id={slug}`
+> reading `get_impact_dashboard()` / `get_impact_campaigns()` (`supabase/migrations/2026-09-26-impact-dashboard.sql`),
+> open to the admin and the project's owner, linked from Analytics → Map's per-project bar. Also done early from
+> phase 3: the funnel's first three steps, the print report (two pages, Letter) and the daily CSV. Gifts / Raised /
+> "Gave" are placeholders until `campaign_results` exists. Time zone is `?tz=` (no account column yet); highlight
+> date is Giving Tuesday unless `?hl=YYYY-MM-DD`.
+
 1. **Before the pilot prints (~Nov 3):** event logging, story buttons with UTMs, and `?via=org` handling live on the story page. Without these, there's no data to show later.
 2. **By Giving Tuesday (Dec 1):** dashboard with headline numbers, scans by day, stories table, button taps, and address split. Admin-only is fine.
 3. **By mid-December:** gifts entry, funnel, share link, and export, in time to build the GE case study.

@@ -69,12 +69,14 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    "Popcode" if they don't want their name on the booking page.
 2. **Pricing kit contents are a draft** (up to 3 / up to 8 stories, January board
    report, "Your whole year" tag) — user to confirm.
-3. Impact dashboard phase 1, due before ~Nov 3 (`docs/impact-dashboard-handoff.md`).
-   Story buttons + tap logging + UTMs are now done (After the Video). Still to
-   build: `?via=org`, and the dashboard itself. **The user plans a fresh session
-   for this** (agreed 2026-09-26). Reuse from the Map: `reach-map.js`'s
-   per-project filter (`setFilter`), `get_reach_events` (admin-only today — an
-   org-facing version needs its own RLS/ownership check), and the paging rule.
+3. **Impact dashboard: phase 1 DONE and verified live (PR #106, 2026-09-26).**
+   Phase 2 (the dashboard itself, admin-only is fine) is due by Giving Tuesday,
+   Dec 1 — in progress. See `docs/impact-dashboard-handoff.md` §0 for how the
+   brief maps onto `scan_events`. **Decision owed by the user before the
+   dashboard's footer ships:** `scan_events` stores `ip_address` (+ full UA,
+   `user_id` when signed in), contradicting the brief's "no personal
+   information" footer — stop storing IPs (move Map/viewer insights to
+   `device_id`) or reword the footer.
 4. `PRINTIFY_DRY_RUN` is still `true` — one real test ornament order, then flip it
    in Production scope and redeploy.
 5. Carried over: let `curt@theworkshop.works` open `analytics.html`; ST-120
@@ -2967,6 +2969,26 @@ The create step that files a Shop product into My Designs (`saveShopDesign`, `9f
 - Skip the `.mind` recompile on media-only (book) saves.
 - `saveShopDesign` failures are silent; consider telling the user when the design couldn't be filed.
 - Whether board books and calendars should also get the media-only pencil (only `book` does today; board books still open their own builder).
+
+### 2026-09-26 — Impact dashboard phase 1: device ID, `?via=org`, collection_id on events
+
+**PR #106, merged by Claude at the user's request (merge `204f5ba`).** Branch `claude/peaceful-cannon-47pbai`. Migration `supabase/migrations/2026-09-26-impact-events.sql` **run in prod by the user** (verified: `device_id text`, `entry text`, `collection_id uuid` exist). Live deploy confirmed ~90s after merge by polling prod `view.html` for `pc_device`. **Verified end to end on the user's phone:** a `popcode.app/commontide?via=org` scan logged scan_open → scan_start → target_found → video_play → video_complete → cta_shown → cta_tap_3, every row with the same `device_id`, `entry = custom` and Common Tide's `collection_id` (`00c58c86-…`), including a second scan_open after a reload (sessionStorage kept `custom`). Not yet checked on a phone: a plain link in a new tab → `entry = popcode`.
+
+#### Checked the brief against the code first (now §0 of the handoff doc)
+- The brief assumes Express and a new `events` table; neither applies. `scan_events` already had almost all of it under other names: page_view = `scan_open`, camera_start = `scan_start`, recognized = `target_found`, video_progress = `media_progress` (`progress_pct`, furthest point, sent on close/pagehide) + `video_complete`, button_tap = `cta_tap_1..3`, story_buttons = `cover_config.end.buttons` (After the Video, PR #85), platform = `device_type`, image_id = `target_index`.
+- **Missing and added:** `device_id` (random, localStorage `pc_device`, `view.html`), `entry` (`?via=org` → `custom` for the visit, sessionStorage `pc_entry_{slug}`, stripped from the address bar with `history.replaceState`; `?r=` kept), `collection_id` (looked up from the slug **server-side** in `api/log-event.js` — `/api/collection` deliberately doesn't return the id, and a client can't then misattribute events).
+- **Found:** a slug rename (`edit.html renameProjectSlug`) rewrites storage + DB URLs but **not** `scan_events.slug`, so a renamed project's history drops out of the Map's per-project view (`reach-map.js setFilter`), viewer insights and target metrics. `collection_id` fixes it for new events only; old events are still slug-keyed.
+- The Map's per-project view already answers "where" for a campaign (admin-only); it counts `scan_open` (opens, not scans) and unique viewers by md5(IP|UA), not `device_id` — its numbers won't match the dashboard's.
+- `log-event.js` validates `device_id` (`/^[a-z0-9-]{8,64}$/i`) and `entry`, and retries the insert without the new columns if the error names one (same pattern as lat/long), so deploy order never loses events.
+
+#### Gaps carried to phase 2
+- Video length isn't logged → avg. watch time must read durations from the files (or add a column).
+- Taps are logged by button position (1–3), not label; reordering buttons mid-campaign would mix per-button counts.
+- IP storage vs. the "no personal information" footer (see Current state #3).
+
+#### Lessons
+- Testing log-event.js without DB access: copy it into the scratchpad next to a stub `node_modules/@supabase/supabase-js/index.js` and a stub `_sentry.js`, then call the handler with fake req/res. Cheap and covered the pre-migration retry.
+- Headless viewer test: serve `public/` via `page.route` on a fake host (`popcode.test`), unknown paths → `view.html` (mimics the Vercel `/{slug}` rewrite), capture `/api/log-event` bodies. `crypto.randomUUID` is absent on plain http, so the fallback ID path is what gets exercised there; on the phone it was a real UUID.
 
 ### 2026-09-26 (later) — Calendly buttons, Scout's symbol, and My Popcodes / My Designs pictures
 
