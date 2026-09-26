@@ -38,6 +38,11 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   100 items), **saved montages** (storage `montage-drafts/{user}/{id}/`),
   **framing** per photo/clip, **time on screen** per photo, and the last photo
   rests 1.5s longer. Shotstack is still on the **sandbox** key (watermarked).
+- **Analytics → Map** (PRs #99, #100, #101, 2026-09-26): global reach map —
+  Accounts / Created / Watched pins, share lines, country shading, time slider.
+  The SQL (`2026-09-26-event-coordinates.sql`) **has been run in prod** (user
+  confirmed newest-first version). Not yet seen with real data. Analytics event
+  reads now page past Supabase's 1000-row cap (All time was stopping at Sep 14).
 
 **Next**
 1. **Calendly:** the demo is 15 minutes and the hero button now says so (the
@@ -2885,3 +2890,23 @@ Net: nothing lost, nothing to fix. The other session's `8664424` built on top of
 - **A Python heredoc with `'EOF'` doesn't expand `$S`** — screenshots landed in a literal `$S/` directory.
 - Headless test harness for the builder (both pages): stub `window.supabase` with an in-memory storage map exposed via `page.exposeFunction` (`upload`/`list`/`remove`/`getPublicUrl` → `/__store/…` served by `page.route`), and generate test video with `MediaRecorder` on a canvas (WebM; the sandbox Chromium has no H.264).
 
+### 2026-09-26 — Analytics Map tab (global reach); "All time" was silently capped at 1,000 events
+
+**PRs: #99 (Map tab), #100 (1000-row paging), #101 (map RPC newest-first) — all merged by Claude at the user's request.** Branch `claude/analytics-global-reach-map-ylbgnp`.
+
+#### Map tab (`public/reach-map.js`, new; hooked into `analytics.html` at `loadReachMap()` :581, tab :441/:456)
+- Layers, each a toggle chip: **Accounts** (per user: the `signup` event's place, else the earliest located event with that `user_id` — covers accounts older than signup logging, 2026-09-09), **Created** (`create_*` events), **Watched** (`scan_open`, minus opens by the project's owner). Extras: **share lines** (owner's account place → viewer place, ≥ `MIN_LINE_KM` 80 km, `reach-map.js:36`), **country shading** (log-scaled), stat cards (countries + newest, cities, accounts placed of total, created, unique viewers, farthest share), **time slider + Replay**, by-country table. Pin popups list account names, created counts by type, top projects watched.
+- **No map tiles.** Leaflet 1.9.4 (cdnjs) + topojson-client + `world-atlas@2/countries-110m.json` (jsdelivr), lazy-loaded when the tab opens. ISO numeric→alpha-2 table embedded (Kosovo/Somaliland/N. Cyprus mapped by name). Ignores the range bar (all-time, own slider).
+- **Coordinates:** `api/log-event.js:49` stores Vercel's `x-vercel-ip-latitude/-longitude` into new `scan_events.latitude/longitude`; if the insert fails naming those columns it retries without them (:80), so no event is lost if the migration is ever missing. **Older events have only city text** → the map uses coords from any other event at the same city|region|country key, else geocodes via **OpenStreetMap Nominatim** (1 req/s, cached in localStorage `pc-reach-geo-v1`; failures cached as null). First open on a new browser takes ~a minute to place old pins.
+- **RPC `get_reach_events(max_rows)`** (`supabase/migrations/2026-09-26-event-coordinates.sql`): admin-gated (curtmid@gmail.com), returns only signup/scan_open/create_*/signed-in events, `visitor` = md5(ip|ua) — raw IPs never leave the DB. All columns cast (`::text`, `::uuid`) because scan_events' types were set in the dashboard and `return query` must match exactly. **Newest first** (#101) so the cap drops the oldest. Falls back to `get_events_with_users` if the RPC is missing. User ran it in prod; verified with `select prosrc like '%created_at desc%' from pg_proc where proname='get_reach_events'` → true.
+
+#### The 1,000-row bug (user: "what happened to the data before Sep 14? Missing all of Zoe's activity")
+- **PostgREST max-rows (1000) applies to RPCs too**, silently. `get_events_with_users` was called once with `max_rows: 50000`, ordered newest-first, so Activity/Overview "All time" and the funnel (`ensureAllEventsOnce`) only ever saw the latest 1000 events (≈ back to Sep 14 at ~80 events/day). Data was never lost.
+- Fix (#100): `fetchAllPages(makeQuery)` / `fetchAllRpc(fn, args)` in `analytics.html:1751`, paging `.range()` until a short page; `fetchAllRows` now delegates to it. The map has its own `allPages` (`reach-map.js:103`). **Rule: any read of scan_events (table or RPC) must page.**
+- Remaining limits, told to the user: Activity RPC caps at 100,000 rows, map at 200,000; the practical limit comes first — sequential 1000-row pages get slow past ~50k events. Then: aggregate in SQL instead of shipping raw events.
+
+#### Lessons
+- Leaflet + GeoJSON: Russia/Fiji rings cross ±180 and draw horizontal stripes across the whole map — `unwrap()` (`reach-map.js:559`) keeps each ring continuous.
+- Share-line arcs that take the "short way" across the date line run off the single drawn world; they're drawn within −180..180 on purpose.
+- Test harness (scratchpad only): stub `window.supabase` via `page.route` on the supabase-js CDN URL, with `rpc()` returning `{ range(), then() }` and a 1000-row cap to reproduce max-rows; CDN libs downloaded with curl and served from `page.route`; Nominatim stubbed.
+- `ensureUsers()` → `get_all_users` still asks for 1000 rows in one call — fine at 11 accounts, needs paging past ~1000 accounts.
