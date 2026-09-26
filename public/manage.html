@@ -19,6 +19,7 @@
     <title>Popcode — My Popcodes</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/product-preview.js"></script>
     <script src="/dialog.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="stylesheet" href="/ui.css">
@@ -159,6 +160,10 @@
       .design-mat.book-mat { background: #ffffff; padding: 10px; }
       .design-mat .book-canvas { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; }
       .design-mat .design-photo { max-width: 100%; max-height: 100%; border-radius: 2px; box-shadow: 0 2px 8px rgba(0,0,0,0.16); }
+      .design-mat .design-mockup { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; }
+      /* The product photographs have their own backdrop (#f2f2f2, the mug
+         #f6f6f6); the mat takes that colour so the picture has no visible edge. */
+      .design-mat.mockup-mat { background: #f2f2f2; padding: 8px; }
       /* One line, like .design-title: this carries "· plays <project>" and a long
          project name would otherwise wrap and make that card taller than the ones
          beside it. */
@@ -1110,6 +1115,7 @@
           if (cv) renderBookMockup(cv, coverPhoto, coverText).catch(() => {});
         }
         useSmallPhoto(card);
+        if (!isBook && !isCalendar && !isBoardbook) drawDesignMockup(card, col, thumbUrl);
         return card;
       }
       function closeAllDesignMenus() {
@@ -1771,6 +1777,48 @@
           probe.onerror = () => { el.style.backgroundImage = `url('${full}')`; };
           probe.src = small;
         });
+      }
+
+      /* The product itself on a My Designs card — the ornament, the mug, the
+         print in its frame — drawn by the Shop's own renderer (product-preview.js)
+         with the design's saved crop and badge size, so it matches what was
+         ordered. Anything it can't draw faithfully keeps the plain photo:
+         acrylic (no template), white or natural frames (the template is black),
+         books and calendars (their own renderers). */
+      const MOCKUP_FOR = { print: 'print', tile: 'tile', canvas: 'canvas', framed: 'framed', framedcanvas: 'framed', ornament: 'ornament', mug: 'mug' };
+      // Kept in step with order.html's VARIANTS (the mug wraps; the art keeps its own aspect).
+      const MUG_WRAP = { widthMm: 228.6, heightMm: 94.83, safeMm: 4 };
+      async function drawDesignMockup(card, col, photoUrl) {
+        const P = window.PopcodePreview;
+        const pc = (col.book_layout && col.book_layout.print) || {};
+        const type = pc.productType || col.kind;
+        const mk = P && P.MOCKUPS && P.MOCKUPS[MOCKUP_FOR[type]];
+        const img = card.querySelector('.design-photo');
+        if (!mk || !img || !photoUrl) return;
+        if (/-(white|natural)$/.test(pc.variantId || '')) return;
+        const isMug = type === 'mug';
+        const opts = {
+          mockup: mk,
+          scale: typeof pc.scale === 'number' ? pc.scale : 0.06,
+          adjust: pc.adjust || null,
+          aspect: isMug ? MUG_WRAP.widthMm / MUG_WRAP.heightMm : (pc.orientation === 'landscape' ? 1.25 : 0.8),
+          art: isMug ? { wrap: MUG_WRAP, faceFrac: P.WRAP_FACE_FRAC } : {},
+        };
+        const cv = document.createElement('canvas');
+        cv.className = 'design-mockup';
+        try {
+          // The resized copy: a 24MP original is too big to decode on a phone.
+          await P.renderProductMockup(cv, smallPhoto(photoUrl, 1400), opts);
+          img.replaceWith(cv);
+          const mat = cv.closest('.design-mat');
+          if (mat) {
+            mat.classList.add('mockup-mat');
+            try {
+              const [r, g, b] = cv.getContext('2d').getImageData(2, 2, 1, 1).data;
+              mat.style.background = `rgb(${r}, ${g}, ${b})`;
+            } catch (e) { /* the #f2f2f2 default is right for most */ }
+          }
+        } catch (e) { /* keep the plain photo */ }
       }
 
       function escapeHtml(str) {
