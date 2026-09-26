@@ -65,7 +65,14 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    alias at the mail provider (the user does that part), then decide which of
    those uses switch — privacy/terms and order-destination notices may need
    to stay on info@. Tours and Studio now book via Calendly, not email.
-8. **Scout's ornament:** scan `/assets/scout-ornament.pdf` and the home-page
+8. **Oversized photos get uploaded as-is.** `create.html applyMediaFile` only
+   shrinks a photo over 10 MB, so a 3.3 MB, 24.5 MP iPhone MPO (Scout's) went up
+   full size and iOS wouldn't draw it as a My Popcodes thumbnail. Thumbnails now
+   use Supabase's `/render/image/` (2026-09-26), but decide whether to cap the
+   stored photo by pixels too — check first whether shop products print from
+   that stored photo (a 2560px cap would hurt big prints). Image transforms are
+   a metered Supabase feature: keep an eye on the usage page.
+9. **Scout's ornament:** scan `/assets/scout-ornament.pdf` and the home-page
    ornament off a screen to confirm both trigger `popcode.app/scout`. The symbol
    on Scout's is lower right at **12%** of the diameter on a white ring (the
    user's mockup, 2026-09-26); real orders print it at 6% — decide whether

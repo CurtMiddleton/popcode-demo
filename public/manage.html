@@ -815,7 +815,7 @@
 
         card.innerHTML = `
           <div class="card-main">
-            ${thumbUrl ? `<div class="card-thumb" style="background-image:url('${escapeHtml(thumbUrl)}')"></div>` : '<div class="card-thumb"></div>'}
+            ${thumbUrl ? `<div class="card-thumb" data-full="${escapeHtml(thumbUrl)}" data-small="${escapeHtml(smallPhoto(thumbUrl, 480))}"></div>` : '<div class="card-thumb"></div>'}
             <div class="card-info">
               ${kindPill ? `<div class="pop-pill product">${escapeHtml(kindPill)}</div>` : isCollection ? '<div class="pop-pill">Collection</div>' : ''}
               <div class="card-title">${escapeHtml(title)}</div>
@@ -911,6 +911,7 @@
           openDownloadModal(this.dataset.slug, this.dataset.title);
         });
 
+        useSmallPhoto(card);
         return card;
       }
 
@@ -1055,7 +1056,7 @@
         const coverText = { eyebrow: bookCover.eyebrow || '', title: bookCover.title || title, subtitle: bookCover.subtitle || '' };
         const mat = isBook
           ? `<canvas class="book-canvas"></canvas>`
-          : `<img class="design-photo" src="${thumbUrl ? escapeHtml(thumbUrl) : ''}" alt="">`;
+          : (thumbUrl ? `<img class="design-photo" data-full="${escapeHtml(thumbUrl)}" data-small="${escapeHtml(smallPhoto(thumbUrl, 640))}" alt="">` : `<img class="design-photo" src="" alt="">`);
 
         card.innerHTML = `
           <div class="design-top">
@@ -1108,6 +1109,7 @@
           const cv = card.querySelector('.book-canvas');
           if (cv) renderBookMockup(cv, coverPhoto, coverText).catch(() => {});
         }
+        useSmallPhoto(card);
         return card;
       }
       function closeAllDesignMenus() {
@@ -1743,6 +1745,32 @@
           }
         }
         catch (_) { popcodeCopyLink(url, `Link for ${r.name}`); }
+      }
+
+      /* Card thumbnails come from Supabase's image renderer, not the original:
+         an iPhone photo can be 24MP (Scout's is 4284x5712), which iOS Safari
+         won't draw as a background image, so the card showed nothing — and
+         every card was downloading full-size photos. Width only, so the card's
+         own crop is unchanged. Not a Supabase storage URL: returned as is. */
+      function smallPhoto(url, px) {
+        try {
+          const u = new URL(url);
+          if (!u.pathname.includes('/storage/v1/object/public/')) return url;
+          u.pathname = u.pathname.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/');
+          u.searchParams.set('width', String(px));
+          return u.toString();
+        } catch (e) { return url; }
+      }
+      // If the renderer can't serve it, fall back to the original photo.
+      function useSmallPhoto(root) {
+        root.querySelectorAll('[data-full]').forEach(el => {
+          const small = el.dataset.small, full = el.dataset.full;
+          if (el.tagName === 'IMG') { el.onerror = () => { el.onerror = null; el.src = full; }; el.src = small; return; }
+          const probe = new Image();
+          probe.onload = () => { el.style.backgroundImage = `url('${small}')`; };
+          probe.onerror = () => { el.style.backgroundImage = `url('${full}')`; };
+          probe.src = small;
+        });
       }
 
       function escapeHtml(str) {
