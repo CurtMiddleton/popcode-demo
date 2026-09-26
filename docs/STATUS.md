@@ -57,7 +57,15 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    (moved with Shotstack `offset`/`scale` — never seen rendered), and a render
    where the last photo has its own longer time. Then drop the admin gate and
    move Shotstack to the production key (`.../edit/v1`).
-7. **Scout's ornament:** scan `/assets/scout-ornament.pdf` and the home-page
+7. **Set up a `hello@` address (user asked, 2026-09-26, "tomorrow").** The site
+   uses `info@popcodeapp.com` 20 times across `index.html`, `howto.html`
+   (support: "Still having trouble?"), `nonprofits.html`, `auth.html`,
+   `privacy.html`, `terms.html`, `countries.js` and `lib/print/destinations.mjs`.
+   Decide the domain (popcodeapp.com vs popcode.app), create the mailbox or
+   alias at the mail provider (the user does that part), then decide which of
+   those uses switch — privacy/terms and order-destination notices may need
+   to stay on info@. Tours and Studio now book via Calendly, not email.
+8. **Scout's ornament:** scan `/assets/scout-ornament.pdf` and the home-page
    ornament off a screen to confirm both trigger `popcode.app/scout`. The symbol
    is lower **left** on Scout's (the user's call); real ornament orders print it
    lower **right** — decide whether they should match.
