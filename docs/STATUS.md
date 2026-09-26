@@ -27,6 +27,12 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   `/assets/common-tide-postcard.pdf`.
 - Adobe Fonts kit `hdk3gwt` (The Seasons) is loaded on the Common Tide demo pages
   and on `/nonprofits` (for the type printed on the sample pieces).
+- **My Popcodes / My Designs split** (2026-09-24/26): a Popcode made for a shop
+  product shows that product's pill ("Ornament", "Mug"), derived from the design
+  rows whose `book_layout.print.sourceSlug` names it. A book's pencil in My
+  Popcodes opens `edit.html` in **media-only** mode (videos/audio only; photos and
+  pages belong to the book builder, reached from My Designs). The ornament's
+  product page has a Front/Back toggle once a Popcode photo is chosen (PR #105).
 - Mugs live on the shop. Ornaments live via Printify (blueprint 1747). Shop order
   (2026-09-26): Photo Book, Calendar, Board Book, **Ornaments, Photo Mugs**, then
   Framed Prints and the rest.
@@ -2921,3 +2927,30 @@ Net: nothing lost, nothing to fix. The other session's `8664424` built on top of
 - **#102:** *Created* split into **Popcodes** (pink) and **Products** (amber). Popcodes come from `collections` + `collection_items` with the `popcode_used()` rule (distinct collection|target_index with video or audio) → all history; pinned at the owner's account place, dated by the project; owners with no known place are counted but unpinned ("of N made (rest unplaced)"). Products = `create_*` minus `create_project`. Both tables are read with paging (`allTableRows`). Also: `buildModel` keeps the slider at today when late geocodes rebuild (else the "of N made" note never showed); `.rm-card { min-width: 0 }` — nowrap card subtitles widened the page to 423px on a 390px phone. Cities folded into the Countries card's subtitle. This PR also carried the first session-notes commit into main.
 - **#103:** search box (`<datalist>` of every project, most-opened first; matches title, owner or `popcode.app/slug`). `setFilter(slug)` (`reach-map.js:353`) narrows every layer, card, line and the country table, fits the map to the places, and shows a bar with **Show all Popcodes**. Project names in pin popups are links to the same filter (`projLink`, :440). Filtered cards drop site-wide "of N" subtitles. **Gotcha:** `.rm-project { display:flex }` overrides the `hidden` attribute — needed `.rm-project[hidden] { display: none }`.
 - **Nonprofit dashboard:** user asked whether to build it here; recommended a fresh session (it needs per-org access control, not the admin-only RPC). Suggested opener: *"Build phase 1 of the nonprofit impact dashboard from docs/impact-dashboard-handoff.md. Check it against the code first, including the per-project view on the analytics Map tab."*
+
+### 2026-09-24 → 09-26 — Product pills in My Popcodes, a book's Popcodes, ornament Front/Back on the product page
+
+**Branch `claude/exciting-brahmagupta-gbqh76`.** Commit `65f0607` (pills + book pencil) was pushed to the branch and reached `main` through a later merge. **PR #105** (ornament toggle) was opened and merged by Claude at the user's request, merge commit `c66174a`. Verified live: prod `order.html` matched `origin/main` byte for byte about 90 seconds after the merge. No migrations.
+
+#### The model the user set out (keep this)
+**Anything scannable goes in My Popcodes; anything you'd order goes in My Designs.** A book is both: it shows in My Popcodes with a "Book" pill, and its **pencil there edits its Popcodes**, the photos it links and what they play. The book itself (layout, pages, cover) is edited from My Designs.
+
+#### What shipped
+- **Product pill on a Popcode card** (`public/manage.html`, `buildProductIndex` / `buildCard`): `productKindsBySlug[slug]` collects the kinds of the design rows whose `book_layout.print.sourceSlug` is this Popcode. The pill shows the first two ("Ornament · Mug"), then "+N". A Popcode row stores no product of its own, so **no design row means no pill**.
+- **A book's pencil** → `edit.html?id={slug}` instead of `book.html`. The card's Shop button still goes to `book.html?…&cart=1` (`shopHref`).
+- **`edit.html` media-only mode** (`mediaOnly`, set in `loadCollection` when `col.kind === 'book'`): `body.media-only` hides remove-page and add-page, and the photo tile's click does nothing (the eye preview still works). A note links to `/book.html?id=`. **Save never renumbers `target_index`** (`if (mediaOnly) idx = item.target_index;` in the kept-items loop), because the book's `book_layout` slots point at those indexes. It still recompiles the `.mind` from the same photos in the same order, which is harmless but slow; skipping it for media-only saves would be a safe speed-up.
+- **Ornament Front/Back toggle on the detail page** (`public/order.html`): `#detail-side-toggle` (the class is now `.side-toggle`, shared with review's `#side-toggle`). It shows only when `HAS_BACK_PANEL` has the product **and** `state.selectedPhoto.slug` exists; otherwise the side resets to front. Both toggles share `state.previewSide` via `syncSideToggles()`, and review now keeps the side chosen on the detail page instead of forcing Front. `carryProductToCreate` skips the `detail-canvas` snapshot while the back is showing.
+
+#### Why BowieatXmas, Mug test and scouttest1 had no pill and weren't in My Designs
+The create step that files a Shop product into My Designs (`saveShopDesign`, `9f19a70`) only went live at **13:27 UTC on 09-24**. Mug test (09-23) and probably the other two came before that. scouttest1 was created that same day, so it may have come after, gone through **+ New Popcode**, or hit a failure: `saveShopDesign` swallows its errors (Sentry only). Couldn't tell which without DB access. **Fix for an existing one:** Shop on the card → pick the product → reach review, which autosaves the design, and the pill appears. No SQL backfill was written.
+
+#### Lessons
+- **My branch was 116 commits behind `main`** at the start of the 09-26 turn, even though its only commit was already merged. The start-of-session freshness check caught it; `git checkout -B <branch> origin/main` was the clean fix.
+- **Deploy checks:** the first `curl` after the merge returned the *previous* build with `x-vercel-cache: HIT` and a `last-modified` after the merge time. The new build needed about a minute more. Poll for a string that exists only in the new build (or `cmp` against `git show origin/main:…`); one sample proves nothing.
+- Headless harness reused: the supabase-js stub now answers `.eq` / `.in` / `.single` over in-memory `collections` / `collection_items`, which was enough to drive manage.html, edit.html (book vs plain) and order.html (`?type=ornament&id=…&photo=0`) with no page errors. `$NaN` on the price is only the stubbed `/api/*`.
+
+#### Still open
+- Skip the `.mind` recompile on media-only (book) saves.
+- `saveShopDesign` failures are silent; consider telling the user when the design couldn't be filed.
+- Whether board books and calendars should also get the media-only pencil (only `book` does today; board books still open their own builder).
+
