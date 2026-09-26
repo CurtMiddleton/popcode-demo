@@ -38,11 +38,13 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   100 items), **saved montages** (storage `montage-drafts/{user}/{id}/`),
   **framing** per photo/clip, **time on screen** per photo, and the last photo
   rests 1.5s longer. Shotstack is still on the **sandbox** key (watermarked).
-- **Analytics → Map** (PRs #99, #100, #101, 2026-09-26): global reach map —
-  Accounts / Created / Watched pins, share lines, country shading, time slider.
-  The SQL (`2026-09-26-event-coordinates.sql`) **has been run in prod** (user
-  confirmed newest-first version). Not yet seen with real data. Analytics event
-  reads now page past Supabase's 1000-row cap (All time was stopping at Sep 14).
+- **Analytics → Map** (PRs #99–#103, 2026-09-26): global reach map —
+  Accounts / Popcodes (all time) / Products / Watched pins, share lines, country
+  shading, time slider, and a **search box to narrow it to one Popcode** (views
+  by experience). The SQL (`2026-09-26-event-coordinates.sql`) **has been run in
+  prod** (newest-first version, verified). Not yet seen with real data. Analytics
+  event reads now page past Supabase's 1000-row cap (All time was stopping at
+  Sep 14).
 
 **Next**
 1. **Calendly:** the demo is 15 minutes and the hero button now says so (the
@@ -53,7 +55,10 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    report, "Your whole year" tag) — user to confirm.
 3. Impact dashboard phase 1, due before ~Nov 3 (`docs/impact-dashboard-handoff.md`).
    Story buttons + tap logging + UTMs are now done (After the Video). Still to
-   build: `?via=org`, and the dashboard itself.
+   build: `?via=org`, and the dashboard itself. **The user plans a fresh session
+   for this** (agreed 2026-09-26). Reuse from the Map: `reach-map.js`'s
+   per-project filter (`setFilter`), `get_reach_events` (admin-only today — an
+   org-facing version needs its own RLS/ownership check), and the paging rule.
 4. `PRINTIFY_DRY_RUN` is still `true` — one real test ornament order, then flip it
    in Production scope and redeploy.
 5. Carried over: let `curt@theworkshop.works` open `analytics.html`; ST-120
@@ -2910,3 +2915,9 @@ Net: nothing lost, nothing to fix. The other session's `8664424` built on top of
 - Share-line arcs that take the "short way" across the date line run off the single drawn world; they're drawn within −180..180 on purpose.
 - Test harness (scratchpad only): stub `window.supabase` via `page.route` on the supabase-js CDN URL, with `rpc()` returning `{ range(), then() }` and a 1000-row cap to reproduce max-rows; CDN libs downloaded with curl and served from `page.route`; Nominatim stubbed.
 - `ensureUsers()` → `get_all_users` still asks for 1000 rows in one call — fine at 11 accounts, needs paging past ~1000 accounts.
+
+#### Later the same day — Popcodes vs Products (#102), per-project search (#103)
+- **User question: "is 26 things created shop products?"** No — it was `create_*` events (projects, books, board books, calendars, montages), which only exist from **2026-09-09**, and `create_project` counts projects not Popcodes. The Accounts tab's "167 Popcodes made" counts photo+video pairs.
+- **#102:** *Created* split into **Popcodes** (pink) and **Products** (amber). Popcodes come from `collections` + `collection_items` with the `popcode_used()` rule (distinct collection|target_index with video or audio) → all history; pinned at the owner's account place, dated by the project; owners with no known place are counted but unpinned ("of N made (rest unplaced)"). Products = `create_*` minus `create_project`. Both tables are read with paging (`allTableRows`). Also: `buildModel` keeps the slider at today when late geocodes rebuild (else the "of N made" note never showed); `.rm-card { min-width: 0 }` — nowrap card subtitles widened the page to 423px on a 390px phone. Cities folded into the Countries card's subtitle. This PR also carried the first session-notes commit into main.
+- **#103:** search box (`<datalist>` of every project, most-opened first; matches title, owner or `popcode.app/slug`). `setFilter(slug)` (`reach-map.js:353`) narrows every layer, card, line and the country table, fits the map to the places, and shows a bar with **Show all Popcodes**. Project names in pin popups are links to the same filter (`projLink`, :440). Filtered cards drop site-wide "of N" subtitles. **Gotcha:** `.rm-project { display:flex }` overrides the `hidden` attribute — needed `.rm-project[hidden] { display: none }`.
+- **Nonprofit dashboard:** user asked whether to build it here; recommended a fresh session (it needs per-org access control, not the admin-only RPC). Suggested opener: *"Build phase 1 of the nonprofit impact dashboard from docs/impact-dashboard-handoff.md. Check it against the code first, including the per-project view on the analytics Map tab."*
