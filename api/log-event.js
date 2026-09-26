@@ -35,10 +35,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing fields' });
     }
 
-    // IP address — use x-forwarded-for (Vercel sets this)
-    const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
-               || req.headers['x-real-ip']
-               || null;
+    // No IP address is stored (2026-09-26): the impact dashboard promises orgs
+    // that Popcode keeps no donor IPs. Distinct viewers are counted by the
+    // anonymous device_id instead. Vercel's geo headers below are derived from
+    // the IP at the edge; only the city-level result is kept.
 
     // Free geo headers Vercel injects automatically on all deployments
     const country = req.headers['x-vercel-ip-country'] || null;
@@ -59,7 +59,6 @@ export default async function handler(req, res) {
       device_type:  device_type  ?? null,
       browser:      browser      ?? null,
       user_agent:   user_agent   ?? null,
-      ip_address:   ip,
       country,
       region,
       city,

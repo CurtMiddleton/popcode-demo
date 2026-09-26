@@ -140,7 +140,7 @@
         slug: e.slug, event_type: e.event_type, user_id: e.user_id, created_at: e.created_at,
         city: e.city, region: e.region, country: e.country,
         latitude: e.latitude, longitude: e.longitude,
-        visitor: (e.ip_address || '') + '|' + (e.user_agent || ''),
+        visitor: e.device_id || ((e.ip_address || '') + '|' + (e.user_agent || '')),
       };
     });
     return { rows: rows, migrated: false };
