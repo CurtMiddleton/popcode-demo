@@ -30,10 +30,10 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 - Mugs live on the shop. Ornaments live via Printify (blueprint 1747).
 
 **Next**
-1. **Calendly mismatch:** the event is **15 min** but the page says "Book a
-   30-minute demo" and the URL is `/30min`. User to pick one; also rename the
-   Calendly profile from "Curt Middleton" to "Popcode" if they don't want their
-   name on the booking page.
+1. **Calendly:** the demo is 15 minutes and the hero button now says so (the
+   booking URL's slug is still `/30min`; it works, rename it in Calendly only
+   with a matching `BOOKING_URL` change). Rename the Calendly profile from
+   "Curt Middleton" to "Popcode" if the user doesn't want their name on it.
 2. **Pricing kit contents are a draft** (up to 3 / up to 8 stories, January board
    report, "Your whole year" tag) — user to confirm.
 3. Impact dashboard phase 1, due before ~Nov 3 (`docs/impact-dashboard-handoff.md`).
