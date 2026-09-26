@@ -98,13 +98,28 @@
 
   // Rows from get_reach_events; before that migration runs, fall back to the
   // Activity tab's RPC (no coordinates — every place gets looked up by name).
+  // Supabase returns at most 1000 rows a request (max-rows) whatever max_rows
+  // says, and without an error, so every read pages until a short page.
+  async function allPages(db, fn, args) {
+    var PAGE = 1000, out = [], from = 0;
+    for (;;) {
+      var r = await db.rpc(fn, args).range(from, from + PAGE - 1);
+      if (r.error) throw r.error;
+      var batch = r.data || [];
+      out = out.concat(batch);
+      if (batch.length < PAGE) return out;
+      from += PAGE;
+    }
+  }
+
   async function fetchEvents(db) {
-    var r = await db.rpc('get_reach_events', { max_rows: 100000 });
-    if (!r.error) return { rows: r.data || [], migrated: true };
-    console.warn('get_reach_events unavailable, falling back:', r.error.message);
-    var f = await db.rpc('get_events_with_users', { days_back: 0, max_rows: 50000 });
-    if (f.error) throw f.error;
-    var rows = (f.data || []).map(function (e) {
+    try {
+      return { rows: await allPages(db, 'get_reach_events', { max_rows: 200000 }), migrated: true };
+    } catch (e) {
+      console.warn('get_reach_events unavailable, falling back:', e.message);
+    }
+    var f = await allPages(db, 'get_events_with_users', { days_back: 0, max_rows: 200000 });
+    var rows = f.map(function (e) {
       return {
         slug: e.slug, event_type: e.event_type, user_id: e.user_id, created_at: e.created_at,
         city: e.city, region: e.region, country: e.country,
