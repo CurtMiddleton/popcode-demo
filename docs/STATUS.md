@@ -75,10 +75,12 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    `impact.html?id=commontide&demo`. **IP decision made: no viewer IPs are
    stored from 2026-09-26 (PR #112), verified on a live scan**; old rows keep
    theirs (user chose not to erase — one-line SQL if they change their mind).
-   Open: CSV import of gifts, per-account time zone (`?tz=` today), Meg's name
-   in the demo (public API has no `asset_name`), the org-metrics ideas
-   (pieces mailed + cost → response rate / cost per $; `?v=` segments;
-   drop-off curve). Sentry: consider "Prevent storing IP addresses".
+   **Response rate + segments LIVE (PR #114):** printed addresses
+   `popcode.app/{slug}/{code}` (or `?v=`); admin enters pieces/cost and
+   segments. Open: CSV import of gifts, per-account time zone (`?tz=` today),
+   Meg's name in the demo (public API has no `asset_name`), a video drop-off
+   curve, and the demo's sample cost ($0.52 per $1 raised — user may want it
+   lower or hidden). Sentry: consider "Prevent storing IP addresses".
 4. `PRINTIFY_DRY_RUN` is still `true` — one real test ornament order, then flip it
    in Production scope and redeploy.
 5. Carried over: let `curt@theworkshop.works` open `analytics.html`; ST-120
@@ -3081,3 +3083,17 @@ The create step that files a Shop product into My Designs (`saveShopDesign`, `9f
 - Prod-only functions (`get_events_with_users`, `get_all_users`) had to be read with `select pg_get_functiondef(…)` — both now live in `supabase/migrations/`. Local test: install the pasted prod definition in the scratch Postgres, reproduce as `set role anon`, apply the fix, re-test. (The local stub needed `scan_events.id uuid` to match prod.)
 - Splitting a branch mid-flight: `git branch -f ip-wip <sha>` + `git format-patch` to park a commit, rebuild the branch for the urgent PR, then cherry-pick it back on the new `main`.
 - The SQL editor shows only one column when two share a name (`has_function_privilege` twice) — alias every column in check queries.
+
+### 2026-09-26 (late night) — Response rate and mailing segments on the impact dashboard
+
+**PR #114, merged by Claude at the user's say-so (merge `b33ed76`).** Migration `supabase/migrations/2026-09-26-impact-segments.sql` **run in prod by the user** first (verified from outside: `set_campaign_segments` exists and returns 401 to anon). Live checks after deploy: `/commontide/b`, `/commontide/lapsed`, `/CommonTide/B` and `/commontide` all serve the viewer; `/api/collection`, `/assets/…`, `/demo/commontide/give.html`, `/nonprofits`, `/u/test`, `/impact.html` unaffected.
+
+#### What shipped
+- **Segments.** Printed address `popcode.app/{slug}/{code}` or `?v={code}` (e.g. on an org redirect). New `vercel.json` rewrite (before the slug rules): `/:slug((?!(?:api|assets|demo|vendor|video)/)[A-Za-z0-9][A-Za-z0-9-]{2,29})/:seg([A-Za-z0-9][A-Za-z0-9-]{0,19})` → `/view.html`. `view.html` now splits the path (`pathParts`; `fromPath` = first part), keeps the code for the visit (sessionStorage `pc_seg_{slug}`), strips it from the address (path → `/{slug}`, `v` param removed), sends `segment` with every event, and adds `utm_content={code}` to outbound buttons unless the org set one. The uppercase-slug redirect keeps the segment. `log-event.js` stores `segment` (`^[a-z0-9][a-z0-9-]{0,19}$`), with the missing-column retry.
+- **SQL:** `scan_events.segment`; `campaign_results.pieces_mailed`, `print_cost`; gift fields now nullable; `campaign_segments` (collection_id, code, label, pieces_mailed, sort_order; RLS on, no policies); `impact_dashboard_data` returns `segments` (configured codes, codes seen in events, and a null-code row) and pieces/cost in `results`; `set_campaign_results(..., p_pieces, p_cost)` (old 4-arg calls still resolve via defaults); admin-only `set_campaign_segments(slug, jsonb)` (replace-all; bad code → whole call rolls back).
+- **Dashboard:** *Response* strip under the KPIs when pieces are known (phones ÷ pieces; cost per scan; cost per $1 raised); *By segment* table; admin *Campaign numbers* form (pieces, cost, gifts, raised — blanks saved as null) and *Segments* editor. Demo: 5,000 pieces, $2,750, three lists + no-code visits, each column summing to the demo totals. Print: chart + funnel share a row again → still 2 pages.
+
+#### Lessons
+- **path-to-regexp lookahead gotcha:** `(?!api$|…)` inside a param does NOT mean "this segment isn't api" — `$` is end of the whole path, so `/api/log-event` still matched and would have routed every API call to the viewer. Use `(?!(?:api|…)/)`. Test Vercel patterns locally with `npm i path-to-regexp@6` before deploying.
+- Old test harnesses whose stubs return the same object for every RPC will break on new list-returning calls — guard `Array.isArray` in the page and keep stubs per-function.
+- Always delete the previous PDF before re-rendering: a crashed run left a stale 2-page report that briefly looked like a pass (the real one was 3 pages).

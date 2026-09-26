@@ -232,6 +232,33 @@
         .response > div:first-child { border-top: 0; }
       }
       .seg-card { margin-bottom: 16px; }
+
+      /* Where viewers stop: one small line chart per story. */
+      .drop-card { margin-bottom: 16px; }
+      .drops { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 28px; }
+      .drops.one { grid-template-columns: minmax(0, 1fr); }
+      @media (max-width: 760px) { .drops { grid-template-columns: minmax(0, 1fr); } }
+      .drop h3 { font-size: 14px; font-weight: 600; margin: 0 0 8px; font-family: var(--sans); }
+      .drop h3 small { font-weight: 400; color: var(--muted); margin-left: 6px; }
+      .plot { position: relative; height: 150px; margin: 8px 0 0 34px; }
+      .plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+      .plot .yl { position: absolute; left: -34px; transform: translateY(-50%); font-size: 11px; color: var(--muted); }
+      .plot .xl { position: absolute; top: 100%; margin-top: 6px; transform: translateX(-50%); font-size: 11px; color: var(--muted); white-space: nowrap; }
+      .plot .xl.first { transform: none; } .plot .xl.last { transform: translateX(-100%); }
+      .plot .dl { position: absolute; transform: translate(-50%, -130%); font-size: 12px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+      .plot .dl.end { transform: translate(-100%, -130%); }
+      .plot .dot { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%;
+                   background: var(--accent); box-shadow: 0 0 0 2px var(--paper); pointer-events: none; }
+      .plot .dot.hover { display: none; }
+      .plot .hit { position: absolute; top: -10px; bottom: 0; cursor: crosshair; }
+      .plot .hit:focus { outline: none; }
+      .plot .tip { position: absolute; z-index: 2; pointer-events: none; transform: translate(-50%, calc(-100% - 12px));
+                   background: var(--ink); color: #fff; font-size: 12px; line-height: 1.35; padding: 6px 9px; border-radius: 8px;
+                   white-space: nowrap; display: none; }
+      /* Near the top there's no room above the point: show it below instead. */
+      .plot .tip.below { transform: translate(-50%, 12px); }
+      .drop-note { font-size: 13px; color: var(--muted); margin: 30px 0 0; line-height: 1.45; }
+      .drop-note b { color: var(--ink); font-weight: 600; }
       @media (max-width: 640px) { .stories.segs tr { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
       .seg-rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
       .seg-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
@@ -259,6 +286,8 @@
         .grid.row1 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .grid.row1 .wide { grid-column: span 2; }
         .response .v { font-size: 24px; }
+        /* The board report stays at two pages; drop-off is for the org's staff, on screen. */
+        .drop-card { display: none !important; }
         .response > div { padding: 12px 16px; }
         .bars { height: 130px; }
         /* Tighter than on screen so the report stays at two pages. */
@@ -464,6 +493,12 @@
           results: { gifts: 34, amount: 5270, currency: 'USD', source: 'manual', pieces: 5000, cost: 2750 },
           // Three mailing lists plus visits typed without a code; each column
           // sums to the totals above.
+          // Share of plays still watching at each tenth; the last point is the
+          // headline 59% watched to the end.
+          dropoff: stories.map((x, k) => {
+            const curve = [1, 0.96, 0.93, 0.9, 0.88, 0.85, 0.82, 0.78, 0.73, 0.68, 0.59].map((v, i) => Math.min(1, v + (spread[k] || 0) * i / 10));
+            return { target_index: x.target_index, n: x.plays, at: curve.map((v, i) => i === 10 ? x.completes : Math.round(x.plays * v)) };
+          }),
           segments: [
             { code: 'major', label: 'Major donors', pieces: 800, visits: 290, scans: 238, phones: 176, plays: 238, completes: 162, taps: 52 },
             { code: 'lapsed', label: 'Lapsed donors', pieces: 2200, visits: 395, scans: 311, phones: 231, plays: 311, completes: 171, taps: 38 },
@@ -573,12 +608,14 @@
         html += '<section class="grid"><div class="card wide">' + storiesCard(d, items, byTi, watchText) + '</div>' +
           '<div class="stack"><div class="card">' + tapsCard(buttons, tapsBy) + '</div>' +
           '<div class="card">' + splitCard(d) + '</div></div></section>';
+        html += dropoffCard(d);
         html += segmentsCard(d);
 
         html += '<p class="foot">' + (d.demo ? 'Sample data for illustration, shown over this Popcode’s real photos and buttons. ' : '') +
           'Popcode doesn’t ask donors for their name or email, and doesn’t keep IP addresses. Counts are anonymous.</p>';
         if (MODE === 'owner' && d.can) html += manageTools(d);
         $('main').innerHTML = html;
+        wireDropoff();
         wireManage(d);
 
         if ($('adjust')) $('adjust').onsubmit = (e) => {
@@ -776,6 +813,77 @@
         return '<section class="card response">' + cells.map((c) =>
           '<div><div class="k">' + c.k + '</div><div class="v">' + esc(c.v) + '</div><div class="n">' + esc(c.n) + '</div></div>'
         ).join('') + '</section>';
+      }
+
+      // Where viewers stop: for each photo, the share of plays still going at
+      // each tenth of the video (the same furthest points avg. watch uses).
+      function dropoffCard(d) {
+        const rows = (d.dropoff || []).filter((x) => x.n > 0);
+        if (!rows.length) return '';
+        const items = d.campaign.items || [];
+        const nameOf = (ti) => { const i = items.findIndex((it) => it.ti === ti); return i < 0 ? 'Photo' : (items[i].name || 'Photo ' + (i + 1)); };
+        let h = '<section class="card drop-card"><div class="card-head"><h2>Where viewers stop</h2>' +
+          '<span class="aside">Share of viewers still watching</span></div><div class="drops' + (rows.length === 1 ? ' one' : '') + '">';
+        rows.slice(0, 6).forEach((x) => {
+          const pcts = x.at.map((c) => (x.n ? c / x.n * 100 : 0));
+          const dur = state.durations[x.target_index];
+          const at = (i) => dur ? clock(dur * i / 10) : (i * 10) + '%';
+          // Biggest loss between two consecutive tenths.
+          let bi = 1;
+          for (let i = 2; i <= 10; i++) if (pcts[i - 1] - pcts[i] > pcts[bi - 1] - pcts[bi]) bi = i;
+          const lost = Math.round(pcts[bi - 1] - pcts[bi]);
+          const pts = pcts.map((v, i) => (i * 10) + ',' + (100 - v)).join(' ');
+          const label = nameOf(x.target_index) + ': share of ' + x.n + ' plays still watching at each tenth of the video: ' +
+            pcts.map((v, i) => at(i) + ' ' + Math.round(v) + '%').join(', ') + '.';
+          h += '<div class="drop" data-ti="' + x.target_index + '"><h3>' + esc(nameOf(x.target_index)) + '<small>' + num(x.n) + ' plays</small></h3>' +
+            '<div class="plot" role="img" aria-label="' + esc(label) + '">' +
+            '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
+              '<line x1="0" y1="0" x2="100" y2="0" stroke="#ecebe8" stroke-width="1" vector-effect="non-scaling-stroke"/>' +
+              '<line x1="0" y1="50" x2="100" y2="50" stroke="#ecebe8" stroke-width="1" vector-effect="non-scaling-stroke"/>' +
+              '<line x1="0" y1="100" x2="100" y2="100" stroke="#d8d6d0" stroke-width="1" vector-effect="non-scaling-stroke"/>' +
+              '<polygon points="0,100 ' + pts + ' 100,100" fill="#efebff"/>' +
+              '<polyline points="' + pts + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' +
+            '</svg>' +
+            '<span class="yl" style="top:0">100%</span><span class="yl" style="top:50%">50%</span>' +
+            '<span class="xl first" style="left:0">' + esc(at(0)) + '</span><span class="xl" style="left:50%">' + esc(at(5)) + '</span>' +
+            '<span class="xl last" style="left:100%">' + esc(at(10)) + '</span>' +
+            '<span class="dl end" style="left:100%;top:' + (100 - pcts[10]) + '%">' + Math.round(pcts[10]) + '%</span>' +
+            '<span class="dot" style="left:' + (bi * 10) + '%;top:' + (100 - pcts[bi]) + '%"></span>' +
+            '<span class="dot hover"></span><span class="tip"></span>' +
+            pcts.map((v, i) => '<span class="hit" tabindex="0" data-i="' + i + '" style="left:' + Math.max(0, i * 10 - 5) + '%;width:' +
+              (i === 0 || i === 10 ? 5 : 10) + '%" aria-label="' + esc(at(i) + ': ' + Math.round(v) + '% still watching') + '"></span>').join('') +
+            '</div>' +
+            '<p class="drop-note">Biggest drop: <b>' + esc(at(bi - 1)) + '–' + esc(at(bi)) + '</b>, where ' + lost + '% of viewers stopped. ' +
+            Math.round(pcts[10]) + '% watched to the end.</p></div>';
+        });
+        return h + '</div><p class="note">From how far each play got before the viewer closed it. ' +
+          'A big drop just before the end usually means the ask comes too late.</p></section>';
+      }
+
+      // Hover / focus on a tenth: move the dot and show the value.
+      function wireDropoff() {
+        document.querySelectorAll('.drop').forEach((el) => {
+          const ti = +el.dataset.ti;
+          const x = (state.dropoff || []).find((r) => r.target_index === ti);
+          if (!x) return;
+          const plot = el.querySelector('.plot'), tip = plot.querySelector('.tip'), dot = plot.querySelector('.dot.hover');
+          const dur = state.durations[ti];
+          const show = (i) => {
+            const v = x.at[i] / x.n * 100;
+            const when = dur ? clock(dur * i / 10) + ' (' + i * 10 + '%)' : i * 10 + '% in';
+            tip.textContent = 'At ' + when + ': ' + Math.round(v) + '% still watching (' + num(x.at[i]) + ' of ' + num(x.n) + ')';
+            tip.style.left = Math.min(85, Math.max(15, i * 10)) + '%'; tip.style.top = (100 - v) + '%'; tip.style.display = 'block';
+            tip.classList.toggle('below', v > 70);
+            dot.style.left = i * 10 + '%'; dot.style.top = (100 - v) + '%'; dot.style.display = 'block';
+          };
+          const hide = () => { tip.style.display = 'none'; dot.style.display = 'none'; };
+          plot.querySelectorAll('.hit').forEach((h) => {
+            const i = +h.dataset.i;
+            h.onmouseenter = h.onfocus = () => show(i);
+            h.onmouseleave = h.onblur = hide;
+            h.ontouchstart = () => show(i);
+          });
+        });
       }
 
       // By segment: one row per mailing list or card version. Only shown once
