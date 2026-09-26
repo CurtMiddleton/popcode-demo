@@ -16,6 +16,10 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   Calendly (`BOOKING_URL`); the hero phone plays the real `popcode.app/commontide`
   experience (cover → Meg's video → After the Video buttons); `?tweak` opens a
   drag-and-slider layout panel for the hero. `SHOW_CASE_STUDY` still off.
+  It has **its own header, not `nav.js`** (PR #95): logo + anchors (How it works,
+  Try it, What you get, Pricing, Questions) + Book a demo, laid out exactly like
+  the site header. Phones get a *Scan the Common Tide card* button in Try it
+  yourself (PR #96, same split as the Scout panel).
 - **After the Video** (admin-only, PR #85): up to three buttons when a video
   plays to the end, set in edit.html's *After video* tab, stored as
   `collections.cover_config.end` (no migration; the cover_config admin trigger
@@ -59,10 +63,10 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   Sep 14).
 
 **Next**
-1. **Calendly:** the demo is 15 minutes and the hero button now says so (the
-   booking URL's slug is still `/30min`; it works, rename it in Calendly only
-   with a matching `BOOKING_URL` change). Rename the Calendly profile from
-   "Curt Middleton" to "Popcode" if the user doesn't want their name on it.
+1. **Calendly:** done on the page — "Book a 15-minute demo" (the URL slug is
+   still `/30min`; rename it in Calendly only with a matching `BOOKING_URL`).
+   Still the user's: rename the Calendly profile from "Curt Middleton" to
+   "Popcode" if they don't want their name on the booking page.
 2. **Pricing kit contents are a draft** (up to 3 / up to 8 stories, January board
    report, "Your whole year" tag) — user to confirm.
 3. **Impact dashboard: phase 1 DONE and verified live (PR #106, 2026-09-26).**
@@ -81,12 +85,16 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    (moved with Shotstack `offset`/`scale` — never seen rendered), and a render
    where the last photo has its own longer time. Then drop the admin gate and
    move Shotstack to the production key (`.../edit/v1`).
-7. **Set up a `hello@` address (user asked, 2026-09-26, "tomorrow").** The site
+7. **`hello@popcodeapp.com` now exists (2026-09-26):** an alias of
+   `curt@popcodeapp.com` in Google Workspace, added to Gmail *Send mail as*
+   (so replies can go out as "Popcode <hello@…>") and to Apple Mail on the Mac.
+   Mail for popcodeapp.com is Google Workspace (MX = Google; SPF, DKIM, DMARC
+   p=none all set). `info@popcodeapp.com` is a **separate** mailbox, not an
+   alias. **Still to decide:** which site uses move from info@ to hello@. The site
    uses `info@popcodeapp.com` 20 times across `index.html`, `howto.html`
    (support: "Still having trouble?"), `nonprofits.html`, `auth.html`,
    `privacy.html`, `terms.html`, `countries.js` and `lib/print/destinations.mjs`.
-   Decide the domain (popcodeapp.com vs popcode.app), create the mailbox or
-   alias at the mail provider (the user does that part), then decide which of
+   Decide which of
    those uses switch — privacy/terms and order-destination notices may need
    to stay on info@. Tours and Studio now book via Calendly, not email.
 8. **Oversized photos get uploaded as-is.** `create.html applyMediaFile` only
@@ -2994,3 +3002,26 @@ The create step that files a Shop product into My Designs (`saveShopDesign`, `9f
   - Root cause upstream is still open: `create.html applyMediaFile` only downsizes photos over 10 MB (Next, item 8).
 - **My Designs product pictures** (`f150cf7`): `drawDesignMockup` uses `design.book_layout.print` (`productType`, `orientation`, `scale`, `adjust`, `variantId`), the mug's wrap from order.html's VARIANTS (`228.6×94.83mm`, `WRAP_FACE_FRAC`), and paints the mat in the template's own corner colour (`#f2f2f2`; mug `#f6f6f6`) so there's no pale square.
 - Testing note: the sandbox Chromium rejects Supabase's certificate through the proxy (`ERR_CERT_AUTHORITY_INVALID`) — use a context with `ignoreHTTPSErrors: true` to exercise real storage images, and serve test photos from `public/` for canvas work (remove them after).
+
+### 2026-09-26 (later) — Nonprofits polish: own header, real hero experience, phone scan button, honest pricing copy; Tap-to-play icon; hello@ set up
+
+**Branch `claude/affectionate-dirac-iwzkid`. PRs #93–#98 merged, each verified live against `origin/main`.**
+
+#### Built
+- **Hero phone = the real `popcode.app/commontide`** (PR #93): Common Tide cover (from its live `cover_config`) → Meg's video → the After the Video screen, looping. Captions: the video gets **no `<track>`**; the page fetches the `.vtt` and draws cues itself (Safari re-enables a hidden track and draws huge captions when *Closed Captions + SDH* is on).
+- **Viewer Tap to play** (PR #94): `▶` (U+25B6) renders as a **blue emoji tile on iOS** — now an inline SVG triangle; the audio player's `▶` gets U+FE0E. The button itself is the existing rescue (autoplay rejected / frozen first frame), not new.
+- **`/nonprofits` header** (PR #95): `nav.js` removed from this page (the consumer nav confused the pitch). Own sticky header matching `.site-header` geometry (100px, logo at 80px, links 170px after it, `#8a8a8a` Inter 14/600, Book a demo pill). The user rejected a "for Nonprofits" label beside the logo — the hero already says it.
+- **Try it yourself on phones** (PR #96): `(hover: none) and (pointer: coarse)` shows *Scan the Common Tide card* → `/commontide` above the download; same split the home page's Scout panel uses. Hero button → "Book a 15-minute demo".
+- **Copy** (PRs #97, #98): pricing no longer implies Popcode makes the videos ("You bring the stories. We do the rest: the design, the phone experience, the buttons and the dashboard."; "from videos you film on a phone. We send a simple script and filming tips."). How it works step 2 → "Scan any photo. Every photo on the piece can play its own story." New What you get item **"Several voices in one piece"** — examples are the org's own voices (director, researcher, volunteer, longtime donor); a first draft used a school's (student/teacher/parent) and the user caught it.
+- **Pitch copy** (in chat, not on the site): a 1-minute and a 15-second elevator pitch, both now leading with multiple photos per piece.
+- **hello@popcodeapp.com** — see Current state item 7. Walked the user through Google Admin alias → Gmail *Send mail as* → Apple Mail *Edit Email Addresses*. Gmail's Send-as step is required even for an Apple Mail user: Google rewrites an unapproved From.
+
+#### Lessons
+- **Resetting this branch to `main` while a PR from it is still open drops that PR's commits** (happened twice: the session-notes commit and PR #96's first commit). Before `git checkout -B <branch> origin/main`, check `git log origin/main..HEAD`; if anything is there and unmerged, build on it instead (or cherry-pick it back, as done both times).
+- Promises in marketing copy are commitments: "filming tips" is now promised in the Year-End Kit — a tips sheet has to exist.
+
+#### Open
+- Filming-tips sheet for clients (promised on the page).
+- A second playing photo on the Common Tide card (e.g. Marisol) to demo the photo-to-photo moment — needs a short video from the user.
+- info@ → hello@ switch on the site: user to decide which uses move.
+
