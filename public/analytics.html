@@ -706,7 +706,9 @@
           // network change; the IP-change window below is what stops two
           // different anonymous visitors from being merged. (Keying on IP also
           // wrongly merged two people behind one household connection.)
-          var userKey = e.user_id || ('ua:' + (e.user_agent || e.ip_address || 'anon'));
+          // Since 2026-09-26 viewer events carry an anonymous device_id and no IP;
+          // older events fall back to the user agent as before.
+          var userKey = e.user_id || (e.device_id ? 'd:' + e.device_id : 'ua:' + (e.user_agent || e.ip_address || 'anon'));
           var key = userKey + '|' + (e.slug || '');
           var t = new Date(e.created_at).getTime();
 
@@ -719,7 +721,7 @@
             // gap is short. Without this, an anonymous visitor whose IP rotates
             // gets split into two sessions; with too loose a window, two
             // different visitors would get merged into one.
-            var ipChanged = (last.ip_address || '') !== (e.ip_address || '');
+            var ipChanged = !!(last.ip_address && e.ip_address) && last.ip_address !== e.ip_address;
             var window = ipChanged ? 2 * 60 * 1000 : 30 * 60 * 1000;
             if (t - lastT <= window) {
               sess.events.push(e);
@@ -2464,18 +2466,20 @@
         // Viewing events only — a creator who made something and never opened a
         // scanner is not a visitor, and counting them here would quietly inflate
         // the number the moment creation events joined this table.
+        // Device ID where the event has one (no IPs are stored from 2026-09-26),
+        // else the IP of older events.
         const uniqueIPs = new Set(evts.filter(e => eventCategory(e.event_type) === 'viewed')
-                                      .map(e => e.ip_address).filter(Boolean)).size;
+                                      .map(e => e.device_id || e.ip_address).filter(Boolean)).size;
 
         // Detection rate = sessions with at least one target_found / total opens
         // Group by IP+day to approximate sessions
         const sessionsWithFound = new Set(
           evts.filter(e => e.event_type === 'target_found')
-              .map(e => (e.ip_address || e.id) + '|' + (e.created_at || '').slice(0, 10))
+              .map(e => (e.device_id || e.ip_address || e.id) + '|' + (e.created_at || '').slice(0, 10))
         ).size;
         const sessionOpens = new Set(
           evts.filter(e => e.event_type === 'scan_open')
-              .map(e => (e.ip_address || e.id) + '|' + (e.created_at || '').slice(0, 10))
+              .map(e => (e.device_id || e.ip_address || e.id) + '|' + (e.created_at || '').slice(0, 10))
         ).size;
 
         // ── Breakdowns ────────────────────────────────────────────────────────
