@@ -6,7 +6,11 @@
  * Three layers, each toggleable:
  *   Accounts — one pin per account, where it signed up (or, for accounts older
  *              than signup events, where it was first seen signed in).
- *   Created  — every Popcode / book / calendar / montage made.
+ *   Popcodes — every photo + video (or audio) pair ever made, all time, read
+ *              from collections/collection_items and pinned at the owner's
+ *              account place. Counted like the Accounts tab (popcode_used()).
+ *   Products — books, board books, calendars, montages (create_* events,
+ *              which only exist from 2026-09-09).
  *   Watched  — every time a Popcode was opened, minus the owner's own opens.
  * Plus share lines (creator's place → where their Popcode was watched), country
  * shading, a time slider that replays the growth, and a by-country table.
@@ -28,9 +32,9 @@
   var TOPOJSON_JS = 'https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js';
   var WORLD_JSON  = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
 
-  var COLORS = { accounts: '#7657FC', created: '#E0457B', watched: '#1F8FD1' };
-  var LABELS = { accounts: 'Accounts', created: 'Created', watched: 'Watched' };
-  var CREATE_LABELS = { create_project: 'Popcodes', create_book: 'Books', create_boardbook: 'Board books',
+  var COLORS = { accounts: '#7657FC', popcodes: '#E0457B', products: '#E39B1B', watched: '#1F8FD1' };
+  var LABELS = { accounts: 'Accounts', popcodes: 'Popcodes', products: 'Products', watched: 'Watched' };
+  var PRODUCT_LABELS = { create_book: 'Books', create_boardbook: 'Board books',
     create_calendar: 'Calendars', create_montage: 'Montages' };
   // A creator and a viewer in the same metro area isn't a trip worth a line.
   var MIN_LINE_KM = 80;
@@ -112,6 +116,18 @@
     }
   }
 
+  async function allTableRows(db, table, cols) {
+    var PAGE = 1000, out = [], from = 0;
+    for (;;) {
+      var r = await db.from(table).select(cols).range(from, from + PAGE - 1);
+      if (r.error) throw r.error;
+      var batch = r.data || [];
+      out = out.concat(batch);
+      if (batch.length < PAGE) return out;
+      from += PAGE;
+    }
+  }
+
   async function fetchEvents(db) {
     try {
       return { rows: await allPages(db, 'get_reach_events', { max_rows: 200000 }), migrated: true };
@@ -169,7 +185,7 @@
     return {
       opts: opts, world: world, migrated: fetched.migrated, rows: fetched.rows,
       cols: cols, users: opts.users || [],
-      show: { accounts: true, created: true, watched: true, lines: true, shade: true },
+      show: { accounts: true, popcodes: true, products: true, watched: true, lines: true, shade: true },
       through: Date.now(), minT: Date.now(), maxT: Date.now(),
       coords: {}, pending: [], geocoding: false, geoFailed: 0,
       map: null, layers: {}, playing: null, countryRowsAll: false,
@@ -257,12 +273,31 @@
       });
     });
 
-    var created = [], watched = [], lines = {};
+    // Popcodes: same rule as popcode_used() / the Accounts tab — one per
+    // distinct (project, photo) with a video or audio behind it. Dated by the
+    // project, placed at its owner's account place.
+    var colById = {};
+    S.cols.forEach(function (c) { colById[c.id] = c; });
+    var popcodes = [], seen = {}, popTotal = 0;
+    S.items.forEach(function (it) {
+      if (!it.video_url && !it.audio_url) return;
+      var k = it.collection_id + '|' + it.target_index;
+      if (seen[k]) return;
+      seen[k] = 1;
+      var col = colById[it.collection_id];
+      if (!col || !col.user_id) return;
+      popTotal++;
+      var p = acctPlace[col.user_id];
+      if (p) popcodes.push({ t: Date.parse(col.created_at), place: p, name: col.name || col.slug });
+    });
+
+    var products = [], watched = [], lines = {};
     S.rows.forEach(function (e) {
       var t = Date.parse(e.created_at);
       if (/^create_/.test(e.event_type)) {
+        if (e.event_type === 'create_project') return; // counted as Popcodes above, all time
         var p = at(e);
-        if (p) created.push({ t: t, place: p, type: e.event_type, slug: e.slug });
+        if (p) products.push({ t: t, place: p, type: e.event_type });
         return;
       }
       if (e.event_type !== 'scan_open') return;
@@ -282,30 +317,39 @@
       }
     });
 
-    var all = accounts.concat(created, watched);
+    var all = accounts.concat(popcodes, products, watched).filter(function (x) { return isFinite(x.t); });
+    // A slider left at "today" stays at today when late geocodes rebuild this.
+    var atEnd = !S.model || S.through >= S.maxT;
     S.minT = all.length ? Math.min.apply(null, all.map(function (x) { return x.t; })) : Date.now();
     S.maxT = Date.now();
-    S.model = { accounts: accounts, created: created, watched: watched, lines: Object.keys(lines).map(function (k) { return lines[k]; }) };
+    if (atEnd) S.through = S.maxT;
+    S.model = { accounts: accounts, popcodes: popcodes, popTotal: popTotal, products: products, watched: watched,
+      lines: Object.keys(lines).map(function (k) { return lines[k]; }) };
   }
 
   // Everything visible through the slider's date, grouped by place.
   function aggregate() {
     var T = S.through, places = {}, countries = {};
     function P(p) {
-      return places[p.key] || (places[p.key] = { p: p, accounts: [], created: {}, createdN: 0, watchedN: 0, visitors: {}, projects: {}, first: Infinity });
+      return places[p.key] || (places[p.key] = { p: p, accounts: [], popcodesN: 0, popProjects: {}, products: {}, productsN: 0, watchedN: 0, visitors: {}, projects: {}, first: Infinity });
     }
     function C(cc) {
-      return countries[cc] || (countries[cc] = { cc: cc, accounts: 0, created: 0, watched: 0, visitors: {}, first: Infinity });
+      return countries[cc] || (countries[cc] = { cc: cc, accounts: 0, popcodes: 0, products: 0, watched: 0, visitors: {}, first: Infinity });
     }
     S.model.accounts.forEach(function (a) {
       if (a.t > T) return;
       var g = P(a.place); g.accounts.push(a.name); g.first = Math.min(g.first, a.t);
       var c = C(a.place.country); c.accounts++; c.first = Math.min(c.first, a.t);
     });
-    S.model.created.forEach(function (x) {
+    S.model.popcodes.forEach(function (x) {
       if (x.t > T) return;
-      var g = P(x.place); g.created[x.type] = (g.created[x.type] || 0) + 1; g.createdN++; g.first = Math.min(g.first, x.t);
-      var c = C(x.place.country); c.created++; c.first = Math.min(c.first, x.t);
+      var g = P(x.place); g.popcodesN++; g.popProjects[x.name] = (g.popProjects[x.name] || 0) + 1; g.first = Math.min(g.first, x.t);
+      var c = C(x.place.country); c.popcodes++; c.first = Math.min(c.first, x.t);
+    });
+    S.model.products.forEach(function (x) {
+      if (x.t > T) return;
+      var g = P(x.place); g.products[x.type] = (g.products[x.type] || 0) + 1; g.productsN++; g.first = Math.min(g.first, x.t);
+      var c = C(x.place.country); c.products++; c.first = Math.min(c.first, x.t);
     });
     S.model.watched.forEach(function (x) {
       if (x.t > T) return;
@@ -320,12 +364,15 @@
   }
 
   // What a place or country holds on the visible layers. Places carry lists
-  // (accounts, visitors), countries carry counts.
+  // and *N counts, countries carry plain counts.
+  function layerCount(g, k) {
+    if (k === 'accounts') return Array.isArray(g.accounts) ? g.accounts.length : g.accounts;
+    return g[k + 'N'] != null ? g[k + 'N'] : (g[k] || 0);
+  }
   function visibleCount(g) {
-    var acc = Array.isArray(g.accounts) ? g.accounts.length : g.accounts;
-    var cre = g.createdN != null ? g.createdN : g.created;
-    var wat = g.watchedN != null ? g.watchedN : g.watched;
-    return (S.show.accounts ? acc : 0) + (S.show.created ? cre : 0) + (S.show.watched ? wat : 0);
+    return ['accounts', 'popcodes', 'products', 'watched'].reduce(function (n, k) {
+      return n + (S.show[k] ? layerCount(g, k) : 0);
+    }, 0);
   }
 
   // ── Drawing ─────────────────────────────────────────────────────────────
@@ -354,9 +401,15 @@
         g.accounts.length + '</b> account' + (g.accounts.length === 1 ? '' : 's') + '</div>' +
         '<div class="rm-pop-sub">' + g.accounts.slice(0, 6).map(esc).join(', ') + (g.accounts.length > 6 ? ' +' + (g.accounts.length - 6) + ' more' : '') + '</div>';
     }
-    if (g.createdN) {
-      h += '<div class="rm-pop-row"><span class="rm-dot" style="background:' + COLORS.created + '"></span><b>' + g.createdN + '</b> created</div>' +
-        '<div class="rm-pop-sub">' + Object.keys(g.created).map(function (k) { return g.created[k] + ' ' + esc(CREATE_LABELS[k] || k); }).join(' · ') + '</div>';
+    if (g.popcodesN) {
+      var tp = Object.keys(g.popProjects).sort(function (a, b) { return g.popProjects[b] - g.popProjects[a]; });
+      h += '<div class="rm-pop-row"><span class="rm-dot" style="background:' + COLORS.popcodes + '"></span><b>' + g.popcodesN + '</b> Popcode' + (g.popcodesN === 1 ? '' : 's') +
+        ' in ' + tp.length + ' project' + (tp.length === 1 ? '' : 's') + '</div>' +
+        '<div class="rm-pop-sub">' + tp.slice(0, 4).map(function (n) { return esc(n) + ' (' + g.popProjects[n] + ')'; }).join(', ') + (tp.length > 4 ? ' +' + (tp.length - 4) + ' more' : '') + '</div>';
+    }
+    if (g.productsN) {
+      h += '<div class="rm-pop-row"><span class="rm-dot" style="background:' + COLORS.products + '"></span><b>' + g.productsN + '</b> product' + (g.productsN === 1 ? '' : 's') + '</div>' +
+        '<div class="rm-pop-sub">' + Object.keys(g.products).map(function (k) { return g.products[k] + ' ' + esc(PRODUCT_LABELS[k] || k); }).join(' · ') + '</div>';
     }
     if (g.watchedN) {
       var nv = Object.keys(g.visitors).length;
@@ -399,9 +452,10 @@
     Object.keys(agg.places).forEach(function (k) {
       var g = agg.places[k];
       var parts = [];
-      if (S.show.watched && g.watchedN) parts.push(['watched', g.watchedN]);
-      if (S.show.created && g.createdN) parts.push(['created', g.createdN]);
-      if (S.show.accounts && g.accounts.length) parts.push(['accounts', g.accounts.length]);
+      ['watched', 'popcodes', 'products', 'accounts'].forEach(function (k) {
+        var n = layerCount(g, k);
+        if (S.show[k] && n) parts.push([k, n]);
+      });
       if (!parts.length) return;
       parts.sort(function (a, b) { return b[1] - a[1]; });
       var html = popupHtml(g);
@@ -420,10 +474,10 @@
     var el = S.opts.container.querySelector('.rm-stats');
     var cc = Object.keys(agg.countries).filter(function (c) { return c && visibleCount(agg.countries[c]); });
     var cities = Object.keys(agg.places).filter(function (k) { return agg.places[k].p.city && visibleCount(agg.places[k]); });
-    var nAcct = 0, nCreated = 0, nOpens = 0, viewers = {};
+    var nAcct = 0, nPop = 0, nProd = 0, nOpens = 0, viewers = {};
     Object.keys(agg.places).forEach(function (k) {
       var g = agg.places[k];
-      nAcct += g.accounts.length; nCreated += g.createdN; nOpens += g.watchedN;
+      nAcct += g.accounts.length; nPop += g.popcodesN; nProd += g.productsN; nOpens += g.watchedN;
       Object.keys(g.visitors).forEach(function (v) { viewers[v] = 1; });
     });
     var far = agg.lines.slice().sort(function (a, b) { return b.km - a.km; })[0];
@@ -435,10 +489,10 @@
         '<div class="card-label">' + label + '</div>' + (sub ? '<div class="rm-card-sub">' + sub + '</div>' : '') + '</div>';
     }
     el.innerHTML =
-      card(cc.length, 'Countries', newest ? 'Newest: ' + flag(newest.cc) + ' ' + esc(countryName(newest.cc)) : '') +
-      card(cities.length, 'Cities') +
+      card(cc.length, 'Countries', cities.length + ' cities' + (newest ? ' · newest ' + flag(newest.cc) + ' ' + esc(countryName(newest.cc)) : '')) +
       card(nAcct, 'Accounts placed', totalAccts ? 'of ' + totalAccts + ' accounts' : '', COLORS.accounts, 'accounts') +
-      card(nCreated, 'Things created', '', COLORS.created, 'created') +
+      card(nPop, 'Popcodes', S.through >= S.maxT && S.model.popTotal > nPop ? 'of ' + S.model.popTotal + ' made (rest unplaced)' : 'photo + video pairs', COLORS.popcodes, 'popcodes') +
+      card(nProd, 'Products', 'books, calendars, montages', COLORS.products, 'products') +
       card(Object.keys(viewers).length, 'Viewers', nOpens + ' opens', COLORS.watched, 'watched') +
       card(far ? Math.round(far.km).toLocaleString() + '<span style="font-size:16px"> km</span>' : '—', 'Farthest share',
         far ? esc(far.from.city || countryName(far.from.country)) + ' → ' + esc(far.to.city || countryName(far.to.country)) : 'Creator → viewer', null, 'lines');
@@ -447,16 +501,17 @@
   function countryTable(agg) {
     var el = S.opts.container.querySelector('.rm-countries');
     var rows = Object.keys(agg.countries).map(function (c) { return agg.countries[c]; })
-      .filter(function (c) { return c.cc && (c.accounts || c.created || c.watched); })
-      .sort(function (a, b) { return (b.accounts + b.created + b.watched) - (a.accounts + a.created + a.watched); });
+      .filter(function (c) { return c.cc && (c.accounts || c.popcodes || c.products || c.watched); })
+      .sort(function (a, b) { return (b.accounts + b.popcodes + b.products + b.watched) - (a.accounts + a.popcodes + a.products + a.watched); });
     if (!rows.length) { el.innerHTML = '<p class="empty" style="padding:16px">Nothing placed yet.</p>'; return; }
     var shown = S.countryRowsAll ? rows : rows.slice(0, 12);
     el.innerHTML = '<table class="rm-table"><thead><tr><th>Country</th>' +
       '<th title="Accounts"><span class="rm-dot" style="background:' + COLORS.accounts + '"></span></th>' +
-      '<th title="Created"><span class="rm-dot" style="background:' + COLORS.created + '"></span></th>' +
+      '<th title="Popcodes"><span class="rm-dot" style="background:' + COLORS.popcodes + '"></span></th>' +
+      '<th title="Products"><span class="rm-dot" style="background:' + COLORS.products + '"></span></th>' +
       '<th title="Viewers (opens)"><span class="rm-dot" style="background:' + COLORS.watched + '"></span></th></tr></thead><tbody>' +
       shown.map(function (c) {
-        return '<tr><td>' + flag(c.cc) + ' ' + esc(countryName(c.cc)) + '</td><td>' + (c.accounts || '') + '</td><td>' + (c.created || '') + '</td>' +
+        return '<tr><td>' + flag(c.cc) + ' ' + esc(countryName(c.cc)) + '</td><td>' + (c.accounts || '') + '</td><td>' + (c.popcodes || '') + '</td><td>' + (c.products || '') + '</td>' +
           '<td>' + (c.watched ? Object.keys(c.visitors).length + ' <span class="muted">(' + c.watched + ')</span>' : '') + '</td></tr>';
       }).join('') + '</tbody></table>' +
       (rows.length > 12 ? '<button class="btn btn-sm btn-quiet rm-more" type="button">' + (S.countryRowsAll ? 'Show fewer' : 'All ' + rows.length + ' countries') + '</button>' : '');
@@ -497,7 +552,7 @@
     }
     return '<div class="rm-stats cards"></div>' +
       '<div class="rm-toolbar">' +
-        '<div class="rm-chips">' + chip('accounts') + chip('created') + chip('watched') +
+        '<div class="rm-chips">' + chip('accounts') + chip('popcodes') + chip('products') + chip('watched') +
           '<span class="rm-sep"></span>' +
           '<button type="button" class="rm-chip active" data-k="lines"><span class="rm-line"></span>Share lines</button>' +
           '<button type="button" class="rm-chip active" data-k="shade"><span class="rm-shade"></span>Shade countries</button>' +
@@ -605,11 +660,13 @@
     try {
       var got = await Promise.all([
         loadLibs(), fetchEvents(opts.db),
-        opts.db.from('collections').select('slug, name, user_id').then(function (r) { return r.data || []; }),
+        allTableRows(opts.db, 'collections', 'id, slug, name, user_id, created_at'),
         Promise.resolve(opts.users),
+        allTableRows(opts.db, 'collection_items', 'collection_id, target_index, video_url, audio_url'),
       ]);
       opts.users = got[3] || [];
       S = currentState = createState(opts, got[0], got[1], got[2]);
+      S.items = got[4] || [];
       c.innerHTML = shellHtml();
       buildMap(got[0]);
       wire();
