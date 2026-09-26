@@ -1756,14 +1756,18 @@
       /* Card thumbnails come from Supabase's image renderer, not the original:
          an iPhone photo can be 24MP (Scout's is 4284x5712), which iOS Safari
          won't draw as a background image, so the card showed nothing — and
-         every card was downloading full-size photos. Width only, so the card's
-         own crop is unchanged. Not a Supabase storage URL: returned as is. */
+         every card was downloading full-size photos. Scaled to fit a width
+         (resize=contain), so the card's own crop is unchanged. Not a Supabase storage URL: returned as is. */
       function smallPhoto(url, px) {
         try {
           const u = new URL(url);
           if (!u.pathname.includes('/storage/v1/object/public/')) return url;
           u.pathname = u.pathname.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/');
           u.searchParams.set('width', String(px));
+          // Without this, Supabase keeps the ORIGINAL height and crops to the
+          // width (a 480x5712 sliver of a portrait photo — the "zoomed-in"
+          // thumbnails). `contain` scales the whole photo, never up.
+          u.searchParams.set('resize', 'contain');
           return u.toString();
         } catch (e) { return url; }
       }
