@@ -69,15 +69,16 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    "Popcode" if they don't want their name on the booking page.
 2. **Pricing kit contents are a draft** (up to 3 / up to 8 stories, January board
    report, "Your whole year" tag) — user to confirm.
-3. **Impact dashboard: all three phases LIVE (PRs #106, #108, #110, 2026-09-26).**
-   `popcode.app/impact.html?id={slug}` (admin or owner; gift totals admin-only;
-   share links `?share={token}`). **Demo for pitching:**
-   `popcode.app/impact.html?id=commontide&demo` (sample numbers, real
-   buttons, no DB). Not yet looked at with real data by the user. Open: the
-   **IP decision** (`scan_events.ip_address` vs. the brief's "no personal
-   information"; live footer says "never asks donors for their name, email or
-   any account"), CSV import of gifts, a per-account time zone (`?tz=` today),
-   and Meg's name in the demo's Stories row (public API has no `asset_name`).
+3. **Impact dashboard: all three phases LIVE (PRs #106, #108, #110, #111).**
+   `popcode.app/impact.html?id={slug}` (admin or owner; also an **Impact**
+   button on My Popcodes cards for org projects), share links `?share=`, demo
+   `impact.html?id=commontide&demo`. **IP decision made: no viewer IPs are
+   stored from 2026-09-26 (PR #112), verified on a live scan**; old rows keep
+   theirs (user chose not to erase — one-line SQL if they change their mind).
+   Open: CSV import of gifts, per-account time zone (`?tz=` today), Meg's name
+   in the demo (public API has no `asset_name`), the org-metrics ideas
+   (pieces mailed + cost → response rate / cost per $; `?v=` segments;
+   drop-off curve). Sentry: consider "Prevent storing IP addresses".
 4. `PRINTIFY_DRY_RUN` is still `true` — one real test ornament order, then flip it
    in Production scope and redeploy.
 5. Carried over: let `curt@theworkshop.works` open `analytics.html`; ST-120
@@ -3059,3 +3060,24 @@ The create step that files a Shop product into My Designs (`saveShopDesign`, `9f
 - `curl … && cat > file <<EOF` chains: a flaky proxy fetch (`ws_closed_mid_exchange`) killed the chain and the harness file was never written. Fetch with retries on its own, write files with Write.
 - psql `-At -c "insert … returning"` also prints `INSERT 0 1`; use `-q` when capturing a value.
 - Sandbox Chromium can't read MP4 metadata, so the live demo shows avg. watch as "80%"; phones should show "m:ss of m:ss".
+
+### 2026-09-26 (night) — No more viewer IPs; two admin RPCs were readable by anyone; Impact on My Popcodes
+
+**PRs #111 (Impact link, logo sizes), #112 (no IPs + `get_events_with_users` lockdown), #113 (`get_all_users` fix) — all merged by Claude at the user's say-so.** Migrations run in prod by the user: `2026-09-26-no-ip-addresses.sql`, then a one-off `revoke execute … from public, anon` on `get_all_users` (a `do $$` loop over its signatures), then `2026-09-26-lock-get-all-users.sql`.
+
+#### What changed
+- **No viewer IPs** (user's choice after the impact brief promised orgs "no personal information"): `api/log-event.js` no longer writes `ip_address` — for every event site-wide, not just nonprofits. Unique viewers are told apart by `device_id` (fallback to md5(IP|UA) for old rows) in `get_reach_events`, `get_my_view_events` (per-project key) and Analytics (`analytics.html` sessions, Unique Visitors, detection-rate grouping; `reach-map.js` fallback). **Verified live:** the user's next Common Tide scan logged `ip_address` NULL with `device_id` + city on every event. Dashboard footer: "Popcode doesn't ask donors for their name or email, and doesn't keep IP addresses. Counts are anonymous." (Not "collects no personal information": signed-in viewers' `user_id` is still logged and shown to creators.)
+- **My Popcodes Impact button** (bar chart, between Share and Download) on cards whose `cover_config` has `enabled` or `end.enabled`. The query fetches it as **`impact_cfg:cover_config`** because `buildCard`'s `coverTitle` reads `col.cover_config`, which that query had never fetched — aliasing keeps that dormant code dormant (card titles unchanged).
+- Logo sizes: `impact.html` 110→132×35 (it was visibly squashed; image is 2232×591); `/nonprofits` footer hint 94→113×30 (CSS already drew it right).
+
+#### Security findings (both fixed and verified from outside with the anon key)
+- **`get_events_with_users`** (prod-only definition) was SECURITY DEFINER with **no caller check** and default EXECUTE → the anon key could read every event with account names, emails and IPs. Recreated admin-only (+ `device_id` column), EXECUTE revoked from public/anon.
+- **`get_all_users`** had a check, but `(auth.jwt() ->> 'email') <> 'curtmid@gmail.com'` is **NULL for signed-out callers, so the `if` was skipped** → anon could read all 11 accounts' emails/names (count-only probe returned `*/11`). Signed-in non-admins were always refused. Fixed with `coalesce(…, '')`, now in the repo.
+- Audit of every public SECURITY DEFINER function anon can call (user ran the `pg_proc` query): the rest are fine — admin-gated (`get_all_print_orders`, `get_target_scan_counts`), own-data (`get_my_target_metrics`, `popcode_quota`), public by design (`popcode_slugs_taken`, `popcode_view_cards`, `get_impact_dashboard_shared`), a trigger (`enforce_popcode_quota`), or counts for unguessable ids (`popcode_used(uid)`, `popcode_count_in_collection(cid)`). User pointed at Supabase Logs → API to check for past misuse.
+
+#### Lessons
+- **Admin gates must be `coalesce(auth.jwt() ->> 'email', '') <> '…'`.** Without coalesce, NULL comparisons silently let signed-out callers through. And any SECURITY DEFINER function needs an explicit `revoke … from public, anon` — Postgres grants EXECUTE to PUBLIC by default.
+- **Safe outside probe:** `POST /rest/v1/rpc/{fn}?limit=0` with `Prefer: count=exact` and the anon key → `Content-Range: */N` proves exposure without returning any rows; a fixed function gives 401 `42501`.
+- Prod-only functions (`get_events_with_users`, `get_all_users`) had to be read with `select pg_get_functiondef(…)` — both now live in `supabase/migrations/`. Local test: install the pasted prod definition in the scratch Postgres, reproduce as `set role anon`, apply the fix, re-test. (The local stub needed `scan_events.id uuid` to match prod.)
+- Splitting a branch mid-flight: `git branch -f ip-wip <sha>` + `git format-patch` to park a commit, rebuild the branch for the urgent PR, then cherry-pick it back on the new `main`.
+- The SQL editor shows only one column when two share a name (`has_function_privilege` twice) — alias every column in check queries.
