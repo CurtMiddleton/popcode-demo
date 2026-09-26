@@ -69,14 +69,15 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    "Popcode" if they don't want their name on the booking page.
 2. **Pricing kit contents are a draft** (up to 3 / up to 8 stories, January board
    report, "Your whole year" tag) — user to confirm.
-3. **Impact dashboard: phase 1 DONE and verified live (PR #106, 2026-09-26).**
-   Phase 2 (the dashboard itself, admin-only is fine) is due by Giving Tuesday,
-   Dec 1 — in progress. See `docs/impact-dashboard-handoff.md` §0 for how the
-   brief maps onto `scan_events`. **Decision owed by the user before the
-   dashboard's footer ships:** `scan_events` stores `ip_address` (+ full UA,
-   `user_id` when signed in), contradicting the brief's "no personal
-   information" footer — stop storing IPs (move Map/viewer insights to
-   `device_id`) or reword the footer.
+3. **Impact dashboard: phases 1 and 2 LIVE (PRs #106, #108, 2026-09-26).**
+   `popcode.app/impact.html?id={slug}` (admin or project owner). Not yet looked
+   at with real data by the user. **Phase 3 next** (due mid-December): gifts
+   entry (`campaign_results` + admin form → Gifts / Raised / "Gave"), and the
+   revocable read-only share link. **Decision owed by the user:** `scan_events`
+   stores `ip_address` (+ full UA, `user_id` when signed in); the brief's
+   footer said "collects no personal information" — the live footer says
+   "never asks donors for their name, email or any account" instead. Stop
+   storing IPs (move Map/viewer insights to `device_id`) or keep that wording.
 4. `PRINTIFY_DRY_RUN` is still `true` — one real test ornament order, then flip it
    in Production scope and redeploy.
 5. Carried over: let `curt@theworkshop.works` open `analytics.html`; ST-120
@@ -3025,3 +3026,20 @@ The create step that files a Shop product into My Designs (`saveShopDesign`, `9f
 - A second playing photo on the Common Tide card (e.g. Marisol) to demo the photo-to-photo moment — needs a short video from the user.
 - info@ → hello@ switch on the site: user to decide which uses move.
 
+### 2026-09-26 (later) — Impact dashboard phase 2: `/impact.html` and its SQL
+
+**PR #108, merged by Claude at the user's say-so (merge `3f36188`).** Branch `claude/peaceful-cannon-47pbai`. Migration `supabase/migrations/2026-09-26-impact-dashboard.sql` **run in prod by the user** before the merge. Live check: prod `impact.html` and `reach-map.js` byte-identical to `origin/main` ~100s after the merge. **Not yet seen with real data.**
+
+#### What shipped
+- **`public/impact.html?id={slug}`** — the handoff's §2 layout, styled from the sample `.dash` on `/nonprofits` (CooperBT headings, Inter, `#7657FC` accent, `#d9d4f5` bars, `ui.css` card radius/shadow). Header (logo, `cover_config.org_name`, campaign `<select>`, Export report), title (range, photo count, short URL, Updated time), *Dates and options* (`?from`, `?to`, `?own=1`; also `?tz=`, `?hl=YYYY-MM-DD`), 5 KPI cards, Scans by day (Giving Tuesday computed = Tuesday after the 4th Thursday of Nov; else "Busiest day"), funnel (Gave = placeholder), Stories (thumb via `/render/image/` at 112×112 `resize=cover`, `asset_name` or "Photo N"), Button taps (labels from `cover_config.end.buttons` by position), Address split. Every section has an empty state; no zeros before launch.
+- **Watch time:** the SQL gives mean furthest-% per photo; the page reads each video's length with a `preload=metadata` `<video>` (8s timeout) and shows "0:44 of 1:00"; the KPI is weighted by plays. Falls back to "%" if lengths don't load.
+- **Export:** `window.print()` with a print stylesheet (single column, two small cards side by side, tighter spacing) → **2 Letter pages**; date labels re-fit on `beforeprint`/`matchMedia('print')`. Daily CSV from the loaded data.
+- **SQL:** `get_impact_dashboard(p_slug, p_from, p_to, p_tz, p_include_owner) → jsonb` (all aggregates; events by `collection_id` or, when null, slug; owner's signed-in events excluded unless asked; invalid tz → America/New_York; range capped at 367 days) and `get_impact_campaigns()` (own projects; admin also every project with `cover_config`). Gate: admin email **or** `c.user_id = auth.uid()`.
+- **`reach-map.js`**: per-project bar links to the dashboard.
+
+#### Lessons
+- **Local Postgres works here:** PG16 binaries are installed (`/usr/lib/postgresql/16/bin`). initdb can't write in the scratchpad as `postgres`; use a postgres-owned dir (`/var/tmp/pgimpact`), port 5499, `-k` socket in that dir. Stub `auth.jwt()`/`auth.uid()` from `current_setting('request.jwt.claims')`, `set role authenticated`, and you can run migrations and RPCs for real. Its JSON output then fed the headless page test.
+- **Class-name clash:** the header was `.top` (border-bottom + padding) and the busiest tap row also got class `top` → a stray rule across the Button taps card. Prefix page-level classes.
+- PyMuPDF (`pip install pymupdf`, `import pymupdf`) rasterises PDFs here; no poppler.
+- Two other sessions appended STATUS.md entries while this PR was open → two conflicts, both "keep both entries". Expect this on every notes-carrying PR.
+- The auto-mode classifier blocked the merge until the user said "merge it" for this specific PR — approval for #106 didn't carry over.

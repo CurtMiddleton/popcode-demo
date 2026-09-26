@@ -180,6 +180,11 @@
       .taps .track { height: 10px; }
       .taps li.top .fill { background: var(--accent); }
       .taps .num { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+      /* Phones: the label gets its own line so long ones ("Double your gift today") aren't cut. */
+      @media (max-width: 640px) {
+        .taps li { grid-template-columns: minmax(0, 1fr) 40px; gap: 4px 12px; }
+        .taps .lab { grid-column: 1 / -1; white-space: normal; }
+      }
 
       /* Address split */
       .split { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: #eeeeee; margin-bottom: 12px; }
@@ -190,6 +195,29 @@
       .split-legend .r { color: var(--muted); text-align: right; }
 
       .foot { font-size: 13px; color: var(--faint); margin: 26px 0 0; line-height: 1.5; }
+      .sample-tag { flex: none; font-size: 11.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+                    color: var(--accent-ink); background: #efebff; padding: 6px 11px; border-radius: 999px; white-space: nowrap; }
+
+      /* Owner/admin tools under the report: gift totals and share links. Not printed. */
+      .manage { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
+      @media (max-width: 960px) { .manage { grid-template-columns: minmax(0, 1fr); } }
+      .manage .card h2 { margin-bottom: 6px; }
+      .manage p.lede { font-size: 14px; color: var(--muted); line-height: 1.5; margin: 0 0 16px; }
+      .fields { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+      .fields label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+      .fields input { font: inherit; font-size: 15px; height: 44px; padding: 0 12px; border: 1px solid #d8d6d0; border-radius: 10px; width: 130px; }
+      .fields input.cur { width: 80px; text-transform: uppercase; }
+      .tool-btn { font: inherit; font-size: 14px; font-weight: 600; height: 44px; padding: 0 16px; border-radius: 10px; cursor: pointer;
+                  border: 1px solid #d8d6d0; background: var(--paper); color: var(--ink); }
+      .tool-btn.primary { background: var(--ink); border-color: var(--ink); color: #fff; }
+      .tool-btn:disabled { opacity: .5; cursor: default; }
+      .tool-msg { font-size: 13px; color: var(--muted); margin: 10px 0 0; min-height: 18px; }
+      .shares { list-style: none; margin: 0 0 14px; padding: 0; }
+      .shares li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid #f0efeb; font-size: 14px; }
+      .shares code { flex: 1 1 220px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                     font-size: 13px; background: var(--bg); padding: 8px 10px; border-radius: 8px; }
+      .shares small { color: var(--faint); font-size: 12px; }
+      .shares .tool-btn { height: 36px; padding: 0 12px; font-size: 13px; }
       .state { text-align: center; padding: 80px 16px; color: var(--muted); font-size: 16px; line-height: 1.6; }
       .state h1 { font-family: var(--serif); font-weight: 400; font-size: 32px; color: var(--ink); margin: 0 0 10px; }
 
@@ -198,7 +226,7 @@
         @page { margin: 14mm; }
         body { background: #fff; }
         .wrap { max-width: none; padding: 0; }
-        .actions, .adjust, .csv { display: none !important; }
+        .actions, .adjust, .csv, .manage { display: none !important; }
         .card { box-shadow: none; border: 1px solid var(--line); break-inside: avoid; }
         .kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
         /* Letter width is too narrow for three columns: one section per row,
@@ -234,7 +262,8 @@
           <span class="org" id="org-name" hidden></span>
         </div>
         <div class="actions" id="actions" hidden>
-          <select id="campaign" aria-label="Campaign"></select>
+          <span class="sample-tag" id="sample-tag" hidden>Sample data</span>
+          <select id="campaign" aria-label="Campaign" hidden></select>
           <button type="button" class="btn-export" id="export">Export report</button>
         </div>
       </header>
@@ -297,8 +326,16 @@
       }
 
       let state = null;
+      // owner: signed in, the admin or the project's owner.
+      // share: ?share={token} — a board member's read-only link, no sign-in.
+      // demo:  ?demo — the real page over sample numbers, no sign-in, nothing
+      //        read from or written to the analytics tables.
+      const MODE = params.get('share') ? 'share' : params.has('demo') ? 'demo' : 'owner';
 
       async function start() {
+        $('export').onclick = () => window.print();
+        if (MODE === 'share') return loadShared(params.get('share'));
+        if (MODE === 'demo') return loadDemo(params.get('id') || 'commontide');
         const { data } = await db.auth.getSession();
         if (!data.session) {
           location.href = '/auth.html?next=' + encodeURIComponent(location.pathname + location.search);
@@ -319,26 +356,91 @@
         sel.innerHTML = opts.map((c) => '<option value="' + esc(c.slug) + '"' + (c.slug === slug ? ' selected' : '') + '>' +
           esc(c.name || c.slug) + '</option>').join('');
         sel.onchange = () => { location.search = '?id=' + encodeURIComponent(sel.value); };
-        $('export').onclick = () => window.print();
+        sel.hidden = false;
         $('actions').hidden = false;
         load(slug);
       }
 
       async function load(slug) {
-        const args = {
-          p_slug: slug,
-          p_from: DATE_RE.test(params.get('from') || '') ? params.get('from') : null,
-          p_to: DATE_RE.test(params.get('to') || '') ? params.get('to') : null,
-          p_tz: params.get('tz') || 'America/New_York',
-          p_include_owner: params.get('own') === '1',
-        };
+        const args = Object.assign({ p_slug: slug, p_include_owner: params.get('own') === '1' }, rangeArgs());
         const r = await db.rpc('get_impact_dashboard', args);
         if (r.error) return fail(r.error);
         if (!r.data) {
           $('main').innerHTML = '<div class="state"><h1>Campaign not found</h1>There is no Popcode at popcode.app/' + esc(slug) + '.</div>';
           return;
         }
-        state = r.data;
+        show(r.data);
+        if (MODE === 'owner' && r.data.can && r.data.can.share) loadShares();
+      }
+
+      function rangeArgs() {
+        return {
+          p_from: DATE_RE.test(params.get('from') || '') ? params.get('from') : null,
+          p_to: DATE_RE.test(params.get('to') || '') ? params.get('to') : null,
+          p_tz: params.get('tz') || 'America/New_York',
+        };
+      }
+
+      async function loadShared(token) {
+        const r = await db.rpc('get_impact_dashboard_shared', Object.assign({ p_token: token }, rangeArgs()));
+        if (r.error) return fail(r.error);
+        $('actions').hidden = false;
+        show(r.data);
+      }
+
+      // Sample numbers: the same campaign as the preview on /nonprofits
+      // (1,037 scans, peaking at 210 on Giving Tuesday; $5,270 from 34 gifts),
+      // laid over the project's real photos and After the Video buttons.
+      const SAMPLE_DAYS = [18,42,65,58,40,33,29,24,38,31,22,27,35,44,210,96,61,48,39,30,26,21];
+      async function loadDemo(slug) {
+        let col = null;
+        try {
+          const resp = await fetch('/api/collection?slug=' + encodeURIComponent(slug));
+          if (resp.ok) col = await resp.json();
+        } catch (e) {}
+        if (!col) {
+          $('main').innerHTML = '<div class="state"><h1>Campaign not found</h1>There is no Popcode at popcode.app/' + esc(slug) + '.</div>';
+          return;
+        }
+        const cc = col.cover_config || {};
+        const end = cc.end || {};
+        const buttons = (Array.isArray(end.buttons) ? end.buttons : []).filter((b) => b && b.label).slice(0, 3);
+        const items = (col.items || []).map((i) => ({ ti: i.target_index, name: null, photo_url: i.photo_url,
+          video_url: i.video_url, audio_url: i.audio_url, media_type: i.media_type || 'video' }));
+        const start0 = day('2026-11-17');
+        const days = SAMPLE_DAYS.map((n, k) => ({ day: new Date(start0.getTime() + k * 864e5).toISOString().slice(0, 10), scans: n }));
+        const scans = SAMPLE_DAYS.reduce((a, b) => a + b, 0);
+        const tapSplit = [121, 24, 13].slice(0, buttons.length);
+        const taps = tapSplit.reduce((a, b) => a + b, 0);
+        // Share of scans per photo, most-scanned first (the reference's 512/331/194).
+        const w = [512, 331, 194, 150, 120].slice(0, items.length);
+        const wSum = w.reduce((a, b) => a + b, 0) || 1;
+        // Per-photo rates spread around the totals (the first story holds
+        // attention best), so a one-photo campaign's row equals the headline.
+        const spread = items.length > 1 ? [0.05, -0.03, -0.06, -0.07, -0.07] : [0];
+        const stories = items.map((it, k) => {
+          const sc = Math.round(scans * w[k] / wSum);
+          return { target_index: it.ti, scans: sc, plays: sc, completes: Math.round(sc * (612 / scans + spread[k])),
+                   taps: Math.round(taps * w[k] / wSum), avg_pct: Math.round(80 + spread[k] * 100) };
+        });
+        const buttonsBy = {};
+        tapSplit.forEach((n, k) => { buttonsBy[String(k + 1)] = n; });
+        $('sample-tag').hidden = false;
+        $('actions').hidden = false;
+        show({
+          demo: true,
+          campaign: { slug: col.slug, name: col.name, from: days[0].day, to: days[days.length - 1].day, tz: 'America/New_York',
+                      include_owner: false, org_name: cc.org_name || col.name, buttons: buttons, items: items },
+          totals: { scans: scans, phones: 764, plays: scans, completes: 612, avg_pct: 80, taps: taps, visits: 1290, events: 1 },
+          days: days, stories: stories, buttons: buttonsBy,
+          funnel: { scanned: 764, finished: 471, tapped: buttons.length ? 139 : 0 },
+          entry: { custom: 826, popcode: 464 },
+          results: { gifts: 34, amount: 5270, currency: 'USD', source: 'manual' },
+        });
+      }
+
+      async function show(data) {
+        state = data;
         state.durations = {};
         render();
         // Upgrade watch times once the video lengths are known.
@@ -349,10 +451,12 @@
       }
 
       function fail(err) {
-        const msg = /Unauthorized/i.test(err.message || '')
+        const msg = /Link not valid/i.test(err.message || '')
+          ? '<h1>This link isn’t active</h1>It may have been turned off. Ask whoever sent it for a new one.'
+          : /Unauthorized/i.test(err.message || '')
           ? '<h1>No access</h1>This campaign belongs to another account.'
           : /get_impact_/.test(err.message || '') && /function|schema cache/i.test(err.message || '')
-            ? '<h1>Not set up yet</h1>The dashboard\'s database functions haven\'t been installed (2026-09-26-impact-dashboard.sql).'
+            ? '<h1>Not set up yet</h1>The dashboard\'s database functions haven\'t been installed (supabase/migrations/2026-09-26-impact-*.sql).'
             : '<h1>Something went wrong</h1>' + esc(err.message || err);
         $('main').innerHTML = '<div class="state">' + msg + '</div>';
         if (window.Sentry) Sentry.captureException(err);
@@ -393,6 +497,7 @@
         buttons.forEach((b, i) => { const n = tapsBy[String(i + 1)] || 0; if (n > topN) { topN = n; topLabel = b.label; } });
 
         const has = t.events > 0;
+        const res = d.results || null;
         const kpis = [
           { k: 'Scans', v: has ? num(t.scans) : '—',
             n: t.scans ? 'About ' + num(t.phones) + ' different phone' + (t.phones === 1 ? '' : 's') : 'Each time a photo is scanned and plays' },
@@ -400,8 +505,11 @@
             n: t.plays ? avgNote : 'Share of videos watched all the way through' },
           { k: 'Button taps', v: buttons.length ? num(t.taps) : '—',
             n: !buttons.length ? 'No buttons set up after the video' : topN ? num(topN) + ' on ' + topLabel : 'Taps on the buttons after the video' },
-          { k: 'Gifts', v: '—', n: 'From your donation platform, added after the campaign', cls: 'pending' },
-          { k: 'Raised', v: '—', n: 'From your donation platform, added after the campaign', cls: 'pending money' },
+          res ? { k: 'Gifts', v: num(res.gifts), n: 'From donors who scanned' }
+              : { k: 'Gifts', v: '—', n: 'From your donation platform, added after the campaign', cls: 'pending' },
+          res ? { k: 'Raised', v: money(res.amount, res.currency), cls: 'money',
+                  n: res.gifts ? 'Avg. gift ' + money(res.amount / res.gifts, res.currency) : 'From your donation platform' }
+              : { k: 'Raised', v: '—', n: 'From your donation platform, added after the campaign', cls: 'pending money' },
         ];
 
         let html = '';
@@ -410,7 +518,7 @@
           ' · popcode.app/' + esc(c.slug) + '</div></div>' +
           '<div class="updated">Updated ' + esc(updated) + (c.include_owner ? ' · includes your own test scans' : '') + '</div></section>';
 
-        html += '<details class="adjust"' + (params.has('from') || params.has('to') || c.include_owner ? ' open' : '') + '><summary>Dates and options</summary>' +
+        if (MODE === 'owner') html += '<details class="adjust"' + (params.has('from') || params.has('to') || c.include_owner ? ' open' : '') + '><summary>Dates and options</summary>' +
           '<form class="row" id="adjust">' +
           '<label>From<input type="date" name="from" value="' + esc(c.from) + '"></label>' +
           '<label>To<input type="date" name="to" value="' + esc(c.to) + '"></label>' +
@@ -430,10 +538,13 @@
           '<div class="stack"><div class="card">' + tapsCard(buttons, tapsBy) + '</div>' +
           '<div class="card">' + splitCard(d) + '</div></div></section>';
 
-        html += '<p class="foot">Popcode never asks donors for their name, email or any account. Counts are anonymous.</p>';
+        html += '<p class="foot">' + (d.demo ? 'Sample data for illustration, shown over this Popcode’s real photos and buttons. ' : '') +
+          'Popcode never asks donors for their name, email or any account. Counts are anonymous.</p>';
+        if (MODE === 'owner' && d.can) html += manageTools(d);
         $('main').innerHTML = html;
+        wireManage(d);
 
-        $('adjust').onsubmit = (e) => {
+        if ($('adjust')) $('adjust').onsubmit = (e) => {
           e.preventDefault();
           const f = e.target, q = new URLSearchParams({ id: c.slug });
           if (f.from.value) q.set('from', f.from.value);
@@ -517,7 +628,10 @@
           '<li><div class="row">' + s[0] + ' <span>' + num(s[1]) + ' · ' + pct(s[1], base) + '%</span></div>' +
           '<div class="track"><div class="fill" style="width:' + Math.max(pct(s[1], base), s[1] ? 1 : 0) + '%"></div></div></li>'
         ).join('') +
-          '<li class="gave"><div class="row">Gave (confirmed) <span>After the campaign</span></div><div class="track"></div></li></ul>';
+          (d.results
+            ? '<li class="gave"><div class="row">Gave (confirmed) <span>' + num(d.results.gifts) + ' · ' + pct(d.results.gifts, base) + '%</span></div>' +
+              '<div class="track"><div class="fill" style="width:' + Math.max(pct(d.results.gifts, base), d.results.gifts ? 1 : 0) + '%"></div></div></li></ul>'
+            : '<li class="gave"><div class="row">Gave (confirmed) <span>After the campaign</span></div><div class="track"></div></li></ul>');
         h += '<p class="note">Counts are phones, not scans. Gifts and totals come from your donation platform, matched through tracking tags on your donate link.</p>';
         return h;
       }
@@ -584,6 +698,112 @@
         a.download = c.slug + '-scans-by-day-' + c.from + '-to-' + c.to + '.csv';
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      }
+
+      function money(n, cur) {
+        try {
+          return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur || 'USD', maximumFractionDigits: 0 }).format(n || 0);
+        } catch (e) { return (cur || '') + ' ' + num(Math.round(n || 0)); }
+      }
+
+      // ── Owner / admin tools ──────────────────────────────────────────────
+      function manageTools(d) {
+        const r = d.results;
+        let h = '<section class="manage">';
+        if (d.can.edit_results) {
+          h += '<div class="card"><h2>Gift totals</h2><p class="lede">From the org’s donation platform, filtered by ' +
+            '<code>utm_campaign=' + esc(d.campaign.slug) + '</code>. Fills in Gifts, Raised and the last funnel step.</p>' +
+            '<form class="fields" id="results-form">' +
+            '<label>Gifts<input type="number" name="gifts" min="0" step="1" required value="' + (r ? r.gifts : '') + '"></label>' +
+            '<label>Raised<input type="number" name="amount" min="0" step="0.01" required value="' + (r ? r.amount : '') + '"></label>' +
+            '<label>Currency<input class="cur" name="currency" maxlength="3" pattern="[A-Za-z]{3}" value="' + esc(r ? r.currency : 'USD') + '"></label>' +
+            '<button class="tool-btn primary" type="submit">Save</button>' +
+            (r ? '<button class="tool-btn" type="button" id="results-clear">Clear</button>' : '') +
+            '</form><p class="tool-msg" id="results-msg">' +
+            (r ? 'Last updated ' + esc(new Date(r.updated_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })) : 'Not entered yet.') +
+            '</p></div>';
+        }
+        if (d.can.share) {
+          h += '<div class="card"><h2>Share with your board</h2><p class="lede">Anyone with a link sees this dashboard, read-only, ' +
+            'without an account. Your own test scans are never included. Turn a link off at any time.</p>' +
+            '<ul class="shares" id="shares"></ul>' +
+            '<button class="tool-btn primary" type="button" id="share-new">Create a link</button>' +
+            '<p class="tool-msg" id="share-msg"></p></div>';
+        }
+        return h + '</section>';
+      }
+
+      function shareUrl(t) { return location.origin + '/impact.html?share=' + encodeURIComponent(t); }
+
+      function drawShares() {
+        const ul = $('shares');
+        if (!ul) return;
+        const live = (state.shares || []).filter((s) => !s.revoked_at);
+        const off = (state.shares || []).length - live.length;
+        ul.innerHTML = live.length ? live.map((s) =>
+          '<li><code>' + esc(shareUrl(s.token)) + '</code>' +
+          '<button class="tool-btn" type="button" data-copy="' + esc(s.token) + '">Copy</button>' +
+          '<button class="tool-btn" type="button" data-revoke="' + esc(s.token) + '">Turn off</button>' +
+          '<small>Made ' + esc(new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })) + '</small></li>'
+        ).join('') : '<li><small>No active links.' + (off ? ' ' + off + ' turned off.' : '') + '</small></li>';
+      }
+
+      async function loadShares() {
+        const r = await db.rpc('list_impact_shares', { p_slug: state.campaign.slug });
+        if (r.error) { const m = $('share-msg'); if (m) m.textContent = 'Couldn’t load links: ' + r.error.message; return; }
+        state.shares = r.data || [];
+        drawShares();
+      }
+
+      function wireManage(d) {
+        drawShares();
+        const slug = d.campaign.slug;
+        const form = $('results-form');
+        if (form) {
+          form.onsubmit = async (e) => {
+            e.preventDefault();
+            const b = form.querySelector('button[type=submit]'); b.disabled = true;
+            const r = await db.rpc('set_campaign_results', { p_slug: slug, p_gifts: parseInt(form.gifts.value, 10),
+              p_amount: parseFloat(form.amount.value), p_currency: (form.currency.value || 'USD').toUpperCase() });
+            b.disabled = false;
+            if (r.error) { $('results-msg').textContent = 'Not saved: ' + r.error.message; return; }
+            load(slug);
+          };
+          const clr = $('results-clear');
+          if (clr) clr.onclick = async () => {
+            if (!confirm('Clear the gift totals for this campaign?')) return;
+            const r = await db.rpc('clear_campaign_results', { p_slug: slug });
+            if (r.error) { $('results-msg').textContent = 'Not cleared: ' + r.error.message; return; }
+            load(slug);
+          };
+        }
+        const add = $('share-new');
+        if (add) add.onclick = async () => {
+          add.disabled = true;
+          const r = await db.rpc('create_impact_share', { p_slug: slug });
+          add.disabled = false;
+          if (r.error) { $('share-msg').textContent = 'Couldn’t create a link: ' + r.error.message; return; }
+          await loadShares();
+          copy(shareUrl(r.data), 'Link created and copied.');
+        };
+        const ul = $('shares');
+        if (ul) ul.onclick = async (e) => {
+          const c = e.target.closest('[data-copy]'), v = e.target.closest('[data-revoke]');
+          if (c) copy(shareUrl(c.dataset.copy), 'Copied.');
+          if (v) {
+            if (!confirm('Turn this link off? Anyone who has it will lose access.')) return;
+            const r = await db.rpc('revoke_impact_share', { p_token: v.dataset.revoke });
+            if (r.error) { $('share-msg').textContent = 'Couldn’t turn it off: ' + r.error.message; return; }
+            await loadShares();
+            $('share-msg').textContent = 'Link turned off.';
+          }
+        };
+      }
+
+      async function copy(text, done) {
+        const m = $('share-msg');
+        try { await navigator.clipboard.writeText(text); if (m) m.textContent = done; }
+        catch (e) { if (m) m.textContent = text; }
       }
 
       start().catch(fail);

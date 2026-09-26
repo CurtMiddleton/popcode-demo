@@ -127,6 +127,12 @@ Orgs point their own address (yourorg.org/story) at their Popcode page with a si
 > phase 3: the funnel's first three steps, the print report (two pages, Letter) and the daily CSV. Gifts / Raised /
 > "Gave" are placeholders until `campaign_results` exists. Time zone is `?tz=` (no account column yet); highlight
 > date is Giving Tuesday unless `?hl=YYYY-MM-DD`.
+>
+> **Phase 3 built (same day):** `campaign_results` + an admin-only *Gift totals* form under the report (fills Gifts,
+> Raised and the funnel's "Gave"); revocable share links (`impact_shares`, `?share={token}`, no sign-in, created and
+> turned off by the owner or admin). Migration `2026-09-26-impact-phase3.sql`. Also `?demo`: the real page over the
+> `/nonprofits` sample numbers and the project's real photos/buttons, labelled *Sample data*, nothing read from or
+> written to the analytics tables (for pitching; e.g. `impact.html?id=commontide&demo`). CSV import of gifts: not built.
 
 1. **Before the pilot prints (~Nov 3):** event logging, story buttons with UTMs, and `?via=org` handling live on the story page. Without these, there's no data to show later.
 2. **By Giving Tuesday (Dec 1):** dashboard with headline numbers, scans by day, stories table, button taps, and address split. Admin-only is fine.
