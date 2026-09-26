@@ -23,6 +23,8 @@
     <link rel="stylesheet" href="/assets/fonts.css">
     <!-- The Seasons (Adobe Fonts kit hdk3gwt): the type printed on the sample pieces, as on the Common Tide card. -->
     <link rel="stylesheet" href="https://use.typekit.net/hdk3gwt.css">
+    <!-- Cormorant Garamond: the viewer's custom-cover title face, for the hero phone's Common Tide cover. -->
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/ui.css">
     <style>
       :root {
@@ -146,15 +148,21 @@
       }
       .phone-notch { position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
         width: 82px; height: 22px; border-radius: 12px; background: #16121f; z-index: 4; }
-      .phone-home { position: absolute; inset: 0; overflow: hidden; transition: opacity .7s ease;
-        font-family: var(--sans); --logo-lift: 23.6cqw; --cta-bottom: 12%; --cta-h: 20.5cqw; }
-      .phone-home .splash-logo { position: absolute; left: 50%; bottom: calc(50% + var(--logo-lift));
-        transform: translateX(-50%); width: 73.3cqw; height: auto; display: block; }
-      .phone-tap { position: absolute; left: 50%;
-        top: calc(((50% - var(--logo-lift)) + (100% - var(--cta-bottom) - var(--cta-h))) / 2);
-        transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 5.6cqw; }
+      /* The hero phone plays popcode.app/commontide as it really is: Common
+         Tide's custom cover (cover_config, org template), Meg's video, then its
+         After the Video buttons. Sizes are the viewer's px over a 393px-wide
+         screen, in container units so they follow the phone. */
+      .phone-home { position: absolute; inset: 0; overflow: hidden; transition: opacity .7s ease; font-family: var(--sans); color: #fff; }
+      .cv-bg, .cv-bg img, .pe-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+      .cv-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.35) 0%, rgba(0,0,0,.1) 28%, rgba(0,0,0,.1) 55%, rgba(0,0,0,.55) 100%); }
+      .cv-logo { position: absolute; top: 13cqh; left: 50%; translate: -50% 0; width: 45.8cqw; height: auto; filter: drop-shadow(0 2px 12px rgba(0,0,0,.35)); }
+      .cv-text { position: absolute; top: 24cqh; left: 6cqw; right: 6cqw; text-align: center; text-shadow: 0 2px 16px rgba(0,0,0,.35); }
+      .cv-eyebrow { font-size: 4.07cqw; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; margin-bottom: .8em; opacity: .95; }
+      .cv-title { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; font-size: 17.8cqw; line-height: .92; letter-spacing: -0.01em; }
+      .phone-tap { position: absolute; left: 50%; bottom: 17cqh; translate: -50% 0; display: flex; flex-direction: column; align-items: center; gap: 3.6cqw; }
+      .cv-pop { position: absolute; left: 50%; bottom: 5.5cqh; translate: -50% 0; width: 39cqw; height: auto; opacity: .95; }
       .phone-scan { position: relative; width: 36.2cqw; height: 36.2cqw; display: flex; align-items: center; justify-content: center; }
-      .phone-caption { color: #fff; font-size: 4.9cqw; font-weight: 700; letter-spacing: -0.01em; }
+      .phone-caption { color: #fff; font-size: 4.9cqw; font-weight: 700; letter-spacing: -0.01em; text-shadow: 0 2px 14px rgba(0,0,0,.34); }
       .pop-disc { position: absolute; inset: 0; border-radius: 50%; background: #4b3cba; }
       .pop-halo { position: absolute; inset: 0; border-radius: 50%; background: #fff; opacity: 0; }
       @keyframes pop-swell { 0% { transform: scale(1); opacity: 0; } 6% { opacity: .17; } 74% { opacity: .17; } 100% { transform: scale(5.6); opacity: 0; } }
@@ -167,11 +175,6 @@
       .phone:not(.playing) .pop-mark { animation: pop-spinin 1.05s cubic-bezier(.45,.05,.2,1) both; }
       .pop-mark { position: relative; width: 33.8cqw; height: 33.8cqw; filter: drop-shadow(0 2px 14px rgba(0,0,0,.34)); }
       .pop-mark use { fill: #fff; }
-      .phone-cta { position: absolute; bottom: var(--cta-bottom); left: 0; right: 0;
-        display: flex; flex-direction: column; align-items: center; gap: 4.1cqw; }
-      .phone-create { padding: 3.6cqw 9.2cqw; font-size: 4.1cqw; border-radius: 7.7cqw;
-        border: 1px solid rgba(255,255,255,.7); color: #fff; font-weight: 700; }
-      .phone-signin { font-size: 3.6cqw; color: rgba(255,255,255,.75); }
       .phone-media { position: absolute; inset: 0; opacity: 0; transition: opacity .7s ease; background: #000; }
       .phone-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
       /* Captions, drawn by the page rather than the browser: native cues size
@@ -182,8 +185,27 @@
       .phone-cc:empty { display: none; }
       .phone-cc span { background: rgba(0, 0, 0, .62); padding: .12em .4em; border-radius: .3em;
         -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-      .phone.playing .phone-home { opacity: 0; }
+      /* After the video: the project's own buttons, one at a time. */
+      .phone-end { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity .6s ease; color: #fff; font-family: var(--sans); }
+      .pe-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.45) 0%, rgba(0,0,0,.2) 35%, rgba(0,0,0,.55) 65%, rgba(0,0,0,.8) 100%); }
+      .pe-in { position: relative; height: 100%; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 11cqw 6.1cqw 7cqw; }
+      .pe-logo { width: 40.7cqw; height: auto; margin-top: 4.6cqw; filter: drop-shadow(0 2px 8px rgba(0,0,0,.35)); }
+      .pe-title { font-family: var(--serif); font-weight: 400; font-size: 8.6cqw; line-height: 1.1; margin: auto 0 2.5cqw; text-shadow: 0 2px 14px rgba(0,0,0,.4); }
+      .pe-sub { font-size: 4.07cqw; line-height: 1.4; opacity: .92; margin: 0 0 6.6cqw; }
+      .pe-btns { width: 100%; display: flex; flex-direction: column; gap: 3cqw; }
+      .pe-btn { display: block; padding: 3.8cqw 4cqw; border-radius: 999px; border: 1.5px solid rgba(255,255,255,.9); background: rgba(0,0,0,.18);
+                font-size: 3.85cqw; font-weight: 700; line-height: 1.25; opacity: 0; transform: translateY(4cqw); transition: opacity .45s ease, transform .5s cubic-bezier(.2,.8,.3,1.2); }
+      .pe-btn:first-child { background: #fff; color: #1a1a1a; border-color: #fff; }
+      .pe-btn small { display: block; font-size: 3.2cqw; font-weight: 500; opacity: .75; margin-top: .6cqw; }
+      .pe-foot { display: flex; gap: 5.5cqw; justify-content: center; margin-top: 5.2cqw; font-size: 3.7cqw; font-weight: 600; opacity: .85; }
+      .pe-foot span { text-decoration: underline; text-underline-offset: .2em; }
+      .phone.playing .phone-home, .phone.ended .phone-home { opacity: 0; }
       .phone.playing .phone-media { opacity: 1; }
+      .phone.ended .phone-end { opacity: 1; }
+      .phone.ended .pe-btn { opacity: 1; transform: none; }
+      .phone.ended .pe-btn:nth-child(1) { transition-delay: .5s; }
+      .phone.ended .pe-btn:nth-child(2) { transition-delay: .95s; }
+      .phone.ended .pe-btn:nth-child(3) { transition-delay: 1.4s; }
       @media (prefers-reduced-motion: reduce) {
         .phone-scan .pop-halo, .phone-scan .pop-disc, .phone:not(.playing) .pop-mark { animation: none; }
         .phone-scan .pop-halo { opacity: 0; }
@@ -577,7 +599,10 @@
           <div class="phone" id="phone">
             <div class="phone-screen">
               <div class="phone-home" aria-hidden="true">
-                <img class="splash-logo" src="/assets/Popcode_logo.rev.svg" alt=""/>
+                <picture class="cv-bg"><source type="image/webp" srcset="/assets/nonprofits-cover.webp"><img src="/assets/nonprofits-cover.jpg" width="1400" height="933" alt=""></picture>
+                <div class="cv-shade"></div>
+                <img class="cv-logo" src="/assets/nonprofits-ct-logo.png" width="480" height="59" alt=""/>
+                <div class="cv-text"><div class="cv-eyebrow">Giving Tuesday</div><div class="cv-title">The marsh came back.</div></div>
                 <div class="phone-tap">
                   <div class="phone-scan">
                     <span class="pop-halo h1"></span><span class="pop-halo h2"></span><span class="pop-halo h3"></span><span class="pop-halo h4"></span><span class="pop-halo h5"></span>
@@ -593,17 +618,29 @@
                       <g transform="rotate(315 150.6 150.6)"><use href="#pop-p"/></g>
                     </svg>
                   </div>
-                  <div class="phone-caption">Tap to scan</div>
+                  <div class="phone-caption">Scan image</div>
                 </div>
-                <div class="phone-cta">
-                  <span class="phone-create">Create your own Popcode</span>
-                  <span class="phone-signin">Already have an account? <u>Sign in</u></span>
-                </div>
+                <img class="cv-pop" src="/assets/Popcode_logo.rev.svg" alt=""/>
               </div>
               <div class="phone-media">
                 <video id="demo-video" muted playsinline preload="none" poster="/assets/nonprofits-demo-poster.jpg"
                        aria-label="Demo: Meg Holloway of Common Tide on the marsh coming back, and a Giving Tuesday ask"></video>
                 <div class="phone-cc" id="phone-cc" aria-hidden="true"></div>
+              </div>
+              <div class="phone-end" aria-hidden="true">
+                <picture><source type="image/webp" srcset="/assets/nonprofits-cover.webp"><img class="pe-bg" src="/assets/nonprofits-cover.jpg" width="1400" height="933" alt=""></picture>
+                <div class="pe-shade"></div>
+                <div class="pe-in">
+                  <img class="pe-logo" src="/assets/nonprofits-ct-logo.png" width="480" height="59" alt=""/>
+                  <div class="pe-title">Thank you for watching.</div>
+                  <p class="pe-sub">Help bring back the next marsh.</p>
+                  <div class="pe-btns">
+                    <span class="pe-btn">Double your gift today<small>Every dollar matched through Giving Tuesday</small></span>
+                    <span class="pe-btn">Hear from Marisol</span>
+                    <span class="pe-btn">Become a Tide Keeper, $10 a month</span>
+                  </div>
+                  <div class="pe-foot"><span>Watch again</span><span>Scan another photo</span></div>
+                </div>
               </div>
               <div class="phone-notch"></div>
             </div>
@@ -1068,7 +1105,7 @@
         mark();
       })();
 
-      // ── The hero phone: the Popcode start screen for a moment, then the
+      // ── The hero phone: Common Tide's cover for a moment, then the
       // story plays (muted, like the home page), then back to the start screen
       // and round again. The video only loads once the hero is on screen.
       // "Play with sound" restarts it with sound; reduced-motion visitors get
@@ -1081,25 +1118,31 @@
         var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
         var timer = null, userSound = false;
 
+        // Captions are drawn by the page from the .vtt file. No <track> is
+        // given to the video at all: Safari switches a hidden track back on
+        // (and draws its own large captions) when the viewer's system has
+        // "Closed Captions + SDH" turned on.
         if (CONFIG.DEMO_CAPTIONS) {
-          var t = document.createElement('track');
-          t.kind = 'captions'; t.srclang = 'en'; t.label = 'English'; t.default = true;
-          t.src = CONFIG.DEMO_CAPTIONS;
-          v.appendChild(t);
-          // 'hidden' loads the cues without the browser drawing them; the page
-          // draws them in #phone-cc so their size follows the phone, not the OS.
-          var cc = document.getElementById('phone-cc');
-          var track = t.track;
-          track.mode = 'hidden';
-          track.addEventListener('cuechange', function () {
-            var cue = track.activeCues && track.activeCues[0];
-            cc.textContent = '';
+          var cc = document.getElementById('phone-cc'), cues = [], shown = null;
+          var sec = function (t) { var p = t.trim().split(':').map(Number); return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p[0] * 60 + p[1]; };
+          fetch(CONFIG.DEMO_CAPTIONS).then(function (r) { return r.text(); }).then(function (txt) {
+            txt.replace(/\r/g, '').split(/\n\n+/).forEach(function (block) {
+              var lines = block.split('\n'), i = lines.findIndex(function (l) { return l.indexOf('-->') > -1; });
+              if (i < 0) return;
+              var tm = lines[i].split('-->');
+              cues.push({ a: sec(tm[0]), b: sec(tm[1].trim().split(' ')[0]), text: lines.slice(i + 1).join(' ').replace(/<[^>]+>/g, '') });
+            });
+          }).catch(function () {});
+          var draw = function () {
+            var t = v.currentTime, cue = null;
+            for (var k = 0; k < cues.length; k++) if (t >= cues[k].a && t < cues[k].b) { cue = cues[k]; break; }
+            if (cue === shown) return;
+            shown = cue; cc.textContent = '';
             if (!cue) return;
-            var span = document.createElement('span');
-            span.textContent = cue.text.replace(/<[^>]+>/g, '');
-            cc.appendChild(span);
-          });
-          v.addEventListener('loadedmetadata', function () { track.mode = 'hidden'; });
+            var span = document.createElement('span'); span.textContent = cue.text; cc.appendChild(span);
+          };
+          v.addEventListener('timeupdate', draw);
+          v.addEventListener('seeked', draw);
         }
         function load() { if (!v.getAttribute('src')) v.src = CONFIG.DEMO_VIDEO; }
         function play() {
@@ -1108,14 +1151,19 @@
           v.play().catch(function () { phone.classList.remove('playing'); });
         }
         function home(after) {
-          phone.classList.remove('playing');
+          phone.classList.remove('playing', 'ended');
           clearTimeout(timer);
           if (after) timer = setTimeout(play, after);
         }
+        // When the story ends: Common Tide's After the Video screen, as a donor
+        // sees it, for a few seconds; then the cover again, and round.
         v.addEventListener('ended', function () {
           v.currentTime = 0;
           if (userSound) { userSound = false; v.muted = true; btn.textContent = 'Play with sound'; }
-          home(reduce ? 0 : 2400);
+          phone.classList.remove('playing');
+          phone.classList.add('ended');
+          clearTimeout(timer);
+          timer = setTimeout(function () { home(reduce ? 0 : 2400); }, 6500);
         });
         btn.addEventListener('click', function () {
           if (userSound) {                    // currently playing with sound: mute
@@ -1123,6 +1171,7 @@
             return;
           }
           clearTimeout(timer);
+          phone.classList.remove('ended');
           userSound = true; v.muted = false; v.currentTime = 0;
           btn.textContent = 'Mute';
           play();
