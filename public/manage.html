@@ -1129,6 +1129,7 @@
           if (cv) renderBookMockup(cv, coverPhoto, coverText).catch(() => {});
         }
         if (isBoardbook) drawBoardbookMockup(card, col, thumbUrl);
+        if (isCalendar) drawCalendarMockup(card, col, thumbUrl);
         useSmallPhoto(card);
         if (!isBook && !isCalendar && !isBoardbook) drawDesignMockup(card, col, thumbUrl);
         return card;
@@ -1814,7 +1815,22 @@
         const mk = P && P.MOCKUPS && P.MOCKUPS[MOCKUP_FOR[type]];
         const img = card.querySelector('.design-photo');
         if (!mk || !img || !photoUrl) return;
-        if (/-(white|natural)$/.test(pc.variantId || '')) return;
+        /* The frame templates are photos of a BLACK frame; a white or natural
+           one is drawn in its own colour instead. */
+        const fcol = (/-(white|natural)$/.exec(pc.variantId || '') || [])[1];
+        if (fcol && P.drawColouredFrame) {
+          const m = /(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)/i.exec(pc.variantId || '');
+          let a = m ? parseFloat(m[1]) / parseFloat(m[2]) : 0.8;
+          if (pc.orientation === 'landscape' ? a < 1 : a > 1) a = 1 / a;
+          try {
+            const photo = await loadCardImg(smallPhoto(photoUrl, 1000));
+            const cv = document.createElement('canvas');
+            cv.className = 'design-mockup';
+            P.drawColouredFrame(cv, photo, a, P.FRAME_HEX[fcol]);
+            img.replaceWith(cv);
+          } catch (e) { /* keep the plain photo */ }
+          return;
+        }
         const isMug = type === 'mug';
         const opts = {
           mockup: mk,
@@ -1846,6 +1862,28 @@
          mat is taller than the mat and gets cropped, so it is re-pinned here
          to the mat's height — absolutely, for the same iOS reason as
          .design-mockup. */
+      function loadCardImg(src) {
+        return new Promise((res, rej) => {
+          const i = new Image(); i.crossOrigin = 'anonymous';
+          i.onload = () => res(i); i.onerror = rej; i.src = src;
+        });
+      }
+      /* A wall calendar as it hangs: January's dates over the cover photo —
+         the drawing the cart uses (PopcodePreview.drawCalendarSheet). */
+      async function drawCalendarMockup(card, col, thumbUrl) {
+        const P = window.PopcodePreview;
+        const img = card.querySelector('.design-photo');
+        if (!P || !P.drawCalendarSheet || !img) return;
+        const cal = (col.book_layout && col.book_layout.calendar) || {};
+        let photo = null;
+        if (thumbUrl) { try { photo = await loadCardImg(smallPhoto(thumbUrl, 800)); } catch (e) { photo = null; } }
+        const cv = document.createElement('canvas');
+        cv.className = 'design-mockup';
+        try {
+          await P.drawCalendarSheet(cv, photo, parseInt(cal.year, 10) || 0);
+          img.replaceWith(cv);
+        } catch (e) { /* keep the plain photo */ }
+      }
       function drawBoardbookMockup(card, col, thumbUrl) {
         const mat = card.querySelector('.design-mat');
         if (!mat || typeof window.boardbookMockup !== 'function') return;
