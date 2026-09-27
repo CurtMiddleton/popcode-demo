@@ -522,7 +522,101 @@
     return c.toDataURL('image/png');
   }
 
+  /* ── Card thumbnails with no product photograph ─────────────────────
+     A wall calendar and a white or natural frame have no template to
+     composite into (the frame templates are photos of a BLACK frame), so they
+     are drawn. Same drawings as cart.html's line thumbnails (drawCalendarThumb,
+     drawColouredFrameThumb), which keep their own copy because the cart does
+     not load this file. */
+  var CAL_PAGE = { W: 1400, H: 993 };
+  var CAL_MONTHS = ['January','February','March','April','May','June',
+                    'July','August','September','October','November','December'];
+  var CAL_DOW = ['S','M','T','W','T','F','S'];
+  function drawCoveredImg(ctx, img, x, y, w, h) {
+    var want = w / h, have = img.naturalWidth / img.naturalHeight;
+    var sw = img.naturalWidth, sh = img.naturalHeight, sx = 0, sy = 0;
+    if (have > want) { sw = sh * want; sx = (img.naturalWidth - sw) / 2; }
+    else { sh = sw / want; sy = (img.naturalHeight - sh) / 2; }
+    ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  }
+  // One month page at calendar.html's print proportions (1400x993).
+  function drawCalMonthPage(ctx, x, y, w, h, year, month) {
+    var sx = w / CAL_PAGE.W, sy = h / CAL_PAGE.H;
+    ctx.fillStyle = '#fff'; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#141414'; ctx.textBaseline = 'top';
+    ctx.font = '700 ' + Math.max(7, 148 * sy) + 'px Inter, sans-serif';
+    ctx.fillText(CAL_MONTHS[month], x + 90 * sx, y + 64 * sy);
+    var numY = y + h - 66 * sy - 96 * sy;
+    ctx.fillStyle = '#cfcfcf';
+    ctx.fillRect(x + 90 * sx, numY, Math.max(1, 2 * sx), 96 * sy);
+    ctx.fillStyle = '#c2c2c2';
+    ctx.font = '500 ' + Math.max(6, 88 * sy) + 'px Inter, sans-serif';
+    ctx.fillText(String(month + 1).padStart(2, '0'), x + (90 + 18) * sx, numY);
+    var gx = x + 610 * sx, gy = y + 440 * sy;
+    var gw = w - (610 + 82) * sx, gh = h - (440 + 92) * sy;
+    var colW = gw / 7;
+    var days = new Date(year, month + 1, 0).getDate();
+    var first = new Date(year, month, 1).getDay();
+    var weeks = Math.ceil((first + days) / 7);
+    var rowTop = 62 * sy, rowStep = (gh - rowTop - 26 * sy) / Math.max(5, weeks);
+    ctx.strokeStyle = '#d9d9d9'; ctx.lineWidth = Math.max(0.5, 1.5 * sx);
+    for (var c = 1; c < 7; c++) {
+      var lx = Math.round(gx + c * colW) + 0.5;
+      ctx.beginPath(); ctx.moveTo(lx, gy); ctx.lineTo(lx, gy + gh); ctx.stroke();
+    }
+    ctx.textAlign = 'right';
+    for (c = 0; c < 7; c++) {
+      ctx.fillStyle = '#8a8a8a';
+      ctx.font = '600 ' + Math.max(4, 18 * sy) + 'px Inter, sans-serif';
+      ctx.fillText(CAL_DOW[c], gx + (c + 1) * colW - 16 * sx, gy);
+      ctx.fillStyle = '#141414';
+      ctx.font = '500 ' + Math.max(5, 40 * sy) + 'px Inter, sans-serif';
+      for (var row = 0; row < weeks; row++) {
+        var d = row * 7 + c - first + 1;
+        if (d < 1 || d > days) continue;
+        ctx.fillText(String(d), gx + (c + 1) * colW - 14 * sx, gy + rowTop + row * rowStep);
+      }
+    }
+    ctx.textAlign = 'left';
+  }
+  // The hanging sheet: January's dates page on top, the photo page below.
+  async function drawCalendarSheet(cv, photoImg, year) {
+    var S = 460; cv.width = S; cv.height = S;
+    var ctx = cv.getContext('2d');
+    try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (_) {}
+    var sheetH = Math.round(S * 0.88), pageH = Math.round(sheetH / 2);
+    var sheetW = Math.round(pageH * (CAL_PAGE.W / CAL_PAGE.H));
+    var x = Math.round((S - sheetW) / 2), y = Math.round((S - sheetH) / 2);
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.24)'; ctx.shadowBlur = 26; ctx.shadowOffsetY = 12;
+    ctx.fillStyle = '#fff'; ctx.fillRect(x, y, sheetW, sheetH); ctx.restore();
+    drawCalMonthPage(ctx, x, y, sheetW, pageH, year || (new Date().getFullYear() + 1), 0);
+    if (photoImg) {
+      ctx.save(); ctx.beginPath(); ctx.rect(x, y + pageH, sheetW, sheetH - pageH); ctx.clip();
+      drawCoveredImg(ctx, photoImg, x, y + pageH, sheetW, sheetH - pageH); ctx.restore();
+    }
+    ctx.strokeStyle = 'rgba(0,0,0,0.10)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, y + pageH + 0.5); ctx.lineTo(x + sheetW, y + pageH + 0.5); ctx.stroke();
+  }
+  // A photo in a frame of any colour (w/h aspect), with a soft shadow.
+  var FRAME_HEX = { white: '#f7f6f3', natural: '#c9a97e' };
+  function drawColouredFrame(cv, photoImg, aspect, hex) {
+    var S = 420; cv.width = S; cv.height = S;
+    var ctx = cv.getContext('2d');
+    var a = aspect > 0 ? aspect : 1;
+    var w = S * 0.72, h = w / a; if (h > S * 0.8) { h = S * 0.8; w = h * a; }
+    var x = (S - w) / 2, y = (S - h) / 2, f = Math.max(w, h) * 0.07;
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.28)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 8;
+    ctx.fillStyle = hex; ctx.fillRect(x - f, y - f, w + 2 * f, h + 2 * f); ctx.restore();
+    ctx.strokeStyle = 'rgba(0,0,0,0.14)'; ctx.lineWidth = 1;
+    ctx.strokeRect(x - f + .5, y - f + .5, w + 2 * f - 1, h + 2 * f - 1);
+    ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); drawCoveredImg(ctx, photoImg, x, y, w, h); ctx.restore();
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.strokeRect(x + .5, y + .5, w - 1, h - 1);
+  }
+
   window.PopcodePreview = {
+    drawCalendarSheet: drawCalendarSheet,
+    drawColouredFrame: drawColouredFrame,
+    FRAME_HEX: FRAME_HEX,
     MOCKUPS: MOCKUPS,
     drawOrnamentBack: drawOrnamentBack,
     ORNAMENT_BACK_PX: ORNAMENT_BACK_PX,
