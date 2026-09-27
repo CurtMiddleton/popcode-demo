@@ -2972,7 +2972,7 @@
       function openMontage(n) {
         if (montageBusy) return;
         montageState = { page: n, photos: [], perSec: 3, transition: 'kenburns', aspect: 'portrait', musicId: 'none',
-                         draftId: mtgNewId(), savedSig: null };
+                         name: '', draftId: mtgNewId(), savedSig: null };
         mtgSyncControls();
         mtgRenderStrip();
         mtgStatus('');
@@ -2984,6 +2984,7 @@
       }
       // Put the settings controls in line with montageState (new or loaded draft).
       function mtgSyncControls() {
+        document.getElementById('mtg-name').value = montageState.name || '';
         mtgSecRender();
         mtgSetSeg('mtg-transition', montageState.transition);
         mtgSetSeg('mtg-aspect', montageState.aspect);
@@ -3654,7 +3655,7 @@
       function mtgDraftDir(id) { return `montage-drafts/${currentUser.id}/${id || montageState.draftId}`; }
       function mtgSig() {
         const st = montageState;
-        return JSON.stringify([st.photos.map(p => [p.id, p.crop || 0, p.secs || 0]), st.perSec, st.transition, st.aspect, st.musicId]);
+        return JSON.stringify([st.photos.map(p => [p.id, p.crop || 0, p.secs || 0]), st.perSec, st.transition, st.aspect, st.musicId, st.name || '']);
       }
       async function mtgUploadSources(pctSpan) {
         const st = montageState;
@@ -3681,10 +3682,20 @@
           while (next < todo.length) await one(todo[next++]);
         }));
       }
+      // A montage with no name gets one on save, so the list never shows two
+      // anonymous "31 photos" rows. The creator can change it any time.
+      function mtgEnsureName() {
+        const st = montageState;
+        if (st.name && st.name.trim()) return;
+        st.name = 'Montage · ' + new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const el = document.getElementById('mtg-name');
+        if (el) el.value = st.name;
+      }
       async function mtgWriteDraft() {
+        mtgEnsureName();
         const st = montageState;
         const draft = {
-          v: 1, id: st.draftId, updatedAt: new Date().toISOString(),
+          v: 1, id: st.draftId, name: st.name || '', updatedAt: new Date().toISOString(),
           perSec: st.perSec, transition: st.transition, aspect: st.aspect, musicId: st.musicId,
           items: st.photos.map(p => ({ id: p.id, kind: p.kind, url: p.remote, thumb: p.kind === 'video' ? p.thumb : undefined,
                                         seconds: p.seconds, secs: p.secs, trimmed: p.trimmed, w: p.w, h: p.h, crop: p.crop, framed: p.framed })),
@@ -3743,7 +3754,8 @@
         const X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
         const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
         wrap.innerHTML = '<p class="mtg-drafts-h">Your saved montages</p><div class="mtg-drafts-list">' + mtgDrafts.map((d, i) => {
-          const first = d.items[0];
+          // A photo makes a better cover than a video's first frame (often black).
+          const first = d.items.find(it => it.kind !== 'video') || d.items[0];
           const nv = d.items.filter(it => it.kind === 'video').length, np = d.items.length - nv;
           const parts = [];
           if (np) parts.push(`${np} photo${np === 1 ? '' : 's'}`);
@@ -3751,7 +3763,7 @@
           const when = d.updatedAt ? new Date(d.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
           return `<div class="mtg-draft" role="button" tabindex="0" onclick="mtgOpenDraft(${i})">
               <img src="${esc(first.kind === 'video' ? first.thumb : first.url)}" alt=""/>
-              <span class="mtg-draft-txt"><b>${parts.join(' · ')}</b><span>Saved ${esc(when)}</span></span>
+              <span class="mtg-draft-txt"><b>${esc(d.name || parts.join(' · '))}</b><span>${d.name ? parts.join(' · ') + ' · ' : ''}Saved ${esc(when)}</span></span>
               <button type="button" class="mtg-draft-del" title="Delete" aria-label="Delete this montage" onclick="event.stopPropagation(); mtgDeleteDraft(${i})">${X}</button>
             </div>`;
         }).join('') + '</div>';
@@ -3761,7 +3773,7 @@
         const d = mtgDrafts[i];
         if (!d || !montageState || montageBusy) return;
         Object.assign(montageState, {
-          draftId: d.id, perSec: d.perSec || 3, transition: d.transition === 'fade' ? 'fade' : 'kenburns',
+          draftId: d.id, name: d.name || '', perSec: d.perSec || 3, transition: d.transition === 'fade' ? 'fade' : 'kenburns',
           aspect: MTG_ASPECT[d.aspect] ? d.aspect : 'portrait', musicId: d.musicId || 'none',
           photos: d.items.map(it => ({ ...it, url: it.url, remote: it.url })),
         });
@@ -3925,6 +3937,11 @@
     .mtg-draft-del { flex: none; width: 32px; height: 32px; border-radius: 50%; border: none; background: #f3f3f3; color: #555; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .mtg-draft-del svg { width: 12px; height: 12px; }
     .mtg-foot-btns { display: flex; gap: 8px; align-items: center; }
+    .mtg-name-field { margin-bottom: 18px; }
+    .mtg-name { width: 100%; box-sizing: border-box; border: 1px solid #e4e2dc; border-radius: 12px; padding: 12px 14px;
+      font-size: 16px; font-family: 'Inter', sans-serif; color: #1a1a1a; background: #fff; }
+    .mtg-name:focus { outline: none; border-color: #1a1a1a; }
+    .mtg-draft-txt b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .mtg-foot-btns button { white-space: nowrap; }
     @media (max-width: 460px) { .mtg-foot-btns .mtg-create, .mtg-save-draft { padding-left: 16px; padding-right: 16px; } }
     .mtg-save-draft { border: 1px solid #e4e2dc; background: #fff; color: #1a1a1a; border-radius: 999px; font-weight: 700; font-size: 15px;
@@ -4036,6 +4053,11 @@
         <p class="mtg-sub">Pick photos and short videos, set the order, add music. We'll turn them into a memory video and link it to this page's photo.</p>
 
         <div class="mtg-drafts" id="mtg-drafts" hidden></div>
+        <div class="mtg-field mtg-name-field">
+          <label for="mtg-name">Name</label>
+          <input type="text" id="mtg-name" class="mtg-name" maxlength="60" autocomplete="off"
+                 placeholder="e.g. Summer at the lake" oninput="if (montageState) montageState.name = this.value"/>
+        </div>
         <div class="mtg-strip" id="mtg-strip"></div>
         <div class="mtg-reorder-hint" id="mtg-reorder-hint" style="display:none;">Drag the photos to reorder them.</div>
         <label class="mtg-add">
