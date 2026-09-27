@@ -1814,6 +1814,24 @@
         const type = pc.productType || col.kind;
         const mk = P && P.MOCKUPS && P.MOCKUPS[MOCKUP_FOR[type]];
         const img = card.querySelector('.design-photo');
+        /* Acrylic has no template: the shared renderer draws it as a glossy
+           block (drawAcrylicBlock in product-preview.js), badge and crop
+           composited first, the same way the Shop's product page does. */
+        if (type === 'acrylic' && img && photoUrl && P && P.renderProductOnly) {
+          const m = /(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)/i.exec(pc.variantId || '');
+          let a = m ? parseFloat(m[1]) / parseFloat(m[2]) : 0.8;
+          if (pc.orientation === 'landscape' ? a < 1 : a > 1) a = 1 / a;
+          try {
+            const url = await P.compositeBadgedImage(smallPhoto(photoUrl, 1400),
+              { scale: typeof pc.scale === 'number' ? pc.scale : 0.06, aspect: a, adjust: pc.adjust || null });
+            const art = await loadCardImg(url);
+            const cv = document.createElement('canvas');
+            cv.className = 'design-mockup';
+            P.renderProductOnly(cv, art, a, { productType: 'acrylic' });
+            img.replaceWith(cv);
+          } catch (e) { /* keep the plain photo */ }
+          return;
+        }
         if (!mk || !img || !photoUrl) return;
         /* The frame templates are photos of a BLACK frame; a white or natural
            one is drawn in its own colour instead. */
