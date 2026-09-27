@@ -61,7 +61,8 @@ export default async function handler(req, res) {
       });
     } catch (e) {
       if (e instanceof CartError) {
-        return res.status(e.status).json({ error: e.message, ...(e.unservable ? { unservable: true } : {}) });
+        return res.status(e.status).json({ error: e.message, ...(e.unservable ? { unservable: true } : {}),
+          ...(e.methodUnavailable ? { method_unavailable: e.methodUnavailable } : {}) });
       }
       throw e;
     }
