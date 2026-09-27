@@ -512,7 +512,7 @@
       let activeDays = 30;
       let sortCol = 'created_at', sortDir = 'desc';
       let searchQuery = '';
-      let cachedEvts = [], cachedColNames = {};
+      let cachedEvts = [], cachedColNames = {}, cachedColOwners = {};
       let activityCategory = 'all';  // Activity filter pill: all | created | viewed | ordered
       let activityLimit = 25;   // chunk size: how many sessions each "show N" / "load more" click adds
       let activityShown = 25;   // how many sessions are currently visible in the activity log
@@ -664,6 +664,18 @@
       ];
 
       function getUser(e) { return e.user_name || e.user_email || ''; }
+      // Search text for a person: both name and email of whoever was signed
+      // in, plus the owner of the Popcode the event is about — so searching an
+      // email finds what they did AND what happened on their Popcodes.
+      function getUserSearch(e) {
+        var s = (e.user_name || '') + ' ' + (e.user_email || '');
+        var ownerId = cachedColOwners[e.slug];
+        if (ownerId) {
+          var u = (cachedUsers || []).find(function (x) { return x.id === ownerId; });
+          if (u) s += ' ' + (u.email || '') + ' ' + (u.full_name || '');
+        }
+        return s;
+      }
       function getLocation(e) { return (e.city || '') + ' ' + (e.region || '') + ' ' + (e.country || ''); }
       function parseModel(ua) {
         if (!ua) return '—';
@@ -748,7 +760,7 @@
           if (activityCategory !== 'all' && eventCategory(e.event_type) !== activityCategory) return false;
           if (!q) return true;
           return (cachedColNames[e.slug] || e.slug || '').toLowerCase().includes(q) ||
-                 getUser(e).toLowerCase().includes(q) ||
+                 getUserSearch(e).toLowerCase().includes(q) ||
                  getLocation(e).toLowerCase().includes(q) ||
                  (e.ip_address || '').toLowerCase().includes(q) ||
                  (e.event_type || '').toLowerCase().includes(q) ||
@@ -2514,6 +2526,7 @@
 
         cachedEvts = evts;
         cachedColNames = colNames;
+        cachedColOwners = Object.fromEntries((allCols || []).map(c => [c.slug, c.user_id]));
 
         document.getElementById('main-content').innerHTML = `
           <!-- Activity Log (default tab) -->
@@ -2645,6 +2658,8 @@
         document.getElementById('activity-search').addEventListener('input', function() {
           searchQuery = this.value;
           renderActivityTable();
+          // Owner emails come from get_all_users; re-filter once they're in.
+          if (!cachedUsers) ensureUsers().then(renderActivityTable);
         });
 
         document.querySelectorAll('.limit-btn').forEach(function(btn) {
