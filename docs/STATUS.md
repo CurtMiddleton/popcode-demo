@@ -43,6 +43,9 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   and acrylic is a drawn glossy block (also on the Shop's acrylic page).
 - **Shop Edit Popcode** offers Video / Montage / Audio (PR #120); Montage goes to
   `edit.html?id=…&montage={target_index}` and returns to the same photo.
+- **Printify shipping** (PR #123): Budget and Standard are the same price (no budget
+  tier); Express uses the provider's priority rate or tells the customer it isn't
+  available — it no longer silently charges the Standard price.
 - Mugs live on the shop. Ornaments live via Printify (blueprint 1747). Shop order
   (2026-09-26): Photo Book, Calendar, Board Book, **Ornaments, Photo Mugs**, then
   Framed Prints and the rest.
@@ -3145,6 +3148,14 @@ The create step that files a Shop product into My Designs (`saveShopDesign`, `9f
 - `cart.html` still has its own copies of the calendar/frame drawings; switching it to product-preview.js would remove the duplicate (it would need the script tag).
 - Real-phone check of a montage made through the Shop → edit.html path.
 
+#### Later — Printify shipping: Express showed the Standard price (#123, merged)
+User saw $7 shipping for two ornaments whether Budget, Standard or Express was picked.
+- **Budget = Standard is expected:** Printify has no budget tier; `shippingMethodCode` maps everything but Express to 1 (standard).
+- **Express was a real bug:** `printify.mjs` `quote()` did `exp ?? std`, so when the print provider returned no priority/express rate the cart quietly showed (and charged) the standard price, while `submitOrder` still sent `shipping_method: 2` (priority). Now Express uses `r.json.priority ?? r.json.express`; if neither exists the quote throws `{ unservable: true, methodUnavailable: 'Express' }`. `lib/print/cart.mjs` turns that into a `CartError` ("Express shipping isn't available for one of these items. Choose Standard.", `methodUnavailable`), `api/cart-quote.js` returns `method_unavailable`, `public/cart.js` puts it on the error, and `cart.html` shows the message with Pay disabled.
+- Verified with a stubbed `fetch` (`{standard}` → Budget/Standard 589, Express throws; `{standard, priority: 1299}` → Express 1299) and through `quoteCart` (502 CartError with the message). Not verified against Printify itself (no token in the sandbox): the user should pick Express in the cart — for the M.i.A ornament it is expected to say unavailable.
+- **Lesson — don't reset the branch over unmerged work:** starting this fix with `git checkout -B <branch> origin/main` silently dropped the just-written, unmerged session-notes commit (`e8301c8`). Recovered with `git cherry-pick e8301c8` and merged in #123. Before resetting a branch, check `git log origin/main..HEAD`.
+- Open: order.html's single-item "buy it now" shipping picker still offers Express for ornaments; it fails at checkout with the same message rather than being hidden. Hiding unavailable methods up front would need the provider's available methods per product.
+
 ### 2026-09-26 → 09-28 — Drop-off chart, a client guide to the dashboard, neutral segment codes
 
 **PRs #115 (drop-off) and #125 (neutral codes), both merged by Claude at the user's say-so; each verified live (`impact.html` = `origin/main`).** Migration `supabase/migrations/2026-09-26-impact-dropoff.sql` run in prod by the user before #115 merged.
@@ -3158,3 +3169,11 @@ The create step that files a Shop product into My Designs (`saveShopDesign`, `9f
 - **Anything in a printed address is donor-facing copy.** Codes are neutral; descriptive names belong in labels that only the org sees.
 - The scratch Postgres (`/var/tmp/pgimpact`, port 5499) stops when the container sleeps between turns — restart with `su postgres -c "pg_ctl -D /var/tmp/pgimpact/data -o '-p 5499 -k /var/tmp/pgimpact' -l /var/tmp/pgimpact/log start"`.
 - The dataviz skill's validator is quick to run on a single accent (`node scripts/validate_palette.js "#7657FC" --mode light`) — do it before shipping any new chart colour.
+
+### 2026-09-29 — My Designs: no flash of the flat photo before the product drawing
+
+**Branch `claude/exciting-brahmagupta-gbqh76`, merged with this entry.** `public/manage.html` only.
+- Cards that get a drawn product (ornament, mug, prints/frames, calendar, board book, acrylic) rendered the plain `<img class="design-photo">` first and swapped in the canvas once the photo had loaded, so each card flashed a flat block. The img now gets `awaiting-mockup` (`visibility: hidden`, so the mat keeps its size) when `willMock`; `buildDesignCard` collects the drawer promises and, once they settle, removes the class from any photo still in the DOM, so a failed or skipped drawing falls back to the photo instead of a blank card.
+- Verified headless with the photo route delayed 2s: mid-load every product card is `img-hidden`, then `canvas`; with the ornament/mug templates blocked, those cards end `img-VISIBLE` (the fallback).
+- Git lesson, again: the 09-27 "later" notes commit (`a33116c`) had never been merged — it conflicted with another session's STATUS.md entry on cherry-pick and was resolved by hand (09-27 later section first, then the 09-26 → 09-28 entry).
+
