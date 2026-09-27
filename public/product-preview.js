@@ -363,6 +363,7 @@
             : (typeof isLightFrame === 'function' ? isLightFrame() : false);
           const { x, y, w, h } = box;
           const contact = (id === 'shelf');
+          if (product === 'acrylic' && !contact) { drawAcrylicBlock(ctx, art, x, y, w, h); return; }
 
           // Shelf: pool a soft contact shadow under the base so it reads as resting on
           // the shelf (not floating). Everything else: a soft cast drop shadow.
@@ -432,6 +433,65 @@
           }
           if (product === 'framed') { ctx.strokeStyle = lightFrame ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.10)'; ctx.lineWidth = Math.max(1, w * 0.004); ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1); }
         }
+
+  /* Acrylic print as a glossy block: the photo behind 10mm of clear acrylic,
+     standing off the wall on stand-offs. Drawn, not photographed — there is no
+     acrylic template. The pieces that make it read as a block rather than a
+     flat print: a visible edge thickness (right and bottom, glassy and pale),
+     a deep soft shadow set well back (it floats), a diagonal gloss band across
+     the face, and a bright polished rim. */
+  function drawAcrylicBlock(ctx, art, x, y, w, h) {
+    // The box is sized for a flat print; leave room inside it for the block's
+    // edge and its offset shadow, or both run off the canvas.
+    const k = 0.86;
+    x += w * (1 - k) / 2 - w * 0.02; y += h * (1 - k) / 2 - h * 0.03; w *= k; h *= k;
+    const t = Math.max(3, Math.min(w, h) * 0.03);    // edge thickness
+    ctx.save();
+    // Floating shadow: offset and soft, from the whole block.
+    ctx.shadowColor = 'rgba(0,0,0,0.30)';
+    ctx.shadowBlur = w * 0.07;
+    ctx.shadowOffsetX = w * 0.03;
+    ctx.shadowOffsetY = h * 0.06;
+    ctx.fillStyle = '#dfe6e8';
+    ctx.fillRect(x, y, w + t, h + t);
+    ctx.restore();
+    // The block's edges, seen at an angle: right side and bottom, as glassy
+    // bevels picking up light at the front corner.
+    ctx.save();
+    let g = ctx.createLinearGradient(x + w, 0, x + w + t, 0);
+    g.addColorStop(0, 'rgba(210,225,228,1)'); g.addColorStop(1, 'rgba(150,170,175,1)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(x + w, y); ctx.lineTo(x + w + t, y + t); ctx.lineTo(x + w + t, y + h + t); ctx.lineTo(x + w, y + h); ctx.closePath(); ctx.fill();
+    g = ctx.createLinearGradient(0, y + h, 0, y + h + t);
+    g.addColorStop(0, 'rgba(200,215,218,1)'); g.addColorStop(1, 'rgba(135,155,160,1)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(x, y + h); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w + t, y + h + t); ctx.lineTo(x + t, y + h + t); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // The face.
+    if (art) ctx.drawImage(art, x, y, w, h);
+    else { ctx.fillStyle = '#ededed'; ctx.fillRect(x, y, w, h); }
+    // Gloss: a bright diagonal band plus a soft top-left bloom.
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    const band = ctx.createLinearGradient(x, y, x + w, y + h);
+    band.addColorStop(0.00, 'rgba(255,255,255,0.38)');
+    band.addColorStop(0.20, 'rgba(255,255,255,0.10)');
+    band.addColorStop(0.34, 'rgba(255,255,255,0.00)');
+    band.addColorStop(0.42, 'rgba(255,255,255,0.26)');
+    band.addColorStop(0.50, 'rgba(255,255,255,0.00)');
+    band.addColorStop(1.00, 'rgba(255,255,255,0.00)');
+    ctx.fillStyle = band; ctx.fillRect(x, y, w, h);
+    ctx.restore();
+    // Polished rim: bright on the top and left, a darker hairline on the others.
+    ctx.save();
+    const lw = Math.max(1.2, w * 0.004);
+    ctx.lineWidth = lw;
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath(); ctx.moveTo(x + lw / 2, y + h); ctx.lineTo(x + lw / 2, y + lw / 2); ctx.lineTo(x + w, y + lw / 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.beginPath(); ctx.moveTo(x + w - lw / 2, y); ctx.lineTo(x + w - lw / 2, y + h - lw / 2); ctx.lineTo(x, y + h - lw / 2); ctx.stroke();
+    ctx.restore();
+  }
 
   /* The page's own `state` (order.html) when there is one; create.html has none,
      so the product and its options are passed in there. Reading `state` bare
