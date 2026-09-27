@@ -20,6 +20,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <script src="/product-preview.js"></script>
+    <script src="/unsplash-samples.js"></script>
     <script src="/dialog.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="stylesheet" href="/ui.css">
@@ -1091,7 +1092,7 @@
               <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
             </button>
           </div>
-          <div class="design-mat${isBook ? ' book-mat' : ''}">${mat}</div>
+          <div class="design-mat${isBook || isBoardbook ? ' book-mat' : ''}">${mat}</div>
           <div class="design-date">${escapeHtml(relTime(col.created_at))}${playsName ? ' &middot; plays ' + escapeHtml(playsName) : ''}</div>
           <div class="design-menu">
             ${viewUrl
@@ -1127,6 +1128,7 @@
           const cv = card.querySelector('.book-canvas');
           if (cv) renderBookMockup(cv, coverPhoto, coverText).catch(() => {});
         }
+        if (isBoardbook) drawBoardbookMockup(card, col, thumbUrl);
         useSmallPhoto(card);
         if (!isBook && !isCalendar && !isBoardbook) drawDesignMockup(card, col, thumbUrl);
         return card;
@@ -1836,6 +1838,29 @@
             } catch (e) { /* the #f2f2f2 default is right for most */ }
           }
         } catch (e) { /* keep the plain photo */ }
+      }
+
+      /* A board book as the Shop shows it: the square chipboard book with its
+         cover photo and title (window.boardbookMockup, unsplash-samples.js).
+         The helper sizes itself for a Shop card (74% wide), which in this 3:2
+         mat is taller than the mat and gets cropped, so it is re-pinned here
+         to the mat's height — absolutely, for the same iOS reason as
+         .design-mockup. */
+      function drawBoardbookMockup(card, col, thumbUrl) {
+        const mat = card.querySelector('.design-mat');
+        if (!mat || typeof window.boardbookMockup !== 'function') return;
+        const bl = col.book_layout || {};
+        const cover = bl.cover || {};
+        const slot = (bl.slots || []).find(x => x && x.position === 'cover');
+        const photo = (slot && slot.photo_url) || thumbUrl;
+        if (!photo) return;
+        const noText = !!cover.no_text;
+        const book = window.boardbookMockup(mat, smallPhoto(photo, 800), {
+          title: noText ? '' : (cover.title || bl.title || col.name || ''),
+          subtitle: noText ? '' : (cover.subtitle || ''),
+        });
+        Object.assign(book.style, { position: 'absolute', top: '12px', left: '50%', transform: 'translateX(-50%)',
+          height: 'calc(100% - 40px)', width: 'auto', maxWidth: 'none' });
       }
 
       function escapeHtml(str) {
