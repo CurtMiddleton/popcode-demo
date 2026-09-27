@@ -37,6 +37,12 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   Popcodes opens `edit.html` in **media-only** mode (videos/audio only; photos and
   pages belong to the book builder, reached from My Designs). The ornament's
   product page has a Front/Back toggle once a Popcode photo is chosen (PR #105).
+- **My Designs cards all show the product** (2026-09-27, PRs #116, #117, #121,
+  #122): shop mockups fit on iPhone, board books use the chipboard mockup,
+  calendars the hanging sheet, white/natural frames are drawn in their colour,
+  and acrylic is a drawn glossy block (also on the Shop's acrylic page).
+- **Shop Edit Popcode** offers Video / Montage / Audio (PR #120); Montage goes to
+  `edit.html?id=…&montage={target_index}` and returns to the same photo.
 - Mugs live on the shop. Ornaments live via Printify (blueprint 1747). Shop order
   (2026-09-26): Photo Book, Calendar, Board Book, **Ornaments, Photo Mugs**, then
   Framed Prints and the rest.
@@ -81,8 +87,10 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    Meg's name in the demo (public API has no `asset_name`), a video drop-off
    curve, and the demo's sample cost ($0.52 per $1 raised — user may want it
    lower or hidden). Sentry: consider "Prevent storing IP addresses".
-4. `PRINTIFY_DRY_RUN` is still `true` — one real test ornament order, then flip it
-   in Production scope and redeploy.
+4. `PRINTIFY_DRY_RUN`: the user set it to `false` (Production, Secret) on
+   2026-09-27 — confirm the redeploy happened and that the next ornament order
+   goes straight to production. The on-hold test order (Printify #28663478.3)
+   has the OLD front with no Popcode symbol: cancel it and reorder.
 5. Carried over: let `curt@theworkshop.works` open `analytics.html`; ST-120
    resale certificate for Prodigi; shipping options as cards.
 6. **Montage, real-phone checks still owed:** a render with a framed *video* clip
@@ -3097,3 +3105,35 @@ The create step that files a Shop product into My Designs (`saveShopDesign`, `9f
 - **path-to-regexp lookahead gotcha:** `(?!api$|…)` inside a param does NOT mean "this segment isn't api" — `$` is end of the whole path, so `/api/log-event` still matched and would have routed every API call to the viewer. Use `(?!(?:api|…)/)`. Test Vercel patterns locally with `npm i path-to-regexp@6` before deploying.
 - Old test harnesses whose stubs return the same object for every RPC will break on new list-returning calls — guard `Array.isArray` in the page and keep stubs per-function.
 - Always delete the previous PDF before re-rendering: a crashed run left a stale 2-page report that briefly looked like a pass (the real one was 3 pages).
+
+### 2026-09-27 — Ornament order fixes (label, missing symbol), Shop Video/Montage/Audio, every My Designs card a product
+
+**Branch `claude/exciting-brahmagupta-gbqh76`. PRs #116–#122, all opened and merged by Claude at the user's request; each verified live on popcode.app by polling for a string only in the new build.** No migrations.
+
+#### The ornament order (Printify #28663478.3) — three separate problems
+1. **On hold** — not a bug: `lib/print/providers/printify.mjs` sends `send_to_production: !dryRun`, and `PRINTIFY_DRY_RUN` defaults to **true** when unset/not `false`. Printify then parks the order "On hold / Submit order". The user set `PRINTIFY_DRY_RUN=false` in Vercel **Production** (as a Secret — can't be read back; the key already existed, so it was likely `true`). Needs a redeploy to take effect.
+2. **Labelled "Popcode board book …"** (#118): the label was hard-coded from when the board book was Printify's only product. Now `Popcode ornament {id}` / `Popcode board book {id}` / `Popcode order {id}` from the line items' `product_type`. Existing orders keep their old label (set at creation).
+3. **No Popcode symbol on the front** (#119): `order.html`'s client catalogue listed `orn-ceramic` **without `round: true`** (the server catalogue has it) → `placeBadge` put the badge in the square file's bottom-right corner, which the round die cuts away. Also missing from the Shop preview and create page (they take options from order.html's `giftArtOpts`). Fixed, plus My Designs' ornament thumbnail passes `{ round: true }`, and a round badge now sits `max(pad, 15% of radius)` in from the edge (was 2.5% of width ≈ 2mm — too close to the lab's cut). Verified by hooking `drawImage` during `compositeBadgedImage`: badge far corner 458px from centre of a 539px-radius disc.
+   **This is the third client/server catalogue drift** (after the cart's insert list and the white-frame thumbnails). Any flag in `lib/print/catalog.mjs` that changes artwork (`round`, `wrap`, `maxPx`, `padPx`, `format`) must also be in `order.html`'s `VARIANTS` mirror.
+- The ID in a Printify title: `10af957f-…` = our `print_orders.id`; `#28663478.3` = Printify shop id + order sequence.
+
+#### Shop Edit Popcode: Video / Montage / Audio (#120)
+`order.html` now loads `/image-source.js` and uses `openMediaSourceMenu` (the create/edit pages' "Plays when scanned" menu) instead of a Video/Audio toggle. No media → the menu opens straight away; existing media → the sheet shows it with **Change what plays**. Video → `handleVideoPick({files:[file]})` in the sheet; Audio → recorder in the sheet; **Montage** → `edit.html?id={slug}&montage={target_index}&next={product URL}&nextLabel=…`. `edit.html` opens the montage maker on that item after load, and its "Back to {product}" returns with `photo={that target_index}` (was always 0). The montage only sticks after **Save Changes** in edit.html.
+
+#### My Designs thumbnails (#116, #117, #121, #122)
+- **#116 iPhone crop:** mockup canvases used `max-width/max-height: 100%` inside `.design-mat` whose height comes from `aspect-ratio: 3/2`; iOS Safari doesn't resolve the % max-height, so ornament/mug rendered full-width and got cropped. Now `.design-mat { position: relative }` and `.design-mockup` is absolutely pinned (`calc(100% - 16px)`) with `object-fit: contain`. **Use this pattern for anything sized inside `.design-mat`.**
+- **#117 board book:** `window.boardbookMockup` (unsplash-samples.js, now loaded by manage.html) with the `cover` slot photo + cover title/subtitle, re-pinned absolutely to the mat height (the helper sizes itself 74% wide for a Shop card, which overflows a 3:2 mat).
+- **#121 calendar + white/natural frames:** new `PopcodePreview.drawCalendarSheet(cv, photo, year)` and `drawColouredFrame(cv, photo, aspect, hex)` + `FRAME_HEX` in `product-preview.js` — copies of cart.html's line-thumbnail drawings (cart keeps its own copy; it doesn't load product-preview.js). Frame aspect parsed from the variant id (`cfp-8x10-white`) + orientation.
+- **#122 acrylic:** `drawAcrylicBlock()` in product-preview.js, used by `placeProduct` for `acrylic` (except the shelf scene), so the Shop's acrylic page gets it too: glassy right/bottom edge thickness, offset floating shadow, diagonal gloss band, polished rim; inset 86% inside the box so edge + shadow don't run off the canvas. My Designs composites the design's crop + badge first, then `renderProductOnly`.
+
+#### Lessons
+- **Don't verify geometry by eye** — hooking `CanvasRenderingContext2D.prototype.drawImage` to log the badge's x/y/size during the real `compositeBadgedImage` settled the ornament badge in one run.
+- A first acrylic pass sampled a 2px strip of the photo into the edge bevels "as seen through the acrylic" — it read as glitchy streaks. Plain gradient bevels look better.
+- The sandbox's `python3 -m http.server` launched with plain `nohup … &` from a `cd` subshell sometimes died between tool calls; `setsid nohup` kept it up.
+- `node -e` with a stubbed `globalThis.fetch` is a quick way to test a provider adapter's request body (`printify.mjs`) without credentials.
+
+#### Still open
+- Confirm the Production redeploy after `PRINTIFY_DRY_RUN=false`, cancel #28663478.3, reorder, and check the new order is named "Popcode ornament", has the symbol on the front, and goes to production.
+- `cart.html` still has its own copies of the calendar/frame drawings; switching it to product-preview.js would remove the duplicate (it would need the script tag).
+- Real-phone check of a montage made through the Shop → edit.html path.
+

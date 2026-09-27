@@ -167,7 +167,7 @@
       }),
     });
     var data = await resp.json().catch(function () { return {}; });
-    if (!resp.ok) { var e = new Error(data.error || 'Could not price your cart'); e.unservable = data.unservable; e.restricted = data.restricted; throw e; }
+    if (!resp.ok) { var e = new Error(data.error || 'Could not price your cart'); e.unservable = data.unservable; e.restricted = data.restricted; e.methodUnavailable = data.method_unavailable || null; throw e; }
     return data;
   }
 
