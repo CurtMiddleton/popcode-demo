@@ -19,6 +19,7 @@
     <script src="/activity.js"></script>
     <script src="/unsplash-samples.js"></script>
     <script src="/product-preview.js"></script>
+    <script src="/image-source.js"></script>
     <script src="/countries.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="stylesheet" href="/ui.css">
@@ -1911,7 +1912,45 @@
           video: null, audio: null,
           existingVideoUrl: photo.video_url || null, existingAudioUrl: photo.audio_url || null,
         };
-        renderPopcodeSheet();
+        // Nothing plays yet: go straight to the choice. Something does: show it,
+        // with "Change what plays" opening the same choice.
+        if (photoHasExistingMedia(photo)) renderPopcodeSheet();
+        else choosePlayback();
+      }
+
+      /* Video / Montage / Audio — the same "Plays when scanned" menu as the
+         create and edit pages (image-source.js). Video and Audio are handled in
+         this sheet; a montage is built in the edit page's montage maker, which
+         then brings you back here. */
+      function choosePlayback() {
+        if (typeof openMediaSourceMenu !== 'function') { renderPopcodeSheet(); return; }
+        const s = popEditState;
+        openMediaSourceMenu({
+          onVideo: (file) => {
+            s.mediaType = 'video'; s.video = null; s.existingVideoUrl = null;
+            renderPopcodeSheet();
+            handleVideoPick({ files: [file], value: '' });
+          },
+          onMontage: () => openMontageForPhoto(),
+          onAudio: () => {
+            s.mediaType = 'audio'; s.audio = null; s.existingAudioUrl = null;
+            renderPopcodeSheet();
+          },
+        });
+      }
+      function openMontageForPhoto() {
+        const photo = state.selectedPhoto;
+        if (!photo || !photo.slug) { epToast('Could not find this photo’s Popcode.'); return; }
+        // Back to this product with the same options; edit.html adds id/photo.
+        const back = '/order.html?type=' + encodeURIComponent(state.productType)
+          + '&v=' + encodeURIComponent(state.variantId || '')
+          + '&fc=' + encodeURIComponent(state.frameColor || '')
+          + (state.mounted ? '&m=1' : '')
+          + '&o=' + encodeURIComponent(state.orientation || 'portrait');
+        const name = (CATEGORY_META[state.productType] || {}).name || 'your product';
+        window.location.href = '/edit.html?id=' + encodeURIComponent(photo.slug)
+          + '&montage=' + encodeURIComponent(photo.target_index)
+          + '&next=' + encodeURIComponent(back) + '&nextLabel=' + encodeURIComponent(name);
       }
       function popEditHasMedia(s) {
         return s.mediaType === 'video' ? !!(s.video || s.existingVideoUrl) : !!(s.audio || s.existingAudioUrl);
@@ -1922,19 +1961,14 @@
         const hasMedia = popEditHasMedia(s);
         openPcSheet(`
           <h2>${hasExisting ? 'Edit' : 'Add a'} Popcode</h2>
-          <p class="sheet-sub">Link a video or audio clip. When someone scans this printed photo, it plays automatically.</p>
-          <div class="pop-media-toggle">
-            <button data-mode="video" class="${s.mediaType === 'video' ? 'active' : ''}">Video</button>
-            <button data-mode="audio" class="${s.mediaType === 'audio' ? 'active' : ''}">Audio</button>
-          </div>
+          <p class="sheet-sub">Link a video, a montage or an audio clip. When someone scans this printed photo, it plays automatically.</p>
           <div id="pop-body"></div>
+          <button class="mini-btn" id="pop-change" style="margin-top:12px">Change what plays</button>
           <div class="pc-actions">
             <button class="pc-secondary" id="pop-cancel">Cancel</button>
             <button class="pc-primary" id="pop-save" ${hasMedia ? '' : 'disabled'}>Save Popcode</button>
           </div>`);
-        document.querySelectorAll('#pc-modal .pop-media-toggle button').forEach(b => {
-          b.addEventListener('click', () => { s.mediaType = b.dataset.mode; renderPopcodeSheet(); });
-        });
+        document.getElementById('pop-change').addEventListener('click', choosePlayback);
         document.getElementById('pop-save').addEventListener('click', savePopcode);
         document.getElementById('pop-cancel').addEventListener('click', closePcSheet);
         renderPopBody();
@@ -1950,9 +1984,7 @@
               <div class="media-preview show">
                 <video src="${src}" controls playsinline muted></video>
                 <div class="compress-status">${caption}</div>
-                <button class="mini-btn" id="pop-video-change" style="margin-top:10px">Choose a different video</button>
               </div>`;
-            document.getElementById('pop-video-change').addEventListener('click', () => { s.video = null; s.existingVideoUrl = null; renderPopBody(); syncPopSave(); });
           } else {
             body.innerHTML = `
               <div class="drop-zone">

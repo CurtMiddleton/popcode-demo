@@ -1679,6 +1679,14 @@
         existingItems.forEach(item => renderExistingPage(item));
         renumberPages();
         loadEngagement();
+        /* ?montage={target_index}: sent here from the Shop's "Plays when scanned"
+           menu to make a montage for one photo. Open the montage maker on that
+           photo straight away; its result replaces the video like any montage. */
+        const mTi = params.get('montage');
+        if (mTi !== null && mTi !== '') {
+          const item = existingItems.find(it => String(it.target_index) === String(mTi));
+          if (item) openMontage({ kind: 'existing', itemId: item.id, key: `existing-${item.id}` });
+        }
       }
 
       // Read-only per-photo engagement for the creator's own project.
@@ -2796,7 +2804,10 @@
           const back = returnTo();
           if (back) {
             const cb = document.getElementById('continue-btn');
-            cb.href = back + (back.includes('?') ? '&' : '?') + 'id=' + encodeURIComponent(slug) + '&photo=0&created=1';
+            // Back to the photo you came from (a montage for photo 3 returns to
+            // photo 3); a plain edit from the Shop's create step is photo 0.
+            const ph = /^\d+$/.test(params.get('montage') || '') ? params.get('montage') : '0';
+            cb.href = back + (back.includes('?') ? '&' : '?') + 'id=' + encodeURIComponent(slug) + '&photo=' + ph + '&created=1';
             const label = (params.get('nextLabel') || '').slice(0, 40);
             cb.textContent = label ? 'Back to ' + label : 'Back to your product';
             cb.style.display = '';
