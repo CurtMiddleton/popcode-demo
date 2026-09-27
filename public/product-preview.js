@@ -242,7 +242,11 @@
             // Centre of the badge on the 45 degree diagonal, far enough in that the
             // whole badge (plus its own half-diagonal) clears the circle's edge.
             var r = minSide / 2;
-            var reach = Math.max(0, r - size * 0.71 - pad);
+            /* Keep it well inside the disc, not just inside it: the lab's cut and
+               bleed around a 2.9" ceramic disc are a few millimetres, and 2.5% of
+               the width (~2mm) put the badge's corner right on the edge. 15% of the
+               radius is ~5mm in. */
+            var reach = Math.max(0, r - size * 0.71 - Math.max(pad, r * 0.15));
             x = Math.round(w / 2 + reach * 0.707 - size / 2);
             y = Math.round(h / 2 + reach * 0.707 - size / 2);
           }
