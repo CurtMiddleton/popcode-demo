@@ -491,7 +491,7 @@
           days: days, stories: stories, buttons: buttonsBy,
           funnel: { scanned: 764, finished: 471, tapped: buttons.length ? 139 : 0 },
           entry: { custom: 826, popcode: 464 },
-          results: { gifts: 34, amount: 5270, currency: 'USD', source: 'manual', pieces: 5000, cost: 2750 },
+          results: { gifts: 34, amount: 5270, currency: 'USD', source: 'manual', pieces: 5000, cost: 1400 }, // a postcard at nonprofit postage, about $0.28 a piece
           // Three mailing lists plus visits typed without a code; each column
           // sums to the totals above.
           // Share of plays still watching at each tenth; the last point is the
@@ -796,8 +796,8 @@
         return sum || null;
       }
 
-      // Response: recipients who scanned (phones ÷ pieces), cost per scan,
-      // cost per dollar raised. Hidden until pieces mailed are known.
+      // Response: recipients who scanned (phones ÷ pieces), raised per piece
+      // mailed, cost per dollar raised. Hidden until pieces mailed are known.
       function responseCard(d) {
         const P = piecesTotal(d);
         if (!P) return '';
@@ -806,8 +806,11 @@
         const cells = [
           { k: 'Response rate', v: rate(t.phones, P),
             n: 'About ' + num(t.phones) + ' phone' + (t.phones === 1 ? '' : 's') + ' scanned, from ' + num(P) + ' pieces mailed' },
-          { k: 'Cost per scan', v: hasCost && t.scans ? money2(r.cost / t.scans, cur) : '—',
-            n: hasCost ? 'Print and postage (' + money(r.cost, cur) + ') ÷ scans' : 'Needs the print and postage cost' },
+          // Revenue per piece, the fundraising standard, rather than cost per
+          // scan: the mailing goes out regardless, so charging its whole cost to
+          // the people who scanned always looked alarming and meant little.
+          { k: 'Raised per piece mailed', v: r.amount != null ? money2(r.amount / P, cur) : '—',
+            n: r.amount != null ? 'Amount raised (' + money(r.amount, cur) + ') ÷ pieces mailed' : 'Once gifts are entered' },
           { k: 'Cost per $1 raised', v: hasCost && r.amount ? money2(r.cost / r.amount, cur) : '—',
             n: !hasCost ? 'Needs the print and postage cost' : r.amount ? 'Print and postage ÷ amount raised' : 'Once gifts are entered' },
         ];
