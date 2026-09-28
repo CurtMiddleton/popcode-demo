@@ -989,12 +989,117 @@
         if (d < 365) return Math.floor(d / 30) + ' mo ago';
         return Math.floor(d / 365) + ' yr ago';
       }
-      async function shareDesign(url, title) {
-        try {
-          if (navigator.share) { await navigator.share({ title, url }); return; }
-        } catch (_) { return; }
-        try { await navigator.clipboard.writeText(url); showToast('Link copied!'); }
-        catch (_) { popcodeCopyLink(url); }
+      /* Share a design as the picture on its card — the ornament, the mug, the
+         book — so it can be shown off before (or after) it's ordered. Phones get
+         the share sheet with the image, plus the Popcode link when the design
+         scans; desktops download the image and copy the link. The image is made
+         when the ⋯ menu opens: iOS only opens the share sheet close to the tap,
+         and drawing a board book or loading a photo after it can miss that. */
+      function designShareImage(card, col, thumbUrl) {
+        return (async () => {
+          const mat = card.querySelector('.design-mat');
+          let src = card.querySelector('canvas.design-mockup, canvas.book-canvas');
+          if (src && !src.width) src = null;
+          if (!src && col.kind === 'boardbook') src = await drawBoardbookCanvas(col, thumbUrl);
+          if (!src && thumbUrl) src = await loadCardImg(smallPhoto(thumbUrl, 1400));
+          if (!src) return null;
+          const sw = src.width || src.naturalWidth, sh = src.height || src.naturalHeight;
+          // The product on its mat colour, with a margin, at a size that reads in Messages.
+          const k = Math.min(1, 1400 / Math.max(sw, sh));
+          const w = Math.round(sw * k), h = Math.round(sh * k), pad = Math.round(Math.max(w, h) * 0.06);
+          const out = document.createElement('canvas');
+          out.width = w + pad * 2; out.height = h + pad * 2;
+          const ctx = out.getContext('2d');
+          ctx.fillStyle = (mat && getComputedStyle(mat).backgroundColor) || '#ededed';
+          ctx.fillRect(0, 0, out.width, out.height);
+          ctx.drawImage(src, pad, pad, w, h);
+          const blob = await new Promise(res => out.toBlob(res, 'image/jpeg', 0.92));
+          return blob;
+        })().catch(() => null);
+      }
+      /* The board book on its card is DOM (window.boardbookMockup), so for
+         sharing it's drawn again the same way: square, cover-cropped photo,
+         dark fade, title and subtitle bottom-left in Cooper. */
+      async function drawBoardbookCanvas(col, thumbUrl) {
+        const bl = col.book_layout || {};
+        const cover = bl.cover || {};
+        const slot = (bl.slots || []).find(x => x && x.position === 'cover');
+        const url = (slot && slot.photo_url) || thumbUrl;
+        if (!url) return null;
+        const photo = await loadCardImg(smallPhoto(url, 1200));
+        // The book with a margin for its cast shadow, drawn at (M, M).
+        const S = 1200, M = 90, R = 40, cv = document.createElement('canvas');
+        cv.width = S + M * 2; cv.height = S + M * 2;
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
+        const corner = () => { ctx.beginPath(); ctx.roundRect(0, 0, S, S, R); };
+        ctx.translate(M, M);
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.28)'; ctx.shadowBlur = 68; ctx.shadowOffsetY = 36;
+        corner(); ctx.fillStyle = '#ededed'; ctx.fill();
+        ctx.restore();
+        corner(); ctx.clip();
+        const pw = photo.naturalWidth, ph = photo.naturalHeight, c = Math.min(pw, ph);
+        ctx.drawImage(photo, (pw - c) / 2, (ph - c) / 2, c, c, 0, 0, S, S);
+        const title = cover.no_text ? '' : (cover.title || bl.title || col.name || '');
+        const subtitle = cover.no_text ? '' : (cover.subtitle || '');
+        if (title || subtitle) {
+          const g = ctx.createLinearGradient(0, S * 0.48, 0, S);
+          g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.55)');
+          ctx.fillStyle = g; ctx.fillRect(0, S * 0.48, S, S * 0.52);
+          try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (_) {}
+          ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+          ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 20; ctx.shadowOffsetY = 4;
+          const L = S * 0.08, maxW = S * 0.84;
+          let y = S * 0.92;
+          if (subtitle) {
+            ctx.font = `400 ${Math.round(S * 0.045)}px 'CooperBT', Georgia, serif`;
+            ctx.globalAlpha = 0.9; ctx.fillText(subtitle, L, y, maxW); ctx.globalAlpha = 1;
+            y -= S * 0.065;
+          }
+          if (title) {
+            const f = Math.round(S * 0.075);
+            ctx.font = `400 ${f}px 'CooperBT', Georgia, serif`;
+            // Wrap on words, bottom line up, as the card's text wraps.
+            const lines = [];
+            String(title).split(/\s+/).forEach(word => {
+              const last = lines[lines.length - 1];
+              if (last && ctx.measureText(last + ' ' + word).width <= maxW) lines[lines.length - 1] = last + ' ' + word;
+              else lines.push(word);
+            });
+            for (let i = lines.length - 1; i >= 0; i--) { ctx.fillText(lines[i], L, y, maxW); y -= f * 1.1; }
+          }
+        }
+        return cv;
+      }
+      async function shareDesign(imagePromise, url, title) {
+        const blob = imagePromise ? await imagePromise : null;
+        const name = (String(title).replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'popcode-design') + '.jpg';
+        const file = blob ? new File([blob], name, { type: 'image/jpeg' }) : null;
+        const text = url ? `${title}\n${url}` : title;
+        const touch = matchMedia('(any-pointer: coarse)').matches;
+        if (navigator.share && touch) {
+          try {
+            if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+              await navigator.share({ files: [file], title, text }); return;
+            }
+            if (url) { await navigator.share({ title, url }); return; }
+          } catch (e) {
+            if (e && e.name === 'AbortError') return;   // closed the sheet
+          }
+        }
+        // Desktop (or no file sharing): save the picture, copy the link.
+        if (blob) {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob); a.download = name;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        }
+        if (url) {
+          try { await navigator.clipboard.writeText(url); showToast(blob ? 'Image saved · link copied' : 'Link copied!'); }
+          catch (_) { if (blob) showToast('Image saved'); popcodeCopyLink(url); }
+        } else if (blob) showToast('Image saved');
+        else showToast('Couldn’t make an image of this design');
       }
 
       // A design (product) card for My Designs — a Popsa-style light-gray tile: the
@@ -1102,23 +1207,27 @@
             <!-- Board books get Edit too; ordering is what stays gated for them. -->
             <a class="dmenu-item" href="${editHref}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit This ${escapeHtml(noun)}</a>
             <a class="dmenu-item" href="${dupHref}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Duplicate This ${escapeHtml(noun)}</a>
-            ${!viewUrl ? '' : `<button class="dmenu-item dm-share"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>Share</button>`}
+            <button class="dmenu-item dm-share"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>Share This ${escapeHtml(noun)}</button>
             <div class="dmenu-sep"></div>
             <button class="dmenu-item danger dm-delete"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>Delete This ${escapeHtml(noun)}</button>
           </div>`;
 
         const menu = card.querySelector('.design-menu');
         const dots = card.querySelector('.dots-btn');
+        let shareImage = null;   // made when the menu opens; see designShareImage
         dots.addEventListener('click', (e) => {
           e.stopPropagation();
           const isOpen = menu.classList.contains('open');
           closeAllDesignMenus();
-          if (!isOpen) { menu.classList.add('open'); card.style.zIndex = '30'; }
+          if (!isOpen) {
+            menu.classList.add('open'); card.style.zIndex = '30';
+            shareImage = designShareImage(card, col, thumbUrl);
+          }
         });
         // Tapping the product opens the editor.
         card.querySelector('.design-mat').addEventListener('click', () => { window.location.href = editHref; });
         const shareBtn = card.querySelector('.dm-share');
-        if (shareBtn) shareBtn.addEventListener('click', (e) => { e.stopPropagation(); closeAllDesignMenus(); shareDesign(viewUrl, title); });
+        if (shareBtn) shareBtn.addEventListener('click', (e) => { e.stopPropagation(); closeAllDesignMenus(); shareDesign(shareImage || designShareImage(card, col, thumbUrl), viewUrl, title); });
         card.querySelector('.dm-delete').addEventListener('click', (e) => {
           e.stopPropagation(); closeAllDesignMenus();
           confirmDelete(card, col.id, col.slug, title, dots);
