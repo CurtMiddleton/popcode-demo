@@ -81,12 +81,20 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    `impact.html?id=commontide&demo`. **IP decision made: no viewer IPs are
    stored from 2026-09-26 (PR #112), verified on a live scan**; old rows keep
    theirs (user chose not to erase — one-line SQL if they change their mind).
-   **Response rate + segments LIVE (PR #114):** printed addresses
-   `popcode.app/{slug}/{code}` (or `?v=`); admin enters pieces/cost and
-   segments. Open: CSV import of gifts, per-account time zone (`?tz=` today),
-   Meg's name in the demo (public API has no `asset_name`), a video drop-off
-   curve, and the demo's sample cost ($0.52 per $1 raised — user may want it
-   lower or hidden). Sentry: consider "Prevent storing IP addresses".
+   **Response rate + segments (PR #114) and "Where viewers stop" drop-off
+   charts (PR #115) LIVE.** Printed segment addresses
+   `popcode.app/{slug}/{code}` (or `?v=`) — **codes must be neutral (a, b, c
+   or an appeal code): donors see them**; labels like "Lapsed donors" live
+   only on the dashboard (PR #125). **Client guide:** the Claude Doc
+   "Reading your Popcode impact dashboard"
+   (https://claude.ai/code/artifact/21c3fec0-ecb8-4365-ba32-c107ede24a23) —
+   private until the user shares it. **Next:** a real-phone test
+   (`popcode.app/commontide/test?via=org`, scan, tap, then the dashboard with
+   *Include my own test scans*); set up the Green Empowerment pilot once the
+   user sends materials (prints ~Nov 3). Open: CSV import of gifts,
+   per-account time zone (`?tz=` today), Meg's name in the demo (public API has
+   no `asset_name`), the demo's $0.52 per $1 raised. Sentry: consider
+   "Prevent storing IP addresses".
 4. `PRINTIFY_DRY_RUN`: the user set it to `false` (Production, Secret) on
    2026-09-27 — confirm the redeploy happened and that the next ornament order
    goes straight to production. The on-hold test order (Printify #28663478.3)
@@ -3137,3 +3145,16 @@ The create step that files a Shop product into My Designs (`saveShopDesign`, `9f
 - `cart.html` still has its own copies of the calendar/frame drawings; switching it to product-preview.js would remove the duplicate (it would need the script tag).
 - Real-phone check of a montage made through the Shop → edit.html path.
 
+### 2026-09-26 → 09-28 — Drop-off chart, a client guide to the dashboard, neutral segment codes
+
+**PRs #115 (drop-off) and #125 (neutral codes), both merged by Claude at the user's say-so; each verified live (`impact.html` = `origin/main`).** Migration `supabase/migrations/2026-09-26-impact-dropoff.sql` run in prod by the user before #115 merged.
+
+#### What shipped
+- **"Where viewers stop"** (`impact.html dropoffCard` / `wireDropoff`): `impact_dashboard_data` returns `dropoff` = per photo `n` (plays that reported a furthest point) and `at[0..10]` (plays reaching ≥ 0%, 10%, … 100%; `at[10]` = completes). One small line chart per story (2 columns desktop, 1 phone): 2px accent line (`#7657FC`, passed the dataviz palette validator on the page surface), light fill, recessive 50/100% gridlines, end label, biggest drop marked + spelled out, x in m:ss once the video length loads, hover/focus/touch tooltip per tenth that flips below the point near the top. **Left out of print** so the board report stays 2 pages. Demo has a sample curve ending at 59%.
+- **Client guide** (Claude Docs, via the Artifact tool's Docs type): opening the dashboard, a table of the headline cards, response rate/cost with worked examples, the charts, stories/buttons/addresses/segments, how gifts get in (UTM → platform report → we enter totals), privacy (no names/emails/IPs; random per-browser code), and caveats. Privacy wording is deliberately "don't keep IP addresses", not "collect no personal information" (signed-in Popcode viewers' `user_id` is still logged).
+- **Neutral segment codes** (user's catch: "why would we want donors to see /lapsed?"): demo codes `a`/`b`/`c` (labels unchanged); Segments editor hint + field tooltip "Donors see this code, so keep it neutral" and placeholder "Code, e.g. a". The guide's example now uses `/a`, `/b`.
+
+#### Lessons
+- **Anything in a printed address is donor-facing copy.** Codes are neutral; descriptive names belong in labels that only the org sees.
+- The scratch Postgres (`/var/tmp/pgimpact`, port 5499) stops when the container sleeps between turns — restart with `su postgres -c "pg_ctl -D /var/tmp/pgimpact/data -o '-p 5499 -k /var/tmp/pgimpact' -l /var/tmp/pgimpact/log start"`.
+- The dataviz skill's validator is quick to run on a single accent (`node scripts/validate_palette.js "#7657FC" --mode light`) — do it before shipping any new chart colour.
