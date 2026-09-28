@@ -278,7 +278,7 @@
   // Copy for "your country isn't here". Lives here so all four checkout
   // surfaces say the same thing; each page decides WHERE it goes by putting an
   // empty element with [data-country-note] wherever it fits that layout.
-  var NOTE = "Don\u2019t see your country? We can\u2019t ship everywhere yet \u2014 email info@popcodeapp.com and we\u2019ll let you know when we can.";
+  var NOTE = "Don\u2019t see your country? We can\u2019t ship everywhere yet \u2014 email hello@popcodeapp.com and we\u2019ll let you know when we can.";
   window.POPCODE_COUNTRY_NOTE = NOTE;
 
   // Fill a <select> with the destinations we currently offer. `selected`
