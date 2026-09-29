@@ -1,0 +1,303 @@
+<title>Popcode Reel Tweaker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: a work table. Three tall Reel frames across the top, the controls for
+   the selected one beside them, the grid-row preview and the settings to copy below. */
+@font-face { font-family: 'CooperBT'; src: url('__COOPER__') format('truetype'); font-display: block; }
+:root {
+  --bg: #f5f4fa;
+  --panel: #ffffff;
+  --ink: #1d1a2b;
+  --muted: #625d78;
+  --line: #e2dff0;
+  --accent: #7657fc;
+  --accent-ink: #ffffff;
+  --focus: #7657fc;
+  --display: 'CooperBT', Georgia, serif;
+  --body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15131d; --panel: #1f1c2a; --ink: #eeecf6; --muted: #a39fb8; --line: #332f45;
+    --accent: #9a85ff; --accent-ink: #15131d; --focus: #b3a4ff; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15131d; --panel: #1f1c2a; --ink: #eeecf6; --muted: #a39fb8; --line: #332f45;
+  --accent: #9a85ff; --accent-ink: #15131d; --focus: #b3a4ff; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 400 14px/1.5 var(--body); }
+.wrap { max-width: 1320px; margin: 0 auto; padding-inline: 20px; padding-block: 24px 48px; display: grid; gap: 22px; }
+header h1 { font: 400 34px/1.1 var(--display); margin: 0 0 6px; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); max-width: 70ch; }
+
+.work { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+@media (max-width: 900px) { .work { grid-template-columns: minmax(0, 1fr); } }
+
+.stagecol { display: grid; gap: 12px; min-width: 0; }
+.tabs { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.frames { display: flex; gap: 14px; justify-content: center; min-width: 0; }
+.frame { display: grid; gap: 8px; justify-items: center; }
+.frame-btn { cursor: pointer; font: 600 13px var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); background: var(--panel); border: 1px solid var(--line); padding: 8px 16px; border-radius: 999px; }
+.frame-btn[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.frame-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.box { position: relative; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px var(--line); }
+.frame.sel .box { box-shadow: 0 0 0 3px var(--accent); }
+@media (max-width: 700px) { .frame:not(.sel) { display: none; } }
+
+/* The canvas is the real 432 × 768 space the videos are recorded in, scaled down. */
+.canvas { position: absolute; left: 0; top: 0; width: 432px; height: 768px; transform-origin: 0 0; overflow: hidden;
+  background: linear-gradient(160deg, #5bc8f5 0%, #7c3aed 100%); touch-action: none; user-select: none; -webkit-user-select: none; }
+.art { position: absolute; left: 0; top: 0; width: max-content; }
+.art img { height: 100%; width: auto; max-width: none; display: block; pointer-events: none; }
+.ph { position: absolute; background: #16121f; box-shadow: 0 20px 40px rgba(10,5,40,.5); z-index: 3; }
+.ph .scr { position: relative; width: 100%; height: 100%; overflow: hidden; background: #000; display: flex; align-items: center; }
+.ph .scr img { max-width: none; width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.ph .scr img.contain { height: auto; aspect-ratio: 1 / 1; object-fit: cover; }
+.ph .notch { position: absolute; left: 50%; transform: translateX(-50%); background: #16121f; z-index: 4; }
+.word { position: absolute; color: #fff; font-family: var(--display); font-weight: 400; line-height: 1; white-space: nowrap; z-index: 5; }
+.url { position: absolute; left: 0; right: 0; bottom: 16px; text-align: center; color: #fff; font: 400 22px var(--display); z-index: 6; pointer-events: none; }
+.drag { cursor: grab; }
+.drag.active { cursor: grabbing; outline: 2px dashed rgba(255,255,255,.9); outline-offset: 2px; }
+/* The band Instagram shows in the profile grid (3:4 out of 9:16). */
+.crop { position: absolute; left: 0; right: 0; pointer-events: none; z-index: 8; }
+.crop.top { top: 0; height: 96px; }
+.crop.bot { top: 672px; bottom: 0; }
+.show-crop .crop { background: rgba(8, 4, 30, .55); }
+.crop-line { position: absolute; left: 0; right: 0; height: 0; border-top: 2px dashed rgba(255,255,255,.7); z-index: 9; pointer-events: none; }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 16px; }
+.panel h2 { font: 400 22px/1.2 var(--display); margin: 0; }
+fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+legend { font: 600 11px var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.ctl { display: grid; grid-template-columns: 70px minmax(0, 1fr) 46px; gap: 8px; align-items: center; }
+.ctl label { color: var(--muted); font-size: 13px; }
+.ctl output { font-variant-numeric: tabular-nums; text-align: right; font-size: 13px; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+input:focus-visible, button:focus-visible, textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+.hint { color: var(--muted); font-size: 12.5px; margin: 0; }
+
+.row-sec { display: grid; gap: 10px; }
+.row-sec h2, .out h2 { font: 400 22px/1.2 var(--display); margin: 0; }
+.gridrow { display: flex; gap: 3px; background: var(--panel); padding: 3px; border-radius: 6px; width: fit-content; max-width: 100%; }
+.gcell { position: relative; overflow: hidden; }
+
+.out { display: grid; gap: 10px; }
+.out textarea { width: 100%; min-height: 150px; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 12px; resize: vertical; }
+.btns { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.btn { font: 600 14px var(--body); border-radius: 999px; padding: 10px 18px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.status { color: var(--muted); font-size: 13px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Make · anything · play.</h1>
+    <p>Drag the artwork, the phone and the word on each Reel, or use the sliders. Size keeps the artwork's shape; Turn and Lean back add perspective. The dashed lines mark what shows in your Instagram grid. When it looks right, copy the settings and paste them to Claude to record new videos.</p>
+  </header>
+
+  <div class="work">
+    <div class="stagecol"><div class="tabs" id="tabs" role="tablist" aria-label="Choose a Reel"></div><div class="frames" id="frames"></div></div>
+
+    <aside class="panel" aria-labelledby="ctl-title">
+      <h2 id="ctl-title">Make</h2>
+      <fieldset>
+        <legend>Artwork</legend>
+        <div class="ctl"><label for="art-h">Size</label><input id="art-h" type="range" min="160" max="1100" step="2"><output for="art-h" id="art-h-o"></output></div>
+        <div class="ctl"><label for="art-rot">Tilt</label><input id="art-rot" type="range" min="-20" max="20" step="0.5"><output for="art-rot" id="art-rot-o"></output></div>
+        <div class="ctl"><label for="art-ry">Turn</label><input id="art-ry" type="range" min="-50" max="50" step="1"><output for="art-ry" id="art-ry-o"></output></div>
+        <div class="ctl"><label for="art-rx">Lean back</label><input id="art-rx" type="range" min="-50" max="50" step="1"><output for="art-rx" id="art-rx-o"></output></div>
+        <div class="ctl"><label for="art-cx">Left/right</label><input id="art-cx" type="range" min="-300" max="900" step="1"><output for="art-cx" id="art-cx-o"></output></div>
+        <div class="ctl"><label for="art-cy">Up/down</label><input id="art-cy" type="range" min="-100" max="868" step="1"><output for="art-cy" id="art-cy-o"></output></div>
+      </fieldset>
+      <fieldset>
+        <legend>Phone</legend>
+        <div class="ctl"><label for="ph-w">Size</label><input id="ph-w" type="range" min="110" max="240" step="1"><output for="ph-w" id="ph-w-o"></output></div>
+        <div class="ctl"><label for="ph-x">Left/right</label><input id="ph-x" type="range" min="-60" max="400" step="1"><output for="ph-x" id="ph-x-o"></output></div>
+        <div class="ctl"><label for="ph-y">Up/down</label><input id="ph-y" type="range" min="0" max="700" step="1"><output for="ph-y" id="ph-y-o"></output></div>
+      </fieldset>
+      <fieldset>
+        <legend>Word</legend>
+        <div class="ctl"><label for="wd-s">Size</label><input id="wd-s" type="range" min="50" max="150" step="1"><output for="wd-s" id="wd-s-o"></output></div>
+        <div class="ctl"><label for="wd-x">Left/right</label><input id="wd-x" type="range" min="0" max="300" step="1"><output for="wd-x" id="wd-x-o"></output></div>
+        <div class="ctl"><label for="wd-y">Up/down</label><input id="wd-y" type="range" min="0" max="720" step="1"><output for="wd-y" id="wd-y-o"></output></div>
+      </fieldset>
+      <fieldset>
+        <legend>Keep the row lined up</legend>
+        <label class="check"><input id="link-word" type="checkbox" checked> Same word size and position on all three</label>
+        <label class="check"><input id="link-phone" type="checkbox" checked> Same phone size and position on all three</label>
+        <label class="check"><input id="show-crop" type="checkbox" checked> Shade what the grid hides</label>
+      </fieldset>
+      <p class="hint">Numbers are in the video's own units (a 432 × 768 frame, recorded at 2.5× to 1080 × 1920).</p>
+    </aside>
+  </div>
+
+  <section class="row-sec" aria-labelledby="row-title">
+    <h2 id="row-title">Your grid row</h2>
+    <div class="gridrow" id="gridrow"></div>
+  </section>
+
+  <section class="out" aria-labelledby="out-title">
+    <h2 id="out-title">Settings</h2>
+    <textarea id="json" readonly aria-label="Settings to paste to Claude"></textarea>
+    <div class="btns">
+      <button class="btn primary" id="copy" type="button">Copy settings</button>
+      <button class="btn" id="reset" type="button">Reset to current videos</button>
+      <span class="status" id="status" role="status"></span>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var IMG = { albums: '__ART_ALBUM__', anything: '__ART_ANYTHING__', calendars: '__ART_CALENDAR__' };
+  var SCR = { albums: '__PH_ALBUM__', anything: '__PH_ANYTHING__', calendars: '__PH_CALENDAR__' };
+  // The positions in the v3 videos, measured from the recording page.
+  var DEFAULTS = [
+    { word: 'Make', scene: 'albums', art: { cx: 211, cy: 279, h: 340, rot: -6 }, phone: { x: 54, y: 225, w: 158 }, text: { x: 24, y: 556, size: 96 } },
+    { word: 'anything', scene: 'anything', art: { cx: 197, cy: 279, h: 420, rot: 0 }, phone: { x: 54, y: 225, w: 158 }, text: { x: 24, y: 556, size: 96 } },
+    { word: 'play.', scene: 'calendars', art: { cx: 288, cy: 293, h: 362, rot: 0 }, phone: { x: 54, y: 225, w: 158 }, text: { x: 24, y: 556, size: 96 } }
+  ];
+  var KEY = 'popcode-reel-tweaker-v1';
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  var tiles = clone(DEFAULTS);
+  try { var saved = JSON.parse(localStorage.getItem(KEY) || 'null'); if (saved && saved.length === 3) tiles = saved; } catch (e) {}
+  var sel = 0;
+  var $ = function (id) { return document.getElementById(id); };
+
+  // Build one composition (used for the big frames and the grid preview).
+  function compose(t) {
+    var c = document.createElement('div'); c.className = 'canvas';
+    var art = document.createElement('div'); art.className = 'art'; art.dataset.part = 'art';
+    var ai = document.createElement('img'); ai.src = IMG[t.scene]; ai.alt = ''; art.appendChild(ai);
+    var ph = document.createElement('div'); ph.className = 'ph'; ph.dataset.part = 'phone';
+    var scr = document.createElement('div'); scr.className = 'scr';
+    var si = document.createElement('img'); si.src = SCR[t.scene]; si.alt = ''; if (t.scene === 'calendars') si.className = 'contain';
+    scr.appendChild(si); ph.appendChild(scr);
+    var notch = document.createElement('div'); notch.className = 'notch'; ph.appendChild(notch);
+    var w = document.createElement('div'); w.className = 'word'; w.dataset.part = 'word'; w.textContent = t.word;
+    var u = document.createElement('div'); u.className = 'url'; u.textContent = 'popcode.app';
+    c.append(art, ph, w, u);
+    return c;
+  }
+  function place(c, t) {
+    var art = c.querySelector('.art'), ph = c.querySelector('.ph'), w = c.querySelector('.word');
+    art.style.height = t.art.h + 'px';
+    art.style.transform = 'translate(' + t.art.cx + 'px,' + t.art.cy + 'px) translate(-50%,-50%) perspective(1400px) rotateY(' + (t.art.ry || 0) + 'deg) rotateX(' + (t.art.rx || 0) + 'deg) rotate(' + t.art.rot + 'deg)';
+    var pw = t.phone.w, phh = Math.round(pw * 2.025);
+    ph.style.left = t.phone.x + 'px'; ph.style.top = t.phone.y + 'px';
+    ph.style.width = pw + 'px'; ph.style.height = phh + 'px';
+    ph.style.borderRadius = (pw * 0.19) + 'px'; ph.style.padding = (pw * 0.05) + 'px';
+    ph.querySelector('.scr').style.borderRadius = (pw * 0.152) + 'px';
+    var n = ph.querySelector('.notch'); n.style.width = (pw * 0.38) + 'px'; n.style.height = (pw * 0.108) + 'px'; n.style.top = (pw * 0.063) + 'px'; n.style.borderRadius = (pw * 0.07) + 'px';
+    w.style.left = t.text.x + 'px'; w.style.top = t.text.y + 'px'; w.style.fontSize = t.text.size + 'px';
+  }
+
+  var frames = $('frames'), bigs = [], cells = [];
+  var K = 0.56;
+  function scaleFor() {
+    var avail = frames.clientWidth || 800;
+    if (window.innerWidth <= 700) return Math.min(0.8, (avail - 4) / 432);
+    return Math.max(0.3, Math.min(0.62, (avail - 28 - 6) / (3 * 432)));
+  }
+  tiles.forEach(function (t, i) {
+    var f = document.createElement('div'); f.className = 'frame';
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'frame-btn'; b.setAttribute('role', 'tab'); b.textContent = t.word;
+    b.addEventListener('click', function () { select(i); });
+    var box = document.createElement('div'); box.className = 'box';
+    var c = compose(t);
+    var ct = document.createElement('div'); ct.className = 'crop top';
+    var cb = document.createElement('div'); cb.className = 'crop bot';
+    var l1 = document.createElement('div'); l1.className = 'crop-line'; l1.style.top = '96px';
+    var l2 = document.createElement('div'); l2.className = 'crop-line'; l2.style.top = '672px';
+    c.append(ct, cb, l1, l2);
+    box.appendChild(c); f.append(box); frames.appendChild(f); $('tabs').appendChild(b);
+    bigs.push({ f: f, b: b, box: box, c: c });
+    c.addEventListener('pointerdown', function (e) { startDrag(e, i); });
+
+    var cell = document.createElement('div'); cell.className = 'gcell';
+    var gc = compose(t); cell.appendChild(gc); $('gridrow').appendChild(cell); cells.push({ cell: cell, c: gc });
+  });
+
+  function layout() {
+    K = scaleFor();
+    bigs.forEach(function (x) { x.box.style.width = 432 * K + 'px'; x.box.style.height = 768 * K + 'px'; x.c.style.transform = 'scale(' + K + ')'; });
+    var gk = Math.min(0.42, ((document.querySelector('.wrap').clientWidth - 12) / 3) / 432);
+    cells.forEach(function (x) {
+      x.cell.style.width = 432 * gk + 'px'; x.cell.style.height = 576 * gk + 'px';
+      x.c.style.transform = 'scale(' + gk + ') translateY(-96px)';
+    });
+  }
+
+  function renderAll() {
+    tiles.forEach(function (t, i) { place(bigs[i].c, t); place(cells[i].c, t); });
+    bigs.forEach(function (x, i) { x.f.classList.toggle('sel', i === sel); x.b.setAttribute('aria-selected', i === sel ? 'true' : 'false'); });
+    document.body.classList.toggle('show-crop', $('show-crop').checked);
+    syncControls();
+    var out = { tiles: tiles.map(function (t) { return { word: t.word, scene: t.scene, art: t.art, phone: t.phone, text: t.text }; }) };
+    $('json').value = JSON.stringify(out, null, 1);
+    try { localStorage.setItem(KEY, JSON.stringify(tiles)); } catch (e) {}
+  }
+
+  var CTL = [
+    ['art-h', 'art', 'h'], ['art-rot', 'art', 'rot'], ['art-ry', 'art', 'ry'], ['art-rx', 'art', 'rx'], ['art-cx', 'art', 'cx'], ['art-cy', 'art', 'cy'],
+    ['ph-w', 'phone', 'w'], ['ph-x', 'phone', 'x'], ['ph-y', 'phone', 'y'],
+    ['wd-s', 'text', 'size'], ['wd-x', 'text', 'x'], ['wd-y', 'text', 'y']
+  ];
+  function syncControls() {
+    var t = tiles[sel];
+    $('ctl-title').textContent = t.word;
+    CTL.forEach(function (c) { var v = t[c[1]][c[2]] || 0; $(c[0]).value = v; $(c[0] + '-o').textContent = /^(rot|ry|rx)$/.test(c[2]) ? v + '°' : Math.round(v); });
+  }
+  function setVal(group, key, v) {
+    var linked = (group === 'text' && $('link-word').checked) || (group === 'phone' && $('link-phone').checked);
+    tiles.forEach(function (t, i) { if (i === sel || linked) t[group][key] = v; });
+  }
+  CTL.forEach(function (c) {
+    $(c[0]).addEventListener('input', function (e) { setVal(c[1], c[2], parseFloat(e.target.value)); renderAll(); });
+  });
+  ['link-word', 'link-phone', 'show-crop'].forEach(function (id) { $(id).addEventListener('change', renderAll); });
+
+  function select(i) { sel = i; renderAll(); }
+
+  // Dragging: move whichever piece was grabbed, in video units.
+  var drag = null;
+  function startDrag(e, i) {
+    var part = e.target.closest('[data-part]');
+    select(i);
+    if (!part) return;
+    e.preventDefault();
+    var t = tiles[i], p = part.dataset.part;
+    var group = p === 'art' ? 'art' : p === 'phone' ? 'phone' : 'text';
+    var kx = group === 'art' ? 'cx' : 'x', ky = group === 'art' ? 'cy' : 'y';
+    drag = { el: part, group: group, kx: kx, ky: ky, sx: e.clientX, sy: e.clientY, ox: t[group][kx], oy: t[group][ky] };
+    part.classList.add('active');
+    bigs[i].c.setPointerCapture(e.pointerId);
+  }
+  window.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    setVal(drag.group, drag.kx, Math.round(drag.ox + (e.clientX - drag.sx) / K));
+    setVal(drag.group, drag.ky, Math.round(drag.oy + (e.clientY - drag.sy) / K));
+    renderAll();
+  });
+  window.addEventListener('pointerup', function () { if (drag) { drag.el.classList.remove('active'); drag = null; } });
+
+  $('copy').addEventListener('click', function () {
+    var txt = $('json').value;
+    var done = function () { $('status').textContent = 'Copied. Paste it to Claude.'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(done, function () { $('json').select(); $('status').textContent = 'Selected. Press Cmd+C (or Ctrl+C) to copy.'; });
+    } else { $('json').select(); $('status').textContent = 'Selected. Press Cmd+C (or Ctrl+C) to copy.'; }
+  });
+  $('reset').addEventListener('click', function () { tiles = clone(DEFAULTS); $('status').textContent = 'Back to the current videos.'; renderAll(); });
+
+  window.addEventListener('resize', layout);
+  layout(); renderAll();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(renderAll);
+})();
+</script>

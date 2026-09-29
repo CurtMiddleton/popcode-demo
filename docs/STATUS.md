@@ -6,7 +6,7 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-09-29)
+## Current state (updated 2026-09-29, evening)
 
 **Live and recent**
 - `popcode.app/nonprofits` — the Popcode for Nonprofits page. Not linked from the
@@ -134,8 +134,11 @@ happened and what's open. (Session history moved here from CLAUDE.md on
     requested for `/` and `/nonprofits`. **~Oct 6:** check GSC → Pages
     (is `/nonprofits` indexed?) and Bing → AI Performance. **Biggest lever now is
     links to `/nonprofits`** (LinkedIn post drafted in chat; partner ask waits
-    for the first pilot). Instagram is **@popcodeapp** (refreshed; new posts
-    still owed, and Claude offered to make the nonprofit carousel slides).
+    for the first pilot). Instagram is **@popcodeapp**: refreshed, old posts
+    archived, and three pinned Reels spell **Make · anything · play.** across
+    the top row (2026-09-29; tools in `tools/instagram-reels/`). Next posts:
+    real phone recordings (Scout's ornament, Common Tide card); nonprofit
+    carousel slides still offered.
     Open: `/pricing`, `/shop`, `/howto`, `/privacy`, `/terms` without `.html`
     serve the **viewer**, not the page (slug catch-all). Offered to add rewrites;
     the user hasn't decided.
@@ -3217,4 +3220,24 @@ User saw $7 shipping for two ornaments whether Budget, Standard or Express was p
 - Cards that get a drawn product (ornament, mug, prints/frames, calendar, board book, acrylic) rendered the plain `<img class="design-photo">` first and swapped in the canvas once the photo had loaded, so each card flashed a flat block. The img now gets `awaiting-mockup` (`visibility: hidden`, so the mat keeps its size) when `willMock`; `buildDesignCard` collects the drawer promises and, once they settle, removes the class from any photo still in the DOM, so a failed or skipped drawing falls back to the photo instead of a blank card.
 - Verified headless with the photo route delayed 2s: mid-load every product card is `img-hidden`, then `canvas`; with the ornament/mug templates blocked, those cards end `img-VISIBLE` (the fallback).
 - Git lesson, again: the 09-27 "later" notes commit (`a33116c`) had never been merged — it conflicted with another session's STATUS.md entry on cherry-pick and was resolved by hand (09-27 later section first, then the 09-26 → 09-28 entry).
+
+### 2026-09-29 (evening) — Instagram: three pinned Reels, "Make · anything · play."
+
+**No PRs; nothing on popcode.app changed.** New: `tools/instagram-reels/` (recorder script, final settings, tweaker template, README). Branch `claude/happy-dijkstra-3o0nat`.
+
+#### What happened
+- **@popcodeapp cleaned up:** all old posts archived. The last one, "Your stories. Brought to life.", had a "Download on the App Store" badge and popcodeapp.com, which contradict "No app". @popcodeapp is now logged in on the user's iPhone alongside @curtmid.
+- **Two still posts** (1080×1350, all Cooper: "Make anything play." and a For Nonprofits version) were made and not posted.
+- **The three Reels** (1080×1920, ~9–10s each) are recordings of the real home-page hero, one scene each: **Make** = Venice album, **anything** = elephant print, **play.** = birthday calendar. The big word sits at the bottom, flush left (play. flush right), with popcode.app just under it. Each starts and ends on the word + empty stage + Popcode start screen, so it loops. Music: LAVLO "Perfect Day" from Instagram's commercial library. The user wanted Paul Simon's "Kodachrome"; a business account can't use it, and it's commercial use anyway.
+  - Posted in reverse order (play., anything, Make) and pinned in that order, so the grid row reads left to right. Covers are frames with the phone playing.
+- **Reel Tweaker** (private Artifact https://claude.ai/artifact/EJvJqKbtkpQjGMeCxxgtQs): drag art/phone/word per tile, with sliders for size, tilt, turn and lean back, linked word/phone rows, 3:4 grid shading, a grid-row preview and "Copy settings". The user tuned it there, and the recorder applies the same JSON exactly (checked: default settings reproduce the previous render).
+
+#### Lessons
+- **Instagram crops a 9:16 Reel two ways:** the profile grid shows 3:4 (y 96–672 of 768), and the feed/post view shows 4:5 (y 114–654). The first posted set had popcode.app at the bottom, so the feed cut it off, and they had to be deleted and reposted. Check both crops before sending.
+- **Name final files unmistakably** (`FINAL-1-make.mp4`). The user posted v4 instead of v5 because six near-identical videos were in Photos.
+- **Deleted posts can still hold pins** (Recently deleted, 30 days). "Pin limit reached" with only three posts visible: tap Confirm, which replaces the hidden pin.
+- Headless Chromium here can't play H.264: record with WebM copies of `public/video/*.mp4` served through a route (`imageio-ffmpeg` gives a full ffmpeg; Playwright's own is VP8-only). The page's own opening scene keeps running for about 2.5s after load, so pause the reel and wait before clearing the stage, or the first frame shows the wrong scene. Capture with CDP `Page.startScreencast` and re-time with the ffmpeg concat demuxer.
+- In an Artifact, the publish skeleton's `img{max-width:100%}` squashes anything wider than its container. Set `max-width:none` on scaled artwork.
+- `python3 -m http.server` started in the background dies between tool calls here. Start it in the same command that uses it.
+- iPhone Mirroring was too fiddly for the user ("iPhone in Use" until the phone is fully locked). Saving videos to Photos and posting on the phone was easier.
 
