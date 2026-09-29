@@ -161,6 +161,7 @@
       }
       .design-mat.book-mat { background: #ffffff; padding: 10px; }
       .design-mat .book-canvas { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; }
+      .design-mat .design-photo.awaiting-mockup { visibility: hidden; }
       .design-mat .design-photo { max-width: 100%; max-height: 100%; border-radius: 2px; box-shadow: 0 2px 8px rgba(0,0,0,0.16); }
       /* Pinned to the mat's box and scaled with object-fit rather than
          max-width/max-height: iOS Safari doesn't resolve a percentage max-height
@@ -1074,9 +1075,15 @@
         const bookCover = (isBook && col.book_layout && col.book_layout.cover) || {};
         const coverPhoto = (bookCover.photo_url) || thumbUrl || '';
         const coverText = { eyebrow: bookCover.eyebrow || '', title: bookCover.title || title, subtitle: bookCover.subtitle || '' };
+        /* Cards that get a drawn product (mockup, calendar sheet, board book,
+           acrylic block) keep the plain photo hidden until the drawing replaces
+           it — otherwise the photo flashed up as a flat block first. If the
+           drawing fails, the photo is revealed as the fallback. */
+        const mockType = (printCfg && printCfg.productType) || col.kind;
+        const willMock = !isBook && !!thumbUrl && (isCalendar || isBoardbook || mockType === 'acrylic' || !!MOCKUP_FOR[mockType]);
         const mat = isBook
           ? `<canvas class="book-canvas"></canvas>`
-          : (thumbUrl ? `<img class="design-photo" data-full="${escapeHtml(thumbUrl)}" data-small="${escapeHtml(smallPhoto(thumbUrl, 640))}" alt="">` : `<img class="design-photo" src="" alt="">`);
+          : (thumbUrl ? `<img class="design-photo${willMock ? ' awaiting-mockup' : ''}" data-full=""${escapeHtml(thumbUrl)}" data-small="${escapeHtml(smallPhoto(thumbUrl, 640))}" alt="">` : `<img class="design-photo" src="" alt="">`);
 
         card.innerHTML = `
           <div class="design-top">
@@ -1129,10 +1136,16 @@
           const cv = card.querySelector('.book-canvas');
           if (cv) renderBookMockup(cv, coverPhoto, coverText).catch(() => {});
         }
+        const drawing = [];
         if (isBoardbook) drawBoardbookMockup(card, col, thumbUrl);
-        if (isCalendar) drawCalendarMockup(card, col, thumbUrl);
+        if (isCalendar) drawing.push(drawCalendarMockup(card, col, thumbUrl));
         useSmallPhoto(card);
-        if (!isBook && !isCalendar && !isBoardbook) drawDesignMockup(card, col, thumbUrl);
+        if (!isBook && !isCalendar && !isBoardbook) drawing.push(drawDesignMockup(card, col, thumbUrl));
+        // Whatever happened, never leave a card blank: reveal the photo if it's
+        // still there once the drawing has finished (or given up).
+        Promise.allSettled(drawing).then(() => {
+          card.querySelectorAll('.design-photo.awaiting-mockup').forEach(i => i.classList.remove('awaiting-mockup'));
+        });
         return card;
       }
       function closeAllDesignMenus() {
