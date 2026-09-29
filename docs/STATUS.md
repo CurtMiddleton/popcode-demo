@@ -76,8 +76,10 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    still `/30min`; rename it in Calendly only with a matching `BOOKING_URL`).
    Still the user's: rename the Calendly profile from "Curt Middleton" to
    "Popcode" if they don't want their name on the booking page.
-2. **Pricing kit contents are a draft** (up to 3 / up to 8 stories, January board
-   report, "Your whole year" tag) — user to confirm.
+2. **Nonprofit pricing set (PR #126, live 2026-09-28):** founding partner pilot
+   Year-End Kit $2,500 (regular $4,500), Gala & Donor Kit $4,500 (regular $6,500),
+   "for nonprofits that sign up this season". Kit contents (up to 3 / up to 8
+   stories, January board report, "Your whole year" tag) still a draft to confirm.
 3. **Impact dashboard: all three phases LIVE (PRs #106, #108, #110, #111).**
    `popcode.app/impact.html?id={slug}` (admin or owner; also an **Impact**
    button on My Popcodes cards for org projects), share links `?share=`, demo
@@ -3242,3 +3244,22 @@ User saw $7 shipping for two ornaments whether Budget, Standard or Express was p
 - `python3 -m http.server` started in the background dies between tool calls here. Start it in the same command that uses it.
 - iPhone Mirroring was too fiddly for the user ("iPhone in Use" until the phone is fully locked). Saving videos to Photos and posting on the phone was easier.
 
+
+### 2026-09-28 — Nonprofit pricing: founding partner pilot prices
+
+**PR #126, merged by Claude at the user's say-so; `popcode.app/nonprofits` verified identical to `origin/main`.** One file: `public/nonprofits.html`.
+
+#### What shipped
+- **Pricing cards:** "from $X" replaced with a purple uppercase "Founding partner pilot" label, the pilot price, and the regular price struck through: **Year-End $2,500 ~~$4,500~~**, **Gala & Donor $4,500 ~~$6,500~~**. Markup is `<p class="cost">$2,500 <span class="was"><span class="sr">Regular price </span><s>$4,500</s></span></p>` (visually hidden `.sr` text so screen readers don't read a bare second number).
+- **`.pilot-line`** pill above the cards: "Founding partner pilot: special pricing for nonprofits that sign up this season, in exchange for sharing your results and feedback." Checked at 1440 and 390, no sideways scroll.
+
+#### Decisions (from conversation, not in code)
+- Amy thought $2,500 was too low; the user kept it for the pilot to get nonprofits participating and learn where the issues are, with regular prices $4,500 / $6,500 after. Some (e.g. One Mond) could pay more; for others (Picture House, Centurion) the pilot price feels right.
+- **User rejected "first five partners."** The scarcity framing is "this season" only. Don't reintroduce a partner count.
+
+#### Lessons
+- The user asked to **merge `origin/main` into the branch before every push**. Main moved twice while the PR was open (FAQ rewrite #127, then #128/#129); both merged cleanly. After merging, grep for stale prices/"first five" in text other sessions added.
+- `merge_pull_request` can 409 "Head branch was modified" right after a push even with the correct SHA; `git ls-remote` confirmed it, and an immediate retry succeeded.
+
+#### Next (from the user)
+- **Share a product design from My Designs:** the user is starting a new session for this. Nothing has been built or explored yet.
