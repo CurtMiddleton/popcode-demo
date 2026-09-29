@@ -6,7 +6,7 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-09-26)
+## Current state (updated 2026-09-29)
 
 **Live and recent**
 - `popcode.app/nonprofits` — the Popcode for Nonprofits page. Not linked from the
@@ -105,18 +105,12 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    (moved with Shotstack `offset`/`scale` — never seen rendered), and a render
    where the last photo has its own longer time. Then drop the admin gate and
    move Shotstack to the production key (`.../edit/v1`).
-7. **`hello@popcodeapp.com` now exists (2026-09-26):** an alias of
-   `curt@popcodeapp.com` in Google Workspace, added to Gmail *Send mail as*
-   (so replies can go out as "Popcode <hello@…>") and to Apple Mail on the Mac.
-   Mail for popcodeapp.com is Google Workspace (MX = Google; SPF, DKIM, DMARC
-   p=none all set). `info@popcodeapp.com` is a **separate** mailbox, not an
-   alias. **Still to decide:** which site uses move from info@ to hello@. The site
-   uses `info@popcodeapp.com` 20 times across `index.html`, `howto.html`
-   (support: "Still having trouble?"), `nonprofits.html`, `auth.html`,
-   `privacy.html`, `terms.html`, `countries.js` and `lib/print/destinations.mjs`.
-   Decide which of
-   those uses switch — privacy/terms and order-destination notices may need
-   to stay on info@. Tours and Studio now book via Calendly, not email.
+7. **Contact is hello@popcodeapp.com (PR #130, 2026-09-28).** An alias of
+   `curt@popcodeapp.com` (Google Workspace). Every address people write to on the
+   site now says hello@. **Still info@:** the auth page's "look for an email
+   from" hint, `supabase/email-templates/*` and the beta-feedback edge function,
+   because Supabase/Resend still **send from** info@ (a separate mailbox). Moving the
+   sender is a Supabase SMTP + Resend settings change, not a code change.
 8. **Oversized photos get uploaded as-is.** `create.html applyMediaFile` only
    shrinks a photo over 10 MB, so a 3.3 MB, 24.5 MP iPhone MPO (Scout's) went up
    full size and iOS wouldn't draw it as a My Popcodes thumbnail. Thumbnails now
@@ -129,6 +123,19 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    on Scout's is lower right at **12%** of the diameter on a white ring (the
    user's mockup, 2026-09-26); real orders print it at 6% — decide whether
    orders should get the bigger symbol too.
+
+10. **SEO / AI discoverability — set up 2026-09-28/29 (PRs #130, #131).**
+    Google Search Console (Domain property, auto-verified by the existing `gv-…`
+    CNAMEs in Squarespace DNS; **don't delete them**) and Bing Webmaster Tools
+    (imported from GSC) both have `https://popcode.app/sitemap.xml`; indexing
+    requested for `/` and `/nonprofits`. **~Oct 6:** check GSC → Pages
+    (is `/nonprofits` indexed?) and Bing → AI Performance. **Biggest lever now is
+    links to `/nonprofits`** (LinkedIn post drafted in chat; partner ask waits
+    for the first pilot). Instagram is **@popcodeapp** (refreshed; new posts
+    still owed, and Claude offered to make the nonprofit carousel slides).
+    Open: `/pricing`, `/shop`, `/howto`, `/privacy`, `/terms` without `.html`
+    serve the **viewer**, not the page (slug catch-all). Offered to add rewrites;
+    the user hasn't decided.
 
 ## Session history
 
@@ -3158,3 +3165,38 @@ The create step that files a Shop product into My Designs (`saveShopDesign`, `9f
 - **Anything in a printed address is donor-facing copy.** Codes are neutral; descriptive names belong in labels that only the org sees.
 - The scratch Postgres (`/var/tmp/pgimpact`, port 5499) stops when the container sleeps between turns — restart with `su postgres -c "pg_ctl -D /var/tmp/pgimpact/data -o '-p 5499 -k /var/tmp/pgimpact' -l /var/tmp/pgimpact/log start"`.
 - The dataviz skill's validator is quick to run on a single accent (`node scripts/validate_palette.js "#7657FC" --mode light`) — do it before shipping any new chart colour.
+
+### 2026-09-28 → 09-29 — SEO + AI discoverability, Instagram, hello@, domains
+
+**PRs #130 and #131, both opened and merged by Claude at the user's "merge it"; each verified live on popcode.app.** Branch `claude/happy-dijkstra-3o0nat`. No migrations.
+
+#### What shipped
+- **#130:** `public/robots.txt` (disallows signed-in pages and `/api/`, points to the sitemap), `public/sitemap.xml` (home, `/nonprofits`, pricing/howto/shop/privacy/terms **as `.html`**), `public/llms.txt` (plain-language summary of Popcode + Popcode for Nonprofits for AI assistants).
+  - `noindex` on `view.html` (every `/{slug}`), `scan.html` and all signed-in/test pages.
+  - Canonical + `og:url` on public pages; descriptions for howto/shop; `lang="en"` where missing.
+  - JSON-LD: Organization/WebSite/WebApplication on home; Service + FAQPage on `/nonprofits`. The FAQPage leaves out "Do you collect donor data?", whose page wording ("any personal information") is stronger than the settled "don't keep IP addresses".
+  - @popcodeapp Instagram link in both footers + `sameAs`. info@ → hello@ in 14 places.
+  - New 1200×630 `og_image.png` (`?v=3`, 19 pages) and a separate `og-nonprofits.png`. They are rendered from `scratchpad/og.html`, which isn't in the repo: gradient `#7657FC→#5b9bf8`, white wordmark, CooperBT headline, Inter.
+- **#131:** after Bing's live URL check. `/nonprofits` meta description 197 → 155 chars; alt text on 17 images (all inside `aria-hidden` art). The "What you get" background keeps `alt=""` on purpose, so Bing still shows 1 notice.
+
+#### Outside the repo (user did these, Claude guided and verified)
+- **Search Console:** Domain property `popcode.app`, **auto-verified** via the existing `gv-…googlehosted.com` CNAMEs. **Don't delete them.** Sitemap must be entered as the full URL (`https://popcode.app/sitemap.xml`); a bare `sitemap.xml` gives "Invalid sitemap address" on a Domain property.
+- **Bing:** imported from GSC (0 sitemaps came across; submitted by hand). Bing has no "URL Submission" menu any more: request indexing from **URL Inspection → Live URL → Request indexing**. The Bing Index tab showed a stale "Blocked"; the Live URL test passed.
+- **Vercel domains:** www.popcode.app, popcodeapp.com and www.popcodeapp.com switched from 307 to **308**, verified with curl. The status code is set in **Project → Settings → Domains → Edit**; the team-level Domains page doesn't show it.
+- **DNS (Squarespace; both domains are there):**
+  - popcode.app A @ → **216.150.1.1**
+  - popcodeapp.com A @ → **216.150.1.1**
+  - www.popcodeapp.com CNAME → **9a47defac2c58f6f.vercel-dns-017.com** (the same value as www.popcode.app)
+  - All five Vercel rows are now "Valid Configuration". Vercel says the old values (76.76.21.21, cname.vercel-dns.com, 216.198.79.1) still work.
+- **Instagram @popcodeapp** (found via Meta Business Suite; the Business portfolio "Popcode App" owns the Popcode FB page, which links it):
+  - Name → Popcode; new bio; links `popcode.app` + `popcode.app/nonprofits`; pinwheel avatar; linked to the Popcode FB page.
+  - Still to change: category (was "Shopping & retail"), the FB page avatar and cover. No new posts yet.
+  - The user nearly pasted the bio into their personal @curtmid; links can only be edited in the phone app.
+
+#### Lessons
+- **The slug catch-all makes every unknown path a 200 viewer page** (soft-404s). That's why `view.html` is `noindex` and the sitemap uses `.html` URLs. `/pricing` etc. without `.html` open the viewer.
+- Bing's "Blocked" on the **Bing Index** tab is its old record; always check the **Live URL** tab, and click ↻ after a deploy (it keeps the old test time otherwise).
+- `git push -f` is blocked by the auto-mode classifier. After a PR merges, `git checkout -B <branch> origin/main` and a normal push works, because the old tip is an ancestor.
+- Sandbox Chromium can't reach the internet (cert error through the proxy): test pages via `python3 -m http.server` in `public/`, and load fonts from local files (Inter TTFs fetched with curl).
+- `mcp__github__merge_pull_request`'s `expectedHeadSha` needs the full 40-char SHA.
+
