@@ -3204,7 +3204,7 @@ User saw $7 shipping for two ornaments whether Budget, Standard or Express was p
   - All five Vercel rows are now "Valid Configuration". Vercel says the old values (76.76.21.21, cname.vercel-dns.com, 216.198.79.1) still work.
 - **Instagram @popcodeapp** (found via Meta Business Suite; the Business portfolio "Popcode App" owns the Popcode FB page, which links it):
   - Name → Popcode; new bio; links `popcode.app` + `popcode.app/nonprofits`; pinwheel avatar; linked to the Popcode FB page.
-  - Still to change: category (was "Shopping & retail"), the FB page avatar and cover. No new posts yet.
+  - Still to change (as of 09-28): category (was "Shopping & retail"; fixed 09-29), the FB page avatar and cover.
   - The user nearly pasted the bio into their personal @curtmid; links can only be edited in the phone app.
 
 #### Lessons
@@ -3227,6 +3227,7 @@ User saw $7 shipping for two ornaments whether Budget, Standard or Express was p
 
 #### What happened
 - **@popcodeapp cleaned up:** all old posts archived. The last one, "Your stories. Brought to life.", had a "Download on the App Store" badge and popcodeapp.com, which contradict "No app". @popcodeapp is now logged in on the user's iPhone alongside @curtmid.
+- **Profile (final):** category **Product/service**. Links: **popcode.app first**, then popcode.app/nonprofits. Instagram shows the most recently added link first and has no reorder control, so Popcode was removed and re-added. The user may have changed the bio's closing "For nonprofits too ↓" to match (suggested: "Nonprofits: see links ↓").
 - **Two still posts** (1080×1350, all Cooper: "Make anything play." and a For Nonprofits version) were made and not posted.
 - **The three Reels** (1080×1920, ~9–10s each) are recordings of the real home-page hero, one scene each: **Make** = Venice album, **anything** = elephant print, **play.** = birthday calendar. The big word sits at the bottom, flush left (play. flush right), with popcode.app just under it. Each starts and ends on the word + empty stage + Popcode start screen, so it loops. Music: LAVLO "Perfect Day" from Instagram's commercial library. The user wanted Paul Simon's "Kodachrome"; a business account can't use it, and it's commercial use anyway.
   - Posted in reverse order (play., anything, Make) and pinned in that order, so the grid row reads left to right. Covers are frames with the phone playing.
