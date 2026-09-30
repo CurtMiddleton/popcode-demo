@@ -1792,14 +1792,18 @@
 
       // Rasterize the Popcode badge SVG to a PNG data-URL so html2canvas renders
       // it in the print PDF (it drops external SVG <img>s).
-      async function rasterizeBadge() {
+      // px: 256 is plenty on screen; the print file overlays a 600px copy (see
+      // PRINT_BADGE_PX) so the half-inch symbol prints at 1200 DPI, not 300.
+      async function rasterizeBadge(px = 256) {
         let svg = await (await fetch('/assets/popcode_symbol_color.svg')).text();
         if (!/<svg[^>]*\bwidth=/.test(svg)) svg = svg.replace('<svg ', '<svg width="302" height="302" ');
         const img = new Image();
         img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
         await (img.decode ? img.decode().catch(() => {}) : new Promise(r => { img.onload = img.onerror = r; }));
-        const c = document.createElement('canvas'); c.width = 256; c.height = 256;
-        c.getContext('2d').drawImage(img, 0, 0, 256, 256);
+        const c = document.createElement('canvas'); c.width = px; c.height = px;
+        const ctx = c.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, px, px);
         return c.toDataURL('image/png');
       }
 
@@ -2620,6 +2624,18 @@
         await saveCalendar({ quiet: true });
       }
 
+      const PRINT_BADGE_PX = 600;
+      // Place the sharp scan symbol over a rendered page at each .print-badge
+      // box. k = inches per CSS px of the unit.
+      function overlayBadges(doc, unit, badgePng, k) {
+        const ur = unit.getBoundingClientRect();
+        unit.querySelectorAll('.print-badge').forEach(b => {
+          const r = b.getBoundingClientRect();
+          if (!r.width || !r.height) return;
+          doc.addImage(badgePng, 'PNG', (r.left - ur.left) * k, (r.top - ur.top) * k, r.width * k, r.height * k, 'popcode-badge', 'FAST');
+        });
+      }
+
       async function buildCalendarPrintPdf() { return withProofStage(buildCalendarPrintPdfInner); }
       async function buildCalendarPrintPdfInner() {
         await loadProofLibs();
@@ -2656,7 +2672,9 @@
         // Bake the scan badge onto popcoded photo pages (bottom-right, replacing
         // the on-screen SVG badge — html2canvas needs the PNG data-URL).
         const hasPopcodes = popcodedIdsInOrder().length > 0;
-        const badgePng = hasPopcodes ? await rasterizeBadge() : null;
+        // Sharp symbol overlaid in the PDF, not baked into the page JPEG — see
+        // overlayBadges and book.html (1200 DPI instead of a 300 DPI raster).
+        const badgePng = hasPopcodes ? await rasterizeBadge(PRINT_BADGE_PX) : null;
         units.forEach(unit => {
           const tag = unit.querySelector('.pf-badge');
           if (!tag) return;
@@ -2665,9 +2683,9 @@
           const size = Math.round(PRINT.PXH * 0.09);
           const pad = Math.round(size * 0.5);
           const b = document.createElement('div');
+          b.className = 'print-badge';
           b.style.cssText = 'position:absolute;z-index:3;right:' + pad + 'px;bottom:' + pad + 'px;'
-            + 'width:' + size + 'px;height:' + size + 'px;pointer-events:none;'
-            + 'background-image:url("' + badgePng + '");background-size:contain;background-repeat:no-repeat;background-position:center;';
+            + 'width:' + size + 'px;height:' + size + 'px;pointer-events:none;visibility:hidden;';
           unit.querySelector('.page-inner').appendChild(b);
         });
 
@@ -2705,6 +2723,7 @@
           units[i].querySelectorAll('canvas').forEach(c => { c.width = c.height = 0; });
           if (i > 0) doc.addPage(fmt, 'landscape');
           doc.addImage(data, 'JPEG', 0, 0, fmt[0], fmt[1]);
+          if (badgePng) overlayBadges(doc, units[i], badgePng, fmt[0] / PRINT.PXW);
         }
         return { blob: doc.output('blob'), pageCount: units.length };
       }

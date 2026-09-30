@@ -3492,14 +3492,18 @@
 
       // Rasterize the Popcode badge SVG (viewBox-only, no intrinsic size) to a
       // PNG data-URL so html2canvas renders it (it drops external SVG <img>s).
-      async function rasterizeBadge() {
+      // px: 256 is plenty on screen; the print file overlays a 600px copy (see
+      // PRINT_BADGE_PX) so the half-inch symbol prints at 1200 DPI, not 300.
+      async function rasterizeBadge(px = 256) {
         let svg = await (await fetch('/assets/popcode_symbol_color.svg')).text();
         if (!/<svg[^>]*\bwidth=/.test(svg)) svg = svg.replace('<svg ', '<svg width="302" height="302" ');
         const img = new Image();
         img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
         await (img.decode ? img.decode().catch(() => {}) : new Promise(r => { img.onload = img.onerror = r; }));
-        const c = document.createElement('canvas'); c.width = 256; c.height = 256;
-        c.getContext('2d').drawImage(img, 0, 0, 256, 256);
+        const c = document.createElement('canvas'); c.width = px; c.height = px;
+        const ctx = c.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, px, px);
         return c.toDataURL('image/png');
       }
 
@@ -3540,6 +3544,18 @@
           img.replaceWith(baked || fallbackPhotoDiv(img));
         }
         await new Promise(r => setTimeout(r, 0));
+      }
+
+      const PRINT_BADGE_PX = 600;
+      // Place the sharp scan symbol over a rendered page at each .print-badge
+      // box. k = inches per CSS px of the unit.
+      function overlayBadges(doc, unit, badgePng, k) {
+        const ur = unit.getBoundingClientRect();
+        unit.querySelectorAll('.print-badge').forEach(b => {
+          const r = b.getBoundingClientRect();
+          if (!r.width || !r.height) return;
+          doc.addImage(badgePng, 'PNG', (r.left - ur.left) * k, (r.top - ur.top) * k, r.width * k, r.height * k, 'popcode-badge', 'FAST');
+        });
       }
 
       async function buildBookPrintPdf() { return withProofStage(buildBookPrintPdfInner); }
@@ -3605,8 +3621,15 @@
         // scan badge to a PNG data-URL once and paint it (and every photo) as a
         // background <div> — the one image path html2canvas renders reliably.
         const badgePng = await rasterizeBadge();
+        // The scan symbol is NOT baked into the page JPEG: at 300 DPI a half-inch
+        // symbol is 150px, JPEG-compressed with the photo, and its edges stair-
+        // step (the 2026-09-30 reorder). Each badge box is laid out invisibly
+        // (visibility:hidden — html2canvas skips it) and a 600px PNG is placed
+        // on top of the page in the PDF at that box: 1200 DPI, clean alpha
+        // edges, embedded once and reused by alias.
+        const badgeHi = await rasterizeBadge(PRINT_BADGE_PX);
 
-        // Bake the badge onto popcoded slots + apply the buildProof fixups (pin
+        // Mark the badge boxes on popcoded slots + apply the buildProof fixups (pin
         // aspect-ratio boxes, swap transformed photo <img>s to background <div>s).
         // Layflat has NO spine, so drop the cover spine strip (don't print it).
         units.forEach(unit => {
@@ -3617,13 +3640,13 @@
             // Fixed 1/2" square inset 1/4" from the corner — see badgeBoxPx.
             const { size, pad } = badgeBoxPx(slotPageWidth(slot));
             const b = document.createElement('div');
+            b.className = 'print-badge';
             b.style.cssText = 'position:absolute;z-index:3;right:' + pad + 'px;bottom:' + pad + 'px;'
-              + 'width:' + size + 'px;height:' + size + 'px;pointer-events:none;'
-              + 'background-image:url("' + badgePng + '");background-size:contain;background-repeat:no-repeat;background-position:center;';
+              + 'width:' + size + 'px;height:' + size + 'px;pointer-events:none;visibility:hidden;';
             slot.appendChild(b);
           });
           unit.querySelectorAll('.bc-symbol').forEach(sym => {
-            sym.src = badgePng;         // html2canvas can't render an external SVG
+            sym.src = badgeHi;          // html2canvas can't render an external SVG; the big copy downsamples cleanly
           });
           unit.querySelectorAll('.slot, .bc-inset').forEach(el => { const r = el.getBoundingClientRect(); el.style.width = r.width + 'px'; el.style.height = r.height + 'px'; el.style.aspectRatio = 'auto'; });
           unit.querySelectorAll('.cv-spine').forEach(spine => spine.remove());
@@ -3651,6 +3674,7 @@
           units[i].querySelectorAll('canvas').forEach(c => { c.width = c.height = 0; });
           if (i > 0) doc.addPage(fmt, orient);
           doc.addImage(data, 'JPEG', 0, 0, fmt[0], fmt[1]);
+          overlayBadges(doc, units[i], badgeHi, fmt[0] / PXW);
         }
         proof.innerHTML = ''; proof.className = '';
         return { blob: doc.output('blob'), pageCount: units.length };
