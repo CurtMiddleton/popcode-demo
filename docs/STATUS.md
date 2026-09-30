@@ -86,6 +86,15 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   judge darkness on the reprint; WHCC (layflat, API) is the fallback. Re-add
   the photo tile's original before reordering it. Supabase global upload limit
   is **250 MB** (spend cap on; bucket has no own limit).
+- **Inserts:** Prodigi order pages list inserts but bill them **$0.00** (book
+  `ord_14540083`: postcard listed, none in the box; acrylic `ord_14547754`:
+  postcard + sticker listed). **Check the acrylic box when it arrives (Mon
+  Oct 5; reminder set)** — both there → the book lab missed the card; neither
+  → Prodigi isn't packing inserts. The book had no sticker because of OUR bug
+  (fixed 09-22). If books can't take inserts, build an "About this book" scan
+  page (held until Prodigi answers). **Printify:** inserts only via a few
+  apparel providers — not District Photo (board book) or the ornament's; URL
+  stays on the product. Store Order submission is now **Manual**.
 
 **Next**
 1. **Calendly:** done on the page — "Book a 15-minute demo" (the URL slug is
@@ -3240,4 +3249,13 @@ Photos were shrunk to **2560px on upload** and the original thrown away (~220 DP
 - `public/` pages can be driven headless without auth for pure-function tests: `book.html`/`calendar.html`/`order.html` load signed out; `create.html` redirects to auth (lift its functions into another page). Launch Chromium with `--ignore-certificate-errors` or the Supabase CDN fails through the proxy and the whole inline script dies (TDZ errors on the first const).
 - Cross-origin JS can read `Last-Modified`/`Content-Length` but not `ETag` from Supabase storage (no `Access-Control-Expose-Headers`).
 - The "EXCEEDING USAGE LIMITS" badge was only image transformations; storage 14%, egress 11%/1%.
+
+#### Later the same day — inserts, and a Printify test order that really printed
+- **Reorder:** the user is reordering the book now rather than waiting on Prodigi. Confirmed in code that Add to cart / Order now call `buildBookPrintAsset` → `buildBookPrintPdf` fresh each time (new timestamped path) — the same builder as *Download print file* — so the order gets the sharp file. A cart line made before today would still point at the old PDF: remove and re-add.
+- **Inserts (`api/create-checkout.js:148`, `lib/print/catalog.mjs buildBranding`):** `print_orders.branding` for the book (`ord_14540083`, 09-21) was **postcard only** — the sticker was added to `buildBranding` the next day, and sending `branding` replaces the dashboard defaults, so the sticker didn't ship. Every order since sends both. Prodigi's order page lists the postcard but **Inserts $0.00**, and none was in the box. The acrylic (`ord_14547754`, 09-22) also lists postcard + round sticker at **$0.00**, so $0.00 alone doesn't prove the lab skipped them — the acrylic box (arriving Mon Oct 5, reminder trigger `trig_01UPpr2LLJyxDqW3noyTFw3t`) settles it. Earlier notes cite $5.00 of inserts on a two-card order, so billing is inconsistent; ask Prodigi.
+- **Held, not built:** an optional "About this book" page inside the photo book (URL + how to scan), filling a padding page. Build only if Prodigi confirms books can't take inserts.
+- **Printify inserts:** only Dimona Tee, Monster Digital, SwiftPOD, Print Clever, Duplium support packaging inserts (Printify help center) — not District Photo (board book) or M.i.A Merchandise (ornament). The URL stays printed on those products.
+- **The 2026-08-22 "test" board book was real:** created by our API with `send_to_production:false` and placeholder Popcode-logo pages, but the store's **Order submission** default (automatically in 24h) sent it to production: produced 08-25, charged **$24.37**, USPS "delivered" 08-29 to 80 Pintard Ave — the user never saw it. The user set Order submission to **Manual** (Printify → Settings). Live orders pass `send_to_production:true` explicitly, so they should bypass it — **verify on the next real board book/ornament order** (should read In production, not On hold). Comment corrected in `lib/print/providers/printify.mjs`. The ornament test order #28663478.3 was already cancelled 09-27 ($0).
+- **Don't touch Prodigi's "Order edit window"** (Settings → Preferences): it must stay "None, process immediately" — "Pause indefinitely" would hold every real order.
+- Our `print_orders.status` for the book still reads `in_production` although it shipped 09-23 — Prodigi's callback didn't update it. Worth a look.
 
