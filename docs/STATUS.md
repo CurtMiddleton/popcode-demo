@@ -6,7 +6,7 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-09-26)
+## Current state (updated 2026-09-30)
 
 **Live and recent**
 - `popcode.app/nonprofits` — the Popcode for Nonprofits page. Not linked from the
@@ -71,6 +71,22 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   event reads now page past Supabase's 1000-row cap (All time was stopping at
   Sep 14).
 
+**Print quality (2026-09-30, PRs #134–#139) — read the 09-30 entry first**
+- Photo books and calendars now print from **full-resolution print copies**
+  (`book_layout.print_urls` / `book_layout.calendar.print_urls`, display URL →
+  print URL), baked once at 300 DPI. Older designs: ⋯ Options → **Upgrade to
+  full resolution**. The Rwanda & South Africa book is upgraded (51 photos +
+  19 already full size) and its new print PDF (116 MB) is visibly sharper.
+- Project photos over 10 MB are kept at 6000px (was 2560px) — prints, tiles,
+  canvas, frames and acrylic print from them. `order.html`'s quality score and
+  size note now use real DPI for the chosen size.
+- Card thumbnails are **our own** (`public/thumbs.js`), not Supabase's metered
+  `/render/image`; Supabase *Enable image transformation* is now **off**.
+- **Open:** Prodigi reprint requested (email + Dropbox link to the new PDF) —
+  judge darkness on the reprint; WHCC (layflat, API) is the fallback. Re-add
+  the photo tile's original before reordering it. Supabase global upload limit
+  is **250 MB** (spend cap on; bucket has no own limit).
+
 **Next**
 1. **Calendly:** done on the page — "Book a 15-minute demo" (the URL slug is
    still `/30min`; rename it in Calendly only with a matching `BOOKING_URL`).
@@ -122,13 +138,10 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    Decide which of
    those uses switch — privacy/terms and order-destination notices may need
    to stay on info@. Tours and Studio now book via Calendly, not email.
-8. **Oversized photos get uploaded as-is.** `create.html applyMediaFile` only
-   shrinks a photo over 10 MB, so a 3.3 MB, 24.5 MP iPhone MPO (Scout's) went up
-   full size and iOS wouldn't draw it as a My Popcodes thumbnail. Thumbnails now
-   use Supabase's `/render/image/…?width=N&resize=contain` (2026-09-26), but decide whether to cap the
-   stored photo by pixels too — check first whether shop products print from
-   that stored photo (a 2560px cap would hurt big prints). Image transforms are
-   a metered Supabase feature: keep an eye on the usage page.
+8. ~~Oversized photos / metered thumbnails~~ — settled 2026-09-30: shop
+   products DO print from the stored project photo, so it is **not** capped by
+   pixels (over 10 MB → 6000px); thumbnails are our own (`thumbs.js`), and
+   Supabase image transformation is switched off.
 9. **Scout's ornament:** scan `/assets/scout-ornament.pdf` and the home-page
    ornament off a screen to confirm both trigger `popcode.app/scout`. The symbol
    on Scout's is lower right at **12%** of the diameter on a white ring (the
@@ -3197,3 +3210,34 @@ User saw $7 shipping for two ornaments whether Budget, Standard or Express was p
 
 #### Next (from the user)
 - **Share a product design from My Designs:** the user is starting a new session for this. Nothing has been built or explored yet.
+
+### 2026-09-30 — Print quality: the Prodigi sample book was soft because of OUR file; full-resolution printing everywhere
+
+**PRs #134, #135, #136, #137, #138, #139, #140, #141 — all merged by Claude at the user's say-so, each verified live on popcode.app.** Branch `claude/funny-euler-eo761x`. No migrations (everything lives in `book_layout` jsonb / user_metadata).
+
+#### How it started
+The user's Prodigi layflat sample (the **Rwanda & South Africa** book — one book, not two) came back "dark, no detail"; the photo tile too; Printify's board book looked great. Reviews research (Trustpilot 3.9/137, few colour complaints; Prodigi books run on Peecho's lab network since Jan 2025, lab unnamed) was inconclusive. **The decisive evidence was comparing the Prodigi print PDF with the Photoshop original: the PDF was visibly softer.** The file, not (only) the printer.
+
+#### Root cause (`public/book.html`, same in `calendar.html`)
+Photos were shrunk to **2560px on upload** and the original thrown away (~220 DPI on a full A4 page); the print bake drew that at 2× CSS size with default (low) smoothing, then html2canvas scaled it up again to 300 DPI — three resamples, three JPEG encodes. Measured on a 6000×4000 detail target: edge energy **17 → 105**, small text unreadable → crisp.
+
+#### What shipped
+- **#134 book.html:** print copies (`printFileFor` WeakMap display File → print File; original bytes if JPEG/PNG ≤6000px, else one high-quality downscale), uploaded on save to `{slug}/book/pr_*_print.jpg`, recorded in `book_layout.print_urls`. Print PDF bakes each page's photos **just before capture** from the print copy at the page's final pixel size, as a `<canvas>` html2canvas copies 1:1; one page of full-size photos in memory at a time. **⋯ Options → Upgrade to full resolution**: pick originals in one go; each matched to its book photo by a 32×32 luminance fingerprint + aspect (best pairs first), attached (`upgradedPrint` Map keyed by display URL) and saved. Also a fix: a replaced photo never prints the old photo's print copy.
+- **#135:** originals >10 MB (Photoshop max-quality exports are 25–30 MB) are re-encoded at 0.92 instead of uploaded whole — the first real upgrade stalled at ~1.3 GB.
+- **#136:** the cover is stored as its own copy of a page photo, so one original may serve several book photos on a near-exact match (≥0.985; burst shots still pair one-to-one); reruns skip photos that already have a print copy.
+- **#137:** admin ⋯ Options → **Download print file** (the exact PDF Prodigi gets). **The Proof PDFs still render from editor copies** — don't judge sharpness from them.
+- **#138:** audit of every product. `calendar.html` ported (print copies in `book_layout.calendar.print_urls`, per-page bake, Upgrade option; 19 → 70 on the test). `create.html`/`edit.html`: over 10 MB → `shrinkPhotoForLimit` (6000px @0.92, stepping down only as needed) instead of 2560px — 2560 was **71 DPI on a 24×36**; edit.html used to reject >10 MB outright. `order.html`: `printQuality` ignored print size (10/10 at 71 DPI); now `effectiveDpi()` per variant/orientation, shown with the score, plus a note under the size chips below 150 DPI naming the largest good size. Board book, mugs, ornaments, stickers, magnets, cards were fine.
+- **#139 own thumbnails (`public/thumbs.js`):** Supabase Storage Image Transformations hit **116/100** (Pro, spend cap on). `PopcodeThumbs.src(url, px, db)` makes a 640 or 1400-wide JPEG once and saves it beside the original as `{name}.t{w}-{version}.jpg`, version = hash of `Last-Modified`+`Content-Length` (readable cross-origin; **ETag isn't**) so replaced photos get fresh thumbs; ≤2 originals decode at once. Used by manage.html (cards + all mockups), impact.html, views.html. Also fixed manage.html's `data-full=""${url}"` typo that left design cards blank when a thumbnail failed. The user then switched **Enable image transformation off**.
+- **#140/#141 Past Views (`views.html`):** Remove per entry + light gray **Clear all** above the View Again column, both confirmed. Removing **hides** (localStorage `popcode_views_hidden` + `user_metadata.hidden_views`), never deletes — `scan_events` is the owners' analytics; rescanning brings it back. Slugs `popcode_view_cards` doesn't return (deleted Popcodes — the blank-thumbnail entries like `q5bikcls`) read "No longer available" with no View Again. Names now escaped.
+
+#### State at end of day
+- The book is upgraded (dialog: 51 upgraded, 18 already full, then the cover); new print PDF **116 MB**, sharp next to Photoshop. Supabase global upload limit raised to **250 MB** (was 200; spend cap on; `experiences` bucket has no own limit, public stays on).
+- Prodigi email drafted and sent by the user with a **Dropbox link** (file too big to attach): owns that the file was soft, asks for a reprint per their one-reprint-after-adjusting policy, and asks lab/paper/colour handling. Layflat is **gloss-coated E-Photo Lustre** — paper isn't the darkness explanation. **Printify has no layflat**; WHCC (layflat, white-label API) is the alternative to test if the reprint is still dark.
+
+#### Lessons
+- **Compare the print file with the original before blaming a printer.** Screenshots of the PDF vs Photoshop settled in a minute what reviews couldn't.
+- A soft file prints worse than it looks on screen; darkness and softness compound.
+- `public/` pages can be driven headless without auth for pure-function tests: `book.html`/`calendar.html`/`order.html` load signed out; `create.html` redirects to auth (lift its functions into another page). Launch Chromium with `--ignore-certificate-errors` or the Supabase CDN fails through the proxy and the whole inline script dies (TDZ errors on the first const).
+- Cross-origin JS can read `Last-Modified`/`Content-Length` but not `ETag` from Supabase storage (no `Access-Control-Expose-Headers`).
+- The "EXCEEDING USAGE LIMITS" badge was only image transformations; storage 14%, egress 11%/1%.
+
