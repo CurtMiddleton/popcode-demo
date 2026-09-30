@@ -1437,6 +1437,11 @@
       // carries its print copy without extra plumbing.
       const PRINT_MAX_DIM = 6000;
       const PRINT_QUALITY = 0.92;
+      // Originals are kept byte-for-byte only up to this size. Photoshop's
+      // maximum-quality exports run 25–30 MB for 24 MP, which made a 60-photo
+      // upgrade a >1 GB upload; one 0.92 re-encode is ~4× smaller and
+      // indistinguishable in print.
+      const PRINT_KEEP_MAX_BYTES = 10 * 1024 * 1024;
       const printFileFor = new WeakMap();   // display File → print File
       // Display URL → print File attached by "Upgrade to full resolution"
       // (books saved before print copies existed). Keyed by URL so replacing a
@@ -1553,7 +1558,7 @@
       // when it can't be made — printing then falls back to the display copy.
       async function makePrintFile(file, src, w0, h0) {
         const plain = /^image\/(jpeg|png)$/.test(file.type);
-        if (plain && Math.max(w0, h0) <= PRINT_MAX_DIM) return file;   // original bytes
+        if (plain && Math.max(w0, h0) <= PRINT_MAX_DIM && file.size <= PRINT_KEEP_MAX_BYTES) return file;   // original bytes
         const k = Math.min(1, PRINT_MAX_DIM / Math.max(w0, h0));
         const w = Math.max(1, Math.round(w0 * k)), h = Math.max(1, Math.round(h0 * k));
         const c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -4183,7 +4188,7 @@
           const o = originals[pr.oi], t = targets[pr.ti];
           if (o.w <= t.w * 1.1) { alreadyFull++; continue; }   // no sharper than what's there
           showToast(`Preparing full-size photos… ${upgraded + 1}`);
-          let pf = /^image\/(jpeg|png)$/.test(o.file.type) && Math.max(o.w, o.h) <= PRINT_MAX_DIM ? o.file : null;
+          let pf = /^image\/(jpeg|png)$/.test(o.file.type) && Math.max(o.w, o.h) <= PRINT_MAX_DIM && o.file.size <= PRINT_KEEP_MAX_BYTES ? o.file : null;
           if (!pf) {
             const src = await decodeDrawable(o.file);
             if (src) { pf = await makePrintFile(o.file, src, o.w, o.h); releaseSource(src); }
