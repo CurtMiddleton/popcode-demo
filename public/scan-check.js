@@ -14,7 +14,8 @@
                     under either 12 tracking or 110 matching
    So: warn below 12 tracking points OR below 110 matching points.
 
-   Never blocks anything. If MindAR isn't loaded or the compile throws, the
+   Never blocks anything. If MindAR isn't loaded, the compile throws, or it
+   takes over 15s (no WebGL: MindAR fails without ever settling), the
    result is { ok: true, skipped: true } and the creator carries on.
 
    Needs MINDAR.IMAGE.Compiler on the page (the vendored
@@ -30,6 +31,7 @@
   var MIN_TRACKING = 12;
   var MIN_MATCHING = 110;
   var DARK_MEAN = 60;         // 0–255 average brightness
+  var TIMEOUT_MS = 15000;
 
   function loadImage(source) {
     if (source instanceof HTMLImageElement && source.complete && source.naturalWidth) {
@@ -90,7 +92,12 @@
       var target = await canvasToImage(canvas);
       await nextPaint();
       var compiler = new MINDAR.IMAGE.Compiler();
-      var data = await compiler.compileImageTargets([target], function () {});
+      // Without WebGL MindAR throws inside its own async code and this promise
+      // never settles, which would leave "Checking…" spinning. Give up quietly.
+      var data = await Promise.race([
+        compiler.compileImageTargets([target], function () {}),
+        new Promise(function (_, reject) { setTimeout(function () { reject(new Error('scan check timed out')); }, TIMEOUT_MS); })
+      ]);
       var d = data[0];
       var tracking = d.trackingData[0] ? d.trackingData[0].points.length : 0;
       var m = d.matchingData[0];
