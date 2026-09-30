@@ -14,6 +14,7 @@
     <title>Popcode — Impact</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/thumbs.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="stylesheet" href="/ui.css">
     <!--
@@ -354,16 +355,15 @@
         return new Date(Date.UTC(year, 10, firstThu + 21 + 5)).toISOString().slice(0, 10);
       }
 
-      // Supabase's public image transform for a stored photo: a small thumb
-      // instead of the full-size upload (see manage.html).
-      function thumb(u) {
-        try {
-          const x = new URL(u);
-          if (!x.pathname.includes('/storage/v1/object/public/')) return u;
-          x.pathname = x.pathname.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/');
-          x.searchParams.set('width', '112'); x.searchParams.set('height', '112'); x.searchParams.set('resize', 'cover');
-          return x.toString();
-        } catch (e) { return u; }
+      // Story thumbnails: our own small copies (thumbs.js; see manage.html),
+      // not Supabase's metered image renderer. The <img>s render empty with
+      // data-thumb and are filled in after the page is drawn.
+      function hydrateThumbs(root) {
+        root.querySelectorAll('img[data-thumb]').forEach(img => {
+          const full = img.dataset.thumb; img.removeAttribute('data-thumb');
+          const set = (u) => { img.src = u; };
+          if (window.PopcodeThumbs) PopcodeThumbs.src(full, 112, db).then(set); else set(full);
+        });
       }
 
       // Video lengths turn "watched 80% on average" into "0:48 of 1:00".
@@ -616,6 +616,7 @@
           'Popcode doesn’t ask donors for their name or email, and doesn’t keep IP addresses. Counts are anonymous.</p>';
         if (MODE === 'owner' && d.can) html += manageTools(d);
         $('main').innerHTML = html;
+        hydrateThumbs($('main'));
         wireDropoff();
         wireManage(d);
 
@@ -719,7 +720,7 @@
         items.forEach((it, i) => {
           const s = byTi[it.ti];
           const name = it.name || 'Photo ' + (i + 1);
-          const img = it.photo_url ? '<img src="' + esc(thumb(it.photo_url)) + '" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'), { className: \'ph\' }))">' : '<span class="ph"></span>';
+          const img = it.photo_url ? '<img data-thumb="' + esc(it.photo_url) + '" alt="" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'), { className: \'ph\' }))">' : '<span class="ph"></span>';
           h += '<tr><td><div class="story">' + img + '<div><b>' + esc(name) + '</b><small>' +
             (it.media_type === 'audio' ? 'Audio story' : 'Video story') + '</small></div></div></td>' +
             '<td data-k="Scans">' + (s ? num(s.scans) : any ? '0' : '—') + '</td>' +

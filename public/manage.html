@@ -21,6 +21,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <script src="/product-preview.js"></script>
+    <script src="/thumbs.js"></script>
     <script src="/unsplash-samples.js"></script>
     <script src="/dialog.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
@@ -835,7 +836,7 @@
 
         card.innerHTML = `
           <div class="card-main">
-            ${thumbUrl ? `<div class="card-thumb" data-full="${escapeHtml(thumbUrl)}" data-small="${escapeHtml(smallPhoto(thumbUrl, 480))}"></div>` : '<div class="card-thumb"></div>'}
+            ${thumbUrl ? `<div class="card-thumb" data-full="${escapeHtml(thumbUrl)}" data-px="480"></div>` : '<div class="card-thumb"></div>'}
             <div class="card-info">
               ${kindPill ? `<div class="pop-pill product">${escapeHtml(kindPill)}</div>` : isCollection ? '<div class="pop-pill">Collection</div>' : ''}
               <div class="card-title">${escapeHtml(title)}</div>
@@ -1083,7 +1084,7 @@
         const willMock = !isBook && !!thumbUrl && (isCalendar || isBoardbook || mockType === 'acrylic' || !!MOCKUP_FOR[mockType]);
         const mat = isBook
           ? `<canvas class="book-canvas"></canvas>`
-          : (thumbUrl ? `<img class="design-photo${willMock ? ' awaiting-mockup' : ''}" data-full=""${escapeHtml(thumbUrl)}" data-small="${escapeHtml(smallPhoto(thumbUrl, 640))}" alt="">` : `<img class="design-photo" src="" alt="">`);
+          : (thumbUrl ? `<img class="design-photo${willMock ? ' awaiting-mockup' : ''}" data-full="${escapeHtml(thumbUrl)}" data-px="640" alt="">` : `<img class="design-photo" src="" alt="">`);
 
         card.innerHTML = `
           <div class="design-top">
@@ -1137,7 +1138,7 @@
           if (cv) renderBookMockup(cv, coverPhoto, coverText).catch(() => {});
         }
         const drawing = [];
-        if (isBoardbook) drawBoardbookMockup(card, col, thumbUrl);
+        if (isBoardbook) drawBoardbookMockup(card, col, thumbUrl).catch(() => {});
         if (isCalendar) drawing.push(drawCalendarMockup(card, col, thumbUrl));
         useSmallPhoto(card);
         if (!isBook && !isCalendar && !isBoardbook) drawing.push(drawDesignMockup(card, col, thumbUrl));
@@ -1783,33 +1784,26 @@
         catch (_) { popcodeCopyLink(url, `Link for ${r.name}`); }
       }
 
-      /* Card thumbnails come from Supabase's image renderer, not the original:
-         an iPhone photo can be 24MP (Scout's is 4284x5712), which iOS Safari
-         won't draw as a background image, so the card showed nothing — and
-         every card was downloading full-size photos. Scaled to fit a width
-         (resize=contain), so the card's own crop is unchanged. Not a Supabase storage URL: returned as is. */
-      function smallPhoto(url, px) {
-        try {
-          const u = new URL(url);
-          if (!u.pathname.includes('/storage/v1/object/public/')) return url;
-          u.pathname = u.pathname.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/');
-          u.searchParams.set('width', String(px));
-          // Without this, Supabase keeps the ORIGINAL height and crops to the
-          // width (a 480x5712 sliver of a portrait photo — the "zoomed-in"
-          // thumbnails). `contain` scales the whole photo, never up.
-          u.searchParams.set('resize', 'contain');
-          return u.toString();
-        } catch (e) { return url; }
-      }
-      // If the renderer can't serve it, fall back to the original photo.
+      /* Card thumbnails are our own small copies (thumbs.js), made and saved
+         the first time they're needed. They used to come from Supabase's
+         image renderer, which is metered per photo (the Pro quota ran out on
+         2026-09-30). Why small at all: an iPhone photo can be 24MP (Scout's is
+         4284x5712), which iOS Safari won't draw as a background image, and
+         every card was downloading full-size photos. Resolves to the original
+         URL if anything goes wrong. */
+      const thumbSrc = (url, px) => window.PopcodeThumbs ? PopcodeThumbs.src(url, px, db) : Promise.resolve(url);
       function useSmallPhoto(root) {
         root.querySelectorAll('[data-full]').forEach(el => {
-          const small = el.dataset.small, full = el.dataset.full;
-          if (el.tagName === 'IMG') { el.onerror = () => { el.onerror = null; el.src = full; }; el.src = small; return; }
-          const probe = new Image();
-          probe.onload = () => { el.style.backgroundImage = `url('${small}')`; };
-          probe.onerror = () => { el.style.backgroundImage = `url('${full}')`; };
-          probe.src = small;
+          const full = el.dataset.full;
+          if (!full) return;
+          const px = parseInt(el.dataset.px, 10) || 640;
+          thumbSrc(full, px).then(small => {
+            if (el.tagName === 'IMG') { el.onerror = () => { el.onerror = null; el.src = full; }; el.src = small; return; }
+            const probe = new Image();
+            probe.onload = () => { el.style.backgroundImage = `url('${small}')`; };
+            probe.onerror = () => { el.style.backgroundImage = `url('${full}')`; };
+            probe.src = small;
+          });
         });
       }
 
@@ -1836,7 +1830,7 @@
           let a = m ? parseFloat(m[1]) / parseFloat(m[2]) : 0.8;
           if (pc.orientation === 'landscape' ? a < 1 : a > 1) a = 1 / a;
           try {
-            const url = await P.compositeBadgedImage(smallPhoto(photoUrl, 1400),
+            const url = await P.compositeBadgedImage(await thumbSrc(photoUrl, 1400),
               { scale: typeof pc.scale === 'number' ? pc.scale : 0.06, aspect: a, adjust: pc.adjust || null });
             const art = await loadCardImg(url);
             const cv = document.createElement('canvas');
@@ -1855,7 +1849,7 @@
           let a = m ? parseFloat(m[1]) / parseFloat(m[2]) : 0.8;
           if (pc.orientation === 'landscape' ? a < 1 : a > 1) a = 1 / a;
           try {
-            const photo = await loadCardImg(smallPhoto(photoUrl, 1000));
+            const photo = await loadCardImg(await thumbSrc(photoUrl, 1000));
             const cv = document.createElement('canvas');
             cv.className = 'design-mockup';
             P.drawColouredFrame(cv, photo, a, P.FRAME_HEX[fcol]);
@@ -1875,7 +1869,7 @@
         cv.className = 'design-mockup';
         try {
           // The resized copy: a 24MP original is too big to decode on a phone.
-          await P.renderProductMockup(cv, smallPhoto(photoUrl, 1400), opts);
+          await P.renderProductMockup(cv, await thumbSrc(photoUrl, 1400), opts);
           img.replaceWith(cv);
           const mat = cv.closest('.design-mat');
           if (mat) {
@@ -1908,7 +1902,7 @@
         if (!P || !P.drawCalendarSheet || !img) return;
         const cal = (col.book_layout && col.book_layout.calendar) || {};
         let photo = null;
-        if (thumbUrl) { try { photo = await loadCardImg(smallPhoto(thumbUrl, 800)); } catch (e) { photo = null; } }
+        if (thumbUrl) { try { photo = await loadCardImg(await thumbSrc(thumbUrl, 800)); } catch (e) { photo = null; } }
         const cv = document.createElement('canvas');
         cv.className = 'design-mockup';
         try {
@@ -1916,7 +1910,7 @@
           img.replaceWith(cv);
         } catch (e) { /* keep the plain photo */ }
       }
-      function drawBoardbookMockup(card, col, thumbUrl) {
+      async function drawBoardbookMockup(card, col, thumbUrl) {
         const mat = card.querySelector('.design-mat');
         if (!mat || typeof window.boardbookMockup !== 'function') return;
         const bl = col.book_layout || {};
@@ -1925,7 +1919,7 @@
         const photo = (slot && slot.photo_url) || thumbUrl;
         if (!photo) return;
         const noText = !!cover.no_text;
-        const book = window.boardbookMockup(mat, smallPhoto(photo, 800), {
+        const book = window.boardbookMockup(mat, await thumbSrc(photo, 800), {
           title: noText ? '' : (cover.title || bl.title || col.name || ''),
           subtitle: noText ? '' : (cover.subtitle || ''),
         });
