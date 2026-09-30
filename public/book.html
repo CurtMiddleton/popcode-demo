@@ -3485,9 +3485,11 @@
         const m = new Map();
         const add = (ph) => {
           if (!ph || !ph.url) return;
-          const f = ph.file && printFileFor.get(ph.file);
+          // A photo holding a File prints from that File's print copy, or from
+          // itself — never from a printUrl, which would be a replaced photo's.
+          if (ph.file) { const f = printFileFor.get(ph.file); if (f) m.set(ph.url, { file: f }); return; }
           const u = ph.printUrl || savedPrintUrls[ph.existingUrl] || savedPrintUrls[ph.url];
-          if (f) m.set(ph.url, { file: f }); else if (u) m.set(ph.url, { url: u });
+          if (u) m.set(ph.url, { url: u });
         };
         photos.forEach(add); add(cover.photo); add(backCover.photo);
         return m;
@@ -4957,6 +4959,10 @@
                 pf._storedUrl = pub(path);
               }
               ph.printUrl = pf._storedUrl;
+            } else if (ph.file) {
+              // A new/replaced photo that is its own print copy (small enough
+              // to keep untouched). Any printUrl is the REPLACED photo's.
+              ph.printUrl = null;
             } else if (ph.printUrl || savedPrintUrls[ph.existingUrl]) {
               ph.printUrl = await remapAsset(ph.printUrl || savedPrintUrls[ph.existingUrl]);
             } else if (printUrls[displayUrl]) {
