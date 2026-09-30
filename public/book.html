@@ -1100,12 +1100,13 @@
           // a remote URL and no File; a photo is re-uploaded on save only if it
           // gains a File (new or replaced).
           const idByUrl = {};
+          savedPrintUrls = col.book_layout.print_urls || {};
           const getPhotoId = (url) => {
             if (idByUrl[url]) return idByUrl[url];
             const id = uid('ph');
             const it = itemByPhotoUrl[url];
             photos.set(id, {
-              id, file: null, url, existingUrl: url, source: 'Saved', ow: 0, oh: 0, adjust: DEFAULT_ADJUST(),
+              id, file: null, url, existingUrl: url, printUrl: savedPrintUrls[url] || null, source: 'Saved', ow: 0, oh: 0, adjust: DEFAULT_ADJUST(),
               popcode: it ? {
                 mediaType: it.media_type || 'video',
                 video: null, audio: null,
@@ -1137,7 +1138,7 @@
             font: COVER_FONTS.some(f => f.id === c.font) ? c.font : 'cormorant',
             eyebrow: c.eyebrow || '', title: c.title || '', subtitle: c.subtitle || '',
             tint: typeof c.tint === 'number' ? c.tint : DEFAULT_COVER_TINT,
-            photo: c.photo_url ? { file: null, url: c.photo_url, existingUrl: c.photo_url, source: 'Saved', adjust: normalizeAdjust(c.photo_adjust) } : null,
+            photo: c.photo_url ? { file: null, url: c.photo_url, existingUrl: c.photo_url, printUrl: savedPrintUrls[c.photo_url] || null, source: 'Saved', adjust: normalizeAdjust(c.photo_adjust) } : null,
           };
 
           // Restore the back-cover config.
@@ -1145,7 +1146,7 @@
           if (bc) backCover = {
             mode: bc.mode === 'fullbleed' ? 'fullbleed' : 'inset',
             shape: ['landscape', 'portrait', 'square'].includes(bc.shape) ? bc.shape : 'landscape',
-            photo: bc.photo_url ? { file: null, url: bc.photo_url, existingUrl: bc.photo_url, source: 'Saved', adjust: normalizeAdjust(bc.photo_adjust) } : null,
+            photo: bc.photo_url ? { file: null, url: bc.photo_url, existingUrl: bc.photo_url, printUrl: savedPrintUrls[bc.photo_url] || null, source: 'Saved', adjust: normalizeAdjust(bc.photo_adjust) } : null,
           };
 
           document.getElementById('title-input').value = col.name || '';
@@ -1294,6 +1295,8 @@
       //   popcode: { mediaType:'video'|'audio', video:File|null, audio:File|null }
       // pages: [ { id, layout, slots:[photoId|null,...] } ]
       const photos = new Map();
+      // Stored display URL → stored print URL (book_layout.print_urls).
+      let savedPrintUrls = {};
       let pages = [];
       // Front-cover config (Bashō model). photo: { file, url, existingUrl } | null.
       // How dark the shade behind the cover title is, 0–1, adjustable per book
@@ -1336,6 +1339,7 @@
           cover: cloneCover(cover),
           backCover: cloneCover(backCover),
           bookSize,
+          upgrades: upgradedPrint.size,
         }),
         signature: (s) => ({
           p: s.photos.map(([id, p]) => [id, PopcodeUndo.photoSig(p)]),
@@ -1345,6 +1349,7 @@
           cover: Object.assign({}, s.cover, { photo: PopcodeUndo.photoSig(s.cover.photo) }),
           backCover: Object.assign({}, s.backCover, { photo: PopcodeUndo.photoSig(s.backCover.photo) }),
           size: s.bookSize,
+          upgrades: s.upgrades,
         }),
         restore: (s) => {
           PopcodeUndo.restorePhotos(photos, s.photos);
@@ -1420,6 +1425,23 @@
       const MAX_PHOTO_DIM = 2560;
       const PHOTO_QUALITY = 0.85;
       const HARD_MAX_MB = 40; // only reject originals we can't even decode above this
+
+      // The 2560px copy is for the EDITOR only. Printed from, it gave a full A4
+      // page ~220 DPI, and every later resample softened it further — the
+      // 2026-09-30 Rwanda/South Africa sample books came back visibly softer
+      // than the originals. So each photo also keeps a PRINT copy: the original
+      // bytes when they're a JPEG/PNG within PRINT_MAX_DIM (no recompression),
+      // otherwise one high-quality downscale. 6000px covers a full page at
+      // 300 DPI with room to crop. Keyed by the display File, so every place a
+      // photo object is created or shared (`file: out.file`, `file: p.file`)
+      // carries its print copy without extra plumbing.
+      const PRINT_MAX_DIM = 6000;
+      const PRINT_QUALITY = 0.92;
+      const printFileFor = new WeakMap();   // display File → print File
+      // Display URL → print File attached by "Upgrade to full resolution"
+      // (books saved before print copies existed). Keyed by URL so replacing a
+      // photo — which gives it a new URL — drops the upgrade with it.
+      const upgradedPrint = new Map();
 
       // ── Safe photo decoding ─────────────────────────────────────
       // JPEG has no alpha channel, so anything transparent — or any source that
@@ -1505,10 +1527,14 @@
         const oversized = scale < 1;                        // dimensions over the cap
         const heavy = file.size / (1024 * 1024) > 4;        // large byte size
         // Already reasonable → keep the original untouched (no needless recompress).
+        // It is its own print copy.
         if (!oversized && !heavy) { releaseSource(src); return { file, ow: w0, oh: h0 }; }
+        const printFile = await makePrintFile(file, src, w0, h0);
         const w = Math.max(1, Math.round(w0 * scale)), h = Math.max(1, Math.round(h0 * scale));
         const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
-        const drew = drawOpaque(canvas.getContext('2d'), src, w, h);
+        const dctx = canvas.getContext('2d');
+        dctx.imageSmoothingQuality = 'high';
+        const drew = drawOpaque(dctx, src, w, h);
         releaseSource(src);
         if (!drew) return keepOriginal();
         const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', PHOTO_QUALITY));
@@ -1517,8 +1543,27 @@
         // the point). When only heavy, keep whichever is smaller in bytes.
         const chosen = oversized ? blob : (blob.size < file.size ? blob : file);
         const name = (file.name || 'photo').replace(/\.[^.]+$/, '') + (chosen === blob ? '.jpg' : '');
+        const display = chosen === file ? file : new File([chosen], name, { type: chosen.type || 'image/jpeg' });
+        if (printFile && printFile !== display) printFileFor.set(display, printFile);
         // ow/oh = the ORIGINAL source dimensions (shown as "Dimensions" in Edit Photo).
-        return { file: new File([chosen], name, { type: chosen.type || 'image/jpeg' }), ow: w0, oh: h0 };
+        return { file: display, ow: w0, oh: h0 };
+      }
+
+      // The full-resolution copy a photo prints from (see PRINT_MAX_DIM). Null
+      // when it can't be made — printing then falls back to the display copy.
+      async function makePrintFile(file, src, w0, h0) {
+        const plain = /^image\/(jpeg|png)$/.test(file.type);
+        if (plain && Math.max(w0, h0) <= PRINT_MAX_DIM) return file;   // original bytes
+        const k = Math.min(1, PRINT_MAX_DIM / Math.max(w0, h0));
+        const w = Math.max(1, Math.round(w0 * k)), h = Math.max(1, Math.round(h0 * k));
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        if (!drawOpaque(ctx, src, w, h)) return plain ? file : null;
+        const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', PRINT_QUALITY));
+        c.width = c.height = 0;
+        if (!blob) return plain ? file : null;
+        return new File([blob], (file.name || 'photo').replace(/\.[^.]+$/, '') + '-print.jpg', { type: 'image/jpeg' });
       }
 
       document.getElementById('photo-input').addEventListener('change', async (e) => {
@@ -2546,21 +2591,33 @@
       // prints exactly what the page shows (and html2canvas renders it trivially).
       // Returns null for non-slot / unloaded / CORS-tainted images so the caller can
       // fall back to the plain background-div path.
-      function bakeSlotImgForPrint(img) {
+      // opts.scale  canvas px per CSS px (default 2 — the proof's resolution)
+      // opts.source a higher-resolution copy of the same photo to draw from
+      // opts.canvas return the <canvas> itself (no JPEG round-trip), for print
+      function bakeSlotImgForPrint(img, opts) {
+        opts = opts || {};
         const slot = photoBox(img);
         if (!slot || !img.complete || !img.naturalWidth) return null;
         const r = slot.getBoundingClientRect();
         if (!r.width || !r.height) return null;
-        const S = 2;
+        const S = opts.scale || 2;
+        const src = (opts.source && opts.source.naturalWidth) ? opts.source : img;
         const c = document.createElement('canvas');
         c.width = Math.max(1, Math.round(r.width * S));
         c.height = Math.max(1, Math.round(r.height * S));
         let data;
         try {
+          const ctx = c.getContext('2d');
+          ctx.imageSmoothingQuality = 'high';
           // Two-page photo: draw into a box two pages wide, offset for the right half.
           const part = img.dataset.spread;
-          if (part) drawPhotoAdjusted(c.getContext('2d'), img, readAdj(img), part === 'r' ? -c.width : 0, 0, c.width * 2, c.height);
-          else drawPhotoAdjusted(c.getContext('2d'), img, readAdj(img), 0, 0, c.width, c.height);
+          if (part) drawPhotoAdjusted(ctx, src, readAdj(img), part === 'r' ? -c.width : 0, 0, c.width * 2, c.height);
+          else drawPhotoAdjusted(ctx, src, readAdj(img), 0, 0, c.width, c.height);
+          if (opts.canvas) {
+            c.getContext('2d').getImageData(0, 0, 1, 1);   // throws now if tainted, not inside html2canvas
+            c.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
+            return c;
+          }
           data = c.toDataURL('image/jpeg', 0.92);
         } catch (e) { return null; }
         const div = document.createElement('div');
@@ -3116,6 +3173,11 @@
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></div>
             <div><div>Duplicate this book</div><div class="menu-sub">Save the current design as a new copy</div></div>
           </div>
+          ${editingCollection && photos.size ? `
+          <div class="menu-row" data-act="upgrade">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="8 12 12 8 16 12"/><line x1="12" y1="8" x2="12" y2="16"/></svg></div>
+            <div><div>Upgrade to full resolution</div><div class="menu-sub">Choose your original photos so the book prints at full sharpness. Layout and crops stay as they are.</div></div>
+          </div>` : ''}
           <div class="menu-row" data-act="share">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></div>
             <div><div>Share</div><div class="menu-sub">Copy the link to your published book</div></div>
@@ -3144,6 +3206,8 @@
         document.querySelector('#sheet [data-act="addpages"]').addEventListener('click', () => { closeSheet(); document.getElementById('add-page-btn').click(); });
         document.querySelector('#sheet [data-act="duplicate"]').addEventListener('click', duplicateBook);
         document.querySelector('#sheet [data-act="share"]').addEventListener('click', shareBook);
+        const up = document.querySelector('#sheet [data-act="upgrade"]');
+        if (up) up.addEventListener('click', () => { closeSheet(); upgradeToFullResolution(); });
         const ps = document.querySelector('#sheet [data-act="proof-spreads"]');
         if (ps) ps.addEventListener('click', () => { closeSheet(); buildProof('spreads'); });
         const pp = document.querySelector('#sheet [data-act="proof-pages"]');
@@ -3428,6 +3492,45 @@
         return c.toDataURL('image/png');
       }
 
+      // Display URL (what an <img> in the book shows) → where its full-size
+      // print copy lives: { file } this session, or { url } once saved.
+      function printSourceMap() {
+        const m = new Map();
+        const add = (ph) => {
+          if (!ph || !ph.url) return;
+          const up = upgradedPrint.get(ph.url);
+          if (up) { m.set(ph.url, { file: up }); return; }
+          // A photo holding a File prints from that File's print copy, or from
+          // itself — never from a printUrl, which would be a replaced photo's.
+          if (ph.file) { const f = printFileFor.get(ph.file); if (f) m.set(ph.url, { file: f }); return; }
+          const u = ph.printUrl || savedPrintUrls[ph.existingUrl] || savedPrintUrls[ph.url];
+          if (u) m.set(ph.url, { url: u });
+        };
+        photos.forEach(add); add(cover.photo); add(backCover.photo);
+        return m;
+      }
+      function loadPrintSource(srcInfo) {
+        if (!srcInfo) return Promise.resolve(null);
+        return new Promise(res => {
+          const im = new Image();
+          const obj = srcInfo.file ? URL.createObjectURL(srcInfo.file) : null;
+          if (!obj) im.crossOrigin = 'anonymous';
+          im.onload = async () => { if (im.decode) { try { await im.decode(); } catch (e) {} } if (obj) URL.revokeObjectURL(obj); res(im); };
+          im.onerror = () => { if (obj) URL.revokeObjectURL(obj); res(null); };   // fall back to the editor copy
+          im.src = obj || srcInfo.url;
+        });
+      }
+      async function bakeUnitPhotosForPrint(unit, scale, printSources) {
+        for (const img of [...unit.querySelectorAll('.slot-img, .cv-photo-img, .bc-img')]) {
+          const hi = await loadPrintSource(printSources.get(img.getAttribute('src')));
+          const baked = bakeSlotImgForPrint(img, { scale, source: hi, canvas: true })
+            || bakeSlotImgForPrint(img, { scale, canvas: true });   // print copy unreadable → editor copy
+          if (hi) hi.src = '';
+          img.replaceWith(baked || fallbackPhotoDiv(img));
+        }
+        await new Promise(r => setTimeout(r, 0));
+      }
+
       async function buildBookPrintPdf() { return withProofStage(buildBookPrintPdfInner); }
       async function buildBookPrintPdfInner() {
         await loadProofLibs();
@@ -3492,11 +3595,6 @@
             sym.src = badgePng;         // html2canvas can't render an external SVG
           });
           unit.querySelectorAll('.slot, .bc-inset').forEach(el => { const r = el.getBoundingClientRect(); el.style.width = r.width + 'px'; el.style.height = r.height + 'px'; el.style.aspectRatio = 'auto'; });
-          unit.querySelectorAll('.slot-img, .cv-photo-img, .bc-img').forEach(img => {
-            const baked = bakeSlotImgForPrint(img);
-            if (baked) { img.replaceWith(baked); return; }
-            img.replaceWith(fallbackPhotoDiv(img));
-          });
           unit.querySelectorAll('.cv-spine').forEach(spine => spine.remove());
         });
         await new Promise(r => setTimeout(r, 30));
@@ -3506,10 +3604,20 @@
         const orient = size.wIn > size.hIn ? 'landscape' : 'portrait';
         const doc = new jsPDF({ unit: 'in', format: fmt, orientation: orient, compress: true });
         const scale = (size.wIn * PRINT_A4L.dpi) / PXW; // → 300 DPI across the width
+        const printSources = printSourceMap();
         for (let i = 0; i < units.length; i++) {
           setPrintProgress(i, units.length, `Rendering page ${i + 1} of ${units.length}`);
+          // Photos are baked one page at a time, straight from the full-size
+          // print copy at the page's final pixel size, so html2canvas copies
+          // them 1:1 — one resample and one JPEG encode in total. (It used to
+          // bake every page up front from the 2560px editor copy at 2×, then
+          // html2canvas scaled that up again.) Page by page also means only one
+          // page of full-size photos is in memory at a time.
+          await bakeUnitPhotosForPrint(units[i], scale, printSources);
           const canvas = await html2canvas(units[i], { useCORS: true, backgroundColor: '#ffffff', scale, logging: false, width: PXW, height: PXH });
           const data = canvas.toDataURL('image/jpeg', 0.92);
+          canvas.width = canvas.height = 0;
+          units[i].querySelectorAll('canvas').forEach(c => { c.width = c.height = 0; });
           if (i > 0) doc.addPage(fmt, orient);
           doc.addImage(data, 'JPEG', 0, 0, fmt[0], fmt[1]);
         }
@@ -3998,6 +4106,100 @@
           render();
         });
         inp.click();
+      }
+
+      // ── Upgrade to full resolution ──────────────────────────────
+      // Books saved before print copies existed hold only the 2560px editor
+      // copy. The creator picks their originals (all at once, any order); each
+      // is matched to the book photo it IS by a 32×32 luminance fingerprint +
+      // aspect ratio, and attached as that photo's print copy. Nothing visible
+      // changes — layout, crops and linked media are untouched — then it saves.
+      const FP = 32;
+      function fingerprint(src, w, h) {
+        const c = document.createElement('canvas'); c.width = c.height = FP;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        ctx.imageSmoothingQuality = 'high';
+        drawOpaque(ctx, src, FP, FP);
+        const d = ctx.getImageData(0, 0, FP, FP).data, v = new Float32Array(FP * FP);
+        let mean = 0;
+        for (let i = 0; i < v.length; i++) { v[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]; mean += v[i]; }
+        mean /= v.length;
+        let sd = 0; for (let i = 0; i < v.length; i++) { v[i] -= mean; sd += v[i] * v[i]; }
+        sd = Math.sqrt(sd / v.length) || 1;
+        for (let i = 0; i < v.length; i++) v[i] /= sd;
+        return { v, ar: w / h };
+      }
+      const fpScore = (a, b) => {
+        if (Math.abs(a.ar - b.ar) / b.ar > 0.03) return -1;   // different shape: not the same photo
+        let s = 0; for (let i = 0; i < a.v.length; i++) s += a.v[i] * b.v[i];
+        return s / a.v.length;                                 // correlation, 1 = identical
+      };
+      function loadForFingerprint(url) {
+        return new Promise(res => {
+          const im = new Image(); im.crossOrigin = 'anonymous';
+          im.onload = () => res(im); im.onerror = () => res(null);
+          im.src = url;
+        });
+      }
+
+      function upgradeToFullResolution() {
+        const inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true;
+        inp.addEventListener('change', () => applyUpgrade([...inp.files]));
+        inp.click();
+      }
+      async function applyUpgrade(chosen) {
+        const files = chosen.filter(f => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
+        if (!files.length) return;
+        // Every distinct photo the book shows, pages + tray + covers.
+        const byUrl = new Map();
+        [...photos.values(), cover.photo, backCover.photo].forEach(ph => { if (ph && ph.url && !byUrl.has(ph.url)) byUrl.set(ph.url, ph); });
+        const targets = [];
+        let n = 0;
+        for (const [url] of byUrl) {
+          showToast(`Reading your book’s photos… ${++n}/${byUrl.size}`);
+          const im = await loadForFingerprint(url);
+          if (!im || !im.naturalWidth) continue;
+          try { targets.push({ url, w: im.naturalWidth, fp: fingerprint(im, im.naturalWidth, im.naturalHeight) }); } catch (e) { /* unreadable (CORS) — skip */ }
+        }
+        const originals = [];
+        for (let i = 0; i < files.length; i++) {
+          showToast(`Matching originals… ${i + 1}/${files.length}`);
+          const src = await decodeDrawable(files[i]);
+          if (!src) continue;
+          const w = src.width || src.naturalWidth, h = src.height || src.naturalHeight;
+          originals.push({ file: files[i], w, h, fp: fingerprint(src, w, h) });
+          releaseSource(src);
+        }
+        // Best pairs first, each photo and each original used once.
+        const pairs = [];
+        originals.forEach((o, oi) => targets.forEach((t, ti) => { const sc = fpScore(o.fp, t.fp); if (sc >= 0.9) pairs.push({ oi, ti, sc }); }));
+        pairs.sort((a, b) => b.sc - a.sc);
+        const usedO = new Set(), usedT = new Set();
+        let upgraded = 0, alreadyFull = 0;
+        for (const pr of pairs) {
+          if (usedO.has(pr.oi) || usedT.has(pr.ti)) continue;
+          usedO.add(pr.oi); usedT.add(pr.ti);
+          const o = originals[pr.oi], t = targets[pr.ti];
+          if (o.w <= t.w * 1.1) { alreadyFull++; continue; }   // no sharper than what's there
+          showToast(`Preparing full-size photos… ${upgraded + 1}`);
+          let pf = /^image\/(jpeg|png)$/.test(o.file.type) && Math.max(o.w, o.h) <= PRINT_MAX_DIM ? o.file : null;
+          if (!pf) {
+            const src = await decodeDrawable(o.file);
+            if (src) { pf = await makePrintFile(o.file, src, o.w, o.h); releaseSource(src); }
+          }
+          if (pf) { upgradedPrint.set(t.url, pf); upgraded++; }
+        }
+        const missing = targets.length - usedT.size;
+        const unmatched = files.length - usedO.size;
+        const lines = [`${upgraded} photo${upgraded === 1 ? '' : 's'} upgraded to full resolution.`];
+        if (alreadyFull) lines.push(`${alreadyFull} already at full size.`);
+        if (missing) lines.push(`${missing} photo${missing === 1 ? '' : 's'} in the book had no matching original — ${missing === 1 ? 'it' : 'they'}’ll print as before.`);
+        if (unmatched) lines.push(`${unmatched} file${unmatched === 1 ? '' : 's'} you chose didn’t match any photo in the book.`);
+        if (!upgraded) { popcodeDialog({ title: 'Nothing to upgrade', message: lines.join('\n') }); return; }
+        await popcodeDialog({ title: 'Full-resolution photos ready', message: lines.join('\n') + '\n\nSaving now uploads them — larger files, so this can take a few minutes.' });
+        render();
+        await saveBook({ quiet: true });
       }
 
       // ── Edit Photo (Popsa-style crop/zoom/rotate) ───────────────
@@ -4851,12 +5053,40 @@
           const photoUrlById = {};
           const trayIds = [...photos.keys()].filter(id => !orderedPhotoIds.includes(id));
           const uploadIds = [...orderedPhotoIds, ...trayIds];
+          // Full-resolution print copies (see PRINT_MAX_DIM), recorded as
+          // book_layout.print_urls: stored display URL → stored print URL.
+          const printUrls = {};
+          const settlePrint = async (ph, displayUrl) => {
+            if (!ph || !displayUrl) return;
+            const pf = upgradedPrint.get(ph.url) || (ph.file && printFileFor.get(ph.file));
+            if (pf) {
+              // Each print File gets its own path, uploaded once per session.
+              if (!pf._storedUrl) {
+                const path = `${slug}/book/${uid('pr')}_print.${pf.type === 'image/png' ? 'png' : 'jpg'}`;
+                const { error } = await db.storage.from(bucket).upload(path, pf, { contentType: pf.type || 'image/jpeg', upsert: true });
+                if (error) throw new Error('Print photo upload failed: ' + error.message);
+                pf._storedUrl = pub(path);
+              }
+              ph.printUrl = pf._storedUrl;
+            } else if (ph.file) {
+              // A new/replaced photo that is its own print copy (small enough
+              // to keep untouched). Any printUrl is the REPLACED photo's.
+              ph.printUrl = null;
+            } else if (ph.printUrl || savedPrintUrls[ph.existingUrl]) {
+              ph.printUrl = await remapAsset(ph.printUrl || savedPrintUrls[ph.existingUrl]);
+            } else if (printUrls[displayUrl]) {
+              ph.printUrl = printUrls[displayUrl];   // a cover sharing a page photo
+            }
+            if (ph.printUrl) printUrls[displayUrl] = ph.printUrl;
+          };
           let done = 0;
           for (const id of uploadIds) {
             const p = photos.get(id);
             if (p.existingUrl && (!p.file || p._uploadedFile === p.file)) {
               p.existingUrl = await remapAsset(p.existingUrl);
-              photoUrlById[id] = p.existingUrl; done++; continue;
+              photoUrlById[id] = p.existingUrl;
+              await settlePrint(p, p.existingUrl);
+              done++; continue;
             }
             const ext = (p.file.name && p.file.name.split('.').pop().toLowerCase()) || 'jpg';
             const safeExt = /^[a-z0-9]+$/.test(ext) ? ext : 'jpg';
@@ -4866,6 +5096,7 @@
             photoUrlById[id] = pub(path);
             // Remember it's stored, so the next save doesn't upload it again.
             p.existingUrl = photoUrlById[id]; p._uploadedFile = p.file;
+            await settlePrint(p, photoUrlById[id]);
             done++;
             setProgress(`Uploading photos… ${done}/${uploadIds.length}`, 4 + (done / uploadIds.length) * 26);
           }
@@ -4881,6 +5112,7 @@
           } else if (cover.photo) {
             coverPhotoUrl = cover.photo.existingUrl = await remapAsset(coverPhotoUrl);
           }
+          await settlePrint(cover.photo, coverPhotoUrl);
 
           // 1c. Upload the back-cover photo (new File only; reuse existing URL otherwise).
           let backCoverPhotoUrl = backCover.photo ? backCover.photo.existingUrl : null;
@@ -4892,6 +5124,7 @@
           } else if (backCover.photo) {
             backCoverPhotoUrl = backCover.photo.existingUrl = await remapAsset(backCoverPhotoUrl);
           }
+          await settlePrint(backCover.photo, backCoverPhotoUrl);
 
           // 2. Compile popcoded photos into a .mind target — but ONLY when the
           //    target set actually changed. The .mind encodes each popcoded
@@ -4991,7 +5224,9 @@
             })),
             // Photos added but not on a page yet (restored into the tray on reopen).
             tray: trayIds.map(id => photoUrlById[id]).filter(Boolean),
+            print_urls: printUrls,
           };
+          savedPrintUrls = printUrls;
 
           // 5. Insert (create) or update (edit) the collection row.
           setProgress(editing ? 'Saving changes…' : 'Saving your book…', 90);
