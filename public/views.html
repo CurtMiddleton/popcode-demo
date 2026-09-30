@@ -20,6 +20,8 @@
     <title>Popcode — Past Views</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/dialog.js"></script>
+    <script src="/thumbs.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="stylesheet" href="/ui.css">
     <style>
@@ -70,6 +72,11 @@
       .view-date { font-size: 12px; color: #aaa; }
       /* .btn .btn-sm .btn-primary — only the flex behaviour is local. */
       .view-btn { flex-shrink: 0; }
+      .view-actions { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+      .view-remove { background: none; border: 0; padding: 6px 2px; font: inherit; font-size: 13px; color: #999; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+      .view-remove:hover { color: #1a1a1a; }
+      .view-card.gone .view-name { color: #999; }
+      .top-bar .view-remove { margin-left: auto; align-self: center; }
 
       .empty-state {
         width: 100%; text-align: center; padding: 60px 24px;
@@ -138,6 +145,7 @@
 
     <div class="top-bar">
       <h1>Past Views</h1>
+      <button type="button" class="view-remove" id="clear-all" style="display:none">Clear all</button>
     </div>
 
     <div class="content" id="content">
@@ -151,23 +159,95 @@
         return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
       }
 
+      function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+      // ── Removing a past view ──────────────────────────────────────
+      // A past view HIDES, never deletes: signed-in history comes from
+      // scan_events, which is also the Popcode owner's analytics. The hidden
+      // list is { slug: hiddenAt } in localStorage and, when signed in, the
+      // user's metadata (so it follows them across devices). Scanning the
+      // Popcode again later brings it back (last_viewed > hiddenAt).
+      const HIDE_KEY = 'popcode_views_hidden';
+      let currentUser = null;
+      let shownViews = [];
+      function readHidden() {
+        let h = {};
+        try { h = JSON.parse(localStorage.getItem(HIDE_KEY) || '{}') || {}; } catch (e) {}
+        const meta = currentUser && currentUser.user_metadata && currentUser.user_metadata.hidden_views;
+        if (meta && typeof meta === 'object') Object.keys(meta).forEach(function (k) { if (!h[k] || meta[k] > h[k]) h[k] = meta[k]; });
+        return h;
+      }
+      async function hideViews(slugs) {
+        const now = new Date().toISOString();
+        const h = readHidden();
+        slugs.forEach(function (sl) { h[sl] = now; });
+        // Keep the newest 300 so the list can't grow without bound.
+        const keep = Object.keys(h).sort(function (a, b) { return h[b].localeCompare(h[a]); }).slice(0, 300);
+        const trimmed = {}; keep.forEach(function (k) { trimmed[k] = h[k]; });
+        try { localStorage.setItem(HIDE_KEY, JSON.stringify(trimmed)); } catch (e) {}
+        try {
+          const local = JSON.parse(localStorage.getItem('popcode_views') || '{}') || {};
+          slugs.forEach(function (sl) { delete local[sl]; });
+          localStorage.setItem('popcode_views', JSON.stringify(local));
+        } catch (e) {}
+        if (currentUser) {
+          try {
+            const { data } = await db.auth.updateUser({ data: { hidden_views: trimmed } });
+            if (data && data.user) currentUser = data.user;
+          } catch (e) { /* this device still remembers */ }
+        }
+      }
+      const isHidden = (v, h) => !!(h[v.slug] && v.last_viewed <= h[v.slug]);
+
       function renderCards(views) {
         const content = document.getElementById('content');
+        const clearAll = document.getElementById('clear-all');
+        const hidden = readHidden();
+        views = views.filter(function (v) { return !isHidden(v, hidden); });
+        shownViews = views;
+        if (clearAll) clearAll.style.display = views.length > 1 ? '' : 'none';
         if (views.length === 0) {
           content.innerHTML = '<div class="empty-state"><p>No recent views yet.<br>Scan a Popcode to get started.</p></div>';
           return;
         }
         content.innerHTML = views.map(function(v) {
-          return '<div class="view-card">' +
-            '<div class="view-thumb"' + (v.thumb ? ' style="background-image:url(\'' + v.thumb + '\')"' : '') + '></div>' +
+          return '<div class="view-card' + (v.gone ? ' gone' : '') + '" data-slug="' + esc(v.slug) + '">' +
+            '<div class="view-thumb"' + (v.thumb ? ' data-thumb="' + esc(v.thumb) + '"' : '') + '></div>' +
             '<div class="view-info">' +
-              '<div class="view-name">' + v.name + '</div>' +
-              '<div class="view-date">Last viewed ' + formatDate(v.last_viewed) + '</div>' +
+              '<div class="view-name">' + esc(v.name) + '</div>' +
+              '<div class="view-date">' + (v.gone ? 'No longer available · last viewed ' : 'Last viewed ') + formatDate(v.last_viewed) + '</div>' +
             '</div>' +
-            '<a class="btn btn-sm btn-primary view-btn" href="/' + v.slug + '">View Again</a>' +
+            '<div class="view-actions">' +
+              '<button type="button" class="view-remove" data-remove="' + esc(v.slug) + '" aria-label="Remove ' + esc(v.name) + ' from Past Views">Remove</button>' +
+              (v.gone ? '' : '<a class="btn btn-sm btn-primary view-btn" href="/' + encodeURIComponent(v.slug) + '">View Again</a>') +
+            '</div>' +
           '</div>';
         }).join('');
+        // Small thumbnails (thumbs.js), not the full-size photos.
+        content.querySelectorAll('.view-thumb[data-thumb]').forEach(function (el) {
+          const full = el.dataset.thumb;
+          const set = function (u) { el.style.backgroundImage = "url('" + u.replace(/'/g, '%27') + "')"; };
+          if (window.PopcodeThumbs) PopcodeThumbs.src(full, 120, db).then(set); else set(full);
+        });
       }
+
+      document.getElementById('content').addEventListener('click', async function (e) {
+        const btn = e.target.closest('[data-remove]');
+        if (!btn) return;
+        const slug = btn.dataset.remove;
+        await hideViews([slug]);
+        renderCards(shownViews);
+      });
+      document.getElementById('clear-all').addEventListener('click', async function () {
+        const n = shownViews.length;
+        if (!n) return;
+        const ok = window.popcodeConfirm
+          ? await popcodeConfirm('This only clears your list — the Popcodes themselves aren’t affected, and anything you scan again will reappear.', { title: 'Clear all ' + n + ' past views?', confirmText: 'Clear all', cancelText: 'Keep them' })
+          : confirm('Clear all ' + n + ' past views?');
+        if (!ok) return;
+        await hideViews(shownViews.map(function (v) { return v.slug; }));
+        renderCards(shownViews);
+      });
 
       // Attach each view's first photo as a thumbnail.
       async function attachThumbs(views) {
@@ -178,11 +258,14 @@
           // SECURITY DEFINER and returns name + first photo only, for slugs the
           // viewer already has.
           var slugs = views.map(function(v){ return v.slug; }).slice(0, 100);
-          var { data: cards } = await db.rpc('popcode_view_cards', { slugs: slugs });
-          if (!cards || !cards.length) return;
+          var { data: cards, error } = await db.rpc('popcode_view_cards', { slugs: slugs });
+          if (error || !cards) return;
+          // A slug the lookup doesn't return has been deleted: say so, and
+          // don't offer a "View Again" that leads nowhere.
+          var known = {};
           var thumbBySlug = {};
-          cards.forEach(function(c){ if (c.thumb) thumbBySlug[c.slug] = c.thumb; });
-          views.forEach(function(v){ v.thumb = thumbBySlug[v.slug] || null; });
+          cards.forEach(function(c){ known[c.slug] = true; if (c.thumb) thumbBySlug[c.slug] = c.thumb; });
+          views.forEach(function(v, i){ v.thumb = thumbBySlug[v.slug] || null; if (i < 100) v.gone = !known[v.slug]; });
         } catch (e) {}
       }
 
@@ -193,6 +276,7 @@
 
         var { data: session } = await db.auth.getSession();
         var user = session?.session?.user;
+        currentUser = user || null;
 
         if (user) {
           // Logged-in: pull from scan_events, merge with localStorage
