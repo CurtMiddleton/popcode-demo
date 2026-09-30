@@ -76,7 +76,10 @@
       .view-remove { background: none; border: 0; padding: 6px 2px; font: inherit; font-size: 13px; color: #999; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
       .view-remove:hover { color: #1a1a1a; }
       .view-card.gone .view-name { color: #999; }
-      .top-bar .view-remove { margin-left: auto; align-self: center; }
+      /* Clear all: a light gray .btn right-aligned over the View Again column. */
+      .views-toolbar { width: 100%; max-width: 800px; display: flex; justify-content: flex-end; }
+      .btn.clear-all-btn { background: #ececec; color: #1a1a1a; }
+      .btn.clear-all-btn:hover { background: #e2e2e2; }
 
       .empty-state {
         width: 100%; text-align: center; padding: 60px 24px;
@@ -145,7 +148,6 @@
 
     <div class="top-bar">
       <h1>Past Views</h1>
-      <button type="button" class="view-remove" id="clear-all" style="display:none">Clear all</button>
     </div>
 
     <div class="content" id="content">
@@ -201,16 +203,16 @@
 
       function renderCards(views) {
         const content = document.getElementById('content');
-        const clearAll = document.getElementById('clear-all');
         const hidden = readHidden();
         views = views.filter(function (v) { return !isHidden(v, hidden); });
         shownViews = views;
-        if (clearAll) clearAll.style.display = views.length > 1 ? '' : 'none';
         if (views.length === 0) {
           content.innerHTML = '<div class="empty-state"><p>No recent views yet.<br>Scan a Popcode to get started.</p></div>';
           return;
         }
-        content.innerHTML = views.map(function(v) {
+        content.innerHTML = (views.length > 1
+          ? '<div class="views-toolbar"><button type="button" class="btn btn-sm clear-all-btn" id="clear-all">Clear all</button></div>'
+          : '') + views.map(function(v) {
           return '<div class="view-card' + (v.gone ? ' gone' : '') + '" data-slug="' + esc(v.slug) + '">' +
             '<div class="view-thumb"' + (v.thumb ? ' data-thumb="' + esc(v.thumb) + '"' : '') + '></div>' +
             '<div class="view-info">' +
@@ -231,22 +233,29 @@
         });
       }
 
+      const ask = (message, title, confirmText, cancelText) => window.popcodeConfirm
+        ? popcodeConfirm(message, { title, confirmText, cancelText })
+        : Promise.resolve(confirm(title + '\n\n' + message));
+      // Remove and Clear all both confirm first; the reassurance matters as
+      // much as the question — nothing happens to the Popcode itself.
       document.getElementById('content').addEventListener('click', async function (e) {
         const btn = e.target.closest('[data-remove]');
-        if (!btn) return;
-        const slug = btn.dataset.remove;
-        await hideViews([slug]);
-        renderCards(shownViews);
-      });
-      document.getElementById('clear-all').addEventListener('click', async function () {
-        const n = shownViews.length;
-        if (!n) return;
-        const ok = window.popcodeConfirm
-          ? await popcodeConfirm('This only clears your list — the Popcodes themselves aren’t affected, and anything you scan again will reappear.', { title: 'Clear all ' + n + ' past views?', confirmText: 'Clear all', cancelText: 'Keep them' })
-          : confirm('Clear all ' + n + ' past views?');
-        if (!ok) return;
-        await hideViews(shownViews.map(function (v) { return v.slug; }));
-        renderCards(shownViews);
+        if (btn) {
+          const slug = btn.dataset.remove;
+          const v = shownViews.find(function (x) { return x.slug === slug; });
+          const name = v ? v.name : slug;
+          if (!(await ask('“' + name + '” will be removed from your list. The Popcode itself isn’t affected, and scanning it again brings it back.', 'Remove this view?', 'Remove', 'Keep it'))) return;
+          await hideViews([slug]);
+          renderCards(shownViews);
+          return;
+        }
+        if (e.target.closest('#clear-all')) {
+          const n = shownViews.length;
+          if (!n) return;
+          if (!(await ask('All ' + n + ' views will be removed from your list. The Popcodes themselves aren’t affected, and anything you scan again will reappear.', 'Clear all past views?', 'Clear all', 'Keep them'))) return;
+          await hideViews(shownViews.map(function (x) { return x.slug; }));
+          renderCards(shownViews);
+        }
       });
 
       // Attach each view's first photo as a thumbnail.
