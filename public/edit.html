@@ -2344,11 +2344,13 @@
 
       // Apply a replacement photo to an existing page — same effect as picking a
       // file through that card's hidden <input>.
-      function applyExistingPhoto(item, key, file) {
+      async function applyExistingPhoto(item, key, file) {
         const sizeMB = file.size / (1024 * 1024);
         if (sizeMB > MAX_PHOTO_MB) {
-          alert(`This image is ${sizeMB.toFixed(1)} MB, which exceeds the ${MAX_PHOTO_MB} MB limit.`);
-          return;
+          // Downscale (keeping print resolution) instead of rejecting.
+          const shrunk = await shrinkPhotoForLimit(file, MAX_PHOTO_MB);
+          if (!shrunk) { alert(`This image is ${sizeMB.toFixed(1)} MB and couldn’t be brought under the ${MAX_PHOTO_MB} MB limit. Please choose a smaller photo.`); return; }
+          file = shrunk;
         }
         if (!replacements[item.id]) replacements[item.id] = {};
         replacements[item.id].photo = file;
@@ -2370,7 +2372,7 @@
       async function applyMediaFile(file, type, n, input) {
         const clearInput = () => { if (input) input.value = ''; };
 
-        const sizeMB = file.size / (1024 * 1024);
+        let sizeMB = file.size / (1024 * 1024);
         const limitMB = type === 'video' ? MAX_VIDEO_MB : MAX_PHOTO_MB;
 
         if (sizeMB > limitMB) {
@@ -2426,8 +2428,13 @@
               clearInput(); return;
             }
           } else {
-            alert(`This photo is ${sizeMB.toFixed(1)} MB, which exceeds the ${MAX_PHOTO_MB} MB limit. Please choose a smaller photo.`);
-            clearInput(); return;
+            // Downscale (keeping print resolution) instead of rejecting.
+            const shrunk = await shrinkPhotoForLimit(file, limitMB);
+            if (!shrunk) {
+              alert(`This photo is ${sizeMB.toFixed(1)} MB and couldn’t be brought under the ${MAX_PHOTO_MB} MB limit. Please choose a smaller photo.`);
+              clearInput(); return;
+            }
+            file = shrunk; sizeMB = file.size / (1024 * 1024);
           }
         }
 
@@ -3204,7 +3211,20 @@
         try { ctx.drawImage(src, 0, 0, w, h); return true; }
         catch (e) { return false; }
       }
-      async function optimizePhotoDim(file, maxDim) {
+      // Print-safe shrink for a photo over the upload limit. Products print from
+      // this stored photo, so it must stay big: a 2560px copy (the old fallback)
+      // is ~71 DPI on a 24×36 print. Try full print size first, stepping down
+      // only as far as the limit forces.
+      async function shrinkPhotoForLimit(file, limitMB) {
+        for (const [dim, q] of [[6000, 0.92], [6000, 0.85], [4800, 0.85], [3600, 0.85], [2560, 0.85]]) {
+          const out = await optimizePhotoDim(file, dim, q);
+          if (!out) return null;
+          if (out.size / (1024 * 1024) <= limitMB) return out;
+        }
+        return null;
+      }
+
+      async function optimizePhotoDim(file, maxDim, quality) {
         // Keep the original bytes when we can't safely re-encode — an original we
         // can't shrink beats a black square.
         const keepOriginal = () => file.size / (1024 * 1024) <= PHOTO_HARD_MAX_MB ? file : null;
@@ -3217,10 +3237,13 @@
         if (!oversized && !heavy) { releaseSource(src); return file; }
         const w = Math.max(1, Math.round(w0 * scale)), h = Math.max(1, Math.round(h0 * scale));
         const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
-        const drew = drawOpaque(canvas.getContext('2d'), src, w, h);
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        const drew = drawOpaque(ctx, src, w, h);
         releaseSource(src);
         if (!drew) return keepOriginal();
-        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', PHOTO_QUALITY));
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', quality || PHOTO_QUALITY));
+        canvas.width = canvas.height = 0;
         if (!blob) return file;
         const chosen = oversized ? blob : (blob.size < file.size ? blob : file);
         const name = (file.name || 'photo').replace(/\.[^.]+$/, '') + (chosen === blob ? '.jpg' : '');
