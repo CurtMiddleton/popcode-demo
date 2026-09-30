@@ -113,7 +113,7 @@
 
   var MESSAGES = {
     dark: 'It’s quite dark, so the camera may not recognise it.',
-    detail: 'It doesn’t have much detail for the camera to lock onto. Blurry, plain or faded photos are the usual cause.'
+    detail: 'It doesn’t have much detail for the camera to lock onto. Blurry, plain or faded images are the usual cause.'
   };
 
   window.PopcodeScanCheck = { check: check, MESSAGES: MESSAGES };
