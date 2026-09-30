@@ -107,6 +107,8 @@
       .detail-info h2 { font-family:'CooperBT', Georgia, serif; font-size:36px; font-weight:400; letter-spacing:-0.01em; margin-bottom:6px; }
       .detail-info .tagline { color:#777; font-size:15px; margin-bottom:28px; }
       .size-chips { display:flex; flex-wrap:wrap; gap:10px; margin:10px 0 6px; }
+      .size-quality { font-size:13px; line-height:1.45; color:#8a5a00; background:#fff6e0; border-radius:10px; padding:9px 12px; margin:4px 0 10px; }
+      .size-quality:empty { display:none; }
       /* .btn .btn-sm .btn-quiet — the selected state is local. The 1.5px
          border is gone: ui.css gives every variant 1px so selecting a chip
          cannot change its height or shuffle the row. */
@@ -325,6 +327,7 @@
             <div class="tagline" id="detail-tagline"></div>
             <label>Size</label>
             <div class="size-chips" id="size-chips"></div>
+            <div class="size-quality" id="size-quality"></div>
             <div id="frame-row" style="display:none;">
               <label>Frame</label>
               <div class="size-chips" id="frame-chips"></div>
@@ -822,10 +825,65 @@
         return Object.assign(DEFAULT_ADJUST(), (v && v.wrap) ? { fit: 'fit' } : {});
       };
       
+      // Longest printed edge of a variant, in inches ('8×10"' → 10; a mounted
+      // frame's image size, not the frame; a mug's wrap width). Null if unknown.
+      function printLongInches(v) {
+        if (!v) return null;
+        if (v.wrap && v.wrap.widthMm) return v.wrap.widthMm / 25.4;
+        const nums = String(v.imgSize || v.size || '').match(/[0-9]+(?:\.[0-9]+)?/g);
+        return nums ? Math.max(...nums.map(Number)) : null;
+      }
+      // Effective DPI of a w×h photo on the selected product: the crop box the
+      // product's shape cuts from it, shrunk by the zoom, over the print size.
+      function effectiveDpi(w, h, scale, v) {
+        v = v || variantOf(state.productType, state.variantId);
+        const L = printLongInches(v);
+        // The variant's shape in the current orientation (as currentAspect()).
+        let A = v && v.aspect;
+        if (A && A !== 1 && !ORIENTATION_LOCKED.has(state.productType) && state.orientation === 'landscape') A = 1 / A;
+        if (!w || !h || !L || !A) return null;
+        const cw = w / h > A ? h * A : w, ch = w / h > A ? h : w / A;
+        return Math.round(Math.max(cw, ch) / (scale || 1) / L);
+      }
+      // 10 = 300 DPI or better; the score used to ignore print size entirely,
+      // so a photo fine for a 5×7 read 10/10 on a 24×36 (~71 DPI).
       function printQuality(w, h, scale) {
-        if (!w || !h) return 10;
-        const eff = Math.min(w, h) / (scale || 1);
-        return Math.max(1, Math.min(10, Math.round(eff / 170)));
+        const dpi = effectiveDpi(w, h, scale);
+        if (dpi == null) return 10;
+        return Math.max(1, Math.min(10, Math.round(dpi / 30)));
+      }
+      const SOFT_DPI = 150;
+      // Pixel size of a photo URL (cached) — project photos don't carry it.
+      const photoDimsCache = new Map();
+      function photoDims(url) {
+        if (!photoDimsCache.has(url)) photoDimsCache.set(url, new Promise(res => {
+          const im = new Image(); im.crossOrigin = 'anonymous';
+          im.onload = () => res({ w: im.naturalWidth, h: im.naturalHeight }); im.onerror = () => res(null);
+          im.src = url;
+        }));
+        return photoDimsCache.get(url);
+      }
+      // Warn under the size chips when the chosen photo is too small for the
+      // chosen size, and name the largest size it prints well at.
+      async function updateSizeQuality() {
+        const el = document.getElementById('size-quality'); if (!el) return;
+        const photo = state.selectedPhoto;
+        const want = state.variantId;
+        const d = photo && photo.url ? await photoDims(photo.url) : null;
+        if (state.variantId !== want) return;          // a newer update is on its way
+        el.textContent = '';
+        if (!d) return;
+        const scale = (state.photoAdjust && state.photoAdjust.scale) || 1;
+        const dpi = effectiveDpi(d.w, d.h, scale);
+        if (dpi == null || dpi >= SOFT_DPI) return;
+        const cur = variantOf(state.productType, state.variantId);
+        let best = null;
+        for (const v of activeSizeList()) {
+          const dv = effectiveDpi(d.w, d.h, scale, v);
+          if (dv != null && dv >= SOFT_DPI && (!best || printLongInches(v) > printLongInches(best))) best = v;
+        }
+        el.textContent = `This photo will look soft at ${cur.size.replace(/"$/, '″')} (about ${dpi} DPI; 300 is ideal).`
+          + (best ? ` It prints well up to ${best.size.replace(/"$/, '″')}.` : ' Try a smaller size, or re-add the original photo to its Popcode.');
       }
       // Clamp the pan so the photo always covers the crop box (no background bleed).
       
@@ -1551,6 +1609,7 @@
       // Only the product reshapes; the white tile + gray stage stay fixed.
       
       async function renderDetailPreview() {
+        updateSizeQuality();
         const aspect = currentAspect();
         const cv = document.getElementById('detail-canvas');
         // No thumbnail strip / scenes. The product reshapes to the selected size's aspect
@@ -1831,7 +1890,8 @@
         document.getElementById('ep-dims').textContent = w ? `${w} × ${h}` : '—';
         const q = printQuality(w, h, a.scale);
         const qbox = document.getElementById('ep-quality');
-        document.getElementById('ep-q').textContent = q + '/10';
+        const dpi = effectiveDpi(w, h, a.scale);
+        document.getElementById('ep-q').textContent = q + '/10' + (dpi ? ` · ${dpi} DPI` : '');
         qbox.classList.toggle('good', q >= 8); qbox.classList.toggle('warn', q <= 4);
         document.getElementById('ep-thirds').style.display = s.gridOn ? 'block' : 'none';
         const set = (act, on) => { const el = document.querySelector(`#ep-modal .ep-btn[data-act="${act}"]`); if (el) el.classList.toggle('active', on); };

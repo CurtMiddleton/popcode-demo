@@ -1148,7 +1148,7 @@
           } else {
             // Photo over the limit — downscale it (like the book maker) instead
             // of rejecting. Only alert if it's still too big after resizing.
-            const optimized = await optimizePhotoDim(file, 2560);
+            const optimized = await shrinkPhotoForLimit(file, limitMB);
             if (optimized && optimized.size / (1024 * 1024) <= limitMB) {
               file = optimized;
               sizeMB = file.size / (1024 * 1024);
@@ -2076,7 +2076,20 @@
         try { ctx.drawImage(src, 0, 0, w, h); return true; }
         catch (e) { return false; }
       }
-      async function optimizePhotoDim(file, maxDim) {
+      // Print-safe shrink for a photo over the upload limit. Products print from
+      // this stored photo, so it must stay big: a 2560px copy (the old fallback)
+      // is ~71 DPI on a 24×36 print. Try full print size first, stepping down
+      // only as far as the limit forces.
+      async function shrinkPhotoForLimit(file, limitMB) {
+        for (const [dim, q] of [[6000, 0.92], [6000, 0.85], [4800, 0.85], [3600, 0.85], [2560, 0.85]]) {
+          const out = await optimizePhotoDim(file, dim, q);
+          if (!out) return null;
+          if (out.size / (1024 * 1024) <= limitMB) return out;
+        }
+        return null;
+      }
+
+      async function optimizePhotoDim(file, maxDim, quality) {
         // Keep the original bytes when we can't safely re-encode — an original we
         // can't shrink beats a black square.
         const keepOriginal = () => file.size / (1024 * 1024) <= PHOTO_HARD_MAX_MB ? file : null;
@@ -2089,10 +2102,13 @@
         if (!oversized && !heavy) { releaseSource(src); return file; }
         const w = Math.max(1, Math.round(w0 * scale)), h = Math.max(1, Math.round(h0 * scale));
         const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
-        const drew = drawOpaque(canvas.getContext('2d'), src, w, h);
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        const drew = drawOpaque(ctx, src, w, h);
         releaseSource(src);
         if (!drew) return keepOriginal();
-        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', PHOTO_QUALITY));
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', quality || PHOTO_QUALITY));
+        canvas.width = canvas.height = 0;
         if (!blob) return file;
         const chosen = oversized ? blob : (blob.size < file.size ? blob : file);
         const name = (file.name || 'photo').replace(/\.[^.]+$/, '') + (chosen === blob ? '.jpg' : '');
