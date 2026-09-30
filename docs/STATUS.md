@@ -95,6 +95,10 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   page (held until Prodigi answers). **Printify:** inserts only via a few
   apparel providers — not District Photo (board book) or the ornament's; URL
   stays on the product. Store Order submission is now **Manual**.
+- **Book reordered 2026-09-30: Prodigi `ord_14579891`**, file
+  `rwandasouthafrica24/print/book_1790798950285.pdf` (113 MB, 62 pages) —
+  verified 1.9× sharper than the 09-21 file, same brightness. When it
+  arrives: sharp-but-dark = Prodigi's printing (refund / WHCC).
 
 **Next**
 1. **Calendly:** done on the page — "Book a 15-minute demo" (the URL slug is
@@ -3258,4 +3262,5 @@ Photos were shrunk to **2560px on upload** and the original thrown away (~220 DP
 - **The 2026-08-22 "test" board book was real:** created by our API with `send_to_production:false` and placeholder Popcode-logo pages, but the store's **Order submission** default (automatically in 24h) sent it to production: produced 08-25, charged **$24.37**, USPS "delivered" 08-29 to 80 Pintard Ave — the user never saw it. The user set Order submission to **Manual** (Printify → Settings). Live orders pass `send_to_production:true` explicitly, so they should bypass it — **verify on the next real board book/ornament order** (should read In production, not On hold). Comment corrected in `lib/print/providers/printify.mjs`. The ornament test order #28663478.3 was already cancelled 09-27 ($0).
 - **Don't touch Prodigi's "Order edit window"** (Settings → Preferences): it must stay "None, process immediately" — "Pause indefinitely" would hold every real order.
 - Our `print_orders.status` for the book still reads `in_production` although it shipped 09-23 — Prodigi's callback didn't update it. Worth a look.
+- **Reorder verified (evening):** Prodigi **`ord_14579891`** (2026-09-30 20:12 UTC) fetched `experiences/rwandasouthafrica24/print/book_1790798950285.pdf` — **113 MB** vs the 09-21 order's `book_1789957013521.pdf` at **78 MB**, both 62 pages of 3507×2480 JPEG. Downloaded both and measured every page (Laplacian edge energy, centre half): new/old median **1.92×** sharper (min 1.05, max 3.78); page 12 group photo 8.3 → 16.0; median brightness **identical (159.5)**. So if the new book prints dark, it's Prodigi's printing, not the file. The order took ~1 minute to build and upload — expected, since the full-size photos were already uploaded by the Upgrade; ordering only uploads the PDF. Quick way to repeat this check: `print_orders.asset_urls` for the order → HEAD the URL for size, or download and compare DCT page images.
 
