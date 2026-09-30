@@ -3195,6 +3195,10 @@
           <div class="menu-row" data-act="proof-pages">
             <div class="menu-ic" style="background:#f3f0ff;color:#5b3fd6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/></svg></div>
             <div><div>Proof: PDF pages</div><div class="menu-sub">Admin · print one page per sheet to PDF</div></div>
+          </div>
+          <div class="menu-row" data-act="print-file">
+            <div class="menu-ic" style="background:#f3f0ff;color:#5b3fd6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div>
+            <div><div>Download print file</div><div class="menu-sub">Admin · the exact 300 DPI PDF Prodigi receives, from full-resolution photos</div></div>
           </div>` : ''}
         `);
         document.querySelector('#sheet [data-act="cart"]').addEventListener('click', addBookToCart);
@@ -3217,6 +3221,8 @@
         if (ps) ps.addEventListener('click', () => { closeSheet(); buildProof('spreads'); });
         const pp = document.querySelector('#sheet [data-act="proof-pages"]');
         if (pp) pp.addEventListener('click', () => { closeSheet(); buildProof('pages'); });
+        const pf = document.querySelector('#sheet [data-act="print-file"]');
+        if (pf) pf.addEventListener('click', () => { closeSheet(); downloadPrintFile(); });
       }
 
       // Book size picker — photos keep their crops; pages just re-flow to the
@@ -3537,6 +3543,26 @@
       }
 
       async function buildBookPrintPdf() { return withProofStage(buildBookPrintPdfInner); }
+
+      // Admin: build the real print PDF (the file Add to cart uploads for
+      // Prodigi) and download it, without ordering. The Proof PDFs render from
+      // the editor copies, so they can't show print sharpness; this can.
+      async function downloadPrintFile() {
+        openPrintProgress('Preparing the print file', 'Rendering every page at print resolution.');
+        try {
+          const out = await buildBookPrintPdf();
+          const base = ((document.getElementById('title-input').value || cover.title || 'popcode-book').trim() || 'popcode-book').replace(/[^\w\- ]+/g, '').trim() || 'popcode-book';
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(out.blob); a.download = `${base} - print file.pdf`;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+        } catch (err) {
+          console.error(err);
+          showToast(err.message || 'Could not build the print file.');
+        } finally {
+          closePrintProgress();
+        }
+      }
       async function buildBookPrintPdfInner() {
         await loadProofLibs();
         const proof = document.getElementById('proof');
