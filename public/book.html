@@ -4158,7 +4158,11 @@
         if (!files.length) return;
         // Every distinct photo the book shows, pages + tray + covers.
         const byUrl = new Map();
-        [...photos.values(), cover.photo, backCover.photo].forEach(ph => { if (ph && ph.url && !byUrl.has(ph.url)) byUrl.set(ph.url, ph); });
+        // Skip photos that already have a print copy (an earlier upgrade, or
+        // added since print copies existed), so running it again only fills gaps.
+        const hasPrint = (ph) => upgradedPrint.has(ph.url) || (ph.file && printFileFor.has(ph.file)) || ph.printUrl || savedPrintUrls[ph.existingUrl] || savedPrintUrls[ph.url];
+        [...photos.values(), cover.photo, backCover.photo].forEach(ph => { if (ph && ph.url && !byUrl.has(ph.url) && !hasPrint(ph)) byUrl.set(ph.url, ph); });
+        if (!byUrl.size) { popcodeDialog({ title: 'Already at full resolution', message: 'Every photo in this book already has its full-resolution copy.' }); return; }
         const targets = [];
         let n = 0;
         for (const [url] of byUrl) {
@@ -4176,31 +4180,35 @@
           originals.push({ file: files[i], w, h, fp: fingerprint(src, w, h) });
           releaseSource(src);
         }
-        // Best pairs first, each photo and each original used once.
+        // Best pairs first, each book photo used once. An original may serve
+        // more than one book photo only when it's a near-exact match — the
+        // front cover is stored as its own copy of a page photo — so burst
+        // shots (similar, not identical) still pair one-to-one.
         const pairs = [];
         originals.forEach((o, oi) => targets.forEach((t, ti) => { const sc = fpScore(o.fp, t.fp); if (sc >= 0.9) pairs.push({ oi, ti, sc }); }));
         pairs.sort((a, b) => b.sc - a.sc);
         const usedO = new Set(), usedT = new Set();
         let upgraded = 0, alreadyFull = 0;
         for (const pr of pairs) {
-          if (usedO.has(pr.oi) || usedT.has(pr.ti)) continue;
+          if (usedT.has(pr.ti) || (usedO.has(pr.oi) && pr.sc < 0.985)) continue;
           usedO.add(pr.oi); usedT.add(pr.ti);
           const o = originals[pr.oi], t = targets[pr.ti];
           if (o.w <= t.w * 1.1) { alreadyFull++; continue; }   // no sharper than what's there
           showToast(`Preparing full-size photos… ${upgraded + 1}`);
-          let pf = /^image\/(jpeg|png)$/.test(o.file.type) && Math.max(o.w, o.h) <= PRINT_MAX_DIM && o.file.size <= PRINT_KEEP_MAX_BYTES ? o.file : null;
+          // Made once per original, so a cover sharing it uploads nothing extra.
+          let pf = o.pf || (/^image\/(jpeg|png)$/.test(o.file.type) && Math.max(o.w, o.h) <= PRINT_MAX_DIM && o.file.size <= PRINT_KEEP_MAX_BYTES ? o.file : null);
           if (!pf) {
             const src = await decodeDrawable(o.file);
             if (src) { pf = await makePrintFile(o.file, src, o.w, o.h); releaseSource(src); }
           }
-          if (pf) { upgradedPrint.set(t.url, pf); upgraded++; }
+          if (pf) { o.pf = pf; upgradedPrint.set(t.url, pf); upgraded++; }
         }
         const missing = targets.length - usedT.size;
         const unmatched = files.length - usedO.size;
         const lines = [`${upgraded} photo${upgraded === 1 ? '' : 's'} upgraded to full resolution.`];
         if (alreadyFull) lines.push(`${alreadyFull} already at full size.`);
         if (missing) lines.push(`${missing} photo${missing === 1 ? '' : 's'} in the book had no matching original — ${missing === 1 ? 'it' : 'they'}’ll print as before.`);
-        if (unmatched) lines.push(`${unmatched} file${unmatched === 1 ? '' : 's'} you chose didn’t match any photo in the book.`);
+        if (unmatched) lines.push(`${unmatched} file${unmatched === 1 ? '' : 's'} you chose weren’t needed — not in the book, or already upgraded.`);
         if (!upgraded) { popcodeDialog({ title: 'Nothing to upgrade', message: lines.join('\n') }); return; }
         await popcodeDialog({ title: 'Full-resolution photos ready', message: lines.join('\n') + '\n\nSaving now uploads them — larger files, so this can take a few minutes.' });
         render();
