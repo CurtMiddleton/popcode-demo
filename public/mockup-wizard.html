@@ -42,7 +42,7 @@
     .progress span::after { content: ''; position: absolute; inset: 0;
       background: linear-gradient(90deg, #7657FC, #589AF9) no-repeat; background-size: var(--fill, 100%) 100%; background-position: calc(var(--off, 0px) * -1) 0; transform: scaleX(0); transform-origin: left; transition: transform .55s cubic-bezier(.2,.8,.2,1); }
     .progress span.on::after { transform: scaleX(1); }
-    .progress-labels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 11px; color: #9a9a9a; font-weight: 600; margin-bottom: 28px; }
+    .progress-labels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 11px; color: #bdbdbd; font-weight: 600; margin-bottom: 28px; }
     .progress-labels span.on { color: var(--ink); }
 
     /* ── Motion ─────────────────────────────────────────────────────────
@@ -90,6 +90,9 @@
     .drop.filled .media { display: block; }
     .drop .change { display: none; position: absolute; right: 12px; bottom: 12px; z-index: 2; background: rgba(255,255,255,.95); color: var(--ink); font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: 999px; pointer-events: none; }
     .drop.filled .change { display: block; }
+    /* Once a video is in, the player gets the taps; Change sits top-right, clear of its controls. */
+    .video-drop.filled input { display: none; }
+    .video-drop .change { top: 12px; bottom: auto; pointer-events: auto; border: 0; font-family: inherit; cursor: pointer; }
     .drop.video-drop.filled .media { object-fit: contain; }
 
     /* While checking: a scanner line sweeps the image and corner brackets close
@@ -154,6 +157,13 @@
     .done-row { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 15px; font-weight: 700; margin-bottom: 14px; }
     .done-row .ok { width: 26px; height: 26px; border-radius: 50%; background: #16a34a; color: #fff; display: grid; place-items: center; }
     .or { font-size: 12px; color: #999; margin: 12px 0; }
+    /* Listen-back player for recorded or uploaded audio. */
+    .player { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+    .player .play { width: 48px; height: 48px; flex-shrink: 0; border-radius: 50%; border: 0; background: var(--ink); color: #fff; display: grid; place-items: center; cursor: pointer; }
+    .player .track { flex: 1; height: 6px; border-radius: 3px; background: #e8e8e8; overflow: hidden; cursor: pointer; }
+    .player .track-fill { height: 100%; width: 0; background: var(--grad); }
+    .player .clock { font-size: 13px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .audio-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
     .mtg-strip { display: flex; justify-content: center; gap: 4px; margin-bottom: 14px; }
     .mtg-strip span { width: 38px; height: 52px; border-radius: 6px; background: var(--grad); opacity: .85; }
     .mtg-strip span:nth-child(2n) { opacity: .55; }
@@ -329,16 +339,19 @@
       </div>
 
       <div class="panel" data-panel="video">
-        <label class="drop video-drop" id="video-drop">
+        <!-- A div, not a label: inside a label every tap on the player's controls
+             would open the file picker instead. -->
+        <div class="drop video-drop" id="video-drop">
           <input type="file" accept="video/*" id="video-input">
           <img class="icon" src="/assets/video.png" alt="">
           <div class="d-title">Tap to add a video</div>
           <div class="d-sub">Up to 2 minutes works best</div>
-          <video class="media" id="video-preview" playsinline muted loop></video>
-          <span class="change">Change</span>
-        </label>
+          <video class="media" id="video-preview" playsinline controls preload="metadata"></video>
+          <button type="button" class="change" onclick="$('video-input').click()">Change</button>
+        </div>
       </div>
 
+      <input type="file" accept="audio/*" id="audio-file" hidden onchange="audioFileChosen(event)">
       <div class="panel" data-panel="audio">
         <div class="card" id="audio-card"></div>
       </div>
@@ -440,6 +453,7 @@
     function go(step, dir) {
       const back = dir ? dir === 'back' : ORDER.indexOf(step) < ORDER.indexOf(state.step);
       document.querySelector('main').dataset.dir = back ? 'back' : 'fwd';
+      document.querySelectorAll('audio, video').forEach(m => m.pause());   // nothing keeps playing off-screen
       state.step = step;
       document.querySelectorAll('.step').forEach(s => s.classList.toggle('active', s.dataset.step === step));
       const idx = STEPS.indexOf(step);
@@ -506,7 +520,7 @@
         const vd = $('video-drop'), vp = $('video-preview');
         const hasVideo = d.kind === 'video' && d.media;
         vd.classList.toggle('filled', !!hasVideo);
-        if (hasVideo && vp.dataset.src !== d.media) { vp.src = d.media; vp.dataset.src = d.media; vp.play().catch(() => {}); }
+        if (hasVideo && vp.dataset.src !== d.media) { vp.src = d.media; vp.dataset.src = d.media; }
         if (!hasVideo) { vp.removeAttribute('src'); vp.dataset.src = ''; }
         renderAudio(); renderMontage();
         next.textContent = state.editIndex >= 0 ? 'Save' : 'Next';
@@ -615,16 +629,27 @@
     });
     $('video-input').onchange = e => {
       const f = e.target.files[0]; if (!f) return;
-      state.draft.media = URL.createObjectURL(f);
-      state.draft.label = 'Video';
+      const d = state.draft, url = URL.createObjectURL(f);
+      d.media = url; d.label = 'Video';
       e.target.value = '';
       render();
+      // Label it with its length once the player knows it.
+      $('video-preview').addEventListener('loadedmetadata', function once() {
+        if (d.media === url && isFinite(this.duration)) d.label = `Video · ${fmt(Math.round(this.duration))}`;
+      }, { once: true });
     };
 
-    // Audio is faked: a timer that counts up, then "Recorded 0:07".
-    let recTimer = null, recSecs = 0;
-    function stopRecording() { if (recTimer) { clearInterval(recTimer); recTimer = null; } }
+    // Audio records for real from the mic (MediaRecorder) or takes an uploaded
+    // file, then shows a player so you can listen back before moving on.
+    // If the mic isn't available it falls back to a timed fake, without playback.
+    let recTimer = null, recSecs = 0, recorder = null, recStream = null;
     const fmt = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    function stopRecording() {
+      if (recTimer) { clearInterval(recTimer); recTimer = null; }
+      if (recorder && recorder.state !== 'inactive') { recorder.onstop = null; recorder.stop(); }
+      if (recStream) { recStream.getTracks().forEach(t => t.stop()); recStream = null; }
+      recorder = null;
+    }
     function renderAudio() {
       const d = state.draft, card = $('audio-card');
       if (d.kind !== 'audio') return;
@@ -637,26 +662,80 @@
           <div class="timer"><span class="rec-dot"></span><span class="timer-text">${fmt(recSecs)}</span></div>
           <button type="button" class="btn btn-lg btn-primary btn-block" onclick="finishRecording()">Stop</button>`;
       } else if (d.media) {
-        card.innerHTML = `<div class="done-row"><span class="ok">✓</span>${d.label}</div>
-          <button type="button" class="btn btn-quiet" onclick="startRecording()">Re-record</button>`;
+        const playable = d.media !== 'audio';
+        card.innerHTML = `${playable ? `
+          <div class="player">
+            <button type="button" class="play" aria-label="Play" onclick="toggleAudio()">${PLAY}</button>
+            <div class="track"><div class="track-fill" id="track-fill"></div></div>
+            <span class="clock" id="audio-clock">0:00 / ${d.label.split('· ')[1] || ''}</span>
+          </div>
+          <audio id="audio-el" src="${d.media}" preload="metadata"></audio>`
+          : `<div class="done-row"><span class="ok">✓</span>${d.label}</div>`}
+          <div class="audio-actions">
+            <button type="button" class="btn btn-quiet" onclick="startRecording()">Re-record</button>
+            <button type="button" class="btn btn-quiet" onclick="$('audio-file').click()">Upload a file</button>
+          </div>`;
+        if (playable) wireAudio();
       } else {
         card.innerHTML = `<p>Record a message, a song or a story. It plays over the image when it’s scanned.</p>
           <button type="button" class="btn btn-lg btn-primary btn-block" onclick="startRecording()">● Start recording</button>
           <div class="or">or</div>
-          <button type="button" class="btn btn-quiet btn-block" onclick="fakeAudioUpload()">Upload an audio file</button>`;
+          <button type="button" class="btn btn-quiet btn-block" onclick="$('audio-file').click()">Upload an audio file</button>`;
       }
     }
-    function startRecording() {
+    const PLAY = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+    const PAUSE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
+    function wireAudio() {
+      const a = $('audio-el'), btn = $('audio-card').querySelector('.play');
+      const tick = () => {
+        const dur = isFinite(a.duration) ? a.duration : 0;
+        $('track-fill').style.width = dur ? (a.currentTime / dur * 100) + '%' : '0';
+        $('audio-clock').textContent = `${fmt(Math.floor(a.currentTime))} / ${dur ? fmt(Math.round(dur)) : (state.draft.label.split('· ')[1] || '')}`;
+      };
+      a.ontimeupdate = tick; a.onloadedmetadata = tick;
+      a.onplay = () => { btn.innerHTML = PAUSE; btn.setAttribute('aria-label', 'Pause'); };
+      a.onpause = a.onended = () => { btn.innerHTML = PLAY; btn.setAttribute('aria-label', 'Play'); };
+      $('audio-card').querySelector('.track').onclick = e => {
+        const r = e.currentTarget.getBoundingClientRect();
+        if (isFinite(a.duration)) a.currentTime = (e.clientX - r.left) / r.width * a.duration;
+      };
+    }
+    function toggleAudio() { const a = $('audio-el'); if (a) a.paused ? a.play() : a.pause(); }
+    async function startRecording() {
       stopRecording(); recSecs = 0; state.draft.media = null;
+      const d = state.draft;
+      try {
+        recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const chunks = [];
+        recorder = new MediaRecorder(recStream);
+        recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+        recorder.onstop = () => {
+          d.media = URL.createObjectURL(new Blob(chunks, { type: recorder.mimeType || 'audio/mp4' }));
+          d.label = `Audio · ${fmt(Math.max(recSecs, 1))}`;
+          if (recStream) { recStream.getTracks().forEach(t => t.stop()); recStream = null; }
+          recorder = null; render();
+        };
+        recorder.start();
+      } catch (e) { recorder = null; }     // no mic: fall back to the timed fake
       recTimer = setInterval(() => { recSecs++; renderAudio(); }, 1000);
       render();
     }
     function finishRecording() {
-      stopRecording();
+      clearInterval(recTimer); recTimer = null;
+      if (recorder && recorder.state !== 'inactive') return recorder.stop();   // onstop renders
       state.draft.media = 'audio'; state.draft.label = `Audio · ${fmt(Math.max(recSecs, 1))}`;
       render();
     }
-    function fakeAudioUpload() { state.draft.media = 'audio'; state.draft.label = 'Audio · 0:42'; render(); }
+    function audioFileChosen(e) {
+      const f = e.target.files[0]; if (!f) return;
+      stopRecording();
+      const d = state.draft, url = URL.createObjectURL(f);
+      d.kind = 'audio'; d.media = url; d.label = 'Audio';
+      e.target.value = '';
+      const probe = new Audio(); probe.preload = 'metadata'; probe.src = url;
+      probe.onloadedmetadata = () => { if (d.media === url && isFinite(probe.duration)) { d.label = `Audio · ${fmt(Math.round(probe.duration))}`; render(); } };
+      render();
+    }
 
     // Montage is faked too: the real one opens the montage maker.
     function renderMontage() {
