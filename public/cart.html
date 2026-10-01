@@ -240,6 +240,7 @@
     </script>
     <script src="/cart.js"></script>
     <script src="/postcard-render.js"></script>
+    <script src="/book-spine.js"></script>
     <script src="/beta-feedback.js"></script>
     <script>
 
@@ -838,6 +839,33 @@
         }
       }
 
+      /* Photo books need a SPINE asset (Prodigi layflat takes it separately
+         from the page PDF), sized for this address's lab — so it can only be
+         made here, at checkout. The cart used to skip it entirely, which is
+         how both 2026 Rwanda & South Africa orders printed a blank spine.
+         Throws (with a readable message) rather than ship a book without one. */
+      async function withSpines(lines, address, token) {
+        const books = lines.filter((l) => l.productType === 'book');
+        if (!books.length) return lines;
+        if (!window.PopcodeSpine) throw new Error('Could not prepare your book’s spine. Please reload the page and try again.');
+        const ids = [...new Set(books.map((l) => l.collectionId).filter(Boolean))];
+        const { data: cols } = await db.from('collections').select('id, slug, name, book_layout').in('id', ids);
+        const byId = new Map((cols || []).map((c) => [c.id, c]));
+        const out = [];
+        for (const l of lines) {
+          if (l.productType !== 'book') { out.push(l); continue; }
+          const col = byId.get(l.collectionId);
+          if (!col || !col.slug) throw new Error('Could not find the book “' + (l.title || 'your book') + '” to prepare its spine.');
+          const spine = await PopcodeSpine.prepare({
+            db, token, slug: col.slug, variantId: l.variantId, pageCount: l.pageCount, address,
+            parts: PopcodeSpine.partsFromLayout(col.book_layout, col.name),
+          });
+          // Replace any spine a stale cart line carried.
+          out.push({ ...l, assetUrls: (l.assetUrls || []).filter((a) => a.print_area !== 'spine').concat([spine]) });
+        }
+        return out;
+      }
+
       async function pay() {
         clearError();
         const v = (id) => (document.getElementById(id).value || '').trim();
@@ -860,11 +888,12 @@
           // Put the card artwork in place before checkout builds the order.
           btn.textContent = 'Preparing…';
           await uploadCompanionCards(rows);
+          const items = await withSpines(rows.map(PopcodeCart.toLine), recipient.address, token);
           const resp = await fetch('/api/create-checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
             body: JSON.stringify({
-              items: rows.map(PopcodeCart.toLine),
+              items,
               recipient,
               shippingMethod: document.getElementById('shipping').value,
             }),
