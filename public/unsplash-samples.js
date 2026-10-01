@@ -113,10 +113,15 @@
     const esc = (s) => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
     const FALLBACK = '/assets/sample-photo.jpg';
     const w = document.createElement('div');
-    // Soft, realistic cast shadow (like the other product mockups) — no hard offset block.
-    w.style.cssText = 'width:74%;max-width:300px;aspect-ratio:1/1;position:relative;border-radius:10px;overflow:hidden;container-type:inline-size;background:#ededed;box-shadow:0 18px 34px -6px rgba(0,0,0,0.28), 0 3px 8px rgba(0,0,0,0.12);';
+    // The real book's shape (Printify's template): square, sharp corners at
+    // the spine, the two outer corners rounded at ~10% of the width, and a
+    // hinge groove ~7% in from the spine. Soft cast shadow, no offset block.
+    w.style.cssText = 'width:74%;max-width:300px;aspect-ratio:1/1;position:relative;border-radius:2px 10% 10% 2px / 2px 10% 10% 2px;overflow:hidden;container-type:inline-size;background:#ededed;box-shadow:0 18px 34px -6px rgba(0,0,0,0.28), 0 3px 8px rgba(0,0,0,0.12);';
     w.innerHTML =
       '<div class="bbm-photo" style="position:absolute;inset:0;background-size:cover;background-position:center;"></div>' +
+      // Spine edge catching the light, then the hinge groove.
+      '<div style="position:absolute;top:0;bottom:0;left:0;width:1.6%;background:linear-gradient(to right, rgba(255,255,255,0.45), rgba(255,255,255,0));z-index:1;"></div>' +
+      '<div style="position:absolute;top:0;bottom:0;left:6.2%;width:1.6%;background:linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,0.16) 45%, rgba(255,255,255,0.30) 60%, rgba(255,255,255,0));z-index:1;"></div>' +
       (title || subtitle ? '<div style="position:absolute;left:0;right:0;bottom:0;height:52%;background:linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.55));"></div>' +
         '<div style="position:absolute;left:8%;right:8%;bottom:8%;color:#fff;font-family:\'CooperBT\',Georgia,serif;text-shadow:0 2px 10px rgba(0,0,0,0.45);">' +
           (title ? '<div style="font-size:7.5cqw;line-height:1.1;">' + esc(title) + '</div>' : '') +
