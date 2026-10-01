@@ -27,6 +27,7 @@
     <script src="/product-preview.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/image-source.js"></script>
+    <script src="/scan-check.js"></script>
     <script src="/montage-music.js"></script>
     <!-- create.html only needs MINDAR.IMAGE.Compiler, not AR rendering. The
          compiler ships in the image-aframe build, which exports MINDAR before
@@ -455,6 +456,196 @@
       .nav-link.external { color:#666; font-size:14px; }
       .nav-divider { height:1px; background:#ececec; margin:8px 0; }
       .nav-close { display:none; }
+
+      /* ═══ Create wizard ═══════════════════════════════════════════════════
+         Image → What plays → Your images → Name (the Shop skips Your images:
+         its products print one image). Same look as /mockup-wizard.html. The
+         per-image cards are restyled here when mounted into a step's slot. */
+      :root { --wiz-grad: linear-gradient(135deg, #7657FC 0%, #589AF9 100%); --wiz-line: #e8e8e8; --wiz-muted: #656565; --wiz-accent: #7657FC; }
+      .page-top-bar { padding-top: 40px; padding-bottom: 0; margin-bottom: 0; }
+      .page-top-bar h1, .subtitle { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      body:not(.from-shop) .form-col { max-width: 520px; padding: 22px 16px 0; align-items: stretch; }
+      body.from-shop #shop-step-title { display: none !important; }
+      body.from-shop #shop-back { margin-bottom: 18px; }
+      #pages { display: none; }
+      #wiz { width: 100%; }
+
+      .wiz-progress { display: grid; gap: 6px; margin-bottom: 8px; }
+      .wiz-progress span { position: relative; overflow: hidden; height: 4px; border-radius: 2px; background: #e4e4e4; }
+      /* One gradient across every filled segment (paintProgress sets --off/--fill). */
+      .wiz-progress span::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, #7657FC, #589AF9) no-repeat;
+        background-size: var(--fill, 100%) 100%; background-position: calc(var(--off, 0px) * -1) 0;
+        transform: scaleX(0); transform-origin: left; transition: transform .55s cubic-bezier(.2,.8,.2,1); }
+      .wiz-progress span.on::after { transform: scaleX(1); }
+      .wiz-labels { display: grid; gap: 6px; font-size: 11px; color: #bdbdbd; font-weight: 600; margin-bottom: 28px; }
+      .wiz-labels span.on { color: #1a1a1a; }
+
+      .wiz-step { display: none; }
+      .wiz-step.active { display: block; }
+      .wiz-step.active > * { animation: wizInR .5s cubic-bezier(.2,.8,.2,1) both; }
+      #wiz[data-dir="back"] .wiz-step.active > * { animation-name: wizInL; }
+      .wiz-step.active > :nth-child(2) { animation-delay: .05s; }
+      .wiz-step.active > :nth-child(3) { animation-delay: .1s; }
+      .wiz-step.active > :nth-child(4) { animation-delay: .15s; }
+      .wiz-step.active > :nth-child(n+5) { animation-delay: .2s; }
+      @keyframes wizInR { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+      @keyframes wizInL { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+      @keyframes wizPop { 0% { transform: scale(.92); } 55% { transform: scale(1.025); } 100% { transform: scale(1); } }
+      @keyframes wizBounce { 0% { transform: scale(1); } 35% { transform: scale(.94); } 70% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+      /* padding, not margin: a top margin here collapses into the labels' margin. */
+      .wiz-eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--wiz-accent); text-align: center; padding-top: 5px; margin-bottom: 9px; }
+      .wiz-h { white-space: nowrap; font-family: 'CooperBT', Georgia, serif; font-weight: 400; font-size: 32px; line-height: 1.08; letter-spacing: -0.01em; text-align: center; color: #1a1a1a; margin-bottom: 10px; }
+      .wiz-lede { font-size: 15px; color: var(--wiz-muted); line-height: 1.5; text-align: center; margin-bottom: 24px; }
+      @media (max-width: 480px) { .wide-br { display: none; } }
+      @media (min-width: 700px) { .wiz-h { font-size: 40px; } }
+
+      /* Image step: the image card becomes one big drop zone. */
+      #wiz-image-slot .upload-wrapper { width: 100%; }
+      #wiz-image-slot .media-card { max-width: none; width: 100%; aspect-ratio: 4 / 3; border: 2px dashed #d6d6d6; box-shadow: none; padding: 16px; }
+      #wiz-image-slot .media-card.filled { border: 1px solid var(--wiz-line); box-shadow: var(--pc-shadow-card); }
+      #wiz-image-slot .media-card-label, #wiz-image-slot .tile-eye, #wiz-image-slot .file-name, #wiz-image-slot .file-size { display: none !important; }
+      #wiz-image-slot .upload-btn img.icon { width: 56px; height: 56px; }
+      #wiz-image-slot .upload-btn:not(.selected)::after { content: 'Tap to add an image'; font-size: 16px; font-weight: 700; color: #1a1a1a; }
+      #wiz-image-slot .upload-btn .preview-img { object-fit: cover; }
+      #wiz-image-slot .upload-btn.selected::after { content: 'Change'; width: auto; height: auto; padding: 8px 14px; border-radius: 999px; right: 12px; bottom: 12px;
+        background: rgba(255,255,255,.95); color: #1a1a1a; font-size: 13px; font-weight: 700; }
+      #wiz-image-slot .media-card.pop { animation: wizPop .5s cubic-bezier(.2,.8,.2,1); }
+      /* While the scan check runs: a scanner line sweeps the image and corner
+         brackets close in. transform/opacity only — MindAR holds the main thread. */
+      .wiz-sweep, .wiz-corner { display: none; position: absolute; z-index: 5; pointer-events: none; }
+      .wiz-scanning .wiz-sweep { display: block; left: 0; right: 0; top: 0; height: 34%; will-change: transform; transform: translateY(-100%);
+        background: linear-gradient(180deg, rgba(118,87,252,0) 0%, rgba(118,87,252,.28) 70%, rgba(255,255,255,.85) 100%);
+        animation: wizSweep 1.4s cubic-bezier(.45,0,.55,1) infinite; }
+      @keyframes wizSweep { from { transform: translateY(-100%); } to { transform: translateY(295%); } }
+      .wiz-corner { width: 34px; height: 34px; border: 4px solid #fff; }
+      .wiz-scanning .wiz-corner { display: block; filter: drop-shadow(0 1px 3px rgba(0,0,0,.35)); will-change: transform, opacity; animation: wizCorners .7s ease-in-out infinite alternate; }
+      .wiz-corner.tl { --dx: 1; --dy: 1; top: 16px; left: 16px; border-right: 0; border-bottom: 0; border-radius: 10px 0 0 0; }
+      .wiz-corner.tr { --dx: -1; --dy: 1; top: 16px; right: 16px; border-left: 0; border-bottom: 0; border-radius: 0 10px 0 0; }
+      .wiz-corner.bl { --dx: 1; --dy: -1; bottom: 16px; left: 16px; border-right: 0; border-top: 0; border-radius: 0 0 0 10px; }
+      .wiz-corner.br { --dx: -1; --dy: -1; bottom: 16px; right: 16px; border-left: 0; border-top: 0; border-radius: 0 0 10px 0; }
+      @keyframes wizCorners { from { opacity: .65; transform: none; } to { opacity: 1; transform: translate(calc(var(--dx) * 8px), calc(var(--dy) * 8px)); } }
+      .wiz-scanning .upload-btn.selected::after { display: none; }
+      .wiz-checking { display: none; align-items: center; gap: 8px; margin-top: 14px; font-size: 13px; color: var(--wiz-muted); }
+      .wiz-checking.on { display: flex; }
+      .wiz-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #ddd; border-top-color: var(--wiz-accent); animation: wizSpin .8s linear infinite; }
+      @keyframes wizSpin { to { transform: rotate(360deg); } }
+      .wiz-warn { display: none; gap: 12px; margin-top: 14px; padding: 14px 16px; background: #fff8eb; border: 1px solid #f5d9a6; border-radius: 12px; text-align: left; }
+      .wiz-warn.on { display: flex; }
+      .wiz-warn svg { flex-shrink: 0; color: #b45309; margin-top: 1px; }
+      .wiz-warn b { display: block; font-size: 15px; margin-bottom: 3px; }
+      .wiz-warn p { font-size: 13px; color: #6b5a3a; line-height: 1.45; margin-bottom: 8px; }
+      .wiz-textbtn { background: none; border: none; color: #1a1a1a; font: inherit; font-size: 13px; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0; }
+
+      /* What plays */
+      .wiz-chip { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--wiz-line); border-radius: 12px; padding: 8px; margin: 30px 0 22px; text-align: left; }
+      .wiz-chip img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; background: #eee; }
+      .wiz-chip div { font-size: 13px; color: var(--wiz-muted); }
+      .wiz-chip b { display: block; color: #1a1a1a; font-size: 14px; }
+      .wiz-choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+      .wiz-choice { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 8px 14px; background: #fff; border: 1.5px solid var(--wiz-line);
+        border-radius: 12px; cursor: pointer; font: inherit; color: #1a1a1a; transition: border-color .15s, box-shadow .15s; }
+      .wiz-choice input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+      .wiz-choice svg { width: 26px; height: 26px; }
+      .wiz-choice b { font-size: 14px; }
+      .wiz-choice small { font-size: 11px; color: #888; line-height: 1.3; text-align: center; }
+      .wiz-choice.on { border-color: #1a1a1a; box-shadow: 0 0 0 1px #1a1a1a; }
+      .wiz-choice.bounce { animation: wizBounce .45s cubic-bezier(.2,.8,.2,1); }
+      .wiz-video { display: none; position: relative; border-radius: var(--pc-radius-card); overflow: hidden; background: #000; box-shadow: var(--pc-shadow-card); }
+      .wiz-video.on { display: block; animation: wizInR .4s cubic-bezier(.2,.8,.2,1); }
+      .wiz-video video { display: block; width: 100%; max-height: 62vh; background: #000; }
+      .wiz-change { position: absolute; top: 12px; right: 12px; z-index: 2; background: rgba(255,255,255,.95); color: #1a1a1a; font: inherit; font-size: 13px; font-weight: 700;
+        padding: 8px 14px; border-radius: 999px; border: 0; cursor: pointer; }
+      .wiz-change input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+      .wiz-video .wiz-change-montage, .wiz-video.montage label.wiz-change { display: none; }
+      .wiz-video.montage .wiz-change-montage { display: block; }
+      /* The media card only shows for audio (the recorder); a video is reviewed in the player above. */
+      #wiz-media-slot .upload-wrapper { width: 100%; }
+      #wiz-media-slot .media-card { display: none; max-width: none; width: 100%; aspect-ratio: auto; padding: 0; border: 0; box-shadow: none; background: none; }
+      #wiz-media-slot.audio .media-card { display: flex; }
+      #wiz-media-slot .media-card-label, #wiz-media-slot .tile-eye, #wiz-media-slot .file-name, #wiz-media-slot .file-size, #wiz-media-slot .video-slot { display: none !important; }
+      #wiz-media-slot .video-msg { max-width: none; margin-top: 12px; }
+      #wiz-media-slot .compress-status, #wiz-media-slot .video-msg-banner, #wiz-media-slot .compressed-badge { font-size: 13px; }
+      #wiz-media-slot .audio-slot { width: 100%; }
+      #wiz-media-slot .audio-tile { width: 100%; height: auto; min-height: 150px; padding: 22px; gap: 12px; border-radius: var(--pc-radius-card); background: #fff; animation: wizInR .4s cubic-bezier(.2,.8,.2,1); }
+      #wiz-media-slot .audio-tile.recording { background: #fef2f2; }
+      #wiz-media-slot .audio-rec-btn { padding: 13px 28px; font-size: 15px; }
+      #wiz-media-slot .audio-time { font-size: 28px; color: #1a1a1a; }
+      #wiz-media-slot .audio-play-btn { width: 64px; height: 64px; }
+      #wiz-media-slot .audio-duration { font-size: 15px; }
+      #wiz-media-slot .audio-rerecord { padding: 9px 20px; font-size: 14px; }
+
+      /* Your images */
+      .wiz-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+      .wiz-row { display: flex; align-items: center; gap: 14px; background: #fff; border: 1px solid var(--wiz-line); border-radius: 12px; padding: 10px; box-shadow: var(--pc-shadow-card);
+        animation: wizInR .45s cubic-bezier(.2,.8,.2,1) both; text-align: left; }
+      .wiz-row .num { width: 24px; height: 24px; border-radius: 50%; background: #1a1a1a; color: #fff; font-size: 12px; font-weight: 700; display: grid; place-items: center; flex-shrink: 0; }
+      .wiz-row img { width: 60px; height: 60px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: #eee; }
+      .wiz-row .meta { flex: 1; min-width: 0; }
+      .wiz-row .meta b { display: block; font-size: 15px; margin-bottom: 3px; }
+      .wiz-row .meta span { display: block; font-size: 13px; color: var(--wiz-muted); }
+      .wiz-row .meta .warn-tag { color: #b45309; font-size: 12px; font-weight: 600; margin-top: 2px; }
+      .wiz-row .acts { display: flex; gap: 6px; }
+      .wiz-icon { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--wiz-line); background: #fff; display: grid; place-items: center; cursor: pointer; color: #1a1a1a; padding: 0; }
+      .wiz-icon svg { width: 16px; height: 16px; }
+      .wiz-add { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 18px; border: 2px dashed #d6d6d6; border-radius: 12px;
+        background: transparent; font: inherit; font-size: 15px; font-weight: 700; color: #1a1a1a; cursor: pointer; }
+      .wiz-add:hover { border-color: #b9b9b9; background: #fff; }
+      .wiz-note { font-size: 13px; color: var(--wiz-muted); text-align: center; margin-top: 12px; line-height: 1.45; }
+
+      /* Name: the existing fields, restyled; the link in a white box with an Edit pill. */
+      #wiz .field-label { max-width: none; margin-bottom: 10px; }
+      #wiz .wiz-link-label { margin-top: 34px; }
+      #wiz #name-input { max-width: none; margin-bottom: 0; }
+      #wiz .url-row { max-width: none; margin: 0; display: flex; align-items: center; flex-wrap: nowrap; gap: 12px; background: #fff; border: 1px solid var(--wiz-line);
+        border-radius: 12px; padding: 14px 12px 14px 16px; font-size: 18px; transition: border-color .15s, box-shadow .15s; }
+      #wiz .url-row:focus-within { border-color: var(--wiz-accent); box-shadow: 0 0 0 3px rgba(118,87,252,.15); }
+      #wiz .url-display { flex: 1; min-width: 0; line-height: 1.3; overflow-wrap: anywhere; font-size: 18px; }
+      #wiz .url-base { color: #888; }
+      #wiz #code-input { flex: 1; min-width: 0; max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; font-size: 18px; font-weight: 700; }
+      #wiz .url-edit-btn { flex-shrink: 0; height: 30px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--wiz-line); background: #f4f4f6; color: #1a1a1a; font-size: 13px; text-decoration: none; }
+      #wiz .url-edit-btn:hover { background: #ececf0; text-decoration: none; }
+      #wiz .field-hint { max-width: none; margin: 10px 0 36px; }
+      .wiz-summary { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--wiz-line); border-radius: 12px; padding: 12px; }
+      .wiz-summary .thumbs { display: flex; }
+      .wiz-summary .thumbs img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; border: 2px solid #fff; margin-left: -10px; }
+      .wiz-summary .thumbs img:first-child { margin-left: 0; }
+      .wiz-summary span { font-size: 14px; color: var(--wiz-muted); }
+
+      /* Back / Next / Generate */
+      .wiz-actions { display: flex; gap: 10px; align-items: center; padding: 28px 0 calc(32px + env(safe-area-inset-bottom)); width: 100%; }
+      .wiz-actions .btn-primary { flex: 1; }
+      .wiz-actions.solo { justify-content: center; }
+      .wiz-actions.solo .btn-primary { flex: 0 0 85%; }
+      .wiz-actions .create-btn, body.from-shop .wiz-actions .create-btn { max-width: none; margin: 0; opacity: 1; }
+      .wiz-actions.hidden { display: none; }
+      .btn.wiz-ready { animation: wizFlash .7s ease-out; }
+      @keyframes wizFlash { 0% { box-shadow: 0 0 0 0 rgba(118,87,252,.55); } 100% { box-shadow: 0 0 0 14px rgba(118,87,252,0); } }
+
+      /* Generating: the pinwheel searches exactly as in the viewer (pop-comet);
+         the result dialog's lands (pop-land), without the viewer's white bloom. */
+      .wiz-gen { text-align: center; padding-top: 30px; }
+      .wiz-gen .wiz-h { white-space: normal; }
+      #wiz #progress { display: block; max-width: none; margin-top: 16px; }
+      #wiz #progress-label { font-size: 14px; font-weight: 500; color: var(--wiz-muted); }
+      #wiz #progress-label.error { color: #cc3333; font-weight: 700; }
+      #wiz .progress-bar-wrap { height: 8px; }
+      #wiz .progress-bar { background: var(--wiz-grad); }
+      .wiz-mark { display: block; width: 96px; height: 96px; margin: 0 auto 26px; overflow: visible; }
+      #result .wiz-mark { width: 72px; height: 72px; margin-bottom: 16px; }
+      .wiz-mark use { fill: url(#wiz-grad); }
+      .wiz-mark .p { transform-origin: 150.6px 150.6px; transform-box: view-box; }
+      @keyframes pop-comet { 0% { opacity: 0; } 6% { opacity: 1; } 46% { opacity: .5; } 72% { opacity: 0; } 100% { opacity: 0; } }
+      @keyframes pop-land { 0% { opacity: 0; transform: rotate(-38deg) scale(.86); } 55% { opacity: 1; transform: rotate(6deg) scale(1.04); } 100% { opacity: 1; transform: rotate(0) scale(1); } }
+      .wiz-mark.searching .p { opacity: 0; animation: pop-comet 1.4s linear infinite; animation-delay: calc(var(--i) * .175s); }
+      #result-overlay.open .wiz-mark.found .p { opacity: 0; animation: pop-land .26s cubic-bezier(.32,1.42,.5,1) forwards; animation-delay: calc(.2s + var(--i) * .035s); }
+      #result h3 { font-family: 'CooperBT', Georgia, serif; font-weight: 400; font-size: 26px; }
+
+      @media (prefers-reduced-motion: reduce) {
+        #wiz *, #wiz *::before, #wiz *::after, #result * { animation: none !important; transition: none !important; }
+        .wiz-mark .p { opacity: 1 !important; }
+        .wiz-scanning .wiz-sweep, .wiz-scanning .wiz-corner { display: none; }
+      }
     </style>
   </head>
   <body>
@@ -491,6 +682,9 @@
       </div>
     </div>
 
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+      <linearGradient id="wiz-grad" x1="0" y1="302" x2="302" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#7657FC"/><stop offset="1" stop-color="#589AF9"/></linearGradient>
+    </defs></svg>
     <div class="page-top-bar">
       <h1>New Popcode</h1>
     </div>
@@ -517,17 +711,108 @@
            uses, so the two screens read as one sequence. -->
       <a id="shop-back" href="#">&larr; Back</a>
       <h2 class="step-head" id="shop-step-title">Create a new Popcode</h2>
-      <div class="field-label">Popcode Name <span class="field-req">(required)</span></div>
-      <input type="text" id="name-input" placeholder="" />
 
-      <div class="field-label">URL</div>
-      <div class="url-row">
-        <span class="url-display" id="url-display"><span class="url-base">popcode.app/</span><span class="url-slug" id="url-slug"></span></span>
-        <input type="text" id="code-input" maxlength="30" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="display:none;"/>
-        <button type="button" class="url-edit-btn" id="url-edit-btn">Edit</button>
-        <button type="button" class="url-edit-btn" id="url-done-btn" style="display:none;">Done</button>
+      <!-- ── Wizard ───────────────────────────────────────────────────────
+           One decision per screen: Image → What plays → Your images → Name.
+           The per-image cards still live in #pages (hidden) and every existing
+           upload / record / montage function still writes to them by id; the
+           wizard mounts the current image's two halves into the step slots and
+           parks them back in their card when it moves on. -->
+      <div id="wiz">
+        <div id="wiz-progress-wrap">
+          <div class="wiz-progress" id="wiz-progress"></div>
+          <div class="wiz-labels" id="wiz-labels"></div>
+        </div>
+
+        <section class="wiz-step" data-step="image">
+          <div class="wiz-eyebrow" id="wiz-image-eyebrow">Step 1</div>
+          <h2 class="wiz-h" id="wiz-image-title">Choose an image</h2>
+          <p class="wiz-lede">This is the image people will scan with the Popcode app.<br class="wide-br"> When they scan it, your video or audio plays.</p>
+          <div class="wiz-slot" id="wiz-image-slot"></div>
+          <div class="wiz-checking" id="wiz-checking"><span class="wiz-spin"></span>Checking your image…</div>
+          <div class="wiz-warn" id="wiz-warn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <div>
+              <b>This image may be hard to scan</b>
+              <p id="wiz-warn-msg"></p>
+              <button type="button" class="wiz-textbtn" id="wiz-warn-other">Choose another image</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="wiz-step" data-step="plays">
+          <div class="wiz-eyebrow" id="wiz-plays-eyebrow">Step 2</div>
+          <h2 class="wiz-h">What plays when it’s scanned?</h2>
+          <div class="wiz-chip">
+            <img id="wiz-chip-img" alt="">
+            <div><b id="wiz-chip-name">Image 1</b>When someone scans this image…</div>
+          </div>
+          <div class="wiz-choices">
+            <!-- A real label around a real file input: iOS Safari ignores a
+                 file picker opened from script, silently. -->
+            <label class="wiz-choice" data-kind="video">
+              <input type="file" accept="video/*" id="wiz-video-input">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+              <b>Video</b><small>From your phone</small>
+            </label>
+            <button type="button" class="wiz-choice" data-kind="audio">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+              <b>Audio</b><small>Record a message</small>
+            </button>
+            <button type="button" class="wiz-choice" data-kind="montage">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="14" rx="2"/><path d="M6 2h14a2 2 0 0 1 2 2v14"/></svg>
+              <b>Montage</b><small>Photos set to music</small>
+            </button>
+          </div>
+          <!-- Video review: a real player, so you can watch it through with sound. -->
+          <div class="wiz-video" id="wiz-video">
+            <video id="wiz-video-el" playsinline controls preload="metadata"></video>
+            <label class="wiz-change">Change<input type="file" accept="video/*" id="wiz-video-change"></label>
+            <button type="button" class="wiz-change wiz-change-montage" id="wiz-montage-again">Make a new montage</button>
+          </div>
+          <div class="wiz-slot" id="wiz-media-slot"></div>
+        </section>
+
+        <section class="wiz-step" data-step="review">
+          <div class="wiz-eyebrow">Step 3</div>
+          <h2 class="wiz-h">Your images</h2>
+          <p class="wiz-lede" id="wiz-review-lede"></p>
+          <div class="wiz-list" id="wiz-list"></div>
+          <button class="wiz-add" id="add-page-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add another image
+          </button>
+          <p class="wiz-note">Making a book, calendar or album? Add an image for each page you want to play something.</p>
+        </section>
+
+        <section class="wiz-step" data-step="name">
+          <div class="wiz-eyebrow" id="wiz-name-eyebrow">Step 4</div>
+          <h2 class="wiz-h">Name your Popcode</h2>
+          <p class="wiz-lede">Only you see the name. The link is what you share.</p>
+          <div class="field-label">Name</div>
+          <input type="text" id="name-input" placeholder="e.g. Grandma’s 90th" autocomplete="off" />
+
+          <div class="field-label wiz-link-label">Where your Popcode will live</div>
+          <div class="url-row">
+            <span class="url-display" id="url-display"><span class="url-base">popcode.app/</span><span class="url-slug" id="url-slug"></span></span>
+            <input type="text" id="code-input" maxlength="30" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="display:none;" aria-label="Link"/>
+            <button type="button" class="url-edit-btn" id="url-edit-btn">Edit</button>
+            <button type="button" class="url-edit-btn" id="url-done-btn" style="display:none;">Done</button>
+          </div>
+          <div class="field-hint" id="code-hint">Your link fills in from the name. Tap Edit to change it.</div>
+          <div class="wiz-summary" id="wiz-summary"></div>
+        </section>
+
+        <section class="wiz-step wiz-gen" data-step="gen">
+          <svg class="wiz-mark searching" viewBox="0 0 302 302" aria-hidden="true"><g transform="rotate(0 150.6 150.6)"><use href="#quota-p" class="p" style="--i: 0;"/></g><g transform="rotate(45 150.6 150.6)"><use href="#quota-p" class="p" style="--i: 1;"/></g><g transform="rotate(90 150.6 150.6)"><use href="#quota-p" class="p" style="--i: 2;"/></g><g transform="rotate(135 150.6 150.6)"><use href="#quota-p" class="p" style="--i: 3;"/></g><g transform="rotate(180 150.6 150.6)"><use href="#quota-p" class="p" style="--i: 4;"/></g><g transform="rotate(225 150.6 150.6)"><use href="#quota-p" class="p" style="--i: 5;"/></g><g transform="rotate(270 150.6 150.6)"><use href="#quota-p" class="p" style="--i: 6;"/></g><g transform="rotate(315 150.6 150.6)"><use href="#quota-p" class="p" style="--i: 7;"/></g></svg>
+          <h2 class="wiz-h">Making your Popcode…</h2>
+          <div id="progress">
+            <div id="progress-label">Starting...</div>
+            <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar"></div></div>
+            <button id="try-again-btn">Try Again</button>
+          </div>
+        </section>
       </div>
-      <div class="field-hint" id="code-hint">Your link fills in from the name above. Tap Edit to customize it.</div>
 
       <div class="pages" id="pages"></div>
 
@@ -564,24 +849,22 @@
         </div>
       </div>
 
-      <button class="btn btn-lg btn-block add-page-btn" id="add-page-btn">+ Add another Popcode</button>
-      <button class="btn btn-lg btn-primary btn-block create-btn" id="create-btn">Generate Popcode</button>
+      <nav class="wiz-actions" id="wiz-actions">
+        <button type="button" class="btn btn-lg btn-quiet" id="wiz-back">Back</button>
+        <button type="button" class="btn btn-lg btn-primary" id="wiz-next">Next</button>
+        <button class="btn btn-lg btn-primary create-btn" id="create-btn">Generate Popcode</button>
+      </nav>
     </div>
 
 
     </div><!-- /#shop-split -->
 
-    <div id="progress">
-      <div id="progress-label">Starting...</div>
-      <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar"></div></div>
-      <button id="try-again-btn">Try Again</button>
-    </div>
-
     <div id="result-overlay" role="dialog" aria-modal="true" aria-labelledby="result-title">
     <div id="result">
       <button type="button" id="result-close" aria-label="Close">&times;</button>
-      <h3 id="result-title">Popcode created!</h3>
-      <p>Your Popcode is live — anyone can scan a photo to play its video or audio.</p>
+      <svg class="wiz-mark found" viewBox="0 0 302 302" aria-hidden="true"><g transform="rotate(0 150.6 150.6)"><use href="#quota-p" class="p" style="--i: 0;"/></g><g transform="rotate(45 150.6 150.6)"><use href="#quota-p" class="p" style="--i: 1;"/></g><g transform="rotate(90 150.6 150.6)"><use href="#quota-p" class="p" style="--i: 2;"/></g><g transform="rotate(135 150.6 150.6)"><use href="#quota-p" class="p" style="--i: 3;"/></g><g transform="rotate(180 150.6 150.6)"><use href="#quota-p" class="p" style="--i: 4;"/></g><g transform="rotate(225 150.6 150.6)"><use href="#quota-p" class="p" style="--i: 5;"/></g><g transform="rotate(270 150.6 150.6)"><use href="#quota-p" class="p" style="--i: 6;"/></g><g transform="rotate(315 150.6 150.6)"><use href="#quota-p" class="p" style="--i: 7;"/></g></svg>
+      <h3 id="result-title">Your Popcode is live!</h3>
+      <p>Anyone with the link can scan your images to play them.</p>
       <a id="cart-btn" href="#">Add to cart</a>
       <a id="continue-btn" href="#">Back to your product</a>
       <a id="edit-btn" href="#">Edit this Popcode</a>
@@ -887,9 +1170,9 @@
         const pair = pairs[n];
         if (!pair) return;
         pair.mediaType = mode;
-        const page = document.getElementById(`page-${n}`);
-        page.querySelector(`#video-slot-${n}`).style.display = mode === 'video' ? '' : 'none';
-        page.querySelector(`#audio-slot-${n}`).style.display = mode === 'audio' ? '' : 'none';
+        // By id, not inside #page-n: the wizard mounts these slots into its steps.
+        document.getElementById(`video-slot-${n}`).style.display = mode === 'video' ? '' : 'none';
+        document.getElementById(`audio-slot-${n}`).style.display = mode === 'audio' ? '' : 'none';
         checkReady();
       }
 
@@ -1165,6 +1448,8 @@
         pairs[n][type] = file;
         // Shop only, and only the photo: the product pane redraws with it.
         if (type === 'photo') renderShopProduct(file);
+        if (type === 'photo' && window.wizScanCheck) wizScanCheck(n, file);
+        if (type === 'video') pairs[n].montage = false;
         const btn = document.getElementById(`${type}-btn-${n}`);
         btn.classList.add('selected');
         // Fill the whole card with the thumbnail and reveal the eye/pencil controls.
@@ -1228,6 +1513,7 @@
       function checkReady() {
         const hasComplete = Object.values(pairs).some(pageHasMedia);
         document.getElementById('create-btn').classList.toggle('ready', hasComplete && !createdSlug);
+        if (window.wizSync) wizSync();
       }
 
       function removePage(n) {
@@ -1274,6 +1560,7 @@
           return;
         }
         addPage();
+        wizGo('image', pageCount, 'fwd');
       });
       addPage();
 
@@ -1308,6 +1595,7 @@
 
       document.getElementById('try-again-btn').addEventListener('click', () => {
         resetProgress();
+        wizGo('name');
         document.getElementById('create-btn').disabled = false;
       });
 
@@ -1519,6 +1807,7 @@
         createBtn.classList.remove('ready');
         document.getElementById('try-again-btn').style.display = 'none';
         document.getElementById('progress').style.display = 'block';
+        wizGo('gen');
         document.getElementById('result-overlay').classList.remove('open');
 
         let images;
@@ -1682,6 +1971,7 @@
           // The quota trigger raises with this marker; everything else is a
           // genuine database failure and should read as one.
           if (/POPCODE_QUOTA_EXCEEDED/.test(err.message || '')) {
+            resetProgress(); wizGo('name');
             showQuotaSheet(0, null, null, true);
             return;
           }
@@ -1697,6 +1987,7 @@
         // Hide the progress bar — otherwise the finished "Done!" bar stays on screen
         // alongside the result. The result screen replaces it.
         document.getElementById('progress').style.display = 'none';
+        wizGo('name');
         document.getElementById('view-btn').href = viewUrl;
         createdSlug = slug;
         /* Came from the Shop's "New Popcode" tile: offer the way back, with the
@@ -1758,6 +2049,253 @@
         };
 
       });
+
+
+      // ── Wizard ──────────────────────────────────────────────────────────
+      // Presentation only. pairs[n] and the page cards stay the source of truth;
+      // the current image's two halves are mounted into the step slots (and
+      // parked back in their card, still in the DOM, so every getElementById
+      // in the upload / record / montage code keeps finding them).
+      const SHOP = document.body.classList.contains('from-shop');
+      const WIZ_STEPS = SHOP ? ['image', 'plays', 'name'] : ['image', 'plays', 'review', 'name'];
+      const WIZ_LABELS = { image: 'Image', plays: 'What plays', review: 'Your images', name: 'Name' };
+      const WIZ_ORDER = ['image', 'plays', 'review', 'name', 'gen'];
+      const wiz = { step: 'image', n: 1, editing: false, mounted: null };
+      const $w = id => document.getElementById(id);
+      const wizUrls = new WeakMap();
+      const wizUrl = f => { if (!f) return ''; if (!wizUrls.has(f)) wizUrls.set(f, URL.createObjectURL(f)); return wizUrls.get(f); };
+      const wizPages = () => [...document.querySelectorAll('#pages .page')].map(el => +el.id.slice(5));
+      const wizIndex = n => wizPages().indexOf(n) + 1;
+      const wizEls = {};
+
+      (function buildProgress() {
+        $w('wiz-progress').style.gridTemplateColumns = $w('wiz-labels').style.gridTemplateColumns = `repeat(${WIZ_STEPS.length}, 1fr)`;
+        $w('wiz-progress').innerHTML = WIZ_STEPS.map(() => '<span></span>').join('');
+        $w('wiz-labels').innerHTML = WIZ_STEPS.map(k => `<span>${WIZ_LABELS[k]}</span>`).join('');
+        if (SHOP) {
+          document.querySelector('[data-step="name"] .wiz-eyebrow').textContent = 'Step 3';
+          document.querySelector('[data-step="name"] .wiz-h').textContent = 'Name it';
+        }
+      })();
+
+      function wizElsFor(n) {
+        if (!wizEls[n]) {
+          const page = $w(`page-${n}`);
+          if (!page) return null;
+          const row = page.querySelector('.upload-row');
+          const photo = row.querySelector('.upload-wrapper:not([id])');
+          const card = photo.querySelector('.media-card');
+          card.insertAdjacentHTML('beforeend', '<span class="wiz-sweep"></span><span class="wiz-corner tl"></span><span class="wiz-corner tr"></span><span class="wiz-corner bl"></span><span class="wiz-corner br"></span>');
+          wizEls[n] = { row, photo, media: $w(`media-wrapper-${n}`) };
+        }
+        return wizEls[n];
+      }
+      function wizPark() {
+        const m = wiz.mounted; if (!m) return;
+        const e = wizEls[m];
+        if (e && document.contains(e.row)) { e.row.append(e.photo, e.media); }
+        wiz.mounted = null;
+      }
+      function wizMount(n) {
+        if (wiz.mounted === n) return;
+        wizPark();
+        const e = wizElsFor(n); if (!e) return;
+        $w('wiz-image-slot').append(e.photo);
+        $w('wiz-media-slot').append(e.media);
+        wiz.mounted = n;
+      }
+      // The media card's own click opens the old source menu; in the wizard
+      // the choice cards do that job, so only its buttons keep their clicks.
+      $w('wiz-media-slot').addEventListener('click', e => {
+        if (!e.target.closest('button, audio, input, label, a')) e.stopPropagation();
+      }, true);
+
+      function wizReplay(el, cls) {
+        if (!el) return;
+        el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+        el.addEventListener('animationend', () => el.classList.remove(cls), { once: true });
+      }
+
+      function wizGo(step, n, dir) {
+        if (n) wiz.n = n;
+        const back = dir ? dir === 'back' : WIZ_ORDER.indexOf(step) < WIZ_ORDER.indexOf(wiz.step);
+        $w('wiz').dataset.dir = back ? 'back' : 'fwd';
+        wiz.step = step;
+        document.querySelectorAll('audio, video').forEach(m => { try { m.pause(); } catch (e) {} });
+        if (step === 'image' || step === 'plays') wizMount(wiz.n); else wizPark();
+        document.querySelectorAll('.wiz-step').forEach(s => s.classList.toggle('active', s.dataset.step === step));
+        const idx = WIZ_STEPS.indexOf(step);
+        $w('wiz-progress-wrap').style.display = idx < 0 ? 'none' : '';
+        [...$w('wiz-progress').children].forEach((s, i) => s.classList.toggle('on', i <= idx));
+        [...$w('wiz-labels').children].forEach((s, i) => s.classList.toggle('on', i === idx));
+        paintProgress(idx);
+        window.scrollTo({ top: 0 });
+        wizSync();
+        fitHeadings();
+      }
+      window.wizGo = wizGo;
+
+      function paintProgress(idx) {
+        const segs = [...$w('wiz-progress').children];
+        if (!segs.length || idx < 0) return;
+        const last = segs[Math.min(idx, segs.length - 1)];
+        const fill = last.offsetLeft + last.offsetWidth - segs[0].offsetLeft;
+        segs.forEach(s => { s.style.setProperty('--off', (s.offsetLeft - segs[0].offsetLeft) + 'px'); s.style.setProperty('--fill', fill + 'px'); });
+      }
+      function fitHeadings() {
+        document.querySelectorAll('.wiz-step.active .wiz-h').forEach(h => {
+          h.style.fontSize = ''; h.style.lineHeight = '';
+          if (getComputedStyle(h).whiteSpace !== 'nowrap') return;
+          const lh = h.getBoundingClientRect().height;
+          let size = parseFloat(getComputedStyle(h).fontSize);
+          while (h.scrollWidth > h.clientWidth && size > 18) h.style.fontSize = (size -= 1) + 'px';
+          if (h.style.fontSize) h.style.lineHeight = lh + 'px';
+        });
+      }
+      window.addEventListener('resize', () => { paintProgress(WIZ_STEPS.indexOf(wiz.step)); fitHeadings(); });
+
+      const kindOf = p => !p ? '' : p.mediaType === 'audio' ? (p.audio ? 'audio' : 'audio-empty') : p.video ? (p.montage ? 'montage' : 'video') : '';
+      const KIND_LABEL = { video: 'Video', montage: 'Montage', audio: 'Audio' };
+      const ICON_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+      const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>';
+
+      function wizSync() {
+        if (!$w('wiz')) return;
+        const pages = wizPages();
+        // Every page gone (the last one deleted from the list): start a fresh one.
+        if (!pages.length) { addPage(); wiz.editing = false; return wizGo('image', pageCount, 'back'); }
+        if (!pairs[wiz.n]) wiz.n = pages[pages.length - 1];
+        const p = pairs[wiz.n], k = wizIndex(wiz.n), s = wiz.step;
+        const next = $w('wiz-next'), back = $w('wiz-back'), create = $w('create-btn'), actions = $w('wiz-actions');
+        actions.classList.toggle('hidden', s === 'gen');
+        next.style.display = s === 'name' ? 'none' : '';
+        create.style.display = s === 'name' ? '' : 'none';
+        const solo = s === 'image' && !wiz.editing && pages.length === 1;
+        back.style.display = solo ? 'none' : '';
+        actions.classList.toggle('solo', solo);
+
+        if (s === 'image') {
+          const multi = pages.length > 1 || k > 1;
+          $w('wiz-image-eyebrow').textContent = multi ? `Step 1 · Image ${k}` : 'Step 1';
+          $w('wiz-image-title').textContent = wiz.editing ? `Change image ${k}` : multi ? `Add image ${k}` : 'Choose an image';
+          const card = wizEls[wiz.n] && wizEls[wiz.n].photo.querySelector('.media-card');
+          if (card) card.classList.toggle('wiz-scanning', p.scan === 'checking');
+          const warn = !!(p.scan && p.scan.ok === false);
+          $w('wiz-checking').classList.toggle('on', p.scan === 'checking');
+          $w('wiz-warn').classList.toggle('on', warn);
+          if (warn && window.PopcodeScanCheck) $w('wiz-warn-msg').textContent = PopcodeScanCheck.MESSAGES[p.scan.reason] || '';
+          next.textContent = warn ? 'Use it anyway' : 'Next';
+          next.disabled = !p.photo;
+        }
+        if (s === 'plays') {
+          $w('wiz-plays-eyebrow').textContent = pages.length > 1 ? `Step 2 · Image ${k}` : 'Step 2';
+          $w('wiz-chip-img').src = wizUrl(p.photo);
+          $w('wiz-chip-name').textContent = `Image ${k}`;
+          const kind = kindOf(p);
+          document.querySelectorAll('.wiz-choice').forEach(c => c.classList.toggle('on',
+            c.dataset.kind === kind || (c.dataset.kind === 'audio' && kind === 'audio-empty')));
+          const v = $w('wiz-video'), ve = $w('wiz-video-el');
+          const showVideo = kind === 'video' || kind === 'montage';
+          v.classList.toggle('on', showVideo);
+          v.classList.toggle('montage', kind === 'montage');
+          const src = showVideo ? wizUrl(p.video) : '';
+          if (ve.dataset.src !== src) { ve.dataset.src = src; if (src) ve.src = src; else { ve.removeAttribute('src'); ve.load(); } }
+          $w('wiz-media-slot').classList.toggle('audio', p.mediaType === 'audio');
+          next.textContent = wiz.editing ? 'Save' : 'Next';
+          next.disabled = !pageHasMedia(p);
+        }
+        if (s === 'review') {
+          const done = pages.filter(n => pairs[n]);
+          $w('wiz-list').innerHTML = done.map((n, i) => {
+            const q = pairs[n], kind = kindOf(q);
+            const flag = q.scan && q.scan.ok === false ? '<span class="warn-tag">May be hard to scan</span>' : '';
+            const what = KIND_LABEL[kind] || '<span class="warn-tag">Nothing plays yet</span>';
+            return `<div class="wiz-row" style="animation-delay:${i * 60}ms">
+              <div class="num">${i + 1}</div><img src="${wizUrl(q.photo)}" alt="">
+              <div class="meta"><b>Image ${i + 1}</b><span>${what}</span>${flag}</div>
+              <div class="acts">
+                <button type="button" class="wiz-icon" title="Edit" aria-label="Edit image ${i + 1}" onclick="wizEdit(${n})">${ICON_EDIT}</button>
+                <button type="button" class="wiz-icon" title="Remove" aria-label="Remove image ${i + 1}" onclick="removePage(${n})">${ICON_TRASH}</button>
+              </div></div>`;
+          }).join('');
+          $w('wiz-review-lede').textContent = done.length === 1
+            ? 'One image is all you need. Add more to have each one play its own video or audio, all under one link.'
+            : `${done.length} images, each playing its own video or audio, all under one link.`;
+          next.textContent = 'Next: name it';
+          next.disabled = !done.some(n => pageHasMedia(pairs[n]));
+        }
+        if (s === 'name') {
+          const ready = pages.filter(n => pageHasMedia(pairs[n]));
+          $w('wiz-summary').innerHTML = `<div class="thumbs">${ready.slice(0, 5).map(n => `<img src="${wizUrl(pairs[n].photo)}" alt="">`).join('')}</div>
+            <span>${ready.length} image${ready.length === 1 ? '' : 's'} ready to go</span>`;
+        }
+      }
+      window.wizSync = wizSync;
+
+      // Ripple the Next button the moment it becomes tappable.
+      new MutationObserver(() => { if (!$w('wiz-next').disabled) wizReplay($w('wiz-next'), 'wiz-ready'); })
+        .observe($w('wiz-next'), { attributes: true, attributeFilter: ['disabled'] });
+
+      window.wizEdit = function (n) { wiz.editing = true; wizGo('image', n, 'fwd'); };
+
+      $w('wiz-next').addEventListener('click', () => {
+        const s = wiz.step;
+        if (s === 'image') return wizGo('plays');
+        if (s === 'plays') { wiz.editing = false; return wizGo(SHOP ? 'name' : 'review'); }
+        if (s === 'review') return wizGo('name');
+      });
+      $w('wiz-back').addEventListener('click', () => {
+        const s = wiz.step;
+        if (s === 'image') {
+          // Backing out of a brand-new image drops it quietly; it holds nothing yet.
+          const p = pairs[wiz.n];
+          if (!wiz.editing && wizPages().length > 1 && p && !p.photo && !p.video && !p.audio) {
+            $w(`page-${wiz.n}`).remove(); delete pairs[wiz.n]; delete wizEls[wiz.n]; wiz.mounted = null;
+            renumberPages();
+          }
+          wiz.editing = false;
+          return wizGo('review', wizPages().slice(-1)[0], 'back');
+        }
+        if (s === 'plays') return wizGo('image', wiz.n, 'back');
+        if (s === 'review') { wiz.editing = true; return wizGo('plays', wizPages().slice(-1)[0], 'back'); }
+        if (s === 'name') return SHOP ? wizGo('plays', wizPages()[0], 'back') : wizGo('review');
+      });
+
+      // Choices. Video is a label around a file input (iOS-safe); Audio shows the
+      // recorder; Montage opens the montage maker.
+      function wizVideoChosen(e) {
+        const f = e.target.files && e.target.files[0]; e.target.value = '';
+        if (!f) return;
+        switchMediaType(wiz.n, 'video');
+        applyMediaFile(f, 'video', wiz.n, null).catch(err => console.error(err));
+      }
+      $w('wiz-video-input').addEventListener('change', wizVideoChosen);
+      $w('wiz-video-change').addEventListener('change', wizVideoChosen);
+      document.querySelectorAll('.wiz-choice').forEach(c => c.addEventListener('click', () => {
+        wizReplay(c, 'bounce');
+        if (c.dataset.kind === 'audio') switchMediaType(wiz.n, 'audio');
+        if (c.dataset.kind === 'montage') openMontage(wiz.n);
+      }));
+      $w('wiz-montage-again').addEventListener('click', () => openMontage(wiz.n));
+      $w('wiz-warn-other').addEventListener('click', () => pickScanImage(wiz.n));
+
+      // "May be hard to scan": runs as soon as an image is picked, never blocks.
+      window.wizScanCheck = async function (n, file) {
+        const p = pairs[n]; if (!p) return;
+        p.scan = 'checking';
+        const card = wizEls[n] && wizEls[n].photo.querySelector('.media-card');
+        wizReplay(card, 'pop');
+        wizSync();
+        const [result] = await Promise.all([
+          window.PopcodeScanCheck ? PopcodeScanCheck.check(file) : { ok: true, skipped: true },
+          new Promise(r => setTimeout(r, 1400))     // let the sweep finish a clean pass
+        ]);
+        if (!pairs[n] || pairs[n].photo !== file) return;
+        pairs[n].scan = result;
+        wizSync();
+      };
+
+      wizGo('image', wizPages()[0]);
 
       // Nav overlay
       document.getElementById('nav-btn').addEventListener('click', function() {
@@ -2698,6 +3236,7 @@
         if (!pair) return;
         pair.video = file;
         pair.mediaType = 'video';
+        pair.montage = true;
         switchMediaType(n, 'video');
         const btn = document.getElementById(`video-btn-${n}`);
         if (btn) btn.classList.add('selected');
