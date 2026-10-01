@@ -6,9 +6,15 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-09-30)
+## Current state (updated 2026-10-01)
 
 **Live and recent**
+- **Making a Popcode is now a step-by-step wizard** (`create.html`, PRs #151, #153,
+  2026-10-01): Image → What plays → Your images → Name (the Shop skips Your
+  images). Editing an existing Popcode still uses `edit.html`, unchanged — the
+  user wants it that way. Hard-to-scan warning via `public/scan-check.js`.
+  **Not yet tried on a real iPhone or with a real account** (the user skipped the
+  preview test) — first real create, and the Shop path, are the things to watch.
 - `popcode.app/nonprofits` — the Popcode for Nonprofits page. Not linked from the
   home page, **on purpose**: the user sends people there directly and wants the
   home page to stay about the consumer product (a home-page panel was built and
@@ -3294,4 +3300,40 @@ Photos were shrunk to **2560px on upload** and the original thrown away (~220 DP
 - Next book order: confirm two assets (pages + spine) in `print_orders.asset_urls`, and that Prodigi's order page shows the spine.
 - Spine reading direction: bottom-to-top today; US/UK convention is top-to-bottom — one-line flip if the user wants it.
 - Tell Prodigi neither book had spine artwork (our error) alongside the darkness/insert questions.
+
+### 2026-10-01 — Create becomes a step-by-step wizard
+
+**PRs #145–#148, #150 (mockup iterations), #151 (the real wizard), #153 (after-create + exit) — all merged by Claude at the user's say-so.** Branch `claude/determined-turing-fmae9r`, restarted from `main` after each merge.
+
+#### What it is
+- The user wanted creating to be less confusing than one long page. Agreed flow: **Image → What plays (Video / Audio / Montage) → Your images (add another / edit / remove) → Name + link → Generate.** Name is last on purpose. The Shop path (`?next=`) has three steps — no "Your images", its products print one image — with the product pane beside it.
+- Iterated as `public/mockup-wizard.html` (#145–#150) through a lot of layout tweaks, then built into `create.html` (#151); the mockup was deleted in #153 (its name stays reserved in `slug.js`).
+- **Scope: create only.** Editing an existing Popcode keeps `edit.html` (Popcodes / Cover / After video tabs) exactly as it was.
+
+#### How it's built (`public/create.html`)
+- **Presentation only.** `pairs[n]` and the per-image cards in `#pages` (now hidden) stay the source of truth; every upload / compress / record / montage / save function is untouched. The controller (`create.html:2065`, `wizGo` :2130, `wizSync` :2173) **mounts** the current image's photo half and media half into the step slots and **parks** them back in their card — kept in the DOM so all the `getElementById(\`…-${n}\`)` lookups still work. Hooks: `checkReady()` calls `wizSync()`; `applyMediaFile` calls `wizScanCheck` for photos; the create handler calls `wizGo('gen')` / `wizGo('name')`; `mtgApplyToPage` sets `pairs[n].montage`.
+- **One real code change:** `switchMediaType` (:1179) looked its slots up inside `#page-n`; once mounted elsewhere that was null and Audio silently did nothing. Now by id.
+- **iOS:** Safari silently refuses a file picker opened from script. The Video choice and the Change buttons are `<label>`s around real inputs; the image step uses the existing `openImageSourceMenu` (library / camera / frame from video).
+- **After making** (#153): the page behind the result dialog becomes a done state — Back → **Edit** (`edit.html?id=`), main button → **Go to My Popcodes** (Shop keeps Add to cart), name/link locked. Dialog gets My Popcodes · Make another. "← My Popcodes" exit on every step, confirming if work would be lost.
+- Pinwheel: making = the viewer's `pop-comet` search, result dialog = `pop-land` (no white bloom — that's the viewer's hand-off to video). The user called confetti and a check-with-rays "frivolous / off brand"; the pinwheel was their idea, reusing the viewer's exact motions was the agreed answer.
+
+#### `public/scan-check.js` — "This image may be hard to scan"
+- Runs **MindAR's own compiler** on the one image (640 px on white, like Generate) and warns below **12 tracking or 110 matching** points at the finest scale (`scan-check.js:31`). Calibrated by compiling 7 real photos (≥19 / ≥145) and 16 degraded ones (blur, dark, flat, gradient, text, logo — every one under a threshold). Never blocks: errors and a 15 s timeout (no WebGL → MindAR never settles) resolve `{ok:true, skipped:true}`. The user wants **no** message for a good image — only problems.
+- Headless Chromium needs `--use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist` or MindAR falls back to CPU and throws `BinomialFilter not registered`.
+
+#### Testing approach worth reusing
+- `create.html` redirects signed out, so the tests route `cdn.jsdelivr.net/npm/@supabase/supabase-js@2` to a **stub client** (fake session, `rpc` quota, chainable `from()` via a Proxy, `storage.upload` that records paths). With it the whole create runs headless: a two-image Popcode compiled and "uploaded" `target.mind, audio_0.wav, photo_0.jpg, video_1.mp4, photo_1.jpg` then inserted `collections` + `collection_items`. Fake mic: `--use-fake-device-for-media-stream` + the microphone permission. Headless Chromium can't decode H.264, so video previews show a spinner there — not a bug.
+- Not tested: real Supabase/auth, a real iPhone, the montage render, scanning a wizard-made Popcode.
+
+#### Lessons
+- **Margins collapse.** The step label's `margin-top` merged into the progress labels' `margin-bottom`, so two rounds of "move it down" changed nothing until the user said it still looked cramped. Use padding there.
+- **`classList.toggle(cls, undefined)` toggles** instead of removing — the warning box showed on load until coerced with `!!`.
+- **A generic `.step.active > *` animation overrode the pinwheel's own animation** (the user saw "nothing happened"). Check `getComputedStyle(el).animationName` when something "doesn't animate".
+- Only `transform`/`opacity` animations stay smooth while MindAR holds the main thread.
+- The user's pixel numbers are **screen pixels on a 2× display** — halve them for CSS.
+- The user reviews on popcode.app, not Vercel previews ("cumbersome to log into Vercel"), and pushed the wizard to prod without a preview test — be ready to fix or revert fast.
+
+#### Open
+- First real create on an iPhone (photo picker, mic, video, montage) and a scan of the result; the **Shop path** on a phone.
+- Thresholds in `scan-check.js` are untested on real camera-roll images — if a good photo gets flagged, recalibrate.
 
