@@ -9,12 +9,14 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 ## Current state (updated 2026-10-01)
 
 **Live and recent**
-- **Making a Popcode is now a step-by-step wizard** (`create.html`, PRs #151, #153,
+- **Making a Popcode is now a step-by-step wizard** (`create.html`, PRs #151, #153, #154,
   2026-10-01): Image → What plays → Your images → Name (the Shop skips Your
   images). Editing an existing Popcode still uses `edit.html`, unchanged — the
   user wants it that way. Hard-to-scan warning via `public/scan-check.js`.
-  **Not yet tried on a real iPhone or with a real account** (the user skipped the
-  preview test) — first real create, and the Shop path, are the things to watch.
+  The user has since made one on their iPhone from the Shop; the Shop path and a
+  scan of a wizard-made Popcode are still the things to watch.
+- **My Designs, Past Views and Edit are centred** (PR #154); Edit's Popcodes / Cover /
+  After video tabs now sit on their own row under the subtitle.
 - `popcode.app/nonprofits` — the Popcode for Nonprofits page. Not linked from the
   home page, **on purpose**: the user sends people there directly and wants the
   home page to stay about the consumer product (a home-page panel was built and
@@ -3336,4 +3338,14 @@ Photos were shrunk to **2560px on upload** and the original thrown away (~220 DP
 #### Open
 - First real create on an iPhone (photo picker, mic, video, montage) and a scan of the result; the **Shop path** on a phone.
 - Thresholds in `scan-check.js` are untested on real camera-roll images — if a good photo gets flagged, recalibrate.
+
+#### Later the same day — centring, a title bar, holiday copy (PRs #154, #155, merged)
+- **After a Shop create the user opened Edit from My Popcodes** and asked to "center everything", then the same for My Designs and Past Views (#154):
+  - `manage.html` (designs tab only): `body.tab-designs` sets the header and grid to an **860px** column (exactly two 384px tiles + gap + gutter), grid `justify-content: center`. My Popcodes untouched.
+  - `views.html`: header + list in an **856px** column; a line under the heading explains the page; on ≤520px the Remove / View Again pair wraps below the name/date (it was squeezing names to "S." — pre-existing). The max-width rule has to come **after** `.content`'s own declaration or it loses.
+  - `edit.html`: a "Centred (2026-10-01)" block at the end of the head `<style>`; the mode toggle markup moved below the subtitle. Popcodes form = one 640px column; the image cards needed `width:100%; height:auto; aspect-ratio:1/1` to beat the desktop `.edit-main .media-card { width:210px; height:210px }`. Cover / After video keep their wide layout.
+- **Create title bar:** the user said the wizard "feels bare" — a slim app-style bar "← My Popcodes · **New Popcode**" (grid 1fr auto 1fr), hidden in the Shop flow. A big "New Popcode" h1 was rejected on purpose: it would compete with each step's own Cooper heading.
+- **Next was hidden behind iPhone Safari's bottom toolbar** (seen in the user's screenshot). ≤600px: image box 16:9, tighter gaps → Next ends at 658px in a 390×664 view. Don't pull the page up by cutting `.page-top-bar` padding: content then slides under nav.js's faded shelf and looks washed out.
+- **Home holiday panel copy** (#155), the user's words: "A ceramic ornament of someone you love or a moment to remember — that plays video or voice when it’s scanned. Hang it on the tree, and every year the memory plays again."
+- **Session-notes commits on the branch**: when a PR merges, restart the branch from `main` — but if notes commits are sitting on it unmerged, reset to `origin/<branch>` instead or they're lost (nearly happened; they went out with #154).
 
