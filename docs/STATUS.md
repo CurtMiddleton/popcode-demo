@@ -9,7 +9,7 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 ## Current state (updated 2026-10-01)
 
 **Live and recent**
-- **Viewer reload prompt + lost-photo fix** (`view.html`, PR #162, **open — not yet merged**, 2026-10-01): a
+- **Viewer reload prompt + lost-photo fix** (`view.html`, PR #162, merged and live 2026-10-01): a
   photo lost during the 0.9 s pre-play hold no longer locks scanning; a turning
   reload-arrow button appears when a scan stalls. Logs `reload_prompt_*` /
   `reload_tap_*`. **Not yet tried on a real iPhone.**
@@ -3343,7 +3343,7 @@ Photos were shrunk to **2560px on upload** and the original thrown away (~220 DP
 
 ### 2026-10-01 — Reload prompt for stuck scans, and the bug behind them
 
-**PR #162 — open, awaiting the user's merge** (they said "merged" but GitHub still showed it open). Branch `claude/scan-reload-prompt` (from `main`).
+**PR #162, merged by the user and verified live on popcode.app.** Branch `claude/scan-reload-prompt` (from `main`).
 
 #### Why
 - The user noticed scans sometimes don't take (first open, held too close, phone at an angle) and that **reloading fixes it almost every time**; asked for an animated reload icon when scanning looks stuck.
