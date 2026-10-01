@@ -28,6 +28,7 @@
     <script src="/book-spine.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
+    <script src="/product-gallery.js"></script>
     <script src="/countries.js"></script>
     <!-- book.html only needs MINDAR.IMAGE.Compiler (to compile popcoded photos
          into a .mind target), not AR rendering. Stub AFRAME so the compiler
@@ -1049,19 +1050,39 @@
             const side = (size.hIn < 10 ? W * LAND_BOOK_HW : W) / SQ_BOOK;
             return { w: side, h: side };
           }
-          function renderIntroBook() {
-            if (!window.drawProductCardMockup || !introSample || !introStage) return;
+          // The gallery under the book: this live mockup first, then Prodigi's
+          // photos of the real book (PopcodeGallery.IMAGES.book).
+          let bookGallery = null;
+          const drawBookCanvas = (cv) => {
+            const square = currentBookSize().wIn === currentBookSize().hIn;
+            return window.drawProductCardMockup(cv, square ? 'book-square' : 'book', introSample, '/assets/sample-photo.jpg');
+          };
+          function drawIntroBook(el) {
             const cv = document.createElement('canvas');
             const size = currentBookSize();
-            const square = size.wIn === size.hIn;
-            window.drawProductCardMockup(cv, square ? 'book-square' : 'book', introSample, '/assets/sample-photo.jpg').then(() => {
+            drawBookCanvas(cv).then(() => {
+              if (bookGallery && bookGallery.current !== 0) return; // a still was picked meanwhile
               const box = introCanvasSize(size);
               // Hold the stage at the tallest book so switching sizes doesn't jump.
-              introStage.style.minHeight = Math.round(introCanvasSize({ wIn: 12, hIn: 12 }).h + 72) + 'px';
+              el.style.minHeight = Math.round(introCanvasSize({ wIn: 12, hIn: 12 }).h + 72) + 'px';
               cv.style.cssText = 'width:' + Math.round(box.w) + 'px;height:' + Math.round(box.h) + 'px;max-width:none;display:block;';
-              introStage.innerHTML = '';
-              introStage.appendChild(cv);
+              el.innerHTML = '';
+              el.appendChild(cv);
             }).catch(() => {});
+          }
+          function renderIntroBook() {
+            if (!window.drawProductCardMockup || !introSample || !introStage) return;
+            if (!window.PopcodeGallery) { drawIntroBook(introStage); return; }
+            if (bookGallery) { bookGallery.show(0); bookGallery.refreshThumb(); return; }
+            bookGallery = window.PopcodeGallery.mount(introStage, {
+              renderLive: drawIntroBook,
+              renderThumb: (box) => {
+                const cv = document.createElement('canvas');
+                cv.style.cssText = 'max-width:86%;max-height:86%;display:block;';
+                drawBookCanvas(cv).then(() => box.appendChild(cv)).catch(() => {});
+              },
+              images: window.PopcodeGallery.IMAGES.book,
+            });
           }
           // Drop any size we can't actually sell right now (see BOOK_SIZES).
           document.querySelectorAll('#bi-sizes .bi-size').forEach(chip => {

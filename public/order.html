@@ -19,6 +19,7 @@
     <script src="/activity.js"></script>
     <script src="/unsplash-samples.js"></script>
     <script src="/product-preview.js"></script>
+    <script src="/product-gallery.js"></script>
     <script src="/image-source.js"></script>
     <script src="/countries.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
@@ -1608,13 +1609,44 @@
       // soft drop shadow, on a transparent canvas — it floats on the gray stage behind it.
       // Only the product reshapes; the white tile + gray stage stay fixed.
       
+      /* Gallery under the preview: the live product first (this canvas), then the
+         product's stills from PopcodeGallery.IMAGES. Built once per product; any
+         change that redraws the preview (size, frame, photo) brings the live view
+         back to the front and refreshes its thumbnail. */
+      let detailGallery = null, detailGalleryType = null;
+      function syncDetailGallery(cv) {
+        if (!window.PopcodeGallery) return;
+        const row = document.getElementById('view-row');
+        if (detailGalleryType !== state.productType) {
+          if (detailGallery) detailGallery.destroy();
+          detailGallery = null; detailGalleryType = state.productType;
+          row.innerHTML = '';
+          const images = PopcodeGallery.IMAGES[state.productType] || [];
+          if (!images.length) return;
+          detailGallery = PopcodeGallery.mount(cv.parentElement, {
+            liveEl: cv, images, // thumbnails go right under the stage, inside the card
+            renderThumb: (box) => {
+              const t = document.createElement('canvas');
+              t.width = 120; t.height = 120;
+              const k = Math.min(120 / (cv.width || 1), 120 / (cv.height || 1));
+              const w = cv.width * k, h = cv.height * k;
+              t.getContext('2d').drawImage(cv, (120 - w) / 2, (120 - h) / 2, w, h);
+              t.style.cssText = 'width:100%;height:100%;display:block;';
+              box.appendChild(t);
+            },
+          });
+        } else if (detailGallery) {
+          detailGallery.show(0);
+          detailGallery.refreshThumb();
+        }
+      }
       async function renderDetailPreview() {
         updateSizeQuality();
         const aspect = currentAspect();
         const cv = document.getElementById('detail-canvas');
-        // No thumbnail strip / scenes. The product reshapes to the selected size's aspect
-        // ratio and portrait/landscape (photo cropped to fit); the tile + stage stay put.
-        document.getElementById('view-row').innerHTML = '';
+        // The product reshapes to the selected size's aspect ratio and portrait/landscape
+        // (photo cropped to fit); the tile + stage stay put. Thumbnails underneath are
+        // the product gallery (syncDetailGallery).
         /* Front/Back for a double-sided product, once there's a Popcode to put
            on the back — before that the back is a placeholder link, not yours. */
         const hasBack = HAS_BACK_PANEL.has(state.productType) && !!(state.selectedPhoto && state.selectedPhoto.slug);
@@ -1622,6 +1654,7 @@
         document.getElementById('detail-side-toggle').classList.toggle('on', hasBack);
         syncSideToggles();
         await renderProductPreview(cv, aspect, state.previewSide);
+        syncDetailGallery(cv);
         updateDetailCta();
         renderPopcodeCta();
       }
