@@ -68,7 +68,7 @@
     /* Next lights up with a ripple the moment it becomes tappable. */
     .btn.ready { animation: flash .7s ease-out; }
 
-    .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 20px 0 19px; }
+    .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0 0 9px; padding-top: 5px; } /* padding, not margin: a top margin here collapses into the progress labels' margin and does nothing */
     /* One line always: fitHeadings() steps the size down until it fits. */
     h1 { white-space: nowrap; font-family: 'CooperBT', Georgia, serif; font-weight: 400; font-size: 32px; line-height: 1.08; letter-spacing: -0.01em; margin-bottom: 10px; }
     /* Step header (eyebrow, heading, intro line) is centred on every step. */
@@ -463,10 +463,14 @@
 
     function fitHeadings() {
       document.querySelectorAll('.step.active h1').forEach(h => {
-        h.style.fontSize = '';
+        h.style.fontSize = ''; h.style.lineHeight = '';
         if (getComputedStyle(h).whiteSpace !== 'nowrap') return;
+        // Keep the full-size line height, so a heading shrunk to fit sits in
+        // the same box and everything below it lines up across steps.
+        const lineHeight = h.getBoundingClientRect().height;
         let size = parseFloat(getComputedStyle(h).fontSize);
         while (h.scrollWidth > h.clientWidth && size > 18) h.style.fontSize = (size -= 1) + 'px';
+        if (h.style.fontSize) h.style.lineHeight = lineHeight + 'px';
       });
     }
     window.addEventListener('resize', fitHeadings);
