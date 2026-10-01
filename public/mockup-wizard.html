@@ -64,7 +64,7 @@
     /* Next lights up with a ripple the moment it becomes tappable. */
     .btn.ready { animation: flash .7s ease-out; }
 
-    .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+    .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 10px 0 -1px; }
     /* One line always: fitHeadings() steps the size down until it fits. */
     h1 { white-space: nowrap; font-family: 'CooperBT', Georgia, serif; font-weight: 400; font-size: 32px; line-height: 1.08; letter-spacing: -0.01em; margin-bottom: 10px; }
     /* Step header (eyebrow, heading, intro line) is centred on every step. */
@@ -229,6 +229,11 @@
     .actions { padding: 28px 16px calc(32px + env(safe-area-inset-bottom)); }
     .actions .inner { max-width: 520px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
     .actions .btn-primary { flex: 1; }
+    /* No Back yet (first image): Next sits centred on its own. */
+    .actions .inner.solo { justify-content: center; }
+    /* The intro's line break only where the first sentence fits on one line. */
+    @media (max-width: 480px) { .wide-br { display: none; } }
+    .actions .inner.solo .btn-primary { flex: 0 0 85%; }
     .actions.hidden { display: none; }
 
     @media (prefers-reduced-motion: reduce) {
@@ -264,7 +269,7 @@
     <section class="step" data-step="photo">
       <div class="eyebrow" id="photo-eyebrow">Step 1</div>
       <h1 id="photo-title">Choose an image</h1>
-      <p class="lede">This is the image people will scan with the Popcode app. When they scan it, your video or audio plays.</p>
+      <p class="lede">This is the image people will scan with the Popcode app.<br class="wide-br"> When they scan it, your video or audio plays.</p>
       <label class="drop" id="photo-drop">
         <input type="file" accept="image/*" id="photo-input">
         <img class="icon" src="/assets/photo.png" alt="">
@@ -448,7 +453,9 @@
       const s = state.step, d = state.draft, n = photoNumber();
       const adding = state.items.length > 0 && state.editIndex < 0;
       const back = $('back-btn'), next = $('next-btn');
-      back.style.visibility = (s === 'photo' && !state.items.length) ? 'hidden' : '';
+      const solo = s === 'photo' && !state.items.length;
+      back.style.display = solo ? 'none' : '';
+      back.parentElement.classList.toggle('solo', solo);
 
       if (s === 'photo') {
         $('photo-eyebrow').textContent = n > 1 ? `Step 1 · Image ${n}` : 'Step 1';
