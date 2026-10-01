@@ -459,7 +459,7 @@
 
       /* ═══ Create wizard ═══════════════════════════════════════════════════
          Image → What plays → Your images → Name (the Shop skips Your images:
-         its products print one image). Same look as /mockup-wizard.html. The
+         its products print one image). The
          per-image cards are restyled here when mounted into a step's slot. */
       :root { --wiz-grad: linear-gradient(135deg, #7657FC 0%, #589AF9 100%); --wiz-line: #e8e8e8; --wiz-muted: #656565; --wiz-accent: #7657FC; }
       .page-top-bar { padding-top: 40px; padding-bottom: 0; margin-bottom: 0; }
@@ -468,6 +468,10 @@
       body.from-shop #shop-step-title { display: none !important; }
       body.from-shop #shop-back { margin-bottom: 18px; }
       #pages { display: none; }
+      /* A way out from any step. The Shop has its own Back to the product. */
+      #wiz-exit { display: inline-block; margin-bottom: 18px; font-size: 14px; font-weight: 600; color: var(--wiz-accent); text-decoration: none; }
+      #wiz-exit:hover { opacity: .8; }
+      body.from-shop #wiz-exit { display: none; }
       #wiz { width: 100%; }
 
       .wiz-progress { display: grid; gap: 6px; margin-bottom: 8px; }
@@ -640,6 +644,10 @@
       .wiz-mark.searching .p { opacity: 0; animation: pop-comet 1.4s linear infinite; animation-delay: calc(var(--i) * .175s); }
       #result-overlay.open .wiz-mark.found .p { opacity: 0; animation: pop-land .26s cubic-bezier(.32,1.42,.5,1) forwards; animation-delay: calc(.2s + var(--i) * .035s); }
       #result h3 { font-family: 'CooperBT', Georgia, serif; font-weight: 400; font-size: 26px; }
+      .result-links { display: flex; justify-content: center; gap: 10px; margin-top: 16px; font-size: 14px; color: #bbb; }
+      .result-links a { color: #1a1a1a; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+      /* From the Shop the next step is the product, not another Popcode. */
+      #result.has-next .result-new { display: none; }
 
       @media (prefers-reduced-motion: reduce) {
         #wiz *, #wiz *::before, #wiz *::after, #result * { animation: none !important; transition: none !important; }
@@ -719,6 +727,7 @@
            wizard mounts the current image's two halves into the step slots and
            parks them back in their card when it moves on. -->
       <div id="wiz">
+        <a id="wiz-exit" href="/manage.html">&larr; My Popcodes</a>
         <div id="wiz-progress-wrap">
           <div class="wiz-progress" id="wiz-progress"></div>
           <div class="wiz-labels" id="wiz-labels"></div>
@@ -878,6 +887,7 @@
           <button class="share-option" id="rs-message"><span class="share-option-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>Message</button>
         </div>
       </div>
+      <div class="result-links"><a href="/manage.html">My Popcodes</a><span class="result-new">·</span><a class="result-new" href="/create.html">Make another</a></div>
     </div>
     </div><!-- /#result-overlay -->
 
@@ -1732,7 +1742,7 @@
       document.getElementById('create-btn').addEventListener('click', async () => {
         if (createdSlug) {
           if (createdCartHref) { window.location.href = createdCartHref; return; }
-          openResult(); return;
+          window.location.href = '/manage.html'; return;
         }
         // The name is what the link is built from, so there's no Popcode
         // without one.
@@ -2023,7 +2033,8 @@
         const cb = document.getElementById('create-btn');
         cb.disabled = false; cb.classList.remove('ready');
         if (createdCartHref) { cb.textContent = 'Add to cart'; cb.classList.add('cart-ready'); }
-        else cb.textContent = 'Popcode created \u2713';
+        else cb.textContent = 'Go to My Popcodes';
+        wizCreated(slug, document.getElementById('edit-btn').href);
 
         // Share button → Copy link / Email / Message popup (matches Manage).
         const shareTitle = (document.getElementById('name-input').value.trim() || 'My Popcode');
@@ -2227,7 +2238,7 @@
         if (s === 'name') {
           const ready = pages.filter(n => pageHasMedia(pairs[n]));
           $w('wiz-summary').innerHTML = `<div class="thumbs">${ready.slice(0, 5).map(n => `<img src="${wizUrl(pairs[n].photo)}" alt="">`).join('')}</div>
-            <span>${ready.length} image${ready.length === 1 ? '' : 's'} ready to go</span>`;
+            <span>${ready.length} image${ready.length === 1 ? '' : 's'}${wiz.created ? '' : ' ready to go'}</span>`;
         }
       }
       window.wizSync = wizSync;
@@ -2258,8 +2269,40 @@
         }
         if (s === 'plays') return wizGo('image', wiz.n, 'back');
         if (s === 'review') { wiz.editing = true; return wizGo('plays', wizPages().slice(-1)[0], 'back'); }
-        if (s === 'name') return SHOP ? wizGo('plays', wizPages()[0], 'back') : wizGo('review');
+        if (s === 'name') {
+          if (wiz.created) { window.location.href = wiz.created; return; }   // Back → Edit, once made
+          return SHOP ? wizGo('plays', wizPages()[0], 'back') : wizGo('review');
+        }
       });
+
+      // Leaving with work in progress loses it, so ask first (not once it's made).
+      $w('wiz-exit').addEventListener('click', async e => {
+        const started = Object.values(pairs).some(p => p.photo || p.video || p.audio);
+        if (!started || wiz.created) return;
+        e.preventDefault();
+        const go = await popcodeConfirm('What you\u2019ve added so far won\u2019t be saved.',
+          { title: 'Leave without making it?', confirmText: 'Leave', cancelText: 'Keep going' });
+        if (go) window.location.href = '/manage.html';
+      });
+
+      // Made: there's no going back into the steps (they'd edit nothing), so
+      // Back becomes Edit for the real Popcode and the fields lock.
+      function wizCreated(slug, editHref) {
+        wiz.created = editHref;
+        const sec = document.querySelector('.wiz-step[data-step="name"]');
+        sec.querySelector('.wiz-eyebrow').textContent = 'Done';
+        sec.querySelector('.wiz-h').textContent = 'Your Popcode is live';
+        sec.querySelector('.wiz-lede').textContent = 'Share the link, or edit it any time from My Popcodes.';
+        $w('name-input').disabled = true;
+        $w('code-input').disabled = true;
+        $w('url-edit-btn').style.display = 'none';
+        $w('url-done-btn').style.display = 'none';
+        $w('code-hint').textContent = 'Your Popcode lives here. Anyone with the link can scan it.';
+        $w('code-hint').className = 'field-hint';
+        document.querySelector('.wiz-link-label').textContent = 'Where your Popcode lives';
+        $w('wiz-back').textContent = 'Edit';
+        wizSync(); fitHeadings();
+      }
 
       // Choices. Video is a label around a file input (iOS-safe); Audio shows the
       // recorder; Montage opens the montage maker.
