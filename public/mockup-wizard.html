@@ -92,21 +92,20 @@
        in, like the viewer's targeting corners. */
     .drop.pop { animation: pop .5s cubic-bezier(.2,.8,.2,1); }
     .drop .sweep, .drop .corner { display: none; position: absolute; z-index: 2; pointer-events: none; }
-    .drop.scanning .sweep { display: block; left: 0; right: 0; height: 34%; top: -34%;
+    /* Only transform and opacity animate here: MindAR keeps the main thread busy
+       while it checks, and those two run on the compositor without it. */
+    .drop.scanning .sweep { display: block; left: 0; right: 0; height: 34%; top: 0; will-change: transform; transform: translateY(-100%);
       background: linear-gradient(180deg, rgba(118,87,252,0) 0%, rgba(118,87,252,.28) 70%, rgba(255,255,255,.85) 100%);
       animation: sweep 1.4s cubic-bezier(.45,0,.55,1) infinite; }
-    @keyframes sweep { to { top: 100%; } }
+    @keyframes sweep { from { transform: translateY(-100%); } to { transform: translateY(295%); } }
     .drop .corner { width: 34px; height: 34px; border: 4px solid #fff; }
-    .drop.scanning .corner { display: block; filter: drop-shadow(0 1px 3px rgba(0,0,0,.35)); animation: corners 1.4s ease-in-out infinite alternate; }
-    .drop .corner.tl { top: 16px; left: 16px; border-right: 0; border-bottom: 0; border-radius: 10px 0 0 0; }
-    .drop .corner.tr { top: 16px; right: 16px; border-left: 0; border-bottom: 0; border-radius: 0 10px 0 0; }
-    .drop .corner.bl { bottom: 16px; left: 16px; border-right: 0; border-top: 0; border-radius: 0 0 0 10px; }
-    .drop .corner.br { bottom: 16px; right: 16px; border-left: 0; border-top: 0; border-radius: 0 0 10px 0; }
-    @keyframes corners { from { opacity: .6; margin: 0; } to { opacity: 1; margin: 10px; } }
+    .drop.scanning .corner { display: block; filter: drop-shadow(0 1px 3px rgba(0,0,0,.35)); will-change: transform, opacity; animation: corners .7s ease-in-out infinite alternate; }
+    .drop .corner.tl { --dx: 1; --dy: 1; top: 16px; left: 16px; border-right: 0; border-bottom: 0; border-radius: 10px 0 0 0; }
+    .drop .corner.tr { --dx: -1; --dy: 1; top: 16px; right: 16px; border-left: 0; border-bottom: 0; border-radius: 0 10px 0 0; }
+    .drop .corner.bl { --dx: 1; --dy: -1; bottom: 16px; left: 16px; border-right: 0; border-top: 0; border-radius: 0 0 0 10px; }
+    .drop .corner.br { --dx: -1; --dy: -1; bottom: 16px; right: 16px; border-left: 0; border-top: 0; border-radius: 0 0 10px 0; }
+    @keyframes corners { from { opacity: .65; transform: none; } to { opacity: 1; transform: translate(calc(var(--dx) * 8px), calc(var(--dy) * 8px)); } }
     .drop.scanning .change { display: none; }
-    .scan-ok { display: none; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; font-size: 14px; font-weight: 600; color: #15803d; }
-    .scan-ok.on { display: flex; animation: pop .45s cubic-bezier(.2,.8,.2,1); }
-    .scan-ok .ok { width: 22px; height: 22px; border-radius: 50%; background: #16a34a; color: #fff; display: grid; place-items: center; font-size: 13px; }
     .checking { display: none; align-items: center; gap: 8px; margin-top: 14px; font-size: 13px; color: var(--muted); }
     .checking.on { display: flex; }
     .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #ddd; border-top-color: var(--accent); animation: spin .8s linear infinite; }
@@ -263,7 +262,6 @@
         <span class="change">Change</span>
       </label>
       <div class="checking" id="photo-checking"><span class="spin"></span>Checking your image…</div>
-      <div class="scan-ok" id="scan-ok"><span class="ok">✓</span>Looks great for scanning</div>
       <div class="scan-warn" id="scan-warn">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         <div>
@@ -447,7 +445,6 @@
         const warn = !!(d.scan && d.scan.ok === false);
         $('photo-checking').classList.toggle('on', d.scan === 'checking');
         $('photo-drop').classList.toggle('scanning', d.scan === 'checking');
-        $('scan-ok').classList.toggle('on', !!(d.scan && d.scan.ok === true && !d.scan.skipped));
         $('scan-warn').classList.toggle('on', warn);
         if (warn) $('scan-warn-msg').textContent = PopcodeScanCheck.MESSAGES[d.scan.reason];
         next.textContent = warn ? 'Use it anyway' : 'Next';
@@ -551,7 +548,11 @@
       d.photo = url; d.scan = 'checking';
       render();
       replay($('photo-drop'), 'pop');
-      const result = window.PopcodeScanCheck ? await PopcodeScanCheck.check(url) : { ok: true, skipped: true };
+      // Let the sweep finish at least one clean pass, even when the check is quick.
+      const [result] = await Promise.all([
+        window.PopcodeScanCheck ? PopcodeScanCheck.check(url) : { ok: true, skipped: true },
+        new Promise(r => setTimeout(r, 1400))
+      ]);
       if (d.photo !== url) return;           // replaced while checking
       d.scan = result;
       if (result.ok === false) console.info('[scan-check]', result);
