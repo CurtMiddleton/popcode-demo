@@ -459,7 +459,7 @@
 
       /* ═══ Create wizard ═══════════════════════════════════════════════════
          Image → What plays → Your images → Name (the Shop skips Your images:
-         its products print one image). Same look as /mockup-wizard.html. The
+         its products print one image). The
          per-image cards are restyled here when mounted into a step's slot. */
       :root { --wiz-grad: linear-gradient(135deg, #7657FC 0%, #589AF9 100%); --wiz-line: #e8e8e8; --wiz-muted: #656565; --wiz-accent: #7657FC; }
       .page-top-bar { padding-top: 40px; padding-bottom: 0; margin-bottom: 0; }
@@ -468,6 +468,10 @@
       body.from-shop #shop-step-title { display: none !important; }
       body.from-shop #shop-back { margin-bottom: 18px; }
       #pages { display: none; }
+      /* A way out from any step. The Shop has its own Back to the product. */
+      #wiz-exit { display: inline-block; margin-bottom: 18px; font-size: 14px; font-weight: 600; color: var(--wiz-accent); text-decoration: none; }
+      #wiz-exit:hover { opacity: .8; }
+      body.from-shop #wiz-exit { display: none; }
       #wiz { width: 100%; }
 
       .wiz-progress { display: grid; gap: 6px; margin-bottom: 8px; }
@@ -723,6 +727,7 @@
            wizard mounts the current image's two halves into the step slots and
            parks them back in their card when it moves on. -->
       <div id="wiz">
+        <a id="wiz-exit" href="/manage.html">&larr; My Popcodes</a>
         <div id="wiz-progress-wrap">
           <div class="wiz-progress" id="wiz-progress"></div>
           <div class="wiz-labels" id="wiz-labels"></div>
@@ -2268,6 +2273,16 @@
           if (wiz.created) { window.location.href = wiz.created; return; }   // Back → Edit, once made
           return SHOP ? wizGo('plays', wizPages()[0], 'back') : wizGo('review');
         }
+      });
+
+      // Leaving with work in progress loses it, so ask first (not once it's made).
+      $w('wiz-exit').addEventListener('click', async e => {
+        const started = Object.values(pairs).some(p => p.photo || p.video || p.audio);
+        if (!started || wiz.created) return;
+        e.preventDefault();
+        const go = await popcodeConfirm('What you\u2019ve added so far won\u2019t be saved.',
+          { title: 'Leave without making it?', confirmText: 'Leave', cancelText: 'Keep going' });
+        if (go) window.location.href = '/manage.html';
       });
 
       // Made: there's no going back into the steps (they'd edit nothing), so
