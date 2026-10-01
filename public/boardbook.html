@@ -24,6 +24,7 @@
     <script src="/storage-copy.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
+    <script src="/product-gallery.js"></script>
     <!-- Board book only needs MINDAR.IMAGE.Compiler (compile popcoded photos into a
          .mind), not AR rendering. Stub AFRAME so the compiler bundle loads without a
          WebGL renderer — same trick as create.html / book.html. -->
@@ -958,7 +959,19 @@
       (function introMock() {
         const stage = document.getElementById('intro-mock');
         if (!stage || !window.boardbookMockup) return;
-        window.boardbookMockup(stage, window.unsplashBaby ? window.unsplashBaby(800) : '', { title: "Baby’s First Book" });
+        const photo = window.unsplashBaby ? window.unsplashBaby(800) : '';
+        const live = (el) => window.boardbookMockup(el, photo, { title: "Baby’s First Book" });
+        // Gallery: the live mockup first, then Printify's blanks with our
+        // sample photos (made by scripts/boardbook-mockup/).
+        if (!window.PopcodeGallery) { live(stage); return; }
+        window.PopcodeGallery.mount(stage, {
+          renderLive: live,
+          renderThumb: (el) => { const b = window.boardbookMockup(el, photo, { title: '' }); b.style.boxShadow = '0 2px 4px rgba(0,0,0,0.18)'; },
+          images: [
+            { src: '/assets/gallery/boardbook/standing.jpg', alt: 'The board book standing, pages fanned open' },
+            { src: '/assets/gallery/boardbook/spread.jpg', alt: 'The board book open flat, a photo on each page' },
+          ],
+        });
       })();
 
       // "From $X" on the intro — the product price, like every other product.
