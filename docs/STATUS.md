@@ -99,6 +99,16 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   `rwandasouthafrica24/print/book_1790798950285.pdf` (113 MB, 62 pages) —
   verified 1.9× sharper than the 09-21 file, same brightness. When it
   arrives: sharp-but-dark = Prodigi's printing (refund / WHCC).
+- **Spines (2026-10-01, PR #149):** both Rwanda & South Africa orders went
+  with NO spine asset → blank spine (the 09-30 reorder will be blank too).
+  Every book checkout (cart and Order now) now attaches one via
+  `public/book-spine.js` and refuses to proceed without it. **Verify on the
+  next book order:** `print_orders.asset_urls` should hold two files, the
+  second `print_area: "spine"`. Spine text reads bottom-to-top (unchanged
+  design) — the user may want it flipped.
+- **Scan symbol (PR #144):** now a 1200 DPI PNG overlaid in the PDF, not baked
+  into the 300 DPI page JPEG (the reorder still has the old, slightly stepped
+  one).
 
 **Next**
 1. **Calendly:** done on the page — "Book a 15-minute demo" (the URL slug is
@@ -3263,4 +3273,25 @@ Photos were shrunk to **2560px on upload** and the original thrown away (~220 DP
 - **Don't touch Prodigi's "Order edit window"** (Settings → Preferences): it must stay "None, process immediately" — "Pause indefinitely" would hold every real order.
 - Our `print_orders.status` for the book still reads `in_production` although it shipped 09-23 — Prodigi's callback didn't update it. Worth a look.
 - **Reorder verified (evening):** Prodigi **`ord_14579891`** (2026-09-30 20:12 UTC) fetched `experiences/rwandasouthafrica24/print/book_1790798950285.pdf` — **113 MB** vs the 09-21 order's `book_1789957013521.pdf` at **78 MB**, both 62 pages of 3507×2480 JPEG. Downloaded both and measured every page (Laplacian edge energy, centre half): new/old median **1.92×** sharper (min 1.05, max 3.78); page 12 group photo 8.3 → 16.0; median brightness **identical (159.5)**. So if the new book prints dark, it's Prodigi's printing, not the file. The order took ~1 minute to build and upload — expected, since the full-size photos were already uploaded by the Upgrade; ordering only uploads the PDF. Quick way to repeat this check: `print_orders.asset_urls` for the order → HEAD the URL for size, or download and compare DCT page images.
+
+### 2026-10-01 — Sharp scan symbol and the missing book spine
+
+**PRs #144 and #149, merged by Claude at the user's say-so; both verified live on popcode.app.** Branch `claude/funny-euler-eo761x` (same session as 09-30). Note `main` also moved with other sessions' PRs #145–#148 in between; #149 merged cleanly on top.
+
+#### #144 — scan symbol overlaid at 1200 DPI (`book.html`, `calendar.html`)
+- The user downloaded the reorder's PDF from Prodigi and thought the symbols looked pixelated. Their saved pages had been **re-saved at 150 DPI (JPX)** by whatever exported them — but the real file also had the symbol at only ~148 px for 0.5", JPEG'd with the photo, edges visibly stepped.
+- Now: the badge box is laid out with `visibility:hidden` (html2canvas skips it) and `overlayBadges()` places a 600 px PNG (`rasterizeBadge(PRINT_BADGE_PX)`) on the page in jsPDF at that box, one embedded object reused by alias `popcode-badge`. Book: 0.50" at 0.25" inset (10.94–11.44 × 7.52–8.02 in), verified; calendar 0.74". Zero badge pixels left in the page JPEG. The back-cover symbol uses the 600 px copy too.
+- `pymupdf` (`pip install pymupdf`) is the quickest way to inspect a PDF's images, placement (`page.get_image_info`) and render a region at high DPI — use it, not regex over DCT streams, when a PDF may have been re-saved.
+
+#### #149 — spines (`public/book-spine.js` new, `cart.html`, `book.html`)
+- The user's book has **no title on the spine**. Prodigi's layflat guide: API users must send the spine as its **own** asset. `print_orders.asset_urls` for both book orders held only the page PDF.
+- Causes: **cart checkout never built a spine at all**; book.html's "Order this one now" built one but caught and ignored every failure. `/api/book-spine` (no auth) returns **19.05 mm** for 62 pages A4 layflat to US/NY but **null with no US state** — a silent skip waiting to happen.
+- Fix: shared `PopcodeSpine.prepare({db, token, slug, variantId, pageCount, address, parts})` → width lookup (retry once) → canvas-drawn strip (same Bashō design: eyebrow italic + title Cormorant Garamond, year Inter, `#1a1a1a`, 300 DPI; bottom-to-top) → uploads `{slug}/print/spine_*.pdf` → `{url, print_area:'spine'}`. **Throws** a readable message instead of skipping ("Please choose a state — we need it to size your book's spine."). `cart.html withSpines()` adds it to each book line from `book_layout.cover` (via `partsFromLayout`); book.html uses the same module; the old html2canvas spine renderer is gone. Server unchanged (`create-checkout` passes `spine` through; `cart.mjs` keeps `page_count` off it).
+- Tested headless against the live lookup (19.05 × 210 mm, correct text) and the no-state refusal. **Not** tested: a real paid checkout.
+- cart.html redirects signed-out visitors, so test shared client modules from `book.html` (which loads signed out).
+
+#### Open
+- Next book order: confirm two assets (pages + spine) in `print_orders.asset_urls`, and that Prodigi's order page shows the spine.
+- Spine reading direction: bottom-to-top today; US/UK convention is top-to-bottom — one-line flip if the user wants it.
+- Tell Prodigi neither book had spine artwork (our error) alongside the darkness/insert questions.
 
