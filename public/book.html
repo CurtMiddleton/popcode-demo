@@ -137,15 +137,19 @@
       .bi-cta { max-width: 340px; }
       /* Size choice on the intro screen (A4 landscape vs 8×8 square) */
       .bi-size-label { font-size: 13px; font-weight: 700; color: #1a1a1a; margin: 2px 0 10px; font-family: 'Inter', sans-serif; }
-      .bi-sizes { display: flex; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
-      .bi-size { display: flex; align-items: center; gap: 11px; border: 2px solid #e4e2dc; background: #fff; border-radius: 14px; padding: 11px 15px; cursor: pointer; font-family: 'Inter', sans-serif; text-align: left; }
+      /* Three sizes side by side: shape on top (to scale, bottom-aligned), name under it. */
+      .bi-sizes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 22px; }
+      .bi-size { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 9px; border: 2px solid #e4e2dc; background: #fff; border-radius: 14px; padding: 12px 12px 11px; cursor: pointer; font-family: 'Inter', sans-serif; text-align: left; min-width: 0; }
       .bi-size.active { border-color: #1a1a1a; }
       .bi-size .bs-shape { display: block; background: #d9d5cf; border-radius: 3px; flex-shrink: 0; }
       .bi-size.active .bs-shape { background: #1a1a1a; }
       .bi-size .bs-shape.landscape { width: 30px; height: 21px; }
-      .bi-size .bs-shape.square { width: 24px; height: 24px; }
-      .bi-size strong { display: block; font-size: 14px; font-weight: 700; color: #1a1a1a; }
+      /* Shapes to scale: A4 30×21, 8×8 21×21, 12×12 30×30. */
+      .bi-size .bs-shape.square { width: 21px; height: 21px; }
+      .bi-size .bs-shape.square.lg { width: 30px; height: 30px; }
+      .bi-size strong { display: block; font-size: 13.5px; font-weight: 700; color: #1a1a1a; white-space: nowrap; }
       .bi-size em { display: block; font-style: normal; font-size: 12px; color: #8a857d; margin-top: 1px; }
+      @media (max-width: 420px) { .bi-size { padding: 11px 9px 10px; } .bi-size strong { font-size: 12.5px; } .bi-size em { font-size: 11.5px; } }
       .bi-cta:hover { opacity: 0.94; }
       /* Starting price — same type as order.html's .detail-price so a book
          reads like every other product in the Shop. */
@@ -848,6 +852,7 @@
           <div class="bi-sizes" id="bi-sizes">
             <button class="bi-size active" data-size="a4-landscape"><span class="bs-shape landscape"></span><span><strong>A4 Landscape</strong><em>11.7 × 8.3"</em></span></button>
             <button class="bi-size" data-size="square-8x8"><span class="bs-shape square"></span><span><strong>8×8" Square</strong><em>8.3 × 8.3"</em></span></button>
+            <button class="bi-size" data-size="square-12x12"><span class="bs-shape square lg"></span><span><strong>12×12" Square</strong><em>11.7 × 11.7"</em></span></button>
           </div>
           <div class="bi-price" id="bi-price">From &mdash;</div>
           <div class="bi-price-note" id="bi-price-note">Getting price&hellip;</div>
@@ -1036,7 +1041,7 @@
           function renderIntroBook() {
             if (!window.drawProductCardMockup || !introSample || !introStage) return;
             const cv = document.createElement('canvas');
-            const square = bookSize === 'square-8x8';
+            const square = currentBookSize().wIn === currentBookSize().hIn;
             window.drawProductCardMockup(cv, square ? 'book-square' : 'book', introSample, '/assets/sample-photo.jpg').then(() => {
               cv.style.cssText = 'height:' + introBookHeight() + 'px;width:auto;max-width:100%;display:block;';
               introStage.innerHTML = '';
@@ -1080,7 +1085,7 @@
             window.location.href = '/manage.html'; return;
           }
           editingCollection = col;
-          applyBookSize(col.book_layout.size === 'square-8x8' ? 'square-8x8' : 'a4-landscape', false);
+          applyBookSize(col.book_layout.size, false); // unknown/missing → A4 landscape
 
           // Popcoded media, keyed by the photo URL the item was linked to.
           const { data: items } = await db.from('collection_items')
@@ -1315,6 +1320,8 @@
         // SKU verified 2026-09-21 (BOOK-FE-8_3-SQ-LF-G, see lib/print/catalog.mjs),
         // so this size is live again in both pickers.
         'square-8x8':   { id: 'square-8x8',   variantId: 'book-21sq-layflat', label: '8×8" Square',  dims: '8.3 × 8.3"',  wIn: 8.2677,  hIn: 8.2677, ar: '1 / 1' },
+        // Prodigi's 297 × 297 mm square, sold as 12×12" (book-30sq-layflat).
+        'square-12x12': { id: 'square-12x12', variantId: 'book-30sq-layflat', label: '12×12" Square', dims: '11.7 × 11.7"', wIn: 11.6929, hIn: 11.6929, ar: '1 / 1' },
       };
       let bookSize = 'a4-landscape';
       const currentBookSize = () => BOOK_SIZES[bookSize] || BOOK_SIZES['a4-landscape'];
@@ -3231,7 +3238,7 @@
       function openBookSizeSheet() {
         const rows = Object.values(BOOK_SIZES).filter(s => !s.unavailable).map(s => `
           <div class="menu-row" data-size="${s.id}"${s.id === bookSize ? ' style="background:#f0eefe"' : ''}>
-            <div class="menu-ic"><span style="display:block;background:#1a1a1a;border-radius:2px;width:${s.wIn > s.hIn ? 22 : 17}px;height:${s.wIn > s.hIn ? 15.6 : 17}px"></span></div>
+            <div class="menu-ic"><span style="display:block;background:#1a1a1a;border-radius:2px;width:${(s.wIn / 11.6929 * 22).toFixed(1)}px;height:${(s.hIn / 11.6929 * 22).toFixed(1)}px"></span></div>
             <div><div>${escapeHtml(s.label)}</div><div class="menu-sub">${escapeHtml(s.dims)} · layflat hardcover</div></div>
           </div>`).join('');
         openSheet(`
@@ -5208,7 +5215,7 @@
           const targetIndexByPhoto = {};
           popcodedIds.forEach((id, i) => { targetIndexByPhoto[id] = i; });
           const bookLayout = {
-            size: bookSize, // 'a4-landscape' (11.7 × 8.3") or 'square-8x8' (8.3 × 8.3")
+            size: bookSize, // a BOOK_SIZES id: 'a4-landscape', 'square-8x8' or 'square-12x12'
             cover: {
               style: cover.style,
               font: cover.font,
