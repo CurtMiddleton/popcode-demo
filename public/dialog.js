@@ -79,7 +79,10 @@
     var field = null;
     if (opts.value != null) {
       field = document.createElement('input');
-      field.className = 'pcd-field'; field.readOnly = true; field.value = opts.value;
+      field.className = 'pcd-field'; field.value = opts.value;
+      // Read-only by default (Copy link shows a URL to select, not edit);
+      // a dialog that asks for input passes `editable: true`.
+      field.readOnly = !opts.editable;
       field.addEventListener('focus', function () { field.select(); });
       box.appendChild(field);
     }
