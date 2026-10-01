@@ -123,9 +123,10 @@
       '<div style="position:absolute;top:0;bottom:0;left:0;width:1.6%;background:linear-gradient(to right, rgba(255,255,255,0.45), rgba(255,255,255,0));z-index:1;"></div>' +
       '<div style="position:absolute;top:0;bottom:0;left:6.2%;width:1.6%;background:linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,0.16) 45%, rgba(255,255,255,0.30) 60%, rgba(255,255,255,0));z-index:1;"></div>' +
       (title || subtitle ? '<div style="position:absolute;left:0;right:0;bottom:0;height:52%;background:linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.55));"></div>' +
-        '<div style="position:absolute;left:8%;right:8%;bottom:8%;color:#fff;font-family:\'CooperBT\',Georgia,serif;text-shadow:0 2px 10px rgba(0,0,0,0.45);">' +
-          (title ? '<div style="font-size:7.5cqw;line-height:1.1;">' + esc(title) + '</div>' : '') +
-          (subtitle ? '<div style="font-size:4.5cqw;opacity:0.9;margin-top:2cqw;">' + esc(subtitle) + '</div>' : '') +
+        // Title clear of the hinge groove (6–8% in) and lifted off the bottom edge.
+        '<div style="position:absolute;left:14%;right:8%;bottom:13%;color:#fff;font-family:\'CooperBT\',Georgia,serif;text-shadow:0 2px 10px rgba(0,0,0,0.45);">' +
+          (title ? '<div style="font-size:9.5cqw;line-height:1.1;">' + esc(title) + '</div>' : '') +
+          (subtitle ? '<div style="font-size:5cqw;opacity:0.9;margin-top:2cqw;">' + esc(subtitle) + '</div>' : '') +
         '</div>' : '');
     const photo = w.querySelector('.bbm-photo');
     const im = new Image();
