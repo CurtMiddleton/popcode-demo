@@ -3364,3 +3364,18 @@ Photos were shrunk to **2560px on upload** and the original thrown away (~220 DP
 
 #### Open
 - On an iPhone: get too close to a photo, back off — it should play without a reload. Watch how often `reload_prompt_*` fires and which reason dominates; if `flicker` is common, consider a longer `missTolerance` or a shorter hold.
+
+
+### 2026-10-01 — Share card: gradient logo on light gray
+
+**PR #163 (`claude/og-light-card`) — merged 2026-10-01, live on popcode.app.**
+
+- `public/assets/og_image.png` (the link-preview card in Messages etc.) is now the **gradient Popcode logo on very light gray (#EEECEE), 1200×450** — was the white logo + "Make anything play." tagline on the purple gradient, 1200×630. Logo is `Popcode_logo.png` scaled to 560 px wide, centered, so 1.91:1 crops (Facebook/LinkedIn) still keep it whole. sRGB profile embedded (lesson from `03e52d1`). Generated with a short PIL script — no script checked in.
+- `og:image` bumped `?v=3` → `?v=4` on every page (`/nonprofits` keeps its own `og-nonprofits.png`).
+- The bottom 10 px is a logo-gradient strip, added to try to keep the iMessage bar purple. **It didn't work**: Messages trimmed it off and drew the bar gray. **The user said gray is fine — leave it.** The strip is harmless; removing it isn't worth a cache bump.
+
+**Lessons**
+- **The bar under an iMessage card is one solid color that iOS picks itself**; it can't be a gradient and we don't control it.
+- "How do I clear the cache?" turned out to be **an unmerged PR**, not a cache problem. Check `gh pr view N --json state` and `curl -s https://popcode.app/view.html | grep og_image` before talking about caches. Bumping the `?v=` makes new sends re-fetch; cards already sent never change.
+- `gh pr merge` was blocked by the permission classifier in this session — the user merges by hand.
+- Another session was working in the main checkout (`claude/boardbook-title`, uncommitted changes); these notes were written from a separate worktree so they weren't touched.
