@@ -182,14 +182,25 @@
     .field-label { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
     input[type="text"] { width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); font-size: 16px; color: var(--ink); outline: none; background: #fff; font-family: inherit; }
     input[type="text"]:focus { border-color: #bdbdbd; }
-    .link-label { margin-top: 26px; }
-    .url-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0 0 6px; font-size: 18px; }
+    .link-label { margin-top: 34px; }
+    /* The link gets its own white box, with Edit as a small pill on the right.
+       Editing swaps the slug for an input in place, so popcode.app/ stays put. */
+    .url-row { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px;
+      padding: 14px 12px 14px 16px; font-size: 18px; transition: border-color .15s, box-shadow .15s; }
+    .url-row:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(118,87,252,.15); }
+    /* Long links wrap back to the box's left edge; while editing, the input fills the line. */
+    .url-text { flex: 1; min-width: 0; line-height: 1.3; overflow-wrap: anywhere; }
+    .url-text.editing { display: flex; align-items: baseline; }
     .url-base { color: #888; }
     .url-slug.bump { animation: pop .3s ease-out; display: inline-block; }
     .url-slug { color: var(--ink); font-weight: 700; word-break: break-all; }
-    .link-btn { background: none; border: none; color: #2563eb; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; padding: 0; }
-    #slug-input { display: none; max-width: 260px; padding: 10px 12px; font-size: 15px; text-transform: lowercase; }
-    .hint { font-size: 12px; color: #888; margin-bottom: 28px; min-height: 16px; }
+    .pill-btn { flex-shrink: 0; height: 30px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: #f4f4f6;
+      color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .pill-btn:hover { background: #ececf0; }
+    #slug-input { display: none; flex: 1; min-width: 0; width: auto; border: 0; border-radius: 0; padding: 0; background: transparent;
+      font-size: 18px; font-weight: 700; color: var(--ink); text-transform: lowercase; }
+    #slug-input:focus { border: 0; }
+    .hint { font-size: 12px; color: #888; margin: 10px 0 36px; min-height: 16px; }
     .summary { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--line); border-radius: var(--pc-radius-inner); padding: 12px; }
     .thumbs { display: flex; }
     .thumbs img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; border: 2px solid #fff; margin-left: -10px; }
@@ -359,9 +370,8 @@
       <input type="text" id="name-input" placeholder="e.g. Grandma’s 90th" autocomplete="off">
       <div class="field-label link-label">Where your Popcode will live</div>
       <div class="url-row">
-        <span><span class="url-base">popcode.app/</span><span class="url-slug" id="url-slug">your-link</span></span>
-        <input type="text" id="slug-input" maxlength="30" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-        <button type="button" class="link-btn" id="slug-edit">Edit</button>
+        <span class="url-text"><span class="url-base">popcode.app/</span><span class="url-slug" id="url-slug">your-link</span><input type="text" id="slug-input" maxlength="30" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Link"></span>
+        <button type="button" class="pill-btn" id="slug-edit">Edit</button>
       </div>
       <div class="hint" id="slug-hint">Your link fills in from the name. Tap Edit to change it.</div>
       <div class="summary">
@@ -680,9 +690,11 @@
       const input = $('slug-input'), editing = input.style.display === 'block';
       if (editing) {
         input.style.display = 'none'; $('url-slug').style.display = ''; $('slug-edit').textContent = 'Edit';
+        input.parentElement.classList.remove('editing');
       } else {
         input.value = currentSlug(); state.slugEdited = true;
         input.style.display = 'block'; $('url-slug').style.display = 'none'; $('slug-edit').textContent = 'Done';
+        input.parentElement.classList.add('editing');
         input.focus();
       }
       renderSlug();
@@ -713,6 +725,7 @@
       state.items = []; state.draft = newDraft(); state.editIndex = -1; state.slugEdited = false;
       $('name-input').value = ''; $('slug-input').value = ''; $('gen-bar').style.width = '0';
       $('slug-input').style.display = 'none'; $('url-slug').style.display = ''; $('slug-edit').textContent = 'Edit';
+      $('slug-input').parentElement.classList.remove('editing');
       renderSlug(); go('photo', 'fwd');
     };
 
