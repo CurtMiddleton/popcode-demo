@@ -34,14 +34,35 @@
 
     /* Progress */
     .progress { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
-    .progress span { height: 4px; border-radius: 2px; background: #e4e4e4; transition: background .25s; }
-    .progress span.on { background: var(--grad); }
+    .progress span { position: relative; overflow: hidden; height: 4px; border-radius: 2px; background: #e4e4e4; }
+    /* The fill sweeps in from the left as each step is reached. */
+    .progress span::after { content: ''; position: absolute; inset: 0; background: var(--grad); transform: scaleX(0); transform-origin: left; transition: transform .55s cubic-bezier(.2,.8,.2,1); }
+    .progress span.on::after { transform: scaleX(1); }
     .progress-labels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 11px; color: #9a9a9a; font-weight: 600; margin-bottom: 28px; }
     .progress-labels span.on { color: var(--ink); }
 
-    .step { display: none; animation: in .25s ease; }
+    /* ── Motion ─────────────────────────────────────────────────────────
+       Each step's pieces glide in one after another, from the right going
+       forward and from the left going back. All of it is switched off for
+       people who ask their phone for reduced motion (bottom of this sheet). */
+    .step { display: none; }
     .step.active { display: block; }
-    @keyframes in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .step.active > * { animation: inR .5s cubic-bezier(.2,.8,.2,1) both; }
+    main[data-dir="back"] .step.active > * { animation-name: inL; }
+    .step.active > :nth-child(2) { animation-delay: .05s; }
+    .step.active > :nth-child(3) { animation-delay: .1s; }
+    .step.active > :nth-child(4) { animation-delay: .15s; }
+    .step.active > :nth-child(5) { animation-delay: .2s; }
+    .step.active > :nth-child(n+6) { animation-delay: .25s; }
+    @keyframes inR { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+    @keyframes inL { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+    @keyframes pop { 0% { transform: scale(.92); } 55% { transform: scale(1.025); } 100% { transform: scale(1); } }
+    @keyframes bounce { 0% { transform: scale(1); } 35% { transform: scale(.94); } 70% { transform: scale(1.05); } 100% { transform: scale(1); } }
+    @keyframes wiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-12deg); } 75% { transform: rotate(10deg); } }
+    @keyframes flash { 0% { box-shadow: 0 0 0 0 rgba(118,87,252,.55); } 100% { box-shadow: 0 0 0 14px rgba(118,87,252,0); } }
+
+    /* Next lights up with a ripple the moment it becomes tappable. */
+    .btn.ready { animation: flash .7s ease-out; }
 
     .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
     /* One line always: fitHeadings() steps the size down until it fits. */
@@ -60,13 +81,32 @@
     .drop .d-title { font-size: 16px; font-weight: 700; }
     .drop .d-sub { font-size: 13px; color: #888; }
     .drop.filled { border: 1px solid var(--line); border-style: solid; box-shadow: var(--pc-shadow-card); background: #000; }
-    .drop.filled > :not(.media):not(.change):not(input) { display: none; }
+    .drop.filled > :not(.media):not(.change):not(input):not(.sweep):not(.corner) { display: none; }
     .drop .media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
     .drop.filled .media { display: block; }
     .drop .change { display: none; position: absolute; right: 12px; bottom: 12px; z-index: 2; background: rgba(255,255,255,.95); color: var(--ink); font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: 999px; pointer-events: none; }
     .drop.filled .change { display: block; }
     .drop.video-drop.filled .media { object-fit: contain; }
 
+    /* While checking: a scanner line sweeps the image and corner brackets close
+       in, like the viewer's targeting corners. */
+    .drop.pop { animation: pop .5s cubic-bezier(.2,.8,.2,1); }
+    .drop .sweep, .drop .corner { display: none; position: absolute; z-index: 2; pointer-events: none; }
+    .drop.scanning .sweep { display: block; left: 0; right: 0; height: 34%; top: -34%;
+      background: linear-gradient(180deg, rgba(118,87,252,0) 0%, rgba(118,87,252,.28) 70%, rgba(255,255,255,.85) 100%);
+      animation: sweep 1.4s cubic-bezier(.45,0,.55,1) infinite; }
+    @keyframes sweep { to { top: 100%; } }
+    .drop .corner { width: 34px; height: 34px; border: 4px solid #fff; }
+    .drop.scanning .corner { display: block; filter: drop-shadow(0 1px 3px rgba(0,0,0,.35)); animation: corners 1.4s ease-in-out infinite alternate; }
+    .drop .corner.tl { top: 16px; left: 16px; border-right: 0; border-bottom: 0; border-radius: 10px 0 0 0; }
+    .drop .corner.tr { top: 16px; right: 16px; border-left: 0; border-bottom: 0; border-radius: 0 10px 0 0; }
+    .drop .corner.bl { bottom: 16px; left: 16px; border-right: 0; border-top: 0; border-radius: 0 0 0 10px; }
+    .drop .corner.br { bottom: 16px; right: 16px; border-left: 0; border-top: 0; border-radius: 0 0 10px 0; }
+    @keyframes corners { from { opacity: .6; margin: 0; } to { opacity: 1; margin: 10px; } }
+    .drop.scanning .change { display: none; }
+    .scan-ok { display: none; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; font-size: 14px; font-weight: 600; color: #15803d; }
+    .scan-ok.on { display: flex; animation: pop .45s cubic-bezier(.2,.8,.2,1); }
+    .scan-ok .ok { width: 22px; height: 22px; border-radius: 50%; background: #16a34a; color: #fff; display: grid; place-items: center; font-size: 13px; }
     .checking { display: none; align-items: center; gap: 8px; margin-top: 14px; font-size: 13px; color: var(--muted); }
     .checking.on { display: flex; }
     .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #ddd; border-top-color: var(--accent); animation: spin .8s linear infinite; }
@@ -92,6 +132,14 @@
     .choice b { font-size: 14px; }
     .choice small { font-size: 11px; color: #888; line-height: 1.3; text-align: center; }
     .choice.on { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+    .choice.bounce { animation: bounce .45s cubic-bezier(.2,.8,.2,1); }
+    .choice.bounce svg { animation: wiggle .5s ease-in-out; }
+    .panel.on { animation: inR .4s cubic-bezier(.2,.8,.2,1); }
+    .done-row .ok { animation: pop .45s cubic-bezier(.2,.8,.2,1); }
+    /* A live waveform while recording. */
+    .wave { display: flex; align-items: center; justify-content: center; gap: 4px; height: 40px; margin-bottom: 14px; }
+    .wave i { width: 4px; height: 100%; border-radius: 2px; background: var(--grad); animation: wave 1s ease-in-out infinite; transform-origin: center; }
+    @keyframes wave { 0%, 100% { transform: scaleY(.2); } 50% { transform: scaleY(1); } }
 
     .panel { display: none; }
     .panel.on { display: block; }
@@ -109,6 +157,9 @@
 
     /* Step 3 */
     .list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+    .list .row { animation: inR .45s cubic-bezier(.2,.8,.2,1) both; }
+    .list .row.new { animation: inR .45s cubic-bezier(.2,.8,.2,1) both, flash .9s .35s ease-out; }
+    .list .row.leaving { transition: opacity .25s, transform .25s; opacity: 0; transform: translateX(-40px); }
     .row { display: flex; align-items: center; gap: 14px; background: #fff; border: 1px solid var(--line); border-radius: var(--pc-radius-inner); padding: 10px; box-shadow: var(--pc-shadow-card); }
     .row .num { width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 12px; font-weight: 700; display: grid; place-items: center; flex-shrink: 0; }
     .row img { width: 60px; height: 60px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
@@ -131,6 +182,7 @@
     .link-label { margin-top: 26px; }
     .url-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0 0 6px; font-size: 18px; }
     .url-base { color: #888; }
+    .url-slug.bump { animation: pop .3s ease-out; display: inline-block; }
     .url-slug { color: var(--ink); font-weight: 700; word-break: break-all; }
     .link-btn { background: none; border: none; color: #2563eb; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; padding: 0; }
     #slug-input { display: none; max-width: 260px; padding: 10px 12px; font-size: 15px; text-transform: lowercase; }
@@ -143,12 +195,26 @@
 
     /* Generating + success */
     .gen { text-align: center; padding-top: 40px; }
+    /* Generating: the Popcode mark spins up while the bar fills with a shimmer. */
+    .gen-mark { width: 96px; height: 96px; margin: 0 auto 26px; display: block; animation: spin 2.4s cubic-bezier(.5,0,.5,1) infinite, breathe 1.2s ease-in-out infinite alternate; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes breathe { from { filter: drop-shadow(0 4px 10px rgba(118,87,252,.15)); } to { filter: drop-shadow(0 8px 26px rgba(118,87,252,.5)); } }
+    .bar div { background-size: 200% 100%; background-image: linear-gradient(90deg, #7657FC, #589AF9, #a68bff, #7657FC); animation: shimmer 1.2s linear infinite; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+    #gen-label { display: inline-block; }
+    #gen-label.x { animation: inR .35s ease; }
     .bar { height: 8px; border-radius: 4px; background: #e8e8e8; overflow: hidden; margin: 20px 0 10px; }
     .bar div { height: 100%; width: 0; background: var(--grad); transition: width .2s linear; }
     .gen small { font-size: 13px; color: var(--muted); }
     .success { text-align: center; padding-top: 20px; }
     .success h1, .gen h1 { white-space: normal; }
-    .burst { width: 76px; height: 76px; border-radius: 50%; background: var(--grad); display: grid; place-items: center; margin: 0 auto 20px; color: #fff; }
+    .burst { position: relative; width: 76px; height: 76px; border-radius: 50%; background: var(--grad); display: grid; place-items: center; margin: 0 auto 20px; color: #fff;
+      animation: pop .6s cubic-bezier(.2,.8,.2,1) .1s both; }
+    .burst::after { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 3px solid #7657FC; animation: ripple 1.1s .3s ease-out both; }
+    @keyframes ripple { from { transform: scale(1); opacity: .8; } to { transform: scale(2.2); opacity: 0; } }
+    .burst polyline { stroke-dasharray: 30; stroke-dashoffset: 30; animation: draw .45s .45s ease-out forwards; }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+    #confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 50; }
     .live-link { display: inline-block; font-size: 18px; font-weight: 700; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 12px 20px; margin: 6px 0 24px; word-break: break-all; }
     .success .btn { margin-bottom: 10px; }
     .upsell { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
@@ -160,6 +226,11 @@
     .actions .inner { max-width: 520px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
     .actions .btn-primary { flex: 1; }
     .actions.hidden { display: none; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+      .drop.scanning .sweep, .drop.scanning .corner { display: none; }
+    }
 
     @media (min-width: 700px) {
       .wrap { padding-top: 44px; }
@@ -190,9 +261,11 @@
         <div class="d-title">Tap to add an image</div>
         <div class="d-sub">JPG, PNG or HEIC</div>
         <img class="media" id="photo-preview" alt="">
+        <span class="sweep"></span><span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
         <span class="change">Change</span>
       </label>
       <div class="checking" id="photo-checking"><span class="spin"></span>Checking your image…</div>
+      <div class="scan-ok" id="scan-ok"><span class="ok">✓</span>Looks great for scanning</div>
       <div class="scan-warn" id="scan-warn">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         <div>
@@ -281,6 +354,7 @@
 
     <!-- Generating -->
     <section class="step gen" data-step="gen">
+      <img class="gen-mark" src="/assets/popcode_symbol_color.svg" alt="">
       <h1>Making your Popcode…</h1>
       <div class="bar"><div id="gen-bar"></div></div>
       <small id="gen-label">Preparing images</small>
@@ -306,11 +380,13 @@
     </div>
   </nav>
 
+  <canvas id="confetti" hidden></canvas>
+
   <script>
     // ── State ─────────────────────────────────────────────────────────────
     // items: [{ photo, kind: 'video'|'audio'|'montage', media, label }]
     // draft: the photo being added or edited; editIndex: which item it replaces.
-    const state = { step: 'photo', items: [], draft: null, editIndex: -1, slugEdited: false };
+    const state = { step: 'photo', items: [], draft: null, editIndex: -1, slugEdited: false, flash: -1 };
     const STEPS = ['photo', 'plays', 'review', 'name'];
     const $ = id => document.getElementById(id);
     const newDraft = () => ({ photo: null, kind: null, media: null, label: '' });
@@ -326,7 +402,18 @@
     const photoNumber = () => (state.editIndex >= 0 ? state.editIndex : state.items.length) + 1;
 
     // ── Navigation ────────────────────────────────────────────────────────
-    function go(step) {
+    // Restart a one-shot CSS animation on an element.
+    function replay(el, cls) {
+      if (!el) return;
+      el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+      el.addEventListener('animationend', () => el.classList.remove(cls), { once: true });
+    }
+
+    const ORDER = ['photo', 'plays', 'review', 'name', 'gen', 'done'];
+    // dir: 'back' or 'fwd' when the order of steps doesn't say (the add-another loop).
+    function go(step, dir) {
+      const back = dir ? dir === 'back' : ORDER.indexOf(step) < ORDER.indexOf(state.step);
+      document.querySelector('main').dataset.dir = back ? 'back' : 'fwd';
       state.step = step;
       document.querySelectorAll('.step').forEach(s => s.classList.toggle('active', s.dataset.step === step));
       const idx = STEPS.indexOf(step);
@@ -363,6 +450,8 @@
         $('photo-preview').src = d.photo || '';
         const warn = !!(d.scan && d.scan.ok === false);
         $('photo-checking').classList.toggle('on', d.scan === 'checking');
+        $('photo-drop').classList.toggle('scanning', d.scan === 'checking');
+        $('scan-ok').classList.toggle('on', !!(d.scan && d.scan.ok === true && !d.scan.skipped));
         $('scan-warn').classList.toggle('on', warn);
         if (warn) $('scan-warn-msg').textContent = PopcodeScanCheck.MESSAGES[d.scan.reason];
         next.textContent = warn ? 'Use it anyway' : 'Next';
@@ -385,7 +474,7 @@
       }
       if (s === 'review') {
         $('list').innerHTML = state.items.map((it, i) => `
-          <div class="row">
+          <div class="row${i === state.flash ? ' new' : ''}" style="animation-delay:${i * 60}ms">
             <div class="num">${i + 1}</div>
             <img src="${it.photo}" alt="">
             <div class="meta"><b>Image ${i + 1}</b><span>${ICONS[it.kind]} ${it.label}</span>${it.scan && it.scan.ok === false ? '<span class="warn-tag">May be hard to scan</span>' : ''}</div>
@@ -409,38 +498,46 @@
       }
     }
 
+    // Ripple the Next button the moment it becomes tappable.
+    new MutationObserver(() => { if (!$('next-btn').disabled) replay($('next-btn'), 'ready'); })
+      .observe($('next-btn'), { attributes: true, attributeFilter: ['disabled'] });
+
     $('next-btn').onclick = () => {
       const s = state.step;
       if (s === 'photo') return go('plays');
       if (s === 'plays') { commitDraft(); return go('review'); }
-      if (s === 'review') return go('name');
+      if (s === 'review') { state.flash = -1; return go('name'); }
       if (s === 'name') return generate();
     };
     $('back-btn').onclick = () => {
       const s = state.step;
-      if (s === 'photo') { state.draft = newDraft(); state.editIndex = -1; return go('review'); }
+      if (s === 'photo') { state.draft = newDraft(); state.editIndex = -1; return go('review', 'back'); }
       if (s === 'plays') return go('photo');
-      if (s === 'review') { editItem(state.items.length - 1, 'plays'); return; }
+      if (s === 'review') { editItem(state.items.length - 1, 'plays', 'back'); return; }
       if (s === 'name') return go('review');
     };
 
     function commitDraft() {
-      if (state.editIndex >= 0) state.items[state.editIndex] = state.draft;
-      else state.items.push(state.draft);
+      if (state.editIndex >= 0) { state.items[state.editIndex] = state.draft; state.flash = state.editIndex; }
+      else { state.items.push(state.draft); state.flash = state.items.length - 1; }
       state.draft = newDraft(); state.editIndex = -1;
     }
-    function editItem(i, step = 'photo') {
+    function editItem(i, step = 'photo', dir = 'fwd') {
       state.editIndex = i;
       state.draft = { ...state.items[i] };
-      go(step);
+      go(step, dir);
     }
     function removeItem(i) {
       if (!confirm(`Remove image ${i + 1}?`)) return;
-      state.items.splice(i, 1);
-      if (!state.items.length) { state.draft = newDraft(); return go('photo'); }
-      render();
+      const row = $('list').children[i];
+      if (row) row.classList.add('leaving');
+      setTimeout(() => {
+        state.items.splice(i, 1); state.flash = -1;
+        if (!state.items.length) { state.draft = newDraft(); return go('photo'); }
+        render();
+      }, row ? 250 : 0);
     }
-    $('add-more').onclick = () => { state.draft = newDraft(); state.editIndex = -1; go('photo'); };
+    $('add-more').onclick = () => { state.draft = newDraft(); state.editIndex = -1; go('photo', 'fwd'); };
 
     // ── Step 1 · Photo ────────────────────────────────────────────────────
     $('photo-input').onchange = e => {
@@ -457,6 +554,7 @@
       const d = state.draft;
       d.photo = url; d.scan = 'checking';
       render();
+      replay($('photo-drop'), 'pop');
       const result = window.PopcodeScanCheck ? await PopcodeScanCheck.check(url) : { ok: true, skipped: true };
       if (d.photo !== url) return;           // replaced while checking
       d.scan = result;
@@ -469,6 +567,7 @@
       if (state.draft.kind !== c.dataset.kind) { state.draft.kind = c.dataset.kind; state.draft.media = null; state.draft.label = ''; }
       stopRecording();
       render();
+      replay(c, 'bounce');
     });
     $('video-input').onchange = e => {
       const f = e.target.files[0]; if (!f) return;
@@ -486,7 +585,12 @@
       const d = state.draft, card = $('audio-card');
       if (d.kind !== 'audio') return;
       if (recTimer) {
-        card.innerHTML = `<div class="timer"><span class="rec-dot"></span>${fmt(recSecs)}</div>
+        // Only the clock ticks, so the waveform keeps moving smoothly.
+        const t = card.querySelector('.timer-text');
+        if (t) { t.textContent = fmt(recSecs); return; }
+        const bars = Array.from({ length: 16 }, (_, i) => `<i style="animation-delay:${(i * 137 % 1000) / 1000 - 1}s;animation-duration:${0.7 + (i * 53 % 50) / 100}s"></i>`).join('');
+        card.innerHTML = `<div class="wave">${bars}</div>
+          <div class="timer"><span class="rec-dot"></span><span class="timer-text">${fmt(recSecs)}</span></div>
           <button type="button" class="btn btn-lg btn-primary btn-block" onclick="finishRecording()">Stop</button>`;
       } else if (d.media) {
         card.innerHTML = `<div class="done-row"><span class="ok">✓</span>${d.label}</div>
@@ -534,6 +638,7 @@
     const currentSlug = () => state.slugEdited ? slugify($('slug-input').value) : slugify($('name-input').value);
     function renderSlug() {
       const slug = currentSlug(), el = $('url-slug');
+      if (el.textContent !== (slug || 'your-link')) replay(el, 'bump');
       el.textContent = slug || 'your-link';
       const hint = $('slug-hint');
       if (slug && slug.length < 3) { hint.textContent = 'Links need at least 3 characters.'; hint.style.color = '#dc2626'; }
@@ -563,9 +668,37 @@
       let p = 0;
       const t = setInterval(() => {
         p += 4; $('gen-bar').style.width = p + '%';
-        $('gen-label').textContent = labels[Math.min(3, Math.floor(p / 26))];
-        if (p >= 100) { clearInterval(t); $('live-link').textContent = 'popcode.app/' + slug; go('done'); }
+        const label = labels[Math.min(3, Math.floor(p / 26))];
+        if ($('gen-label').textContent !== label) { $('gen-label').textContent = label; replay($('gen-label'), 'x'); }
+        if (p >= 100) { clearInterval(t); $('live-link').textContent = 'popcode.app/' + slug; go('done'); confetti(); }
       }, 90);
+    }
+
+    // A burst of brand-coloured confetti on the success screen.
+    function confetti() {
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const c = $('confetti'), x = c.getContext('2d'), dpr = devicePixelRatio || 1;
+      c.hidden = false; c.width = innerWidth * dpr; c.height = innerHeight * dpr; x.scale(dpr, dpr);
+      const colors = ['#7657FC', '#589AF9', '#a68bff', '#FF6FB5', '#FFC94D', '#2DD4BF'];
+      const ox = innerWidth / 2, oy = Math.min(innerHeight * 0.28, 260);
+      const bits = Array.from({ length: 140 }, () => {
+        const a = Math.random() * Math.PI * 2, v = 4 + Math.random() * 9;
+        return { x: ox, y: oy, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 5, r: Math.random() * Math.PI, vr: (Math.random() - .5) * .4,
+                 w: 6 + Math.random() * 6, h: 8 + Math.random() * 8, c: colors[Math.random() * colors.length | 0] };
+      });
+      const start = performance.now();
+      (function frame(now) {
+        const t = now - start;
+        x.clearRect(0, 0, innerWidth, innerHeight);
+        x.globalAlpha = Math.max(0, 1 - Math.max(0, t - 1600) / 900);
+        for (const b of bits) {
+          b.vy += 0.28; b.vx *= 0.985; b.vy *= 0.985; b.x += b.vx; b.y += b.vy; b.r += b.vr;
+          x.save(); x.translate(b.x, b.y); x.rotate(b.r); x.fillStyle = b.c;
+          x.fillRect(-b.w / 2, -b.h / 2 * Math.abs(Math.cos(b.r * 2)), b.w, b.h * Math.abs(Math.cos(b.r * 2)) + 1);
+          x.restore();
+        }
+        if (t < 2500) requestAnimationFrame(frame); else { x.clearRect(0, 0, innerWidth, innerHeight); c.hidden = true; }
+      })(start);
     }
     $('share-btn').onclick = async () => {
       const url = 'https://' + $('live-link').textContent;
@@ -576,7 +709,7 @@
       state.items = []; state.draft = newDraft(); state.editIndex = -1; state.slugEdited = false;
       $('name-input').value = ''; $('slug-input').value = ''; $('gen-bar').style.width = '0';
       $('slug-input').style.display = 'none'; $('url-slug').style.display = ''; $('slug-edit').textContent = 'Edit';
-      renderSlug(); go('photo');
+      renderSlug(); go('photo', 'fwd');
     };
 
     go('photo');
