@@ -109,7 +109,7 @@ def fit_cover_quad(c):
 
 
 def title_on(img, font_path, title):
-    """The live mockup's cover: bottom gradient + serif title at 8% in."""
+    """The live mockup's cover: bottom gradient + serif title, clear of the hinge."""
     img = img.convert('RGBA')
     W, H = img.size
     grad = Image.new('L', (1, 256))
@@ -119,10 +119,11 @@ def title_on(img, font_path, title):
     shade = Image.new('RGBA', (W, int(H * 0.52)), (0, 0, 0, 0))
     shade.putalpha(g)
     img.alpha_composite(shade, (0, H - shade.height))
-    font = ImageFont.truetype(font_path, int(W * 0.075))
+    size = int(W * 0.095)  # matches boardbookMockup: 9.5cqw, 14% in, 13% up
+    font = ImageFont.truetype(font_path, size)
     glow = Image.new('RGBA', img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(glow)
-    x, y = int(W * 0.08), int(H * 0.92 - W * 0.075 * 1.1)
+    x, y = int(W * 0.14), int(H * 0.87 - size * 1.1)
     d.text((x, y), title, font=font, fill=(0, 0, 0, 115))
     img.alpha_composite(glow.filter(ImageFilter.GaussianBlur(W * 0.012)))
     ImageDraw.Draw(img).text((x, y), title, font=font, fill=(255, 255, 255, 255))
