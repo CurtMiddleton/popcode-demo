@@ -845,7 +845,7 @@
           <p class="bi-desc">Design a photo book from your favourite photos, then bring any page to life — link a photo to a video and it plays when someone scans the printed page.</p>
           <ul class="bi-specs">
             <li>Lay-flat hardcover binding</li>
-            <li>Premium matte pages</li>
+            <li>Lustre photo pages, matte hardcover</li>
             <li>Scannable pages come to life with video</li>
           </ul>
           <div class="bi-size-label">Size</div>
@@ -1041,9 +1041,13 @@
           function renderIntroBook() {
             if (!window.drawProductCardMockup || !introSample || !introStage) return;
             const cv = document.createElement('canvas');
-            const square = currentBookSize().wIn === currentBookSize().hIn;
+            const size = currentBookSize();
+            const square = size.wIn === size.hIn;
+            // Squares to scale with each other: the 12×12 gets the full height,
+            // the 8×8 its true fraction of it (8.3 / 11.7).
+            const h = Math.round(introBookHeight() * (square ? size.wIn / 11.6929 : 1));
             window.drawProductCardMockup(cv, square ? 'book-square' : 'book', introSample, '/assets/sample-photo.jpg').then(() => {
-              cv.style.cssText = 'height:' + introBookHeight() + 'px;width:auto;max-width:100%;display:block;';
+              cv.style.cssText = 'height:' + h + 'px;width:auto;max-width:100%;display:block;';
               introStage.innerHTML = '';
               introStage.appendChild(cv);
             }).catch(() => {});
@@ -3743,7 +3747,7 @@
           if (!resp.ok || typeof d.total_minor !== 'number') throw new Error('no price');
           el.textContent = 'From ' + formatMoney(d.printing_minor, d.currency);
           note.textContent = d.page_count
-            ? `for a ${d.page_count}-page book, plus shipping. More pages cost more.`
+            ? `for ${/^(8|11|18)/.test(String(d.page_count)) && !/^1[01]\d$/.test(String(d.page_count)) ? 'an' : 'a'} ${d.page_count}-page book, plus shipping. More pages cost more.`
             : 'plus shipping';
         } catch (_) {
           if (seq !== introPriceSeq) return;
