@@ -196,9 +196,6 @@
     .gen { text-align: center; padding-top: 40px; }
     /* Generating: the Popcode mark spins up while the bar fills with a shimmer. */
     /* .step.active .x beats the generic step slide-in, which would otherwise replace these. */
-    .step.active .gen-mark { width: 96px; height: 96px; margin: 0 auto 26px; display: block; animation: spin 2.4s cubic-bezier(.5,0,.5,1) infinite, breathe 1.2s ease-in-out infinite alternate; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes breathe { from { filter: drop-shadow(0 4px 10px rgba(118,87,252,.15)); } to { filter: drop-shadow(0 8px 26px rgba(118,87,252,.5)); } }
     .bar div { background-size: 200% 100%; background-image: linear-gradient(90deg, #7657FC, #589AF9, #a68bff, #7657FC); animation: shimmer 1.2s linear infinite; }
     @keyframes shimmer { to { background-position: -200% 0; } }
     #gen-label { display: inline-block; }
@@ -209,8 +206,18 @@
     .success { text-align: center; padding-top: 20px; }
     .success h1, .gen h1 { white-space: normal; }
     /* Done: the pinwheel that spun while generating spins in and settles. */
-    .step.active .done-mark { display: block; width: 92px; height: 92px; margin: 0 auto 22px; animation: settle 1.3s cubic-bezier(.12,.85,.25,1) both; }
-    @keyframes settle { from { transform: rotate(-720deg) scale(.6); opacity: 0; } 25% { opacity: 1; } to { transform: rotate(0) scale(1); } }
+    /* The pinwheel moves exactly as it does in the viewer (view.html), so it
+       means one thing everywhere. Making: the arms chase round, searching
+       (pop-comet). Done: the arms land in turn and the mark completes
+       (pop-land), without the viewer's white bloom, which is its hand-off
+       to the video. */
+    .mark { display: block; width: 96px; height: 96px; margin: 0 auto 26px; overflow: visible; }
+    .mark use { fill: url(#pop-grad); }
+    .mark .p { transform-origin: 150.6px 150.6px; transform-box: view-box; }
+    @keyframes pop-comet { 0% { opacity: 0; } 6% { opacity: 1; } 46% { opacity: .5; } 72% { opacity: 0; } 100% { opacity: 0; } }
+    @keyframes pop-land { 0% { opacity: 0; transform: rotate(-38deg) scale(.86); } 55% { opacity: 1; transform: rotate(6deg) scale(1.04); } 100% { opacity: 1; transform: rotate(0) scale(1); } }
+    .step.active .mark.searching .p { opacity: 0; animation: pop-comet 1.4s linear infinite; animation-delay: calc(var(--i) * .175s); }
+    .step.active .mark.found .p { opacity: 0; animation: pop-land .26s cubic-bezier(.32,1.42,.5,1) forwards; animation-delay: calc(.3s + var(--i) * .035s); }
     .live-link { animation: inR .5s .3s cubic-bezier(.2,.8,.2,1) both; }
     .live-link { display: inline-block; font-size: 18px; font-weight: 700; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 12px 20px; margin: 6px 0 24px; word-break: break-all; }
     .success .btn { margin-bottom: 10px; }
@@ -225,6 +232,7 @@
     .actions.hidden { display: none; }
 
     @media (prefers-reduced-motion: reduce) {
+      .mark .p { opacity: 1 !important; }
       *, *::before, *::after { animation: none !important; transition: none !important; }
       .drop.scanning .sweep, .drop.scanning .corner { display: none; }
     }
@@ -236,6 +244,11 @@
   </style>
 </head>
 <body>
+  <!-- The pinwheel arm (same path as view.html's #pop-p) and the brand gradient. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <path id="pop-p" fill-rule="nonzero" d="M90.6,150.6a60.0,60.0 0 1,0 120.0,0a60.0,60.0 0 1,0 -120.0,0ZM129.1,150.6a21.5,21.5 0 1,1 43.0,0a21.5,21.5 0 1,1 -43.0,0ZM96.1,150.6L96.1,237.1A16.75,16.75 0 0,0 129.6,237.1L129.6,150.6Z"/>
+    <linearGradient id="pop-grad" x1="0" y1="302" x2="302" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#7657FC"/><stop offset="1" stop-color="#589AF9"/></linearGradient>
+  </defs></svg>
   <header class="top">
     <img src="/assets/Popcode_logo.png" alt="Popcode">
     <span class="mock-tag">Mockup</span>
@@ -350,7 +363,7 @@
 
     <!-- Generating -->
     <section class="step gen" data-step="gen">
-      <img class="gen-mark" src="/assets/popcode_symbol_color.svg" alt="">
+      <svg class="mark searching" viewBox="0 0 302 302" aria-hidden="true"><g transform="rotate(0 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 0;"/></g><g transform="rotate(45 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 1;"/></g><g transform="rotate(90 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 2;"/></g><g transform="rotate(135 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 3;"/></g><g transform="rotate(180 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 4;"/></g><g transform="rotate(225 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 5;"/></g><g transform="rotate(270 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 6;"/></g><g transform="rotate(315 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 7;"/></g></svg>
       <h1>Making your Popcode…</h1>
       <div class="bar"><div id="gen-bar"></div></div>
       <small id="gen-label">Preparing images</small>
@@ -358,7 +371,7 @@
 
     <!-- Done -->
     <section class="step success" data-step="done">
-      <img class="done-mark" src="/assets/popcode_symbol_color.svg" alt="">
+      <svg class="mark found" viewBox="0 0 302 302" aria-hidden="true"><g transform="rotate(0 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 0;"/></g><g transform="rotate(45 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 1;"/></g><g transform="rotate(90 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 2;"/></g><g transform="rotate(135 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 3;"/></g><g transform="rotate(180 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 4;"/></g><g transform="rotate(225 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 5;"/></g><g transform="rotate(270 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 6;"/></g><g transform="rotate(315 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 7;"/></g></svg>
       <h1>Your Popcode is live!</h1>
       <p class="lede">Anyone with the link can scan your images to play them.</p>
       <div class="live-link" id="live-link">popcode.app/</div>
