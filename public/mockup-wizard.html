@@ -36,7 +36,11 @@
     .progress { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
     .progress span { position: relative; overflow: hidden; height: 4px; border-radius: 2px; background: #e4e4e4; }
     /* The fill sweeps in from the left as each step is reached. */
-    .progress span::after { content: ''; position: absolute; inset: 0; background: var(--grad); transform: scaleX(0); transform-origin: left; transition: transform .55s cubic-bezier(.2,.8,.2,1); }
+    /* One gradient runs across every filled segment, from the left edge of the
+       first to the right edge of the current one: each segment shows its own
+       slice of it (--off / --fill are set by paintProgress()). */
+    .progress span::after { content: ''; position: absolute; inset: 0;
+      background: linear-gradient(90deg, #7657FC, #589AF9) no-repeat; background-size: var(--fill, 100%) 100%; background-position: calc(var(--off, 0px) * -1) 0; transform: scaleX(0); transform-origin: left; transition: transform .55s cubic-bezier(.2,.8,.2,1); }
     .progress span.on::after { transform: scaleX(1); }
     .progress-labels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 11px; color: #9a9a9a; font-weight: 600; margin-bottom: 28px; }
     .progress-labels span.on { color: var(--ink); }
@@ -64,7 +68,7 @@
     /* Next lights up with a ripple the moment it becomes tappable. */
     .btn.ready { animation: flash .7s ease-out; }
 
-    .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+    .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 10px 0 -1px; }
     /* One line always: fitHeadings() steps the size down until it fits. */
     h1 { white-space: nowrap; font-family: 'CooperBT', Georgia, serif; font-weight: 400; font-size: 32px; line-height: 1.08; letter-spacing: -0.01em; margin-bottom: 10px; }
     /* Step header (eyebrow, heading, intro line) is centred on every step. */
@@ -119,7 +123,7 @@
     .row .meta .warn-tag { display: flex; color: #b45309; margin-top: 3px; font-size: 12px; font-weight: 600; }
 
     /* Step 2 */
-    .scan-chip { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--line); border-radius: var(--pc-radius-inner); padding: 8px; margin-bottom: 22px; }
+    .scan-chip { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--line); border-radius: var(--pc-radius-inner); padding: 8px; margin: 30px 0 22px; }
     .scan-chip img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; }
     .scan-chip div { font-size: 13px; color: var(--muted); }
     .scan-chip b { display: block; color: var(--ink); font-size: 14px; }
@@ -227,8 +231,13 @@
     /* Bottom action bar */
     /* Back / Next sit right under the step's content, not pinned to the bottom. */
     .actions { padding: 28px 16px calc(32px + env(safe-area-inset-bottom)); }
-    .actions .inner { max-width: 520px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
+    .actions .inner { max-width: 488px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
     .actions .btn-primary { flex: 1; }
+    /* No Back yet (first image): Next sits centred on its own. */
+    .actions .inner.solo { justify-content: center; }
+    /* The intro's line break only where the first sentence fits on one line. */
+    @media (max-width: 480px) { .wide-br { display: none; } }
+    .actions .inner.solo .btn-primary { flex: 0 0 85%; }
     .actions.hidden { display: none; }
 
     @media (prefers-reduced-motion: reduce) {
@@ -264,7 +273,7 @@
     <section class="step" data-step="photo">
       <div class="eyebrow" id="photo-eyebrow">Step 1</div>
       <h1 id="photo-title">Choose an image</h1>
-      <p class="lede">This is the image people will scan with the Popcode app. When they scan it, your video or audio plays.</p>
+      <p class="lede">This is the image people will scan with the Popcode app.<br class="wide-br"> When they scan it, your video or audio plays.</p>
       <label class="drop" id="photo-drop">
         <input type="file" accept="image/*" id="photo-input">
         <img class="icon" src="/assets/photo.png" alt="">
@@ -426,12 +435,21 @@
       const idx = STEPS.indexOf(step);
       $('progress-wrap').style.display = idx < 0 ? 'none' : '';
       [...$('progress').children].forEach((s, i) => s.classList.toggle('on', i <= idx));
+      paintProgress(idx);
       [...$('progress-labels').children].forEach((s, i) => s.classList.toggle('on', i === idx));
       $('actions').classList.toggle('hidden', idx < 0);
       window.scrollTo({ top: 0 });
       render();
       fitHeadings();
     }
+
+    function paintProgress(idx) {
+      const segs = [...$('progress').children];
+      const last = segs[Math.max(0, Math.min(idx, segs.length - 1))];
+      const fill = last.offsetLeft + last.offsetWidth - segs[0].offsetLeft;
+      segs.forEach(s => { s.style.setProperty('--off', (s.offsetLeft - segs[0].offsetLeft) + 'px'); s.style.setProperty('--fill', fill + 'px'); });
+    }
+    window.addEventListener('resize', () => paintProgress(STEPS.indexOf(state.step)));
 
     function fitHeadings() {
       document.querySelectorAll('.step.active h1').forEach(h => {
@@ -448,7 +466,9 @@
       const s = state.step, d = state.draft, n = photoNumber();
       const adding = state.items.length > 0 && state.editIndex < 0;
       const back = $('back-btn'), next = $('next-btn');
-      back.style.visibility = (s === 'photo' && !state.items.length) ? 'hidden' : '';
+      const solo = s === 'photo' && !state.items.length;
+      back.style.display = solo ? 'none' : '';
+      back.parentElement.classList.toggle('solo', solo);
 
       if (s === 'photo') {
         $('photo-eyebrow').textContent = n > 1 ? `Step 1 · Image ${n}` : 'Step 1';
