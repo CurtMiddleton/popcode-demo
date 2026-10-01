@@ -1033,21 +1033,32 @@
           // never overflow; the square then matches it exactly.
           const introStage = document.querySelector('#book-intro .bi-stage');
           const introSample = window.unsplashSample ? window.unsplashSample(1100) : null;
-          function introBookHeight() {
+          /* All three books drawn to one scale, matched on the drawn book, not
+             the canvas (each mockup has its own margin): the 8×8 is as tall as
+             the A4 book, the 12×12 as wide. Fractions come from the mockups in
+             unsplash-samples.js — landscape: book rect 0.745 × 0.537 of a square
+             template, cropped to 0.781 × 0.573; square: 780 of an 892 canvas. */
+          const LAND_BOOK_W = 0.745 / 0.781;   // book width / landscape canvas width
+          const LAND_BOOK_HW = 0.537 / 0.745;  // drawn A4 book height / width
+          const SQ_BOOK = 780 / 892;           // book side / square canvas side
+          function introCanvasSize(size) {
             const contentW = (introStage ? introStage.clientWidth : 400) - 72; // stage padding 36*2
-            const LAND_AR = 703 / 516; // landscape mockup aspect (w/h), the wider shape
-            return Math.max(190, Math.min(340, Math.floor((contentW - 6) / LAND_AR)));
+            // W = drawn A4 book width. The widest canvas is the 12×12 (W / SQ_BOOK).
+            const W = Math.max(150, Math.min(420 * SQ_BOOK, (contentW - 6) * SQ_BOOK));
+            if (size.wIn !== size.hIn) return { w: W / LAND_BOOK_W, h: W / LAND_BOOK_W * 516 / 703 };
+            const side = (size.hIn < 10 ? W * LAND_BOOK_HW : W) / SQ_BOOK;
+            return { w: side, h: side };
           }
           function renderIntroBook() {
             if (!window.drawProductCardMockup || !introSample || !introStage) return;
             const cv = document.createElement('canvas');
             const size = currentBookSize();
             const square = size.wIn === size.hIn;
-            // Squares to scale with each other: the 12×12 gets the full height,
-            // the 8×8 its true fraction of it (8.3 / 11.7).
-            const h = Math.round(introBookHeight() * (square ? size.wIn / 11.6929 : 1));
             window.drawProductCardMockup(cv, square ? 'book-square' : 'book', introSample, '/assets/sample-photo.jpg').then(() => {
-              cv.style.cssText = 'height:' + h + 'px;width:auto;max-width:100%;display:block;';
+              const box = introCanvasSize(size);
+              // Hold the stage at the tallest book so switching sizes doesn't jump.
+              introStage.style.minHeight = Math.round(introCanvasSize({ wIn: 12, hIn: 12 }).h + 72) + 'px';
+              cv.style.cssText = 'width:' + Math.round(box.w) + 'px;height:' + Math.round(box.h) + 'px;max-width:none;display:block;';
               introStage.innerHTML = '';
               introStage.appendChild(cv);
             }).catch(() => {});
