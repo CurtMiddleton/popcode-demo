@@ -180,6 +180,39 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    on Scout's is lower right at **12%** of the diameter on a white ring (the
    user's mockup, 2026-09-26); real orders print it at 6% — decide whether
    orders should get the bigger symbol too.
+10. **Privacy/trust fixes — Monday 2026-10-05 (reminder set in session
+    `session_01Kf5EHms85CmqqyN3UHuXfu`, 9:00 ET).** (a) `scan_events.ip_address`
+    still holds real IPs for every event before 2026-09-26 (log-event stopped
+    writing them in `eb81c4c`, but nothing deleted the old ones) — so the impact
+    dashboard's "Popcode doesn't keep IP addresses" isn't yet true for history.
+    Plan: migration that replaces each with a one-way hash (keeps old
+    unique-visitor counts), then nulls the raw column; first check every RPC
+    that reads `ip_address` (`get_reach_events`, `get_events_with_users`
+    (prod-only definition), viewer-insights). (b) `privacy.html` says local
+    storage is only for sign-in and UI preferences — the anonymous `device_id`
+    lives there now; add a sentence.
+11. **New engagement insights — plan agreed 2026-10-02, build in a fresh
+    session.** One data source (`scan_events`), three audiences, each insight
+    only where it answers that audience's question:
+    - *Admin Analytics:* when people watch (day × hour grid on Overview), rewatch
+      column on Content, gift→first-view delay (and print shipped→first scan),
+      share channel bars (referrer/UTM), language on the Map's country table,
+      and a new **Health** tab (scan reliability: time-to-match, camera denied,
+      scans abandoned; video load time). Failures are admin-only.
+    - *Creators (My Popcodes viewer insights):* one-line stories, not charts —
+      "Mom watched it 4 times" (personal links only), "First opened 2 days after
+      you shared it".
+    - *Nonprofits (`impact.html`):* "best time to send" beside *Scans by day*,
+      a rewatch-rate KPI, mail-drop → first scans.
+    - **Order:** step 1 needs no new logging (when / repeat / gift→first view —
+      history works from day one): Analytics first, then creator sentences,
+      then impact cards. Step 2 needs new anonymous viewer events (reliability,
+      load time, referrer, `navigator.language`) — starts counting on ship, and
+      `privacy.html` needs a matching line (pairs with item 10b).
+    - **Never:** precise GPS, fingerprinting, ad/tracking pixels, keeping camera
+      frames, tying an anonymous viewer to an identity they didn't give, or
+      showing nonprofits per-donor data. Consider a retention rule (raw events
+      ~2 years, aggregates forever).
 
 ## Session history
 
@@ -3379,3 +3412,7 @@ Photos were shrunk to **2560px on upload** and the original thrown away (~220 DP
 - "How do I clear the cache?" turned out to be **an unmerged PR**, not a cache problem. Check `gh pr view N --json state` and `curl -s https://popcode.app/view.html | grep og_image` before talking about caches. Bumping the `?v=` makes new sends re-fetch; cards already sent never change.
 - `gh pr merge` was blocked by the permission classifier in this session — the user merges by hand.
 - Another session was working in the main checkout (`claude/boardbook-title`, uncommitted changes); these notes were written from a separate worktree so they weren't touched.
+
+### 2026-10-02 — Privacy check on what Popcode collects; engagement-insights plan
+
+No code changed. User asked whether locations come "from their server" since we don't collect IPs. Corrected: until 2026-09-26 `log-event.js` **stored full IPs** (the Activity log's IP column); `eb81c4c` stopped that and switched distinct-viewer counting to the anonymous `device_id`, but the old IPs are still in `scan_events`. Location is Vercel's edge lookup from the IP (`x-vercel-ip-*` headers) — only the city-level result is kept. Two trust gaps found → **Next item 10**, reminder set for Mon 2026-10-05 09:00 ET (`trig_01NDJbNKDh4PHRRAxAmnetMb`). Discussed what more can be learned without breaking trust and how to present it per audience → **Next item 11**. Also from this session (2026-09-26, already merged): #104 fixed the Activity-log search box coming back empty but still filtering after a date-range change (`value="${escapeAttr(searchQuery)}"`).
