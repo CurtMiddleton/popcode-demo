@@ -235,7 +235,7 @@
     // "Have a code? Enter it here." field instead of a Scan button that only
     // exists on a project page.
     line: (slug) => (slug
-      ? [`Go to popcode.app/${slug}`, 'on your phone and hit Scan image.']
+      ? [`Go to popcode.app/${slug}`, 'on your phone and tap to scan.']
       : ['Go to popcode.app', 'on your phone and enter your code.']),
 
   };
