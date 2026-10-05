@@ -497,6 +497,17 @@
         cursor: pointer; padding: 8px 4px; text-decoration: underline; text-underline-offset: 3px; }
       #end-screen .end-close { position: absolute; top: max(20px, env(safe-area-inset-top)); right: 20px; z-index: 1;
         width: 44px; height: 44px; border-radius: 50%; border: none; background: rgba(110,110,110,.7); color: #fff; font-size: 22px; cursor: pointer; }
+      /* Back from a button's link: scanning the next photo becomes the main
+         action, and the buttons step down to outlines (still there to tap). */
+      #end-screen .end-back { width: 100%; margin: 0 0 18px; text-align: center; }
+      #end-screen .end-back p { margin: 0 0 12px; font: 600 16px/1.35 var(--brand-body, 'DM Sans', sans-serif); text-shadow: 0 2px 10px rgba(0,0,0,.45); }
+      #end-screen .end-next { display: block; width: 100%; padding: 17px 20px; border-radius: 999px; border: none; cursor: pointer;
+        background: #fff; color: #1a1a1a; font: 700 18px/1.25 var(--brand-body, 'DM Sans', sans-serif); box-shadow: 0 6px 24px rgba(0,0,0,.3); }
+      #end-screen.returned .end-btn:first-child { background: rgba(0,0,0,.18); color: #fff; border-color: rgba(255,255,255,.9); }
+      #end-screen.returned .end-scan { display: none; }
+      #end-screen.returned .end-title:not(:empty) ~ .end-back { margin-top: 0; }
+      #end-screen.returned .end-back { margin-top: auto; }
+      #end-screen.returned .end-btns { margin-top: 0; }
       @media (prefers-reduced-motion: reduce) { #end-screen .end-btn { transition: none; } }
       #close-btn {
         position: absolute; top: 20px; right: 20px; z-index: 9001;
@@ -727,6 +738,10 @@
         <img class="end-logo" alt="" hidden/>
         <h2 class="end-title"></h2>
         <p class="end-sub"></p>
+        <div class="end-back" hidden>
+          <p>Welcome back. There&rsquo;s more to see.</p>
+          <button type="button" class="end-next">Scan another photo</button>
+        </div>
         <div class="end-btns"></div>
         <div class="end-foot">
           <button type="button" class="end-replay">Watch again</button>
@@ -1799,7 +1814,11 @@
           if (u.origin !== location.origin) { a.target = '_blank'; a.rel = 'noopener'; }
           a.textContent = b.label;
           if (b.sub) { const sm = document.createElement('small'); sm.textContent = b.sub; a.appendChild(sm); }
-          a.addEventListener('click', () => { if (!endPreview) logEvent('cta_tap_' + (i + 1), currentTargetIndex); });
+          a.addEventListener('click', () => {
+            if (endPreview) return;
+            logEvent('cta_tap_' + (i + 1), currentTargetIndex);
+            if (a.target === '_blank') markCtaAway();
+          });
           wrap.appendChild(a);
         });
       }
@@ -1812,7 +1831,43 @@
         btns.forEach((b, i) => setTimeout(() => b.classList.add('in'), 350 + i * 450));
         if (!isPreview) logEvent('cta_shown', currentTargetIndex);
       }
-      function hideEndScreen() { endScreen.style.display = 'none'; }
+      function hideEndScreen() { endScreen.style.display = 'none'; endScreen.classList.remove('returned'); endScreen.querySelector('.end-back').hidden = true; }
+
+      // ── Coming back from a button's link ───────────────────────────────────
+      // Outbound buttons open in a new tab, so this page is still here behind
+      // it. When the viewer comes back, count it (cta_return, by photo) and make
+      // the next scan the obvious thing to do. The camera is already off on the
+      // end screen (stopped before the video played), so there's nothing frozen
+      // to rescue: "Scan another photo" restarts it the usual way.
+      // sessionStorage covers iOS discarding the tab while they were away: the
+      // reloaded page still counts the return, then starts fresh.
+      const CTA_AWAY_KEY = 'popcode_cta_away';
+      const CTA_AWAY_MAX_MS = 2 * 60 * 60 * 1000;
+      let ctaAway = null;
+      function markCtaAway() {
+        ctaAway = { slug: id, t: currentTargetIndex, at: Date.now() };
+        try { sessionStorage.setItem(CTA_AWAY_KEY, JSON.stringify(ctaAway)); } catch (e) {}
+      }
+      function takeCtaAway() {
+        let away = ctaAway;
+        if (!away) { try { away = JSON.parse(sessionStorage.getItem(CTA_AWAY_KEY) || 'null'); } catch (e) {} }
+        ctaAway = null;
+        try { sessionStorage.removeItem(CTA_AWAY_KEY); } catch (e) {}
+        return away && away.slug === id && Date.now() - away.at < CTA_AWAY_MAX_MS ? away : null;
+      }
+      function onCtaReturn() {
+        if (document.visibilityState !== 'visible' || !ctaAway) return;
+        const away = takeCtaAway();
+        if (!away) return;
+        logEvent('cta_return', away.t);
+        if (endScreen.style.display !== 'block') return;
+        endScreen.classList.add('returned');
+        endScreen.querySelector('.end-back').hidden = false;
+      }
+      document.addEventListener('visibilitychange', onCtaReturn);
+      window.addEventListener('pageshow', onCtaReturn);
+      { const away = takeCtaAway(); if (away) logEvent('cta_return', away.t); }
+      endScreen.querySelector('.end-next').addEventListener('click', () => { hideEndScreen(); handleStartTap(); });
       endScreen.querySelector('.end-close').addEventListener('click', () => { hideEndScreen(); showStartScreen(); });
       endScreen.querySelector('.end-scan').addEventListener('click', () => { hideEndScreen(); showStartScreen(); });
       endScreen.querySelector('.end-replay').addEventListener('click', () => {
