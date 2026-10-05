@@ -1684,6 +1684,9 @@
         try {
           if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen();
           else if (document.webkitExitFullscreen && document.webkitFullscreenElement) document.webkitExitFullscreen();
+          // iPhone: landscape videos go full screen in the system player
+          // (webkitEnterFullscreen), which the document-level calls don't close.
+          else if (fullVid.webkitDisplayingFullscreen && fullVid.webkitExitFullscreen) fullVid.webkitExitFullscreen();
         } catch(e) {}
       }
       // If user exits fullscreen via browser controls, return to scanner
@@ -1737,6 +1740,12 @@
       fullVid.addEventListener('ended', () => {
         progressPending = false;
         logEvent('video_complete', currentTargetIndex);
+        // Leave full screen first, or on iPhone the system player stays up on a
+        // black frame with the end screen hidden behind it. mediaActive goes
+        // false before the exit so the fullscreen-exit listeners don't treat it
+        // as a viewer closing the video (they'd skip the end screen).
+        mediaActive = false;
+        tryExitFullscreen();
         hideTapToPlay();
         const fade = document.getElementById('fade-overlay');
         fade.style.display = 'block';
