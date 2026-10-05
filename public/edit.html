@@ -453,7 +453,7 @@
       .wl-image-preview .wl-overlay-text { position: absolute; left: 0; right: 0; top: 22%; display: flex; flex-direction: column; align-items: center; padding: 0 20px; text-align: center; color: white; text-shadow: 0 2px 8px rgba(0,0,0,0.4); pointer-events: none; }
       .wl-image-preview .wl-overlay-text { font-family: var(--brand-body, 'DM Sans', sans-serif); }
       .wl-image-preview .wl-overlay-text .pv-eyebrow { font-size: 13px; letter-spacing: 0.22em; text-transform: uppercase; margin-bottom: 0.8em; }
-      .wl-image-preview .wl-overlay-text .pv-title { font-family: var(--brand-head, 'Cormorant Garamond', serif); font-style: normal; font-weight: 500; font-size: 93px; line-height: 0.92; margin-bottom: 0.3em; }
+      .wl-image-preview .wl-overlay-text .pv-title { font-family: var(--brand-head, 'Cormorant Garamond', serif); font-style: normal; font-weight: var(--brand-head-weight, 500); font-size: 93px; line-height: 0.92; margin-bottom: 0.3em; }
       .wl-image-preview .wl-overlay-text .pv-sub { font-size: 15px; }
       .wl-image-preview .wl-tint { --bg-d: 1; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,calc(0.35 * var(--bg-d))) 0%, rgba(0,0,0,calc(0.10 * var(--bg-d))) 30%, rgba(0,0,0,calc(0.10 * var(--bg-d))) 60%, rgba(0,0,0,calc(0.55 * var(--bg-d))) 100%); pointer-events: none; }
       .wl-image-preview .pv-org-logo { position: absolute; top: 22px; left: 0; right: 0; display: flex; justify-content: center; pointer-events: none; }
@@ -555,7 +555,7 @@
       .end-preview .ep-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.45) 0%, rgba(0,0,0,.2) 35%, rgba(0,0,0,.55) 65%, rgba(0,0,0,.8) 100%); }
       .end-preview .ep-inner { position: relative; height: 100%; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 16px 12px 12px; }
       .end-preview .ep-logo { max-width: 90px; max-height: 40px; object-fit: contain; margin-top: 10px; }
-      .end-preview .ep-title { font-family: var(--brand-head, 'CooperBT', Georgia, serif); font-size: 19px; line-height: 1.1; margin: auto 0 6px; }
+      .end-preview .ep-title { font-family: var(--brand-head, 'CooperBT', Georgia, serif); font-weight: var(--brand-head-weight, normal); font-size: 19px; line-height: 1.1; margin: auto 0 6px; }
       .end-preview .ep-sub { font-size: 9.5px; line-height: 1.35; opacity: .92; margin: 0 0 14px; }
       .end-preview .ep-title:empty, .end-preview .ep-sub:empty { display: none; }
       .end-preview .ep-btns { width: 100%; display: flex; flex-direction: column; gap: 7px; margin-top: auto; }
@@ -757,6 +757,19 @@
                 <div class="wl-font-row">
                   <div><label for="wl-font-heading">Heading font</label><select id="wl-font-heading"></select></div>
                   <div><label for="wl-font-body">Text font</label><select id="wl-font-body"></select></div>
+                </div>
+                <div class="wl-font-row">
+                  <div><label for="wl-font-weight">Heading weight</label>
+                    <select id="wl-font-weight">
+                      <option value="">Default</option>
+                      <option value="300">Light (300)</option>
+                      <option value="400">Regular (400)</option>
+                      <option value="500">Medium (500)</option>
+                      <option value="600">SemiBold (600)</option>
+                      <option value="700">Bold (700)</option>
+                      <option value="800">ExtraBold (800)</option>
+                    </select></div>
+                  <div></div>
                 </div>
                 <p class="end-note" style="margin:4px 0 0;">Match the organization&rsquo;s branding. Used on the cover and the after-video screen.</p>
               </div>
@@ -1425,12 +1438,14 @@
         l.href = 'https://fonts.googleapis.com/css2?family=' + f.family.replace(/ /g, '+') + ':wght@' + f.wght + '&display=swap';
         document.head.appendChild(l);
       }
-      // Sets --brand-head / --brand-body on el (unset = Popcode's own fonts).
-      function applyBrandFonts(el, headKey, bodyKey) {
+      // Sets --brand-head / --brand-body / --brand-head-weight on el (unset = Popcode's own).
+      function applyBrandFonts(el, headKey, bodyKey, headWeight) {
         [['--brand-head', headKey], ['--brand-body', bodyKey]].forEach(([v, k]) => {
           const stack = brandFontStack(k);
           if (stack) { loadBrandFont(k); el.style.setProperty(v, stack); } else el.style.removeProperty(v);
         });
+        const w = Number(headWeight);
+        if (w >= 100 && w <= 900) el.style.setProperty('--brand-head-weight', String(w)); else el.style.removeProperty('--brand-head-weight');
       }
 
       function initBrandFontPickers(cfg) {
@@ -1443,12 +1458,17 @@
         });
         document.getElementById('wl-font-heading').value = BRAND_FONTS[cfg.font_heading] ? cfg.font_heading : '';
         document.getElementById('wl-font-body').value = BRAND_FONTS[cfg.font_body] ? cfg.font_body : '';
+        const weightSel = document.getElementById('wl-font-weight');
+        weightSel.value = cfg.font_heading_weight ? String(cfg.font_heading_weight) : '';
+        if (weightSel.selectedIndex < 0) weightSel.value = '';
+        weightSel.addEventListener('change', applyEditorBrandFonts);
         applyEditorBrandFonts();
       }
       // Both previews (cover and after-video) show the chosen fonts.
       function applyEditorBrandFonts() {
         const h = document.getElementById('wl-font-heading').value, b = document.getElementById('wl-font-body').value;
-        ['wl-preview', 'end-preview'].forEach(id => { const el = document.getElementById(id); if (el) applyBrandFonts(el, h, b); });
+        const w = document.getElementById('wl-font-weight').value;
+        ['wl-preview', 'end-preview'].forEach(id => { const el = document.getElementById(id); if (el) applyBrandFonts(el, h, b, w); });
       }
 
       function updatePreviewText() {
@@ -1573,7 +1593,8 @@
             org_logo_max_px: Number(document.getElementById('wl-org-logo-size').value),
             org_logo_top_pct: Number(document.getElementById('wl-org-logo-top').value),
             font_heading: document.getElementById('wl-font-heading').value || null,
-            font_body: document.getElementById('wl-font-body').value || null
+            font_body: document.getElementById('wl-font-body').value || null,
+            font_heading_weight: Number(document.getElementById('wl-font-weight').value) || null
           };
           const { error: dbErr, data } = await db.from('collections')
             .update({ cover_config: cfg })
