@@ -1190,6 +1190,14 @@
           if (cc.image_url) cc.image_url = rewrite(cc.image_url);
           if (cc.org_logo_url) cc.org_logo_url = rewrite(cc.org_logo_url);
           if (cc.end && cc.end.bg_url) cc.end = { ...cc.end, bg_url: rewrite(cc.end.bg_url) };
+          if (cc.end && cc.end.per_target) {
+            const pt = {};
+            Object.keys(cc.end.per_target).forEach(k => {
+              const o = cc.end.per_target[k];
+              pt[k] = o && o.bg_url ? { ...o, bg_url: rewrite(o.bg_url) } : o;
+            });
+            cc.end = { ...cc.end, per_target: pt };
+          }
           colPatch.cover_config = cc;
         }
         const { error: colErr, data: updated } = await db.from('collections').update(colPatch).eq('id', collectionId).select();
@@ -1522,18 +1530,18 @@
       // ── After the Video (admin only) ──────────────────────────────────────────
       // Saved as cover_config.end = { enabled, title, subtitle, bg_url, replay,
       // buttons: [{ label, sub, url }],
-      // per_target: { "<target_index>": { title, subtitle, buttons } } };
+      // per_target: { "<target_index>": { title, subtitle, buttons, bg_url } } };
       // view.html shows it when a video ends. A photo listed in per_target gets
-      // its own headline and buttons; every other photo uses the shared ones.
-      // Background and Watch again are shared by all.
+      // its own headline and buttons, and optionally its own background; every
+      // other photo uses the shared ones. Watch again is shared by all.
       const END_DEFAULT_BUTTONS = [
         { label: 'Double your gift today', sub: 'Every dollar matched through Giving Tuesday', url: '' },
         { label: 'Hear from Marisol', sub: '', url: '' },
         { label: 'Become a Tide Keeper, $10 a month', sub: '', url: '' }
       ];
-      let endBgPickedFile = null;
-      let endBgExistingUrl = null;
-      let endBgPreviewUrl = null;
+      // Each entry (endShared, endOwn[k]) carries bg = { url, file, preview }:
+      // url is the saved image, file a newly picked one waiting to upload.
+      const noBg = () => ({ url: null, file: null, preview: null });
       let endShared = { title: '', subtitle: '', buttons: [] };
       let endOwn = {};       // target_index -> { title, subtitle, buttons }
       let endSel = 'all';    // 'all' or a target_index
@@ -1544,16 +1552,15 @@
         document.getElementById('end-preview-link').href = '/' + slug + '?preview=end';
         document.getElementById('end-enabled').checked = !!(e && e.enabled);
         document.getElementById('end-replay').checked = !(e && e.replay === false);
-        endBgExistingUrl = (e && e.bg_url) || null;
-        endBgPreviewUrl = endBgExistingUrl;
         endShared = {
           title: (e && e.title) || '',
           subtitle: (e && e.subtitle) || '',
-          buttons: e && Array.isArray(e.buttons) ? e.buttons : END_DEFAULT_BUTTONS
+          buttons: e && Array.isArray(e.buttons) ? e.buttons : END_DEFAULT_BUTTONS,
+          bg: { ...noBg(), url: (e && e.bg_url) || null }
         };
         endOwn = {};
         Object.entries((e && e.per_target) || {}).forEach(([k, o]) => {
-          if (o && Array.isArray(o.buttons)) endOwn[k] = { title: o.title || '', subtitle: o.subtitle || '', buttons: o.buttons };
+          if (o && Array.isArray(o.buttons)) endOwn[k] = { title: o.title || '', subtitle: o.subtitle || '', buttons: o.buttons, bg: { ...noBg(), url: o.bg_url || null } };
         });
         endSel = 'all';
         const rows = document.getElementById('end-btn-rows');
@@ -1572,7 +1579,7 @@
         document.getElementById('end-own').addEventListener('change', (ev) => {
           if (endSel === 'all') return;
           if (ev.target.checked) {
-            endOwn[endSel] = readEndFields(); // start from the shared buttons
+            endOwn[endSel] = { ...readEndFields(), bg: noBg() }; // start from the shared buttons; background inherits until one is chosen
           } else {
             delete endOwn[endSel];
             fillEndFields(endShared);
@@ -1588,13 +1595,17 @@
           const f = ev.target.files && ev.target.files[0];
           if (!f) return;
           if (f.size > 8 * 1024 * 1024) { setEndStatus('Image is over 8 MB — please pick a smaller one.', 'err'); return; }
-          endBgPickedFile = f;
-          endBgPreviewUrl = URL.createObjectURL(f);
+          const entry = endEntry();
+          if (!entry) return;
+          entry.bg = { url: entry.bg.url, file: f, preview: URL.createObjectURL(f) };
+          ev.target.value = '';
           setEndStatus('');
           updateEndPreview();
         });
         document.getElementById('end-bg-clear').addEventListener('click', () => {
-          endBgPickedFile = null; endBgExistingUrl = null; endBgPreviewUrl = null;
+          const entry = endEntry();
+          if (!entry) return;
+          entry.bg = noBg();
           document.getElementById('end-bg-input').value = '';
           updateEndPreview();
         });
@@ -1623,9 +1634,13 @@
 
       // Keep what's typed with the photo (or "Every video") it was typed for.
       function stashEndFields() {
-        if (endSel === 'all') endShared = readEndFields();
-        else if (endOwn[endSel]) endOwn[endSel] = readEndFields();
+        if (endSel === 'all') endShared = { ...readEndFields(), bg: endShared.bg };
+        else if (endOwn[endSel]) endOwn[endSel] = { ...readEndFields(), bg: endOwn[endSel].bg };
       }
+
+      // The entry being edited, or null when a photo is just borrowing the shared one.
+      function endEntry() { return endSel === 'all' ? endShared : (endOwn[endSel] || null); }
+      const bgShown = bg => (bg && (bg.preview || bg.url)) || null;
 
       // The chip row appears once a Popcode has more than one photo.
       function renderEndTargets() {
@@ -1671,6 +1686,7 @@
         document.getElementById('end-own').checked = own;
         ['end-title', 'end-subtitle'].forEach(id => { document.getElementById(id).disabled = locked; });
         document.querySelectorAll('#end-btn-rows input').forEach(i => { i.disabled = locked; });
+        ['end-bg-pick', 'end-bg-clear'].forEach(id => { document.getElementById(id).disabled = locked; });
         const n = endSel === 'all' ? '' : 'photo ' + (Number(endSel) + 1);
         document.getElementById('end-target-note').textContent = endSel === 'all'
           ? 'Shown after every video that doesn\u2019t have its own buttons.'
@@ -1690,12 +1706,15 @@
       }
 
       function updateEndPreview() {
-        const bgUrl = endBgPreviewUrl || (wlCoverCfg.enabled && wlCoverCfg.image_url) || null;
+        const own = endSel !== 'all' ? endOwn[endSel] : null;
+        const ownBg = own ? bgShown(own.bg) : null, sharedBg = bgShown(endShared.bg);
+        const bgUrl = ownBg || sharedBg || (wlCoverCfg.enabled && wlCoverCfg.image_url) || null;
         const bg = document.getElementById('ep-bg');
         if (bgUrl) { bg.src = bgUrl; bg.style.display = 'block'; } else { bg.removeAttribute('src'); bg.style.display = 'none'; }
-        document.getElementById('end-bg-note').textContent = endBgPreviewUrl
-          ? 'Using the image you chose.'
-          : 'None chosen: the cover image is used if there is one.';
+        document.getElementById('end-bg-note').textContent =
+          endSel === 'all' ? (sharedBg ? 'Using the image you chose.' : 'None chosen: the cover image is used if there is one.')
+          : own ? (ownBg ? 'Using this photo\u2019s own image.' : 'None chosen for this photo: it uses the image for every video, or the cover image.')
+          : 'Uses the image for every video. Tick the box above to give this photo its own.';
         const logo = document.getElementById('ep-logo');
         if (wlCoverCfg.org_logo_url) { logo.src = wlCoverCfg.org_logo_url; logo.style.display = 'block'; } else { logo.style.display = 'none'; }
         document.getElementById('ep-title').textContent = document.getElementById('end-title').value.trim();
@@ -1746,7 +1765,8 @@
           perTarget[k] = {
             title: endOwn[k].title || null,
             subtitle: endOwn[k].subtitle || null,
-            buttons: own.map(b => ({ label: b.label, sub: b.sub || null, url: b.url }))
+            buttons: own.map(b => ({ label: b.label, sub: b.sub || null, url: b.url })),
+            bg_url: null // filled in after any upload below
           };
         });
         if (problem) { setEndStatus(problem.charAt(0).toUpperCase() + problem.slice(1), 'err'); return; }
@@ -1754,19 +1774,21 @@
         btn.disabled = true;
         setEndStatus('Saving…');
         try {
-          let bgUrl = endBgExistingUrl;
-          if (endBgPickedFile) {
-            const ext = (endBgPickedFile.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-            const path = `${slug}/end_bg.${ext}`;
+          // Upload a newly picked image (if any) and return the entry's saved URL.
+          const uploadBg = async (entry, name) => {
+            const bg = entry.bg || noBg();
+            if (!bg.file) return bg.url;
+            const ext = (bg.file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+            const path = `${slug}/${name}.${ext}`;
             const { error: upErr } = await db.storage.from('experiences')
-              .upload(path, endBgPickedFile, { upsert: true, contentType: endBgPickedFile.type || 'image/jpeg' });
+              .upload(path, bg.file, { upsert: true, contentType: bg.file.type || 'image/jpeg' });
             if (upErr) throw upErr;
             const { data: pub } = db.storage.from('experiences').getPublicUrl(path);
-            bgUrl = pub.publicUrl + '?v=' + Date.now();
-            endBgPickedFile = null;
-            endBgExistingUrl = bgUrl;
-            endBgPreviewUrl = bgUrl;
-          }
+            entry.bg = { url: pub.publicUrl + '?v=' + Date.now(), file: null, preview: null };
+            return entry.bg.url;
+          };
+          const bgUrl = await uploadBg(endShared, 'end_bg');
+          for (const k of Object.keys(perTarget)) perTarget[k].bg_url = (await uploadBg(endOwn[k], 'end_bg_' + k)) || null;
           const cfg = {
             ...wlCoverCfg,
             end: {
