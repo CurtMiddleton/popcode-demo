@@ -14,7 +14,7 @@
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
     <meta property="og:title" content="Popcode — Design a Calendar">
     <meta property="og:description" content="Design a 12-month wall calendar from your photos.">
-    <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=3">
+    <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=4">
     <meta property="og:type" content="website">
     <title>Popcode — Design a Calendar</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -27,6 +27,8 @@
     <script src="/postcard-render.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
+    <script src="/product-preview.js"></script>
+    <script src="/product-gallery.js"></script>
     <script src="/countries.js"></script>
     <!-- calendar.html only needs MINDAR.IMAGE.Compiler (to compile popcoded
          photos into a .mind target), not AR rendering. Stub AFRAME so the
@@ -3028,11 +3030,32 @@
         // Unsplash sample with the bundled photo as an offline/blocked fallback.
         const photoDiv = pf.inner.querySelector('.pf-photo');
         const im = new Image();
-        im.onload = () => { photoDiv.style.backgroundImage = `url('${im.src}')`; };
+        im.onload = () => { photoDiv.style.backgroundImage = `url('${im.src}')`; introPhoto = im; if (calGallery) calGallery.refreshThumb(); };
         im.onerror = () => { if (im.src !== location.origin + FALLBACK) im.src = FALLBACK; };
         im.src = sample;
         sheet.appendChild(pf.frame);
         host.appendChild(sheet);
+        syncCalGallery(host);
+      }
+      /* Gallery under the calendar: this live sheet first, then Prodigi's
+         close-ups of the real calendar (PopcodeGallery.IMAGES.calendar). The
+         live thumbnail is the same sheet drawn small (PopcodePreview's
+         calendar drawing, as on My Designs); a year change brings the live
+         view back and refreshes it. */
+      let calGallery = null, introPhoto = null;
+      function syncCalGallery(host) {
+        if (!window.PopcodeGallery) return;
+        if (calGallery) { calGallery.show(0); calGallery.refreshThumb(); return; }
+        calGallery = window.PopcodeGallery.mount(host.parentElement, {
+          liveEl: host,
+          renderThumb: (box) => {
+            if (!introPhoto || !window.PopcodePreview || !window.PopcodePreview.drawCalendarSheet) return;
+            const cv = document.createElement('canvas');
+            cv.style.cssText = 'width:100%;height:100%;display:block;';
+            window.PopcodePreview.drawCalendarSheet(cv, introPhoto, calYear).then(() => box.appendChild(cv)).catch(() => {});
+          },
+          images: window.PopcodeGallery.IMAGES.calendar,
+        });
       }
 
       function renderIntroYears() {

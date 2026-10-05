@@ -14,7 +14,7 @@
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
     <meta property="og:title" content="Popcode">
     <meta property="og:description" content="Bring your photos to life with AR video">
-    <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=3">
+    <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=4">
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     <title>Popcode</title>
@@ -523,13 +523,41 @@
         pointer-events: none; z-index: 1000;
         white-space: nowrap;
       }
+      /* Shown when scanning looks stuck (see the reload prompt in the script).
+         A reload fixes nearly every stuck scan, so the prompt is a big round
+         reload arrow that turns, pauses, and turns again. transform/opacity
+         only: MindAR holds the main thread while it scans. */
       #reload-hint {
-        display: none; position: fixed; bottom: 12px; left: 50%;
+        display: none; position: fixed; left: 50%;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
         transform: translateX(-50%);
-        font-family: 'DM Sans', sans-serif; font-size: 13px; color: rgba(255,255,255,0.85);
-        z-index: 1000; white-space: nowrap; cursor: pointer;
-        background: rgba(0,0,0,0.55); border: none; padding: 8px 20px;
-        border-radius: 24px; text-decoration: underline;
+        flex-direction: column; align-items: center; gap: 10px;
+        background: none; border: none; padding: 0; margin: 0;
+        font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 600;
+        color: #fff; white-space: nowrap; cursor: pointer; z-index: 1000;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #reload-hint.show { display: flex; animation: rh-in 0.42s cubic-bezier(.32,1.42,.5,1) both; }
+      #reload-hint .rh-disc {
+        position: relative; width: 64px; height: 64px; border-radius: 50%;
+        background: #fff; box-shadow: 0 6px 22px rgba(0,0,0,0.35);
+        display: flex; align-items: center; justify-content: center;
+      }
+      #reload-hint .rh-disc::before {
+        content: ''; position: absolute; inset: 0; border-radius: 50%;
+        border: 2px solid #fff; animation: rh-ring 2.4s ease-out infinite;
+      }
+      #reload-hint svg { width: 32px; height: 32px; animation: rh-turn 2.4s cubic-bezier(.65,0,.35,1) infinite; }
+      #reload-hint .rh-label {
+        background: rgba(0,0,0,0.55); padding: 7px 16px; border-radius: 20px;
+      }
+      #reload-hint:active .rh-disc { transform: scale(0.94); }
+      @keyframes rh-in   { from { opacity: 0; transform: translateX(-50%) translateY(16px) scale(0.85); } to { opacity: 1; transform: translateX(-50%); } }
+      @keyframes rh-turn { 0% { transform: rotate(0); } 45%, 100% { transform: rotate(360deg); } }
+      @keyframes rh-ring { 0% { transform: scale(1); opacity: 0.8; } 60%, 100% { transform: scale(1.6); opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) {
+        #reload-hint.show, #reload-hint svg, #reload-hint .rh-disc::before { animation: none; }
+        #reload-hint .rh-disc::before { opacity: 0; }
       }
       #error-screen {
         display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: black;
@@ -662,7 +690,15 @@
 
     <button id="home-btn">&#8592;</button>
     <div id="scan-hint"></div>
-    <button id="reload-hint">Having trouble? Tap to reload</button>
+    <button id="reload-hint" type="button" aria-label="Not scanning? Tap to reload">
+      <span class="rh-disc">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 12a8 8 0 1 1-2.6-5.9"/>
+          <path d="M18.2 2.6l.2 4.2-4.2.6"/>
+        </svg>
+      </span>
+      <span class="rh-label">Not scanning? Tap to reload</span>
+    </button>
     <div id="scanner">
       <svg id="scan-mark" class="pop-mark" viewBox="0 0 302 302" aria-hidden="true">
         <g transform="rotate(0 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 0;"/></g>
@@ -968,6 +1004,15 @@
               clearTimeout(triggerTimer);
               triggerTimer = null;
               document.getElementById('scan-mark').classList.remove('found');
+              // Lost inside the hold before playback: back to scanning. Until
+              // 2026-10-01 mediaActive stayed true here, so every later
+              // targetFound was ignored and only a reload got the scan back.
+              mediaActive = false;
+              progressPending = false;
+              document.getElementById('scan-hint').style.display = 'block';
+              // Seeing the photo but not holding it: count it toward the prompt.
+              if (++rhFlickers >= RH_FLICKERS) showReloadHint('flicker');
+              else startReloadHintTimer(true);
             }
           });
           scene.appendChild(target);
@@ -976,6 +1021,7 @@
         document.body.appendChild(scene);
         arScene = scene;
 
+        scene.addEventListener('arReady', () => { cameraUp = true; });
         scene.addEventListener('arError', () => {
           if (cleanRescanActive) return; // a clean-rescan attempt will handle its own fallback
           // NotAllowedError is the viewer refusing camera access (or having
@@ -1242,19 +1288,48 @@
       const FORCE_LEGACY_RESCAN = new URLSearchParams(location.search).get('rescan') === 'legacy';
       let cleanRescanActive = false; // true while a clean stop()/start() may still fall back
 
+      // ── Reload prompt ───────────────────────────────────────────────────
+      // A scan that won't take — first open, held too close, phone at an
+      // angle — is nearly always fixed by reloading, so we offer it as soon as
+      // scanning looks stuck. Three signs, whichever comes first:
+      //   • the camera never came up (no arReady) within RH_CAMERA_MS,
+      //   • the photo was found and lost RH_FLICKERS times before it could
+      //     trigger — it's seeing the photo but can't hold it,
+      //   • nothing has triggered after RH_IDLE_MS.
+      // Logs reload_prompt_{idle|camera|flicker} and reload_tap_{same} so we
+      // can see how often scans stall, and why.
+      const RH_IDLE_MS = 10000, RH_CAMERA_MS = 6000, RH_FLICKERS = 2;
       const reloadHintBtn = document.getElementById('reload-hint');
-      reloadHintBtn.addEventListener('click', () => location.reload());
+      let rhCameraTimer = null, rhFlickers = 0, rhReason = null, cameraUp = false;
+      reloadHintBtn.addEventListener('click', () => {
+        logEvent('reload_tap_' + rhReason);
+        // Give the log a beat to leave (keepalive covers the rest).
+        setTimeout(() => location.reload(), 120);
+      });
 
-      function startReloadHintTimer() {
-        clearTimeout(reloadHintTimer);
-        reloadHintBtn.style.display = 'none';
-        reloadHintTimer = setTimeout(() => {
-          if (!mediaActive) reloadHintBtn.style.display = 'block';
-        }, 10000);
+      function showReloadHint(reason) {
+        if (mediaActive || reloadHintBtn.classList.contains('show')) return;
+        clearTimeout(reloadHintTimer); clearTimeout(rhCameraTimer);
+        rhReason = reason;
+        // An error pill would sit on top of the prompt; the prompt is the fix.
+        document.getElementById('scan-hint').textContent = '';
+        reloadHintBtn.classList.add('show');
+        logEvent('reload_prompt_' + reason);
+      }
+      // Called right after mindar.start(). arReady always arrives later (it
+      // waits on the camera's video), so clearing cameraUp here is safe.
+      // resume: restarting after a lost photo — keep the flicker count.
+      function startReloadHintTimer(resume) {
+        clearReloadHint();
+        if (!resume) { rhFlickers = 0; cameraUp = false; }
+        reloadHintTimer = setTimeout(() => showReloadHint('idle'), RH_IDLE_MS);
+        if (!cameraUp) {
+          rhCameraTimer = setTimeout(() => { if (!cameraUp) showReloadHint('camera'); }, RH_CAMERA_MS);
+        }
       }
       function clearReloadHint() {
-        clearTimeout(reloadHintTimer);
-        reloadHintBtn.style.display = 'none';
+        clearTimeout(reloadHintTimer); clearTimeout(rhCameraTimer);
+        reloadHintBtn.classList.remove('show');
       }
 
       function showMediaError(msg) {

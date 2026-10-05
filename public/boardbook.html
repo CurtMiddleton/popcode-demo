@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
     <meta property="og:title" content="Popcode — Design a Board Book">
     <meta property="og:description" content="Design a baby board book where every page comes to life with video when scanned.">
-    <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=3">
+    <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=4">
     <title>Popcode — Design a Board Book</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
@@ -24,6 +24,7 @@
     <script src="/storage-copy.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
+    <script src="/product-gallery.js"></script>
     <!-- Board book only needs MINDAR.IMAGE.Compiler (compile popcoded photos into a
          .mind), not AR rendering. Stub AFRAME so the compiler bundle loads without a
          WebGL renderer — same trick as create.html / book.html. -->
@@ -958,7 +959,16 @@
       (function introMock() {
         const stage = document.getElementById('intro-mock');
         if (!stage || !window.boardbookMockup) return;
-        window.boardbookMockup(stage, window.unsplashBaby ? window.unsplashBaby(800) : '', { title: "Baby’s First Book" });
+        const photo = window.unsplashBaby ? window.unsplashBaby(800) : '';
+        const live = (el) => window.boardbookMockup(el, photo, { title: "Baby’s First Book" });
+        // Gallery: the live mockup first, then Printify's blanks with our
+        // sample photos (made by scripts/boardbook-mockup/).
+        if (!window.PopcodeGallery) { live(stage); return; }
+        window.PopcodeGallery.mount(stage, {
+          renderLive: live,
+          renderThumb: (el) => { const b = window.boardbookMockup(el, photo, { title: '' }); b.style.boxShadow = '0 2px 4px rgba(0,0,0,0.18)'; },
+          images: window.PopcodeGallery.IMAGES.boardbook,
+        });
       })();
 
       // "From $X" on the intro — the product price, like every other product.

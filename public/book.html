@@ -14,7 +14,7 @@
     <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
     <meta property="og:title" content="Popcode — Design a Book">
     <meta property="og:description" content="Design a photo book where any page can come to life with video.">
-    <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=3">
+    <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=4">
     <meta property="og:type" content="website">
     <title>Popcode — Design a Book</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -28,6 +28,7 @@
     <script src="/book-spine.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
+    <script src="/product-gallery.js"></script>
     <script src="/countries.js"></script>
     <!-- book.html only needs MINDAR.IMAGE.Compiler (to compile popcoded photos
          into a .mind target), not AR rendering. Stub AFRAME so the compiler
@@ -1033,24 +1034,55 @@
           // never overflow; the square then matches it exactly.
           const introStage = document.querySelector('#book-intro .bi-stage');
           const introSample = window.unsplashSample ? window.unsplashSample(1100) : null;
-          function introBookHeight() {
+          /* All three books drawn to one scale, matched on the drawn book, not
+             the canvas (each mockup has its own margin): the 8×8 is as tall as
+             the A4 book, the 12×12 as wide. Fractions come from the mockups in
+             unsplash-samples.js — landscape: book rect 0.745 × 0.537 of a square
+             template, cropped to 0.781 × 0.573; square: 780 of an 892 canvas. */
+          const LAND_BOOK_W = 0.745 / 0.781;   // book width / landscape canvas width
+          const LAND_BOOK_HW = 0.537 / 0.745;  // drawn A4 book height / width
+          const SQ_BOOK = 780 / 892;           // book side / square canvas side
+          function introCanvasSize(size) {
             const contentW = (introStage ? introStage.clientWidth : 400) - 72; // stage padding 36*2
-            const LAND_AR = 703 / 516; // landscape mockup aspect (w/h), the wider shape
-            return Math.max(190, Math.min(340, Math.floor((contentW - 6) / LAND_AR)));
+            // W = drawn A4 book width. The widest canvas is the 12×12 (W / SQ_BOOK).
+            const W = Math.max(150, Math.min(420 * SQ_BOOK, (contentW - 6) * SQ_BOOK));
+            if (size.wIn !== size.hIn) return { w: W / LAND_BOOK_W, h: W / LAND_BOOK_W * 516 / 703 };
+            const side = (size.hIn < 10 ? W * LAND_BOOK_HW : W) / SQ_BOOK;
+            return { w: side, h: side };
+          }
+          // The gallery under the book: this live mockup first, then Prodigi's
+          // photos of the real book (PopcodeGallery.IMAGES.book).
+          let bookGallery = null;
+          const drawBookCanvas = (cv) => {
+            const square = currentBookSize().wIn === currentBookSize().hIn;
+            return window.drawProductCardMockup(cv, square ? 'book-square' : 'book', introSample, '/assets/sample-photo.jpg');
+          };
+          function drawIntroBook(el) {
+            const cv = document.createElement('canvas');
+            const size = currentBookSize();
+            drawBookCanvas(cv).then(() => {
+              if (bookGallery && bookGallery.current !== 0) return; // a still was picked meanwhile
+              const box = introCanvasSize(size);
+              // Hold the stage at the tallest book so switching sizes doesn't jump.
+              el.style.minHeight = Math.round(introCanvasSize({ wIn: 12, hIn: 12 }).h + 72) + 'px';
+              cv.style.cssText = 'width:' + Math.round(box.w) + 'px;height:' + Math.round(box.h) + 'px;max-width:none;display:block;';
+              el.innerHTML = '';
+              el.appendChild(cv);
+            }).catch(() => {});
           }
           function renderIntroBook() {
             if (!window.drawProductCardMockup || !introSample || !introStage) return;
-            const cv = document.createElement('canvas');
-            const size = currentBookSize();
-            const square = size.wIn === size.hIn;
-            // Squares to scale with each other: the 12×12 gets the full height,
-            // the 8×8 its true fraction of it (8.3 / 11.7).
-            const h = Math.round(introBookHeight() * (square ? size.wIn / 11.6929 : 1));
-            window.drawProductCardMockup(cv, square ? 'book-square' : 'book', introSample, '/assets/sample-photo.jpg').then(() => {
-              cv.style.cssText = 'height:' + h + 'px;width:auto;max-width:100%;display:block;';
-              introStage.innerHTML = '';
-              introStage.appendChild(cv);
-            }).catch(() => {});
+            if (!window.PopcodeGallery) { drawIntroBook(introStage); return; }
+            if (bookGallery) { bookGallery.show(0); bookGallery.refreshThumb(); return; }
+            bookGallery = window.PopcodeGallery.mount(introStage, {
+              renderLive: drawIntroBook,
+              renderThumb: (box) => {
+                const cv = document.createElement('canvas');
+                cv.style.cssText = 'max-width:86%;max-height:86%;display:block;';
+                drawBookCanvas(cv).then(() => box.appendChild(cv)).catch(() => {});
+              },
+              images: window.PopcodeGallery.IMAGES.book,
+            });
           }
           // Drop any size we can't actually sell right now (see BOOK_SIZES).
           document.querySelectorAll('#bi-sizes .bi-size').forEach(chip => {
