@@ -233,13 +233,13 @@
         text-shadow: 0 2px 16px rgba(0,0,0,0.35);
       }
       #wl-cover .wl-eyebrow {
-        font-family: 'DM Sans', sans-serif;
+        font-family: var(--brand-body, 'DM Sans', sans-serif);
         font-weight: 500; font-size: 16px;
         letter-spacing: 0.22em; text-transform: uppercase;
         margin-bottom: 0.8em; opacity: 0.95;
       }
       #wl-cover .wl-title {
-        font-family: 'Cormorant Garamond', serif;
+        font-family: var(--brand-head, 'Cormorant Garamond', serif);
         font-weight: 500; font-style: normal;
         font-size: 112px; line-height: 0.92; letter-spacing: -0.01em;
         margin-bottom: 0.3em;
@@ -247,7 +247,7 @@
       #wl-cover .wl-title.wl-size-md { font-size: 88px; }
       #wl-cover .wl-title.wl-size-sm { font-size: 64px; }
       #wl-cover .wl-subtitle {
-        font-family: 'DM Sans', sans-serif;
+        font-family: var(--brand-body, 'DM Sans', sans-serif);
         font-weight: 400; font-size: 18px;
         letter-spacing: 0.04em; opacity: 0.95;
       }
@@ -267,7 +267,7 @@
         margin-bottom: 20px;
       }
       #wl-cover .wl-scan-caption {
-        color: #fff; font-family: 'DM Sans', sans-serif;
+        color: #fff; font-family: var(--brand-body, 'DM Sans', sans-serif);
         font-size: 19px; font-weight: 700; letter-spacing: -0.01em;
         text-shadow: 0 2px 14px rgba(0,0,0,0.34);
       }
@@ -465,7 +465,7 @@
          background. Up to three, arriving one at a time. */
       #end-screen {
         display: none; position: fixed; inset: 0; z-index: 10000; overflow: hidden;
-        background: #16121f; color: #fff; font-family: 'DM Sans', sans-serif;
+        background: #16121f; color: #fff; font-family: var(--brand-body, 'DM Sans', sans-serif);
       }
       #end-screen .end-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
       #end-screen .end-shade { position: absolute; inset: 0;
@@ -477,7 +477,7 @@
       }
       #end-screen .end-logo { max-width: 160px; max-height: 70px; object-fit: contain; margin-top: 18px;
         filter: drop-shadow(0 2px 8px rgba(0,0,0,.35)); }
-      #end-screen .end-title { font-family: 'CooperBT', Georgia, serif; font-size: 34px; line-height: 1.1; margin: auto 0 10px;
+      #end-screen .end-title { font-family: var(--brand-head, 'CooperBT', Georgia, serif); font-size: 34px; line-height: 1.1; margin: auto 0 10px;
         text-shadow: 0 2px 14px rgba(0,0,0,.4); }
       #end-screen .end-sub { font-size: 16px; line-height: 1.4; opacity: .92; margin: 0 0 26px; text-shadow: 0 2px 10px rgba(0,0,0,.45); }
       #end-screen .end-title:empty, #end-screen .end-sub:empty { display: none; }
@@ -486,14 +486,14 @@
       #end-screen .end-btn {
         display: block; width: 100%; padding: 15px 20px; border-radius: 999px; text-decoration: none; cursor: pointer;
         border: 1.5px solid rgba(255,255,255,.9); background: rgba(0,0,0,.18); color: #fff;
-        font: 700 17px/1.25 'DM Sans', sans-serif; text-align: center;
+        font: 700 17px/1.25 var(--brand-body, 'DM Sans', sans-serif); text-align: center;
         opacity: 0; transform: translateY(16px); transition: opacity .45s ease, transform .5s cubic-bezier(.2,.8,.3,1.2);
       }
       #end-screen .end-btn:first-child { background: #fff; color: #1a1a1a; border-color: #fff; }
       #end-screen .end-btn small { display: block; font-size: 13px; font-weight: 500; opacity: .75; margin-top: 3px; }
       #end-screen .end-btn.in { opacity: 1; transform: none; }
       #end-screen .end-foot { display: flex; gap: 22px; justify-content: center; margin-top: 22px; }
-      #end-screen .end-foot button { background: none; border: none; color: #fff; opacity: .85; font: 600 15px 'DM Sans', sans-serif;
+      #end-screen .end-foot button { background: none; border: none; color: #fff; opacity: .85; font: 600 15px var(--brand-body, 'DM Sans', sans-serif);
         cursor: pointer; padding: 8px 4px; text-decoration: underline; text-underline-offset: 3px; }
       #end-screen .end-close { position: absolute; top: max(20px, env(safe-area-inset-top)); right: 20px; z-index: 1;
         width: 44px; height: 44px; border-radius: 50%; border: none; background: rgba(110,110,110,.7); color: #fff; font-size: 22px; cursor: pointer; }
@@ -1061,6 +1061,9 @@
 
         mindUrl = col.mind_file_url;
         applyCoverConfig(col.cover_config);
+        // Brand fonts apply to the cover and the after-video screen, so they're set
+        // on the page whether or not the cover itself is turned on.
+        if (col.cover_config) applyBrandFonts(document.documentElement, col.cover_config.font_heading, col.cover_config.font_body);
         endCC = col.cover_config;
         applyEndConfig(endCC, null);
         // ?preview=end: the editor's preview link, straight to the end screen.
@@ -1173,6 +1176,46 @@
             startReloadHintTimer();
           }, { once: true });
         }, 500);
+      }
+
+      // Fonts an organization can pick for its cover and after-video screen, to match
+      // its own branding. All Google Fonts; only the chosen ones are loaded. Keys are
+      // what cover_config.font_heading / font_body store. Same list in edit.html.
+      const BRAND_FONTS = {
+        'libre-franklin':    { family: 'Libre Franklin',     wght: '400;500;600;700;800', fallback: 'sans-serif' },
+        'figtree':           { family: 'Figtree',            wght: '400;500;600;700;800', fallback: 'sans-serif' },
+        'inter':             { family: 'Inter',              wght: '400;500;600;700;800', fallback: 'sans-serif' },
+        'montserrat':        { family: 'Montserrat',         wght: '400;500;600;700;800', fallback: 'sans-serif' },
+        'poppins':           { family: 'Poppins',            wght: '400;500;600;700;800', fallback: 'sans-serif' },
+        'open-sans':         { family: 'Open Sans',          wght: '400;500;600;700;800', fallback: 'sans-serif' },
+        'source-sans-3':     { family: 'Source Sans 3',      wght: '400;500;600;700;800', fallback: 'sans-serif' },
+        'lato':              { family: 'Lato',               wght: '400;700;900',         fallback: 'sans-serif' },
+        'oswald':            { family: 'Oswald',             wght: '400;500;600;700',     fallback: 'sans-serif' },
+        'playfair-display':  { family: 'Playfair Display',   wght: '400;500;600;700;800', fallback: 'serif' },
+        'lora':              { family: 'Lora',               wght: '400;500;600;700',     fallback: 'serif' },
+        'merriweather':      { family: 'Merriweather',       wght: '400;700;900',         fallback: 'serif' },
+        'libre-baskerville': { family: 'Libre Baskerville',  wght: '400;700',             fallback: 'serif' },
+        'dm-serif-display':  { family: 'DM Serif Display',   wght: '400',                 fallback: 'serif' }
+      };
+      function brandFontStack(key) {
+        const f = BRAND_FONTS[key];
+        return f ? `'${f.family}', ${f.fallback}` : '';
+      }
+      function loadBrandFont(key) {
+        const f = BRAND_FONTS[key];
+        if (!f || document.querySelector(`link[data-brand-font="${key}"]`)) return;
+        const l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.dataset.brandFont = key;
+        l.href = 'https://fonts.googleapis.com/css2?family=' + f.family.replace(/ /g, '+') + ':wght@' + f.wght + '&display=swap';
+        document.head.appendChild(l);
+      }
+      // Sets --brand-head / --brand-body on el (unset = Popcode's own fonts).
+      function applyBrandFonts(el, headKey, bodyKey) {
+        [['--brand-head', headKey], ['--brand-body', bodyKey]].forEach(([v, k]) => {
+          const stack = brandFontStack(k);
+          if (stack) { loadBrandFont(k); el.style.setProperty(v, stack); } else el.style.removeProperty(v);
+        });
       }
 
       let coverConfig = null;
