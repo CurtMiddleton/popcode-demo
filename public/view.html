@@ -1757,11 +1757,11 @@
       // ── After the video: buttons ────────────────────────────────────────
       // cover_config.end = { enabled, title, subtitle, bg_url, replay,
       //   buttons: [{ label, sub, url }],
-      //   per_target: { "<target_index>": { title, subtitle, buttons } } }.
+      //   per_target: { "<target_index>": { title, subtitle, buttons, bg_url } } }.
       // Admin-set (the cover_config trigger guards it). Shown when a video plays
       // to the end, not when it's closed. A video with its own per_target entry
-      // gets its own headline and buttons; the rest fall back to the shared ones.
-      // Background, logo and Watch again stay shared.
+      // gets its own headline, buttons and (optionally) background; the rest fall
+      // back to the shared ones. Logo and Watch again stay shared.
       let endCC = null;
       let endConfig = null;
       let lastVideoUrl = null;
@@ -1797,7 +1797,8 @@
         if (!btns.length) { endConfig = null; return; }
         endConfig = { ...e, title: src.title, subtitle: src.subtitle, buttons: btns };
         const bg = endScreen.querySelector('.end-bg');
-        const bgUrl = e.bg_url || (cc.enabled && cc.image_url) || null;
+        // A photo with its own buttons can have its own background too.
+        const bgUrl = (ownBtns.length && own.bg_url) || e.bg_url || (cc.enabled && cc.image_url) || null;
         if (bgUrl) { bg.src = bgUrl; bg.hidden = false; } else { bg.hidden = true; }
         const logo = endScreen.querySelector('.end-logo');
         if (cc.org_logo_url) { logo.src = cc.org_logo_url; logo.hidden = false; } else { logo.hidden = true; }
