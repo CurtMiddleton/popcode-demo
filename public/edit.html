@@ -533,6 +533,16 @@
         background: white; font-family: 'Inter', sans-serif; outline: none; margin-bottom: 12px; }
       .wl-section input[type="url"]:focus { border-color: #7657FC; }
       .end-note { font-size: 12px; color: #888; margin: -4px 0 12px; line-height: 1.4; }
+      /* Which video's buttons are being edited: "Every video" or one photo. */
+      .end-targets { margin: 4px 0 14px; }
+      .end-target-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+      .end-target-chip { display: inline-flex; align-items: center; gap: 7px; padding: 4px 12px 4px 4px; border-radius: 999px; border: 1.5px solid #e0d6ff;
+        background: #fff; font: 600 13px 'Inter', sans-serif; color: #1a1a1a; cursor: pointer; }
+      .end-target-chip.all { padding-left: 12px; }
+      .end-target-chip img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #eee; }
+      .end-target-chip.active { border-color: #7657FC; background: #f3efff; }
+      .end-target-chip.has-own::after { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #7657FC; }
+      #end-section input:disabled { background: #f6f5f8; color: #888; }
       /* Preview: the viewer's end screen at preview scale. */
       .end-preview { position: relative; width: 100%; aspect-ratio: 9 / 19.5; border-radius: 10px; overflow: hidden; background: #16121f; color: #fff;
         font-family: 'Inter', sans-serif; }
@@ -842,6 +852,16 @@
               <div class="wl-toggle-row">
                 <input type="checkbox" id="end-enabled"/>
                 <label for="end-enabled" style="margin:0;">Show buttons after the video</label>
+              </div>
+
+              <div class="end-targets" id="end-targets" style="display:none;">
+                <label>Buttons for</label>
+                <div class="end-target-chips" id="end-target-chips"></div>
+                <div class="wl-toggle-row" id="end-own-row" style="display:none;">
+                  <input type="checkbox" id="end-own"/>
+                  <label for="end-own" style="margin:0;">Give this video its own headline and buttons</label>
+                </div>
+                <p class="end-note" id="end-target-note"></p>
               </div>
 
               <label for="end-title">Headline (optional)</label>
@@ -1501,7 +1521,11 @@
 
       // ── After the Video (admin only) ──────────────────────────────────────────
       // Saved as cover_config.end = { enabled, title, subtitle, bg_url, replay,
-      // buttons: [{ label, sub, url }] }; view.html shows it when a video ends.
+      // buttons: [{ label, sub, url }],
+      // per_target: { "<target_index>": { title, subtitle, buttons } } };
+      // view.html shows it when a video ends. A photo listed in per_target gets
+      // its own headline and buttons; every other photo uses the shared ones.
+      // Background and Watch again are shared by all.
       const END_DEFAULT_BUTTONS = [
         { label: 'Double your gift today', sub: 'Every dollar matched through Giving Tuesday', url: '' },
         { label: 'Hear from Marisol', sub: '', url: '' },
@@ -1510,22 +1534,31 @@
       let endBgPickedFile = null;
       let endBgExistingUrl = null;
       let endBgPreviewUrl = null;
+      let endShared = { title: '', subtitle: '', buttons: [] };
+      let endOwn = {};       // target_index -> { title, subtitle, buttons }
+      let endSel = 'all';    // 'all' or a target_index
 
       function initEndSection(cfg) {
         const e = (cfg && cfg.end) || null;
         document.getElementById('end-section').style.display = 'block';
         document.getElementById('end-preview-link').href = '/' + slug + '?preview=end';
         document.getElementById('end-enabled').checked = !!(e && e.enabled);
-        document.getElementById('end-title').value = (e && e.title) || '';
-        document.getElementById('end-subtitle').value = (e && e.subtitle) || '';
         document.getElementById('end-replay').checked = !(e && e.replay === false);
         endBgExistingUrl = (e && e.bg_url) || null;
         endBgPreviewUrl = endBgExistingUrl;
-        const saved = e && Array.isArray(e.buttons) ? e.buttons : END_DEFAULT_BUTTONS;
+        endShared = {
+          title: (e && e.title) || '',
+          subtitle: (e && e.subtitle) || '',
+          buttons: e && Array.isArray(e.buttons) ? e.buttons : END_DEFAULT_BUTTONS
+        };
+        endOwn = {};
+        Object.entries((e && e.per_target) || {}).forEach(([k, o]) => {
+          if (o && Array.isArray(o.buttons)) endOwn[k] = { title: o.title || '', subtitle: o.subtitle || '', buttons: o.buttons };
+        });
+        endSel = 'all';
         const rows = document.getElementById('end-btn-rows');
         rows.textContent = '';
         for (let i = 0; i < 3; i++) {
-          const b = saved[i] || {};
           const row = document.createElement('div');
           row.className = 'end-btn-row';
           row.innerHTML =
@@ -1533,11 +1566,20 @@
             '<label>Label</label><input type="text" class="eb-label" maxlength="48">' +
             '<label>Small line under it (optional)</label><input type="text" class="eb-sub" maxlength="60">' +
             '<label>Link</label><input type="url" class="eb-url" maxlength="500" placeholder="https://yourorg.org/give">';
-          row.querySelector('.eb-label').value = b.label || '';
-          row.querySelector('.eb-sub').value = b.sub || '';
-          row.querySelector('.eb-url').value = b.url || '';
           rows.appendChild(row);
         }
+        fillEndFields(endShared);
+        document.getElementById('end-own').addEventListener('change', (ev) => {
+          if (endSel === 'all') return;
+          if (ev.target.checked) {
+            endOwn[endSel] = readEndFields(); // start from the shared buttons
+          } else {
+            delete endOwn[endSel];
+            fillEndFields(endShared);
+          }
+          showEndTarget();
+        });
+        renderEndTargets();
         rows.addEventListener('input', updateEndPreview);
         ['end-title', 'end-subtitle'].forEach(id => document.getElementById(id).addEventListener('input', updateEndPreview));
         document.getElementById('end-replay').addEventListener('change', updateEndPreview);
@@ -1557,6 +1599,85 @@
           updateEndPreview();
         });
         document.getElementById('end-save-btn').addEventListener('click', saveEndSection);
+        updateEndPreview();
+      }
+
+      function readEndFields() {
+        return {
+          title: document.getElementById('end-title').value.trim(),
+          subtitle: document.getElementById('end-subtitle').value.trim(),
+          buttons: readEndButtons()
+        };
+      }
+
+      function fillEndFields(o) {
+        document.getElementById('end-title').value = o.title || '';
+        document.getElementById('end-subtitle').value = o.subtitle || '';
+        document.querySelectorAll('#end-btn-rows .end-btn-row').forEach((r, i) => {
+          const b = (o.buttons && o.buttons[i]) || {};
+          r.querySelector('.eb-label').value = b.label || '';
+          r.querySelector('.eb-sub').value = b.sub || '';
+          r.querySelector('.eb-url').value = b.url || '';
+        });
+      }
+
+      // Keep what's typed with the photo (or "Every video") it was typed for.
+      function stashEndFields() {
+        if (endSel === 'all') endShared = readEndFields();
+        else if (endOwn[endSel]) endOwn[endSel] = readEndFields();
+      }
+
+      // The chip row appears once a Popcode has more than one photo.
+      function renderEndTargets() {
+        const box = document.getElementById('end-targets');
+        if (!box || !isAdmin()) return;
+        const items = existingItems || [];
+        box.style.display = items.length > 1 ? 'block' : 'none';
+        if (endSel !== 'all' && !items.some(it => String(it.target_index) === String(endSel))) endSel = 'all';
+        const wrap = document.getElementById('end-target-chips');
+        wrap.textContent = '';
+        const all = document.createElement('button');
+        all.type = 'button';
+        all.className = 'end-target-chip all' + (endSel === 'all' ? ' active' : '');
+        all.textContent = 'Every video';
+        all.addEventListener('click', () => selectEndTarget('all'));
+        wrap.appendChild(all);
+        items.forEach(it => {
+          const k = String(it.target_index);
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'end-target-chip' + (endSel === k ? ' active' : '') + (endOwn[k] ? ' has-own' : '');
+          chip.title = endOwn[k] ? 'Has its own buttons' : 'Uses the buttons for every video';
+          chip.setAttribute('aria-label', 'Photo ' + (it.target_index + 1) + (endOwn[k] ? ', has its own buttons' : ''));
+          if (it.photo_url) { const img = document.createElement('img'); img.src = it.photo_url; img.alt = ''; chip.appendChild(img); }
+          chip.append('Photo ' + (it.target_index + 1));
+          chip.addEventListener('click', () => selectEndTarget(k));
+          wrap.appendChild(chip);
+        });
+      }
+
+      function selectEndTarget(sel) {
+        stashEndFields();
+        endSel = sel;
+        fillEndFields(sel === 'all' ? endShared : (endOwn[sel] || endShared));
+        showEndTarget();
+      }
+
+      // Lock the fields when a photo is just borrowing the shared buttons.
+      function showEndTarget() {
+        const own = endSel !== 'all' && !!endOwn[endSel];
+        const locked = endSel !== 'all' && !own;
+        document.getElementById('end-own-row').style.display = endSel === 'all' ? 'none' : 'flex';
+        document.getElementById('end-own').checked = own;
+        ['end-title', 'end-subtitle'].forEach(id => { document.getElementById(id).disabled = locked; });
+        document.querySelectorAll('#end-btn-rows input').forEach(i => { i.disabled = locked; });
+        const n = endSel === 'all' ? '' : 'photo ' + (Number(endSel) + 1);
+        document.getElementById('end-target-note').textContent = endSel === 'all'
+          ? 'Shown after every video that doesn\u2019t have its own buttons.'
+          : own ? 'Shown only after the video for ' + n + '.'
+                : 'This video uses the buttons for every video. Tick the box to give it its own.';
+        document.getElementById('end-preview-link').href = '/' + slug + '?preview=end' + (endSel === 'all' ? '' : '&t=' + endSel);
+        renderEndTargets();
         updateEndPreview();
       }
 
@@ -1605,13 +1726,31 @@
       async function saveEndSection() {
         const btn = document.getElementById('end-save-btn');
         const enabled = document.getElementById('end-enabled').checked;
-        const buttons = readEndButtons().filter(b => b.label || b.url);
-        for (let i = 0; i < buttons.length; i++) {
-          const b = buttons[i];
-          if (!b.label) { setEndStatus('A button has a link but no label.', 'err'); return; }
-          if (!isWebUrl(b.url)) { setEndStatus('"' + b.label + '" needs a full link, starting with https://', 'err'); return; }
-        }
-        if (enabled && !buttons.length) { setEndStatus('Add at least one button with a label and a link.', 'err'); return; }
+        stashEndFields();
+        const filled = list => (list || []).filter(b => b.label || b.url);
+        const checkButtons = (list, where) => {
+          for (const b of list) {
+            if (!b.label) return where + 'a button has a link but no label.';
+            if (!isWebUrl(b.url)) return where + '"' + b.label + '" needs a full link, starting with https://';
+          }
+          return null;
+        };
+        const buttons = filled(endShared.buttons);
+        let problem = checkButtons(buttons, '');
+        const liveTargets = new Set((existingItems || []).map(it => String(it.target_index)));
+        const perTarget = {};
+        Object.keys(endOwn).filter(k => liveTargets.has(k)).sort((a, b) => a - b).forEach(k => {
+          const own = filled(endOwn[k].buttons);
+          const where = 'Photo ' + (Number(k) + 1) + ': ';
+          problem = problem || checkButtons(own, where) || (own.length ? null : where + 'add a button, or untick \u201cits own headline and buttons\u201d.');
+          perTarget[k] = {
+            title: endOwn[k].title || null,
+            subtitle: endOwn[k].subtitle || null,
+            buttons: own.map(b => ({ label: b.label, sub: b.sub || null, url: b.url }))
+          };
+        });
+        if (problem) { setEndStatus(problem.charAt(0).toUpperCase() + problem.slice(1), 'err'); return; }
+        if (enabled && !buttons.length && !Object.keys(perTarget).length) { setEndStatus('Add at least one button with a label and a link.', 'err'); return; }
         btn.disabled = true;
         setEndStatus('Saving…');
         try {
@@ -1632,11 +1771,12 @@
             ...wlCoverCfg,
             end: {
               enabled,
-              title: document.getElementById('end-title').value.trim() || null,
-              subtitle: document.getElementById('end-subtitle').value.trim() || null,
+              title: endShared.title || null,
+              subtitle: endShared.subtitle || null,
               bg_url: bgUrl || null,
               replay: document.getElementById('end-replay').checked,
-              buttons: buttons.map(b => ({ label: b.label, sub: b.sub || null, url: b.url }))
+              buttons: buttons.map(b => ({ label: b.label, sub: b.sub || null, url: b.url })),
+              per_target: perTarget
             }
           };
           const { error: dbErr, data } = await db.from('collections')
@@ -1646,12 +1786,32 @@
             throw new Error('No row updated. The admin trigger may have blocked the write — check that you are signed in as ' + ADMIN_EMAIL + '.');
           }
           wlCoverCfg = cfg;
+          renderEndTargets();
           setEndStatus(enabled ? 'Saved. Play a video to the end to see it, or use the preview link.' : 'Saved (turned off).', 'ok');
         } catch (err) {
           console.error(err);
           setEndStatus('Save failed: ' + (err.message || 'unknown error'), 'err');
         } finally {
           btn.disabled = false;
+        }
+      }
+
+      // Saving pages renumbers photos 0..N-1, so a deleted photo shifts the rest.
+      // Move each photo's own end buttons to its new number and drop deleted ones.
+      // Admin only (the cover_config trigger refuses anyone else); never fails a save.
+      async function remapEndTargets(remap) {
+        const pt = wlCoverCfg.end && wlCoverCfg.end.per_target;
+        if (!isAdmin() || !pt || !Object.keys(pt).length) return;
+        const next = {};
+        Object.keys(pt).forEach(k => { if (k in remap) next[remap[k]] = pt[k]; });
+        if (JSON.stringify(next) === JSON.stringify(pt)) return;
+        try {
+          const cfg = { ...wlCoverCfg, end: { ...wlCoverCfg.end, per_target: next } };
+          const { error } = await db.from('collections').update({ cover_config: cfg }).eq('id', collectionId);
+          if (error) throw error;
+          wlCoverCfg = cfg;
+        } catch (err) {
+          console.warn('Could not move per-video end buttons after renumbering', err);
         }
       }
 
@@ -1701,6 +1861,7 @@
         existingItems.forEach(item => renderExistingPage(item));
         renumberPages();
         loadEngagement();
+        renderEndTargets();
         /* ?montage={target_index}: sent here from the Shop's "Plays when scanned"
            menu to make a montage for one photo. Open the montage maker on that
            photo straight away; its result replaces the video like any montage. */
@@ -2659,6 +2820,7 @@
         // We'll assign new target_index values 0..N-1
         const finalItems = [];
         let idx = 0;
+        const endRemap = {}; // old target_index -> new, so per-video buttons follow their photo
 
         // Kept existing items — reuse existing URLs, or upload replacements if chosen
         for (const item of keptItems) {
@@ -2712,6 +2874,7 @@
             photo_url,
             asset_name: (document.getElementById('assetname-existing-' + item.id)?.value || '').trim() || null
           });
+          endRemap[item.target_index] = idx;
           idx++;
         }
 
@@ -2824,6 +2987,8 @@
           showSaveError('Step 6 failed (saving pages) — ' + (err.message || 'Database error.'));
           return;
         }
+
+        await remapEndTargets(endRemap);
 
         // ── Done ──────────────────────────────────────────────────────────────
         setProgress('Done!', 100);
