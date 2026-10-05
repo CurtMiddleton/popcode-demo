@@ -1061,9 +1061,15 @@
 
         mindUrl = col.mind_file_url;
         applyCoverConfig(col.cover_config);
-        applyEndConfig(col.cover_config);
+        endCC = col.cover_config;
+        applyEndConfig(endCC, null);
         // ?preview=end: the editor's preview link, straight to the end screen.
-        if (params.get('preview') === 'end' && endConfig) setTimeout(() => showEndScreen(true), 0);
+        if (params.get('preview') === 'end') {
+          // &t={target_index} previews one video's own buttons (from the editor).
+          const pt = params.get('t');
+          if (pt !== null && pt !== '') applyEndConfig(endCC, Number(pt));
+          if (endConfig) setTimeout(() => showEndScreen(true), 0);
+        }
         setStartName(col.name);
         (col.items || []).forEach(item => {
           mediaMap[item.target_index] = {
@@ -1681,6 +1687,7 @@
           fullVid.src = '';
           closeBtn.style.display = 'none';
           document.getElementById('scan-mark').classList.remove('found');
+          applyEndConfig(endCC, currentTargetIndex);
           if (endConfig) showEndScreen(); else showStartScreen();
           fade.style.opacity = '0';
           setTimeout(() => fade.style.display = 'none', 1000);
@@ -1691,8 +1698,13 @@
 
       // ── After the video: buttons ────────────────────────────────────────
       // cover_config.end = { enabled, title, subtitle, bg_url, replay,
-      //   buttons: [{ label, sub, url }] }. Admin-set (the cover_config trigger
-      // guards it). Shown when a video plays to the end, not when it's closed.
+      //   buttons: [{ label, sub, url }],
+      //   per_target: { "<target_index>": { title, subtitle, buttons } } }.
+      // Admin-set (the cover_config trigger guards it). Shown when a video plays
+      // to the end, not when it's closed. A video with its own per_target entry
+      // gets its own headline and buttons; the rest fall back to the shared ones.
+      // Background, logo and Watch again stay shared.
+      let endCC = null;
       let endConfig = null;
       let lastVideoUrl = null;
       let endPreview = false; // opened from the editor's preview link: don't count taps
@@ -1713,19 +1725,26 @@
         }
         return x;
       }
-      function applyEndConfig(cc) {
+      function validEndButtons(list) {
+        return Array.isArray(list) ? list.filter(b => b && b.label && safeUrl(b.url)).slice(0, 3) : [];
+      }
+      function applyEndConfig(cc, targetIndex) {
         const e = cc && cc.end;
-        const btns = e && e.enabled && Array.isArray(e.buttons)
-          ? e.buttons.filter(b => b && b.label && safeUrl(b.url)).slice(0, 3) : [];
+        if (!e || !e.enabled) { endConfig = null; return; }
+        const own = targetIndex != null && e.per_target ? e.per_target[String(targetIndex)] : null;
+        const ownBtns = own ? validEndButtons(own.buttons) : [];
+        const src = ownBtns.length ? { title: own.title, subtitle: own.subtitle, buttons: ownBtns }
+                                   : { title: e.title, subtitle: e.subtitle, buttons: validEndButtons(e.buttons) };
+        const btns = src.buttons;
         if (!btns.length) { endConfig = null; return; }
-        endConfig = { ...e, buttons: btns };
+        endConfig = { ...e, title: src.title, subtitle: src.subtitle, buttons: btns };
         const bg = endScreen.querySelector('.end-bg');
         const bgUrl = e.bg_url || (cc.enabled && cc.image_url) || null;
         if (bgUrl) { bg.src = bgUrl; bg.hidden = false; } else { bg.hidden = true; }
         const logo = endScreen.querySelector('.end-logo');
         if (cc.org_logo_url) { logo.src = cc.org_logo_url; logo.hidden = false; } else { logo.hidden = true; }
-        endScreen.querySelector('.end-title').textContent = e.title || '';
-        endScreen.querySelector('.end-sub').textContent = e.subtitle || '';
+        endScreen.querySelector('.end-title').textContent = src.title || '';
+        endScreen.querySelector('.end-sub').textContent = src.subtitle || '';
         endScreen.querySelector('.end-replay').hidden = e.replay === false;
         const wrap = endScreen.querySelector('.end-btns');
         wrap.textContent = '';
