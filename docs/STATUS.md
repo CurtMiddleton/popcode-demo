@@ -6,7 +6,7 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-01)
+## Current state (updated 2026-10-05)
 
 **Live and recent**
 - **Viewer reload prompt + lost-photo fix** (`view.html`, PR #162, merged and live 2026-10-01): a
@@ -35,6 +35,25 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   `collections.cover_config.end` (no migration; the cover_config admin trigger
   guards it). Taps log `cta_shown` / `cta_tap_1..3` / `cta_replay`; outbound
   links get `utm_source=popcode&utm_medium=print&utm_campaign={slug}`.
+  **2026-10-05 upgrades (all live):** each photo can have its own headline,
+  buttons and background (`end.per_target[k]`, PRs #169, #172 — "Buttons for"
+  chips in the editor); a **"Welcome back / Scan another photo"** screen when a
+  viewer returns from a button's link, logging **`cta_return`** (PR #170); and on
+  iPhone a landscape video's system full-screen player is now closed at the end,
+  so the end screen actually shows (PR #174 — before this, iPhone viewers were
+  left on a black player and never saw the buttons).
+- **Cover tab (2026-10-05, all live):** brand **fonts** (`font_heading`,
+  `font_body`, 14 Google Fonts, PR #171) and **Heading weight**
+  (`font_heading_weight`, PR #173) for the cover and end screen; **line breaks**
+  in the title via Return (PR #175); the caption under the pinwheel says **"Tap
+  to scan"** everywhere, matching the regular start screen (PR #176).
+- **One Mind demo** (`popcode.app/onemind2026`, 2026-10-05): a nonprofit pitch for
+  One Mind's winter appeal — four photos/videos (Accelerator founders, Jennifer
+  Hudson, 31st Music Festival, Apollo & Psyche), each with its own end buttons,
+  Figtree 700 cover "Think big. / Act boldly." on a black triangle background.
+  Print piece and source files live **outside the repo** (see the 2026-10-05
+  entry). Waiting on One Mind's Zoom; the proposed printed link is
+  `onemind.org/winterappeal`, a redirect on *their* site to the Popcode URL.
 - **Common Tide** is the fictional demo org: `popcode.app/commontide` (cover +
   end screen configured by the user), demo pages at
   `/demo/commontide/{give,marisol,monthly}.html`, printable card at
@@ -213,6 +232,16 @@ happened and what's open. (Session history moved here from CLAUDE.md on
       frames, tying an anonymous viewer to an identity they didn't give, or
       showing nonprofits per-donor data. Consider a retention rule (raw events
       ~2 years, aggregates forever).
+12. **One Mind follow-ups (2026-10-05):** the user is sending a short preview email
+    ahead of a Zoom. Owed from One Mind: the original Jennifer Hudson photo (the one
+    pulled from their PDF is 1109 px, about 158 dpi across the 7" panel), original
+    video files, the `onemind.org/winterappeal` → `popcode.app/onemind2026` 302
+    redirect on their WordPress site, and feedback on the CTAs. Check the tri-fold
+    PDF's printed URL — the 15:44 export read **"onemid.org"** (typo).
+13. **`.claude/settings.local.json` in the main checkout has an uncommitted
+    `Bash(gh pr merge:*)` allow rule** (added 2026-10-05 at the user's request so
+    Claude can merge when the user says "push to prod" — it worked for #176). The
+    file is tracked: commit it if it should apply on the other Mac too.
 
 ## Session history
 
@@ -3416,3 +3445,30 @@ Photos were shrunk to **2560px on upload** and the original thrown away (~220 DP
 ### 2026-10-02 — Privacy check on what Popcode collects; engagement-insights plan
 
 No code changed. User asked whether locations come "from their server" since we don't collect IPs. Corrected: until 2026-09-26 `log-event.js` **stored full IPs** (the Activity log's IP column); `eb81c4c` stopped that and switched distinct-viewer counting to the anonymous `device_id`, but the old IPs are still in `scan_events`. Location is Vercel's edge lookup from the IP (`x-vercel-ip-*` headers) — only the city-level result is kept. Two trust gaps found → **Next item 10**, reminder set for Mon 2026-10-05 09:00 ET (`trig_01NDJbNKDh4PHRRAxAmnetMb`). Discussed what more can be learned without breaking trust and how to present it per audience → **Next item 11**. Also from this session (2026-09-26, already merged): #104 fixed the Activity-log search box coming back empty but still filtering after a date-range change (`value="${escapeAttr(searchQuery)}"`).
+
+### 2026-10-05 — One Mind appeal demo: per-photo end screens, fonts, iPhone end-of-video fix
+
+**PRs (all merged and live):** #169 per-photo end buttons · #170 Welcome back + `cta_return` · #171 cover fonts · #172 per-photo end backgrounds · #173 heading weight · #174 iPhone full-screen fix · #175 title line breaks · #176 "Tap to scan". The user merged #169–#175 by hand; #176 was merged by Claude via `gh pr merge` after the user added the allow rule (see Next 13).
+
+#### Why
+The user is pitching **One Mind** (mental-health nonprofit) a winter appeal: a print piece whose photos play their videos, each video ending with its own call to action, all measured. The demo Popcode is **`popcode.app/onemind2026`**.
+
+#### Product changes (`public/view.html`, `public/edit.html`)
+- **Per-photo end screens.** `cover_config.end.per_target = { "<target_index>": { title, subtitle, buttons, bg_url } }`; photos without an entry use the shared ("Every video") set. Editor: a **Buttons for** chip row (Every video + a chip per photo, purple dot = has its own); a photo borrowing the shared set shows it greyed out until "Give this video its own headline and buttons" is ticked. The **Background image** picker follows the selected chip (uploads `{slug}/end_bg_{k}.ext`). Saving pages renumbers photos 0..N-1, so `remapEndTargets()` moves each photo's entry with it and drops deleted ones; renaming a Popcode rewrites per-photo `bg_url`s. `?preview=end&t=N` previews one photo.
+- **Welcome back.** Outbound buttons open in a new tab; on return (`visibilitychange`/`pageshow`) the end screen shows "Welcome back. There's more to see." with a white **Scan another photo** (→ `handleStartTap()`, skips the start screen) and logs `cta_return` with the photo's index. `sessionStorage` (`popcode_cta_away`) covers iOS discarding the tab.
+- **Brand fonts.** `BRAND_FONTS` (14 Google Fonts, duplicated in both pages) → `--brand-head` / `--brand-body` / `--brand-head-weight` with the old fonts as fallbacks; only chosen fonts load. Saved by **Save Cover** only (Save After the Video doesn't store them — the user's first try "didn't take" because the edit page predated the deploy).
+- **iPhone end-of-video bug (#174).** Landscape videos call `tryGoFullscreen()` → on iPhone `webkitEnterFullscreen()` (system player). `ended` never left it, so viewers sat on a black player at −0:00 and never saw the end screen. Now `ended` sets `mediaActive = false` *first* (so `webkitendfullscreen`/`fullscreenchange` don't call `returnToScanner()` and skip the end screen) then `tryExitFullscreen()`, which now also handles `fullVid.webkitExitFullscreen()`. **Confirmed on the user's iPhone.**
+- Title textarea + `white-space: pre-line`; "Tap to scan" also in howto/index/nonprofits/scan.html and the companion postcard line (new cards only).
+
+#### One Mind assets (not in the repo — `marketing/` is untracked in the main checkout)
+- `marketing/demo-source/`: the four YouTube videos (user has One Mind's permission). **yt-dlp gave two in AV1**, which Macs/iPhones can't play — use `-S "vcodec:h264"`. `popcode-ready/` holds H.264 trims cut at speaker changes found from YouTube auto-captions (`--write-auto-subs`; there are no silences — music bed): founders 1:27, Hudson 0:45, festival 1:17, Apollo & Psyche 1:12.
+- `marketing/onemind-trifold/`: HTML tri-fold (21 × 5 in landscape letter-fold, tuck panel 6.9375", ⅛" bleed; `?guides`, `?rects`), print/proof PDFs, `popcode-upload/` scan targets cut from the print PDF, `popcode-cover-bg.jpg` (1290×2796 black + triangles), and **`indesign/OneMind-Trifold.jsx`** — builds the whole document natively (layers, swatches, styles, linked CMYK logo EPS, vector badge/pattern PDFs). The user's final is `Dropbox/Popcode X/Non Profit/One Mind/OM_2026_Appeal.indd/.pdf`.
+- Brochure photos came out of One Mind's PDF via a one-page PDF wrapper rendered with PDFKit (`osascript -l JavaScript`); raw extraction gave inverted/wrong CMYK colours.
+
+#### Lessons
+- **This Mac:** no poppler/ghostscript/PIL, Homebrew hangs, and `swift` is broken (CommandLineTools modulemap clash). PDFKit/AppKit via **JXA** (`osascript -l JavaScript`) works for rendering PDFs and images.
+- **Worktree isolation blocks bash with computed values** (`$VAR` in command position, `git -C`, complex pipelines). Write a script file and `bash script.sh` it.
+- **InDesign scripting:** with `scriptPreferences.measurementUnit = INCHES`, pass `"10pt"` strings for pointSize/leading. Insert all text, *then* style by range — run-by-run insertion inherits the previous character style. A script copied to the Scripts Panel folder loses relative paths (`findRoot()` now searches/asks). **Never `close(SaveOptions.NO)` every open document in a test** — Claude did once and may have discarded the user's unsaved InDesign work.
+- InDesign 2026 (21.x) has a known Shift-doesn't-constrain bug; InDesign 2025 is unaffected; a full Mac restart fixed it for others.
+- A gray box in a PDF viewer where a photo should be was the frame's fill showing through a viewer that failed to draw the image — the PDF itself was fine (macOS PDFKit rendered it).
+- When the user says something "isn't taking", check whether the PR is merged/deployed (`curl popcode.app/... | grep`) and whether the setting actually saved (`/api/collection?slug=…`) before debugging.
