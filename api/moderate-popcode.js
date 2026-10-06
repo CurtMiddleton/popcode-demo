@@ -1,11 +1,15 @@
-// POST /api/set-popcode-disabled — the admin switch that takes a Popcode down.
+// POST /api/moderate-popcode — admin moderation switches for one Popcode.
 //
+// disabled: the switch that takes a Popcode down.
 // Disabling sets collections.disabled_at; /api/collection then answers 410 and
 // the viewer shows "This Popcode isn't available", so the link and every
 // printed copy stop playing. Nothing is deleted: re-enabling clears the column
-// and it plays again. Used from Analytics → Content (the project media viewer).
+// and it plays again.
+// blurred: cosmetic, Analytics only — blurs the project's media there so the
+// page can be shown to other people. Viewers are unaffected.
+// Used from Analytics → Content (the project media viewer).
 //
-// Body: { slug, disabled: true|false, reason? }
+// Body: { slug, disabled?: true|false, reason?, blurred?: true|false }
 // Auth: Authorization: Bearer <supabase token>; caller must be an admin.
 // Env: SUPABASE_SERVICE_ROLE_KEY.
 // Needs supabase/migrations/2026-10-06-disable-popcode.sql.
@@ -36,20 +40,26 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'Admins only' });
     }
 
-    const { slug, disabled, reason } = req.body || {};
-    if (!slug || typeof disabled !== 'boolean') {
-      return res.status(400).json({ error: 'Need slug and disabled (true/false)' });
+    const { slug, disabled, reason, blurred } = req.body || {};
+    if (!slug || (typeof disabled !== 'boolean' && typeof blurred !== 'boolean')) {
+      return res.status(400).json({ error: 'Need slug and disabled or blurred (true/false)' });
     }
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { persistSession: false } });
-    const patch = disabled
-      ? { disabled_at: new Date().toISOString(), disabled_reason: String(reason || '').slice(0, 500) || null }
-      : { disabled_at: null, disabled_reason: null };
+    const patch = {};
+    if (disabled === true) {
+      patch.disabled_at = new Date().toISOString();
+      patch.disabled_reason = String(reason || '').slice(0, 500) || null;
+    } else if (disabled === false) {
+      patch.disabled_at = null;
+      patch.disabled_reason = null;
+    }
+    if (typeof blurred === 'boolean') patch.admin_blurred = blurred;
     const { data, error } = await admin
       .from('collections')
       .update(patch)
       .eq('slug', String(slug).toLowerCase())
-      .select('slug, disabled_at, disabled_reason')
+      .select('slug, disabled_at, disabled_reason, admin_blurred')
       .maybeSingle();
     if (error) {
       if (error.code === '42703') {
@@ -60,7 +70,7 @@ export default async function handler(req, res) {
     if (!data) return res.status(404).json({ error: 'Popcode not found' });
     return res.status(200).json(data);
   } catch (e) {
-    console.error('set-popcode-disabled error:', e);
+    console.error('moderate-popcode error:', e);
     Sentry.captureException(e);
     await Sentry.flush(2000);
     return res.status(500).json({ error: 'Could not update the Popcode' });
