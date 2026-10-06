@@ -233,7 +233,7 @@
       .lib-chip { position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.62); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 99px; }
       .lib-kind { position: absolute; top: 8px; left: 8px; background: #7657FC; color: #fff; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 99px; }
       .lib-body { padding: 9px 11px 11px; }
-      .lib-name { font-size: 12.5px; font-weight: 700; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; min-height: 2.5em; overflow-wrap: anywhere; }
+      .lib-name { font-size: 12.5px; font-weight: 700; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
       .lib-sub { font-size: 10.5px; color: #999; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .lib-links { margin-top: 8px; display: flex; gap: 12px; }
       .lib-links a { font-size: 11px; font-weight: 700; color: #7657FC; text-decoration: none; }
@@ -2243,6 +2243,13 @@
         }
       }
 
+      // Shop designs are saved as "Ornament · 2.9″ × 2.9″ — Scout" (order.html
+      // namePrefix). Here the size is noise, so show "Ornament — Scout". Display
+      // only: the stored name, search and the hover title keep the full one.
+      function shortName(name) {
+        return String(name || '').replace(/^([^·—]+?) · [^—]+ — /, '$1 — ');
+      }
+
       function renderLibrary() {
         const wrap = document.getElementById('library-wrap');
         if (!wrap) return;
@@ -2285,7 +2292,7 @@
               '<span class="lib-chip">' + items.length + ' photo' + (items.length === 1 ? '' : 's') + '</span>' +
             '</div>' +
             '<div class="lib-body">' +
-              '<div class="lib-name">' + escapeHtml(c.name || c.slug) + '</div>' +
+              '<div class="lib-name" title="' + escapeHtml(c.name || c.slug) + '">' + escapeHtml(shortName(c.name) || c.slug) + '</div>' +
               '<div class="lib-sub">' + escapeHtml(ownerLabel(c.user_id)) + '</div>' +
               '<div class="lib-sub">' + (c.created_at ? formatDate(c.created_at) : '—') + ' · ' + media + '</div>' +
             '</div>' +
@@ -2322,7 +2329,7 @@
         // Opened from a specific thumbnail -> go straight to that one.
         lbMode = at >= 0 ? 'single' : 'sheet';
 
-        document.getElementById('lb-title').textContent = (col && col.name) || slug;
+        document.getElementById('lb-title').textContent = (col && shortName(col.name)) || slug;
         document.getElementById('lb-sub').textContent =
           (col ? ownerLabel(col.user_id) + ' · ' : '') + slug +
           (col && col.created_at ? ' · ' + formatDate(col.created_at) : '');
