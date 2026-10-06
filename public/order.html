@@ -18,6 +18,7 @@
     <script src="/audio-wav.js"></script>
     <script src="/activity.js"></script>
     <script src="/unsplash-samples.js"></script>
+    <script src="/symbol-color.js"></script>
     <script src="/product-preview.js"></script>
     <script src="/product-gallery.js"></script>
     <script src="/image-source.js"></script>
@@ -183,6 +184,8 @@
       .photo-cell.tray-new { border:2px dashed #d7d4cd; background:#fafafa; display:flex; align-items:center; justify-content:center; text-decoration:none; color:#8a857d; }
       .photo-cell.tray-new:hover { border-color:#7657FC; color:#7657FC; }
       .tray-new-inner { display:flex; flex-direction:column; align-items:center; gap:6px; font-size:12px; font-weight:600; font-family:'Inter',sans-serif; text-align:center; }
+      .symbol-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:4px 0 22px; }
+      .symbol-row-label { font-size:13px; font-weight:700; }
       .badge-size-toggle { display:inline-flex; background:#eee; border-radius:16px; padding:3px; gap:2px; }
       .badge-size-btn { border:none; background:none; border-radius:14px; padding:7px 14px; font-size:13px; font-weight:500; color:#666; cursor:pointer; font-family:'Inter',sans-serif; }
       .badge-size-btn.active { background:#fff; color:#1a1a1a; box-shadow:0 1px 4px rgba(0,0,0,0.12); font-weight:600; }
@@ -418,6 +421,10 @@
             <div class="detail-price" id="review-price">—</div>
             <div class="detail-price-note" id="review-price-note">plus shipping at cost</div>
             <ul class="specs" id="review-specs"></ul>
+            <div class="symbol-row">
+              <span class="symbol-row-label">Popcode symbol</span>
+              <div id="review-symbol"></div>
+            </div>
             <button class="btn btn-lg btn-block primary-btn" id="addcart-btn">Add to cart</button>
             <button class="btn btn-lg btn-quiet btn-block secondary-btn" id="order-btn">Buy this one now</button>
             <button class="btn btn-lg btn-quiet btn-block secondary-btn" id="save-btn">Save design</button>
@@ -452,6 +459,10 @@
               <button type="button" class="badge-size-btn" data-scale="0.09">Medium</button>
               <button type="button" class="badge-size-btn" data-scale="0.12">Large</button>
             </div>
+          </div>
+          <div style="margin:14px 0 2px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span style="font-size:13px;font-weight:700;">Symbol color</span>
+            <div id="create-symbol"></div>
           </div>
         </div>
 
@@ -747,8 +758,9 @@
 
       function giftArtOpts(photo) {
         const v = variantOf(state.productType, state.variantId);
-        if (!v) return {};
-        const o = {};
+        // The badge colour is the source Popcode's (collections.symbol_color).
+        const o = { symbol: symbolOf(photo || state.selectedPhoto) };
+        if (!v) return o;
         if (v.round) o.round = true;
         if (v.wrap) o.faceFrac = WRAP_FACE_FRAC;
         if (v.format) o.format = v.format;
@@ -1164,9 +1176,11 @@
       // tray. Each carries its own collection so checkout can target it.
       async function loadUserPhotos() {
         try {
-          const { data: cols } = await db.from('collections')
-            .select('id, slug, name, kind, mind_file_url').eq('user_id', currentUser.id)
+          const trayCols = (extra) => db.from('collections')
+            .select('id, slug, name, kind, mind_file_url' + extra).eq('user_id', currentUser.id)
             .order('created_at', { ascending: false });
+          let { data: cols, error: colsErr } = await trayCols(', symbol_color');
+          if (PopcodeSymbol.missingColumn(colsErr)) ({ data: cols } = await trayCols(''));
           // A tray photo is a real Popcode target, so the project must be SCANNABLE.
           // Naming kinds alone drifts — every product added to the shop since has to
           // be remembered here — and a saved design that slips through would be
@@ -1197,6 +1211,7 @@
               const c = byId[it.collection_id];
               photos.push({
                 url: it.photo_url, target_index: it.target_index, slug: c.slug, collectionId: c.id, name: c.name || c.slug,
+                symbol: PopcodeSymbol.normalize(c.symbol_color),
                 // A tray photo is a real Popcode target, so its linked media can be
                 // edited here (fromTray gates the Popcode CTA). media_type/video_url/
                 // audio_url reflect what currently plays when it's scanned.
@@ -1278,7 +1293,7 @@
           card.onclick = () => openCategory(type);
           grid.appendChild(card);
           const cv = card.querySelector('canvas');
-          const fallback = () => compositeBadgedImage(firstPhoto, { scale: 0.06, aspect: first.aspect, previewCanvas: cv, returnDataUrl: false }).catch(() => {});
+          const fallback = () => compositeBadgedImage(firstPhoto, Object.assign({ scale: 0.06, aspect: first.aspect, previewCanvas: cv, returnDataUrl: false }, giftArtOpts())).catch(() => {});
           if (hasMockup) {
             renderProductMockup(cv, firstPhoto, { scale: 0.06, aspect: first.aspect, mockup: mk, art: giftArtOpts() }).catch(fallback);
           } else { fallback(); }
@@ -2473,6 +2488,7 @@
         const v = variantOf(state.productType, state.variantId);
         const meta = CATEGORY_META[state.productType];
         document.getElementById('review-name').textContent = meta.noun || meta.name;
+        syncSymbolPickers();
         document.getElementById('review-sub').textContent = ORIENTATION_LOCKED.has(state.productType) ? v.size
           : v.size + ' · ' + (baseAspect() !== 1 ? (state.orientation === 'landscape' ? 'Landscape' : 'Portrait') : 'Square');
         {
@@ -2691,6 +2707,7 @@
         document.getElementById('summary-sub').textContent = ORIENTATION_LOCKED.has(state.productType) ? ''
           : (baseAspect() !== 1 ? (state.orientation === 'landscape' ? 'Landscape' : 'Portrait') : 'Square');
         renderChosenThumb();
+        syncSymbolPickers();
         showStep('create');
         requestQuote();
       }
@@ -2699,7 +2716,35 @@
       document.getElementById('change-photo').addEventListener('click', () => openPhotoStep());
       function renderChosenThumb() {
         const cv = document.getElementById('chosen-thumb');
-        if (state.selectedPhoto) compositeBadgedImage(state.selectedPhoto.url, { scale: state.scale, aspect: 1, previewCanvas: cv, returnDataUrl: false }).catch(() => {});
+        if (state.selectedPhoto) compositeBadgedImage(state.selectedPhoto.url, { scale: state.scale, aspect: 1, previewCanvas: cv, returnDataUrl: false, symbol: symbolOf(state.selectedPhoto) }).catch(() => {});
+      }
+
+      /* Popcode symbol colour. It belongs to the Popcode the photo comes from
+         (collections.symbol_color), so changing it here saves it there — and
+         every photo in the tray from that Popcode follows. A photo with no
+         Popcode of its own just keeps the choice for this print. */
+      function symbolOf(photo) { return PopcodeSymbol.normalize(photo && photo.symbol); }
+      const symbolPickers = ['review-symbol', 'create-symbol'].map(id =>
+        PopcodeSymbol.picker(document.getElementById(id), 'color', c => setSymbol(c)));
+      function syncSymbolPickers() { symbolPickers.forEach(p => p.set(symbolOf(state.selectedPhoto))); }
+      async function setSymbol(c) {
+        const photo = state.selectedPhoto;
+        if (!photo) return;
+        const before = symbolOf(photo);
+        const apply = (v) => {
+          photo.symbol = v;
+          if (photo.collectionId && photo.slug) photos.forEach(p => { if (p.collectionId === photo.collectionId) p.symbol = v; });
+          syncSymbolPickers();
+          renderChosenThumb();
+          if (state.step === 'review') renderProductPreview(document.getElementById('review-canvas'), currentAspect(), state.previewSide);
+        };
+        apply(c);
+        if (!(photo.fromTray && photo.collectionId)) return;
+        const { error } = await db.from('collections').update({ symbol_color: c }).eq('id', photo.collectionId);
+        if (error && !PopcodeSymbol.missingColumn(error)) {
+          apply(before);
+          popcodeDialog({ message: 'Couldn’t save the symbol color. Please try again.' });
+        }
       }
 
       document.getElementById('badge-size-toggle').addEventListener('click', e => {

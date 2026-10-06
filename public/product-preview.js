@@ -129,6 +129,13 @@
                    h: Math.min(y + h, cy + sh2) - Math.max(y, cy - sh2) };
         }
 
+  // opts.symbol: the Popcode's badge colour ('color' | 'black' | 'white'),
+  // collections.symbol_color. symbol-color.js isn't loaded on every page that
+  // draws previews, so fall back to the colour badge without it.
+  function symbolUrl(c) {
+    return window.PopcodeSymbol ? window.PopcodeSymbol.url(c) : '/assets/popcode_symbol_color.svg';
+  }
+
   async function compositeBadgedImage(photoUrl, opts) {
           opts = opts || {};
           var scale = typeof opts.scale === 'number' ? opts.scale : 0.06;
@@ -138,7 +145,7 @@
           var img = new Image(); img.crossOrigin = 'anonymous';
           await new Promise(function (res, rej) { img.onload = res; img.onerror = rej; img.src = photoUrl; });
           var iconImg = new Image();
-          await new Promise(function (res, rej) { iconImg.onload = res; iconImg.onerror = rej; iconImg.src = '/assets/popcode_symbol_color.svg'; });
+          await new Promise(function (res, rej) { iconImg.onload = res; iconImg.onerror = rej; iconImg.src = symbolUrl(opts.symbol); });
           var returnDataUrl = opts.returnDataUrl !== false; // previews pass false
           var sw = img.naturalWidth, sh = img.naturalHeight;
           var cropW = sw, cropH = sh, sx = 0, sy = 0;
