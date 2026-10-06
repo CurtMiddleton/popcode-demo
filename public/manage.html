@@ -20,6 +20,7 @@
     <title>Popcode — My Popcodes</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/symbol-color.js"></script>
     <script src="/product-preview.js"></script>
     <script src="/thumbs.js"></script>
     <script src="/unsplash-samples.js"></script>
@@ -707,14 +708,16 @@
       async function loadCollections() {
         const content = document.getElementById('content');
         try {
-          const { data: collections, error } = await db
-            .from('collections')
-            // impact_cfg: cover_config under another name, read only for the
-            // Impact link below. (buildCard's coverTitle reads col.cover_config,
-            // which this query has never fetched; aliasing keeps titles as they are.)
-            .select('id, slug, name, created_at, kind, book_layout, mind_file_url, impact_cfg:cover_config')
+          // impact_cfg: cover_config under another name, read only for the
+          // Impact link below. (buildCard's coverTitle reads col.cover_config,
+          // which this query has never fetched; aliasing keeps titles as they are.)
+          // symbol_color is retried without if the migration hasn't run yet.
+          const listCols = (extra) => db.from('collections')
+            .select('id, slug, name, created_at, kind, book_layout, mind_file_url, impact_cfg:cover_config' + extra)
             .eq('user_id', currentUser.id)
             .order('created_at', { ascending: false });
+          let { data: collections, error } = await listCols(', symbol_color');
+          if (PopcodeSymbol.missingColumn(error)) ({ data: collections, error } = await listCols(''));
 
           if (error) throw error;
 
@@ -1226,8 +1229,10 @@
         dlAll.style.display = 'none';
         grid.innerHTML = '<div style="color:#aaa;font-size:14px;text-align:center;padding:20px">Loading photos...</div>';
 
-        const colRes = await db.from('collections').select('id, kind, book_layout').eq('slug', slug).single();
+        let colRes = await db.from('collections').select('id, kind, book_layout, symbol_color').eq('slug', slug).single();
+        if (PopcodeSymbol.missingColumn(colRes.error)) colRes = await db.from('collections').select('id, kind, book_layout').eq('slug', slug).single();
         const col = colRes.data;
+        downloadSymbol = PopcodeSymbol.normalize(col && col.symbol_color);
         const { data: rawItems } = await db.from('collection_items')
           .select('target_index, photo_url')
           .eq('collection_id', col.id)
@@ -1326,6 +1331,7 @@
         });
       }
 
+      let downloadSymbol = 'color';   // the open project's symbol_color
       async function compositeImage(photoUrl, previewCanvas) {
         // Load photo
         var img = new Image();
@@ -1339,7 +1345,7 @@
         var iconImg = new Image();
         await new Promise(function(resolve, reject) {
           iconImg.onload = resolve; iconImg.onerror = reject;
-          iconImg.src = '/assets/popcode_symbol_color.svg';
+          iconImg.src = PopcodeSymbol.url(downloadSymbol);
         });
 
         // Full-res canvas
@@ -1826,6 +1832,9 @@
       async function drawDesignMockup(card, col, photoUrl) {
         const P = window.PopcodePreview;
         const pc = (col.book_layout && col.book_layout.print) || {};
+        // The badge colour belongs to the Popcode the design prints from.
+        const srcCol = pc.sourceSlug ? allCollections.find(c => c.slug === pc.sourceSlug) : null;
+        const symbol = PopcodeSymbol.normalize(srcCol && srcCol.symbol_color);
         const type = pc.productType || col.kind;
         const mk = P && P.MOCKUPS && P.MOCKUPS[MOCKUP_FOR[type]];
         const img = card.querySelector('.design-photo');
@@ -1838,7 +1847,7 @@
           if (pc.orientation === 'landscape' ? a < 1 : a > 1) a = 1 / a;
           try {
             const url = await P.compositeBadgedImage(await thumbSrc(photoUrl, 1400),
-              { scale: typeof pc.scale === 'number' ? pc.scale : 0.06, aspect: a, adjust: pc.adjust || null });
+              { scale: typeof pc.scale === 'number' ? pc.scale : 0.06, aspect: a, adjust: pc.adjust || null, symbol });
             const art = await loadCardImg(url);
             const cv = document.createElement('canvas');
             cv.className = 'design-mockup';
@@ -1870,7 +1879,7 @@
           scale: typeof pc.scale === 'number' ? pc.scale : 0.06,
           adjust: pc.adjust || null,
           aspect: isMug ? MUG_WRAP.widthMm / MUG_WRAP.heightMm : (pc.orientation === 'landscape' ? 1.25 : 0.8),
-          art: isMug ? { wrap: MUG_WRAP, faceFrac: P.WRAP_FACE_FRAC } : type === 'ornament' ? { round: true } : {},
+          art: Object.assign({ symbol }, isMug ? { wrap: MUG_WRAP, faceFrac: P.WRAP_FACE_FRAC } : type === 'ornament' ? { round: true } : {}),
         };
         const cv = document.createElement('canvas');
         cv.className = 'design-mockup';

@@ -24,6 +24,7 @@
     <script src="/activity.js"></script>
     <script src="/referral.js"></script>
     <script src="/slug.js"></script>
+    <script src="/symbol-color.js"></script>
     <script src="/product-preview.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/image-source.js"></script>
@@ -825,6 +826,10 @@
             <button type="button" class="url-edit-btn" id="url-done-btn" style="display:none;">Done</button>
           </div>
           <div class="field-hint" id="code-hint">Your link fills in from the name. Tap Edit to change it.</div>
+
+          <div class="field-label">Popcode symbol</div>
+          <div id="symbol-picker"></div>
+          <div class="field-hint">The symbol printed in the corner of your photos, so people know to scan them. Pick whichever shows up best on your pictures.</div>
           <div class="wiz-summary" id="wiz-summary"></div>
         </section>
 
@@ -983,6 +988,12 @@
         const b = e.target.closest('button'); if (b) showShopSide(b.dataset.side);
       });
 
+      // The scan symbol's colour (collections.symbol_color), set on the Name step.
+      // The Shop pane redraws with it so the product shows the badge it will print.
+      const symbolPicker = PopcodeSymbol.picker(document.getElementById('symbol-picker'), 'color', () => {
+        if (spFile && spSide === 'front') renderShopProduct(spFile);
+      });
+
       async function renderShopProduct(file) {
         const P = window.PopcodePreview;
         if (!shopRender || !P || !file) return;
@@ -993,7 +1004,8 @@
         try {
           const mk = P.MOCKUPS[shopRender.productType];
           const opts = { scale: shopRender.scale, aspect: shopRender.aspect,
-                         adjust: shopRender.adjust, art: shopRender.art || {} };
+                         adjust: shopRender.adjust,
+                         art: Object.assign({}, shopRender.art || {}, { symbol: symbolPicker.get() }) };
           if (mk) {
             await P.renderProductMockup(cv, url, Object.assign({ mockup: mk }, opts));
           } else {
@@ -1970,10 +1982,16 @@
         try {
           setProgress('Almost there…', 90);
           const name = document.getElementById('name-input').value.trim() || null;
-          const { data, error: colError } = await db
-            .from('collections')
-            .insert({ slug, name, mind_file_url: mindUrl, user_id: currentUser.id })
-            .select().single();
+          const row = { slug, name, mind_file_url: mindUrl, user_id: currentUser.id };
+          // Only sent when it isn't the default, and dropped if the column
+          // doesn't exist yet (symbol-color.js) — the Popcode still gets made.
+          const symbol = symbolPicker.get();
+          if (symbol !== 'color') row.symbol_color = symbol;
+          let { data, error: colError } = await db.from('collections').insert(row).select().single();
+          if (row.symbol_color && PopcodeSymbol.missingColumn(colError)) {
+            delete row.symbol_color;
+            ({ data, error: colError } = await db.from('collections').insert(row).select().single());
+          }
           if (colError) throw colError;
           collection = data;
           logActivity('create_project', { slug, user_id: currentUser.id });
@@ -2311,6 +2329,7 @@
         sec.querySelector('.wiz-lede').textContent = 'Share the link, or edit it any time from My Popcodes.';
         $w('name-input').disabled = true;
         $w('code-input').disabled = true;
+        $w('symbol-picker').style.pointerEvents = 'none';   // saved with the Popcode; change it in Edit
         $w('url-edit-btn').style.display = 'none';
         $w('url-done-btn').style.display = 'none';
         $w('code-hint').textContent = 'Your Popcode lives here. Anyone with the link can scan it.';

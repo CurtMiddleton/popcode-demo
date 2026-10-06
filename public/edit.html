@@ -25,6 +25,7 @@
     <script src="/config.js"></script>
     <script src="/dialog.js"></script>
     <script src="/slug.js"></script>
+    <script src="/symbol-color.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/image-source.js"></script>
     <script src="/montage-music.js"></script>
@@ -656,6 +657,12 @@
           <button type="button" class="url-edit-btn" id="rename-code-btn" style="display:none;">Save</button>
         </div>
         <div class="field-hint" id="code-hint" style="font-size:12px;color:#888;margin:6px 0 24px;width:100%;max-width:420px;text-align:left;min-height:16px;line-height:1.3;">Your shareable link. Tap Edit to change it.</div>
+
+        <div id="symbol-field">
+          <div class="field-label">Popcode symbol</div>
+          <div id="symbol-picker"></div>
+          <div class="field-hint" id="symbol-hint" style="font-size:12px;color:#888;margin:8px 0 24px;width:100%;max-width:420px;text-align:left;min-height:16px;line-height:1.3;">Printed in the corner of your photos when you order or download them.</div>
+        </div>
 
         <div class="media-only-note" id="media-only-note"></div>
         <div class="pages" id="pages"></div>
@@ -1934,6 +1941,32 @@
         }
       }
 
+      // ── Scan symbol colour (collections.symbol_color) ─────────────────────────
+      // Saved the moment it changes — it touches nothing that needs a recompile.
+      // Books, calendars and board books draw their symbol in their own makers,
+      // which don't read this yet, so the picker is hidden for them rather than
+      // offering a no-op. Also hidden until the migration has added the column.
+      function initSymbolPicker(col) {
+        const field = document.getElementById('symbol-field');
+        if (mediaOnly || ['book', 'calendar', 'boardbook'].includes(col.kind) || !('symbol_color' in col)) {
+          field.style.display = 'none'; return;
+        }
+        const hint = document.getElementById('symbol-hint');
+        const defaultHint = hint.textContent;
+        let saved = PopcodeSymbol.normalize(col.symbol_color);
+        const picker = PopcodeSymbol.picker(document.getElementById('symbol-picker'), saved, async (c) => {
+          hint.textContent = 'Saving…';
+          const { error } = await db.from('collections').update({ symbol_color: c }).eq('id', collectionId);
+          if (error) {
+            picker.set(saved);
+            hint.textContent = 'Couldn’t save the symbol color. Please try again.';
+            return;
+          }
+          saved = c;
+          hint.textContent = 'Saved. ' + defaultHint;
+        });
+      }
+
       // ── Load existing collection ──────────────────────────────────────────────
       let collectionLoaded = false;
       async function loadCollection() {
@@ -1954,6 +1987,7 @@
           note.append(a, '.');
         }
         document.getElementById('name-input').value = col.name || '';
+        initSymbolPicker(col);
         document.getElementById('code-input').value = slug;
         document.getElementById('url-slug').textContent = slug;
         initCodeRename();

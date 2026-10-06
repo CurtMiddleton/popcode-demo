@@ -5,6 +5,7 @@
 // window.compositeBadgedImage(photoUrl, opts) -> Promise<dataURL 'image/png'>
 //   opts.scale         badge size as a fraction of the photo's shorter side (default 0.06)
 //   opts.previewCanvas optional <canvas> to draw a fitted thumbnail into
+//   opts.symbol        badge colour: 'color' (default) | 'black' | 'white'
 //
 // window.dataUrlToBlob(dataUrl) -> Blob  (for uploading the composited PNG)
 (function () {
@@ -23,7 +24,7 @@
     var iconImg = new Image();
     await new Promise(function (resolve, reject) {
       iconImg.onload = resolve; iconImg.onerror = reject;
-      iconImg.src = '/assets/popcode_symbol_color.svg';
+      iconImg.src = window.PopcodeSymbol ? window.PopcodeSymbol.url(opts.symbol) : '/assets/popcode_symbol_color.svg';
     });
 
     var c = document.createElement('canvas');
