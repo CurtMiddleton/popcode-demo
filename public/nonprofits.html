@@ -563,6 +563,14 @@
       .kit li::before { content: ''; position: absolute; left: 3px; top: .5em; width: 9px; height: 5px;
                         border-left: 2px solid var(--accent); border-bottom: 2px solid var(--accent); transform: rotate(-45deg); }
       .kit .btn { margin-top: auto; }
+      /* Pay link: secondary to Book a demo. Hidden until CONFIG has the Stripe
+         Payment Link for that kit. */
+      .kit-pay { margin: 14px 0 0; text-align: center; font-size: 14px; line-height: 1.5; color: var(--muted); }
+      .kit-pay a { color: var(--accent); font-weight: 600; text-underline-offset: 3px; }
+      .kit-pay small { display: block; font-size: 13px; color: var(--faint); margin-top: 2px; }
+      /* Side by side, the Gala note wraps to two lines: reserve them on both
+         cards so the two Book a demo buttons stay level. */
+      @media (min-width: 761px) { .kit-pay small { min-height: 3em; } }
       .kits-note { text-align: center; font-size: 15px; color: var(--muted); margin: 22px 0 0; }
 
       /* ── FAQ. Real buttons, so it works from the keyboard and a screen
@@ -1036,6 +1044,8 @@
                 <li>Keeps playing through at least 2027</li>
               </ul>
               <a class="btn btn-secondary book-demo" href="#">Book a demo</a>
+              <p class="kit-pay" hidden><a class="pay-link" data-kit="year_end" href="#">Ready to start? Pay here</a>
+                <small>Paid in full up front.</small></p>
             </div>
             <div class="kit feature">
               <span class="tag">Your whole year</span>
@@ -1057,9 +1067,11 @@
                 <li>A post-event report for your board</li>
               </ul>
               <a class="btn btn-primary book-demo" href="#">Book a demo</a>
+              <p class="kit-pay" hidden><a class="pay-link" data-kit="gala" href="#">Ready to start? Pay here</a>
+                <small>50% deposit ($2,250) now. The other half is invoiced on delivery.</small></p>
             </div>
           </div>
-          <p class="kits-note">You provide the videos, images and donation page, and handle printing and postage.<br>Includes one round of revisions. Delivery about four weeks after we receive your assets.</p>
+          <p class="kits-note">You provide the videos, images and donation page, and handle printing and postage.<br>Includes one round of revisions. Delivery about four weeks after we receive your assets.<span class="pay-methods" hidden><br>Pay by card or US bank transfer (ACH).</span></p>
         </div>
       </section>
 
@@ -1129,7 +1141,15 @@
         DEMO_CAPTIONS: '/assets/nonprofits-demo.vtt',
         // Flip to true once the Green Empowerment case study is written into
         // #case-study-tpl above.
-        SHOW_CASE_STUDY: false
+        SHOW_CASE_STUDY: false,
+        // Stripe Payment Links (Dashboard → Payment Links), card + US bank
+        // account. Each one's "After payment" redirect goes to
+        // https://popcode.app/nonprofits/thanks?kit=year_end (or ?kit=gala).
+        // A kit's "Pay here" link stays hidden while its URL is empty.
+        PAY_URLS: {
+          year_end: '',   // Year-End Kit, $2,500 in full
+          gala: ''        // Gala & Donor Kit, $2,250 deposit (balance invoiced on delivery)
+        }
       };
       var FALLBACK_BOOKING = 'mailto:hello@popcodeapp.com?subject=' +
         encodeURIComponent('Popcode for Nonprofits — demo');
@@ -1148,15 +1168,19 @@
         return out;
       })();
 
-      function bookingHref() {
-        if (!CONFIG.BOOKING_URL) return FALLBACK_BOOKING;
+      // Stripe Payment Links accept utm_* too, so payments trace back the same way.
+      function withUtms(url) {
         try {
-          var u = new URL(CONFIG.BOOKING_URL);
+          var u = new URL(url);
           Object.keys(utms).forEach(function (k) {
-            if (!u.searchParams.has(k)) u.searchParams.set(k, utms[k]);  // never overwrite the booking link's own
+            if (!u.searchParams.has(k)) u.searchParams.set(k, utms[k]);  // never overwrite the link's own
           });
           return u.toString();
-        } catch (e) { return CONFIG.BOOKING_URL; }
+        } catch (e) { return url; }
+      }
+
+      function bookingHref() {
+        return CONFIG.BOOKING_URL ? withUtms(CONFIG.BOOKING_URL) : FALLBACK_BOOKING;
       }
 
       function logEvent(type) {
@@ -1183,6 +1207,17 @@
         if (CONFIG.BOOKING_URL) { a.target = '_blank'; a.rel = 'noopener'; }
         a.addEventListener('click', function () { logEvent('book_demo_click'); });   // never blocks the navigation
       });
+
+      var anyPay = false;
+      document.querySelectorAll('.pay-link').forEach(function (a) {
+        var url = CONFIG.PAY_URLS[a.dataset.kit];
+        if (!url) return;
+        anyPay = true;
+        a.href = withUtms(url);
+        a.closest('.kit-pay').hidden = false;
+        a.addEventListener('click', function () { logEvent('pay_click_' + a.dataset.kit); });
+      });
+      if (anyPay) document.querySelector('.pay-methods').hidden = false;
 
       // ── FAQ ──
       document.querySelectorAll('.faq-q').forEach(function (btn, i) {
