@@ -19,6 +19,8 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   is unsaved). **Not yet tried on the live site** — do the blur → disable →
   open link → re-enable check once. No automatic scanning, on purpose (see the
   2026-10-06 entry for when to add it).
+- **Analytics → Content cards** (PR #179, 2026-10-06): 6 across (was 4), and
+  Shop designs show as "Ornament — Scout" (size dropped, display only).
 - **Viewer reload prompt + lost-photo fix** (`view.html`, PR #162, merged and live 2026-10-01): a
   photo lost during the 0.9 s pre-play hold no longer locks scanning; a turning
   reload-arrow button appears when a scan stalls. Logs `reload_prompt_*` /
@@ -3450,3 +3452,15 @@ Prompted by a creator uploading what the user called soft porn. Finding: **the o
 **Lessons**
 - Verified in headless Chromium by routing the jsdelivr `@supabase/supabase-js` URL to a hand-written fake client (chainable thenable query builder, `getSession` returning the admin) and stubbing `/api/moderate-popcode`. Playwright matches routes **last-registered first** — register the catch-all abort *before* the specific stubs or it swallows them.
 - `pkill -f "<pattern>"` in the same Bash call killed the shell itself (exit 144) because the pattern was in its own command line.
+
+### 2026-10-06 (later) — Report email wording, smaller Content cards, short design names
+
+**PR #178 merged (`d98ab47`), PR #179 merged (`0692ce2`) — both live.** Same session as the entry above.
+
+- **Report email** (`public/view.html`, where the `#report-link` href is built next to the `?from=` tagging): the body now reads "Popcode: {link}" / "Thank you for letting us know. Please tell us what concerns you about this Popcode, and we'll take a look." / "(Write your note here)". The user first suggested "Thank you for contacting us" — pointed out the reporter writes and sends this email from their own app, so the text has to read as a note from Popcode above their own words, not a reply. PR #178 also carried the session notes above.
+- **Content cards** (`public/analytics.html` `.lib-grid`): `minmax(230px)` → `minmax(160px)`, gap 12 — 6 columns inside the 1200px `.content`, 2 on a 390px phone. Smaller name/sub text and badges. `.lib-name` may wrap to 2 lines (`-webkit-line-clamp: 2`), no reserved height.
+- **Short design names**: `shortName()` in `analytics.html` turns "Ornament · 2.9″ × 2.9″ — Scout" into "Ornament — Scout" (regex `^([^·—]+?) · [^—]+ — ` → `$1 — `) on cards and the lightbox title. **Display only** — the stored name comes from `order.html` `namePrefix` (line ~2436) and is used by My Designs / cart, where size distinguishes prints and canvases. Hover title and search keep the full name. Not applied to My Designs; if the user wants it there too, decide per product (ornaments/mugs have one size; prints don't).
+
+**Lessons**
+- Made the `pkill -f` mistake from the entry above **again** — the lesson didn't stick. Stop a test server some other way (save its PID, or `fuser -k 8765/tcp`), never `pkill -f` with a pattern that's in the same command.
+- The user merges by asking ("open the PR and merge it") — check the Vercel commit status is `success` on the PR head first; a preview build takes ~1 minute.
