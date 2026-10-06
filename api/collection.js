@@ -13,6 +13,7 @@
 //
 // 200 { slug, name, kind, mind_file_url, cover_config, items:[...] }
 // 404 { error: 'not_found' }
+// 410 { error: 'disabled' }  — switched off by an admin (collections.disabled_at)
 //
 // Env: SUPABASE_SERVICE_ROLE_KEY (already set in Production and Preview).
 
@@ -47,12 +48,25 @@ export default async function handler(req, res) {
     });
 
     // `id` is needed to fetch the items but is not part of the response.
-    const { data: col, error: colErr } = await db
+    const COLS = 'id, slug, name, kind, mind_file_url, cover_config';
+    let { data: col, error: colErr } = await db
       .from('collections')
-      .select('id, slug, name, kind, mind_file_url, cover_config')
+      .select(COLS + ', disabled_at')
       .eq('slug', slug)
       .maybeSingle();
+    // 42703 = undefined column: 2026-10-06-disable-popcode.sql hasn't been run
+    // yet. Serve as before rather than taking every viewer down with it.
+    if (colErr && colErr.code === '42703') {
+      ({ data: col, error: colErr } = await db
+        .from('collections').select(COLS).eq('slug', slug).maybeSingle());
+    }
     if (colErr) throw colErr;
+
+    if (col && col.disabled_at) {
+      // Short cache, so switching one back on takes effect quickly too.
+      res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60');
+      return res.status(410).json({ error: 'disabled' });
+    }
 
     if (col) {
       const { data: items, error: itemsErr } = await db

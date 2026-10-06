@@ -248,6 +248,11 @@
       .lb-sub { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .lb-head a, .lb-x { color: #fff; background: rgba(255,255,255,0.14); border: none; border-radius: 99px; font-family: inherit; font-size: 12px; font-weight: 700; padding: 7px 14px; cursor: pointer; text-decoration: none; white-space: nowrap; }
       .lb-head a:hover, .lb-x:hover { background: rgba(255,255,255,0.26); }
+      #lb-disable { background: rgba(229,72,77,0.85); }
+      #lb-disable:hover { background: rgba(229,72,77,1); }
+      #lb-disable.is-off { background: rgba(255,255,255,0.14); }
+      #lb-disable:disabled { opacity: 0.6; cursor: default; }
+      .lib-off { position: absolute; top: 8px; right: 8px; background: #e5484d; color: #fff; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 99px; }
       .lb-stage { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 0 12px; min-height: 0; }
       .lb-media { max-width: 100%; max-height: 100%; border-radius: 10px; background: #000; display: block; object-fit: contain; }
       .lb-audio-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; max-height: 100%; }
@@ -494,6 +499,7 @@
         </div>
         <button class="lb-back" id="lb-back" hidden>&#8592; All photos</button>
         <a id="lb-open" href="#" target="_blank" rel="noopener">Open viewer &#8599;</a>
+        <button class="lb-x" id="lb-disable" type="button">Disable</button>
         <button class="lb-x" id="lb-close" aria-label="Close">Close</button>
       </div>
       <div class="lb-sheet" id="lb-sheet"></div>
@@ -523,6 +529,7 @@
       let cachedTargetCounts = {};  // 'slug|target_index' -> { found, plays, dones }
       let cachedThumbs = null;   // { collectionId: { targetIndex: photo_url } }
       let cachedSlugId = null;   // { slug: collectionId }
+      let cachedDisabled = {};   // { slug: { disabled_at, disabled_reason } }
       let cachedCols = null;     // [{ id, slug, name, user_id, created_at, kind }]
       let cachedUsers = null;    // [{ id, email, full_name, ... }] for owner lookup
       let cachedCredits = null;  // { userId: { purchased, granted, from_purchases } }
@@ -1802,6 +1809,13 @@
           const cols = await fetchAllRows('collections', 'id, slug, name, user_id, created_at, kind');
           cachedCols = cols || [];
           cachedCols.forEach(c => { cachedSlugId[c.slug] = c.id; });
+          // Separate read so the Content tab still loads before
+          // 2026-10-06-disable-popcode.sql has been run.
+          cachedDisabled = {};
+          try {
+            const off = await fetchAllRows('collections', 'slug, disabled_at, disabled_reason');
+            (off || []).forEach(c => { if (c.disabled_at) cachedDisabled[c.slug] = c; });
+          } catch (e) { console.warn('disabled_at not readable yet', e); }
           const items = await fetchAllRows('collection_items', 'collection_id, target_index, photo_url, asset_name, media_type, video_url, audio_url');
           (items || []).forEach(it => {
             if (!cachedThumbs[it.collection_id]) cachedThumbs[it.collection_id] = {};
@@ -2252,6 +2266,7 @@
               (cover ? '<img src="' + encodeURI(cover.url) + '" alt="" loading="lazy">'
                      : '<div class="lib-cover-empty">No photo</div>') +
               (c.kind === 'book' ? '<span class="lib-kind">Book</span>' : '') +
+              (cachedDisabled[c.slug] ? '<span class="lib-off">Disabled</span>' : '') +
               '<span class="lib-chip">' + items.length + ' photo' + (items.length === 1 ? '' : 's') + '</span>' +
             '</div>' +
             '<div class="lib-body">' +
@@ -2297,10 +2312,59 @@
           (col ? ownerLabel(col.user_id) + ' · ' : '') + slug +
           (col && col.created_at ? ' · ' + formatDate(col.created_at) : '');
         document.getElementById('lb-open').href = '/' + encodeURIComponent(slug);
+        renderDisableBtn();
         document.getElementById('lb').classList.add('open');
         document.body.style.overflow = 'hidden';
         lbApplyMode();
       }
+
+      // ── Disable switch ───────────────────────────────────────────────────
+      // Takes a Popcode down without deleting anything: /api/collection stops
+      // serving it, so the link and printed copies stop playing. Undoable.
+      function renderDisableBtn() {
+        const btn = document.getElementById('lb-disable');
+        const off = cachedDisabled[lbSlug];
+        btn.disabled = false;
+        btn.textContent = off ? 'Re-enable' : 'Disable';
+        btn.classList.toggle('is-off', !!off);
+        btn.title = off
+          ? 'Disabled ' + formatDate(off.disabled_at) + (off.disabled_reason ? ' — ' + off.disabled_reason : '')
+          : 'Stop this Popcode from playing (nothing is deleted)';
+      }
+
+      async function toggleDisabled() {
+        const btn = document.getElementById('lb-disable');
+        const slug = lbSlug;
+        const turnOff = !cachedDisabled[slug];
+        let reason = '';
+        if (turnOff) {
+          reason = prompt('Disable popcode.app/' + slug + '?\n\nIt will stop playing for everyone, including printed copies. ' +
+            'Nothing is deleted and you can re-enable it.\n\nReason (optional, only you see it):', '');
+          if (reason === null) return;
+        } else if (!confirm('Re-enable popcode.app/' + slug + '? It will play again for everyone.')) {
+          return;
+        }
+        btn.disabled = true; btn.textContent = 'Saving…';
+        try {
+          const { data: { session } } = await db.auth.getSession();
+          if (!session) { alert('Your session expired. Sign in again.'); return; }
+          const resp = await fetch('/api/set-popcode-disabled', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json',
+                       'Authorization': 'Bearer ' + session.access_token },
+            body: JSON.stringify({ slug: slug, disabled: turnOff, reason: reason }),
+          });
+          const j = await resp.json().catch(function () { return {}; });
+          if (!resp.ok) { alert('Could not update this Popcode.\n\n' + (j.error || ('HTTP ' + resp.status))); return; }
+          if (j.disabled_at) cachedDisabled[slug] = j; else delete cachedDisabled[slug];
+          renderLibrary();
+        } catch (e) {
+          alert('Could not update this Popcode.\n\n' + (e.message || e));
+        } finally {
+          if (lbSlug === slug) renderDisableBtn();
+        }
+      }
+      document.getElementById('lb-disable').addEventListener('click', toggleDisabled);
 
       function closeLightbox() {
         lbMode = 'sheet';
