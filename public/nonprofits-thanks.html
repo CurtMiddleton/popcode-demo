@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <script
+      src="https://browser.sentry-cdn.com/10.59.0/bundle.min.js"
+      integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
+      crossorigin="anonymous" defer></script>
+    <script src="/sentry-init.js" defer></script>
+    <!-- Where the Stripe Payment Links on /nonprofits land after payment:
+         popcode.app/nonprofits/thanks?kit=year_end | gala (vercel.json rewrite).
+         Anyone can open this URL, so it never claims a payment it can't see. -->
+    <meta name="robots" content="noindex">
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
+    <title>Thank you — Popcode for Nonprofits</title>
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <link rel="stylesheet" href="/ui.css">
+    <style>
+      :root {
+        --ink: #1a1a1a;
+        --muted: #5f5f5f;
+        --faint: #767676;
+        --line: #e7e5e0;
+        --paper: #ffffff;
+        --bg: #f9f9f9;
+        --accent: #7657FC;
+        --serif: 'CooperBT', Georgia, serif;
+        --sans: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+      a { color: inherit; }
+      .np-nav { height: 100px; display: flex; align-items: center; padding: 0 28px 0 80px; background: #fff; }
+      .np-nav img { height: 35px; width: auto; display: block; }
+      @media (max-width: 959px) { .np-nav { padding: 0 28px; height: 80px; } }
+      main { max-width: 720px; margin: 0 auto; padding: 64px 28px 80px; }
+      @media (max-width: 560px) { main { padding: 40px 20px 56px; } }
+      .eyebrow { font-size: 14px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); margin: 0 0 16px; }
+      h1 { font-family: var(--serif); font-weight: 400; font-size: 52px; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 20px; }
+      @media (max-width: 640px) { h1 { font-size: 38px; } }
+      .lede { font-size: 18px; line-height: 1.6; margin: 0 0 12px; }
+      .note { font-size: 15px; line-height: 1.6; color: var(--muted); margin: 0; }
+      h2 { font-family: var(--serif); font-weight: 400; font-size: 30px; letter-spacing: -0.01em; margin: 48px 0 20px; }
+      ol.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; }
+      .steps li { counter-increment: s; position: relative; background: var(--paper); border: 1px solid var(--line);
+                  border-radius: var(--pc-radius-card, 16px); padding: 22px 24px 22px 70px; margin-bottom: 14px; }
+      .steps li::before { content: counter(s); position: absolute; left: 22px; top: 20px; width: 32px; height: 32px; border-radius: 50%;
+                          background: #f1eefe; color: var(--accent); font-weight: 700; font-size: 15px;
+                          display: flex; align-items: center; justify-content: center; }
+      .steps h3 { font-size: 17px; font-weight: 600; margin: 4px 0 6px; }
+      .steps p { font-size: 15px; line-height: 1.6; color: var(--muted); margin: 0; }
+      .send { margin: 28px 0 0; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+      .send p { flex-basis: 100%; font-size: 14px; color: var(--muted); margin: 4px 0 0; }
+      .after { background: #f1eefe; border-radius: var(--pc-radius-card, 16px); padding: 22px 24px; margin-top: 40px; }
+      .after h3 { font-size: 17px; font-weight: 600; margin: 0 0 8px; }
+      .after p { font-size: 15px; line-height: 1.6; margin: 0 0 8px; }
+      .after p:last-child { margin-bottom: 0; }
+      footer { background: #fff; border-top: 1px solid var(--line); padding: 28px; font-size: 14px; color: var(--faint);
+               display: flex; gap: 8px 18px; flex-wrap: wrap; justify-content: center; }
+      footer a { color: var(--faint); }
+    </style>
+  </head>
+  <body>
+    <header class="np-nav">
+      <a href="/nonprofits" aria-label="Popcode for Nonprofits"><img src="/assets/Popcode_logo.png" alt="Popcode" height="35"></a>
+    </header>
+
+    <main>
+      <p class="eyebrow">Popcode for Nonprofits</p>
+      <h1>Thank you. Let's make your stories play.</h1>
+      <p class="lede" id="paid">Your payment is in, and Stripe has emailed your receipt.</p>
+      <p class="note">Paid by bank transfer? It takes a few business days to clear. There's no need to wait: send your materials now and we'll get started.</p>
+
+      <h2>What we need from you</h2>
+      <ol class="steps">
+        <li>
+          <h3>Your videos</h3>
+          <p>One short video for each story: <span id="stories">your stories</span>. Filmed on a phone is perfect. Videos are usually too big to attach, so share a folder link (Google Drive, Dropbox or WeTransfer). Haven't filmed yet? Tell us, and we'll send a simple script and filming tips.</p>
+        </li>
+        <li>
+          <h3>Your images</h3>
+          <p>Your logo, and the photos you want on the printed <span id="pieces">piece</span>. These are the photos donors will scan, so send full-size originals, not screenshots. Brand colors and fonts too, if you have them.</p>
+        </li>
+        <li>
+          <h3>Your donation page link</h3>
+          <p>The page the Donate button should open. If you'd like other buttons after each story, such as volunteer or sign up, send those links too.</p>
+        </li>
+      </ol>
+
+      <div class="send">
+        <a class="btn btn-lg btn-primary" id="email-btn" href="mailto:hello@popcodeapp.com">Email your materials</a>
+        <p>Or write to <a href="mailto:hello@popcodeapp.com">hello@popcodeapp.com</a>. Tell us your mail or event date too, so we can plan the schedule around it.</p>
+      </div>
+
+      <div class="after">
+        <h3>What happens next</h3>
+        <p>Delivery is about four weeks after we receive your videos, images and links, including one round of revisions. You handle printing and postage.</p>
+        <p id="balance" hidden>The second half of your Gala &amp; Donor Kit ($2,250) is invoiced on delivery. Stripe will email the invoice, and you can pay it by card or US bank transfer.</p>
+      </div>
+    </main>
+
+    <footer>
+      <span>© <span id="yr">2026</span> Popcode</span>
+      <a href="/nonprofits">Popcode for Nonprofits</a>
+      <a href="/terms.html">Terms</a>
+      <a href="/privacy.html">Privacy</a>
+    </footer>
+
+    <script>
+      document.getElementById('yr').textContent = new Date().getFullYear();
+
+      // ?kit= is set by each Payment Link's "After payment" redirect.
+      var KITS = {
+        year_end: {
+          name: 'Year-End Kit',
+          paid: 'Your Year-End Kit is paid in full, and Stripe has emailed your receipt.',
+          stories: 'up to 3',
+          pieces: 'appeal piece'
+        },
+        gala: {
+          name: 'Gala & Donor Kit',
+          paid: 'Your 50% deposit ($2,250) for the Gala & Donor Kit is in, and Stripe has emailed your receipt.',
+          stories: 'up to 8 across all your pieces',
+          pieces: 'pieces',
+          balance: true
+        }
+      };
+      var kit = KITS[new URLSearchParams(location.search).get('kit')];
+
+      if (kit) {
+        document.getElementById('paid').textContent = kit.paid;
+        document.getElementById('stories').textContent = kit.stories;
+        document.getElementById('pieces').textContent = kit.pieces;
+        if (kit.balance) document.getElementById('balance').hidden = false;
+      }
+
+      var subject = 'Our Popcode materials' + (kit ? ' — ' + kit.name : '');
+      var body = [
+        'Organization:',
+        'Mail or event date:',
+        '',
+        'Videos (shared folder link):',
+        'Logo and photos (shared folder link):',
+        'Donation page link:',
+        'Other button links (optional):',
+        ''
+      ].join('\n');
+      document.getElementById('email-btn').href = 'mailto:hello@popcodeapp.com?subject=' +
+        encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+    </script>
+  </body>
+</html>
