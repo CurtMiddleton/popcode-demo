@@ -141,6 +141,15 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    Year-End Kit $2,500 (regular $4,500), Gala & Donor Kit $4,500 (regular $6,500),
    "for nonprofits that sign up this season". Kit contents (up to 3 / up to 8
    stories, January board report, "Your whole year" tag) still a draft to confirm.
+   **Paying (2026-10-06, PRs #181, #183):** Stripe Payment Links, card + ACH
+   Direct Debit — Year-End $2,500 `https://buy.stripe.com/28E00j8aJ9tR4qu7vj8IU03`,
+   Gala deposit $2,250 `https://buy.stripe.com/fZu7sL4Yx5dB7CG6rf8IU04` (Gala
+   balance: Stripe invoice on delivery). **Not on the page** — the user sends
+   the link by email after the demo (`CONFIG.PAY_URLS` empty; fill to show
+   "Ready to start?" links again). After payment → `/nonprofits/thanks?kit=…`.
+   ACH has a $2,000 minimum rule in Stripe so print checkout stays card-only
+   (the print webhook fulfils on `checkout.session.completed`, before ACH clears).
+   Product tax category: General – Services ($0 tax in NY).
 3. **Impact dashboard: all three phases LIVE (PRs #106, #108, #110, #111).**
    `popcode.app/impact.html?id={slug}` (admin or owner; also an **Impact**
    button on My Popcodes cards for org projects), share links `?share=`, demo
