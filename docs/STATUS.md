@@ -6,9 +6,19 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-01)
+## Current state (updated 2026-10-06)
 
 **Live and recent**
+- **Content rules + admin moderation** (PR #177, merged and live 2026-10-06; migration
+  `2026-10-06-disable-popcode.sql` **has been run in prod**): Terms §3 now bans
+  porn/nudity/sexually suggestive content and lets us remove anything at our
+  discretion; viewer start screen has a **Report** link (prefilled email to
+  hello@); Analytics → Content → a project → **Disable** (link + prints stop
+  playing, 410 from `/api/collection`, nothing deleted) and **Blur** (hides that
+  project's media in Analytics only, for showing the page to others; **Peek**
+  is unsaved). **Not yet tried on the live site** — do the blur → disable →
+  open link → re-enable check once. No automatic scanning, on purpose (see the
+  2026-10-06 entry for when to add it).
 - **Viewer reload prompt + lost-photo fix** (`view.html`, PR #162, merged and live 2026-10-01): a
   photo lost during the 0.9 s pre-play hold no longer locks scanning; a turning
   reload-arrow button appears when a scan stalls. Logs `reload_prompt_*` /
@@ -3416,3 +3426,27 @@ Photos were shrunk to **2560px on upload** and the original thrown away (~220 DP
 ### 2026-10-02 — Privacy check on what Popcode collects; engagement-insights plan
 
 No code changed. User asked whether locations come "from their server" since we don't collect IPs. Corrected: until 2026-09-26 `log-event.js` **stored full IPs** (the Activity log's IP column); `eb81c4c` stopped that and switched distinct-viewer counting to the anonymous `device_id`, but the old IPs are still in `scan_events`. Location is Vercel's edge lookup from the IP (`x-vercel-ip-*` headers) — only the city-level result is kept. Two trust gaps found → **Next item 10**, reminder set for Mon 2026-10-05 09:00 ET (`trig_01NDJbNKDh4PHRRAxAmnetMb`). Discussed what more can be learned without breaking trust and how to present it per audience → **Next item 11**. Also from this session (2026-09-26, already merged): #104 fixed the Activity-log search box coming back empty but still filtering after a date-range change (`value="${escapeAttr(searchQuery)}"`).
+
+### 2026-10-06 — Content rules, Report link, admin Disable and Blur
+
+**PR #177 (`claude/beautiful-brown-s9inai`) — merged 2026-10-06 (`f599fc7`), live. Migration run in prod (twice — see below).**
+
+Prompted by a creator uploading what the user called soft porn. Finding: **the old Terms did not prohibit it** — §3 only banned "sexually explicit material involving minors" plus vague "illegal, harmful"; the privacy policy says nothing about content. There was no moderation of any kind in the code.
+
+- **Terms** (`public/terms.html` §3, "Last updated: October 6, 2026"): bans pornographic / sexually explicit / nude / sexually suggestive content and anything sexualizing minors; we may remove or disable any content at our sole discretion (with notice + a chance to download where practical); how to report; CSAM goes to NCMEC. Not lawyer-reviewed — the user was told to have it checked before enforcing against content uploaded under the old terms. "Sexually suggestive" is deliberately broad; the user may want to drop it.
+- **Report link** (`public/view.html`): appended to the `#view-notice` disclosure line ("The sender can see when this is opened. · Report"). That node is *moved* onto the custom cover when `cover_config` is on, so one link covers both start screens. `mailto:hello@popcodeapp.com` with subject/body prefilled with `popcode.app/{slug}` (set next to the `?from=` tagging of the Create buttons). The user asked whether it's needed given they review uploads in Analytics — kept it: covers things only the people involved can know (consent, copyright, age), swaps after review, and DMCA contact.
+- **Disable** — `collections.disabled_at` / `disabled_reason`. `api/collection.js` returns **410 `disabled`** (s-maxage=60, so up to a couple of minutes to bite); `view.html` `loadCollection()` rewrites `#error-screen` to "This Popcode isn't available / It has been turned off." Nothing deleted; Re-enable clears it. If the column is missing (42703) the API retries without it, so a deploy-before-migration can't take viewers down.
+- **Blur** — `collections.admin_blurred`. Analytics only: blurs (grayscale + blur) that project's media on the Content grid, the per-photo scan list (`renderByVideo`, re-rendered via `lastByVideoRows`) and the lightbox (`#lb.is-blurred`); **Peek** toggles `#lb.peek`, never saved. Disabled projects are blurred automatically (`isBlurred()`). Viewers unaffected.
+- Both switches go through **`api/moderate-popcode.js`** (admin = `curtmid@gmail.com` or `curt@theworkshop.works`, same pattern as `sync-print-order.js`), body `{ slug, disabled?, reason?, blurred? }`. UI: lightbox header buttons Peek / Blur / Disable in `public/analytics.html` (`renderDisableBtn`, `toggleDisabled`, `toggleBlurred`, `saveModeration`); state in `cachedMod`, read in `loadThumbsOnce()` as a separate tolerant query. Header now wraps on phones.
+- **Migration** `supabase/migrations/2026-10-06-disable-popcode.sql`: the three columns + trigger `enforce_disable_admin` — owners can UPDATE their own row (2026-09-04 lockdown), so the trigger refuses changes to these columns unless `auth.uid()` is null (service key / SQL editor) or `is_popcode_admin()`. The user ran the first version (no `admin_blurred`), then re-ran the updated one; it's idempotent.
+
+**Decided against (for now): automatic upload scanning.** Designed but not built: Supabase DB webhook on `collection_items` → `/api/moderate` → Sightengine (takes public URLs, samples video frames, graded nudity classes) → `moderation_flags` table + Resend email → review queue; flag-for-review, not auto-block. The user agreed it's only worth ~a day of work once it's a real problem. Triggers to revisit: more borderline uploads or Report emails, a print partner complaint (Printify/Prodigi ban adult content — the Shop is where a check matters first), nonprofit partners needing a content guarantee, or strangers signing up in volume.
+
+**Still open**
+- Live check not done yet: Blur, Disable, open the link (expect the "isn't available" screen), Re-enable, tap Report.
+- The creator isn't notified and My Popcodes doesn't show "disabled" — email them by hand. Shop orders aren't blocked for disabled Popcodes. Legacy `experiences` slugs can't be disabled.
+- The original borderline upload: the user can now Blur it and/or email the creator about the new terms, then Disable.
+
+**Lessons**
+- Verified in headless Chromium by routing the jsdelivr `@supabase/supabase-js` URL to a hand-written fake client (chainable thenable query builder, `getSession` returning the admin) and stubbing `/api/moderate-popcode`. Playwright matches routes **last-registered first** — register the catch-all abort *before* the specific stubs or it swallows them.
+- `pkill -f "<pattern>"` in the same Bash call killed the shell itself (exit 144) because the pattern was in its own command line.
