@@ -475,11 +475,42 @@
           const resp = await fetch('/api/collection?slug=' + encodeURIComponent(slug));
           if (resp.ok) return brandFrom((await resp.json()).cover_config);
         } catch (e) {}
-        return brandFrom(null);
+        return null; // couldn't tell — not the same as "no branding"
       }
-      // Never hold the page up for branding: give up after 3 s and draw plain.
-      const brandOrNothing = (p) => Promise.race([p.catch(() => brandFrom(null)),
-        new Promise((r) => setTimeout(() => r(brandFrom(null)), 3000))]);
+      // Each browser keeps the last branding it saw per campaign, so a reload
+      // starts in the org's colours instead of flashing purple.
+      const brandKey = (slug) => 'pc_impact_brand_' + slug;
+      function rememberedBrand(slug) {
+        try {
+          const b = JSON.parse(localStorage.getItem(brandKey(slug)) || 'null');
+          if (b && typeof b === 'object') return brandFrom({ dash_logo_url: b.logo, brand_color: b.color });
+        } catch (e) {}
+        return null;
+      }
+      function rememberBrand(slug, b) {
+        try { localStorage.setItem(brandKey(slug), JSON.stringify({ logo: b.logo || null, color: b.color || null })); } catch (e) {}
+      }
+      // Never hold the page up for branding: draw at once with what this
+      // browser remembers, or wait up to 3 s for a first answer. A slower answer
+      // is still applied when it lands (before 2026-10-07 it was dropped, and
+      // the page stayed purple).
+      const freshBrand = {};
+      function brandFor(slug) {
+        const fresh = fetchBrand(slug).catch(() => null).then((b) => {
+          if (!b) return null;
+          freshBrand[slug] = b;
+          rememberBrand(slug, b);
+          if (state && state.campaign && state.campaign.slug === slug &&
+              ((state.brand || {}).logo !== b.logo || (state.brand || {}).color !== b.color)) {
+            state.brand = Object.assign({}, state.brand, b);
+            render();
+          }
+          return b;
+        });
+        const known = rememberedBrand(slug);
+        if (known) return Promise.resolve(known); // draw now; `fresh` corrects it if it changed
+        return Promise.race([fresh.then((b) => b || brandFrom(null)), new Promise((r) => setTimeout(() => r(brandFrom(null)), 3000))]);
+      }
 
       function drawBrand() {
         const b = state.brand || {}, org = state.campaign.org_name || '';
@@ -534,7 +565,7 @@
 
       async function load(slug) {
         const args = Object.assign({ p_slug: slug, p_include_owner: params.get('own') === '1' }, rangeArgs());
-        const brandP = brandOrNothing(fetchBrand(slug));
+        const brandP = brandFor(slug);
         const r = await db.rpc('get_impact_dashboard', args);
         if (r.error) return fail(r.error);
         if (r.data) r.data.brand = await brandP;
@@ -557,7 +588,7 @@
       async function loadShared(token) {
         const r = await db.rpc('get_impact_dashboard_shared', Object.assign({ p_token: token }, rangeArgs()));
         if (r.error) return fail(r.error);
-        if (r.data && r.data.campaign) r.data.brand = await brandOrNothing(fetchBrand(r.data.campaign.slug));
+        if (r.data && r.data.campaign) r.data.brand = await brandFor(r.data.campaign.slug);
         $('actions').hidden = false;
         show(r.data);
       }
@@ -630,6 +661,9 @@
 
       async function show(data) {
         state = data;
+        // Branding that landed after the 3 s cut-off but before the numbers.
+        const fb = state.campaign && freshBrand[state.campaign.slug];
+        if (fb) state.brand = Object.assign({}, state.brand, fb);
         state.durations = {};
         render();
         // Upgrade watch times once the video lengths are known.
@@ -1233,6 +1267,7 @@
             state.brand = Object.assign({}, state.brand, { logo: logo, color: hex });
             state.campaign.org_name = org;
             Object.assign(saved, state.brand);
+            rememberBrand(slug, state.brand);
             drawBrand();
             msg.textContent = 'Saved.';
           } catch (err) {
