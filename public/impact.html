@@ -248,6 +248,26 @@
       }
       .seg-card { margin-bottom: 16px; }
 
+      /* Compare two versions: which drew more responses, and is the gap real. */
+      .ab-card { margin-bottom: 16px; }
+      .ab-pick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
+      .ab-pick select { font: inherit; font-size: 14px; height: 36px; padding: 0 10px; border: 1px solid #d8d6d0; border-radius: 8px;
+                        background: var(--paper); color: var(--ink); max-width: 200px; }
+      .ab-verdict { font-family: var(--serif); font-size: 22px; line-height: 1.3; margin: 0 0 18px; }
+      .ab-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 32px; }
+      @media (max-width: 760px) { .ab-metrics { grid-template-columns: minmax(0, 1fr); } }
+      .ab-metric h3 { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+                      margin: 0 0 10px; font-family: var(--sans); }
+      .ab-row { display: grid; grid-template-columns: minmax(0, 120px) minmax(0, 1fr) 56px; align-items: center; gap: 10px;
+                font-size: 14px; margin-bottom: 8px; }
+      .ab-row .lab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .ab-row .track { height: 12px; }
+      .ab-row .fill { background: var(--bar); }
+      .ab-row.win .fill { background: var(--accent); }
+      .ab-row .num { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .ab-call { font-size: 13px; line-height: 1.45; color: var(--muted); margin: 6px 0 0; }
+      .ab-call b { color: var(--ink); font-weight: 600; }
+
       /* Where viewers stop: one small line chart per story. */
       .drop-card { margin-bottom: 16px; }
       .drops { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 28px; }
@@ -708,6 +728,7 @@
           '<div class="card">' + splitCard(d) + '</div></div></section>';
         html += dropoffCard(d);
         html += segmentsCard(d);
+        html += compareCard(d);
 
         html += '<p class="foot">' + (d.demo ? 'Sample data for illustration, shown over this Popcode’s real photos and buttons. ' : '') +
           'Popcode doesn’t ask donors for their name or email, and doesn’t keep IP addresses. Counts are anonymous.</p>';
@@ -716,6 +737,7 @@
         hydrateThumbs($('main'));
         wireDropoff();
         wireManage(d);
+        wireCompare();
 
         if ($('adjust')) $('adjust').onsubmit = (e) => {
           e.preventDefault();
@@ -1011,6 +1033,81 @@
         h += '</tbody></table><p class="note">Response is phones that scanned ÷ pieces mailed to that segment. ' +
           'To split gifts by segment, filter your donation platform by <code>utm_content</code> (set to the segment code).</p></section>';
         return h;
+      }
+
+      // ── Compare two versions (an A/B test) ──
+      // Two segment codes, e.g. the batch with a QR code and the batch without.
+      // Response rate (phones ÷ pieces) is the headline; watched to end is the
+      // second measure. Each gets a two-proportion z-test at 95%, and when the
+      // gap isn't clear, roughly how many pieces per version would settle a
+      // gap that size (80% power).
+      function zTest(x1, n1, x2, n2) {
+        const p1 = Math.min(1, x1 / n1), p2 = Math.min(1, x2 / n2), p = Math.min(1, (x1 + x2) / (n1 + n2));
+        const se = Math.sqrt(p * (1 - p) * (1 / n1 + 1 / n2));
+        const z = se ? (p1 - p2) / se : 0;
+        const d = Math.abs(p1 - p2);
+        let need = null;
+        if (d > 0) {
+          const pb = (p1 + p2) / 2;
+          const n = Math.pow(1.96 * Math.sqrt(2 * pb * (1 - pb)) + 0.84 * Math.sqrt(p1 * (1 - p1) + p2 * (1 - p2)), 2) / (d * d);
+          need = Math.ceil(n / 100) * 100;
+        }
+        return { p1: p1, p2: p2, sure: Math.abs(z) >= 1.96, need: need };
+      }
+      const segName = (x) => x.label || x.code;
+      let abPair = null;
+      function compareCard(d) {
+        const segs = (d.segments || []).filter((x) => x.code && x.pieces > 0);
+        if (segs.length < 2) return '';
+        const codes = segs.map((x) => x.code);
+        if (!abPair || !codes.includes(abPair[0]) || !codes.includes(abPair[1]) || abPair[0] === abPair[1]) abPair = [codes[0], codes[1]];
+        const A = segs.find((x) => x.code === abPair[0]), B = segs.find((x) => x.code === abPair[1]);
+        const opts = (sel) => segs.map((x) => '<option value="' + esc(x.code) + '"' + (x.code === sel ? ' selected' : '') + '>' + esc(segName(x)) + '</option>').join('');
+        const pick = segs.length > 2
+          ? '<div class="ab-pick"><select id="ab-a" aria-label="First version">' + opts(A.code) + '</select>vs' +
+            '<select id="ab-b" aria-label="Second version">' + opts(B.code) + '</select></div>'
+          : '';
+        let h = '<section class="card ab-card"><div class="card-head"><h2>Which version did better</h2>' + pick + '</div>';
+
+        const MIN = 10; // below this many on either side, say so instead of guessing
+        function metric(title, xa, na, xb, nb, unit) {
+          let body = '<div class="ab-metric"><h3>' + title + '</h3>';
+          if (!na || !nb) return body + '<p class="ab-call">Not enough yet.</p></div>';
+          const t = zTest(xa, na, xb, nb);
+          const top = Math.max(t.p1, t.p2) || 1;
+          const aWin = t.sure && t.p1 > t.p2, bWin = t.sure && t.p2 > t.p1;
+          const row = (x, p, n, win) => '<div class="ab-row' + (win ? ' win' : '') + '"><span class="lab">' + esc(segName(x)) + '</span>' +
+            '<div class="track"><div class="fill" style="width:' + (p / top * 100).toFixed(1) + '%"></div></div>' +
+            '<span class="num">' + (p * 100).toFixed(1).replace(/\.0$/, '') + '%</span></div>';
+          body += row(A, t.p1, na, aWin) + row(B, t.p2, nb, bWin);
+          const pp = (v) => (v * 100).toFixed(1).replace(/\.0$/, '') + '%';
+          if (Math.min(xa + xb, na, nb) < MIN) body += '<p class="ab-call">Not enough ' + unit + ' yet to tell.</p>';
+          else if (t.sure) body += '<p class="ab-call"><b>' + esc(segName(aWin ? A : B)) + ' did better</b>, ' + pp(Math.max(t.p1, t.p2)) + ' vs ' +
+            pp(Math.min(t.p1, t.p2)) + '. A gap this size is very unlikely to be chance (95% confidence).</p>';
+          else body += '<p class="ab-call"><b>Too close to call.</b> A gap this size could be chance' +
+            (t.need && t.need > Math.min(na, nb) ? '; it would take about ' + num(t.need) + ' ' + unit + ' per version to tell.' : '.') + '</p>';
+          return { html: body + '</div>', t: t, aWin: aWin, bWin: bWin };
+        }
+        const resp = metric('Response rate', A.phones, A.pieces, B.phones, B.pieces, 'pieces');
+        const end = metric('Watched to the end', A.completes, A.plays, B.completes, B.plays, 'plays');
+        const r = typeof resp === 'string' ? null : resp;
+        let verdict;
+        if (!r || A.phones + B.phones < MIN) verdict = 'Not enough scans yet to compare.';
+        else if (r.aWin || r.bWin) {
+          const w = r.aWin ? A : B, l = r.aWin ? B : A, pw = r.aWin ? r.t.p1 : r.t.p2, pl = r.aWin ? r.t.p2 : r.t.p1;
+          verdict = esc(segName(w)) + ' drew ' + (pl ? (pw / pl).toFixed(1).replace(/\.0$/, '') + '× the response rate of' : 'more responses than') + ' ' + esc(segName(l)) + '.';
+        } else verdict = 'No clear winner yet.';
+        h += '<p class="ab-verdict">' + verdict + '</p><div class="ab-metrics">' +
+          (typeof resp === 'string' ? resp : resp.html) + (typeof end === 'string' ? end : end.html) + '</div>';
+        h += '<p class="note">For a fair test, split one mailing list at random (every other address) and change only one thing. ' +
+          'Gifts by version: filter your donation platform by <code>utm_content=' + esc(A.code) + '</code> and <code>' + esc(B.code) + '</code>.</p></section>';
+        return h;
+      }
+      function wireCompare() {
+        const a = $('ab-a'), b = $('ab-b');
+        if (!a || !b) return;
+        const go = () => { abPair = [a.value, b.value]; render(); };
+        a.onchange = go; b.onchange = go;
       }
 
       // Admin: the campaign's segments (code, label, pieces mailed).
