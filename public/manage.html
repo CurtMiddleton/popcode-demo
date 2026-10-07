@@ -127,6 +127,35 @@
 
       .collections-list { width: 100%; max-width: 1040px; padding: 0 28px; display: flex; flex-direction: column; gap: 16px; }
 
+      /* Consumer | Nonprofits: only on accounts that have org Popcodes. */
+      .aud-toggle { display: inline-flex; margin-top: 26px; padding: 4px; border-radius: 999px; background: #ececec; align-self: flex-start; }
+      .aud-toggle button { font: 600 14px 'Inter', sans-serif; color: #555; background: none; border: 0; border-radius: 999px;
+                           padding: 9px 18px; cursor: pointer; }
+      .aud-toggle button.on { background: #fff; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+      .aud-toggle button .n { font-weight: 500; color: #8a8a8a; margin-left: 4px; }
+      .aud-toggle[hidden] { display: none; }
+      /* Nonprofits: one heading per organization, its campaigns under it. */
+      .org-head { display: flex; align-items: center; gap: 14px; margin: 22px 0 -4px; }
+      .org-head:first-child { margin-top: 0; }
+      .org-mark { width: 48px; height: 48px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
+                  font: 600 16px 'Inter', sans-serif; color: #fff; background: #7657FC; overflow: hidden; }
+      .org-mark.logo { background: #fff; box-shadow: 0 0 0 1px #e7e5e0; border-radius: 12px; width: auto; min-width: 48px; max-width: 160px; padding: 6px 10px; }
+      .org-mark.logo img { max-height: 36px; max-width: 140px; display: block; }
+      .org-name { font-family: 'CooperBT', Georgia, serif; font-size: 26px; line-height: 1.1; color: #1a1a1a; }
+      .org-meta { font: 14px 'Inter', sans-serif; color: #767676; margin-top: 3px; }
+      .org-brand-link { margin-left: auto; font: 600 13px 'Inter', sans-serif; color: #1a1a1a; text-decoration: none;
+                        border: 1px solid #d8d6d0; border-radius: 999px; padding: 8px 14px; white-space: nowrap; }
+      .org-brand-link:hover { background: #fff; }
+      .org-head > div:nth-child(2) { flex: 1; min-width: 0; }
+      @media (max-width: 560px) {
+        .org-head { gap: 10px; }
+        .org-name { font-size: 22px; }
+        .org-mark { width: 40px; height: 40px; min-width: 40px; font-size: 14px; }
+        .org-mark.logo { max-width: 104px; padding: 5px 8px; }
+        .org-mark.logo img { max-width: 88px; max-height: 26px; }
+        .org-brand-link { padding: 7px 11px; }
+      }
+
       /* My Designs — Popsa-style light-gray tiles, 3 columns */
       .designs-grid {
         /* 384px tiles, left-aligned with the header (same 1040 container) */
@@ -608,6 +637,10 @@
         </div>
       </div>
       <p class="lib-sub" id="lib-sub"></p>
+      <div class="aud-toggle" id="aud-toggle" role="group" aria-label="Show" hidden>
+        <button type="button" data-aud="consumer">Consumer<span class="n" id="aud-n-consumer"></span></button>
+        <button type="button" data-aud="nonprofit">Nonprofits<span class="n" id="aud-n-nonprofit"></span></button>
+      </div>
     </div>
 
     <div id="content" class="collections-list">
@@ -705,6 +738,27 @@
       }
       let activeTab = (new URLSearchParams(location.search).get('tab') === 'designs') ? 'designs' : 'popcodes';
 
+      // Consumer | Nonprofits, within My Popcodes. A nonprofit Popcode is one
+      // with an Organization cover or an org name (cover_config, read here as
+      // impact_cfg) — no column of its own yet. ?view=nonprofits links straight
+      // in; otherwise the last choice in this browser.
+      const isNonprofit = (c) => {
+        if (isDesignKind(c)) return false;
+        const ic = c.impact_cfg || {};
+        return ic.variant === 'org' || !!ic.org_name;
+      };
+      let audience = (() => {
+        const v = new URLSearchParams(location.search).get('view');
+        if (v === 'nonprofits') return 'nonprofit';
+        if (v === 'consumer') return 'consumer';
+        try { return localStorage.getItem('pc_lib_audience') === 'nonprofit' ? 'nonprofit' : 'consumer'; } catch (e) { return 'consumer'; }
+      })();
+      function setAudience(a) {
+        audience = a;
+        try { localStorage.setItem('pc_lib_audience', a); } catch (e) {}
+        renderActiveTab();
+      }
+
       async function loadCollections() {
         const content = document.getElementById('content');
         try {
@@ -791,10 +845,64 @@
         // collections PLUS any product that's actually scannable (a popcoded
         // book/calendar has a compiled .mind, so it IS a Popcode too).
         buildProductIndex();
-        const list = allCollections.filter(c => isDesigns ? isDesignKind(c) : (!isDesignKind(c) || isScannable(c)));
+        let list = allCollections.filter(c => isDesigns ? isDesignKind(c) : (!isDesignKind(c) || isScannable(c)));
+        // The toggle shows only once there is something on the Nonprofits side.
+        const npCount = isDesigns ? 0 : list.filter(isNonprofit).length;
+        const tog = document.getElementById('aud-toggle');
+        if (tog) {
+          tog.hidden = isDesigns || !npCount;
+          tog.querySelectorAll('button').forEach(b => {
+            b.classList.toggle('on', b.dataset.aud === audience);
+            b.setAttribute('aria-pressed', b.dataset.aud === audience);
+            b.onclick = () => setAudience(b.dataset.aud);
+          });
+          document.getElementById('aud-n-consumer').textContent = list.length - npCount;
+          document.getElementById('aud-n-nonprofit').textContent = npCount;
+        }
+        const showNp = !isDesigns && npCount > 0 && audience === 'nonprofit';
+        if (!isDesigns && npCount) list = list.filter(c => isNonprofit(c) === showNp);
+        if (showNp) {
+          if (title) title.textContent = 'My Popcodes';
+          if (cta) cta.textContent = '+ New campaign';
+          if (sub) sub.textContent = 'Campaigns for nonprofits, grouped by organization. Each one has its own impact dashboard.';
+          renderNonprofits(content, list);
+          return;
+        }
         if (!list.length) { content.className = 'collections-list'; content.appendChild(buildEmptyState(activeTab)); return; }
         if (isDesigns) list.forEach(col => content.appendChild(buildDesignCard(col, photoMap[col.id] || null)));
         else list.forEach(col => content.appendChild(buildCard(col, countMap[col.id] || 0, photoMap[col.id] || null)));
+      }
+
+      // Nonprofits: grouped by org (cover_config.org_name, else the project's
+      // name), orgs with the newest campaign first; campaigns newest first.
+      function renderNonprofits(content, list) {
+        const groups = [];
+        const byName = {};
+        list.forEach(c => {
+          const ic = c.impact_cfg || {};
+          const name = (ic.org_name || c.name || c.slug || 'Organization').trim();
+          const key = name.toLowerCase();
+          if (!byName[key]) groups.push(byName[key] = { name: name, cols: [] });
+          byName[key].cols.push(c);
+        });
+        groups.forEach(g => {
+          // The org's look comes from whichever campaign has branding set.
+          const branded = g.cols.find(c => (c.impact_cfg || {}).dash_logo_url || (c.impact_cfg || {}).brand_color) || g.cols[0];
+          const ic = branded.impact_cfg || {};
+          const head = document.createElement('div');
+          head.className = 'org-head';
+          const initials = g.name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+          const color = /^#[0-9a-f]{6}$/i.test(ic.brand_color || '') ? ic.brand_color : null;
+          head.innerHTML =
+            (ic.dash_logo_url
+              ? `<div class="org-mark logo"><img src="${escapeHtml(ic.dash_logo_url)}" alt=""></div>`
+              : `<div class="org-mark"${color ? ` style="background:${color}"` : ''}>${escapeHtml(initials)}</div>`) +
+            `<div><div class="org-name">${escapeHtml(g.name)}</div>` +
+            `<div class="org-meta">${g.cols.length} campaign${g.cols.length === 1 ? '' : 's'}${ic.dash_logo_url || color ? ' · branding set' : ''}</div></div>` +
+            `<a class="org-brand-link" href="/impact.html?id=${escapeHtml(branded.slug)}#branding">Branding</a>`;
+          content.appendChild(head);
+          g.cols.forEach(col => content.appendChild(buildCard(col, countMap[col.id] || 0, photoMap[col.id] || null, { nonprofit: true })));
+        });
       }
 
       function buildEmptyState(tab) {
@@ -806,7 +914,8 @@
         return div;
       }
 
-      function buildCard(col, pageCount, thumbUrl) {
+      function buildCard(col, pageCount, thumbUrl, opts) {
+        const np = !!(opts && opts.nonprofit);
         const card = document.createElement('div');
         card.className = 'card';
         card.dataset.id = col.id;
@@ -836,11 +945,12 @@
         // Download the badged photos: available for plain projects AND for board
         // books / calendars (multi-photo scannable products). Not for single-image
         // print designs (those live in My Designs and are for ordering, not badging).
-        const showDownload = !isProduct || col.kind === 'boardbook' || col.kind === 'calendar' || col.kind === 'book';
+        // A nonprofit campaign's prints come from the org's own printer, not the Shop.
+        const showDownload = !np && (!isProduct || col.kind === 'boardbook' || col.kind === 'calendar' || col.kind === 'book');
         // Org projects (an org cover or After the Video buttons) get a link to
         // their impact dashboard (impact.html).
         const ic = col.impact_cfg || {};
-        const showImpact = !isProduct && !!(ic.enabled || (ic.end && ic.end.enabled));
+        const showImpact = !np && !isProduct && !!(ic.enabled || (ic.end && ic.end.enabled));
         const viewUrl = `https://popcode.app/${col.slug}`;
         const shortUrl = `popcode.app/${col.slug}`;
 
@@ -882,7 +992,9 @@
             <span class="act"><button class="btn btn-sm btn-icon icon-btn btn-share-id" data-slug="${escapeHtml(col.slug)}" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button><span class="act-label">Share</span></span>
             ${showImpact ? `<span class="act"><a class="btn btn-sm btn-icon icon-btn" href="/impact.html?id=${escapeHtml(col.slug)}" title="Impact dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="13"/><line x1="12" y1="20" x2="12" y2="5"/><line x1="18" y1="20" x2="18" y2="10"/></svg></a><span class="act-label">Impact</span></span>` : ''}
             ${showDownload ? `<span class="act"><button class="btn btn-sm btn-icon icon-btn btn-download" data-slug="${escapeHtml(col.slug)}" data-title="${escapeHtml(title)}" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><span class="act-label">Download</span></span>` : ''}
-            ${isProduct
+            ${np
+              ? `<a class="btn btn-sm shop-btn" href="/impact.html?id=${escapeHtml(col.slug)}" title="Impact dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="13"/><line x1="12" y1="20" x2="12" y2="5"/><line x1="18" y1="20" x2="18" y2="10"/></svg>Dashboard</a>`
+              : isProduct
               ? `<a class="btn btn-sm shop-btn" href="${shopHref}?id=${escapeHtml(col.slug)}&cart=1" title="Add a printed copy to your cart"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`
               : `<a class="btn btn-sm shop-btn" href="/shop.html?id=${escapeHtml(col.slug)}" title="Shop products with this Popcode"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</a>`}
             </div>
