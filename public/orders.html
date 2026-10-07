@@ -188,6 +188,11 @@
         prodigi_failed: { label:'Needs attention', cls:'state-problem', step:1 },
       };
       const stateOf = (s) => STATE[s] || { label:'Processing', cls:'state-making', step:1 };
+      /* Prodigi's "Complete" means every parcel has left the lab, not that it
+         arrived — Prodigi never reports delivery. Only Printify does, so only a
+         Printify row may claim "Delivered". */
+      const rowState = (r) => stateOf(
+        r.status === 'complete' && (r.provider || 'prodigi') !== 'printify' ? 'shipped' : r.status);
 
       const STEPS = ['Ordered', 'Printing', 'Shipped', 'Delivered'];
 
@@ -214,7 +219,7 @@
           .from('print_orders')
           .select('id, order_group_id, status, items, product_type, sku, copies, attributes, '
                 + 'asset_urls, recipient, shipping_method, currency, total_charged_minor, '
-                + 'tracking_url, shipments, created_at, collection_id')
+                + 'tracking_url, shipments, created_at, collection_id, provider')
           .order('created_at', { ascending: false });
 
         const el = document.getElementById('content');
@@ -295,14 +300,14 @@
            "where is the rest of my order" email, so a partly-dispatched order
            says so and does not light the Shipped step. */
         const worst = rows.reduce((a, r) =>
-          stateOf(r.status).step < stateOf(a.status).step ? r : a, first);
-        let st = stateOf(worst.status);
+          rowState(r).step < rowState(a).step ? r : a, first);
+        let st = rowState(worst);
         const shippedParcels = parcels.filter(
           (p) => String(p.status || '').toLowerCase() === 'shipped').length;
         /* Same claim one level up: a cart split across two providers (an
            acrylic from Prodigi, a board book from Printify) is one order with
            one box on its way and one still being made. */
-        const someRowShipped = rows.some((r) => stateOf(r.status).step >= 3);
+        const someRowShipped = rows.some((r) => rowState(r).step >= 3);
         if ((parcels.length > 1 && shippedParcels > 0 && shippedParcels < parcels.length)
             || (someRowShipped && st.step < 3 && st.cls !== 'state-problem')) {
           st = { label: 'Partly shipped', cls: 'state-printing', step: 2 };
