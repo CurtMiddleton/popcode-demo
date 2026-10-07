@@ -6,9 +6,20 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-06)
+## Current state (updated 2026-10-07)
 
 **Live and recent**
+- **Nonprofit branding on the impact dashboard + org cover** (PRs #188–#193, all
+  merged and live 2026-10-07; no migrations). `impact.html` takes the org's logo
+  (`cover_config.dash_logo_url`, its own light-background logo) and colour
+  (`cover_config.brand_color`), set by admin in the **Branding** card at the
+  bottom of the dashboard; header becomes org logo · POWERED BY popcode. New
+  **Which version did better** card (A/B between two segments, z-test). The org
+  cover's **Tap to scan** disc takes `cover_config.scan_color` (edit.html → Cover);
+  pinwheel always white. **One Mind** (`onemind2026`) is the first branded org;
+  its A/B (printed URL vs QR, via org redirects with `?via=org&v=a|b`) is set up
+  in principle, not yet printed. **Not tried:** a real share link of a branded
+  dashboard, the edit-page colour picker signed in.
 - **Content rules + admin moderation** (PR #177, merged and live 2026-10-06; migration
   `2026-10-06-disable-popcode.sql` **has been run in prod**): Terms §3 now bans
   porn/nudity/sexually suggestive content and lets us remove anything at our
@@ -3473,3 +3484,34 @@ Prompted by a creator uploading what the user called soft porn. Finding: **the o
 **Lessons**
 - Made the `pkill -f` mistake from the entry above **again** — the lesson didn't stick. Stop a test server some other way (save its PID, or `fuser -k 8765/tcp`), never `pkill -f` with a pattern that's in the same command.
 - The user merges by asking ("open the PR and merge it") — check the Vercel commit status is `success` on the PR head first; a preview build takes ~1 minute.
+
+
+### 2026-10-07 — Nonprofit branding on the dashboard and cover; A/B comparison card
+
+**PRs #188, #189, #190, #191, #192, #193 — all merged by Claude at the user's "push to prod", each verified live (prod file = `origin/main`).** No migrations; everything new lives in `collections.cover_config`. Work done in a separate worktree (`/Users/curtmiddleton/popcode-impact-branding`) off `origin/main` because the main checkout was on another session's branch (`claude/calendar-wire`, 49 behind).
+
+#### What shipped
+- **#188 Dashboard branding (`public/impact.html`).** `cover_config.dash_logo_url` + `brand_color` (+ existing `org_name`). The dashboard has its **own** logo field because the cover's `org_logo_url` is usually white (made for a dark photo) and vanished on the light page — confirmed with the Common Tide logo. Header: org logo → divider → "POWERED BY" + small Popcode logo; no logo = unchanged. Colour tokens set in `applyColor()`: `--accent` (fills), `--accent-ink` (text, darkened to 4.5:1), `--accent-big` (Raised numerals, 3:1), `--bar` (32% tint), `--accent-soft` (12% tint). So yellow `#FBB619` is gold for text, yellow for bars. Admin **Branding** card in the manage tools (logo upload → `{slug}/dash_logo.{ext}`, name, colour picker + hex, "Popcode purple" reset, live preview); it re-reads `cover_config` before writing so nothing else is overwritten. Owners read branding straight from `collections`; share/demo via `/api/collection` (60 s CDN cache). `edit.html` slug rename now rewrites `dash_logo_url`.
+- **#189 "Which version did better" (`compareCard`).** Under *By segment* when ≥2 segments have pieces. Response rate (phones ÷ pieces) and watched-to-end, each a pooled two-proportion z-test at 95%; winner named, else "Too close to call" + pieces per version needed at 80% power (sanity: 15.6% vs 14.9% on 2,500 each → ~39,100). <10 on a side → "not enough yet". Pickers when 3+ segments. Note text still says "utm_content=a and b" (a replace didn't match; harmless).
+- **#190 + #192 Tap to scan colour on the org cover.** `cover_config.scan_color`, edit.html Cover → "Tap to scan colour" (picker/hex/reset, preview via `--scan-disc` on `#pv-scan-btn`), saved with Save Cover. `view.html` sets `--scan-disc` on `#wl-cover` in `applyCoverConfig`; only the cover's disc changes, not the default start screen. #190 auto-switched the pinwheel to near-black on light colours; **the user said it looked bad — #192 made it always white.** One Mind currently has `scan_color: #000000` saved (pointed out; user's call).
+- **#191 Drop-off fill** uses `--accent-soft` (was hard-coded `#efebff`), "1 play" not "1 plays", and a flat curve says "No one stopped early." (no marker) instead of "Biggest drop … 0% stopped".
+- **#193 Branding lost on slow loads.** After Apply the dashboard came back purple: branding had to arrive within 3 s or was **discarded**. Now `brandFor(slug)`: a late answer re-renders when it lands (`freshBrand[slug]` also catches one arriving before the numbers), each browser remembers the last branding per campaign in `localStorage` (`pc_impact_brand_{slug}`) and draws it at once, a failed read returns `null` (≠ "no branding").
+
+#### Explained to the user (worth reusing with orgs)
+- **A/B set-up:** one segment code per version. Best with the org's own redirects so nobody types a code: `onemind.org/winterappeal` → `https://popcode.app/onemind2026?via=org&v=a` (printed URL piece), `onemind.org/winterappeal/b` → `…?via=org&v=b` (QR-only piece). 302s, keep the query string, no wildcard on `/winterappeal`. `via=org` only feeds the address-split card (forwarded links arrive as plain popcode.app). Split one list at random, change one thing; gifts by `utm_content` (view.html adds it, `view.html:1808`).
+- **Owner scans are excluded** (`p_include_owner`, SQL `e.user_id is distinct from c.user_id`) — the user's own scans "didn't show" until *Include my own test scans*. A tester signed in **as Curt** on their phone (Oyster Bay rows, User = Curt Middleton) is excluded the same way. Desktop "Opened" rows are visits, not scans (scans = `target_found`). City is IP-based; cellular shows carrier hubs (Oyster Bay → "NYC → Cambridge").
+- The funnel's black bars = phones per step as % of phones that scanned; all 100% with 2 test phones.
+- The org cover is called the **cover** in code (`#wl-cover`, variant `org`); "org cover" to the user.
+
+#### Testing approach
+- Harness: `scratchpad/harness/serve.py` serves the worktree's `public/` plus a fake `/api/collection` from `collection.json` (`?slow` path sleeps 5 s). `?demo` exercises the whole dashboard; the admin editor was tested by injecting `brandEditor(state)` + `wireBrand(state)`. launch.json entry `impact-brand-harness` (untracked file).
+- Not tested: a real branding save signed in on prod, a real share link, the edit-page picker signed in, an iPhone.
+
+#### Lessons
+- **`[hidden]` loses to author `display:`.** "Powered by" showed on unbranded dashboards until `.brand [hidden] { display: none !important; }`.
+- **GitHub refused every push for ~15 min (10-07 ~11:05 ET) with "Internal Server Error"** while githubstatus.com said all operational; API blob uploads 500'd too, ref-only calls worked. A half-built API commit created a bad branch — deleted. A background retry loop (push + PR, no merge) got through after 20 tries. **Auto mode blocks a background loop that merges unattended** — merge only while the user is there.
+- A "drop the whole thing after N seconds" fallback silently loses data; prefer draw-now-then-correct.
+
+#### Open
+- One Mind: print proofs not yet tested end to end (redirects → segment rows); decide whether the Tap to scan colour should default to `brand_color` so the org sets one colour once (offered, not built).
+- Rewrite the A/B card's note in plainer words for org staff (offered).
