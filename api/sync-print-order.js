@@ -1,4 +1,4 @@
-// POST /api/sync-print-order — pull an order's real state from Prodigi.
+// POST /api/sync-print-order — pull an order's real state from its print provider.
 //
 // The callback (api/prodigi-callback.js) is the live path. This is the one that
 // makes it trustworthy, for two cases it cannot cover:
@@ -9,12 +9,21 @@
 //   2. A callback that was missed — Prodigi retries, but a deploy window or a
 //      bad minute is enough to lose one permanently, and nothing would notice.
 //
-// Body: { orderId }  — one order, or { all: true } to sweep every order that is
-// still open. Uses exactly the same read and the same patch builder as the
-// callback, so the two can never form different opinions about one order.
+//   3. Printify orders (board books, ornaments). Printify has no callback wired
+//      up at all, so this is their ONLY path off "submitted".
 //
-// Auth: Authorization: Bearer <supabase token>; caller must be the admin.
-// Env: SUPABASE_SERVICE_ROLE_KEY, PRODIGI_API_KEY, PRODIGI_BASE_URL.
+// Body: { orderId }  — one order, or { all: true } to sweep every order that is
+// still open, or { mine: true } to sweep the CALLER's own open orders.
+// Uses exactly the same read and the same patch builder as the callback, so
+// the two can never form different opinions about one order.
+//
+// Auth: Authorization: Bearer <supabase token>. `orderId` / `all` need the
+// admin; `mine` is any signed-in customer, and is what orders.html calls on
+// load — so an order's status is fresh whenever someone actually looks at it.
+// It only reads back state we would store anyway, and skips orders checked in
+// the last few minutes so reloading the page can't hammer either provider.
+// Env: SUPABASE_SERVICE_ROLE_KEY, PRODIGI_API_KEY, PRODIGI_BASE_URL,
+//      PRINTIFY_API_TOKEN, PRINTIFY_SHOP_ID.
 
 import { createClient } from '@supabase/supabase-js';
 import { Sentry } from './_sentry.js';
@@ -24,8 +33,11 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ADMIN_EMAILS = ['curtmid@gmail.com', 'curt@theworkshop.works'];
 
-// Sweeping means one Prodigi call per order, so it is bounded.
+// Sweeping means one provider call per order, so it is bounded.
 const SWEEP_LIMIT = 50;
+// A customer's own sweep: how recently checked counts as fresh enough.
+const MINE_FRESH_MS = 10 * 60 * 1000;
+const OPEN = ['submitted', 'in_production', 'shipped'];
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -41,23 +53,36 @@ export default async function handler(req, res) {
     const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const { data: { user }, error: userError } = await anonClient.auth.getUser(token);
     if (userError || !user) return res.status(401).json({ error: 'Invalid token' });
-    if (!ADMIN_EMAILS.includes((user.email || '').toLowerCase())) {
+    const { orderId, all, mine } = req.body || {};
+    if (!mine && !ADMIN_EMAILS.includes((user.email || '').toLowerCase())) {
       return res.status(403).json({ error: 'Admins only' });
     }
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { persistSession: false } });
-    const { orderId, all } = req.body || {};
+    const COLS = 'id, status, provider, prodigi_order_id, provider_status, tracked_at';
 
     let rows;
-    if (all) {
-      /* Only orders Prodigi could still have news about. A complete or
+    if (mine) {
+      const { data, error } = await admin
+        .from('print_orders')
+        .select(COLS)
+        .eq('user_id', user.id)
+        .not('prodigi_order_id', 'is', null)
+        .in('status', OPEN)
+        .order('created_at', { ascending: false })
+        .limit(SWEEP_LIMIT);
+      if (error) throw error;
+      const cutoff = Date.now() - MINE_FRESH_MS;
+      rows = (data || []).filter((r) => !r.tracked_at || Date.parse(r.tracked_at) < cutoff);
+    } else if (all) {
+      /* Only orders the provider could still have news about. A complete or
          cancelled order will never change again, and re-reading every order
          ever placed would grow into a slow sweep for no information. */
       const { data, error } = await admin
         .from('print_orders')
-        .select('id, status, prodigi_order_id, provider_status')
+        .select(COLS)
         .not('prodigi_order_id', 'is', null)
-        .in('status', ['submitted', 'in_production', 'shipped'])
+        .in('status', OPEN)
         .order('created_at', { ascending: false })
         .limit(SWEEP_LIMIT);
       if (error) throw error;
@@ -66,20 +91,32 @@ export default async function handler(req, res) {
       if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
       const { data, error } = await admin
         .from('print_orders')
-        .select('id, status, prodigi_order_id, provider_status')
+        .select(COLS)
         .eq('id', orderId)
         .maybeSingle();
       if (error) throw error;
       if (!data) return res.status(404).json({ error: 'Order not found' });
       if (!data.prodigi_order_id) {
-        return res.status(400).json({ error: 'Order was never submitted to Prodigi' });
+        return res.status(400).json({ error: 'Order was never submitted to a print provider' });
       }
       rows = [data];
     }
 
     const { fetchProdigiOrder, baseUrl } = await import('../lib/print/providers/prodigi.mjs');
-    const { buildOrderPatch, shouldAdvance } = await import('../lib/print/order-status.mjs');
-    const where = baseUrl();
+    const { fetchPrintifyOrder } = await import('../lib/print/providers/printify.mjs');
+    const { buildOrderPatch, buildPrintifyOrderPatch, shouldAdvance } =
+      await import('../lib/print/order-status.mjs');
+    /* Each provider: how to read an order, how to turn it into our columns,
+       and which account we're pointed at (for the not-found note below). The
+       column is still called prodigi_order_id; it holds Printify's id too. */
+    const PROVIDERS = {
+      prodigi: { fetch: fetchProdigiOrder, patch: buildOrderPatch, where: baseUrl() },
+      printify: {
+        fetch: fetchPrintifyOrder,
+        patch: buildPrintifyOrderPatch,
+        where: 'printify:' + (process.env.PRINTIFY_SHOP_ID || '28663478').trim(),
+      },
+    };
 
     const results = [];
     for (const row of rows) {
@@ -97,13 +134,16 @@ export default async function handler(req, res) {
          Keyed on the base URL, not a bare flag: point the app back at the
          sandbox and these become findable again, so the note has to expire by
          itself rather than hide them permanently. */
+      const prov = PROVIDERS[row.provider || 'prodigi'];
+      if (!prov) { results.push({ id: row.id, skipped: `unknown provider ${row.provider}` }); continue; }
+      const where = prov.where;
       const gone = row.provider_status && row.provider_status.unreachable;
       if (gone && gone.base_url === where) {
-        results.push({ id: row.id, skipped: 'not on this Prodigi environment' });
+        results.push({ id: row.id, skipped: 'not on this provider account' });
         continue;
       }
 
-      const fetched = await fetchProdigiOrder(row.prodigi_order_id);
+      const fetched = await prov.fetch(row.prodigi_order_id);
       if (!fetched.ok) {
         /* 404 is the provider saying this id does not exist here — permanent,
            unlike a 500 or a timeout, which are worth asking about again. */
@@ -122,7 +162,7 @@ export default async function handler(req, res) {
         continue;
       }
 
-      const patch = buildOrderPatch(fetched.order);
+      const patch = prov.patch(fetched.order);
       const from = row.status;
       // Same monotonic rule as the callback — a sweep must not undo a state a
       // late callback or a manual edit already moved forward.

@@ -188,6 +188,11 @@
         prodigi_failed: { label:'Needs attention', cls:'state-problem', step:1 },
       };
       const stateOf = (s) => STATE[s] || { label:'Processing', cls:'state-making', step:1 };
+      /* Prodigi's "Complete" means every parcel has left the lab, not that it
+         arrived — Prodigi never reports delivery. Only Printify does, so only a
+         Printify row may claim "Delivered". */
+      const rowState = (r) => stateOf(
+        r.status === 'complete' && (r.provider || 'prodigi') !== 'printify' ? 'shipped' : r.status);
 
       const STEPS = ['Ordered', 'Printing', 'Shipped', 'Delivered'];
 
@@ -200,7 +205,7 @@
 
       let user = null;
 
-      async function load() {
+      async function load(synced) {
         const { data: { session } } = await db.auth.getSession();
         if (!session) {
           location.href = '/auth.html?next=' + encodeURIComponent('/orders.html');
@@ -214,7 +219,7 @@
           .from('print_orders')
           .select('id, order_group_id, status, items, product_type, sku, copies, attributes, '
                 + 'asset_urls, recipient, shipping_method, currency, total_charged_minor, '
-                + 'tracking_url, shipments, created_at, collection_id')
+                + 'tracking_url, shipments, created_at, collection_id, provider')
           .order('created_at', { ascending: false });
 
         const el = document.getElementById('content');
@@ -244,6 +249,26 @@
 
         const cols = await loadCollections(groups);
         el.innerHTML = groups.map((g) => card(g, cols)).join('');
+        if (!synced) refresh(session);
+      }
+
+      /* Neither provider is guaranteed to tell us an order moved: Printify has
+         no callback at all, and a missed Prodigi callback is never resent. So
+         the page asks for a fresh read of this customer's open orders after
+         showing what's stored, and redraws if any were actually checked. The
+         server skips orders checked in the last few minutes. */
+      async function refresh(session) {
+        try {
+          const resp = await fetch('/api/sync-print-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json',
+                       'Authorization': 'Bearer ' + session.access_token },
+            body: JSON.stringify({ mine: true }),
+          });
+          if (!resp.ok) return;
+          const data = await resp.json().catch(() => ({}));
+          if ((data.results || []).some((r) => !r.error && !r.skipped)) load(true);
+        } catch (_) { /* the stored state is already on screen */ }
       }
 
       /* Names and slugs for the projects behind the ordered items, so an order can
@@ -275,11 +300,16 @@
            "where is the rest of my order" email, so a partly-dispatched order
            says so and does not light the Shipped step. */
         const worst = rows.reduce((a, r) =>
-          stateOf(r.status).step < stateOf(a.status).step ? r : a, first);
-        let st = stateOf(worst.status);
+          rowState(r).step < rowState(a).step ? r : a, first);
+        let st = rowState(worst);
         const shippedParcels = parcels.filter(
           (p) => String(p.status || '').toLowerCase() === 'shipped').length;
-        if (parcels.length > 1 && shippedParcels > 0 && shippedParcels < parcels.length) {
+        /* Same claim one level up: a cart split across two providers (an
+           acrylic from Prodigi, a board book from Printify) is one order with
+           one box on its way and one still being made. */
+        const someRowShipped = rows.some((r) => rowState(r).step >= 3);
+        if ((parcels.length > 1 && shippedParcels > 0 && shippedParcels < parcels.length)
+            || (someRowShipped && st.step < 3 && st.cls !== 'state-problem')) {
           st = { label: 'Partly shipped', cls: 'state-printing', step: 2 };
         }
         const totalMinor = rows.reduce((a, r) => a + (r.total_charged_minor || 0), 0);
@@ -383,7 +413,8 @@
 
         return note + parcels.map((p, i) => {
           const shipped = String(p.status || '').toLowerCase() === 'shipped';
-          const sub = shipped
+          const sub = p.delivered_at ? 'Delivered ' + esc(when(p.delivered_at))
+            : shipped
             ? (p.dispatched_at ? 'Dispatched ' + esc(when(p.dispatched_at)) : 'On its way')
             : 'Still being made';
           /* Prodigi reports "Mixed" as the carrier on a shipment it has not
@@ -434,7 +465,7 @@
         return section('Your Popcode', out.join(''));
       }
 
-      load();
+      load(false);
     </script>
   </body>
 </html>
