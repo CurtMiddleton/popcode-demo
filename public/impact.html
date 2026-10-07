@@ -937,25 +937,26 @@
           const pts = pcts.map((v, i) => (i * 10) + ',' + (100 - v)).join(' ');
           const label = nameOf(x.target_index) + ': share of ' + x.n + ' plays still watching at each tenth of the video: ' +
             pcts.map((v, i) => at(i) + ' ' + Math.round(v) + '%').join(', ') + '.';
-          h += '<div class="drop" data-ti="' + x.target_index + '"><h3>' + esc(nameOf(x.target_index)) + '<small>' + num(x.n) + ' plays</small></h3>' +
+          h += '<div class="drop" data-ti="' + x.target_index + '"><h3>' + esc(nameOf(x.target_index)) + '<small>' + num(x.n) + (x.n === 1 ? ' play' : ' plays') + '</small></h3>' +
             '<div class="plot" role="img" aria-label="' + esc(label) + '">' +
             '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
               '<line x1="0" y1="0" x2="100" y2="0" stroke="#ecebe8" stroke-width="1" vector-effect="non-scaling-stroke"/>' +
               '<line x1="0" y1="50" x2="100" y2="50" stroke="#ecebe8" stroke-width="1" vector-effect="non-scaling-stroke"/>' +
               '<line x1="0" y1="100" x2="100" y2="100" stroke="#d8d6d0" stroke-width="1" vector-effect="non-scaling-stroke"/>' +
-              '<polygon points="0,100 ' + pts + ' 100,100" fill="#efebff"/>' +
+              '<polygon points="0,100 ' + pts + ' 100,100" fill="var(--accent-soft)"/>' +
               '<polyline points="' + pts + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' +
             '</svg>' +
             '<span class="yl" style="top:0">100%</span><span class="yl" style="top:50%">50%</span>' +
             '<span class="xl first" style="left:0">' + esc(at(0)) + '</span><span class="xl" style="left:50%">' + esc(at(5)) + '</span>' +
             '<span class="xl last" style="left:100%">' + esc(at(10)) + '</span>' +
             '<span class="dl end" style="left:100%;top:' + (100 - pcts[10]) + '%">' + Math.round(pcts[10]) + '%</span>' +
-            '<span class="dot" style="left:' + (bi * 10) + '%;top:' + (100 - pcts[bi]) + '%"></span>' +
+            (lost > 0 ? '<span class="dot" style="left:' + (bi * 10) + '%;top:' + (100 - pcts[bi]) + '%"></span>' : '') +
             '<span class="dot hover"></span><span class="tip"></span>' +
             pcts.map((v, i) => '<span class="hit" tabindex="0" data-i="' + i + '" style="left:' + Math.max(0, i * 10 - 5) + '%;width:' +
               (i === 0 || i === 10 ? 5 : 10) + '%" aria-label="' + esc(at(i) + ': ' + Math.round(v) + '% still watching') + '"></span>').join('') +
             '</div>' +
-            '<p class="drop-note">Biggest drop: <b>' + esc(at(bi - 1)) + '–' + esc(at(bi)) + '</b>, where ' + lost + '% of viewers stopped. ' +
+            '<p class="drop-note">' + (lost > 0 ? 'Biggest drop: <b>' + esc(at(bi - 1)) + '–' + esc(at(bi)) + '</b>, where ' + lost + '% of viewers stopped. '
+              : 'No one stopped early. ') +
             Math.round(pcts[10]) + '% watched to the end.</p></div>';
         });
         return h + '</div><p class="note">From how far each play got before the viewer closed it. ' +
