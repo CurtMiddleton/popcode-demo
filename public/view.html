@@ -166,6 +166,9 @@
         filter: drop-shadow(0 2px 14px rgba(0,0,0,0.34));
       }
       .pop-mark use { fill: #fff; }
+      /* The cover's disc can take the org's colour (applyCoverConfig). */
+      #wl-cover .pop-disc { background: var(--scan-disc, #4b3cba); }
+      #wl-cover .pop-mark use { fill: var(--scan-mark, #fff); }
       .pop-mark .p { transform-origin: 150.6px 150.6px; transform-box: view-box; }
       #cta-group {
         position: absolute; bottom: 12%; left: 0; right: 0;
@@ -1252,6 +1255,14 @@
       }
 
       let coverConfig = null;
+      // A Tap to scan disc in the org's colour (cover_config.scan_color). The
+      // pinwheel stays white unless the colour is too light for it (yellow,
+      // say), then it turns near-black.
+      function scanMarkFor(hex) {
+        const L = [1, 3, 5].map((i) => { let v = parseInt(hex.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+        const lum = 0.2126 * L[0] + 0.7152 * L[1] + 0.0722 * L[2];
+        return 1.05 / (lum + 0.05) >= 2.5 ? '#fff' : '#1a1a1a';
+      }
       function applyCoverConfig(cfg) {
         if (!cfg || !cfg.enabled || !cfg.image_url) { coverConfig = null; return; }
         coverConfig = cfg;
@@ -1260,6 +1271,13 @@
         wl.setAttribute('data-variant', variant);
         const ctaMode = cfg.cta_mode === 'code' || cfg.cta_mode === 'both' ? cfg.cta_mode : 'tap';
         wl.setAttribute('data-cta-mode', ctaMode);
+        if (/^#[0-9a-f]{6}$/i.test(cfg.scan_color || '')) {
+          wl.style.setProperty('--scan-disc', cfg.scan_color);
+          wl.style.setProperty('--scan-mark', scanMarkFor(cfg.scan_color));
+        } else {
+          wl.style.removeProperty('--scan-disc');
+          wl.style.removeProperty('--scan-mark');
+        }
         wl.querySelector('.wl-bg').src = cfg.image_url;
         const orgLogo = wl.querySelector('.wl-org-logo');
         if (variant === 'org' && cfg.org_logo_url) {
