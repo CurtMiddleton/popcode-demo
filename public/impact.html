@@ -308,6 +308,20 @@
       .brand-form input.name { width: 220px; }
       .brand-form input[type=color] { width: 52px; padding: 4px; cursor: pointer; }
       .brand-form input.hex { width: 100px; text-transform: uppercase; }
+      .redir { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+      .redir h3 { font-size: 14px; font-weight: 700; margin: 0 0 4px; font-family: var(--sans); }
+      .redir .lede { margin-bottom: 12px; }
+      .redir-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 10px 0; border-bottom: 1px solid #f0efeb; font-size: 13px; }
+      .redir-row:last-of-type { border-bottom: 0; }
+      .redir-row .who { font-weight: 600; font-size: 14px; }
+      .redir-row .who small { font-weight: 400; color: var(--faint); margin-left: 6px; }
+      .redir-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .redir-line .k { width: 64px; flex: none; font-size: 12px; font-weight: 600; color: var(--muted); }
+      .redir-line input { flex: 1 1 200px; min-width: 0; font: inherit; font-size: 13px; height: 34px; padding: 0 10px;
+                          border: 1px solid #d8d6d0; border-radius: 8px; }
+      .redir-line code { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; font-size: 12.5px; background: var(--bg);
+                         padding: 8px 10px; border-radius: 8px; }
+      .redir-line .tool-btn { height: 34px; padding: 0 12px; font-size: 13px; }
       .seg-hint { font-size: 12px; color: var(--faint); margin: 4px 0 12px; line-height: 1.5; }
       .seg-hint b { color: var(--ink); font-weight: 600; }
       .state { text-align: center; padding: 80px 16px; color: var(--muted); font-size: 16px; line-height: 1.6; }
@@ -1168,7 +1182,57 @@
           'Codes: lowercase letters, numbers and dashes, up to 20; short is best, it’s typed by hand.</p>' +
           '<div class="fields"><button class="tool-btn" type="button" id="seg-add">Add segment</button>' +
           '<button class="tool-btn primary" type="submit">Save segments</button></div>' +
-          '<p class="tool-msg" id="seg-msg"></p></form></div>';
+          '<p class="tool-msg" id="seg-msg"></p></form>' +
+          '<div class="redir" id="seg-redirects"></div></div>';
+      }
+
+      // The links an org sets up for each segment, from the rows as typed.
+      // "To" is what their redirect points at; "From" is their own address
+      // (their choice, so only remembered in this browser, per campaign).
+      const redirTo = (slug, code) => 'https://popcode.app/' + slug + '?via=org&v=' + code;
+      const redirFromKey = (slug) => 'pc_redirect_from_' + slug;
+      function redirFroms(slug) { try { return JSON.parse(localStorage.getItem(redirFromKey(slug)) || '{}') || {}; } catch (e) { return {}; } }
+      function segRowsNow() {
+        return [...document.querySelectorAll('#seg-rows .seg-row')].map((row) => ({
+          code: row.querySelector('.code').value.trim().toLowerCase(),
+          label: row.querySelector('.label').value.trim(),
+        })).filter((x) => /^[a-z0-9][a-z0-9-]{0,19}$/.test(x.code));
+      }
+      function drawRedirects(d) {
+        const box = $('seg-redirects');
+        if (!box) return;
+        const slug = d.campaign.slug, rows = segRowsNow(), froms = redirFroms(slug);
+        if (!rows.length) { box.innerHTML = ''; return; }
+        box.innerHTML = '<h3>Redirects for the org’s website</h3>' +
+          '<p class="lede">So donors never type a code: the org points its own address at each link below, as a temporary (302) redirect that keeps everything after the <code>?</code>. ' +
+          'Or print <code>popcode.app/' + esc(slug) + '/{code}</code> instead and skip the redirects.</p>' +
+          rows.map((x) => '<div class="redir-row" data-code="' + esc(x.code) + '">' +
+            '<div class="who">' + esc(x.label || 'Segment ' + x.code) + '<small>code ' + esc(x.code) + '</small></div>' +
+            '<div class="redir-line"><span class="k">From</span><input class="from" placeholder="their address, e.g. onemind.org/winterappeal" value="' + esc(froms[x.code] || '') + '" aria-label="The org’s address for ' + esc(x.label || x.code) + '"></div>' +
+            '<div class="redir-line"><span class="k">To</span><code>' + esc(redirTo(slug, x.code)) + '</code>' +
+            '<button class="tool-btn" type="button" data-copy-to="' + esc(x.code) + '">Copy</button></div></div>'
+          ).join('') +
+          '<div class="fields" style="margin-top:12px"><button class="tool-btn" type="button" id="redir-copy-all">Copy all for their web person</button></div>' +
+          '<p class="tool-msg" id="redir-msg"></p>';
+        box.oninput = (e) => {
+          if (!e.target.classList.contains('from')) return;
+          const all = redirFroms(slug);
+          all[e.target.closest('.redir-row').dataset.code] = e.target.value.trim();
+          try { localStorage.setItem(redirFromKey(slug), JSON.stringify(all)); } catch (err) {}
+        };
+        const say = async (text, done) => {
+          try { await navigator.clipboard.writeText(text); $('redir-msg').textContent = done; } catch (e) { $('redir-msg').textContent = text; }
+        };
+        box.onclick = (e) => {
+          const b = e.target.closest('[data-copy-to]');
+          if (b) say(redirTo(slug, b.dataset.copyTo), 'Link copied.');
+          if (e.target.id === 'redir-copy-all') {
+            const f = redirFroms(slug);
+            const lines = segRowsNow().map((x) => (f[x.code] || '(your address for ' + (x.label || x.code) + ')') + '  →  ' + redirTo(slug, x.code));
+            say('Redirects for ' + (d.campaign.name || slug) + '\n' +
+              'Temporary (302) redirects. Keep the part after the "?" exactly as written.\n\n' + lines.join('\n'), 'Copied — paste it into an email.');
+          }
+        };
       }
 
       // ── Owner / admin tools ──────────────────────────────────────────────
@@ -1332,11 +1396,13 @@
         }
         const sf = $('segments-form');
         if (sf) {
+          drawRedirects(d);
+          $('seg-rows').addEventListener('input', () => drawRedirects(d));
           $('seg-add').onclick = () => {
             $('seg-rows').insertAdjacentHTML('beforeend', segRow({ code: '', label: '', pieces: null }));
             const last = $('seg-rows').lastElementChild; if (last) last.querySelector('.code').focus();
           };
-          $('seg-rows').onclick = (e) => { const b = e.target.closest('[data-remove]'); if (b) b.parentElement.remove(); };
+          $('seg-rows').onclick = (e) => { const b = e.target.closest('[data-remove]'); if (b) { b.parentElement.remove(); drawRedirects(d); } };
           sf.onsubmit = async (e) => {
             e.preventDefault();
             const list = [...sf.querySelectorAll('.seg-row')].map((row) => ({
