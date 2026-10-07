@@ -35,6 +35,8 @@
         --accent: #7657FC;
         --accent-ink: #5a3fd6;
         --bar: #d9d4f5;
+        --accent-soft: #efebff;
+        --accent-big: #7657FC;
         --serif: 'CooperBT', Georgia, serif;
         --sans: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
       }
@@ -55,6 +57,18 @@
       .brand img { display: block; }
       .brand .org { font-size: 15px; font-weight: 600; padding-left: 14px; border-left: 1px solid var(--line);
                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      /* Branded: the org's logo leads, Popcode steps back to "Powered by". */
+      .brand [hidden] { display: none !important; }
+      .brand .org-logo { max-height: 48px; max-width: 240px; width: auto; height: auto; }
+      .brand .powered { display: flex; align-items: center; gap: 8px; padding-left: 14px; border-left: 1px solid var(--line);
+                        font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+                        color: var(--faint); white-space: nowrap; text-decoration: none; }
+      .brand .powered img { width: 90px; height: auto; }
+      @media (max-width: 640px) {
+        .brand .org-logo { max-height: 38px; max-width: 160px; }
+        .brand .powered { font-size: 9.5px; gap: 6px; padding-left: 10px; }
+        .brand .powered img { width: 72px; }
+      }
       .actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
       .actions select {
         font: inherit; font-size: 14px; font-weight: 500; color: var(--ink); background: var(--paper);
@@ -113,7 +127,7 @@
       .kpi .k { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
       .kpi .v { font-family: var(--serif); font-size: 40px; line-height: 1.05; margin: 8px 0 6px; }
       .kpi .n { font-size: 13px; line-height: 1.4; color: var(--muted); }
-      .kpi.money .v { color: var(--accent); }
+      .kpi.money .v { color: var(--accent-big); }
       .kpi.pending .v { color: #b5b3ae; }
       @media (max-width: 640px) { .kpi { padding: 16px 14px 14px; } .kpi .v { font-size: 30px; }
                                   .kpi:last-child { grid-column: 1 / -1; } }
@@ -197,7 +211,7 @@
 
       .foot { font-size: 13px; color: var(--faint); margin: 26px 0 0; line-height: 1.5; }
       .sample-tag { flex: none; font-size: 11.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
-                    color: var(--accent-ink); background: #efebff; padding: 6px 11px; border-radius: 999px; white-space: nowrap; }
+                    color: var(--accent-ink); background: var(--accent-soft); padding: 6px 11px; border-radius: 999px; white-space: nowrap; }
 
       /* Owner/admin tools under the report: gift totals and share links. Not printed. */
       .manage { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
@@ -266,6 +280,14 @@
       .seg-row input { font: inherit; font-size: 14px; height: 40px; padding: 0 10px; border: 1px solid #d8d6d0; border-radius: 8px; min-width: 0; }
       .seg-row .code { width: 110px; } .seg-row .label { flex: 1 1 160px; } .seg-row .pieces { width: 100px; }
       .seg-row .tool-btn { height: 40px; padding: 0 12px; }
+      .brand-form .logo-pick { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .brand-form .logo-box { height: 44px; min-width: 88px; max-width: 200px; border: 1px dashed #d8d6d0; border-radius: 10px;
+                              display: flex; align-items: center; justify-content: center; padding: 4px 10px;
+                              font-size: 12px; color: var(--faint); background: var(--paper); }
+      .brand-form .logo-box img { max-height: 34px; max-width: 180px; }
+      .brand-form input.name { width: 220px; }
+      .brand-form input[type=color] { width: 52px; padding: 4px; cursor: pointer; }
+      .brand-form input.hex { width: 100px; text-transform: uppercase; }
       .seg-hint { font-size: 12px; color: var(--faint); margin: 4px 0 12px; line-height: 1.5; }
       .seg-hint b { color: var(--ink); font-weight: 600; }
       .state { text-align: center; padding: 80px 16px; color: var(--muted); font-size: 16px; line-height: 1.6; }
@@ -315,8 +337,10 @@
     <div class="wrap" id="app">
       <header class="masthead">
         <div class="brand">
-          <a href="/"><img src="/assets/Popcode_logo.png" alt="Popcode" width="132" height="35"></a>
+          <a href="/" id="popcode-logo"><img src="/assets/Popcode_logo.png" alt="Popcode" width="132" height="35"></a>
           <span class="org" id="org-name" hidden></span>
+          <img class="org-logo" id="org-logo" alt="" hidden>
+          <a class="powered" id="powered" href="/" hidden>Powered by <img src="/assets/Popcode_logo.png" alt="Popcode" width="90" height="24"></a>
         </div>
         <div class="actions" id="actions" hidden>
           <span class="sample-tag" id="sample-tag" hidden>Sample data</span>
@@ -381,6 +405,77 @@
         });
       }
 
+      // ── The org's branding ──
+      // Kept in collections.cover_config beside org_name (admin-only writes, the
+      // cover_config trigger): dash_logo_url is a logo for a light background
+      // (the cover's org_logo_url is usually white, made for a dark photo), and
+      // brand_color replaces Popcode purple. With a logo the org leads and
+      // Popcode becomes "Powered by".
+      const HEX_RE = /^#[0-9a-f]{6}$/i;
+      const DEFAULT_ACCENT = '#7657FC';
+      const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+      const toHex = (c) => '#' + c.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+      const mix = (h, w, t) => toHex(rgb(h).map((v, i) => v * t + rgb(w)[i] * (1 - t)));
+      function contrastOnWhite(h) {
+        const L = rgb(h).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+        return 1.05 / (0.2126 * L[0] + 0.7152 * L[1] + 0.0722 * L[2] + 0.05);
+      }
+      // The same hue darkened just enough to read as text on white. A light
+      // brand colour (yellow, say) stays as-is for bars and fills.
+      function readable(h, ratio) {
+        let t = 1;
+        while (contrastOnWhite(mix(h, '#000000', t)) < ratio && t > 0.2) t -= 0.02;
+        return mix(h, '#000000', t);
+      }
+      function applyColor(hex) {
+        const h = HEX_RE.test(hex || '') ? hex : DEFAULT_ACCENT;
+        const st = document.documentElement.style;
+        if (h === DEFAULT_ACCENT) {
+          ['--accent', '--accent-ink', '--accent-big', '--bar', '--accent-soft'].forEach((k) => st.removeProperty(k));
+          return;
+        }
+        st.setProperty('--accent', h);
+        st.setProperty('--accent-ink', readable(h, 4.5)); // small text: the peak-day label, the Sample tag
+        st.setProperty('--accent-big', readable(h, 3));   // large numerals: Raised
+        st.setProperty('--bar', mix(h, '#ffffff', 0.32));
+        st.setProperty('--accent-soft', mix(h, '#ffffff', 0.12));
+      }
+      function brandFrom(cc) {
+        cc = cc || {};
+        return { logo: cc.dash_logo_url || null, color: HEX_RE.test(cc.brand_color || '') ? cc.brand_color : null };
+      }
+      // Owners read their own row directly (no CDN cache, so a save shows on
+      // reload); share links and the demo go through the public /api/collection.
+      async function fetchBrand(slug) {
+        if (MODE === 'owner') {
+          const r = await db.from('collections').select('id, cover_config').eq('slug', slug).maybeSingle();
+          if (!r.error && r.data) return Object.assign(brandFrom(r.data.cover_config), { id: r.data.id });
+        }
+        try {
+          const resp = await fetch('/api/collection?slug=' + encodeURIComponent(slug));
+          if (resp.ok) return brandFrom((await resp.json()).cover_config);
+        } catch (e) {}
+        return brandFrom(null);
+      }
+      // Never hold the page up for branding: give up after 3 s and draw plain.
+      const brandOrNothing = (p) => Promise.race([p.catch(() => brandFrom(null)),
+        new Promise((r) => setTimeout(() => r(brandFrom(null)), 3000))]);
+
+      function drawBrand() {
+        const b = state.brand || {}, org = state.campaign.org_name || '';
+        applyColor(b.color);
+        const logo = $('org-logo');
+        if (b.logo) {
+          if (logo.getAttribute('src') !== b.logo) logo.src = b.logo;
+          logo.alt = org || 'Organization logo';
+        }
+        logo.hidden = !b.logo;
+        $('powered').hidden = !b.logo;
+        $('popcode-logo').hidden = !!b.logo;
+        $('org-name').textContent = org;
+        $('org-name').hidden = !org || !!b.logo;
+      }
+
       let state = null;
       // owner: signed in, the admin or the project's owner.
       // share: ?share={token} — a board member's read-only link, no sign-in.
@@ -419,8 +514,10 @@
 
       async function load(slug) {
         const args = Object.assign({ p_slug: slug, p_include_owner: params.get('own') === '1' }, rangeArgs());
+        const brandP = brandOrNothing(fetchBrand(slug));
         const r = await db.rpc('get_impact_dashboard', args);
         if (r.error) return fail(r.error);
+        if (r.data) r.data.brand = await brandP;
         if (!r.data) {
           $('main').innerHTML = '<div class="state"><h1>Campaign not found</h1>There is no Popcode at popcode.app/' + esc(slug) + '.</div>';
           return;
@@ -440,6 +537,7 @@
       async function loadShared(token) {
         const r = await db.rpc('get_impact_dashboard_shared', Object.assign({ p_token: token }, rangeArgs()));
         if (r.error) return fail(r.error);
+        if (r.data && r.data.campaign) r.data.brand = await brandOrNothing(fetchBrand(r.data.campaign.slug));
         $('actions').hidden = false;
         show(r.data);
       }
@@ -485,6 +583,7 @@
         $('actions').hidden = false;
         show({
           demo: true,
+          brand: brandFrom(cc),
           campaign: { slug: col.slug, name: col.name, from: days[0].day, to: days[days.length - 1].day, tz: 'America/New_York',
                       include_owner: false, org_name: cc.org_name || col.name, buttons: buttons, items: items },
           totals: { scans: scans, phones: 764, plays: scans, completes: 612, avg_pct: 80, taps: taps, visits: 1290, events: 1 },
@@ -539,9 +638,7 @@
         const byTi = {};
         (d.stories || []).forEach((s) => { byTi[s.target_index] = s; });
 
-        const org = c.org_name || '';
-        $('org-name').textContent = org;
-        $('org-name').hidden = !org;
+        drawBrand();
         document.title = (c.name || c.slug) + ' — Impact · Popcode';
 
         const photos = items.length;
@@ -958,6 +1055,7 @@
             (r ? 'Last updated ' + esc(new Date(r.updated_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })) : 'Not entered yet.') +
             '</p></div>';
           h += segmentsEditor(d);
+          h += brandEditor(d);
         }
         if (d.can.share) {
           h += '<div class="card"><h2>Share with your board</h2><p class="lede">Anyone with a link sees this dashboard, read-only, ' +
@@ -967,6 +1065,83 @@
             '<p class="tool-msg" id="share-msg"></p></div>';
         }
         return h + '</section>';
+      }
+
+      // Admin: the org's logo, name and colour. The colour previews as you pick.
+      function brandEditor(d) {
+        const b = d.brand || {}, c = d.campaign;
+        const hex = b.color || DEFAULT_ACCENT;
+        return '<div class="card"><h2>Branding</h2><p class="lede">The org’s logo leads the header, with “Powered by Popcode” beside it, ' +
+          'and their colour replaces Popcode purple. Use a logo made for a light background. ' +
+          'Applies to share links and the printed report too.</p>' +
+          '<form class="fields brand-form" id="brand-form">' +
+          '<div class="logo-pick"><div class="logo-box" id="brand-logo-box">' +
+            (b.logo ? '<img src="' + esc(b.logo) + '" alt="">' : 'No logo') + '</div>' +
+            '<input type="file" id="brand-logo-file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden>' +
+            '<button class="tool-btn" type="button" id="brand-logo-pick">Choose logo</button>' +
+            '<button class="tool-btn" type="button" id="brand-logo-clear"' + (b.logo ? '' : ' hidden') + '>Remove</button></div>' +
+          '<label>Organization name<input class="name" name="org" maxlength="80" value="' + esc(c.org_name || '') + '" placeholder="' + esc(c.name || '') + '"></label>' +
+          '<label>Colour<input type="color" id="brand-color" value="' + esc(hex.toLowerCase()) + '"></label>' +
+          '<label>Hex<input class="hex" id="brand-hex" maxlength="7" value="' + esc(hex.toUpperCase()) + '"></label>' +
+          '<button class="tool-btn" type="button" id="brand-reset">Popcode purple</button>' +
+          '<button class="tool-btn primary" type="submit">Save</button>' +
+          '</form><p class="tool-msg" id="brand-msg"></p></div>';
+      }
+
+      function wireBrand(d) {
+        const form = $('brand-form');
+        if (!form) return;
+        const slug = d.campaign.slug, msg = $('brand-msg');
+        const saved = Object.assign({}, d.brand || {});
+        let file = null, logo = saved.logo || null;
+        const box = $('brand-logo-box');
+        const showLogo = (src) => { box.innerHTML = src ? '<img src="' + esc(src) + '" alt="">' : 'No logo'; $('brand-logo-clear').hidden = !src; };
+        const color = () => (HEX_RE.test($('brand-hex').value.trim()) ? $('brand-hex').value.trim() : null);
+        $('brand-color').oninput = (e) => { $('brand-hex').value = e.target.value.toUpperCase(); applyColor(e.target.value); };
+        $('brand-hex').oninput = (e) => {
+          let v = e.target.value.trim(); if (v && v[0] !== '#') v = '#' + v;
+          if (HEX_RE.test(v)) { $('brand-color').value = v.toLowerCase(); applyColor(v); }
+        };
+        $('brand-reset').onclick = () => { $('brand-hex').value = DEFAULT_ACCENT; $('brand-color').value = DEFAULT_ACCENT.toLowerCase(); applyColor(DEFAULT_ACCENT); };
+        $('brand-logo-pick').onclick = () => $('brand-logo-file').click();
+        $('brand-logo-file').onchange = (e) => {
+          const f = e.target.files && e.target.files[0]; if (!f) return;
+          file = f; showLogo(URL.createObjectURL(f));
+        };
+        $('brand-logo-clear').onclick = () => { file = null; logo = null; $('brand-logo-file').value = ''; showLogo(null); };
+        form.onsubmit = async (e) => {
+          e.preventDefault();
+          let v = $('brand-hex').value.trim(); if (v && v[0] !== '#') v = '#' + v;
+          if (v && !HEX_RE.test(v)) { msg.textContent = '“' + v + '” isn’t a colour like #FBB619.'; return; }
+          const btn = form.querySelector('button[type=submit]'); btn.disabled = true; msg.textContent = 'Saving…';
+          try {
+            // Read the row fresh so nothing else in cover_config is overwritten.
+            const cur = await db.from('collections').select('id, cover_config').eq('slug', slug).single();
+            if (cur.error) throw cur.error;
+            if (file) {
+              const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+              const path = slug + '/dash_logo.' + ext;
+              const up = await db.storage.from('experiences').upload(path, file, { upsert: true, contentType: file.type || 'image/png' });
+              if (up.error) throw up.error;
+              logo = db.storage.from('experiences').getPublicUrl(path).data.publicUrl + '?v=' + Date.now();
+              file = null;
+            }
+            const hex = !v || v.toUpperCase() === DEFAULT_ACCENT.toUpperCase() ? null : v.toUpperCase();
+            const org = form.org.value.trim() || null;
+            const cfg = Object.assign({}, cur.data.cover_config || {}, { dash_logo_url: logo, brand_color: hex, org_name: org });
+            const r = await db.from('collections').update({ cover_config: cfg }).eq('id', cur.data.id).select('id');
+            if (r.error) throw r.error;
+            if (!r.data || !r.data.length) throw new Error('No row updated — only the admin account can change branding.');
+            state.brand = Object.assign({}, state.brand, { logo: logo, color: hex });
+            state.campaign.org_name = org;
+            Object.assign(saved, state.brand);
+            drawBrand();
+            msg.textContent = 'Saved.';
+          } catch (err) {
+            msg.textContent = 'Not saved: ' + (err.message || err);
+            applyColor(saved.color);
+          } finally { btn.disabled = false; }
+        };
       }
 
       function shareUrl(t) { return location.origin + '/impact.html?share=' + encodeURIComponent(t); }
@@ -994,6 +1169,7 @@
 
       function wireManage(d) {
         drawShares();
+        wireBrand(d);
         const slug = d.campaign.slug;
         const form = $('results-form');
         if (form) {
