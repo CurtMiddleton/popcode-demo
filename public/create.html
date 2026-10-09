@@ -274,6 +274,12 @@
       .audio-upload { font-size: 11px; font-weight: 600; color: #555; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; font-family: 'Inter', sans-serif; }
       .audio-upload:hover { color: #1a1a1a; }
       .audio-upload input { display: none; }
+      /* Transcript for an audio page: shown under the player in the viewer. */
+      .transcript-field { width: 100%; margin-top: 14px; text-align: left; }
+      .transcript-field label { display: block; font-size: 12px; font-weight: 700; color: #1a1a1a; margin-bottom: 6px; font-family: 'Inter', sans-serif; }
+      .transcript-field label span { font-weight: 500; color: #888; }
+      .transcript-field textarea { display: block; width: 100%; box-sizing: border-box; min-height: 96px; padding: 10px 12px; border-radius: 12px; border: 1.5px solid #e0ddd6; background: #fff; font: 14px/1.45 'Inter', sans-serif; color: #1a1a1a; resize: vertical; outline: none; }
+      .transcript-field textarea:focus { border-color: #1a1a1a; }
       .rec-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #dc2626; margin-right: 5px; vertical-align: middle; animation: rec-pulse 1s infinite; }
       @keyframes rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
@@ -590,6 +596,8 @@
       #wiz-media-slot .audio-tile.recording { background: #fef2f2; }
       #wiz-media-slot .audio-rec-btn { padding: 13px 28px; font-size: 15px; }
       #wiz-media-slot .audio-upload { font-size: 13px; }
+      #wiz-media-slot .transcript-field { margin-top: 18px; }
+      #wiz-media-slot .transcript-field label { font-size: 14px; }
       #wiz-media-slot .audio-time { font-size: 28px; color: #1a1a1a; }
       #wiz-media-slot .audio-play-btn { width: 64px; height: 64px; }
       #wiz-media-slot .audio-duration { font-size: 15px; }
@@ -1119,7 +1127,7 @@
       function addPage() {
         pageCount++;
         const n = pageCount;
-        pairs[n] = { photo: null, video: null, audio: null, mediaType: 'video' };
+        pairs[n] = { n, photo: null, video: null, audio: null, mediaType: 'video' };
         const page = document.createElement('div');
         page.className = 'page';
         page.id = `page-${n}`;
@@ -1165,6 +1173,10 @@
               <div class="file-size" id="video-size-${n}"></div>
               <div class="video-msg" id="video-msg-${n}"></div>
               <div class="file-size" id="audio-size-${n}" style="margin-top:6px;"></div>
+              <div class="transcript-field" id="transcript-wrap-${n}" style="display:none;">
+                <label for="transcript-${n}">Transcript <span>(optional)</span></label>
+                <textarea id="transcript-${n}" placeholder="The words of the recording. Shown under the player, for anyone listening without headphones."></textarea>
+              </div>
             </div>
           </div>
         `;
@@ -1218,6 +1230,7 @@
         // By id, not inside #page-n: the wizard mounts these slots into its steps.
         document.getElementById(`video-slot-${n}`).style.display = mode === 'video' ? '' : 'none';
         document.getElementById(`audio-slot-${n}`).style.display = mode === 'audio' ? '' : 'none';
+        document.getElementById(`transcript-wrap-${n}`).style.display = mode === 'audio' ? '' : 'none';
         checkReady();
       }
 
@@ -1966,7 +1979,7 @@
           for (let i = 0; i < readyPairs.length; i++) {
             setProgress(`Uploading page ${i+1} of ${readyPairs.length}…`, 60 + (i / readyPairs.length) * 25);
             const pair = readyPairs[i];
-            const item = { type: pair.mediaType, video_url: null, audio_url: null, photo_url: null };
+            const item = { type: pair.mediaType, video_url: null, audio_url: null, transcript: null, photo_url: null };
 
             if (pair.mediaType === 'video') {
               if (pair.video.size === 0) {
@@ -1986,6 +1999,7 @@
                 await uploadToStorage(audioPath, pair.audio, pair.audio.type || 'audio/webm');
               } catch (e) { throw new Error(`Audio ${i+1}: ${e.message}`); }
               item.audio_url = db.storage.from('experiences').getPublicUrl(audioPath).data.publicUrl;
+              item.transcript = (document.getElementById(`transcript-${pair.n}`)?.value || '').trim() || null;
             }
 
             const photoExt = pair.photo.name.split('.').pop() || 'jpg';
@@ -2030,6 +2044,7 @@
             media_type: m.type,
             video_url: m.video_url,
             audio_url: m.audio_url,
+            transcript: m.transcript,
             photo_url: m.photo_url
           }));
           const { error: itemsError } = await db.from('collection_items').insert(items);

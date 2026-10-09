@@ -186,6 +186,13 @@
       /* Optional per-asset name (shown in analytics "By Photo"). */
       .asset-name-input { width: 404px; max-width: 100%; margin: 0 0 12px; display: block; padding: 8px 12px; border-radius: 10px; border: 1.5px solid #e0ddd6; font-size: 13px; font-family: 'Inter', sans-serif; outline: none; text-align: left; color: #1a1a1a; }
       .asset-name-input:focus { border-color: #1a1a1a; }
+      /* Transcript for an audio page: shown under the player in the viewer. */
+      .transcript-field { width: 100%; max-width: 404px; margin-top: 14px; text-align: left; }
+      .edit-main .transcript-field { max-width: none; }
+      .transcript-field label { display: block; font-size: 12px; font-weight: 700; color: #1a1a1a; margin-bottom: 6px; font-family: 'Inter', sans-serif; }
+      .transcript-field label span { font-weight: 500; color: #888; }
+      .transcript-field textarea { display: block; width: 100%; box-sizing: border-box; min-height: 96px; padding: 10px 12px; border-radius: 12px; border: 1.5px solid #e0ddd6; background: #fff; font: 14px/1.45 'Inter', sans-serif; color: #1a1a1a; resize: vertical; outline: none; }
+      .transcript-field textarea:focus { border-color: #1a1a1a; }
       .edit-main .asset-name-input { width: 430px; }
       /* Read-only per-photo engagement (creator's own scan metrics). */
       .asset-stats { width: 290px; max-width: 100%; margin: -6px auto 12px; text-align: center; font-size: 11px; color: #999; font-weight: 600; }
@@ -2136,9 +2143,14 @@
               <div class="file-size" id="audio-size-${key}" style="margin-top:6px;"></div>
             </div>
           </div>
+          <div class="transcript-field" id="transcript-wrap-${key}" style="display:${startMode === 'audio' ? '' : 'none'};">
+            <label for="transcript-${key}">Transcript <span>(optional)</span></label>
+            <textarea id="transcript-${key}" placeholder="The words of the recording. Shown under the player, for anyone listening without headphones.">${escapeHtml(item.transcript || '')}</textarea>
+          </div>
         `;
 
         document.getElementById('pages').appendChild(page);
+        document.getElementById(`transcript-${key}`).addEventListener('input', () => markUnsaved('Transcript changed'), { once: true });
 
         // Generate video thumbnail from URL (only meaningful when item already has video)
         if (videoThumb) {
@@ -2260,6 +2272,8 @@
         const as = document.getElementById(`audio-slot-${key}`);
         if (vs) vs.style.display = mode === 'video' ? '' : 'none';
         if (as) as.style.display = mode === 'audio' ? '' : 'none';
+        const tw = document.getElementById(`transcript-wrap-${key}`);
+        if (tw) tw.style.display = mode === 'audio' ? '' : 'none';
         markUnsaved(mode === 'audio' ? 'Now plays a voice recording' : 'Now plays a video');
         // Switching TO audio when the item had none originally shows the empty recorder.
         if (mode === 'audio') renderExistingAudioTile(item, key, item.audio_url || '');
@@ -2551,6 +2565,10 @@
               <div class="file-size" id="audio-size-new-${n}" style="margin-top:6px;"></div>
             </div>
           </div>
+          <div class="transcript-field" id="transcript-wrap-new-${n}" style="display:none;">
+            <label for="transcript-new-${n}">Transcript <span>(optional)</span></label>
+            <textarea id="transcript-new-${n}" placeholder="The words of the recording. Shown under the player, for anyone listening without headphones."></textarea>
+          </div>
         `;
         page.querySelector('.remove-page-btn').addEventListener('click', () => {
           confirmDeletePage('Remove this page? You\'ll still need to tap Save Changes to apply.', () => {
@@ -2596,6 +2614,8 @@
         const as = document.getElementById(`audio-slot-new-${n}`);
         if (vs) vs.style.display = mode === 'video' ? '' : 'none';
         if (as) as.style.display = mode === 'audio' ? '' : 'none';
+        const tw = document.getElementById(`transcript-wrap-new-${n}`);
+        if (tw) tw.style.display = mode === 'audio' ? '' : 'none';
         markUnsaved(mode === 'audio' ? 'Now plays a voice recording' : 'Now plays a video');
       }
 
@@ -3079,6 +3099,10 @@
             photo_url = db.storage.from('experiences').getPublicUrl(pPath).data.publicUrl;
           }
 
+          // The transcript box shows what will be saved, including after new audio.
+          const ta = document.getElementById('transcript-existing-' + item.id);
+          if (ta && finalType === 'audio') transcript = ta.value.trim() || null;
+
           // If user switched type, null out the unused field so view.html doesn't accidentally load it
           if (finalType === 'video') audio_url = audio_url; // keep for re-switch convenience
           finalItems.push({
@@ -3112,7 +3136,7 @@
               media_type: pair.mediaType,
               video_url: null,
               audio_url: null,
-              transcript: null,
+              transcript: pair.mediaType === 'audio' ? ((document.getElementById('transcript-new-' + pair.key)?.value || '').trim() || null) : null,
               photo_url: db.storage.from('experiences').getPublicUrl(photoPath).data.publicUrl,
               asset_name: (document.getElementById('assetname-new-' + pair.key)?.value || '').trim() || null
             };
