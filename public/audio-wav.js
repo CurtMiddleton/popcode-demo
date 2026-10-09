@@ -63,4 +63,25 @@
     try { return { blob: await window.audioToWav(blob), ext: 'wav' }; }
     catch (e) { return { blob, ext: ext || 'webm' }; }
   };
+
+  // An audio file the creator chose instead of recording (an MP3 from a
+  // voiceover tool, a curator's recording). Checked, normalized like a
+  // recording, and named so the save code picks the right extension and
+  // content type. Resolves to a File; rejects with a message to show.
+  const AUDIO_TYPES = { mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac', wav: 'audio/wav', webm: 'audio/webm', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg' };
+  const TYPE_EXTS = { 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/wave': 'wav', 'audio/webm': 'webm', 'audio/ogg': 'ogg' };
+  window.MAX_AUDIO_UPLOAD_MB = 25;
+  window.AUDIO_UPLOAD_ACCEPT = 'audio/*,.mp3,.m4a,.aac,.wav';
+  window.prepareAudioUpload = async function (file) {
+    const nameExt = ((file.name || '').split('.').pop() || '').toLowerCase();
+    const ext = AUDIO_TYPES[nameExt] ? nameExt : TYPE_EXTS[(file.type || '').split(';')[0]];
+    if (!ext) throw new Error("That file isn't audio we can play. Choose an MP3, M4A or WAV.");
+    if (file.size > window.MAX_AUDIO_UPLOAD_MB * 1024 * 1024) {
+      throw new Error(`That file is ${(file.size / 1048576).toFixed(0)} MB. Audio can be up to ${window.MAX_AUDIO_UPLOAD_MB} MB.`);
+    }
+    if (file.size === 0) throw new Error('That file is empty.');
+    const typed = new File([file], `upload.${ext}`, { type: AUDIO_TYPES[ext] });
+    const norm = await window.normalizeAudio(typed, ext);
+    return norm.blob === typed ? typed : new File([norm.blob], `upload.${norm.ext}`, { type: norm.blob.type || AUDIO_TYPES[norm.ext] });
+  };
 })();
