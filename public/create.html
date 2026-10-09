@@ -1956,11 +1956,15 @@
             .upload(path, body, { contentType, upsert: true });
           if (!error) return;
           last = error;
-          if (!/load failed|network|fetch|timed? ?out/i.test(error.message || '')) break;
+          // Dropped connections and server-side timeouts (a 502/503/504 from the
+          // storage gateway on a big photo) are worth another go; a refusal isn't.
+          if (!/load failed|network|fetch|timed? ?out|gateway|\b50[234]\b/i.test(error.message || '')) break;
         }
         const msg = (last && last.message) || 'upload failed';
         throw new Error(/load failed|network|fetch/i.test(msg)
           ? 'the connection dropped mid-upload \u2014 check your signal and try again'
+          : /gateway|\b50[234]\b/i.test(msg)
+          ? 'the server took too long to respond \u2014 tap Try Again'
           : msg);
       }
 
