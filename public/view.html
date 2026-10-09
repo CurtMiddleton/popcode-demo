@@ -1451,6 +1451,7 @@
       function triggerVideo(url) {
         if (!url) { showMediaError('No video found for this photo'); return; }
         lastVideoUrl = url;
+        lastAudio = null;
         mediaActive = true;
         progressPending = true;
         clearReloadHint();
@@ -1591,6 +1592,8 @@
       }
 
       function triggerAudio(media) {
+        lastAudio = media;
+        lastVideoUrl = null;
         mediaActive = true;
         progressPending = true;
         clearReloadHint();
@@ -1604,23 +1607,27 @@
             if (mindar && typeof mindar.stop === 'function') { mindar.stop(); sceneWasStopped = true; }
           } catch(e) {}
 
-          apPhotoImg.src = media.photoUrl || '';
-          apTranscript.textContent = media.transcript || '';
-          apAudio.src = media.audioUrl;
-          apAudio.load();
-          apResetUi();
-          apPlay.textContent = '▶\uFE0E';
-          audioRecoverAttempts = 0;
-          hideAudioTapHint();
-
-          scanner.style.display = 'none';
-          document.getElementById('home-btn').style.display = 'none';
-          audioPlayer.classList.add('visible');
-
-          apAudio.play()
-            .then(() => { logEvent('audio_play', currentTargetIndex); apPlay.textContent = '❚❚'; })
-            .catch(() => attemptAudioRecover());
+          startAudio(media);
         }, 900);
+      }
+
+      function startAudio(media) {
+        apPhotoImg.src = media.photoUrl || '';
+        apTranscript.textContent = media.transcript || '';
+        apAudio.src = media.audioUrl;
+        apAudio.load();
+        apResetUi();
+        apPlay.textContent = '▶\uFE0E';
+        audioRecoverAttempts = 0;
+        hideAudioTapHint();
+
+        scanner.style.display = 'none';
+        document.getElementById('home-btn').style.display = 'none';
+        audioPlayer.classList.add('visible');
+
+        apAudio.play()
+          .then(() => { logEvent('audio_play', currentTargetIndex); apPlay.textContent = '❚❚'; })
+          .catch(() => attemptAudioRecover());
       }
 
       apPlay.addEventListener('click', () => {
@@ -1673,6 +1680,23 @@
         logEvent('audio_complete', currentTargetIndex);
         apPlay.textContent = '▶\uFE0E';
         apResetUi();
+        // Same hand-off as a video: fade to the Popcode's buttons, if it has
+        // any. Without buttons the player stays up, ready to play again.
+        applyEndConfig(endCC, currentTargetIndex);
+        if (!endConfig) return;
+        mediaActive = false;
+        const fade = document.getElementById('fade-overlay');
+        fade.style.display = 'block';
+        setTimeout(() => fade.style.opacity = '1', 10);
+        setTimeout(() => {
+          audioPlayer.classList.remove('visible');
+          apAudio.removeAttribute('src');
+          try { apAudio.load(); } catch (e) {}
+          document.getElementById('scan-mark').classList.remove('found');
+          showEndScreen();
+          fade.style.opacity = '0';
+          setTimeout(() => fade.style.display = 'none', 1000);
+        }, 1000);
       });
       apAudio.addEventListener('error', () => {
         if (apAudio.src) showMediaError('Audio could not load — check your connection');
@@ -1799,6 +1823,7 @@
       let endCC = null;
       let endConfig = null;
       let lastVideoUrl = null;
+      let lastAudio = null; // the audio page just heard, for "Listen again"
       let endPreview = false; // opened from the editor's preview link: don't count taps
       const endScreen = document.getElementById('end-screen');
       function safeUrl(u) {
@@ -1859,6 +1884,7 @@
       }
       function showEndScreen(isPreview) {
         endPreview = !!isPreview;
+        endScreen.querySelector('.end-replay').textContent = lastAudio ? 'Listen again' : 'Watch again';
         hideStartScreen();
         endScreen.style.display = 'block';
         const btns = endScreen.querySelectorAll('.end-btn');
@@ -1906,6 +1932,14 @@
       endScreen.querySelector('.end-close').addEventListener('click', () => { hideEndScreen(); showStartScreen(); });
       endScreen.querySelector('.end-scan').addEventListener('click', () => { hideEndScreen(); showStartScreen(); });
       endScreen.querySelector('.end-replay').addEventListener('click', () => {
+        if (lastAudio) {
+          hideEndScreen();
+          mediaActive = true;
+          progressPending = true;
+          logEvent('cta_replay', currentTargetIndex);
+          startAudio(lastAudio);
+          return;
+        }
         if (!lastVideoUrl) { hideEndScreen(); showStartScreen(); return; }
         hideEndScreen();
         mediaActive = true;
