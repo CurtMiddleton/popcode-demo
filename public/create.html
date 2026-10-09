@@ -270,6 +270,10 @@
         cursor: pointer; transition: background 0.15s;
       }
       .audio-rerecord:hover { background: #f7f7f7; }
+      .audio-tile-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+      .audio-upload { font-size: 11px; font-weight: 600; color: #555; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .audio-upload:hover { color: #1a1a1a; }
+      .audio-upload input { display: none; }
       .rec-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #dc2626; margin-right: 5px; vertical-align: middle; animation: rec-pulse 1s infinite; }
       @keyframes rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
@@ -585,6 +589,7 @@
       #wiz-media-slot .audio-tile { width: 100%; height: auto; min-height: 150px; padding: 22px; gap: 12px; border-radius: var(--pc-radius-card); background: #fff; animation: wizInR .4s cubic-bezier(.2,.8,.2,1); }
       #wiz-media-slot .audio-tile.recording { background: #fef2f2; }
       #wiz-media-slot .audio-rec-btn { padding: 13px 28px; font-size: 15px; }
+      #wiz-media-slot .audio-upload { font-size: 13px; }
       #wiz-media-slot .audio-time { font-size: 28px; color: #1a1a1a; }
       #wiz-media-slot .audio-play-btn { width: 64px; height: 64px; }
       #wiz-media-slot .audio-duration { font-size: 15px; }
@@ -783,7 +788,7 @@
             </label>
             <button type="button" class="wiz-choice" data-kind="audio">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
-              <b>Audio</b><small>Record a message</small>
+              <b>Audio</b><small>Record or upload</small>
             </button>
             <button type="button" class="wiz-choice" data-kind="montage">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="14" rx="2"/><path d="M6 2h14a2 2 0 0 1 2 2v14"/></svg>
@@ -1150,6 +1155,7 @@
                   <div class="audio-tile" id="audio-tile-${n}">
                     <div class="audio-tile-empty">
                       <button type="button" class="audio-rec-btn" data-page="${n}" data-action="start">● Record</button>
+                      <label class="audio-upload">or upload a file<input type="file" accept="${window.AUDIO_UPLOAD_ACCEPT}"/></label>
                     </div>
                   </div>
                 </div>
@@ -1167,10 +1173,11 @@
         // Tapping the playback tile opens its source menu. Its own controls
         // (record, play, preview) keep their clicks.
         page.querySelector(`#media-wrapper-${n} .media-card`).addEventListener('click', (e) => {
-          if (e.target.closest('.tile-eye, .audio-play-btn, .audio-rerecord, .audio-rec-btn')) return;
+          if (e.target.closest('.tile-eye, .audio-play-btn, .audio-rerecord, .audio-rec-btn, .audio-upload')) return;
           pickPlayback(n);
         });
         page.querySelector('.audio-rec-btn[data-action="start"]').addEventListener('click', () => startRecording(n));
+        page.querySelector('.audio-upload input').addEventListener('change', (e) => uploadAudio(n, e.target));
 
         renumberPages();
       }
@@ -1311,7 +1318,21 @@
         btn.addEventListener('click', () => { if (audio.paused) audio.play(); else audio.pause(); });
       }
 
-      function finalizeRecording(n, blob, ext) {
+      // A finished audio file (an MP3 from a voiceover tool, say) instead of
+      // recording one. Saved exactly like a recording.
+      async function uploadAudio(n, input) {
+        const f = input.files && input.files[0];
+        input.value = '';
+        if (!f) return;
+        try {
+          const file = await window.prepareAudioUpload(f);
+          finalizeRecording(n, file, file.name.split('.').pop(), 'Replace');
+        } catch (e) {
+          alert(e.message);
+        }
+      }
+
+      function finalizeRecording(n, blob, ext, againLabel) {
         delete recorders[n];
         const file = new File([blob], `audio_${n}.${ext}`, { type: blob.type });
         pairs[n].audio = file;
@@ -1324,7 +1345,7 @@
           <audio class="audio-el" preload="metadata" src="${url}"></audio>
           <button type="button" class="audio-play-btn" aria-label="Play"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
           <div class="audio-duration">0:00</div>
-          <button type="button" class="audio-rerecord" data-page="${n}">Re-record</button>
+          <button type="button" class="audio-rerecord" data-page="${n}">${againLabel || 'Re-record'}</button>
         `;
         wireAudioPlayer(tile);
         tile.querySelector('.audio-rerecord').addEventListener('click', () => resetAudio(n));
@@ -1343,9 +1364,11 @@
         tile.innerHTML = `
           <div class="audio-tile-empty">
             <button type="button" class="audio-rec-btn" data-page="${n}" data-action="start">● Record</button>
+            <label class="audio-upload">or upload a file<input type="file" accept="${window.AUDIO_UPLOAD_ACCEPT}"/></label>
           </div>
         `;
         tile.querySelector('.audio-rec-btn').addEventListener('click', () => startRecording(n));
+        tile.querySelector('.audio-upload input').addEventListener('change', (e) => uploadAudio(n, e.target));
         const sizeEl = document.getElementById(`audio-size-${n}`);
         if (sizeEl) { sizeEl.textContent = ''; sizeEl.className = 'file-size'; }
         checkReady();

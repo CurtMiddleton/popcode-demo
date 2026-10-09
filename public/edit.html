@@ -338,6 +338,9 @@
         cursor: pointer; transition: background 0.15s;
       }
       .audio-rerecord:hover { background: #f7f7f7; }
+      .audio-upload { font-size: 11px; font-weight: 600; color: #555; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .audio-upload:hover { color: #1a1a1a; }
+      .audio-upload input { display: none; }
       .rec-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #dc2626; margin-right: 5px; vertical-align: middle; animation: rec-pulse 1s infinite; }
       @keyframes rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
@@ -2169,7 +2172,7 @@
 
         // Media-type dropdown (Video / Montage / Audio) — same control as New Popcode.
         page.querySelector(`#media-wrapper-${key} .media-card`).addEventListener('click', (e) => {
-          if (e.target.closest('.tile-eye, .audio-play-btn, .audio-rerecord, .audio-rec-btn')) return;
+          if (e.target.closest('.tile-eye, .audio-play-btn, .audio-rerecord, .audio-rec-btn, .audio-upload')) return;
           pickExistingPlayback(item, key);
         });
 
@@ -2296,7 +2299,7 @@
             <audio class="audio-el" preload="metadata" src="${url}"></audio>
             <button type="button" class="audio-play-btn" aria-label="Play"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
             <div class="audio-duration">0:00</div>
-            <button type="button" class="audio-rerecord">Re-record</button>
+            <button type="button" class="audio-rerecord">${newAudio.name.startsWith('upload.') ? 'Replace' : 'Re-record'}</button>
           `;
           wireAudioPlayer(tile);
           tile.querySelector('.audio-rerecord').addEventListener('click', () => {
@@ -2315,12 +2318,36 @@
             <button type="button" class="audio-play-btn" aria-label="Play"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
             <div class="audio-duration">0:00</div>
             <button type="button" class="audio-rerecord">Re-record</button>
+            <label class="audio-upload">or upload a file<input type="file" accept="${window.AUDIO_UPLOAD_ACCEPT}"/></label>
           `;
           wireAudioPlayer(tile);
           tile.querySelector('.audio-rerecord').addEventListener('click', () => startRecordingExisting(item, key));
         } else {
-          tile.innerHTML = `<button type="button" class="audio-rec-btn">● Record</button>`;
+          tile.innerHTML = `<button type="button" class="audio-rec-btn">● Record</button>
+            <label class="audio-upload">or upload a file<input type="file" accept="${window.AUDIO_UPLOAD_ACCEPT}"/></label>`;
           tile.querySelector('.audio-rec-btn').addEventListener('click', () => startRecordingExisting(item, key));
+        }
+        tile.querySelector('.audio-upload input').addEventListener('change', (e) => {
+          uploadAudioFile(e.target, (file) => {
+            if (!replacements[item.id]) replacements[item.id] = {};
+            replacements[item.id].audio = file;
+            replacements[item.id].mediaType = 'audio';
+            markUnsaved('Audio file added');
+            renderExistingAudioTile(item, key, item.audio_url || '');
+          });
+        });
+      }
+
+      // A finished audio file (an MP3 from a voiceover tool, say) instead of
+      // recording one. Saved exactly like a recording.
+      async function uploadAudioFile(input, onDone) {
+        const f = input.files && input.files[0];
+        input.value = '';
+        if (!f) return;
+        try {
+          onDone(await window.prepareAudioUpload(f));
+        } catch (e) {
+          alert(e.message);
         }
       }
 
@@ -2427,7 +2454,7 @@
             <audio class="audio-el" preload="metadata" src="${url}"></audio>
             <button type="button" class="audio-play-btn" aria-label="Play"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
             <div class="audio-duration">0:00</div>
-            <button type="button" class="audio-rerecord">Re-record</button>
+            <button type="button" class="audio-rerecord">${audio.name.startsWith('upload.') ? 'Replace' : 'Re-record'}</button>
           `;
           wireAudioPlayer(tile);
           tile.querySelector('.audio-rerecord').addEventListener('click', () => {
@@ -2437,8 +2464,12 @@
           const sz = document.getElementById(`audio-size-new-${n}`);
           if (sz) sz.textContent = formatFileSize(audio.size);
         } else {
-          tile.innerHTML = `<button type="button" class="audio-rec-btn">● Record</button>`;
+          tile.innerHTML = `<button type="button" class="audio-rec-btn">● Record</button>
+            <label class="audio-upload">or upload a file<input type="file" accept="${window.AUDIO_UPLOAD_ACCEPT}"/></label>`;
           tile.querySelector('.audio-rec-btn').addEventListener('click', () => startRecordingNew(n));
+          tile.querySelector('.audio-upload input').addEventListener('change', (e) => {
+            uploadAudioFile(e.target, (file) => { newPairs[n].audio = file; renderNewAudioTile(n); });
+          });
           const sz = document.getElementById(`audio-size-new-${n}`);
           if (sz) sz.textContent = '';
         }
@@ -2531,7 +2562,7 @@
         });
         document.getElementById('pages').appendChild(page);
         page.querySelector(`#media-wrapper-new-${n} .media-card`).addEventListener('click', (e) => {
-          if (e.target.closest('.tile-eye, .audio-play-btn, .audio-rerecord, .audio-rec-btn')) return;
+          if (e.target.closest('.tile-eye, .audio-play-btn, .audio-rerecord, .audio-rec-btn, .audio-upload')) return;
           pickNewPlayback(n);
         });
         renderNewAudioTile(n);
