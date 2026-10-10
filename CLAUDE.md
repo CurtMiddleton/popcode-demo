@@ -1,5 +1,8 @@
 # Popcode — Session Context
 
+## Spelling the name
+It's **Popcode**: one word, capital P, lowercase c. Never "Pop Code", "PopCode" or "Pop-code". This applies everywhere: chat replies, docs, commit messages, PR text, page copy, emails, scripts, voiceover text and print. The plural is "Popcodes", and the domain is `popcode.app`. If you find the wrong spelling anywhere, fix it.
+
 ## What this app is
 Popcode is an AR (augmented reality) web app. Creators upload photo+video pairs, which get compiled into a MindAR `.mind` file and stored in Supabase. A shareable link is generated (popcode.app short URL). Viewers open the link, point their camera at one of the photos, and the matching video plays fullscreen.
 
