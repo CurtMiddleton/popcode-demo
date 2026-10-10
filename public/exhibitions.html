@@ -303,10 +303,12 @@
       /* The placard on the left, whole; a phone comes in from the right on
          its home screen, touches the card beside the tap circle, an "open"
          banner drops in, and the phone opens the show's start screen. */
-      .tap-scene { position: relative; width: min(100%, 330px); height: 190px; }
-      .tap-card { position: absolute; left: 0; top: 50%; translate: 0 -50%; width: 72%; aspect-ratio: 16 / 10.5;
+      .tap-scene { position: relative; width: min(100%, 330px); height: 190px; display: flex; align-items: center; }
+      /* Static, and a tight shadow: Safari clipped the big soft one into a grey
+         box once the phone beside it started animating. */
+      .tap-card { position: relative; width: 70%; aspect-ratio: 16 / 10.5;
                   background: #fff; border-radius: 6px; font-family: var(--placard);
-                  box-shadow: 0 14px 34px rgba(26,26,26,.14), 0 1px 3px rgba(26,26,26,.08);
+                  box-shadow: 0 4px 12px rgba(26,26,26,.10), 0 1px 3px rgba(26,26,26,.08);
                   display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
       .tc-l { padding: 14px 0 12px 14px; display: flex; flex-direction: column; border-right: 1px solid #efece6; }
       .tc-l small { font-size: 8px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #6d675e; }
@@ -324,12 +326,17 @@
       .tap-ring-burst { position: absolute; inset: -2px; border-radius: 50%; border: 3px solid var(--accent); opacity: 0; }
       .steps.tapped .tap-ring-burst { animation: ring-burst .8s ease-out; }
       @keyframes ring-burst { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(2.2); } }
-      .tap-phone { position: absolute; z-index: 2; right: 0; top: 50%; width: 80px; height: 160px; border-radius: 15px; background: #16121f; padding: 4px;
-                   box-shadow: 0 14px 26px rgba(0,0,0,.28); translate: 40px -50%; rotate: 10deg; opacity: 0;
-                   transition: translate .8s cubic-bezier(.3,.7,.3,1), rotate .8s ease, opacity .4s ease; }
-      .steps.tapping .tap-phone { translate: 0 -50%; rotate: 0deg; opacity: 1; }
-      .steps.tapped .tap-phone { translate: -16px -50%; rotate: -5deg; }
-      .steps.opened .tap-phone { translate: 0 -50%; rotate: 0deg; }
+      /* Moved with transform, and shadowed with a drop-shadow filter, which
+         Safari draws whole on an animated layer (a box-shadow came out as a
+         hard-edged grey box). The tap is a small nudge toward the card's
+         edge, clear of "Tap your phone here". */
+      .tap-phone { position: absolute; z-index: 2; right: 0; top: 15px; width: 80px; height: 160px; border-radius: 15px; background: #16121f; padding: 4px;
+                   filter: drop-shadow(0 8px 10px rgba(0,0,0,.22)); will-change: transform, opacity;
+                   transform: translateX(40px) rotate(8deg); opacity: 0;
+                   transition: transform .8s cubic-bezier(.3,.7,.3,1), opacity .4s ease; }
+      .steps.tapping .tap-phone { transform: none; opacity: 1; }
+      .steps.tapped .tap-phone { transform: translateX(-8px) rotate(-3deg); }
+      .steps.opened .tap-phone { transform: none; }
       .tp-screen { position: relative; display: block; width: 100%; height: 100%; border-radius: 11px; overflow: hidden; }
       .tp-screen::before { content: ''; position: absolute; z-index: 3; left: 50%; top: 4px; width: 22px; height: 6px; translate: -50% 0; border-radius: 4px; background: #16121f; }
       /* An ordinary home screen */
