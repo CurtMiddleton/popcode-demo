@@ -83,6 +83,10 @@ After writing the entry, commit `docs/STATUS.md` with a message like `Add sessio
 
 ## Queued briefs
 
+- **`docs/exhibitions-handoff.md`**: Popcode for Exhibitions (galleries and museums;
+  NFC entrance placard; audio stops; buttons; hearts later). Nothing built beyond the
+  audio upload, transcript and buttons-after-audio work (PRs #197–#200). Demo for the
+  Bruce Museum; scripts in `docs/exhibitions-demo-scripts.md`.
 - **`docs/impact-dashboard-handoff.md`** — the nonprofit impact dashboard. Nothing
   built. Phase 1 (event logging, story buttons with UTMs, `?via=org`) is due before
   the Green Empowerment pilot prints (~Nov 3). Check it against the code first:

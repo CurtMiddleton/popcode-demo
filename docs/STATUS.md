@@ -6,9 +6,18 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-06)
+## Current state (updated 2026-10-10)
 
 **Live and recent**
+- **Audio Popcodes: upload, transcript, buttons after audio** (PRs #197–#200, all merged and live 2026-10-09):
+  *or upload a file* under Record (MP3/M4A/AAC/WAV/WebM/Ogg, up to 25 MB) in create and edit; a
+  **Transcript (optional)** box under every audio page (viewer shows it with line
+  breaks); After the Video buttons now also follow **audio**, with "Listen again";
+  `create.html` uploads retry on 502/503/504. **None tried on an iPhone yet.**
+- **New vertical in planning: Popcode for Exhibitions** (`/exhibitions`, not built).
+  Brief: `docs/exhibitions-handoff.md`. Demo target: the Bruce Museum (the user knows
+  the board chair). Scripts: `docs/exhibitions-demo-scripts.md`; draft audio in
+  `marketing/bruce-demo-audio/` (untracked, main checkout).
 - **Content rules + admin moderation** (PR #177, merged and live 2026-10-06; migration
   `2026-10-06-disable-popcode.sql` **has been run in prod**): Terms §3 now bans
   porn/nudity/sexually suggestive content and lets us remove anything at our
@@ -3504,3 +3513,65 @@ Prompted by a creator uploading what the user called soft porn. Finding: **the o
 - "Your own story page" wording in the pricing card and What you get — user leaning to "What donors see on their phone, in your look…" (option A); not yet changed.
 - Follow-up 1 for the first 10; send the other 40 (one group a day).
 - Confirm the One Mind A/B test; build Centurion / Mica mockups if they say yes.
+
+
+### 2026-10-08 → 10 — Popcode for Exhibitions: strategy, Bruce demo, and audio Popcodes made demo-ready
+
+**PRs (all merged and live 2026-10-09):** #197 audio file upload · #198 transcript box · #199 upload retry on 5xx · #200 buttons after audio. Plus this notes commit, with `docs/exhibitions-handoff.md` and `docs/exhibitions-demo-scripts.md`.
+
+#### The idea and where it landed
+- The user wants a vertical for galleries and museums: an NFC placard at the exhibition entrance opens a Popcode, a headphone check, then scan any work in any order for an audio stop; hearts, replay after the visit, and a dashboard of scans and button taps.
+- **Name decided: "Popcode for Exhibitions" at `/exhibitions`.** "Museums" was rejected because galleries are likely the biggest market.
+- **Competition** (details in the brief, §2):
+  - **Bloomberg Connects** is free, and *also* works in the browser with no download via QR. "No app" is not an edge over it.
+  - **Smartify** is the closest match (image recognition, free to partners, lists the Met), but it's an app.
+  - **Nubart** already sells take-home QR cards.
+  - Popcode's edge: live in an afternoon (Bloomberg asks for a 13-week cohort), commercial galleries and art fairs, buttons tied to fundraising, gift-shop products that play at home.
+- **Entrance placard decided:** NFC first, plus a QR code and the short URL, at the entrance only. This is an exception to the nonprofits brief's "no QR anywhere" rule.
+
+#### Bruce Museum demo
+- The user knows the Bruce's board chair. Two collections got confused at first:
+  - The *William L. Richter Collection* (French: Corot, Pissarro, Renoir, Gauguin, Braque, Picasso, Matisse; listed through 2025-08-03, may be closed).
+  - An *anonymous promised gift of 70 works* shown in the **Richter Art Wing** (press release 2022-04-13, the user has the PDF).
+- **Demo set (public domain, flat), from the promised gift:**
+  - Pissarro, *The Market of Gisors, Grande-Rue* (1885)
+  - Cassatt, *Two Little Sisters* (c. 1901–02)
+  - Sargent, *Girl Fishing* (1913; probably the *Girl Fishing at San Vigilio* sold at Christie's in 2014)
+  - Hassam, *Rainy Day on the Avenue* (1893)
+- No Bruce pages exist for these. The only records are auction listings (links in the scripts doc). The Hassam image is unconfirmed. Get the images from the museum.
+- **Scripts:** the user wanted them informative, not chatty, each opening by naming the painting and the artist, about 45–50 s. Final versions are at the top of the scripts doc.
+- **Voice:** ElevenLabs. Multilingual v2 and v4 put on a French accent for French names; fix with Language = English, higher Stability, or an English-only model (Flash/Turbo v2). Paste-in files are `marketing/bruce-demo-audio/*-elevenlabs.txt`: "Grande-Rue" removed and Éragny written without the accent.
+- **Pronunciation:** *Childe Hassam* = "Child HASS-um", stress on the first syllable. The user's search said the second; Wikipedia's IPA (/ˈtʃaɪld ˈhæsəm/) and Merriam-Webster say the first. For reliable results, use a phoneme tag `<phoneme alphabet="cmu-arpabet" ph="HH AE1 S AH0 M">` on Flash/Turbo v2, or an alias in a pronunciation dictionary.
+- **Placard:** the user designed one. Review notes are in the brief §6b. The main one: it's titled for the Richter Collection, but the stops are from the promised gift.
+
+#### What was built
+- **#197 upload** (`audio-wav.js` `prepareAudioUpload()`, `create.html`, `edit.html`): checks type and size, converts WebM/Ogg to WAV like recordings, and names the file `upload.<ext>` with the right type so the existing save code stores `audio_N.<ext>`. After an upload the button reads *Replace*. The wizard's choice reads "Record or upload". The board book builder already had this; create and edit never did.
+- **#198 transcript:** the `collection_items.transcript` column existed since 2026-05-06 and the viewer showed it, but nothing could set it, and Edit **cleared** it whenever audio changed. Now there's a textarea per audio page. Edit prefills it and saves whatever is in the box. `view.html` uses `white-space: pre-line`.
+- **#199:** `uploadToStorage` (`create.html`) retried only dropped connections, so a real create died on "Photo 1: HTTP 504 error". Supabase status was green. Photos are kept at print size (up to 10 MB), the biggest upload. Now 502/503/504 retry too, with a friendlier final message. `edit.html` uploads still don't retry.
+- **#200:** `apAudio` `ended` → `applyEndConfig` → fade → `showEndScreen`. `startAudio()` was split out of `triggerAudio()` for **Listen again**. With no buttons configured, nothing changes.
+
+#### Testing approach worth reusing
+- Playwright isn't in this repo. Use `/Users/curtmiddleton/JA-Wedding-Suite/node_modules/playwright` via `createRequire`. Its Chromium is cached.
+- **Stub Supabase:** route `**/npm/@supabase/supabase-js@2*` to a stub (Proxy query chain, recorded `storage.upload` and `insert`).
+- **Full saves:** launch with `--use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist` so MindAR compiles. For create, also set `#name-input`, fire `input`, and override `PopcodeSlug.isAvailable`.
+- **Viewer:** stub `**/api/collection*` with JSON (`items[].transcript`, `cover_config.end`), use `--autoplay-policy=no-user-gesture-required`, and call `triggerAudio(savedMediaMap[0])`.
+- **App dialogs:** `dialog.js` replaces `alert` with a `.pcd-overlay`, so tests must click its button, not a native dialog.
+
+#### Lessons
+- **Check what a feature actually saves before telling the user to use it.** I told the user to "paste the script as the transcript" before checking. There was no UI for it.
+- Run `say` (macOS text-to-speech) only for timing drafts. Its voices aren't demo quality, and there's no ElevenLabs or OpenAI key on this Mac.
+- `gh pr merge` worked this session when the user said "merge" (it was blocked in earlier sessions).
+
+#### Open
+- **iPhone:**
+  - pick an MP3 from Files
+  - transcript under the player
+  - buttons after audio
+  - the 504 retry, in real use
+- **Placard:** resolve the Richter vs promised-gift mismatch, the real `popcode.app/{slug}`, the QR at ≥2.5 cm, and NFC (NTAG213/215, 35–38 mm, locked).
+- **Small builds not done:**
+  - `via=qr` / `via=nfc` logging (only `via=org` is read today)
+  - rename Edit's *After video* tab
+  - retry in `edit.html` uploads
+- **Exhibitions phase 2** (brief §5): hearts, "My visit" replay without scanning, browse stops, preload, the `/exhibitions` page.
+- **Untested:** whether MindAR copes with 30–100 targets in one Popcode. Test that before promising a full exhibition.
