@@ -173,7 +173,16 @@
       .pa-close { position: absolute; top: 9cqw; right: 5.1cqw; width: 11.2cqw; height: 11.2cqw; border-radius: 50%; background: rgba(255,255,255,.18);
                   display: flex; align-items: center; justify-content: center; font-size: 5.6cqw; }
       .pa-photo { width: 78cqw; aspect-ratio: 1; border-radius: 4.6cqw; overflow: hidden; box-shadow: 0 4.6cqw 12cqw rgba(0,0,0,.55); flex: none; }
+      .pa-photo { position: relative; }
       .pa-photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 28%; }
+      /* Captions of the narration over the work, drawn by the page as on
+         /nonprofits' phone, so a silent visitor can see there's a voice. */
+      .pa-cc { position: absolute; left: 4cqw; right: 4cqw; bottom: 4cqw; text-align: center;
+               font-size: max(9px, 4.6cqw); font-weight: 600; line-height: 1.35; color: #fff; }
+      .pa-cc:empty { display: none; }
+      .pa-cc span { background: rgba(0, 0, 0, .7); padding: .14em .45em; border-radius: .3em;
+                    -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+      .pa-cc svg { width: 1em; height: 1em; vertical-align: -.14em; margin-right: .35em; }
       .pa-controls { margin-top: 5.6cqw; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4cqw; }
       .pa-bar { width: 100%; height: 1cqw; min-height: 3px; border-radius: 999px; background: rgba(255,255,255,.25); position: relative; }
       .pa-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: inherit; background: #fff; }
@@ -618,7 +627,7 @@
               </div>
               <div class="phone-audio" aria-hidden="true">
                 <span class="pa-close">✕</span>
-                <div class="pa-photo"><img src="/assets/mockups/scenes/exhibit.webp" width="1050" height="1200" alt=""></div>
+                <div class="pa-photo"><img src="/assets/mockups/scenes/exhibit.webp" width="1050" height="1200" alt=""><div class="pa-cc" id="pa-cc"></div></div>
                 <div class="pa-controls">
                   <div style="width:100%">
                     <div class="pa-bar"><span class="pa-fill" id="pa-fill"></span></div>
@@ -1073,7 +1082,24 @@
       (function () {
         var phone = document.getElementById('phone');
         var fill = document.getElementById('pa-fill'), time = document.getElementById('pa-time'), left = document.getElementById('pa-left');
-        var tr = document.getElementById('pa-transcript');
+        var tr = document.getElementById('pa-transcript'), cc = document.getElementById('pa-cc');
+        // Caption cues: the transcript's sentences, each given a share of the
+        // stop in proportion to its length (no .vtt for a sample stop).
+        var cues = (tr.textContent.replace(/\s+/g, ' ').trim().match(/[^.!?]+[.!?]+/g) || []).map(function (t) { return t.trim(); });
+        var total = cues.reduce(function (n, t) { return n + t.length; }, 0), ends = [], acc = 0;
+        cues.forEach(function (t) { acc += t.length; ends.push(acc / total); });
+        var shownCue = -1;
+        var SPEAKER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+        function caption(frac) {
+          var i = frac <= 0 || frac >= 1 ? -1 : ends.findIndex(function (e) { return frac < e; });
+          if (i === shownCue) return;
+          shownCue = i; cc.innerHTML = '';
+          if (i < 0) return;
+          var span = document.createElement('span');
+          span.innerHTML = SPEAKER;
+          span.appendChild(document.createTextNode(cues[i]));
+          cc.appendChild(span);
+        }
         var audio = document.getElementById('demo-audio'), btn = document.getElementById('sound-btn');
         if (!phone) return;
         var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1084,6 +1110,7 @@
           fill.style.width = (frac * 100).toFixed(2) + '%';
           time.textContent = fmt(frac * dur); left.textContent = '-' + fmt(dur - frac * dur);
           tr.scrollTop = frac * (tr.scrollHeight - tr.clientHeight);
+          caption(frac);
         }
         function ended() {
           cancelAnimationFrame(raf);
