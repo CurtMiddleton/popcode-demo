@@ -1,0 +1,1474 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <script
+      src="https://browser.sentry-cdn.com/10.59.0/bundle.min.js"
+      integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
+      crossorigin="anonymous" defer></script>
+    <script src="/sentry-init.js" defer></script>
+    <!-- No nav.js here, same as /nonprofits: the consumer site nav (My Popcodes,
+         Shop, cart…) would pull a gallery owner out of the pitch. This page has
+         its own header (section anchors and Book a demo), built from the same
+         CSS as /nonprofits. -->
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
+    <title>Popcode for Exhibitions — Audio tours for galleries and museums</title>
+    <link rel="canonical" href="https://popcode.app/exhibitions">
+    <meta name="description" content="Self-guided audio tours for galleries and museums. Visitors tap the card at your entrance, point their phone at any work and hear about it in their own headphones. No app, no QR code beside the work."/>
+    <meta property="og:title" content="Popcode for Exhibitions — Audio tours for galleries and museums">
+    <meta property="og:description" content="Visitors tap the card at your entrance, point their phone at any work and hear about it in their own headphones. Then they can inquire, join or plan a visit. No app, no QR code beside the work.">
+    <meta property="og:url" content="https://popcode.app/exhibitions">
+    <meta property="og:image" content="https://popcode.app/assets/og-exhibitions.png?v=1">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <!-- Cormorant Garamond: the printed placards (entrance card, wall label). -->
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/ui.css">
+    <style>
+      /* Tokens, type and section rhythm: as /nonprofits. */
+      :root {
+        --ink: #1a1a1a;
+        --muted: #5f5f5f;
+        --faint: #767676;
+        --line: #e7e5e0;
+        --paper: #ffffff;
+        --bg: #f9f9f9;
+        --accent: #7657FC;
+        --serif: 'CooperBT', Georgia, serif;
+        --sans: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        --wall: #1c1916;
+        /* The hero's warm gallery grey, for the dark bands and accents. */
+        --warm: #5a544c;
+        --warm-ink: #6b5a43;
+        --warm-tint: #efeae3;
+        --placard: 'Cormorant Garamond', Georgia, serif;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; background: var(--bg); color: var(--ink);
+        font-family: var(--sans); -webkit-font-smoothing: antialiased;
+      }
+      img, video { max-width: 100%; display: block; }
+      a { color: inherit; }
+      .wrap { max-width: 1140px; margin: 0 auto; padding: 0 28px; }
+      @media (max-width: 560px) { .wrap { padding: 0 20px; } }
+      section { padding: 80px 0; }
+      @media (max-width: 640px) { section { padding: 56px 0; } }
+
+      .eyebrow { font-size: 14px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+                 color: var(--accent); margin: 0 0 18px; }
+      h1 { font-family: var(--serif); font-weight: 400; font-size: 64px; line-height: 1.02;
+           letter-spacing: -0.02em; margin: 0 0 22px; }
+      h2 { font-family: var(--serif); font-weight: 400; font-size: 40px; line-height: 1.08;
+           letter-spacing: -0.02em; margin: 0 0 14px; }
+      h3 { font-family: var(--serif); font-weight: 400; font-size: 24px; line-height: 1.2;
+           letter-spacing: -0.01em; margin: 0 0 8px; }
+      .sec-head { text-align: center; max-width: 40em; margin: 0 auto 44px; }
+      .sec-head p { font-size: 17px; line-height: 1.6; color: var(--muted); margin: 0; }
+      @media (max-width: 640px) { h1 { font-size: 42px; } h2 { font-size: 31px; } }
+      .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+      /* ── This page's own header. Same layout as /nonprofits' .np-nav (itself
+           laid out like nav.js's .site-header): 100px tall, logo 80px in,
+           grey section links, one dark pill. When /nonprofits and /exhibitions
+           join the site navigation, replace <header class="lp-nav"> and this
+           block with nav.js; nothing else on the page depends on it. ── */
+      html { scroll-behavior: smooth; }
+      @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+      section[id] { scroll-margin-top: 100px; }
+      .lp-nav { position: sticky; top: 0; z-index: 50; height: 100px; display: flex; align-items: center;
+                padding: 0 28px 0 80px; background: #fff; }
+      .lp-brand { display: flex; align-items: center; flex: none; }
+      .lp-brand img { height: 35px; width: auto; display: block; }
+      .lp-links { display: flex; align-items: center; gap: 6px; margin-left: 170px; }
+      .lp-links a { color: #8a8a8a; text-decoration: none; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600;
+                    padding: 8px 12px; border-radius: 8px; white-space: nowrap; transition: color .15s; }
+      .lp-links a:hover, .lp-links a.on { color: #1a1a1a; }
+      .lp-nav-cta { margin-left: auto; flex: none; height: 40px; padding: 0 20px; font-size: 14px; }
+      @media (max-width: 1240px) { .lp-links { margin-left: 72px; } }
+      @media (max-width: 1080px) { .lp-nav { padding-left: 40px; } .lp-links { margin-left: 32px; gap: 0; } }
+      @media (max-width: 959px) {
+        .lp-nav { padding: 0 28px; }
+        .lp-links { display: none; }
+        .lp-nav-cta { height: 36px; padding: 0 13px; font-size: 13px; }
+      }
+      @media (max-width: 560px) { .lp-nav { height: 72px; padding: 0 20px; } .lp-brand img { height: 28px; } section[id] { scroll-margin-top: 72px; } }
+
+      /* ── Hero. The /nonprofits hero, moved indoors: a dark gallery wall under
+           a spotlight, one framed work on it with a plain wall label (no code
+           beside it), and the phone in front playing that work's audio stop. ── */
+      /* A warm grey gallery wall under one picture light: a narrow beam from
+         the ceiling (--sx), a pool of light on the wall around the work
+         (--px, --py) falling off to the sides, the copy's side in shadow. */
+      .ex-hero { --sx: 76%; --sy: -4%; --sh: 46%; --px: 76%; --py: 20%;
+                 position: relative; overflow: hidden; color: #fff; padding: 40px 0 150px;
+                 background:
+                   radial-gradient(ellipse 15% var(--sh) at var(--sx) var(--sy), rgba(255,247,230,.6) 0%, rgba(255,240,215,.22) 45%, rgba(255,240,215,0) 78%),
+                   radial-gradient(ellipse 38% 85% at var(--px) var(--py), rgba(255,240,214,.42) 0%, rgba(255,236,206,.2) 42%, rgba(255,236,206,0) 76%),
+                   linear-gradient(90deg, rgba(20,17,14,.34) 0%, rgba(20,17,14,.12) 45%, rgba(20,17,14,0) 65%),
+                   linear-gradient(180deg, #7a736b 0%, #6d665e 55%, #59534c 100%); }
+      /* A faint woven texture on the wall. */
+      .ex-hero::after { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: .09; mix-blend-mode: overlay;
+                        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+      .hero-grid { position: relative; z-index: 3; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+                   gap: 32px; align-items: center; }
+      .ex-hero .eyebrow { color: #fff; opacity: .95; }
+      /* Two lines on wider screens, each sentence its own line. */
+      .ex-hero h1 { font-size: 56px; line-height: 1.04; margin-bottom: 20px; }
+      .ex-hero h1 .l { display: block; }
+      @media (min-width: 1101px) { .ex-hero h1 .l { white-space: nowrap; } }
+      .hero-sub { font-size: 17px; line-height: 1.5; margin: 0 0 28px; max-width: 470px; color: rgba(255,255,255,.92); }
+      .hero-sub strong { font-weight: 700; color: #fff; white-space: nowrap; }
+      .btn-on-grad { background: #fff; color: var(--ink); }
+      .btn-on-grad:hover { background: #f1f1f1; }
+      .btn-ghost-light { background: transparent; color: #fff; border-color: rgba(255,255,255,.75); }
+      .btn-ghost-light:hover { background: rgba(255,255,255,.12); border-color: #fff; }
+      .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+      .hero-curve {
+        position: absolute; left: -2%; bottom: -1px; width: 104%; height: 120px;
+        z-index: 2; display: block; pointer-events: none;
+      }
+
+      /* The stage: the work on the wall behind, the phone in front of it. */
+      .stage { position: relative; height: 560px; }
+      .art { position: absolute; right: 0; top: 0; width: 350px;
+             filter: drop-shadow(0 26px 34px rgba(0,0,0,.55)) drop-shadow(0 3px 6px rgba(0,0,0,.35)); }
+      /* The painting comes unframed: a drawn gilt frame, with a dark sight edge. */
+      .art { padding: 12px; border-radius: 2px;
+             background: linear-gradient(135deg, #8a6a2c 0%, #e2c47a 18%, #a8833c 38%, #f0d995 55%, #94722f 75%, #d4b366 100%); }
+      .art img { width: 100%; height: auto; display: block; box-shadow: 0 0 0 2px #4a3714, inset 0 0 0 1px #000; }
+      /* The wall label: title only. The point of the page is what isn't on it. */
+      .wall-label { position: absolute; right: 0; top: 458px; width: 150px; padding: 10px 11px 11px;
+                    background: #f4f1ea; color: #2a2723; border-radius: 1px; box-shadow: 0 6px 14px rgba(0,0,0,.35);
+                    font-size: 9.5px; line-height: 1.35; }
+      .wall-label { font-family: var(--placard); font-size: 11.5px; font-weight: 500; }
+      .wall-label b { display: block; font-weight: 700; font-size: 14px; line-height: 1.1; margin-bottom: 3px; }
+
+      /* The phone: /nonprofits' phone, playing an audio stop the way view.html
+         draws one. Sizes are the viewer's px over a 393px-wide screen, in
+         container units so they follow the phone. */
+      .phone {
+        position: absolute; z-index: 3; left: 0; top: 150px;
+        width: 262px; height: 528px;
+        background: #16121f; border-radius: 48px; padding: 12px;
+        /* Tight, so it doesn't smear a grey edge across the arch below. */
+        box-shadow: 0 8px 14px rgba(0, 0, 0, .32);
+      }
+      .phone-screen {
+        position: relative; width: 100%; height: 100%; border-radius: 37px; overflow: hidden;
+        background: #000; container-type: size;
+      }
+      .phone-notch { position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+        width: 82px; height: 22px; border-radius: 12px; background: #16121f; z-index: 4; }
+      /* 1 · the start screen (the gallery's cover) */
+      .phone-home { position: absolute; inset: 0; overflow: hidden; transition: opacity .7s ease; font-family: var(--sans); color: #fff; }
+      .cv-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; transform: scale(1.25); }
+      .cv-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.72) 0%, rgba(0,0,0,.45) 32%, rgba(0,0,0,.35) 55%, rgba(0,0,0,.78) 100%); }
+      .cv-text { position: absolute; top: 15cqh; left: 6cqw; right: 6cqw; text-align: center; text-shadow: 0 2px 16px rgba(0,0,0,.4); }
+      .cv-eyebrow { font-size: 4.07cqw; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; margin-bottom: .9em; opacity: .95; }
+      .cv-title { font-family: var(--serif); font-weight: 400; font-size: 16cqw; line-height: 1; letter-spacing: -0.01em; }
+      .cv-sub { font-size: 4.3cqw; font-weight: 500; margin-top: 3.5cqw; opacity: .9; }
+      .phone-tap { position: absolute; left: 50%; bottom: 17cqh; translate: -50% 0; display: flex; flex-direction: column; align-items: center; gap: 3.6cqw; }
+      .cv-pop { position: absolute; left: 50%; bottom: 5.5cqh; translate: -50% 0; width: 39cqw; height: auto; opacity: .95; }
+      .phone-scan { position: relative; width: 36.2cqw; height: 36.2cqw; display: flex; align-items: center; justify-content: center; }
+      .phone-caption { color: #fff; font-size: 4.9cqw; font-weight: 700; letter-spacing: -0.01em; text-shadow: 0 2px 14px rgba(0,0,0,.34); }
+      .pop-disc { position: absolute; inset: 0; border-radius: 50%; background: #111; }
+      .pop-halo { position: absolute; inset: 0; border-radius: 50%; background: #fff; opacity: 0; }
+      @keyframes pop-swell { 0% { transform: scale(1); opacity: 0; } 6% { opacity: .17; } 74% { opacity: .17; } 100% { transform: scale(5.6); opacity: 0; } }
+      @keyframes pop-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+      @keyframes pop-spinin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+      .phone-scan .pop-halo { animation: pop-swell 2.8s linear infinite; }
+      .phone-scan .h2 { animation-delay: .45s; } .phone-scan .h3 { animation-delay: .9s; }
+      .phone-scan .h4 { animation-delay: 1.35s; } .phone-scan .h5 { animation-delay: 1.8s; }
+      .phone-scan .pop-disc { animation: pop-breathe 2.6s ease-in-out infinite; }
+      .phone:not(.playing) .pop-mark { animation: pop-spinin 1.05s cubic-bezier(.45,.05,.2,1) both; }
+      .pop-mark { position: relative; width: 33.8cqw; height: 33.8cqw; filter: drop-shadow(0 2px 14px rgba(0,0,0,.34)); }
+      .pop-mark use { fill: #fff; }
+      /* 2 · the audio stop (view.html #audio-player) */
+      .phone-audio { position: absolute; inset: 0; opacity: 0; transition: opacity .7s ease; background: #000; color: #fff; font-family: var(--sans);
+                     display: flex; flex-direction: column; align-items: center; padding: 18cqw 6.1cqw 6cqw; }
+      .pa-close { position: absolute; top: 9cqw; right: 5.1cqw; width: 11.2cqw; height: 11.2cqw; border-radius: 50%; background: rgba(255,255,255,.18);
+                  display: flex; align-items: center; justify-content: center; font-size: 5.6cqw; }
+      .pa-photo { width: 78cqw; aspect-ratio: 1; border-radius: 4.6cqw; overflow: hidden; box-shadow: 0 4.6cqw 12cqw rgba(0,0,0,.55); flex: none; }
+      .pa-photo { position: relative; }
+      .pa-photo img { width: 100%; height: 100%; object-fit: cover; object-position: 40% 48%; }
+      /* Over the work: the audio bar from How it works step 2 (.shot-audio),
+         so a silent visitor can see this is a stop playing, not a picture. */
+      .pa-bar-chip { position: absolute; left: 3cqw; right: 3cqw; bottom: 3cqw; display: flex; align-items: center; gap: 2.8cqw;
+                     background: rgba(0,0,0,.74); color: #fff; border-radius: 3.4cqw; padding: 2.2cqw 3.4cqw 2.2cqw 2.2cqw; }
+      .pa-bar-chip .pp { flex: none; width: 8cqw; height: 8cqw; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; gap: .9cqw; }
+      .pa-bar-chip .pp i { width: .9cqw; height: 2.9cqw; background: #000; border-radius: 1px; }
+      .pa-bar-chip .meta { flex: 1; min-width: 0; font-size: max(8px, 3.4cqw); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .pa-bar-chip .trk { height: .9cqw; min-height: 2px; border-radius: 2px; background: rgba(255,255,255,.3); margin-top: 1.7cqw; overflow: hidden; }
+      .pa-bar-chip .trk b { display: block; height: 100%; width: 0; background: #fff; }
+      .pa-bar-chip .hp { flex: none; width: 4.6cqw; height: 4.6cqw; opacity: .85; }
+      .pa-controls { margin-top: 5.6cqw; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4cqw; }
+      .pa-bar { width: 100%; height: 1cqw; min-height: 3px; border-radius: 999px; background: rgba(255,255,255,.25); position: relative; }
+      .pa-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: inherit; background: #fff; }
+      .pa-fill::after { content: ''; position: absolute; right: -1.5cqw; top: 50%; width: 3cqw; height: 3cqw; translate: 0 -50%; border-radius: 50%; background: #fff; }
+      .pa-time { margin-top: 2cqw; width: 100%; display: flex; justify-content: space-between; font-size: 3.3cqw; font-weight: 500;
+                 font-variant-numeric: tabular-nums; color: rgba(255,255,255,.7); }
+      .pa-play { width: 16.3cqw; height: 16.3cqw; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; }
+      .pa-play i { width: 1.6cqw; height: 5.4cqw; background: #000; border-radius: 1px; margin: 0 .8cqw; }
+      .pa-transcript { margin-top: 4.6cqw; width: 100%; flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 3.6cqw 4.1cqw; border-radius: 3.6cqw;
+                       background: rgba(255,255,255,.08); font-size: 3.56cqw; line-height: 1.5; color: rgba(255,255,255,.92); }
+      .pa-transcript p { margin: 0 0 .7em; }
+      /* The words come in as they're read (JS wraps each in a span). */
+      .pa-transcript .w { opacity: 0; transition: opacity .35s ease; }
+      .pa-transcript .w.on { opacity: 1; }
+      /* 3 · After the audio: the space's own buttons */
+      .phone-end { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity .6s ease; color: #fff; font-family: var(--sans); }
+      .pe-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; transform: scale(1.25); }
+      .pe-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,.35) 35%, rgba(0,0,0,.7) 65%, rgba(0,0,0,.88) 100%); }
+      .pe-in { position: relative; height: 100%; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 15cqw 6.1cqw 7cqw; }
+      .pe-org { font-size: 3.9cqw; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; opacity: .92; }
+      .pe-title { font-family: var(--serif); font-weight: 400; font-size: 8.6cqw; line-height: 1.1; margin: auto 0 2.5cqw; text-shadow: 0 2px 14px rgba(0,0,0,.4); }
+      .pe-sub { font-size: 4.07cqw; line-height: 1.4; opacity: .92; margin: 0 0 6.6cqw; }
+      .pe-btns { width: 100%; display: flex; flex-direction: column; gap: 3cqw; }
+      .pe-btn { display: block; padding: 3.8cqw 4cqw; border-radius: 999px; border: 1.5px solid rgba(255,255,255,.9); background: rgba(0,0,0,.18);
+                font-size: 3.85cqw; font-weight: 700; line-height: 1.25; opacity: 0; transform: translateY(4cqw); transition: opacity .45s ease, transform .5s cubic-bezier(.2,.8,.3,1.2); }
+      .pe-btn:first-child { background: #fff; color: #1a1a1a; border-color: #fff; }
+      .pe-foot { display: flex; gap: 5.5cqw; justify-content: center; margin-top: 5.2cqw; font-size: 3.7cqw; font-weight: 600; opacity: .85; }
+      .pe-foot span { text-decoration: underline; text-underline-offset: .2em; }
+      .phone.playing .phone-home, .phone.ended .phone-home { opacity: 0; }
+      .phone.playing .phone-audio { opacity: 1; }
+      .phone.ended .phone-end { opacity: 1; }
+      .phone.ended .pe-btn { opacity: 1; transform: none; }
+      .phone.ended .pe-btn:nth-child(1) { transition-delay: .5s; }
+      .phone.ended .pe-btn:nth-child(2) { transition-delay: .95s; }
+      .phone.ended .pe-btn:nth-child(3) { transition-delay: 1.4s; }
+      @media (prefers-reduced-motion: reduce) {
+        .phone-scan .pop-halo, .phone-scan .pop-disc, .phone:not(.playing) .pop-mark { animation: none; }
+        .phone-scan .pop-halo { opacity: 0; }
+      }
+      .sound-btn { position: absolute; z-index: 4; left: 290px; top: 520px; }
+      .sound-btn[hidden] { display: none; }
+
+      /* Desktop, as /nonprofits: the copy and the stage start level; the phone
+         tucks in under the headline's second line, just right of the subhead
+         and buttons (which stop 140px short of the copy column), with the
+         painting behind it further right; the phone runs down over the arch. */
+      @media (min-width: 1101px) {
+        .hero-grid { align-items: start; }
+        .hero-copy { padding-top: 34px; }
+        .hero-sub { max-width: calc(100% - 140px); }
+        .hero-actions { max-width: calc(100% - 100px); flex-wrap: nowrap; }
+        .ex-hero { padding-bottom: 100px; }
+        .stage { height: 680px; }
+        .phone { left: -120px; top: 216px; }
+        .art { right: 70px; top: 0; }
+        .wall-label { right: 70px; top: 458px; }
+        .sound-btn { left: 170px; top: 610px; }
+        .ex-hero { --sx: 64%; --px: 64%; }
+      }
+      @media (max-width: 1100px) {
+        .ex-hero h1 { font-size: 50px; }
+        .art { width: 290px; }
+        .wall-label { top: 380px; }
+        .sound-btn { left: 280px; top: 480px; }
+      }
+      @media (max-width: 900px) {
+        .hero-grid { grid-template-columns: 1fr; gap: 28px; }
+        .ex-hero { padding: 48px 0 110px; --sx: 68%; --sy: 60%; --sh: 9%; --px: 66%; --py: 70%; }
+        .ex-hero h1 { font-size: 56px; }
+        .stage { height: 600px; max-width: 600px; }
+        .art { width: 340px; right: 10px; }
+        .wall-label { right: 10px; top: 444px; }
+        .phone { top: 150px; left: 30px; }
+        .sound-btn { left: 310px; top: 520px; }
+      }
+      @media (max-width: 640px) {
+        .ex-hero { padding: 36px 0 70px; }
+        .ex-hero h1 { font-size: min(42px, 10.8vw); }
+        .hero-sub { font-size: 16px; }
+        .hero-curve { height: 50px; }
+        .stage { height: 470px; }
+        .art { width: 214px; right: -4px; top: 0; padding: 8px; }
+        .wall-label { display: none; }
+        .phone { left: 0; top: 168px; width: 176px; height: 356px; border-radius: 34px; padding: 8px;
+                 box-shadow: 0 6px 12px rgba(0,0,0,.3); }
+        .phone-screen { border-radius: 27px; }
+        .phone-notch { width: 60px; height: 16px; top: 8px; }
+        .sound-btn { left: 190px; right: auto; top: 390px; }
+      }
+
+      /* ── How it works: as /nonprofits — a picture of each step, then its
+           number and words, played in order when the section scrolls in. ── */
+      .ex-body { position: relative; z-index: 3; }
+      main { overflow-x: clip; }
+      .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 36px;
+               list-style: none; margin: 0; padding: 0; counter-reset: step; }
+      .steps li { counter-increment: step; min-width: 0; }
+      .step-art { height: 210px; display: flex; align-items: center; justify-content: center; margin: 0 0 22px; }
+      /* 1: the entrance card, and a phone tapping it */
+      /* The placard on the left, whole; a phone comes in from the right on
+         its home screen, touches the card beside the tap circle, an "open"
+         banner drops in, and the phone opens the show's start screen. */
+      .tap-scene { position: relative; width: min(100%, 330px); height: 190px; display: flex; align-items: center; }
+      /* Static, and a tight shadow: Safari clipped the big soft one into a grey
+         box once the phone beside it started animating. */
+      .tap-card { position: relative; width: 70%; min-height: 150px;
+                  background: #fff; border-radius: 6px; font-family: var(--placard);
+                  box-shadow: 0 4px 12px rgba(26,26,26,.10), 0 1px 3px rgba(26,26,26,.08);
+                  display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
+      .tc-l { padding: 14px 8px 12px 14px; display: flex; flex-direction: column; background: #f2f2f2; font-family: var(--sans); }
+      .tc-l small { font-size: 8px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #6d675e; }
+      .tc-l b { font-family: var(--placard); font-weight: 600; font-size: 24px; line-height: .92; margin: 0 0 3px; white-space: nowrap; }
+      .tc-sub { font-family: var(--placard); font-style: italic; font-size: 12.5px; font-weight: 600; line-height: 1.1; color: #111; }
+      .tc-date { font-size: 8.5px; font-weight: 700; margin-top: auto; }
+      .tc-r { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding-top: 4px; font-family: var(--sans); }
+      .tc-r em { font-style: normal; font-size: 8.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; margin-bottom: -2px; }
+      .tc-ring { position: relative; width: 52px; height: 52px; border-radius: 50%;
+                 background: radial-gradient(circle closest-side, #fff 0 55%, #e4e4e5 56% 70%, #cfcfd1 71% 85%, #bcbcbf 86% 100%);
+                 display: flex; align-items: center; justify-content: center; color: #8a8a8e; }
+      .tc-ring svg { width: 15px; height: 15px; }
+      .tc-ring::before, .tc-ring::after { content: none; }
+      .tc-r span { font-size: 9px; font-weight: 600; }
+      .tap-ring-burst { position: absolute; inset: -2px; border-radius: 50%; border: 3px solid var(--warm); opacity: 0; }
+      .steps.tapped .tap-ring-burst { animation: ring-burst .8s ease-out; }
+      @keyframes ring-burst { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(2.2); } }
+      /* Moved with transform, and shadowed with a drop-shadow filter, which
+         Safari draws whole on an animated layer (a box-shadow came out as a
+         hard-edged grey box). The tap is a small nudge toward the card's
+         edge, clear of "Tap your phone here". */
+      .tap-phone { position: absolute; z-index: 2; right: 0; top: 15px; width: 80px; height: 160px; border-radius: 15px; background: #16121f; padding: 4px;
+                   filter: drop-shadow(0 8px 10px rgba(0,0,0,.22)); will-change: transform, opacity;
+                   transform: translateX(40px) rotate(8deg); opacity: 0;
+                   transition: transform .8s cubic-bezier(.3,.7,.3,1), opacity .4s ease; }
+      .steps.tapping .tap-phone { transform: none; opacity: 1; }
+      .steps.tapped .tap-phone { transform: translateX(-8px) rotate(-3deg); }
+      .steps.opened .tap-phone { transform: none; }
+      .tp-screen { position: relative; display: block; width: 100%; height: 100%; border-radius: 11px; overflow: hidden; }
+      .tp-screen::before { content: ''; position: absolute; z-index: 3; left: 50%; top: 4px; width: 22px; height: 6px; translate: -50% 0; border-radius: 4px; background: #16121f; }
+      /* An ordinary home screen */
+      .tp-home { position: absolute; inset: 0; background: linear-gradient(170deg, #f3d9c4 0%, #c9b8e8 55%, #8fa6d8 100%); transition: opacity .5s ease; }
+      .tp-time { position: absolute; left: 7px; top: 3px; font: 600 6.5px/1 var(--sans); color: #1a1a1a; }
+      .tp-apps { position: absolute; left: 7px; right: 7px; top: 18px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 5px; }
+      .tp-apps i, .tp-dock i { display: block; aspect-ratio: 1; border-radius: 4px; background: rgba(255,255,255,.75); }
+      .tp-apps i:nth-child(5n+1) { background: #ffffffd9; } .tp-apps i:nth-child(5n+2) { background: #7fb7f0; }
+      .tp-apps i:nth-child(5n+3) { background: #f2b46b; } .tp-apps i:nth-child(5n+4) { background: #8fd19e; }
+      .tp-apps i:nth-child(5n) { background: #e98a8a; }
+      .tp-dock { position: absolute; left: 5px; right: 5px; bottom: 5px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px;
+                 padding: 4px; border-radius: 7px; background: rgba(255,255,255,.35); }
+      /* The banner a tap brings up */
+      .tp-banner { position: absolute; z-index: 2; left: 4px; right: 4px; top: 12px; padding: 4px 5px; border-radius: 6px; background: rgba(255,255,255,.95);
+                   box-shadow: 0 4px 10px rgba(0,0,0,.18); font: 700 6px/1.25 var(--sans); color: #1a1a1a;
+                   opacity: 0; translate: 0 -10px; transition: opacity .3s ease, translate .35s ease; }
+      .tp-banner small { display: block; font-weight: 500; font-size: 5.5px; color: #5f5f5f; }
+      .steps.tapped .tp-banner { opacity: 1; translate: 0 0; }
+      .steps.opened .tp-banner { opacity: 0; transition-delay: 0s; }
+      /* The show's start screen */
+      .tp-tour { position: absolute; inset: 0; opacity: 0; transition: opacity .6s ease; background: #000; color: #fff; text-align: center; }
+      .tp-tour img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
+      .tp-tour::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.7) 0%, rgba(0,0,0,.35) 40%, rgba(0,0,0,.75) 100%); }
+      .tp-tour b, .tp-tour small, .tp-tour .tp-disc { position: absolute; z-index: 1; left: 50%; translate: -50% 0; }
+      .tp-tour b { top: 20px; font: 400 15px/1 var(--serif); white-space: nowrap; }
+      .tp-tour .tp-disc { bottom: 34px; width: 28px; height: 28px; border-radius: 50%; background: #111; box-shadow: 0 0 0 6px rgba(255,255,255,.14); }
+      .tp-tour .tp-disc::after { content: ''; position: absolute; inset: 8px; border-radius: 50%; border: 2.5px dotted #fff; }
+      .tp-tour small { bottom: 20px; white-space: nowrap; font: 700 6.5px/1 var(--sans); }
+      .steps.opened .tp-tour { opacity: 1; }
+      .steps.opened .tp-home { opacity: 0; }
+      /* 2: the work, recognized, then its stop playing */
+      .scan-shot { position: relative; width: min(100%, 300px); aspect-ratio: 3 / 2; border-radius: 16px; overflow: hidden;
+                   box-shadow: 0 14px 34px rgba(26,26,26,.16); background: #222; }
+      .scan-shot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 42%; }
+      .scan-shot .dim { position: absolute; inset: 0; background: rgba(0,0,0,.28); transition: opacity .5s ease; }
+      .scan-shot .scan-mark { position: absolute; z-index: 1; left: 50%; top: 50%; width: 32%; aspect-ratio: 1; translate: -50% -50%;
+                              filter: drop-shadow(0 2px 10px rgba(0,0,0,.35)); }
+      .scan-shot .scan-mark use { fill: #fff; }
+      .scan-shot .scan-mark .p { opacity: 0; }
+      .steps.scanning .scan-mark .p { animation: step-comet 1.4s linear infinite; animation-delay: calc(var(--i) * .175s); }
+      @keyframes step-comet { 0% { opacity: 0; } 6% { opacity: 1; } 46% { opacity: .5; } 72%, 100% { opacity: 0; } }
+      .steps.found .scan-mark .p { opacity: 1; transition: opacity .15s; }
+      .steps.found .scan-mark { animation: step-bloom .5s cubic-bezier(.35,0,.7,1) .25s forwards; }
+      @keyframes step-bloom { to { transform: scale(4); opacity: 0; } }
+      .steps.playing .dim { opacity: 0; }
+      .steps.playing .scan-mark { opacity: 0; }
+      .shot-audio { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; align-items: center; gap: 10px;
+                    background: rgba(0,0,0,.74); color: #fff; border-radius: 12px; padding: 8px 12px 8px 8px;
+                    opacity: 0; translate: 0 14px; transition: opacity .4s ease .3s, translate .45s ease .3s; }
+      .steps.playing .shot-audio { opacity: 1; translate: 0 0; }
+      .shot-audio .pp { flex: none; width: 28px; height: 28px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; gap: 3px; }
+      .shot-audio .pp i { width: 3px; height: 10px; background: #000; border-radius: 1px; }
+      .shot-audio .meta { flex: 1; min-width: 0; font-size: 11.5px; font-weight: 600; }
+      .shot-audio .trk { height: 3px; border-radius: 2px; background: rgba(255,255,255,.3); margin-top: 6px; overflow: hidden; }
+      .shot-audio .trk b { display: block; height: 100%; width: 0; background: #fff; }
+      .steps.playing .shot-audio .trk b { width: 72%; transition: width 4.2s linear .6s; }
+      .shot-audio .hp { flex: none; width: 16px; height: 16px; opacity: .85; }
+      /* 3: the buttons, one at a time */
+      .cta-stack { width: min(100%, 320px); display: flex; flex-direction: column; gap: 10px; }
+      .cta-stack span { display: block; text-align: center; padding: 12px 14px; border-radius: 999px; font-size: 14px; font-weight: 700; line-height: 1.25; text-wrap: balance;
+                        background: #fff; color: var(--ink); border: 1.5px solid var(--ink);
+                        opacity: 0; translate: 0 14px; transition: opacity .45s ease, translate .45s cubic-bezier(.2,.8,.3,1.2); }
+      .cta-stack span:first-child { background: var(--ink); color: #fff; }
+      .steps.cta1 .cta-stack span:nth-child(1), .steps.cta2 .cta-stack span:nth-child(2), .steps.cta3 .cta-stack span:nth-child(3) { opacity: 1; translate: 0 0; }
+      @media (prefers-reduced-motion: reduce) {
+        .steps .scan-mark .p { animation: none !important; }
+        .tap-phone, .shot-audio, .cta-stack span, .shot-audio .trk b { transition: none !important; }
+      }
+      .step-text { display: flex; gap: 16px; align-items: flex-start; }
+      .step-text::before {
+        content: counter(step); flex: none; font-family: var(--serif); font-size: 96px; line-height: 1;
+        margin: -0.14em 0 -0.25em; padding: 0 .05em .25em 0; letter-spacing: -0.04em;
+        background: linear-gradient(160deg, #5bc8f5 10%, #7c3aed 90%); -webkit-background-clip: text;
+        background-clip: text; color: transparent;
+      }
+      .step-text > div { min-width: 0; }
+      .steps b.st { display: block; font-family: var(--serif); font-weight: 400; font-size: 25px; line-height: 1.15; margin-bottom: 6px; color: var(--ink); }
+      .steps p { margin: 0; font-size: 16px; line-height: 1.55; color: var(--muted); }
+      @media (max-width: 960px) { .step-text::before { font-size: 80px; } .steps { gap: 26px; } }
+      @media (max-width: 860px) {
+        .steps { grid-template-columns: 1fr; gap: 40px; max-width: 520px; margin-inline: auto; }
+        .ex-body .sec-head { margin-bottom: 28px; }
+        .step-art { height: auto; min-height: 190px; margin-bottom: 28px; }
+      }
+
+      /* ── For visitors: four short reasons, each with a line icon. ── */
+      .visitors { background: #fff; border-top: 1px solid var(--line); }
+      .vis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px; list-style: none; margin: 0; padding: 0; }
+      .vis li { border-top: 1px solid var(--line); padding-top: 20px; }
+      .vis svg { width: 30px; height: 30px; color: var(--accent); margin-bottom: 14px; }
+      .vis b { display: block; font-family: var(--serif); font-weight: 400; font-size: 22px; line-height: 1.2; margin-bottom: 8px; }
+      .vis p { margin: 0; font-size: 15.5px; line-height: 1.55; color: var(--muted); }
+      @media (max-width: 960px) { .vis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 28px; } }
+      @media (max-width: 560px) { .vis { grid-template-columns: 1fr; gap: 22px; } }
+
+      /* ── For your space: /nonprofits' What you get band, over the work on
+           the wall, with the dashboard as a white card. ── */
+      .get-band { position: relative; overflow: hidden; background: #141414; color: #fff; }
+      .get-bg { position: absolute; inset: 0; }
+      .get-bg img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 35%; filter: blur(2px); transform: scale(1.04); }
+      .get-band::before { content: ''; position: absolute; inset: 0; z-index: 1;
+        background: linear-gradient(90deg, rgba(10,10,10,.93) 0%, rgba(10,10,10,.88) 45%, rgba(10,10,10,.78) 100%); }
+      .get-band .wrap { position: relative; z-index: 2; }
+      .get-band h2 { color: #fff; }
+      .get-band .get-list strong { color: #fff; }
+      .get-band .get-list p { color: rgba(255,255,255,.78); }
+      .get-band .get-list em { color: #fff; }
+      .get-band .get-list li::before { border-color: #b9a9ff; }
+      .get-band .dash { color: var(--ink); }
+      @media (max-width: 960px) { .get-band::before { background: rgba(10,10,10,.88); } }
+      .get-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 56px; align-items: start; }
+      @media (max-width: 960px) { .get-grid { grid-template-columns: 1fr; gap: 40px; } }
+      .get-list { list-style: none; margin: 28px 0 0; padding: 0; }
+      .get-list li { padding: 0 0 22px 30px; position: relative; }
+      .get-list li::before {
+        content: ''; position: absolute; left: 3px; top: .55em; width: 10px; height: 5px;
+        border-left: 2px solid var(--accent); border-bottom: 2px solid var(--accent); transform: rotate(-45deg);
+      }
+      .get-list strong { display: block; font-size: 17px; margin-bottom: 4px; }
+      .get-list p { margin: 0; font-size: 16px; line-height: 1.6; color: var(--muted); }
+      .soon { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+              color: #1a1a1a; background: #b9a9ff; padding: 2px 8px; border-radius: 999px; margin-left: 6px; vertical-align: 2px; }
+      .coming { margin: 4px 0 0; padding: 14px 16px; border: 1px dashed rgba(255,255,255,.3); border-radius: 12px;
+                font-size: 14.5px; line-height: 1.55; color: rgba(255,255,255,.8); }
+      .coming b { color: #fff; }
+
+      /* Dashboard preview: /nonprofits' card, per work. Sample data, labelled. */
+      .dash { margin: 0; background: var(--paper); border-radius: var(--pc-radius-card);
+              box-shadow: var(--pc-shadow-raised); padding: 26px 26px 22px; }
+      .dash-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 20px; }
+      .dash-head h3 { margin: 0; font-size: 26px; }
+      .dash-head .sub { font-size: 13px; color: var(--faint); margin-top: 4px; }
+      .sample-tag { flex: none; font-size: 11.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+                    color: #5a3fd6; background: #efebff; padding: 6px 11px; border-radius: 999px; }
+      .kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 22px; }
+      .kpi { background: var(--bg); border-radius: var(--pc-radius-inner); padding: 12px 12px 11px; min-width: 0; }
+      .kpi .k { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+      .kpi .v { font-family: var(--serif); font-size: 26px; line-height: 1.1; margin: 4px 0 3px; }
+      .kpi .n { font-size: 12px; line-height: 1.35; color: var(--muted); }
+      @media (max-width: 420px) { .kpi .v { font-size: 22px; } .kpi { padding: 10px 9px; } .kpi .k { font-size: 10px; } }
+      .dash-label { font-size: 13px; font-weight: 700; margin: 0 0 10px; display: flex; justify-content: space-between; gap: 10px; }
+      .dash-label span { font-weight: 500; color: var(--muted); }
+      .works { list-style: none; margin: 0 0 14px; padding: 0; }
+      .works li { display: grid; grid-template-columns: 36px minmax(0, 1fr) 40px 110px; gap: 12px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+      .works .th { width: 36px; height: 36px; border-radius: 4px; object-fit: cover; }
+      .works .t small { display: block; font-size: 11.5px; color: var(--faint); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; }
+      .works li:last-child { border-bottom: 0; }
+      .works .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .works .s { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+      .works .track { height: 8px; background: #eeeeee; border-radius: 5px; overflow: hidden; }
+      .works .fill { height: 100%; background: var(--accent); border-radius: 5px; }
+      .works .head { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding-top: 0; }
+      .works .head .s { color: var(--muted); }
+      @media (max-width: 420px) { .works li { grid-template-columns: 32px minmax(0, 1fr) 30px 54px; gap: 8px; } .works .th { width: 32px; height: 32px; } }
+      .taps { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; padding: 0; list-style: none; }
+      .taps li { font-size: 12.5px; background: var(--bg); border-radius: 999px; padding: 6px 11px; }
+      .taps b { font-weight: 700; }
+      .dash-armed .works .fill { transform: scaleX(0); transform-origin: left; }
+      .dash-play .works .fill { transform: scaleX(1); transition: transform .9s cubic-bezier(.25,.8,.3,1); transition-delay: calc(var(--i) * 140ms + 300ms); }
+      .dash-foot { font-size: 12px; color: var(--faint); line-height: 1.5; border-top: 1px solid var(--line); padding-top: 12px; margin: 0; }
+
+      /* ── The edges, on the Popcode gradient (/nonprofits' color band). ── */
+      .color-band { background: radial-gradient(ellipse 60% 90% at 78% 0%, rgba(255,240,215,.16) 0%, rgba(255,240,215,0) 70%), linear-gradient(160deg, #6f685f 0%, #5a544c 55%, #48433d 100%); color: #fff; }
+      .color-band h2 { color: #fff; font-size: 52px; line-height: 1.04; }
+      .color-band .sec-head { max-width: 46em; }
+      .color-band .sec-head p { color: rgba(255,255,255,.9); }
+      @media (max-width: 900px) { .color-band h2 { font-size: 42px; } }
+      @media (max-width: 560px) { .color-band h2 { font-size: 33px; } }
+      .edges { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 32px; list-style: none; margin: 0; padding: 0; }
+      .edges li { border-top: 1px solid rgba(255,255,255,.4); padding: 16px 0 24px; }
+      .edges b { display: block; font-family: var(--serif); font-weight: 400; font-size: 21px; line-height: 1.25; margin-bottom: 6px; }
+      .edges p { margin: 0; font-size: 15px; line-height: 1.55; color: rgba(255,255,255,.88); }
+      @media (max-width: 960px) { .edges { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; } }
+      @media (max-width: 560px) { .edges { grid-template-columns: 1fr; } .edges li { padding-bottom: 18px; } }
+
+      /* ── The entrance placard: drawn in HTML, landscape, as printed. NFC
+           first; the QR code and short address are the fallbacks. ── */
+      .plac-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 56px; align-items: center; }
+      @media (max-width: 960px) { .plac-grid { grid-template-columns: 1fr; gap: 36px; } }
+      .placard-stage { background: #e9e5de; border-radius: var(--pc-radius-card); padding: 40px 30px; display: flex; justify-content: center; }
+      @media (max-width: 560px) { .placard-stage { padding: 26px 14px; margin: 0 -6px; } }
+      /* Laid out like the demo placard: a grey panel with the show (a bold
+         condensed title, dates, a paragraph, a rule), and a white panel with
+         the space's wordmark and the three ways into the tour. Grows with
+         its text. */
+      .placard { width: 100%; max-width: 480px; background: #fff; border-radius: 3px; color: #111;
+                 box-shadow: 0 22px 44px rgba(40,30,20,.22), 0 2px 5px rgba(40,30,20,.12);
+                 display: grid; grid-template-columns: 54fr 46fr; container-type: inline-size; overflow: hidden;
+                 font-family: var(--sans); }
+      .pl-l { background: #f2f2f2; padding: 7cqw 5.5cqw 6cqw 6.4cqw; display: flex; flex-direction: column; }
+            .pl-l b { font-family: var(--placard); font-weight: 600; font-size: 10.5cqw; line-height: .92; letter-spacing: -0.01em; margin: 0 0 1cqw; white-space: nowrap; }
+      .pl-l .sub { font-family: var(--placard); font-style: italic; font-weight: 600; font-size: 5cqw; line-height: 1.05; margin: 0 0 4.2cqw; }
+      .pl-l .dates { font-size: 2.3cqw; font-weight: 700; margin: 0 0 3.4cqw; }
+      .pl-l p { font-size: 2.15cqw; font-weight: 400; line-height: 1.65; color: #222; margin: 0; }
+      .pl-l .rule { margin-top: auto; padding-top: 4cqw; border-bottom: 1px solid #d6d6d6; }
+      .pl-r { padding: 4.6cqw 4.4cqw 4.4cqw; display: flex; flex-direction: column; align-items: center; text-align: center; }
+      .pl-mark { align-self: flex-end; text-align: right; line-height: .9; margin-bottom: 8cqw; }
+      .pl-mark i { display: block; font-style: normal; font-size: 2.6cqw; font-weight: 500; }
+      .pl-mark b { display: block; font-size: 4.4cqw; font-weight: 800; letter-spacing: -0.02em; }
+      .pl-r .ttl { font-weight: 700; font-size: 2.7cqw; line-height: 1.2; }
+      .pl-r .hp { font-size: 1.9cqw; font-weight: 500; color: #666; margin-top: .9cqw; display: flex; align-items: center; gap: .7cqw; }
+      .pl-r .hp svg { width: 2.2cqw; height: 2.2cqw; }
+      .pl-tap-l { font-size: 2cqw; font-weight: 700; margin-top: 3.6cqw; }
+      .pl-tap { position: relative; width: 19cqw; height: 19cqw; margin: 3.2cqw 0 0; border-radius: 50%; flex: none;
+                background: radial-gradient(circle closest-side, #fff 0 55%, #e4e4e5 56% 70%, #cfcfd1 71% 85%, #bcbcbf 86% 100%);
+                display: flex; align-items: center; justify-content: center; color: #8a8a8e; }
+      .pl-tap svg { width: 5cqw; height: 5cqw; }
+      .pl-alt { margin-top: auto; padding-top: 5cqw; width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 2cqw; align-items: end; }
+      .pl-alt > div { display: flex; flex-direction: column; align-items: center; gap: 1.6cqw; }
+      .pl-alt svg.qr { width: 7.4cqw; height: 7.4cqw; }
+      .pl-alt svg.go { width: 6.4cqw; height: 6.4cqw; color: #222; }
+      .pl-alt span { font-size: 1.75cqw; font-weight: 700; line-height: 1.25; }
+      .pl-alt span em { font-style: normal; color: #8a8a8a; }
+      .plac-copy h2 { margin-bottom: 16px; }
+      .plac-copy > p { font-size: 17px; line-height: 1.6; color: var(--muted); margin: 0 0 22px; }
+      .ways { list-style: none; margin: 0 0 22px; padding: 0; counter-reset: way; }
+      .ways li { counter-increment: way; position: relative; padding: 0 0 16px 44px; }
+      .ways li::before { content: counter(way); position: absolute; left: 0; top: -2px; width: 30px; height: 30px; border-radius: 50%;
+                         background: var(--warm-tint); color: var(--warm-ink); font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+      .ways strong { display: block; font-size: 16.5px; margin-bottom: 3px; }
+      .ways p { margin: 0; font-size: 15.5px; line-height: 1.55; color: var(--muted); }
+      .promise { margin: 0; padding: 14px 18px; border-radius: 14px; background: var(--warm-tint); font-size: 15.5px; line-height: 1.5; }
+      .promise b { color: var(--warm-ink); }
+
+      /* ── Pricing: /nonprofits' plan cards, without prices (quoted on a call,
+           as pricing.html says). ── */
+      .kits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; max-width: 1080px; margin: 0 auto; align-items: stretch; }
+      @media (max-width: 900px) { .kits { grid-template-columns: 1fr; max-width: 440px; row-gap: 32px; } }
+      .kit .cost { font-family: var(--serif); font-size: 46px; line-height: 1; letter-spacing: -0.03em; margin: 2px 0 14px; }
+      .kit .cost .per { font-family: var(--sans); font-size: 15px; letter-spacing: 0; color: var(--faint); margin-left: 6px; }
+      .kit { position: relative; background: var(--paper); border: 1px solid var(--line); border-radius: var(--pc-radius-card);
+             padding: 34px 30px 30px; display: flex; flex-direction: column; }
+      .kit.feature { border-color: transparent; box-shadow: 0 0 0 2px var(--warm), var(--pc-shadow-raised); }
+      .kit .tag { position: absolute; z-index: 2; top: -12px; left: 50%; transform: translateX(-50%); white-space: nowrap;
+                  background: var(--warm); color: #fff; font-size: 11.5px; font-weight: 700;
+                  letter-spacing: .1em; text-transform: uppercase; padding: 6px 14px; border-radius: 999px; }
+      .kit h3 { font-size: 30px; margin: 0 0 8px; }
+      .kit .from { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--warm-ink); margin: 0 0 8px; }
+      .kit .for { font-size: 15px; line-height: 1.5; color: var(--ink); margin: 0 0 20px; }
+      .kit ul { list-style: none; margin: 0 0 26px; padding: 0; }
+      .kit li { font-size: 15px; line-height: 1.5; color: var(--muted); padding: 0 0 0 26px; margin-bottom: 10px; position: relative; }
+      .kit li strong { color: var(--ink); }
+      .kit li::before { content: ''; position: absolute; left: 3px; top: .5em; width: 9px; height: 5px;
+                        border-left: 2px solid var(--accent); border-bottom: 2px solid var(--accent); transform: rotate(-45deg); }
+      .kit .btn { margin-top: auto; }
+      .pilot-line { max-width: 640px; margin: -20px auto 34px; text-align: center; font-size: 15px; line-height: 1.5; color: var(--ink);
+                    background: var(--warm-tint); border-radius: 999px; padding: 10px 22px; }
+      .pilot-line b { color: var(--warm-ink); }
+      @media (max-width: 640px) { .pilot-line { border-radius: 16px; margin-top: -12px; } }
+      .kits-note { text-align: center; font-size: 15px; line-height: 1.55; color: var(--muted); margin: 22px auto 0; max-width: 46em; }
+
+      /* ── FAQ: real buttons, as /nonprofits. ── */
+      .faq { max-width: 780px; margin: 0 auto; border-top: 1px solid var(--line); }
+      .faq-item { border-bottom: 1px solid var(--line); }
+      .faq-item h3 { margin: 0; font-family: var(--sans); font-size: 17px; font-weight: 600; letter-spacing: 0; }
+      .faq-q { width: 100%; min-height: 60px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+               padding: 16px 2px; background: none; border: 0; cursor: pointer; text-align: left; font: inherit; color: var(--ink); }
+      .faq-q:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .faq-q .pm { flex: none; width: 22px; height: 22px; position: relative; }
+      .faq-q .pm::before, .faq-q .pm::after { content: ''; position: absolute; left: 4px; right: 4px; top: 10px; height: 2px; background: var(--ink);
+                                              border-radius: 1px; transition: transform .2s; }
+      .faq-q .pm::after { transform: rotate(90deg); }
+      .faq-q[aria-expanded="true"] .pm::after { transform: rotate(0); }
+      .faq-a { padding: 0 40px 20px 2px; font-size: 16px; line-height: 1.65; color: var(--muted); }
+      .faq-a p { margin: 0; }
+      .faq-a p + p { margin-top: .7em; }
+
+      /* ── Final call ── */
+      .closer { border-radius: var(--pc-radius-card); padding: 56px 40px; text-align: center; color: #fff;
+                background: radial-gradient(ellipse 60% 90% at 78% 0%, rgba(255,240,215,.16) 0%, rgba(255,240,215,0) 70%), linear-gradient(160deg, #6f685f 0%, #5a544c 55%, #48433d 100%); box-shadow: 0 18px 44px rgba(60,50,40,.22); }
+      .closer h2 { color: #fff; font-size: 34px; line-height: 1.12; margin: 0 auto 26px; }
+      .closer h2 .l { display: block; }
+      @media (max-width: 640px) { .closer h2 { font-size: 27px; } .closer { padding: 40px 22px; } }
+
+      /* ── Footer: as /nonprofits. ── */
+      footer { background: #fff; border-top: 1px solid var(--line); padding: 48px 0 36px; }
+      .foot-top { margin-bottom: 28px; }
+      .foot-top img { height: 30px; width: auto; display: block; }
+      .foot-tag { font-family: var(--serif); font-size: 21px; margin: 12px 0 0; }
+      .foot-base { display: flex; gap: 8px 18px; flex-wrap: wrap; border-top: 1px solid var(--line);
+                   padding-top: 20px; font-size: 13px; color: var(--faint); }
+      .foot-base a { color: var(--faint); }
+    </style>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://popcode.app/#org",
+      "name": "Popcode",
+      "url": "https://popcode.app/",
+      "logo": "https://popcode.app/assets/Popcode_logo.png",
+      "email": "hello@popcodeapp.com",
+      "sameAs": [
+        "https://www.instagram.com/popcodeapp/"
+      ]
+    },
+    {
+      "@type": "Service",
+      "name": "Popcode for Exhibitions",
+      "url": "https://popcode.app/exhibitions",
+      "provider": {
+        "@id": "https://popcode.app/#org"
+      },
+      "serviceType": "Self-guided audio tours for galleries and museums",
+      "audience": {
+        "@type": "Audience",
+        "audienceType": "Galleries, art fairs, open studios and museums"
+      },
+      "description": "Visitors tap an NFC card at the exhibition entrance, point their phone at any work in any order and hear a short audio stop in their own headphones, then see the space's own buttons: inquire about this work, become a member, plan a visit. A dashboard shows scans, how far people listened and button taps. No app, no QR code beside the work."
+    }
+  ]
+}
+    </script>
+  </head>
+  <body>
+    <!-- Standalone header (see the .lp-nav CSS above): swap for nav.js when
+         /exhibitions and /nonprofits join the site navigation. -->
+    <header class="lp-nav">
+      <a class="lp-brand" href="/exhibitions" aria-label="Popcode for Exhibitions, top of page">
+        <img src="/assets/Popcode_logo.png" alt="Popcode" height="35">
+      </a>
+      <nav class="lp-links" aria-label="On this page">
+        <a href="#how">How it works</a>
+        <a href="#visitors">For visitors</a>
+        <a href="#space">For your space</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">Questions</a>
+      </nav>
+      <a class="btn btn-primary book-demo lp-nav-cta" href="#">Book a demo</a>
+    </header>
+
+    <section class="ex-hero">
+      <div class="wrap hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">Popcode for Exhibitions</p>
+          <h1><span class="l">Every work has a story.</span> <span class="l">Now visitors can hear it.</span></h1>
+          <p class="hero-sub">Self-guided audio tours for galleries and museums. Visitors tap the card at your entrance, point their phone at any work, and hear about it in their own headphones. Then they can inquire, join, or plan their next visit. <strong>No app. No QR code beside the work.</strong></p>
+          <div class="hero-actions">
+            <a class="btn btn-lg btn-on-grad book-demo" href="#">Book a 15-minute demo</a>
+            <a class="btn btn-lg btn-ghost-light" href="#how">See how it works</a>
+          </div>
+        </div>
+
+        <div class="stage" id="hero-stage">
+          <!-- John Singer Sargent, The Fountain, Villa Torlonia, Frascati, Italy
+               (1907). Public domain: Art Institute of Chicago open access (CC0),
+               via Unsplash. Shown as a work in the fictional demo show; the page
+               doesn't name the museum that owns it. -->
+          <div class="art"><img src="/assets/exhibitions-sargent.webp" width="900" height="1146" alt="John Singer Sargent's painting The Fountain, Villa Torlonia: a woman in white sits at an easel painting beside a garden fountain while a man leans back behind her, shown in a gilt frame on a gallery wall" fetchpriority="high"></div>
+          <div class="wall-label" aria-hidden="true"><b>The Fountain, Villa Torlonia, Frascati</b>John Singer Sargent, 1907<br>Oil on canvas</div>
+
+          <svg width="0" height="0" aria-hidden="true" style="position:absolute"><defs><path id="pop-p" fill-rule="nonzero" d="M90.6,150.6a60.0,60.0 0 1,0 120.0,0a60.0,60.0 0 1,0 -120.0,0ZM129.1,150.6a21.5,21.5 0 1,1 43.0,0a21.5,21.5 0 1,1 -43.0,0ZM96.1,150.6L96.1,237.1A16.75,16.75 0 0,0 129.6,237.1L129.6,150.6Z"/></defs></svg>
+          <!-- The phone plays one audio stop as the viewer shows it: the
+               gallery's start screen, the stop with its transcript, then the
+               After the Video buttons (shown after audio since PR #200).
+               PLACEHOLDER: Wren & Alder is a fictional gallery; the stop's
+               words are sample copy. -->
+          <div class="phone" id="phone">
+            <div class="phone-screen">
+              <div class="phone-home" aria-hidden="true">
+                <img class="cv-bg" src="/assets/exhibitions-sargent.webp" width="900" height="1146" alt="">
+                <div class="cv-shade"></div>
+                <div class="cv-text"><div class="cv-eyebrow">Wren &amp; Alder</div><div class="cv-title">At Work</div><div class="cv-sub">Artists and Their Subjects<br>Audio tour · Headphones on</div></div>
+                <div class="phone-tap">
+                  <div class="phone-scan">
+                    <span class="pop-halo h1"></span><span class="pop-halo h2"></span><span class="pop-halo h3"></span><span class="pop-halo h4"></span><span class="pop-halo h5"></span>
+                    <span class="pop-disc"></span>
+                    <svg class="pop-mark" viewBox="0 0 302 302" aria-hidden="true">
+                      <g transform="rotate(0 150.6 150.6)"><use href="#pop-p"/></g>
+                      <g transform="rotate(45 150.6 150.6)"><use href="#pop-p"/></g>
+                      <g transform="rotate(90 150.6 150.6)"><use href="#pop-p"/></g>
+                      <g transform="rotate(135 150.6 150.6)"><use href="#pop-p"/></g>
+                      <g transform="rotate(180 150.6 150.6)"><use href="#pop-p"/></g>
+                      <g transform="rotate(225 150.6 150.6)"><use href="#pop-p"/></g>
+                      <g transform="rotate(270 150.6 150.6)"><use href="#pop-p"/></g>
+                      <g transform="rotate(315 150.6 150.6)"><use href="#pop-p"/></g>
+                    </svg>
+                  </div>
+                  <div class="phone-caption">Tap to scan</div>
+                </div>
+                <img class="cv-pop" src="/assets/Popcode_logo.rev.svg" alt="">
+              </div>
+              <div class="phone-audio" aria-hidden="true">
+                <span class="pa-close">✕</span>
+                <div class="pa-photo"><img src="/assets/exhibitions-sargent.webp" width="900" height="1146" alt=""><div class="pa-bar-chip"><span class="pp"><i></i><i></i></span><div class="meta">The Fountain, Villa Torlonia<div class="trk"><b id="pa-chip-fill"></b></div></div><svg class="hp" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/></svg></div></div>
+                <div class="pa-controls">
+                  <div style="width:100%">
+                    <div class="pa-bar"><span class="pa-fill" id="pa-fill"></span></div>
+                    <div class="pa-time"><span id="pa-time">0:00</span><span id="pa-left">-0:47</span></div>
+                  </div>
+                  <span class="pa-play"><i></i><i></i></span>
+                </div>
+                <div class="pa-transcript" id="pa-transcript">
+                  <p>The Fountain, Villa Torlonia. John Singer Sargent painted it in 1907, in the garden of a villa outside Rome.</p>
+                  <p>The two figures are his friends, the painters Jane and Wilfrid de Glehn. Jane sits on the stone balustrade at her easel; Wilfrid leans back and watches.</p>
+                  <p>Look at her white smock. Almost none of it is pure white: it's cream, pale blue and green, picking up the sky and the garden around her.</p>
+                </div>
+              </div>
+              <div class="phone-end" aria-hidden="true">
+                <img class="pe-bg" src="/assets/exhibitions-sargent.webp" width="900" height="1146" alt="">
+                <div class="pe-shade"></div>
+                <div class="pe-in">
+                  <div class="pe-org">Wren &amp; Alder</div>
+                  <div class="pe-title">Thanks for listening.</div>
+                  <p class="pe-sub">Want to know more about this work?</p>
+                  <div class="pe-btns">
+                    <span class="pe-btn">Inquire about this work</span>
+                    <span class="pe-btn">Join our collectors' list</span>
+                    <span class="pe-btn">Plan your next visit</span>
+                  </div>
+                  <div class="pe-foot"><span>Listen again</span><span>Scan another work</span></div>
+                </div>
+              </div>
+              <div class="phone-notch"></div>
+            </div>
+          </div>
+          <audio id="demo-audio" preload="none"></audio>
+          <button type="button" class="btn btn-sm btn-on-grad sound-btn" id="sound-btn" hidden>Play with sound</button>
+        </div>
+      </div>
+      <svg class="hero-curve" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0 70 C 320 -10, 880 -10, 1200 70 L1200 120 L0 120 Z" fill="#f9f9f9"/>
+      </svg>
+    </section>
+
+    <main>
+      <!-- How it works -->
+      <section class="ex-body" id="how" aria-labelledby="how-h">
+        <div class="wrap">
+          <div class="sec-head"><h2 id="how-h">How it works</h2><p>Visitors use their own phone and headphones. You don't hand anything out.</p></div>
+          <ol class="steps" id="steps">
+            <li>
+              <div class="step-art" aria-hidden="true">
+                <div class="tap-scene">
+                  <div class="tap-card">
+                    <div class="tc-l"><b>At Work</b><span class="tc-sub">Artists and Their Subjects</span><span class="tc-date">Through December 14</span></div>
+                    <div class="tc-r">
+                      <em>Audio tour</em>
+                      <div class="tc-ring"><span class="tap-ring-burst"></span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6.5 8.5a5 5 0 0 1 0 7"/><path d="M10 6a9 9 0 0 1 0 12"/><path d="M13.5 3.5a13 13 0 0 1 0 17"/></svg>
+                      </div>
+                      <span>Tap your phone here</span>
+                    </div>
+                  </div>
+                  <span class="tap-phone"><span class="tp-screen">
+                    <span class="tp-home"><b class="tp-time">9:41</b><span class="tp-apps"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="tp-dock"><i></i><i></i><i></i><i></i></span></span>
+                    <span class="tp-banner">popcode.app<small>Open the audio tour</small></span>
+                    <span class="tp-tour"><img src="/assets/exhibitions-sargent.webp" width="900" height="1146" loading="lazy" alt=""><b>At Work</b><span class="tp-disc"></span><small>Tap to scan</small></span>
+                  </span></span>
+                </div>
+              </div>
+              <div class="step-text"><div>
+                <b class="st">Tap the card at the entrance.</b>
+                <p>Visitors hold their phone to the card by the door, and your tour opens in the browser. Nothing to download, nothing to sign up for.</p>
+              </div></div>
+            </li>
+            <li>
+              <div class="step-art" aria-hidden="true">
+                <div class="scan-shot">
+                  <img src="/assets/exhibitions-sargent.webp" width="900" height="1146" loading="lazy" alt="">
+                  <span class="dim"></span>
+                  <svg class="scan-mark" viewBox="0 0 302 302"><g transform="rotate(0 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 0;"/></g><g transform="rotate(45 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 1;"/></g><g transform="rotate(90 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 2;"/></g><g transform="rotate(135 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 3;"/></g><g transform="rotate(180 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 4;"/></g><g transform="rotate(225 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 5;"/></g><g transform="rotate(270 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 6;"/></g><g transform="rotate(315 150.6 150.6)"><use href="#pop-p" class="p" style="--i: 7;"/></g></svg>
+                  <div class="shot-audio">
+                    <span class="pp"><i></i><i></i></span>
+                    <div class="meta">The Fountain, Villa Torlonia<div class="trk"><b></b></div></div>
+                    <svg class="hp" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/></svg>
+                  </div>
+                </div>
+              </div>
+              <div class="step-text"><div>
+                <b class="st">Point the phone at any work.</b>
+                <p>Any work, in any order. Popcode recognizes the artwork itself, so there's no code on the wall beside it.</p>
+              </div></div>
+            </li>
+            <li>
+              <div class="step-art" aria-hidden="true">
+                <div class="cta-stack"><span>Inquire about this work</span><span>Become a member</span><span>Plan your next visit</span></div>
+              </div>
+              <div class="step-text"><div>
+                <b class="st">Listen, then choose what's next.</b>
+                <p>A 30 to 60 second stop plays in their headphones. Then your buttons appear: inquire about this work, become a member, plan a visit.</p>
+              </div></div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- For visitors -->
+      <section class="visitors" id="visitors" aria-labelledby="vis-h">
+        <div class="wrap">
+          <div class="sec-head"><h2 id="vis-h">Why visitors like it</h2><p>It feels like having the artist or curator beside you, without the headset at the front desk.</p></div>
+          <ul class="vis">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+              <b>Eyes on the art, not the phone.</b>
+              <p>It's audio. Once a stop starts, the phone can drop to their side while they look.</p>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2.5 20a5.5 5.5 0 0 1 11 0"/><path d="M14 20a4 4 0 0 1 7.5-2"/></svg>
+              <b>No crowding at the wall label.</b>
+              <p>Everyone hears the story from wherever they're standing, so nobody queues to read six lines of small print.</p>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/></svg>
+              <b>Their own headphones.</b>
+              <p>Earbuds they already carry. Nothing to rent, and nothing for you to buy, charge, clean, or lose.</p>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg>
+              <b>Any order, no route.</b>
+              <p>Start with whatever catches their eye, skip what doesn't, and go back to a favorite.</p>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- For your space -->
+      <section class="get-band" id="space" aria-labelledby="space-h">
+        <div class="get-bg"><img src="/assets/exhibitions-sargent.webp" width="900" height="1146" loading="lazy" alt=""></div>
+        <div class="wrap get-grid">
+          <div>
+            <h2 id="space-h">What your space gets</h2>
+            <ul class="get-list">
+              <li><strong>Buttons after every stop.</strong>
+                <p>Up to three, chosen by you: inquire about this work, become a member, give, plan a visit. They appear when the stop ends, while the work is still in front of them.</p></li>
+              <li><strong>A dashboard.</strong>
+                <p>Which works people stopped at, how far they listened, and which buttons they tapped. <em>Finally, numbers for the show, not just the opening.</em></p></li>
+              <li><strong>Your branding.</strong>
+                <p>The tour opens on your name, your show title and your image. Visitors feel they're with you, not on a tech platform.</p></li>
+              <li><strong>Ready for opening night.</strong>
+                <p>We build each tour with you and turn it around quickly, so it opens with the show, whether that's a monthly program, an art fair booth or open studios.</p></li>
+              <li><strong>Transcripts for accessibility.</strong>
+                <p>Every stop can carry its text, shown under the player, for visitors who are deaf or hard of hearing, or who forgot their headphones.</p></li>
+              <li><strong>Prints that play at home. <span class="soon">Optional</span></strong>
+                <p>Gift-shop prints and postcards of the works that play the same stop when visitors get home.</p></li>
+            </ul>
+            <p class="coming"><b>Coming next:</b> hearts to save a favorite work, a &ldquo;My visit&rdquo; list to replay stops after leaving, and loading the whole tour at the entrance for rooms with no signal.</p>
+          </div>
+
+          <figure class="dash" aria-labelledby="dash-cap">
+            <div class="dash-head">
+              <div>
+                <h3 id="dash-cap">At Work</h3>
+                <div class="sub">12 works · first four weeks</div>
+              </div>
+              <span class="sample-tag">Sample data</span>
+            </div>
+            <div class="kpis">
+              <div class="kpi"><div class="k">Scans</div><div class="v">1,284</div><div class="n">412 different phones</div></div>
+              <div class="kpi"><div class="k">Listened</div><div class="v">71%</div><div class="n">of each stop, on average</div></div>
+              <div class="kpi"><div class="k">Button taps</div><div class="v">96</div><div class="n">31 on Inquire</div></div>
+            </div>
+            <p class="dash-label">By work <span>Scans · how far people listened</span></p>
+            <!-- Public-domain works, shown as if in the fictional demo show. -->
+            <ul class="works">
+              <li><img class="th" src="/assets/exh-thumb-sargent.webp" width="96" height="96" loading="lazy" alt=""><span class="t">The Fountain, Villa Torlonia<small>John Singer Sargent</small></span><span class="s">214</span><span class="track"><span class="fill" style="width:84%"></span></span></li>
+              <li><img class="th" src="/assets/exh-thumb-homer.webp" width="96" height="96" loading="lazy" alt=""><span class="t">The Studio<small>Winslow Homer</small></span><span class="s">188</span><span class="track"><span class="fill" style="width:77%"></span></span></li>
+              <li><img class="th" src="/assets/exh-thumb-degas.webp" width="96" height="96" loading="lazy" alt=""><span class="t">Yellow Dancers (In the Wings)<small>Edgar Degas</small></span><span class="s">161</span><span class="track"><span class="fill" style="width:69%"></span></span></li>
+              <li><img class="th" src="/assets/exh-thumb-manet.webp" width="96" height="96" loading="lazy" alt=""><span class="t">Woman Reading<small>Édouard Manet</small></span><span class="s">132</span><span class="track"><span class="fill" style="width:63%"></span></span></li>
+              <li><img class="th" src="/assets/exh-thumb-meissonier.webp" width="96" height="96" loading="lazy" alt=""><span class="t">A Painter<small>Ernest Meissonier</small></span><span class="s">97</span><span class="track"><span class="fill" style="width:52%"></span></span></li>
+            </ul>
+            <p class="dash-label">Button taps</p>
+            <ul class="taps">
+              <li>Inquire about this work <b>31</b></li>
+              <li>Join our collectors' list <b>38</b></li>
+              <li>Plan your next visit <b>27</b></li>
+            </ul>
+            <p class="dash-foot">Sample data for illustration. Popcode collects no personal information from visitors. Counts are anonymous.</p>
+          </figure>
+        </div>
+      </section>
+
+      <!-- The edges -->
+      <section class="color-band" aria-labelledby="edge-h">
+        <div class="wrap">
+          <div class="sec-head">
+            <h2 id="edge-h">Made for the way galleries work.</h2>
+            <p>Audio-guide platforms are mostly built for permanent collections, with months of onboarding. We turn tours around in time for your next opening.</p>
+          </div>
+          <ul class="edges">
+            <li><b>Ready for your opening.</b><p>Not a 13-week onboarding. We build the tour with you, test it on real phones, and have it ready when the doors open.</p></li>
+            <li><b>No app. No QR code beside the work.</b><p>The tour opens in the phone's browser, and the walls stay as you hung them.</p></li>
+            <li><b>It recognizes the artwork itself.</b><p>The painting is the trigger. No numbers to key in, no codes to print and stick up.</p></li>
+            <li><b>No handsets.</b><p>Visitors bring their own headphones. Nothing to buy, charge, clean, or lose.</p></li>
+            <li><b>Any order.</b><p>No fixed route and no stop numbers. Visitors wander the way they already do.</p></li>
+            <li><b>Interest you can act on.</b><p>Buttons that turn a good stop into an inquiry, a membership or a gift, and the numbers to show it.</p></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- The entrance placard -->
+      <section id="placard" aria-labelledby="plac-h" style="background:#fff;">
+        <div class="wrap plac-grid">
+          <div class="placard-stage">
+            <!-- PLACEHOLDER: fictional gallery and show. The QR code opens
+                 popcode.app/exhibitions; point it (and the address under it)
+                 at a demo exhibition Popcode once there is one. -->
+            <div class="placard" role="img" aria-label="Sample entrance placard. Left: At Work, Artists and Their Subjects, through December 14, with a short description. Right: the gallery's name, 'For an audio tour of this exhibition', 'Headphones recommended', 'Tap your phone here' above a circle, and below it a QR code and a short web address.">
+              <div class="pl-l">
+                <b>At Work</b>
+                <p class="sub">Artists and Their Subjects</p>
+                <p class="dates">Through December 14, the Main Gallery</p>
+                <p>Painters at the easel, musicians at their music, dancers waiting in the wings. Twelve works from 1855 to 1907, by Sargent, Homer, Degas, Manet, Meissonier and others, of people too absorbed in their work to notice us watching.</p>
+                <span class="rule"></span>
+              </div>
+              <div class="pl-r">
+                <div class="pl-mark"><i>wren &amp;</i><b>Alder</b></div>
+                <div class="ttl">For an audio tour of this exhibition:</div>
+                <div class="hp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/></svg>Headphones recommended</div>
+                <div class="pl-tap-l">Tap your phone here</div>
+                <div class="pl-tap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6.5 8.5a5 5 0 0 1 0 7"/><path d="M10 6a9 9 0 0 1 0 12"/><path d="M13.5 3.5a13 13 0 0 1 0 17"/></svg></div>
+                <div class="pl-alt">
+                  <div><svg class="qr" viewBox="-2 -2 33 33" aria-hidden="true"><rect x="-2" y="-2" width="33" height="33" fill="#fff"/><path stroke="#1f1d1a" d="M0 0.5h7m3 0h4m4 0h1m3 0h7m-29 1h1m5 0h1m1 0h2m6 0h1m1 0h1m3 0h1m5 0h1m-29 1h1m1 0h3m1 0h1m1 0h5m1 0h3m1 0h1m3 0h1m1 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m1 0h1m2 0h3m1 0h1m1 0h1m1 0h1m2 0h1m1 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m7 0h1m2 0h4m1 0h1m1 0h3m1 0h1m-29 1h1m5 0h1m4 0h1m1 0h1m2 0h1m1 0h1m1 0h1m1 0h1m5 0h1m-29 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-21 1h2m1 0h2m7 0h1m-21 1h1m5 0h1m1 0h1m1 0h3m2 0h1m1 0h1m3 0h2m2 0h3m-25 1h1m5 0h2m3 0h2m2 0h2m3 0h2m1 0h2m-27 1h1m3 0h2m3 0h3m2 0h4m1 0h1m1 0h2m-24 1h1m2 0h3m1 0h2m2 0h1m6 0h5m1 0h2m-25 1h3m2 0h4m3 0h2m1 0h1m3 0h1m1 0h2m4 0h1m-28 1h1m1 0h1m1 0h1m1 0h1m2 0h1m2 0h1m1 0h5m2 0h3m2 0h2m-29 1h2m4 0h3m4 0h3m2 0h1m5 0h3m-27 1h1m3 0h2m1 0h1m1 0h1m1 0h1m1 0h3m4 0h1m1 0h1m1 0h1m1 0h1m1 0h1m-28 1h1m1 0h4m2 0h1m1 0h1m2 0h4m2 0h1m2 0h1m1 0h2m-27 1h3m2 0h1m2 0h1m3 0h1m2 0h2m2 0h2m1 0h3m1 0h3m-29 1h3m1 0h3m2 0h3m1 0h3m1 0h1m1 0h2m1 0h1m2 0h1m2 0h1m-29 1h1m2 0h1m3 0h1m1 0h1m4 0h3m1 0h1m2 0h1m1 0h1m-24 1h1m4 0h3m8 0h2m2 0h5m1 0h3m-21 1h3m1 0h2m1 0h6m3 0h2m-26 1h7m2 0h3m1 0h4m1 0h3m1 0h1m1 0h3m-27 1h1m5 0h1m2 0h2m2 0h1m1 0h1m3 0h2m3 0h1m3 0h1m-29 1h1m1 0h3m1 0h1m2 0h5m1 0h1m3 0h7m2 0h1m-29 1h1m1 0h3m1 0h1m3 0h3m2 0h5m5 0h2m1 0h1m-29 1h1m1 0h3m1 0h1m7 0h2m1 0h1m3 0h7m-28 1h1m5 0h1m2 0h2m2 0h1m1 0h1m5 0h1m2 0h3m1 0h1m-29 1h7m1 0h2m2 0h3m2 0h1m1 0h1m1 0h2m1 0h3"/></svg><span><em>or</em> scan this QR code</span></div>
+                  <div><svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="square"><path d="M10 4H4v16h16v-6"/><path d="M14 4h6v6"/><path d="M20 4 11 13"/></svg><span><em>or</em> visit popcode.app/exhibitions</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="plac-copy">
+            <p class="eyebrow">The entrance card</p>
+            <h2 id="plac-h">One card by the door. Nothing beside the work.</h2>
+            <p>A small placard at the entrance carries your show's title and three ways into the tour. It's the only code in the room.</p>
+            <ol class="ways">
+              <li><strong>Tap.</strong><p>An NFC tag inside the card opens the tour. iPhone XS and later and most Android phones read it with no app.</p></li>
+              <li><strong>Or the small QR code.</strong><p>For phones without NFC, or visitors who'd rather use the camera.</p></li>
+              <li><strong>Or the short address.</strong><p>Printed under the code, like <em>popcode.app/yourshow</em>, or your own web address.</p></li>
+            </ol>
+            <p class="promise"><b>Locked tags.</b> Every NFC tag is write-protected after it's set up, so nobody can point it somewhere else.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pricing -->
+      <section id="pricing" aria-labelledby="price-h">
+        <div class="wrap">
+          <div class="sec-head"><h2 id="price-h">Pricing</h2><p>Per exhibition, or as an annual licence. You bring the works; we build the tour with you and have it ready for the opening.</p></div>
+          <p class="pilot-line"><b>Pilot pricing:</b> for the first galleries and museums that sign up this season, in exchange for sharing your results and feedback.</p>
+          <div class="kits">
+            <div class="kit">
+              <h3>Single show</h3>
+              <p class="from">Pilot price</p>
+              <p class="cost">$1,200 <span class="per">per exhibition</span></p>
+              <p class="for">For a gallery show, an art fair booth, or open studios.</p>
+              <ul>
+                <li>Up to 30 works, each with its own audio stop</li>
+                <li>A transcript for every stop</li>
+                <li>Your buttons after every stop: inquire, join, give, visit</li>
+                <li>Your name, show title and image on the tour</li>
+                <li>Your entrance card, with a locked NFC tag, a QR code and a short address</li>
+                <li>A dashboard for the run of the show</li>
+              </ul>
+              <a class="btn btn-secondary book-demo" href="#">Book a demo</a>
+            </div>
+            <div class="kit feature">
+              <span class="tag">For galleries</span>
+              <h3>Gallery year</h3>
+              <p class="from">Pilot price</p>
+              <p class="cost">$3,900 <span class="per">per year</span></p>
+              <p class="for">For galleries with 6 to 10 shows a year.</p>
+              <ul>
+                <li><strong>Everything in Single show, for every show that year</strong></li>
+                <li>Each new show built and tested in time for its opening</li>
+                <li>A dashboard for each show, so you can compare them</li>
+              </ul>
+              <a class="btn btn-primary book-demo" href="#">Book a demo</a>
+            </div>
+            <div class="kit">
+              <h3>Museum year</h3>
+              <p class="from">Pilot price</p>
+              <p class="cost">$7,500 <span class="per">per year</span></p>
+              <p class="for">For small and mid-size museums.</p>
+              <ul>
+                <li><strong>Everything in Gallery year</strong></li>
+                <li>Rotating exhibitions and your permanent collection</li>
+                <li>Membership, donate and plan-a-visit buttons</li>
+                <li>A report for your board after each exhibition</li>
+              </ul>
+              <a class="btn btn-secondary book-demo" href="#">Book a demo</a>
+            </div>
+          </div>
+          <p class="kits-note">No audio yet? Scripts and a natural AI voice from $400 per 10 stops, or a recording session quoted separately.<br>Optional: gift-shop prints and postcards that play the audio at home, from the Popcode shop.</p>
+        </div>
+      </section>
+
+      <!-- FAQ -->
+      <section id="faq" aria-labelledby="faq-h" style="background:#fff; border-top:1px solid var(--line);">
+        <div class="wrap">
+          <div class="sec-head"><h2 id="faq-h">Questions</h2></div>
+          <div class="faq">
+            <div class="faq-item"><h3><button class="faq-q" type="button" aria-expanded="false">Which phones work?<span class="pm" aria-hidden="true"></span></button></h3>
+              <div class="faq-a" hidden><p>Any recent iPhone or Android phone with a camera, in its own browser. There's no app to install. To open the tour with a tap, iPhone XS and later and most Android phones read the NFC card; anyone else can use the QR code or type the short address.</p></div></div>
+            <div class="faq-item"><h3><button class="faq-q" type="button" aria-expanded="false">What if a visitor has no headphones?<span class="pm" aria-hidden="true"></span></button></h3>
+              <div class="faq-a" hidden><p>They can read along. Every stop can carry its transcript, shown right under the player, so the story is there in text too. That also serves visitors who are deaf or hard of hearing.</p></div></div>
+            <div class="faq-item"><h3><button class="faq-q" type="button" aria-expanded="false">What about sculpture and 3D objects?<span class="pm" aria-hidden="true"></span></button></h3>
+              <div class="faq-a" hidden><p>Popcode recognizes flat work: paintings, photographs, prints, drawings, and textiles. For sculpture and other objects, a browse list where visitors choose a stop by its title is coming. It will also let anyone who can't use the camera pick a stop. Tell us what's in your show and we'll talk it through on the call.</p></div></div>
+            <div class="faq-item"><h3><button class="faq-q" type="button" aria-expanded="false">What if there's no signal in the basement gallery?<span class="pm" aria-hidden="true"></span></button></h3>
+              <div class="faq-a" hidden><p>Today each stop loads when it plays, so visitors need a phone signal or your guest Wi-Fi. We'll check any dead spots with you before the show opens. Loading the whole tour at the entrance tap, while there's still signal, is coming.</p></div></div>
+            <div class="faq-item"><h3><button class="faq-q" type="button" aria-expanded="false">Who records the audio?<span class="pm" aria-hidden="true"></span></button></h3>
+              <div class="faq-a" hidden><p>Whoever knows the work best: you, your curator, or the artist. Record straight into Popcode on a phone, or upload an MP3 or other audio file. If nobody wants to be the voice, we can make a natural-sounding AI voice from your script.</p></div></div>
+            <div class="faq-item"><h3><button class="faq-q" type="button" aria-expanded="false">Do visitors need an app or an account?<span class="pm" aria-hidden="true"></span></button></h3>
+              <div class="faq-a" hidden><p>No. The tour opens in the phone's web browser. There's nothing to download, no account to create, and no password to remember.</p></div></div>
+            <div class="faq-item"><h3><button class="faq-q" type="button" aria-expanded="false">Do you collect visitor data?<span class="pm" aria-hidden="true"></span></button></h3>
+              <div class="faq-a" hidden><p>No personal data. We count scans, how much of each stop was heard, and button taps, all anonymously. If a visitor taps &ldquo;Inquire about this work&rdquo;, they land on your own page or email, so the conversation is yours.</p></div></div>
+            <div class="faq-item"><h3><button class="faq-q" type="button" aria-expanded="false">How fast can we go live?<span class="pm" aria-hidden="true"></span></button></h3>
+              <div class="faq-a" hidden><p>Quickly enough for a program that changes every month. Once we have photos of the works and the audio, we build the tour, test it on real phones, and have it ready before the opening. If you'd like help with scripts or a recorded voice, or need the entrance card printed, we'll plan the schedule back from your opening date.</p></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Final call -->
+      <section style="background:#fff; padding-top:0;">
+        <div class="wrap">
+          <div class="closer">
+            <h2><span class="l">Your next opening</span> <span class="l">could have a tour.</span></h2>
+            <a class="btn btn-lg btn-on-grad book-demo" href="#">Book a demo</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        <div class="foot-top">
+          <div>
+            <a href="/"><img src="/assets/Popcode_logo.png" alt="Popcode" width="113" height="30"></a>
+            <p class="foot-tag">Make anything play.</p>
+          </div>
+        </div>
+        <div class="foot-base">
+          <span>© <span id="yr">2026</span> Popcode</span>
+          <a href="/terms.html">Terms</a>
+          <a href="/privacy.html">Privacy</a>
+          <a href="https://www.instagram.com/popcodeapp/" rel="me noopener" target="_blank">Instagram</a>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      // ── Config: the values this page needs filled in. ─────────────────────
+      var CONFIG = {
+        // The tours/galleries booking page, as on the home and pricing pages.
+        BOOKING_URL: 'https://calendly.com/curt-popcodeapp/popcode-tours',
+        // PLACEHOLDER: the hero phone's audio stop. Empty for now, so the phone
+        // plays its stop silently (progress and transcript only) and the
+        // "Play with sound" button stays hidden. Set it to a recorded stop (an
+        // MP3 under /assets/) and the button appears and plays it.
+        DEMO_AUDIO: ''
+      };
+      var FALLBACK_BOOKING = 'mailto:hello@popcodeapp.com?subject=' +
+        encodeURIComponent('Popcode for Exhibitions — demo');
+
+      document.getElementById('yr').textContent = new Date().getFullYear();
+
+      // ── UTMs: as /nonprofits, kept for the visit and passed to the booking page.
+      var utms = (function () {
+        var out = {}, params = new URLSearchParams(location.search), found = false;
+        params.forEach(function (v, k) { if (/^utm_/.test(k) && v) { out[k] = v; found = true; } });
+        try {
+          if (found) sessionStorage.setItem('exh_utms', JSON.stringify(out));
+          else out = JSON.parse(sessionStorage.getItem('exh_utms') || '{}');
+        } catch (e) {}
+        return out;
+      })();
+      function withUtms(url) {
+        try {
+          var u = new URL(url);
+          Object.keys(utms).forEach(function (k) { if (!u.searchParams.has(k)) u.searchParams.set(k, utms[k]); });
+          return u.toString();
+        } catch (e) { return url; }
+      }
+      function logEvent(type) {
+        try {
+          var ua = navigator.userAgent || '';
+          fetch('/api/log-event', {
+            method: 'POST', keepalive: true,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              event_type: type,
+              device_type: /iPad|iPhone|iPod/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : 'Desktop',
+              user_agent: ua
+            })
+          }).catch(function () {});
+        } catch (e) {}
+      }
+      document.querySelectorAll('.book-demo').forEach(function (a) {
+        a.href = CONFIG.BOOKING_URL ? withUtms(CONFIG.BOOKING_URL) : FALLBACK_BOOKING;
+        if (CONFIG.BOOKING_URL) { a.target = '_blank'; a.rel = 'noopener'; }
+        a.addEventListener('click', function () { logEvent('exh_book_demo_click'); });   // never blocks the navigation
+      });
+
+      // ── FAQ ──
+      document.querySelectorAll('.faq-q').forEach(function (btn, i) {
+        var panel = btn.closest('.faq-item').querySelector('.faq-a');
+        panel.id = 'faq-a-' + i;
+        btn.setAttribute('aria-controls', panel.id);
+        btn.addEventListener('click', function () {
+          var open = btn.getAttribute('aria-expanded') === 'true';
+          btn.setAttribute('aria-expanded', String(!open));
+          panel.hidden = open;
+        });
+      });
+
+      // ── Header: mark the section you're in. ──
+      (function () {
+        var links = [].slice.call(document.querySelectorAll('.lp-links a'));
+        if (!links.length || !('IntersectionObserver' in window)) return;
+        var byId = {}; links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) {
+            if (!e.isIntersecting) return;
+            links.forEach(function (a) { a.classList.toggle('on', a === byId[e.target.id]); });
+          });
+        }, { rootMargin: '-45% 0px -50% 0px' });
+        Object.keys(byId).forEach(function (id) { var el = document.getElementById(id); if (el) io.observe(el); });
+      })();
+
+      // ── Dashboard: counts up and the bars fill when it scrolls in, then
+      // again every few seconds while it's on screen. The finished numbers
+      // are in the HTML, so no JS or reduced motion shows the final card. ──
+      (function () {
+        var dash = document.querySelector('.dash');
+        if (!dash || !('IntersectionObserver' in window)) return;
+        if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        dash.querySelectorAll('.works .fill').forEach(function (f, n) { f.style.setProperty('--i', n); });
+        var vals = [].map.call(dash.querySelectorAll('.kpi .v'), function (el) {
+          var m = el.textContent.match(/^(\D*)([\d,]+)(\D*)$/);
+          return m ? { el: el, pre: m[1], n: Number(m[2].replace(/,/g, '')), post: m[3], text: el.textContent } : null;
+        }).filter(Boolean);
+        var fmt = function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
+        dash.classList.add('dash-armed');
+        vals.forEach(function (v) { v.el.textContent = v.pre + '0' + v.post; });
+        var PLAY_MS = 2400, HOLD_MS = 4000, timer = null, raf = null;
+        function play() {
+          cancelAnimationFrame(raf);
+          dash.classList.remove('dash-play');
+          vals.forEach(function (v) { v.el.textContent = v.pre + '0' + v.post; });
+          void dash.offsetWidth;
+          dash.classList.add('dash-play');
+          var t0 = performance.now(), dur = 1400;
+          (function tick(now) {
+            var k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+            vals.forEach(function (v) { v.el.textContent = k < 1 ? v.pre + fmt(Math.round(v.n * e)) + v.post : v.text; });
+            if (k < 1) raf = requestAnimationFrame(tick);
+          })(t0);
+          timer = setTimeout(play, PLAY_MS + HOLD_MS);
+        }
+        var io = new IntersectionObserver(function (entries) {
+          if (entries[0].isIntersecting) { if (!timer) play(); }
+          else { clearTimeout(timer); timer = null; }
+        }, { threshold: 0.35 });
+        io.observe(dash);
+      })();
+
+      // ── The hero phone: the gallery's start screen, then one audio stop
+      // with its transcript scrolling, then the gallery's buttons, and round
+      // again. Silent: the progress runs on a clock. With CONFIG.DEMO_AUDIO
+      // set, "Play with sound" plays the real stop and the progress follows it.
+      // Reduced motion: the start screen stays until the button is pressed
+      // (or, with no audio, the stop is shown still). ──
+      (function () {
+        var phone = document.getElementById('phone');
+        var fill = document.getElementById('pa-fill'), time = document.getElementById('pa-time'), left = document.getElementById('pa-left');
+        var tr = document.getElementById('pa-transcript'), chip = document.getElementById('pa-chip-fill');
+        // Each word of the transcript in its own span, so the text can come
+        // in as it's read (each word's share of the stop is its length).
+        var words = [], wordEnds = [], chars = 0;
+        [].forEach.call(tr.querySelectorAll('p'), function (p) {
+          var parts = p.textContent.trim().split(/\s+/);
+          p.textContent = '';
+          parts.forEach(function (w, n) {
+            var span = document.createElement('span'); span.className = 'w'; span.textContent = w;
+            if (n) p.appendChild(document.createTextNode(' '));
+            p.appendChild(span); words.push(span); chars += w.length + 1; wordEnds.push(chars);
+          });
+        });
+        var lit = 0;
+        function reveal(frac) {
+          var n = 0;
+          while (n < words.length && wordEnds[n] / chars <= frac + 0.004) n++;
+          if (frac > 0 && n === 0) n = 1;
+          if (n === lit) return;
+          for (var k = 0; k < words.length; k++) words[k].classList.toggle('on', k < n);
+          lit = n;
+          // Keep the newest line in view.
+          var last = words[Math.max(0, n - 1)];
+          var bottom = last.offsetTop + last.offsetHeight - tr.offsetTop;
+          tr.scrollTop = Math.max(0, bottom - tr.clientHeight + 16);
+        }
+        var audio = document.getElementById('demo-audio'), btn = document.getElementById('sound-btn');
+        if (!phone) return;
+        var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var DUR = 47, CLOCK_MS = 11000;     // the sample stop's length, and how long the silent loop shows it
+        var timer = null, raf = null, withSound = false;
+        var fmt = function (s) { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ':' + ('0' + s % 60).slice(-2); };
+        function show(frac, dur) {
+          fill.style.width = (frac * 100).toFixed(2) + '%';
+          time.textContent = fmt(frac * dur); left.textContent = '-' + fmt(dur - frac * dur);
+          reveal(frac);
+          chip.style.width = fill.style.width;
+        }
+        function ended() {
+          cancelAnimationFrame(raf);
+          phone.classList.remove('playing'); phone.classList.add('ended');
+          if (withSound) { withSound = false; btn.textContent = 'Play with sound'; }
+          clearTimeout(timer);
+          timer = setTimeout(function () { home(reduce ? 0 : 2400); }, 6500);
+        }
+        function home(after) {
+          phone.classList.remove('playing', 'ended');
+          show(0, DUR);
+          clearTimeout(timer);
+          if (after) timer = setTimeout(playSilent, after);
+        }
+        function playSilent() {
+          phone.classList.remove('ended'); phone.classList.add('playing');
+          var t0 = performance.now();
+          (function tick(now) {
+            var k = Math.min(1, (now - t0) / CLOCK_MS);
+            show(k, DUR);
+            if (k < 1) raf = requestAnimationFrame(tick); else ended();
+          })(t0);
+        }
+        if (CONFIG.DEMO_AUDIO && audio && btn) {
+          btn.hidden = false;
+          audio.addEventListener('timeupdate', function () {
+            if (withSound && audio.duration) show(audio.currentTime / audio.duration, audio.duration);
+          });
+          audio.addEventListener('ended', function () { if (withSound) ended(); });
+          btn.addEventListener('click', function () {
+            if (withSound) { audio.pause(); withSound = false; btn.textContent = 'Play with sound'; home(reduce ? 0 : 1500); return; }
+            clearTimeout(timer); cancelAnimationFrame(raf);
+            if (!audio.getAttribute('src')) audio.src = CONFIG.DEMO_AUDIO;
+            audio.currentTime = 0;
+            withSound = true; btn.textContent = 'Stop';
+            phone.classList.remove('ended'); phone.classList.add('playing');
+            audio.play().catch(function () { withSound = false; btn.textContent = 'Play with sound'; home(1500); });
+          });
+        }
+        if (reduce) { if (!CONFIG.DEMO_AUDIO) { phone.classList.add('playing'); show(0.35, DUR); } return; }
+        if (!('IntersectionObserver' in window)) { timer = setTimeout(playSilent, 1800); return; }
+        var io = new IntersectionObserver(function (entries) {
+          if (!entries[0].isIntersecting) return;
+          io.disconnect();
+          timer = setTimeout(playSilent, 1800);
+        });
+        io.observe(phone);
+      })();
+    </script>
+    <!-- How it works: tap, scan, listen, buttons; then hold and loop. -->
+    <script>
+      (function () {
+        var steps = document.getElementById('steps');
+        if (!steps) return;
+        var states = ['tapping', 'tapped', 'opened', 'scanning', 'found', 'playing', 'cta1', 'cta2', 'cta3'];
+        if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) { steps.classList.add('tapping', 'opened', 'playing', 'cta1', 'cta2', 'cta3'); return; }
+        var timers = [];
+        function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
+        function run() {
+          timers.forEach(clearTimeout); timers = [];
+          states.forEach(function (c) { steps.classList.remove(c); });
+          at(400, function () { steps.classList.add('tapping'); });
+          at(1500, function () { steps.classList.add('tapped'); });
+          at(2700, function () { steps.classList.add('opened'); });
+          at(3800, function () { steps.classList.add('scanning'); });
+          at(6000, function () { steps.classList.add('found'); });
+          at(6700, function () { steps.classList.remove('scanning'); steps.classList.add('playing'); });
+          at(11300, function () { steps.classList.add('cta1'); });
+          at(11900, function () { steps.classList.add('cta2'); });
+          at(12500, function () { steps.classList.add('cta3'); });
+          at(16500, run);
+        }
+        if (!('IntersectionObserver' in window)) { run(); return; }
+        var started = false;
+        new IntersectionObserver(function (entries) {
+          if (entries[0].isIntersecting && !started) { started = true; run(); }
+        }, { threshold: 0.2 }).observe(steps);
+      })();
+    </script>
+    <!-- Layout tweaker: popcode.app/exhibitions?tweak (the /nonprofits panel,
+         adapted: the framed work and its wall label in place of the postcard). Drag anything in the hero,
+         or use the sliders, then Copy and paste the values to Claude. Never
+         loads for a normal visit. -->
+    <script>
+      (function () {
+        if (!/[?&]tweak\b/.test(location.search)) return;
+        var $ = function (q) { return document.querySelector(q); };
+        var num = function (el, prop) { return parseFloat(getComputedStyle(el)[prop]) || 0; };
+        var card = $('.art'), label = $('.wall-label'), phone = $('#phone'), sound = $('#sound-btn');
+
+        // Things in the page flow: moved with `translate`, so nothing around them reflows.
+        var movers = [
+          { k: 'copy', label: 'Whole text column', el: $('.hero-copy'), css: '.hero-copy' },
+          { k: 'eyebrow', label: 'Eyebrow', el: $('.ex-hero .eyebrow'), css: '.ex-hero .eyebrow', size: [9, 28, 0.5] },
+          { k: 'h1', label: 'Headline', el: $('.ex-hero h1'), css: '.ex-hero h1', size: [28, 110, 1] },
+          { k: 'sub', label: 'Subhead', el: $('.hero-sub'), css: '.hero-sub', size: [12, 24, 0.5] },
+          { k: 'btns', label: 'Buttons (both)', el: $('.hero-actions'), css: '.hero-actions' },
+          { k: 'btn1', label: 'Book a demo button', el: $('.hero-actions .book-demo'), css: '.hero-actions .book-demo' },
+          { k: 'btn2', label: 'See how it works button', el: $('.hero-actions .btn-ghost-light'), css: '.hero-actions .btn-ghost-light' }
+        ].filter(function (m) { return m.el; });
+
+        var v = {
+          cardRight: num(card, 'right'), cardTop: num(card, 'top'), cardWidth: num(card, 'width'),
+          labelRight: num(label, 'right'), labelTop: num(label, 'top'),
+          phoneLeft: num(phone, 'left'), phoneTop: num(phone, 'top'), phoneScale: 1,
+          soundRight: sound ? num(sound, 'right') : 0, soundTop: sound ? num(sound, 'top') : 0,
+          heroTop: num($('.ex-hero'), 'paddingTop'), heroBottom: num($('.ex-hero'), 'paddingBottom'), stageH: num($('#hero-stage'), 'height')
+        };
+        movers.forEach(function (m) { v[m.k + 'X'] = 0; v[m.k + 'Y'] = 0; if (m.size) v[m.k + 'Size'] = num(m.el, 'fontSize'); });
+
+        var controls = [];
+        movers.forEach(function (m) {
+          controls.push([m.label, null]);
+          controls.push([m.k + 'X', 'Left/right', -400, 700, 1], [m.k + 'Y', 'Up/down', -300, 400, 1]);
+          if (m.size) controls.push([m.k + 'Size', 'Size', m.size[0], m.size[1], m.size[2]]);
+        });
+        controls.push(
+          ['Framed work', null],
+          ['cardRight', 'Right edge', -400, 300, 1], ['cardTop', 'Top', -200, 500, 1],
+          ['cardWidth', 'Width', 150, 700, 1],
+          ['Wall label', null],
+          ['labelRight', 'Right edge', -200, 600, 1], ['labelTop', 'Top', 0, 800, 1],
+          ['Phone', null],
+          ['phoneLeft', 'Left', -300, 600, 1], ['phoneTop', 'Top', -100, 700, 1], ['phoneScale', 'Scale', 0.5, 1.6, 0.01]);
+        if (sound) controls.push(['Play with sound button', null], ['soundRight', 'Right edge', -200, 600, 1], ['soundTop', 'Top', 0, 900, 1]);
+        controls.push(['Hero height', null],
+          ['heroTop', 'Space above', 0, 200, 1], ['stageH', 'Middle', 300, 800, 1], ['heroBottom', 'Space below', 100, 600, 1]);
+
+        function apply() {
+          card.style.right = v.cardRight + 'px'; card.style.top = v.cardTop + 'px';
+          card.style.width = v.cardWidth + 'px';
+          label.style.right = v.labelRight + 'px'; label.style.top = v.labelTop + 'px';
+          phone.style.left = v.phoneLeft + 'px'; phone.style.top = v.phoneTop + 'px';
+          phone.style.transformOrigin = 'top left'; phone.style.transform = v.phoneScale === 1 ? '' : 'scale(' + v.phoneScale + ')';
+          if (sound) { sound.style.right = v.soundRight + 'px'; sound.style.top = v.soundTop + 'px'; }
+          $('.ex-hero').style.paddingTop = v.heroTop + 'px'; $('.ex-hero').style.paddingBottom = v.heroBottom + 'px';
+          $('#hero-stage').style.height = v.stageH + 'px';
+          movers.forEach(function (m) {
+            m.el.style.translate = v[m.k + 'X'] + 'px ' + v[m.k + 'Y'] + 'px';
+            if (m.size) m.el.style.fontSize = v[m.k + 'Size'] + 'px';
+          });
+          controls.forEach(function (c) {
+            if (!c[1]) return;
+            var r = panel.querySelector('[data-k="' + c[0] + '"]'); r.value = v[c[0]];
+            r.nextElementSibling.textContent = v[c[0]];
+          });
+          readout.textContent = 'Hero is ' + Math.round($('.ex-hero').getBoundingClientRect().height) + 'px tall';
+          out.value = css();
+        }
+        function css() {
+          var w = innerWidth, bp = w > 1100 ? 'desktop (wider than 1100px)' : w > 900 ? '901–1100px' : w > 640 ? '641–900px' : 'phone (640px and under)';
+          var lines = ['/* exhibitions hero, ' + bp + ', viewed at ' + w + 'px */',
+            '.ex-hero { padding-top: ' + v.heroTop + 'px; padding-bottom: ' + v.heroBottom + 'px; }  .stage { height: ' + v.stageH + 'px; }',
+            '.art { right: ' + v.cardRight + 'px; top: ' + v.cardTop + 'px; width: ' + v.cardWidth + 'px; }',
+            '.wall-label { right: ' + v.labelRight + 'px; top: ' + v.labelTop + 'px; }',
+            '.phone { left: ' + v.phoneLeft + 'px; top: ' + v.phoneTop + 'px;' + (v.phoneScale !== 1 ? ' scale: ' + v.phoneScale + ';' : '') + ' }'];
+          if (sound) lines.push('.sound-btn { right: ' + v.soundRight + 'px; top: ' + v.soundTop + 'px; }');
+          movers.forEach(function (m) {
+            var moved = v[m.k + 'X'] || v[m.k + 'Y'], sized = m.size && v[m.k + 'Size'] !== start[m.k + 'Size'];
+            if (!moved && !sized) return;
+            lines.push(m.css + ' {' + (sized ? ' font-size: ' + v[m.k + 'Size'] + 'px;' : '') + (moved ? ' translate: ' + v[m.k + 'X'] + 'px ' + v[m.k + 'Y'] + 'px;' : '') + ' }');
+          });
+          return lines.join('\n');
+        }
+
+        var panel = document.createElement('div');
+        panel.style.cssText = 'position:fixed;z-index:9999;right:16px;bottom:16px;width:290px;max-height:calc(100vh - 32px);overflow:auto;' +
+          'background:#fff;color:#1a1a1a;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.35);padding:14px 16px;font:13px/1.3 system-ui,sans-serif;';
+        var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>Hero tweaker</b>' +
+          '<button data-act="min" style="border:none;background:none;font-size:18px;cursor:pointer">–</button></div><div data-body>' +
+          '<div style="color:#666;margin-bottom:4px">Drag anything in the hero, or use the sliders. Hold Shift to drag a button\'s pair, or the whole text column. Buttons don\'t click while this is open.</div>' +
+          '<div data-readout style="font-weight:600;margin-bottom:6px"></div>';
+        controls.forEach(function (c) {
+          if (!c[1]) { html += '<div style="font-weight:700;margin:10px 0 4px">' + c[0] + '</div>'; return; }
+          html += '<label style="display:grid;grid-template-columns:74px 1fr 44px;gap:6px;align-items:center;margin:3px 0">' + c[1] +
+            '<input type="range" data-k="' + c[0] + '" min="' + c[2] + '" max="' + c[3] + '" step="' + c[4] + '"><span style="text-align:right;font-variant-numeric:tabular-nums"></span></label>';
+        });
+        html += '<textarea readonly rows="8" style="width:100%;margin-top:10px;font:11px/1.35 ui-monospace,monospace;border:1px solid #ddd;border-radius:6px;padding:6px;box-sizing:border-box;resize:vertical"></textarea>' +
+          '<div style="display:flex;gap:8px;margin-top:8px"><button data-act="copy" style="flex:1;padding:8px;border:none;border-radius:8px;background:#1a1a1a;color:#fff;font-weight:600;cursor:pointer">Copy values</button>' +
+          '<button data-act="reset" style="padding:8px 12px;border:1px solid #ccc;border-radius:8px;background:#fff;cursor:pointer">Reset</button></div></div>';
+        panel.innerHTML = html;
+        document.body.appendChild(panel);
+        var out = panel.querySelector('textarea'), readout = panel.querySelector('[data-readout]'), start = JSON.parse(JSON.stringify(v));
+        panel.addEventListener('input', function (e) {
+          var k = e.target.getAttribute('data-k'); if (!k) return;
+          v[k] = parseFloat(e.target.value); apply();
+        });
+        panel.addEventListener('click', function (e) {
+          var a = e.target.getAttribute('data-act');
+          if (a === 'copy') {
+            out.select();
+            (navigator.clipboard ? navigator.clipboard.writeText(out.value) : Promise.reject()).catch(function () { document.execCommand('copy'); });
+            e.target.textContent = 'Copied'; setTimeout(function () { e.target.textContent = 'Copy values'; }, 1200);
+          } else if (a === 'reset') { v = JSON.parse(JSON.stringify(start)); apply(); }
+          else if (a === 'min') { var b = panel.querySelector('[data-body]'); b.hidden = !b.hidden; e.target.textContent = b.hidden ? '+' : '–'; }
+        });
+
+        // Dragging. The thing under the pointer moves: a button, the headline.
+        // With Shift held, its group moves instead: both buttons, or the
+        // whole text column.
+        function draggable(el, onMove, isParent) {
+          el.style.cursor = 'grab'; el.style.touchAction = 'none';
+          el.addEventListener('pointerdown', function (e) {
+            if (e.button) return;
+            if (isParent && !e.shiftKey && e.target !== el) return;
+            if (el === copyEl && e.shiftKey && e.target.closest('.hero-actions')) return;  // Shift on a button: the buttons
+            e.preventDefault(); e.stopPropagation();
+            el.setPointerCapture(e.pointerId); el.style.cursor = 'grabbing';
+            var x0 = e.clientX, y0 = e.clientY, s = JSON.parse(JSON.stringify(v));
+            function move(ev) { onMove(s, ev.clientX - x0, ev.clientY - y0); apply(); }
+            function up() { el.style.cursor = 'grab'; el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); }
+            el.addEventListener('pointermove', move); el.addEventListener('pointerup', up);
+          }, isParent);
+          el.addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); }, true);
+        }
+        var copyEl = $('.hero-copy');
+        movers.forEach(function (m) {
+          draggable(m.el, function (s, dx, dy) { v[m.k + 'X'] = Math.round(s[m.k + 'X'] + dx); v[m.k + 'Y'] = Math.round(s[m.k + 'Y'] + dy); },
+                    m.k === 'copy' || m.k === 'btns');
+        });
+        draggable(card, function (s, dx, dy) { v.cardRight = Math.round(s.cardRight - dx); v.cardTop = Math.round(s.cardTop + dy); });
+        draggable(label, function (s, dx, dy) { v.labelRight = Math.round(s.labelRight - dx); v.labelTop = Math.round(s.labelTop + dy); });
+        draggable(phone, function (s, dx, dy) { v.phoneLeft = Math.round(s.phoneLeft + dx); v.phoneTop = Math.round(s.phoneTop + dy); });
+        if (sound) draggable(sound, function (s, dx, dy) { v.soundRight = Math.round(s.soundRight - dx); v.soundTop = Math.round(s.soundTop + dy); });
+        document.querySelectorAll('.ex-hero img, .ex-hero a').forEach(function (i) { i.draggable = false; });
+        apply();
+      })();
+    </script>
+  </body>
+</html>
