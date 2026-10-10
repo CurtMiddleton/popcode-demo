@@ -6,7 +6,7 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-06)
+## Current state (updated 2026-10-10)
 
 **Live and recent**
 - **Content rules + admin moderation** (PR #177, merged and live 2026-10-06; migration
@@ -234,6 +234,11 @@ happened and what's open. (Session history moved here from CLAUDE.md on
       frames, tying an anonymous viewer to an identity they didn't give, or
       showing nonprofits per-donor data. Consider a retention rule (raw events
       ~2 years, aggregates forever).
+12. **Print vendor switch — in progress (see 2026-10-10 entry).** User is
+    unhappy with Prodigi/Printify sample quality and packaging. Plan: WHCC for
+    prints / wall art / layflat books (account + samples first); waiting on Bay
+    Photo; Alexanders still to contact; Prodigi stays for merch (keeps the
+    postcard insert). Soft target to move prints/books: mid-November, else January.
 
 ## Session history
 
@@ -3473,3 +3478,43 @@ Prompted by a creator uploading what the user called soft porn. Finding: **the o
 **Lessons**
 - Made the `pkill -f` mistake from the entry above **again** — the lesson didn't stick. Stop a test server some other way (save its PID, or `fuser -k 8765/tcp`), never `pkill -f` with a pattern that's in the same command.
 - The user merges by asking ("open the PR and merge it") — check the Vercel commit status is `success` on the PR head first; a preview build takes ~1 minute.
+
+### 2026-10-08 → 10-10 — Print vendor research: replacing Prodigi / Printify
+
+No code changed, no PRs. Prompted by the user's samples: only the Printify board book was decent; packaging from both was "unbranded, cheap, unprofessional" (the Printify ceramic ornament came in a taped generic yellow mailer). Product routing today is `lib/print/catalog.mjs` (`boardbook` and `ornament` → printify, everything else Prodigi), so adding a vendor means a new provider adapter plus SKU mappings, not a rewrite.
+
+**Pic-Time** (the user found it): not usable. It's a photographer gallery platform; its print store only takes orders through its own galleries. There's no public API, only Zapier triggers.
+
+**WHCC — replied 2026-10-09** (Jed Taufer, Strategic Projects, jed@whcc.com, 309-369-7108; the first email went to hello@whcc.com):
+- Order Submit API (docs at developer.whcc.com/docs). Consumer brands are fine; no fee, no minimum, no approval. Next steps: open an account at whcc.com/create-account → Jed requests sandbox credentials → production credentials once a card is on file.
+- Drop ship is blind (no WHCC name or prices) and plain, with our return address. **No logo, and no printed insert until "real volume."** So moving a product to WHCC loses the postcard insert. Premium packaging is $5.50 on some products (prints up to 11×14).
+- **$7.95 drop-ship fee per order *per production department*.** A print + a book is two orders, two fees, two packages. The checkout must split the cart by category before submitting. Volume pricing is case by case.
+- US and Canada at flat rates; elsewhere at actual postage, and the recipient pays duties.
+- Layflat books: square 6/8/10/12; horizontal or vertical 5×7, 8×10, 9×12, 11×14. No A4 — use 10×8 or 12×9 horizontal instead. Cards are 5×7 only through the API. Magnets and metal ornaments: Jed is confirming.
+- Samples can be ordered on whcc.com and drop-shipped to yourself before any integration.
+- **Reply drafted, not yet sent:** mid-November target (else January); asks whether a 5×7 card added to a print order ships in the same package, how layflat books ship, what volume unlocks logo/insert, and about magnets/ornaments. The user still needs to fill in call times and open the account.
+
+**Bay Photo** — emailed baybizdev@bayphoto.com ~2026-10-08, no reply yet. If still nothing by about 10/14: call (800) 435-6686 or send the follow-up nudge. The Order API (with test orders and webhooks) needs fulfillment-partner approval. Packaging is the best of the pro labs: Boutique Packaging, a 5×7 gift note, a branded box sticker. Book line that matches ours: **Sunrise Albums** (photo-paper layflat, 5–53 spreads; 8×8 from $58.65 and 12×12 from $74.20 at 5 spreads). WHCC's 8×8 starts at $90 for 10 spreads, so compare at equal page counts.
+
+**Printful — ruled out** (via their support chat bot). Inserts aren't supported for mugs, stickers, magnets or home decor. Its wooden ornament ships in a white envelope. All it adds is a logo packing slip, and backup facilities may drop that. Note: Printful's "inserts" are your own stock, stored for at least $25/month — not $0.50 each as I first said.
+
+**Second sweep** (other print-on-demand vendors and labs):
+- **Worth contacting:**
+  - **Alexanders** (Utah; prints Chatbooks' books). Custom API built per client; white-label packaging that you supply or they make. The best bet for logo plus insert, and the most likely source of real board books and calendars. **Next to email.**
+  - **Dreamship**: the only boxed ornament with an API. $2.50 white or gold gift box (holds 2), still shipped in an envelope, no branding.
+  - **District Photo**: private-label plant with a partner API; worth one email.
+- **Ruled out:**
+  - Artifact Uprising and Chatbooks: no API.
+  - Shutterfly, Snapfish, Walgreens, Kodak and Fujifilm: no current API, or store pickup only.
+  - ProDPI, Richmond Pro Lab, H&H, Black River, Dwayne's: orders only through gallery platforms.
+  - Teelaunch, CustomCat, Printed Mint, ShineOn: Printify tier.
+  - Mpix: API only via Order Desk, unconfirmed.
+  - Lumaprints and Artelo: wall art only.
+  - Gelato, Gooten, Peecho (which is Prodigi underneath): no upgrade.
+- **Gaps:** no API vendor makes real 6×6 board books (Printify's stays for now). Pro labs make metal, wood or bamboo ornaments, not ceramic.
+
+**Recommended split:** WHCC (prints, wall art, layflat books) → Bay Photo if it answers (better presentation) → Alexanders long-term (branded packaging, books, calendars, board books); Prodigi keeps merch (mugs, stickers, magnets) because it carries the insert. For ornaments, a metal one from a pro lab or Dreamship's boxed ceramic. Samples to order from each pro lab: a framed 8×10, an 8×8 layflat book, a metal ornament.
+
+**Lessons**
+- Vendor marketing pages oversell branding. Ask "on API drop-ship orders, at launch volume?" — WHCC and Printful both turned out to say "later" or "not for those products."
+- Pro labs price drop-ship per department, which changes cart pricing. Check this before quoting multi-item carts.
