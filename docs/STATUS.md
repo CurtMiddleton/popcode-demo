@@ -3473,3 +3473,34 @@ Prompted by a creator uploading what the user called soft porn. Finding: **the o
 **Lessons**
 - Made the `pkill -f` mistake from the entry above **again** — the lesson didn't stick. Stop a test server some other way (save its PID, or `fuser -k 8765/tcp`), never `pkill -f` with a pattern that's in the same command.
 - The user merges by asking ("open the PR and merge it") — check the Vercel commit status is `success` on the PR head first; a preview build takes ~1 minute.
+
+### 2026-09-29 → 10-06 — Nonprofit outreach: 50-org cold list, tracker sheet, short links, warm leads
+
+**PRs #133 (short links) and #158 ("Or any day"), both merged by Claude at the user's say-so and verified live.** Most of this session was sales and outreach, not code.
+
+#### What shipped (code)
+- **Short outreach links** (`vercel.json` `redirects`, PR #133): `popcode.app/nonprofits/1`–`/5` → 307 to `/nonprofits?utm_source=email&utm_campaign=nonprofit-outreach&utm_content=` intl / arts / enviro / human / youth. Redirects run before rewrites, so they never reach `view.html`. `nonprofits.html` already keeps `utm_*` for the visit and passes them to Calendly. Verified all five live.
+- **"What you get" item 1** (PR #158): "A piece designed for Giving Tuesday. Or any day." with "An appeal, gala program or thank-you card…" underneath. The user doesn't want the offer read as Giving Tuesday-only.
+- Also carried the 2026-09-28 pricing notes into main (PR #133), keeping another session's 09-29 entry.
+
+#### Outreach (not in the repo)
+- **Google Sheet "Popcode outreach tracker"** (curt@theworkshop.works Drive, shared as editor with curt@popcodeapp.com): `https://docs.google.com/spreadsheets/d/1VEkjc_WbdHxHL4qw-MJGnIpjMOkk7XH6f_TbO68jajk/edit`. Tabs: **Warm contacts** (Green Empowerment, One Mind, The Picture House, Centurion; Stage dropdown + tick boxes) and **Cold outreach** (50 US nonprofits, $1–10M revenue per ProPublica 990s, 10 each in intl / arts / enviro / human / youth; contact + email per org, 35 published, 9 marked "(guess — may bounce)", 6 general inbox only; full email draft per row in column L; Sent / Follow-up / Replied / Demo tick boxes B–F).
+- **Email shape (user-approved):** "I came across X and love…" opener (user preferred "came across" — less specific, less AI-ish; no dates, beneficiary names or stats), one generic video example, `https://popcode.app/nonprofits/N`, "Is your team starting to plan the year-end appeal? We're working with a small group of nonprofits this season at pilot pricing, in exchange for honest feedback, and I'd be glad to show you how it could fit in.", a thank-you line, opt-out line, "Curt". Signature comes from Apple Mail (curt@popcodeapp.com, "Curt Popcode": Curt Middleton / Founder, Popcode · popcode.app (linked) / 709 Main St, New Rochelle, NY 10801). Send from curt@, not hello@.
+- **Result so far:** 10 sent (intl group), 0 replies after a few days. Advised: normal at 5–10%; send Follow-up 1 (~5 days, short, GIF); October is late for year-end appeals, so also pitch thank-you cards and spring galas; better channels are the user's own past nonprofit clients (The Workshop), mailing a scannable Popcode card, warm intros, AFP chapter, printers/consultants.
+- **Warm leads:**
+  - **One Mind (Jamie Deuell):** built a mockup from their photo/video pairs; Jamie set up a redirect. Jamie suggested a QR code ("typing a URL is a tall ask") and asked for a non-colour symbol. User replied proposing an **A/B test** (with vs without QR, separate segment links) and that the symbol can be black/white (shipped since, PR #182). Not yet confirmed by Jamie.
+  - **Centurion (Laila Wilson-McCoy, Director of Development; also Ayra, Corey):** Laila: "This is amazing! Let us get through the gala…". Follow-up drafted after their gala: thank-you card with highlights + year-end appeal, One Mind mockup attached.
+  - **Mica & Andrea:** asked for a PDF example mailer before any mockup; reply drafted (check with Jamie before sharing One Mind's piece, or send the Common Tide card).
+  - **SOLA (Ariana, Tess):** user is redesigning their website; soft intro email drafted.
+- **Payments decisions** (built in another session, PRs #181/#183): Year-End $2,500 paid in full; Gala & Donor $4,500 as 50/50; card + ACH.
+
+#### Lessons
+- **Google Sheets connector** must be connected at claude.ai/customize/connectors and only appears in a **new** session (it did reconnect mid-session here once). Drive alone can create files but not edit them; a CSV upload loses formulas (`#NAME?`) and strips a leading `'`.
+- **Row 2 of the tracker kept reverting** to older text — the user's copy/undo in the sheet. After any bulk find-replace, read the whole column back and check every row.
+- **Paste from Sheets into Apple Mail with ⌥⇧⌘V** (Paste and Match Style), copying from inside the cell (double-click, ⌘A, ⌘C, Esc) — otherwise Arial 13 and stray quotes. Links need `https://` to auto-link in Apple Mail.
+- Don't add a logo image to a cold-email signature (Apple Mail sends it as an attachment).
+
+#### Open / next
+- "Your own story page" wording in the pricing card and What you get — user leaning to "What donors see on their phone, in your look…" (option A); not yet changed.
+- Follow-up 1 for the first 10; send the other 40 (one group a day).
+- Confirm the One Mind A/B test; build Centurion / Mica mockups if they say yes.
