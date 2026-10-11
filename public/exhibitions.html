@@ -314,7 +314,10 @@
       /* The placard on the left, whole; a phone comes in from the right on
          its home screen, touches the card beside the tap circle, an "open"
          banner drops in, and the phone opens the show's start screen. */
-      .tap-scene { position: relative; width: min(100%, 330px); padding: 6px 0; display: flex; align-items: center; }
+      /* The card sits at the top; the phone waits low and to the right, then
+         slides up so its top lands on the card's tap rings (--tx/--ty are
+         measured by the script below), hanging over the card's bottom edge. */
+      .tap-scene { position: relative; width: min(100%, 330px); padding: 0 0 96px; display: flex; align-items: flex-start; }
       /* Static, and a tight shadow: Safari clipped the big soft one into a grey
          box once the phone beside it started animating. */
       /* Step 1 uses the entrance placard itself, scaled down (its type is in
@@ -327,13 +330,12 @@
          Safari draws whole on an animated layer (a box-shadow came out as a
          hard-edged grey box). The tap is a small nudge toward the card's
          edge, clear of "Tap your phone here". */
-      .tap-phone { position: absolute; z-index: 2; right: 0; top: calc(50% - 80px); width: 80px; height: 160px; border-radius: 15px; background: #16121f; padding: 4px;
+      .tap-phone { position: absolute; z-index: 2; right: 0; bottom: 0; width: 80px; height: 160px; border-radius: 15px; background: #16121f; padding: 4px;
                    filter: drop-shadow(0 8px 10px rgba(0,0,0,.22)); will-change: transform, opacity;
                    transform: translateX(40px) rotate(8deg); opacity: 0;
                    transition: transform .8s cubic-bezier(.3,.7,.3,1), opacity .4s ease; }
       .steps.tapping .tap-phone { transform: none; opacity: 1; }
-      .steps.tapped .tap-phone { transform: translateX(-8px) rotate(-3deg); }
-      .steps.opened .tap-phone { transform: none; }
+      .steps.tapped .tap-phone, .steps.opened .tap-phone { transform: translate(var(--tx, -40px), var(--ty, -60px)) rotate(-8deg); }
       .tp-screen { position: relative; display: block; width: 100%; height: 100%; border-radius: 11px; overflow: hidden; }
       .tp-screen::before { content: ''; position: absolute; z-index: 3; left: 50%; top: 4px; width: 22px; height: 6px; translate: -50% 0; border-radius: 4px; background: #16121f; }
       /* An ordinary home screen */
@@ -834,7 +836,7 @@
       <!-- For visitors -->
       <section class="visitors" id="visitors" aria-labelledby="vis-h">
         <div class="wrap">
-          <div class="sec-head"><h2 id="vis-h">Why visitors like it</h2><p>It feels like having the artist or curator beside you, without the headset at the front desk.</p></div>
+          <div class="sec-head"><h2 id="vis-h">Why visitors like it</h2><p>It's like having the artist or curator at their side, with no audio guide to rent at the front desk.</p></div>
           <ul class="vis">
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -1301,7 +1303,22 @@
         if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) { steps.classList.add('tapping', 'opened', 'playing', 'cta1', 'cta2', 'cta3'); return; }
         var timers = [];
         function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
+        // Where the phone has to move so its top lands on the card's tap rings.
+        var scene = steps.querySelector('.tap-scene'), phone = steps.querySelector('.tap-phone'),
+            ring = steps.querySelector('.placard.mini .pl-tap');
+        function aim() {
+          if (!scene || !phone || !ring) return;
+          var sr = scene.getBoundingClientRect(), rr = ring.getBoundingClientRect();
+          // The phone's untransformed box, from its offsets (transforms don't change them).
+          var px = phone.offsetLeft + phone.offsetWidth / 2, py = phone.offsetTop + 34;
+          var rx = rr.left - sr.left + rr.width / 2, ry = rr.top - sr.top + rr.height / 2;
+          phone.style.setProperty('--tx', Math.round(rx - px) + 'px');
+          phone.style.setProperty('--ty', Math.round(ry - py) + 'px');
+        }
+        aim();
+        window.addEventListener('resize', aim);
         function run() {
+          aim();
           timers.forEach(clearTimeout); timers = [];
           states.forEach(function (c) { steps.classList.remove(c); });
           at(400, function () { steps.classList.add('tapping'); });
