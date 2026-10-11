@@ -433,6 +433,30 @@
         color: rgba(255,255,255,0.92); text-align: left; white-space: pre-line;
       }
       .ap-transcript:empty { display: none; }
+      /* Follow along: while the stop plays, words light up as they're reached
+         (each word's share of the stop is its share of the text). Words not
+         yet reached stay faint, never hidden. Paused, ended or never started:
+         the whole text, as in read-at-my-own-pace. */
+      .ap-transcript { position: relative; }
+      .ap-transcript .tw { transition: opacity 0.25s ease; }
+      .ap-transcript.following .tw { opacity: 0.28; }
+      .ap-transcript.following .tw.on { opacity: 1; }
+      /* Quiet text toggle between the two ways of reading. */
+      .ap-tmode {
+        display: none; align-self: center;
+        width: 100%; max-width: 360px; min-height: 44px; margin-top: 6px;
+        background: none; border: none; padding: 0 4px;
+        justify-content: flex-end; align-items: center;
+        font-family: inherit; font-size: 13px; font-weight: 500;
+        color: rgba(255,255,255,0.6); cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .ap-tmode.shown { display: flex; }
+      .ap-tmode.shown + .ap-transcript { margin-top: 0; }
+      @media (prefers-reduced-motion: reduce) {
+        .ap-tmode.shown { display: none; }
+        .ap-transcript .tw { transition: none; }
+      }
       #ap-close {
         position: absolute; top: 20px; right: 20px;
         background: rgba(255,255,255,0.18); color: white; border: none;
@@ -770,6 +794,7 @@
         <button class="ap-play" id="ap-play" aria-label="Play/Pause">▶&#xFE0E;</button>
       </div>
       <div id="ap-tap-hint">Tap &#9654; to play</div>
+      <button class="ap-tmode" id="ap-tmode" type="button"></button>
       <div class="ap-transcript" id="ap-transcript"></div>
       <audio id="ap-audio" preload="metadata" playsinline webkit-playsinline></audio>
     </div>
@@ -1547,6 +1572,97 @@
         apRemaining.textContent = '-0:00';
       }
       const apTranscript = document.getElementById('ap-transcript');
+      const apTmode = document.getElementById('ap-tmode');
+
+      // ── Transcript: follow along, or read at my own pace ──────────────────
+      // Follow-along timing is proportional to word length, not true word
+      // sync: each word lights when the playback fraction passes its share of
+      // the text's characters (the same approach as the /exhibitions hero).
+      // The choice is kept per phone, so it carries to every stop and visit.
+      const TMODE_KEY = 'popcode_transcript_mode';
+      const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)');
+      let tmodePref = 'follow';
+      try { if (localStorage.getItem(TMODE_KEY) === 'own') tmodePref = 'own'; } catch (e) {}
+      let tWords = [], tWordEnds = [], tChars = 0, tLit = 0;
+      let tRaf = null, tScrollPauseUntil = 0, tScrolledLine = null;
+
+      function transcriptMode() {
+        return reduceMotion && reduceMotion.matches ? 'own' : tmodePref;
+      }
+      // Each word in its own span; the whitespace between stays as text, so
+      // pre-line keeps the paragraph and line breaks in both modes.
+      function setTranscript(text) {
+        apTranscript.textContent = '';
+        tWords = []; tWordEnds = []; tChars = 0; tLit = 0; tScrolledLine = null;
+        apTranscript.scrollTop = 0;
+        (text || '').split(/(\s+)/).forEach(part => {
+          if (!part) return;
+          if (/^\s/.test(part)) { apTranscript.appendChild(document.createTextNode(part)); return; }
+          const span = document.createElement('span');
+          span.className = 'tw'; span.textContent = part;
+          apTranscript.appendChild(span);
+          tWords.push(span); tChars += part.length + 1; tWordEnds.push(tChars);
+        });
+        updateTranscript();
+      }
+      function updateTmodeButton() {
+        const show = tWords.length > 0 && !(reduceMotion && reduceMotion.matches);
+        apTmode.classList.toggle('shown', show);
+        apTmode.textContent = transcriptMode() === 'follow' ? 'Read at my own pace' : 'Follow along';
+      }
+      // Follows only while the audio is actually playing; otherwise the
+      // whole text shows at full opacity.
+      function updateTranscript() {
+        updateTmodeButton();
+        const following = tWords.length > 0 && transcriptMode() === 'follow'
+          && audioPlayer.classList.contains('visible') && !apAudio.paused && !apAudio.ended
+          && isFinite(apAudio.duration) && apAudio.duration > 0 && !apForceDurationPending;
+        apTranscript.classList.toggle('following', following);
+        cancelAnimationFrame(tRaf); tRaf = null;
+        if (!following) return;
+        tScrolledLine = null; // re-centre on the current line
+        (function tick() {
+          revealTranscript();
+          tRaf = requestAnimationFrame(tick);
+        })();
+      }
+      function revealTranscript() {
+        const frac = Math.min(1, (apAudio.currentTime || 0) / apAudio.duration);
+        let n = 0;
+        while (n < tWords.length && tWordEnds[n] / tChars <= frac + 0.004) n++;
+        if (n === 0) n = 1;
+        if (n !== tLit) {
+          // Only the words that changed (forward, or back after a seek).
+          for (let k = Math.min(n, tLit); k < Math.max(n, tLit); k++) tWords[k].classList.toggle('on', k < n);
+          tLit = n;
+        }
+        // Keep the current line in view, about two-thirds down so the faint
+        // words still to come show beneath it. A hand scroll pauses this.
+        if (performance.now() < tScrollPauseUntil) return;
+        const cur = tWords[n - 1];
+        if (cur.offsetTop === tScrolledLine) return;
+        tScrolledLine = cur.offsetTop;
+        const top = Math.max(0, cur.offsetTop + cur.offsetHeight - apTranscript.clientHeight * 0.68);
+        if (Math.abs(apTranscript.scrollTop - top) < 2) return;
+        try { apTranscript.scrollTo({ top, behavior: 'smooth' }); }
+        catch (e) { apTranscript.scrollTop = top; }
+      }
+      // A visitor scrolling the text by hand: leave it where they put it for
+      // a few seconds, then pick the current line up again.
+      ['touchstart', 'touchmove', 'wheel', 'pointerdown'].forEach(ev =>
+        apTranscript.addEventListener(ev, () => {
+          tScrollPauseUntil = performance.now() + 4000;
+          tScrolledLine = null;
+        }, { passive: true }));
+      ['playing', 'pause', 'ended', 'emptied', 'seeked', 'durationchange'].forEach(ev =>
+        apAudio.addEventListener(ev, updateTranscript));
+      if (reduceMotion && reduceMotion.addEventListener) reduceMotion.addEventListener('change', updateTranscript);
+      apTmode.addEventListener('click', () => {
+        tmodePref = transcriptMode() === 'follow' ? 'own' : 'follow';
+        try { localStorage.setItem(TMODE_KEY, tmodePref); } catch (e) {}
+        logEvent('transcript_mode_' + tmodePref, currentTargetIndex);
+        updateTranscript();
+      });
       const apTapHint = document.getElementById('ap-tap-hint');
       const apClose = document.getElementById('ap-close');
       let audioRecoverAttempts = 0; // audio autoplay-block recovery counter
@@ -1613,7 +1729,6 @@
 
       function startAudio(media) {
         apPhotoImg.src = media.photoUrl || '';
-        apTranscript.textContent = media.transcript || '';
         apAudio.src = media.audioUrl;
         apAudio.load();
         apResetUi();
@@ -1624,6 +1739,7 @@
         scanner.style.display = 'none';
         document.getElementById('home-btn').style.display = 'none';
         audioPlayer.classList.add('visible');
+        setTranscript(media.transcript);
 
         apAudio.play()
           .then(() => { logEvent('audio_play', currentTargetIndex); apPlay.textContent = '❚❚'; })
