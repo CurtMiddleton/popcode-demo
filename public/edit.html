@@ -27,6 +27,7 @@
     <script src="/slug.js"></script>
     <script src="/symbol-color.js"></script>
     <script src="/audio-wav.js"></script>
+    <script src="/align-transcript.js"></script>
     <script src="/image-source.js"></script>
     <script src="/montage-music.js"></script>
     <!-- edit.html only needs MINDAR.IMAGE.Compiler, not AR rendering. The
@@ -3115,6 +3116,9 @@
             video_url,
             audio_url,
             transcript,
+            // Word timings still fit if neither the audio nor the words changed.
+            transcript_timing: (finalType === 'audio' && !rep.audio && transcript && transcript === (item.transcript || null))
+              ? (item.transcript_timing || null) : null,
             photo_url,
             asset_name: (document.getElementById('assetname-existing-' + item.id)?.value || '').trim() || null
           });
@@ -3170,6 +3174,15 @@
           return;
         }
 
+        // Word timings for each audio page with a transcript that doesn't have
+        // them yet, so the viewer's Follow along matches the voice. Optional:
+        // a page that can't be timed saves without (alignTranscript → null).
+        const toTime = finalItems.filter(fi => fi.media_type === 'audio' && fi.transcript && fi.audio_url && !fi.transcript_timing);
+        for (let i = 0; i < toTime.length; i++) {
+          setProgress(toTime.length > 1 ? `Timing transcript ${i + 1} of ${toTime.length}…` : 'Timing the transcript…', 80 + (i / toTime.length) * 5);
+          toTime[i].transcript_timing = await alignTranscript(db, toTime[i].audio_url, toTime[i].transcript);
+        }
+
         // ── Step 5: Delete storage files for removed items ────────────────────
         try {
           const removedItems = existingItems.filter(item => deletedExistingIds.has(item.id));
@@ -3222,10 +3235,11 @@
             video_url: fi.video_url,
             audio_url: fi.audio_url,
             transcript: fi.transcript,
+            transcript_timing: fi.transcript_timing || null,
             photo_url: fi.photo_url,
             asset_name: fi.asset_name || null
           }));
-          const { error: insErr } = await db.from('collection_items').insert(rows);
+          const { error: insErr } = await insertItemsWithTiming(db, rows);
           if (insErr) throw insErr;
         } catch (err) {
           showSaveError('Step 6 failed (saving pages) — ' + (err.message || 'Database error.'));

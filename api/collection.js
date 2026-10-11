@@ -69,11 +69,12 @@ export default async function handler(req, res) {
     }
 
     if (col) {
-      const { data: items, error: itemsErr } = await db
-        .from('collection_items')
-        .select('target_index, media_type, video_url, audio_url, transcript, photo_url')
-        .eq('collection_id', col.id)
-        .order('target_index');
+      const ITEM_COLS = 'target_index, media_type, video_url, audio_url, transcript, photo_url';
+      const items_q = cols => db.from('collection_items').select(cols)
+        .eq('collection_id', col.id).order('target_index');
+      let { data: items, error: itemsErr } = await items_q(ITEM_COLS + ', transcript_timing');
+      // 42703: 2026-10-11-transcript-timing.sql not run yet — serve without it.
+      if (itemsErr && itemsErr.code === '42703') ({ data: items, error: itemsErr } = await items_q(ITEM_COLS));
       if (itemsErr) throw itemsErr;
 
       // A viewer's cache is cheap to refill and a repointed video should not

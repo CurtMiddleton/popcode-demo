@@ -1138,6 +1138,7 @@
             videoUrl: item.video_url || null,
             audioUrl: item.audio_url || null,
             transcript: item.transcript || null,
+            transcriptTiming: item.transcript_timing || null,
             photoUrl: item.photo_url || null
           };
         });
@@ -1575,15 +1576,17 @@
       const apTmode = document.getElementById('ap-tmode');
 
       // ── Transcript: follow along, or read at my own pace ──────────────────
-      // Follow-along timing is proportional to word length, not true word
-      // sync: each word lights when the playback fraction passes its share of
-      // the text's characters (the same approach as the /exhibitions hero).
+      // Follow-along timing: when the page has word timings (from ElevenLabs
+      // forced alignment, saved by the editors as transcript_timing), each word
+      // lights as it is spoken. Without them it is proportional to word length:
+      // each word lights when the playback fraction passes its share of the
+      // text's characters (the same approach as the /exhibitions hero).
       // The choice is kept per phone, so it carries to every stop and visit.
       const TMODE_KEY = 'popcode_transcript_mode';
       const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)');
       let tmodePref = 'follow';
       try { if (localStorage.getItem(TMODE_KEY) === 'own') tmodePref = 'own'; } catch (e) {}
-      let tWords = [], tWordEnds = [], tChars = 0, tLit = 0;
+      let tWords = [], tWordEnds = [], tChars = 0, tLit = 0, tTiming = null;
       let tRaf = null, tScrollPauseUntil = 0, tScrolledLine = null;
 
       function transcriptMode() {
@@ -1591,9 +1594,9 @@
       }
       // Each word in its own span; the whitespace between stays as text, so
       // pre-line keeps the paragraph and line breaks in both modes.
-      function setTranscript(text) {
+      function setTranscript(text, timing) {
         apTranscript.textContent = '';
-        tWords = []; tWordEnds = []; tChars = 0; tLit = 0; tScrolledLine = null;
+        tWords = []; tWordEnds = []; tChars = 0; tLit = 0; tScrolledLine = null; tTiming = null;
         apTranscript.scrollTop = 0;
         (text || '').split(/(\s+)/).forEach(part => {
           if (!part) return;
@@ -1603,6 +1606,9 @@
           apTranscript.appendChild(span);
           tWords.push(span); tChars += part.length + 1; tWordEnds.push(tChars);
         });
+        // [[start, end], ...] one per word; ignored unless it matches the text.
+        if (Array.isArray(timing) && timing.length === tWords.length
+            && timing.every(t => Array.isArray(t) && isFinite(t[0]))) tTiming = timing;
         updateTranscript();
       }
       function updateTmodeButton() {
@@ -1627,10 +1633,16 @@
         })();
       }
       function revealTranscript() {
-        const frac = Math.min(1, (apAudio.currentTime || 0) / apAudio.duration);
+        const t = apAudio.currentTime || 0;
         let n = 0;
-        while (n < tWords.length && tWordEnds[n] / tChars <= frac + 0.004) n++;
-        if (n === 0) n = 1;
+        if (tTiming) {
+          // Lit as each word starts (a hair early, so it never trails the voice).
+          while (n < tWords.length && tTiming[n][0] <= t + 0.05) n++;
+        } else {
+          const frac = Math.min(1, t / apAudio.duration);
+          while (n < tWords.length && tWordEnds[n] / tChars <= frac + 0.004) n++;
+          if (n === 0) n = 1;
+        }
         if (n !== tLit) {
           // Only the words that changed (forward, or back after a seek).
           for (let k = Math.min(n, tLit); k < Math.max(n, tLit); k++) tWords[k].classList.toggle('on', k < n);
@@ -1639,7 +1651,7 @@
         // Keep the current line in view, about two-thirds down so the faint
         // words still to come show beneath it. A hand scroll pauses this.
         if (performance.now() < tScrollPauseUntil) return;
-        const cur = tWords[n - 1];
+        const cur = tWords[Math.max(0, n - 1)];
         if (cur.offsetTop === tScrolledLine) return;
         tScrolledLine = cur.offsetTop;
         const top = Math.max(0, cur.offsetTop + cur.offsetHeight - apTranscript.clientHeight * 0.68);
@@ -1739,7 +1751,7 @@
         scanner.style.display = 'none';
         document.getElementById('home-btn').style.display = 'none';
         audioPlayer.classList.add('visible');
-        setTranscript(media.transcript);
+        setTranscript(media.transcript, media.transcriptTiming);
 
         apAudio.play()
           .then(() => { logEvent('audio_play', currentTargetIndex); apPlay.textContent = '❚❚'; })

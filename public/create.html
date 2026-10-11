@@ -27,6 +27,7 @@
     <script src="/symbol-color.js"></script>
     <script src="/product-preview.js"></script>
     <script src="/audio-wav.js"></script>
+    <script src="/align-transcript.js"></script>
     <script src="/image-source.js"></script>
     <script src="/scan-check.js"></script>
     <script src="/montage-music.js"></script>
@@ -2009,6 +2010,12 @@
               } catch (e) { throw new Error(`Audio ${i+1}: ${e.message}`); }
               item.audio_url = db.storage.from('experiences').getPublicUrl(audioPath).data.publicUrl;
               item.transcript = (document.getElementById(`transcript-${pair.n}`)?.value || '').trim() || null;
+              // Word timings, so the viewer's Follow along matches the voice
+              // (null if it can't be done; the page still saves).
+              if (item.transcript) {
+                setProgress(`Timing transcript ${i+1}…`, 60 + ((i + 0.5) / readyPairs.length) * 25);
+                item.transcript_timing = await alignTranscript(db, item.audio_url, item.transcript);
+              }
             }
 
             const photoExt = pair.photo.name.split('.').pop() || 'jpg';
@@ -2054,10 +2061,11 @@
             video_url: m.video_url,
             audio_url: m.audio_url,
             transcript: m.transcript,
+            transcript_timing: m.transcript_timing || null,
             photo_url: m.photo_url,
             asset_name: m.asset_name
           }));
-          const { error: itemsError } = await db.from('collection_items').insert(items);
+          const { error: itemsError } = await insertItemsWithTiming(db, items);
           if (itemsError) throw itemsError;
         } catch (err) {
           // The quota trigger raises with this marker; everything else is a
