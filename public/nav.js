@@ -96,6 +96,32 @@
     white-space: nowrap; transition: color 0.15s;
   }
   .site-header .nav-inline a:hover, .site-header .nav-inline a.active { color: #1a1a1a; }
+  /* Solutions: one menu for the two landing pages (/nonprofits, /exhibitions)
+     rather than two more links in an already full bar. Opens on hover with a
+     mouse, on click or tap everywhere. */
+  .site-header .nav-drop { position: relative; display: flex; }
+  .site-header .nav-drop-btn {
+    display: inline-flex; align-items: center; gap: 4px; background: none; border: none; cursor: pointer;
+    color: #8a8a8a; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600;
+    padding: 8px 12px; border-radius: 8px; white-space: nowrap; transition: color .15s;
+  }
+  .site-header .nav-drop-btn svg { width: 14px; height: 14px; transition: transform .15s; }
+  .site-header .nav-drop-btn:hover, .site-header .nav-drop-btn.active, .site-header .nav-drop.open .nav-drop-btn { color: #1a1a1a; }
+  .site-header .nav-drop.open .nav-drop-btn svg { transform: rotate(180deg); }
+  .site-header .nav-drop-menu {
+    display: none; position: absolute; top: 100%; left: 0; z-index: 60; padding-top: 8px; min-width: 272px;
+  }
+  .site-header .nav-drop-menu .ndm-in {
+    background: #fff; border-radius: 14px; padding: 6px; border: 1px solid #ececec;
+    box-shadow: 0 14px 34px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.06);
+  }
+  .site-header .nav-drop.open .nav-drop-menu { display: block; }
+  @media (hover: hover) { .site-header .nav-drop:hover .nav-drop-menu { display: block; } }
+  .site-header .nav-inline .nav-drop-menu a {
+    display: block; color: #1a1a1a; padding: 10px 12px; border-radius: 10px; font-size: 14px; font-weight: 600; white-space: normal;
+  }
+  .site-header .nav-inline .nav-drop-menu a:hover { background: #f5f5f5; }
+  .site-header .nav-inline .nav-drop-menu a span { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 500; color: #7a7a7a; }
   .site-header .header-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
   .site-header .hicon {
     position: relative; display: flex; align-items: center; justify-content: center;
@@ -157,6 +183,22 @@
   .site-header .account-menu .aq-divider { height: 1px; background: #ececec; margin: 2px 6px 4px; }
   .site-header .account-menu svg { width: 18px; height: 18px; flex-shrink: 0; color: #1a1a1a; }
   @media (max-width: 1040px) { .site-header .nav-inline { margin-left: 40px; } }
+  /* The Solutions menu made the signed-in bar (six links plus Solutions)
+     about 1,160px wide. Tighter link spacing up to 1180px keeps it on one row;
+     below 1040px it no longer fits, so signed in, the bar collapses to the
+     hamburger there, as phones do. Signed out (three links) is unchanged. */
+  @media (max-width: 1180px) {
+    .site-header .nav-inline { gap: 0; }
+    .site-header .nav-inline > a, .site-header .nav-drop-btn { padding: 8px 9px; }
+  }
+  @media (min-width: 1041px) and (max-width: 1180px) { .site-header .nav-inline { margin-left: 48px; } }
+  @media (max-width: 1039px) {
+    html:not(.pc-signed-out) .site-header { padding: 0 28px; }
+    html:not(.pc-signed-out) .site-header .nav-inline { display: none; }
+    html:not(.pc-signed-out) .site-header .cart-btn, html:not(.pc-signed-out) .site-header .profile-btn,
+    html:not(.pc-signed-out) .site-header .account-wrap { display: none; }
+    html:not(.pc-signed-out) .site-header .hamburger { display: flex; margin-left: auto; }
+  }
   /* 959, not 760: the header's own content — logo + five links + cart/profile —
      needs about 938px, so between 761 and 959 the inline nav did not fit and the
      whole header (width:100vw, flex, children at min-content) pushed the page
@@ -233,6 +275,13 @@
     { href: '/pricing.html', label: 'Pricing', match: function (p) { return p === '/pricing.html'; } },
     { href: '/howto.html', label: 'How It Works', match: function (p) { return p === '/howto.html'; } },
   ];
+  // Landing pages for organizations, under one Solutions menu (desktop) and
+  // as plain links in the phone drawer. Clean URLs: both are vercel.json
+  // rewrites, listed before the slug catch-all.
+  var solutions = [
+    { href: '/nonprofits', label: 'Nonprofits', sub: 'Printed appeals that play the story' },
+    { href: '/exhibitions', label: 'Galleries & museums', sub: 'Self-guided audio tours' },
+  ];
   var path = location.pathname;
   var search = location.search || '';
   var nav = items.map(function (it) {
@@ -241,6 +290,15 @@
     var active = it.match(path, search) ? ' class="active"' : '';
     return '<a href="' + it.href + '"' + dn + active + '>' + it.label + '</a>';
   }).join('');
+  var solActive = solutions.some(function (it) { return path === it.href || path === it.href + '.html'; });
+  nav += '<div class="nav-drop" id="nav-drop">' +
+    '<button type="button" class="nav-drop-btn' + (solActive ? ' active' : '') + '" id="nav-drop-btn" aria-haspopup="true" aria-expanded="false">Solutions' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>' +
+    '<div class="nav-drop-menu" role="menu"><div class="ndm-in">' +
+      solutions.map(function (it) {
+        return '<a href="' + it.href + '" role="menuitem">' + it.label.replace('&', '&amp;') + '<span>' + it.sub + '</span></a>';
+      }).join('') +
+    '</div></div></div>';
 
   var IC_CART = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>';
   var IC_LOGOUT = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
@@ -370,6 +428,16 @@
     document.body.appendChild(overlay);
   }
 
+  // Solutions menu: click or tap toggles it; outside click or Escape closes.
+  (function () {
+    var drop = document.getElementById('nav-drop'), btn = document.getElementById('nav-drop-btn');
+    if (!drop || !btn) return;
+    function set(open) { drop.classList.toggle('open', open); btn.setAttribute('aria-expanded', String(open)); }
+    btn.addEventListener('click', function (e) { e.stopPropagation(); set(!drop.classList.contains('open')); });
+    document.addEventListener('click', function (e) { if (!drop.contains(e.target)) set(false); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') set(false); });
+  })();
+
   document.addEventListener('DOMContentLoaded', function () {
     if (!document.getElementById('nav-overlay')) buildDrawer();
     var btn = document.getElementById('nav-btn');
@@ -394,6 +462,27 @@
         '<button class="nav-drawer-close" type="button" aria-label="Close menu">' + IC_CLOSE + '</button>';
       drawer.insertBefore(head, drawer.firstChild);
       head.querySelector('.nav-drawer-close').addEventListener('click', close);
+
+      // The Solutions pages, as plain links after the page's own list. Added
+      // here so pages that ship their own drawer markup get them too.
+      if (!drawer.querySelector('.nav-link[href="/exhibitions"]')) {
+        var solDiv = document.createElement('div');
+        solDiv.className = 'nav-divider nav-sol-divider';
+        drawer.appendChild(solDiv);
+        // Pages whose drawer links carry icons get icons here too, so the
+        // labels line up with the rest of the list.
+        var shopLink = drawer.querySelector('.nav-link[href="/shop.html"]');
+        var withIcons = shopLink ? !!shopLink.querySelector('svg') : !!drawer.querySelector('.nav-link svg');
+        var IC_HEART = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg>';
+        var IC_FRAME = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="1.5"/><rect x="7" y="7" width="10" height="10"/></svg>';
+        solutions.forEach(function (it) {
+          var a = document.createElement('a');
+          a.className = 'nav-link'; a.href = it.href;
+          var np = it.href === '/nonprofits';
+          a.innerHTML = (withIcons ? (np ? IC_HEART : IC_FRAME) : '') + (np ? 'For nonprofits' : 'For galleries &amp; museums');
+          drawer.appendChild(a);
+        });
+      }
 
       // Bottom-pinned account cluster: My Account (moved from the list) + Cart +
       // Log Out, plus the external site link. These replace the cart/profile
@@ -434,7 +523,7 @@
       var external = drawer.querySelector('.nav-link.external');
       if (external) bottom.appendChild(external);
       // Drop the now-orphaned divider that used to precede the external link.
-      var strayDivider = drawer.querySelector(':scope > .nav-divider');
+      var strayDivider = drawer.querySelector(':scope > .nav-divider:not(.nav-sol-divider)');
       if (strayDivider) strayDivider.remove();
       drawer.appendChild(bottom);
 
