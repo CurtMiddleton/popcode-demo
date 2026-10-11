@@ -183,9 +183,11 @@
       .page { margin-bottom: 40px; position: relative; display: flex; flex-direction: column; align-items: flex-start; }
       .page-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; width: 404px; max-width: 100%; }
       .page-label { background: #1a1a1a; color: white; border-radius: 50%; width: 28px; height: 28px; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-      /* Optional per-asset name (shown in analytics "By Photo"). */
-      .asset-name-input { width: 404px; max-width: 100%; margin: 0 0 12px; display: block; padding: 8px 12px; border-radius: 10px; border: 1.5px solid #e0ddd6; font-size: 13px; font-family: 'Inter', sans-serif; outline: none; text-align: left; color: #1a1a1a; }
-      .asset-name-input:focus { border-color: #1a1a1a; }
+      /* Optional name for each image (e.g. a painting's title), beside its
+         number. Saved as collection_items.asset_name; shown in Analytics. */
+      .page-header input.page-name { flex: 1; min-width: 0; width: auto; max-width: none; height: 40px; box-sizing: border-box; margin: 0; padding: 0 12px; border-radius: 10px; border: 1.5px solid #e0ddd6; background: #fff; font: 600 16px 'Inter', sans-serif; color: #1a1a1a; outline: none; }
+      .page-header input.page-name::placeholder { color: #aaa; font-weight: 500; }
+      .page-header input.page-name:focus { border-color: #1a1a1a; }
       /* Transcript for an audio page: shown under the player in the viewer. */
       .transcript-field { width: 100%; max-width: 404px; margin-top: 14px; text-align: left; }
       .edit-main .transcript-field { max-width: none; }
@@ -193,7 +195,6 @@
       .transcript-field label span { font-weight: 500; color: #888; }
       .transcript-field textarea { display: block; width: 100%; box-sizing: border-box; min-height: 96px; padding: 10px 12px; border-radius: 12px; border: 1.5px solid #e0ddd6; background: #fff; font: 14px/1.45 'Inter', sans-serif; color: #1a1a1a; resize: vertical; outline: none; }
       .transcript-field textarea:focus { border-color: #1a1a1a; }
-      .edit-main .asset-name-input { width: 430px; }
       /* Read-only per-photo engagement (creator's own scan metrics). */
       .asset-stats { width: 290px; max-width: 100%; margin: -6px auto 12px; text-align: center; font-size: 11px; color: #999; font-weight: 600; }
       .asset-stats b { color: #1a1a1a; }
@@ -2111,6 +2112,7 @@
         page.innerHTML = `
           <div class="page-header">
             <div class="page-label">${item.target_index + 1}</div>
+            <input type="text" class="page-name" id="assetname-${key}" maxlength="120" autocomplete="off" placeholder="Name (optional)" aria-label="Name of image ${item.target_index + 1}" value="${escapeHtml(item.asset_name || '')}"/>
             <button class="remove-page-btn" title="Remove page"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
           </div>
           <div class="asset-stats" id="stats-existing-${item.id}"></div>
@@ -2151,6 +2153,7 @@
 
         document.getElementById('pages').appendChild(page);
         document.getElementById(`transcript-${key}`).addEventListener('input', () => markUnsaved('Transcript changed'), { once: true });
+        document.getElementById(`assetname-${key}`).addEventListener('input', () => markUnsaved('Name changed'), { once: true });
 
         // Generate video thumbnail from URL (only meaningful when item already has video)
         if (videoThumb) {
@@ -2529,6 +2532,7 @@
         page.innerHTML = `
           <div class="page-header">
             <div class="page-label">${n}</div>
+            <input type="text" class="page-name" id="assetname-new-${n}" maxlength="120" autocomplete="off" placeholder="Name (optional)" aria-label="Name of this image"/>
             <button class="remove-page-btn" title="Remove page"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
           </div>
           <div class="upload-row">
