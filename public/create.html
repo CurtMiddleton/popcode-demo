@@ -27,6 +27,7 @@
     <script src="/symbol-color.js"></script>
     <script src="/product-preview.js"></script>
     <script src="/audio-wav.js"></script>
+    <script src="/align-transcript.js"></script>
     <script src="/image-source.js"></script>
     <script src="/scan-check.js"></script>
     <script src="/montage-music.js"></script>
@@ -611,6 +612,10 @@
       .wiz-row img { width: 60px; height: 60px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: #eee; }
       .wiz-row .meta { flex: 1; min-width: 0; }
       .wiz-row .meta b { display: block; font-size: 15px; margin-bottom: 3px; }
+      /* Optional name for the image (e.g. a painting's title): collection_items.asset_name. */
+      .wiz-row .meta .wiz-name { display: block; width: 100%; box-sizing: border-box; max-width: none; height: 36px; margin: 0 0 4px; padding: 0 10px; border-radius: 8px; border: 1.5px solid #e0ddd6; background: #fff; font: 600 16px 'Inter', sans-serif; color: #1a1a1a; outline: none; }
+      .wiz-row .meta .wiz-name::placeholder { color: #999; font-weight: 500; }
+      .wiz-row .meta .wiz-name:focus { border-color: #1a1a1a; }
       .wiz-row .meta span { display: block; font-size: 13px; color: var(--wiz-muted); }
       .wiz-row .meta .warn-tag { color: #b45309; font-size: 12px; font-weight: 600; margin-top: 2px; }
       .wiz-row .acts { display: flex; gap: 6px; }
@@ -1983,7 +1988,8 @@
           for (let i = 0; i < readyPairs.length; i++) {
             setProgress(`Uploading page ${i+1} of ${readyPairs.length}…`, 60 + (i / readyPairs.length) * 25);
             const pair = readyPairs[i];
-            const item = { type: pair.mediaType, video_url: null, audio_url: null, transcript: null, photo_url: null };
+            const item = { type: pair.mediaType, video_url: null, audio_url: null, transcript: null, photo_url: null,
+                           asset_name: (pair.name || '').trim() || null };
 
             if (pair.mediaType === 'video') {
               if (pair.video.size === 0) {
@@ -2004,6 +2010,12 @@
               } catch (e) { throw new Error(`Audio ${i+1}: ${e.message}`); }
               item.audio_url = db.storage.from('experiences').getPublicUrl(audioPath).data.publicUrl;
               item.transcript = (document.getElementById(`transcript-${pair.n}`)?.value || '').trim() || null;
+              // Word timings, so the viewer's Follow along matches the voice
+              // (null if it can't be done; the page still saves).
+              if (item.transcript) {
+                setProgress(`Timing transcript ${i+1}…`, 60 + ((i + 0.5) / readyPairs.length) * 25);
+                item.transcript_timing = await alignTranscript(db, item.audio_url, item.transcript);
+              }
             }
 
             const photoExt = pair.photo.name.split('.').pop() || 'jpg';
@@ -2049,9 +2061,11 @@
             video_url: m.video_url,
             audio_url: m.audio_url,
             transcript: m.transcript,
-            photo_url: m.photo_url
+            transcript_timing: m.transcript_timing || null,
+            photo_url: m.photo_url,
+            asset_name: m.asset_name
           }));
-          const { error: itemsError } = await db.from('collection_items').insert(items);
+          const { error: itemsError } = await insertItemsWithTiming(db, items);
           if (itemsError) throw itemsError;
         } catch (err) {
           // The quota trigger raises with this marker; everything else is a
@@ -2277,7 +2291,7 @@
         if (s === 'plays') {
           $w('wiz-plays-eyebrow').textContent = pages.length > 1 ? `Step 2 · Image ${k}` : 'Step 2';
           $w('wiz-chip-img').src = wizUrl(p.photo);
-          $w('wiz-chip-name').textContent = `Image ${k}`;
+          $w('wiz-chip-name').textContent = (p.name || '').trim() || `Image ${k}`;
           const kind = kindOf(p);
           document.querySelectorAll('.wiz-choice').forEach(c => c.classList.toggle('on',
             c.dataset.kind === kind || (c.dataset.kind === 'audio' && kind === 'audio-empty')));
@@ -2293,13 +2307,14 @@
         }
         if (s === 'review') {
           const done = pages.filter(n => pairs[n]);
+          const attrEsc = t => String(t).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
           $w('wiz-list').innerHTML = done.map((n, i) => {
             const q = pairs[n], kind = kindOf(q);
             const flag = q.scan && q.scan.ok === false ? '<span class="warn-tag">May be hard to scan</span>' : '';
             const what = KIND_LABEL[kind] || '<span class="warn-tag">Nothing plays yet</span>';
             return `<div class="wiz-row" style="animation-delay:${i * 60}ms">
               <div class="num">${i + 1}</div><img src="${wizUrl(q.photo)}" alt="">
-              <div class="meta"><b>Image ${i + 1}</b><span>${what}</span>${flag}</div>
+              <div class="meta"><input type="text" class="wiz-name" maxlength="120" autocomplete="off" placeholder="Add a name" aria-label="Name of image ${i + 1}" data-n="${n}" value="${attrEsc(q.name || '')}"><span>${what}</span>${flag}</div>
               <div class="acts">
                 <button type="button" class="wiz-icon" title="Edit" aria-label="Edit image ${i + 1}" onclick="wizEdit(${n})">${ICON_EDIT}</button>
                 <button type="button" class="wiz-icon" title="Remove" aria-label="Remove image ${i + 1}" onclick="removePage(${n})">${ICON_TRASH}</button>
@@ -2322,6 +2337,12 @@
       // Ripple the Next button the moment it becomes tappable.
       new MutationObserver(() => { if (!$w('wiz-next').disabled) wizReplay($w('wiz-next'), 'wiz-ready'); })
         .observe($w('wiz-next'), { attributes: true, attributeFilter: ['disabled'] });
+
+      // Names typed on Your images stay with their image (saved as asset_name).
+      $w('wiz-list').addEventListener('input', e => {
+        const el = e.target.closest('.wiz-name');
+        if (el && pairs[el.dataset.n]) pairs[el.dataset.n].name = el.value;
+      });
 
       window.wizEdit = function (n) { wiz.editing = true; wizGo('image', n, 'fwd'); };
 
