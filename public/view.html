@@ -18,6 +18,30 @@
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     <title>Popcode</title>
+    <script>
+      // Ask for the Popcode straight away, before the AR scripts below load
+      // (they block the page for a while on a phone), and start its custom
+      // cover image downloading too. loadCollection() uses this request, so
+      // a Popcode with its own cover can open on that cover instead of on
+      // the Popcode loading screen.
+      (function () {
+        try {
+          var id = new URLSearchParams(location.search).get('id')
+            || location.pathname.replace(/^\/|\/$/g, '').split('/')[0];
+          if (!id || /\.html$/.test(id)) return;
+          var req = fetch('/api/collection?slug=' + encodeURIComponent(id));
+          window.__popcodeEarly = { id: id, req: req };
+          req.then(function (r) { return r.ok ? r.clone().json() : null; }).then(function (col) {
+            var c = col && col.cover_config;
+            if (c && c.enabled && c.image_url) {
+              var img = new Image();
+              img.src = c.image_url;
+              window.__popcodeEarly.cover = img;
+            }
+          }).catch(function () {});
+        } catch (e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
@@ -53,14 +77,19 @@
       a-scene { width: 100vw; height: 100vh; }
       canvas { width: 100vw !important; height: 100vh !important; }
 
+      /* Neutral on purpose: it shows before we know whether this Popcode has
+         its own cover (a gallery's, say), so it must not look like either.
+         The spinner only appears if loading actually takes a while. */
       #loading {
         position: fixed; top: 0; right: 0; bottom: 0; left: 0;
-        background: linear-gradient(160deg, #5bc8f5 0%, #7c3aed 100%);
+        background: #000;
         display: flex; flex-direction: column;
         align-items: center; justify-content: center; z-index: 9999;
         font-family: 'DM Sans', sans-serif;
       }
-      #loading img.splash-logo { height: 100px; margin-bottom: 32px; }
+      #loading .spinner, #loading-text { opacity: 0; animation: loadingIn 0.4s ease 0.6s forwards; }
+      #loading .spinner { animation: loadingIn 0.4s ease 0.6s forwards, spin 0.8s linear infinite; }
+      @keyframes loadingIn { to { opacity: 1; } }
       .spinner {
         width: 36px; height: 36px; border-radius: 50%;
         border: 3px solid rgba(255,255,255,0.3);
@@ -68,7 +97,7 @@
         animation: spin 0.8s linear infinite;
       }
       @keyframes spin { to { transform: rotate(360deg); } }
-      #loading-text { color: white; font-size: 14px; margin-top: 16px; opacity: 0.75; }
+      #loading-text { color: rgba(255,255,255,0.75); font-size: 14px; margin-top: 16px; }
 
       #start-screen {
         display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0;
@@ -672,9 +701,8 @@
       <p>Rotate back once a video plays.</p>
     </div>
     <div id="loading">
-      <img class="splash-logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
       <div class="spinner"></div>
-      <div id="loading-text">Loading experience...</div>
+      <div id="loading-text">Loading…</div>
     </div>
     <div id="start-screen">
       <img class="splash-logo" src="/assets/Popcode_logo.rev.svg" alt="Popcode"/>
@@ -1106,7 +1134,9 @@
 
         let col = null;
         try {
-          const resp = await fetch('/api/collection?slug=' + encodeURIComponent(id));
+          // Usually already on its way: the <head> script asked for it first.
+          const early = window.__popcodeEarly;
+          const resp = await (early && early.id === id ? early.req : fetch('/api/collection?slug=' + encodeURIComponent(id)));
           if (resp.ok) col = await resp.json();
           // 410: switched off by an admin (api/moderate-popcode.js).
           else if (resp.status === 410) {
@@ -1157,6 +1187,10 @@
         savedMediaMap = mediaMap;
 
         buildScene(mindUrl, mediaMap);
+
+        // A custom cover opens whole, not as a blank frame that fills in:
+        // keep the loading screen up until its image is ready (3 s at most).
+        if (coverConfig) await coverImageReady(3000);
 
         document.getElementById('loading').style.display = 'none';
         showStartScreen();
@@ -1288,6 +1322,12 @@
       }
 
       let coverConfig = null;
+      function coverImageReady(maxMs) {
+        const img = document.querySelector('#wl-cover .wl-bg');
+        const ready = img.complete && img.naturalWidth ? Promise.resolve()
+          : new Promise(res => { img.addEventListener('load', res, { once: true }); img.addEventListener('error', res, { once: true }); });
+        return Promise.race([ready, new Promise(res => setTimeout(res, maxMs))]);
+      }
       function applyCoverConfig(cfg) {
         if (!cfg || !cfg.enabled || !cfg.image_url) { coverConfig = null; return; }
         coverConfig = cfg;
