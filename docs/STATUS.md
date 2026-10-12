@@ -3614,3 +3614,11 @@ Prompted by a creator uploading what the user called soft porn. Finding: **the o
 - Record the hero stop audio; point the placard QR at a real demo exhibition Popcode; add a "fictional gallery" note like /nonprofits' Common Tide line.
 - Confirm deliverables behind the pricing cards (locked NFC card, 30 works per show, board report, AI voice price); then bring `pricing.html` in line.
 - Verify the Sargent stop script facts and the four dashboard titles.
+
+### 2026-10-12 — Pricing page: no quota line for admin accounts
+
+**PRs:** #217 merged into `main` via the GitHub MCP `merge_pull_request` (the user asked to "push to prod"; Vercel deploy not checked from here).
+
+- On `/pricing` the admin account showed "You have 2147483503 of 2147483647 Popcodes left. 89 of those came free with things you printed with us." Admin quota is int max (`supabase/migrations/2026-09-18-quota-admin-parity.sql:32`).
+- Fix: `showQuota()` in `public/pricing.html` now returns early when `q.allowance > 1000000` — the same "unlimited" test `public/account.html:310` already uses (account page says "This account has no limit"). Regular accounts (5 free + packs + print credits) see the line unchanged.
+- Not checked in a browser. If more pages show the quota, reuse the same `> 1000000` test rather than a new admin flag.

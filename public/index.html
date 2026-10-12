@@ -440,6 +440,12 @@
       .codebar { position: relative; z-index: 3; margin-top: -80px; padding-block: 8px 24px; }
       /* Stacked, the phone is centred and the bar would climb into it. */
       @media (max-width: 860px) { .codebar { margin-top: 4px; } }
+      /* Desktop: start where the hero copy starts, not in the centred .wrap.
+         The header and hero run the full window width, so on a wide window the
+         centred .wrap drifted right until the bar ran into the phone. */
+      @media (min-width: 861px) {
+        .codebar .wrap { max-width: none; margin: 0; padding-left: var(--hero-pad, 180px); }
+      }
       .codebar .lbl { font-family: var(--serif); font-size: 25px; margin-bottom: 14px; }
       .codebar form { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
       /* The domain is text, not part of the field — so the box holds only what
@@ -1657,12 +1663,15 @@
 
         function alignHeroToNav() {
           var hero = document.querySelector('.hero');
+          // Set on the root, not .hero: the link bar under the hero lines up
+          // with the same edge.
+          var root = document.documentElement;
           var brand = document.querySelector('.site-header .brand');
           if (!hero) return;
           // Below nav.js's own breakpoint the header re-lays itself; the CSS
           // fallback takes over there.
-          if (!brand || !brand.offsetParent) { hero.style.removeProperty('--hero-pad'); return; }
-          hero.style.setProperty('--hero-pad',
+          if (!brand || !brand.offsetParent) { root.style.removeProperty('--hero-pad'); return; }
+          root.style.setProperty('--hero-pad',
             Math.round(brand.getBoundingClientRect().left + COPY_INSET) + 'px');
         }
         window.addEventListener('resize', alignHeroToNav);
