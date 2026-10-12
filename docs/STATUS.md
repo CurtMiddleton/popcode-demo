@@ -14,8 +14,8 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   forced alignment (`ELEVENLABS_API_KEY` set in Vercel, `transcript_timing` column added in prod —
   existing stops get timings only when re-saved in Edit); **Name** field per image in Create and Edit
   (fixed Edit wiping `asset_name` on every save); **tap/drag scrubber**; custom covers open without the
-  purple Popcode loading screen (also for capitalised links). Follow-along confirmed working by the
-  user on iPhone; scrubber and cover fixes not yet confirmed on a phone.
+  purple Popcode loading screen (also for capitalised links). Follow-along and the cover-first
+  loading (placard NFC/QR, after #216) confirmed working by the user on iPhone; scrubber not yet confirmed.
 - **Audio Popcodes: upload, transcript, buttons after audio** (PRs #197–#200, all merged and live 2026-10-09):
   *or upload a file* under Record (MP3/M4A/AAC/WAV/WebM/Ogg, up to 25 MB) in create and edit; a
   **Transcript (optional)** box under every audio page (viewer shows it with line
@@ -3651,7 +3651,7 @@ Prompted by a creator uploading what the user called soft porn. Finding: **the o
 - `merge_pull_request` needs the full 40-char head SHA; a guessed one returns 409.
 
 #### Open
-- iPhone: confirm the scrubber, the cover-first loading via the placard's NFC and QR, and whether the card link has capitals (if all lowercase and purple still shows, use Safari Web Inspector).
+- iPhone: confirm the scrubber. (Cover-first loading via the placard's NFC/QR confirmed working after #216 went live, 2026-10-12.)
 - Re-save every existing audio stop with a transcript in Edit so it gets word timings.
 - `scan.html` (handle scanner) has its own audio player with none of the follow-along/scrubber work.
 - Maybe: show the image name as the stop's title in the viewer.
