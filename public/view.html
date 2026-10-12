@@ -403,7 +403,11 @@
         margin-top: 22px; width: 100%; max-width: 360px;
         display: flex; flex-direction: column; align-items: center; gap: 16px;
       }
-      .ap-progress-wrap { width: 100%; }
+      /* The bar is 4px, but a finger lands anywhere in this taller strip:
+         tap to jump, drag to scrub (handled in JS with pointer events). */
+      .ap-progress-wrap { width: 100%; position: relative; }
+      .ap-scrub-hit { position: relative; z-index: 1; padding: 16px 0; margin: -16px 0; cursor: pointer; touch-action: none; -webkit-tap-highlight-color: transparent; }
+      .ap-scrub-hit .ap-scrub { pointer-events: none; display: block; }
       .ap-scrub {
         width: 100%; -webkit-appearance: none; appearance: none;
         height: 4px; border-radius: 999px; outline: none;
@@ -411,8 +415,10 @@
         background-image: linear-gradient(to right, #fff 0%, #fff 0%, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.25) 100%);
         padding: 0; margin: 0; cursor: pointer;
       }
-      .ap-scrub::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: white; cursor: pointer; border: none; }
-      .ap-scrub::-moz-range-thumb { width: 12px; height: 12px; border: none; border-radius: 50%; background: white; cursor: pointer; }
+      .ap-scrub::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: white; cursor: pointer; border: none; transition: transform 0.15s ease; }
+      .ap-scrub::-moz-range-thumb { width: 16px; height: 16px; border: none; border-radius: 50%; background: white; cursor: pointer; transition: transform 0.15s ease; }
+      .ap-scrub-hit.dragging .ap-scrub::-webkit-slider-thumb { transform: scale(1.4); }
+      .ap-scrub-hit.dragging .ap-scrub::-moz-range-thumb { transform: scale(1.4); }
       .ap-time-row {
         margin-top: 8px; width: 100%;
         display: flex; justify-content: space-between;
@@ -785,7 +791,9 @@
       </div>
       <div class="ap-controls">
         <div class="ap-progress-wrap">
-          <input class="ap-scrub" id="ap-scrub" type="range" min="0" max="100" value="0" step="any"/>
+          <div class="ap-scrub-hit" id="ap-scrub-hit">
+            <input class="ap-scrub" id="ap-scrub" type="range" min="0" max="100" value="0" step="any" aria-label="Seek"/>
+          </div>
           <div class="ap-time-row">
             <span id="ap-time">0:00</span>
             <span id="ap-remaining">-0:00</span>
@@ -1567,6 +1575,8 @@
         apScrub.style.backgroundImage = `linear-gradient(to right, #fff 0%, #fff ${p}%, rgba(255,255,255,0.25) ${p}%, rgba(255,255,255,0.25) 100%)`;
       }
       function apResetUi() {
+        apDragging = false;
+        document.getElementById('ap-scrub-hit').classList.remove('dragging');
         apSetFill(0);
         apScrub.value = 0;
         apTime.textContent = '0:00';
@@ -1794,6 +1804,7 @@
       });
       apAudio.addEventListener('timeupdate', () => {
         if (apForceDurationPending) return; // ignore the forced-seek artefact
+        if (apDragging) return; // the finger owns the bar while scrubbing
         const cur = apAudio.currentTime || 0;
         const dur = isFinite(apAudio.duration) ? apAudio.duration : 0;
         apTime.textContent = fmtTime(cur);
@@ -1829,6 +1840,7 @@
       apAudio.addEventListener('error', () => {
         if (apAudio.src) showMediaError('Audio could not load — check your connection');
       });
+      // Keyboard (arrow keys on the focused slider).
       apScrub.addEventListener('input', () => {
         if (isFinite(apAudio.duration) && apAudio.duration > 0) {
           const v = parseFloat(apScrub.value) || 0;
@@ -1836,6 +1848,44 @@
           apSetFill((v / apAudio.duration) * 100);
         }
       });
+
+      // Touch and mouse: tap anywhere on the bar to jump there, or drag to
+      // scrub. The audio (and the follow-along transcript) move with the
+      // finger; seeks are spaced out so a fast drag doesn't flood the player.
+      let apDragging = false, apLastSeek = 0, apSeekTimer = null;
+      const apScrubHit = document.getElementById('ap-scrub-hit');
+      function apScrubTo(clientX, final) {
+        const dur = apAudio.duration;
+        if (!isFinite(dur) || dur <= 0 || apForceDurationPending) return;
+        const r = apScrub.getBoundingClientRect();
+        const frac = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+        const t = frac * dur;
+        apScrub.value = t;
+        apSetFill(frac * 100);
+        apTime.textContent = fmtTime(t);
+        apRemaining.textContent = '-' + fmtTime(Math.max(0, dur - t));
+        const seek = () => { apLastSeek = performance.now(); apSeekTimer = null; try { apAudio.currentTime = t; } catch (e) {} };
+        clearTimeout(apSeekTimer);
+        if (final || performance.now() - apLastSeek > 120) seek();
+        else apSeekTimer = setTimeout(seek, 120);
+      }
+      apScrubHit.addEventListener('pointerdown', e => {
+        if (!isFinite(apAudio.duration) || apAudio.duration <= 0) return;
+        apDragging = true;
+        apScrubHit.classList.add('dragging');
+        try { apScrubHit.setPointerCapture(e.pointerId); } catch (err) {}
+        apScrubTo(e.clientX, true);
+        e.preventDefault();
+      });
+      apScrubHit.addEventListener('pointermove', e => { if (apDragging) apScrubTo(e.clientX, false); });
+      const apScrubEnd = e => {
+        if (!apDragging) return;
+        if (e.type === 'pointerup') apScrubTo(e.clientX, true);
+        apDragging = false;
+        apScrubHit.classList.remove('dragging');
+      };
+      apScrubHit.addEventListener('pointerup', apScrubEnd);
+      apScrubHit.addEventListener('pointercancel', apScrubEnd);
 
       apClose.addEventListener('click', returnToScanner);
 
