@@ -18,6 +18,33 @@
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     <title>Popcode</title>
+    <script>
+      // A Popcode link typed or printed with a capital (popcode.app/BruceMuseum)
+      // lands here, not on the viewer: a mixed-case path looks like a handle.
+      // Check the lowercase form first thing, before the AR scripts below
+      // load, and go straight to the viewer if it's a Popcode. Until the
+      // answer, the page stays blank black, so a gallery's own cover isn't
+      // preceded by this page's purple Popcode screen. resolveMiscasedSlug()
+      // further down is the fallback if this check can't run.
+      (function () {
+        try {
+          var q = new URLSearchParams(location.search);
+          if (q.get('handle')) return;
+          var raw = location.pathname.replace(/^\/|\/$/g, '');
+          var lower = raw.toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-{2,}/g, '-').replace(/^-+/, '').slice(0, 30);
+          if (!lower || lower === raw || raw.indexOf('/') !== -1) return;
+          var root = document.documentElement;
+          root.classList.add('pc-checking');
+          var done = function () { root.classList.remove('pc-checking'); };
+          setTimeout(done, 4000);
+          fetch('/api/collection?slug=' + encodeURIComponent(lower)).then(function (r) {
+            if (r.ok || r.status === 410) location.replace('/' + lower + location.search + location.hash);
+            else done();
+          }, done);
+        } catch (e) {}
+      })();
+    </script>
+    <style>html.pc-checking, html.pc-checking body { background: #000 !important; } html.pc-checking body { visibility: hidden; }</style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
