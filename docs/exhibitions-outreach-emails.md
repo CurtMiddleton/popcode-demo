@@ -1,0 +1,107 @@
+# Popcode for Exhibitions — cold outreach to galleries
+
+Three-email sequence for gallery owners/directors. Written 2026-10-13.
+Plain text, one link, no images. Send from a second warmed-up domain (see the
+2026-10-13 session notes in `docs/STATUS.md`), 30–50 a day per inbox, stop the
+sequence when someone replies.
+
+**Copy rules (the user's):** say "point your phone at"; never "in an
+afternoon" or "shows that open on Friday" — we build and test the tour in time
+for the opening.
+
+## Merge fields
+
+| Field | What goes in it | Example |
+|---|---|---|
+| `{{first_name}}` | Owner or director, by name | Dana |
+| `{{gallery}}` | Gallery name | Marsh Street Gallery |
+| `{{show}}` | Current or next show title | *Low Tide* |
+| `{{artist}}` | The show's artist (or "the artists") | Ellen Park |
+| `{{hook}}` | ONE specific line about the show — what a visitor would want to hear about. Write it by hand; this line is what makes the email get read. | the big harbour paintings were made from a rowboat |
+
+The link in every email (tagged so sign-ups show as "Campaign: email" in
+Analytics → How sign-ups found Popcode):
+
+`https://popcode.app/exhibitions?utm_source=email&utm_medium=cold&utm_campaign=galleries-oct`
+
+---
+
+## Email 1 — Day 1
+
+**Subject:** an audio tour for {{show}}
+
+Hi {{first_name}},
+
+I saw {{show}} at {{gallery}}. I'd love to hear the story behind it. For
+example, that {{hook}}.
+
+That's what Popcode does. Visitors tap a small card at your entrance, point
+their phone at any painting, and hear {{artist}} (or you) talk about it in their
+own headphones. There's no app and no QR code beside the work. After each stop
+they can inquire about the piece or join your list, and you can see which works
+people listened to all the way through.
+
+We write the stops with you, record them, and test the tour in the room before
+the opening.
+
+Worth a 15-minute look? Here's a demo show to try:
+https://popcode.app/exhibitions?utm_source=email&utm_medium=cold&utm_campaign=galleries-oct
+
+Curt Middleton
+Popcode
+[postal address]
+
+If this isn't for you, reply "no thanks" and I won't write again.
+
+---
+
+## Email 2 — Day 4
+
+**Subject:** Re: an audio tour for {{show}}
+
+Hi {{first_name}},
+
+A quick follow-up with the details:
+
+- We build your tour: up to 30 works, scripts written with you, your voice or a
+  natural AI voice.
+- Your entrance card comes with a locked NFC tag, a QR code and a short address.
+- You get a dashboard of scans, listens and inquiries per work.
+- A founding gallery pilot is $1,200 for one show. That's the same price we'll
+  charge going forward, but the first 10 galleries also get the scripts
+  written for free.
+
+Would a short call next week work? I can show you a tour for one of your own
+works.
+
+Curt
+
+---
+
+## Email 3 — Day 10
+
+**Subject:** close the loop?
+
+Hi {{first_name}},
+
+I don't want to fill your inbox. Should I close the loop on this, or is there a
+better person at {{gallery}} to talk to about the next show?
+
+Curt
+
+---
+
+## Before sending — check these
+
+1. **The founding offer in Email 2 is a draft.** "Scripts written for free for
+   the first 10" is my suggestion. The current price list has scripts as an
+   add-on from $400 per 10 stops. Change or drop it.
+2. **"Up to 30 works" isn't tested yet.** MindAR with 30–100 targets in one
+   Popcode is still untested (STATUS.md). Test it first, or say "up to 15".
+3. **Fill in `[postal address]`.** US cold email needs a physical address and a
+   way to opt out.
+4. **The demo link should play sound.** `CONFIG.DEMO_AUDIO` in
+   `public/exhibitions.html` is still empty. Record the stop before the first
+   send.
+5. **Only US galleries for now.** UK, EU and Canadian rules on cold email are
+   stricter.
