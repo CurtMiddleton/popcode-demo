@@ -468,7 +468,8 @@
       .wl-image-preview .wl-overlay-text .pv-eyebrow { font-size: 13px; letter-spacing: 0.22em; text-transform: uppercase; margin-bottom: 0.8em; }
       .wl-image-preview .wl-overlay-text .pv-title { white-space: pre-line; font-family: var(--brand-head, 'Cormorant Garamond', serif); font-style: normal; font-weight: var(--brand-head-weight, 500); font-size: 93px; line-height: 0.92; margin-bottom: 0.3em; }
       .wl-image-preview .wl-overlay-text .pv-sub { font-size: 15px; }
-      .wl-image-preview .wl-tint { --bg-d: 1; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,calc(0.35 * var(--bg-d))) 0%, rgba(0,0,0,calc(0.10 * var(--bg-d))) 30%, rgba(0,0,0,calc(0.10 * var(--bg-d))) 60%, rgba(0,0,0,calc(0.55 * var(--bg-d))) 100%); pointer-events: none; }
+      /* Same layers as view.html's #wl-cover .wl-overlay. */
+      .wl-image-preview .wl-tint { --bg-d: 1; position: absolute; inset: 0; background: linear-gradient(rgba(0,0,0,calc(max(0, var(--bg-d) - 1) * 0.55)), rgba(0,0,0,calc(max(0, var(--bg-d) - 1) * 0.55))), linear-gradient(180deg, rgba(0,0,0,calc(0.35 * var(--bg-d))) 0%, rgba(0,0,0,calc(0.10 * var(--bg-d))) 30%, rgba(0,0,0,calc(0.10 * var(--bg-d))) 60%, rgba(0,0,0,calc(0.55 * var(--bg-d))) 100%); pointer-events: none; }
       .wl-image-preview .pv-org-logo { position: absolute; top: 22px; left: 0; right: 0; display: flex; justify-content: center; pointer-events: none; }
       .wl-image-preview .pv-org-logo img { max-width: 150px; max-height: 80px; width: auto; height: auto; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35)); }
       .wl-image-preview .pv-cta { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 20px 6px; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
@@ -1550,7 +1551,9 @@
         const titlePx = Number(document.getElementById('wl-title-px').value) || 112;
         const titleTop = Number(document.getElementById('wl-title-top').value) || 0;
         const subPx = Number(document.getElementById('wl-subtitle-px').value) || 18;
-        const darkness = (Number(document.getElementById('wl-bg-darkness').value) || 100) / 100;
+        // 0 is a real setting (no tint), so don't let || turn it into 100.
+        const darkRaw = Number(document.getElementById('wl-bg-darkness').value);
+        const darkness = (Number.isFinite(darkRaw) ? darkRaw : 100) / 100;
         const align = (document.querySelector('input[name="wl-align"]:checked') || {}).value || 'center';
         const orgSize = Number(document.getElementById('wl-org-logo-size').value) || 180;
         const orgTop = Number(document.getElementById('wl-org-logo-top').value) || 0;
