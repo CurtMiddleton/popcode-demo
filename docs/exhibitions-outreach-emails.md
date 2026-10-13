@@ -63,13 +63,18 @@ Hi {{first_name}},
 
 A quick follow-up with the details:
 
-- We build your tour: up to 30 works, scripts written with you, your voice or a
-  natural AI voice.
+- We build your tour: up to 15 works, each with its own audio stop and
+  transcript, ready for the opening.
 - Your entrance card comes with a locked NFC tag, a QR code and a short address.
 - You get a dashboard of scans, listens and inquiries per work.
-- A founding gallery pilot is $1,200 for one show. That's the same price we'll
-  charge going forward, but the first 10 galleries also get the scripts
-  written for free.
+- Pilot price for the first galleries this season: $1,500 for one show
+  (regularly $2,500), in exchange for sharing your results and feedback.
+- No audio yet? We write the scripts and record a natural AI voice, from $400
+  per 10 stops.
+
+You can try it yourself: download three paintings from our demo show and point
+your phone at them.
+https://popcode.app/exhibitions?utm_source=email&utm_medium=cold&utm_campaign=galleries-oct#try
 
 Would a short call next week work? I can show you a tour for one of your own
 works.
@@ -93,15 +98,15 @@ Curt
 
 ## Before sending — check these
 
-1. **The founding offer in Email 2 is a draft.** "Scripts written for free for
-   the first 10" is my suggestion. The current price list has scripts as an
-   add-on from $400 per 10 stops. Change or drop it.
-2. **"Up to 30 works" isn't tested yet.** MindAR with 30–100 targets in one
-   Popcode is still untested (STATUS.md). Test it first, or say "up to 15".
+1. **Pricing (set 2026-10-13):** pilot $1,500 per show (regular $2,500),
+   Gallery year $3,900 (regular $6,500), Museum year $7,500 (regular $12,000),
+   scripts + AI voice from $400 per 10 stops. Keep these in step with the
+   cards on /exhibitions.
+2. **"Up to 15 works"** until a tour with 30+ works has been tested (MindAR
+   with 30–100 targets in one Popcode is untested; STATUS.md).
 3. **Fill in `[postal address]`.** US cold email needs a physical address and a
    way to opt out.
-4. **The demo link should play sound.** `CONFIG.DEMO_AUDIO` in
-   `public/exhibitions.html` is still empty. Record the stop before the first
-   send.
+4. **The demo works:** the hero phone plays sound, and the Try it yourself
+   PDF opens the real tour at popcode.app/wrenalder.
 5. **Only US galleries for now.** UK, EU and Canadian rules on cold email are
    stricter.
