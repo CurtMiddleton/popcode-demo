@@ -6,9 +6,15 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-12)
+## Current state (updated 2026-10-13)
 
 **Live and recent**
+- **Sign-up source tracking** (PR #222, merged 2026-10-13; migration
+  `2026-10-13-signup-source.sql` **has been run in prod**): every new account now
+  records how it found Popcode (outside referrer, utm/via/ref tags, landing page).
+  Analytics → Overview → **How sign-ups found Popcode**. Accounts from before
+  2026-10-13 show "Not recorded". **No real sign-up through it yet** — the test is a
+  private window on `popcode.app/?utm_source=test` → sign up → expect "Campaign: test".
 - **Audio stop viewer upgrades** (PRs #212–#216, all merged and live 2026-10-11/12; see the 2026-10-11 → 12 entry):
   transcript **Follow along / Read at my own pace** toggle; **exact word timing** via ElevenLabs
   forced alignment (`ELEVENLABS_API_KEY` set in Vercel, `transcript_timing` column added in prod —
@@ -3663,3 +3669,27 @@ Prompted by a creator uploading what the user called soft porn. Finding: **the o
 - On `/pricing` the admin account showed "You have 2147483503 of 2147483647 Popcodes left. 89 of those came free with things you printed with us." Admin quota is int max (`supabase/migrations/2026-09-18-quota-admin-parity.sql:32`).
 - Fix: `showQuota()` in `public/pricing.html` now returns early when `q.allowance > 1000000` — the same "unlimited" test `public/account.html:310` already uses (account page says "This account has no limit"). Regular accounts (5 free + packs + print credits) see the line unchanged.
 - Not checked in a browser. If more pages show the quota, reuse the same `> 1000000` test rather than a new admin flag.
+
+### 2026-10-13 — How are people finding Popcode? Sign-up source tracking
+
+**PRs:** #222 merged into `main` via the GitHub MCP `merge_pull_request` (the user asked to "push to prod"; `main` had moved 10 commits, merged in cleanly first). Migration run in prod by the user ("Success. No rows returned"). Vercel deploy not checked from here.
+
+#### The question
+The user's Analytics → Map screenshot showed 9 countries, 15 accounts (Kazakhstan, India, Colombia, Italy… one each), 152 viewers and asked how people worldwide find Popcode. Answer: **viewers** arrive through creators (share lines = creator's place → where watched); **accounts** were untracked apart from `referral.js` (`?from=` on the viewer's "Create your own" button → `referral_visit` / `referral_signup`). Nothing captured `document.referrer` or utm tags. The 1-account / 1-Popcode / 1-viewer countries are probably one curious person each, or a VPN (geo is Vercel's IP lookup). Suggested emailing them; growth advice given (viewer → creator conversion, print CTAs, share prompts, orgs, SEO pages).
+
+#### What was built
+- `public/source.js` (new): per-browser `localStorage.popcode_src` = `{ first, last }`. `first` is the very first visit (never overwritten, 180-day TTL); `last` updates only on a visit with an outside referrer, tags (`utm_*`, `via`, `ref`) or an ad click (`gclid`→`google_ads`, `fbclid`→`facebook`; the ids aren't stored). Referrer kept as origin + path only (no query string). Internal clicks/reloads don't count. Guarded against double load (`window.PopcodeSource`).
+- Loaded by tag in `view.html`, `nonprofits.html`, `exhibitions.html`, `auth.html`; injected by `nav.js` (same pattern as `cart.js`) on every page with the nav.
+- `auth.html` signup: `logActivity('signup', { user_id, source })` and `meta.first_source` on the account's user metadata. `activity.js` passes `opts.source` through.
+- `api/log-event.js`: `cleanSource()` rebuilds `{first,last}` from known keys only, strings capped; written to `scan_events.source` on signup rows only; `source` added to the missing-column retry regex.
+- `public/analytics.html` → Overview, after Word of mouth: `renderSignupSources()` with its own `scan_events` query (the `get_events_with_users` RPC does **not** return `source` — don't expect it there). `sourceChannel()` labels: referral_signup → "A friend's Popcode"; tags → "Campaign: X"; known hosts (Google, ChatGPT, Perplexity, Claude, Instagram, Facebook, X, Reddit, TikTok, YouTube, LinkedIn, Pinterest, Product Hunt…) → names; first page = a real project slug (checked with `projectBySlug`) → "Opened someone's Popcode"; else "Direct / unknown". Bars by channel + table of the latest 25 sign-ups (name, email, place, source).
+
+#### Lessons / caveats
+- WhatsApp, iMessage, email and most apps send no referrer → "Direct / unknown". Tag links the user posts (`?utm_source=instagram`).
+- Playwright isn't globally installed for Node here: `npm i playwright-core` in the scratchpad and launch `/opt/pw-browsers/chromium_headless_shell-1194/.../headless_shell` (the full `chrome` binary rejects old headless mode).
+- Not tested: a real sign-up end to end, the panel on prod data, iPhone.
+
+#### Open
+- Do the private-window test sign-up above; delete the test account after.
+- Email the Kazakhstan / India / Colombia / Italy accounts to ask how they heard of Popcode.
+- Possibly: show source on the Map's account pins / Activity log signup rows.
