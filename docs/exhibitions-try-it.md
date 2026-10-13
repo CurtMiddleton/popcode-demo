@@ -39,6 +39,8 @@ Look at the dancers. They aren't performing for us. They're waiting, adjusting a
 
 *ElevenLabs:* Degas is "deh-GAH"; Opéra is "OH-pair-ah". Break tags between paragraphs, as for the Sargent.
 
+**Recorded 2026-10-13:** `public/assets/exh-try-degas-stop.mp3` (26.9 s). The voice kept saying the final "s" of Degas whatever the spelling, so the hiss (3.01–3.11 s, before "painted") was silenced with 6 ms fades. The user approved it.
+
 ## 3. Manet: *Woman Reading*
 
 Woman Reading. Édouard Manet painted it around 1880, only a few years before his death.
