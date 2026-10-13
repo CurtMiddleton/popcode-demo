@@ -6,9 +6,16 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-11)
+## Current state (updated 2026-10-12)
 
 **Live and recent**
+- **Audio stop viewer upgrades** (PRs #212–#216, all merged and live 2026-10-11/12; see the 2026-10-11 → 12 entry):
+  transcript **Follow along / Read at my own pace** toggle; **exact word timing** via ElevenLabs
+  forced alignment (`ELEVENLABS_API_KEY` set in Vercel, `transcript_timing` column added in prod —
+  existing stops get timings only when re-saved in Edit); **Name** field per image in Create and Edit
+  (fixed Edit wiping `asset_name` on every save); **tap/drag scrubber**; custom covers open without the
+  purple Popcode loading screen (also for capitalised links). Follow-along and the cover-first
+  loading (placard NFC/QR, after #216) confirmed working by the user on iPhone; scrubber not yet confirmed.
 - **Audio Popcodes: upload, transcript, buttons after audio** (PRs #197–#200, all merged and live 2026-10-09):
   *or upload a file* under Record (MP3/M4A/AAC/WAV/WebM/Ogg, up to 25 MB) in create and edit; a
   **Transcript (optional)** box under every audio page (viewer shows it with line
@@ -3614,6 +3621,40 @@ Prompted by a creator uploading what the user called soft porn. Finding: **the o
 - Record the hero stop audio; point the placard QR at a real demo exhibition Popcode; add a "fictional gallery" note like /nonprofits' Common Tide line.
 - Confirm deliverables behind the pricing cards (locked NFC card, 30 works per show, board report, AI voice price); then bring `pricing.html` in line.
 - Verify the Sargent stop script facts and the four dashboard titles.
+
+
+### 2026-10-11 → 12 — Audio stops: follow-along transcript with real word timing, image names, scrubber, cover-first loading
+
+**PRs (all merged by Claude at the user's "push to prod", all live):** #212 follow-along transcript · #213 image names + ElevenLabs word timings · #214 tap/drag scrubber · #215 viewer opens on a custom cover · #216 capitalised links skip `scan.html`'s purple screen. All on branch `claude/dreamy-fermat-938pm3`, restarted from `main` after each merge.
+
+#### What was built
+- **Follow along / Read at my own pace** (#212, `public/view.html`, search `setTranscript`): the transcript is split into `.tw` word spans (whitespace stays as text nodes, so `pre-line` keeps breaks). While playing in follow mode, unreached words sit at 0.28 opacity and the box auto-scrolls the current line to ~2/3 height; a hand scroll (touch/wheel/pointer) pauses auto-scroll 4 s. Paused/ended/not started = full text. Toggle `#ap-tmode` (44px), stored in `localStorage` `popcode_transcript_mode`, logged `transcript_mode_own` / `transcript_mode_follow` (labels in `analytics.html`; no allowlist change needed in `api/log-event.js` — its list only gates slug-less events). `prefers-reduced-motion` → always own pace, toggle hidden.
+- **Real word timing** (#213): the first version timed words by character share and **ran ahead of the voice from the first word** (leading silence + pauses). Now:
+  - `api/align-transcript.js` (signed-in POST `{audio_url, transcript}`; only our `experiences` storage URLs; fetches audio with `?align=` cache-buster because Edit re-uploads audio to the same path) → ElevenLabs `POST /v1/forced-alignment` (`xi-api-key`) → `[start,end]` per word via `api/_word-timing.js` (maps per-character result onto `/\S+/` words, same split as the viewer). 501 without `ELEVENLABS_API_KEY`.
+  - `public/align-transcript.js` (create + edit) times each audio page with a transcript on save ("Timing the transcript…"); stored in `collection_items.transcript_timing` (jsonb, migration `2026-10-11-transcript-timing.sql`, **run in prod**). Edit reuses timings when neither audio (`rep.audio`) nor text changed. Any failure saves without timings; inserts retry without the column if missing.
+  - `api/collection.js` returns `transcript_timing` (42703 fallback). Viewer lights each word as it starts (+50 ms); mismatched timings → proportional fallback.
+  - **User confirmed it works.** ElevenLabs key: created by the user, set in Vercel for Production + Preview.
+- **Image names** (#213): "Name (optional)" between the page number and trash in Edit; "Add a name" on each row of the Create wizard's *Your images* (step-2 chip shows it). Saves to the existing `asset_name`. **Bug found:** Edit's save read `assetname-*` inputs that no longer existed, so every Edit save nulled all names. Inputs are 16px (iOS zooms on smaller). The viewer doesn't show the name yet (possible follow-up: title above the audio player).
+- **Scrubber** (#214): 36px-tall `#ap-scrub-hit` strip (z-index above the time row) takes pointer events: tap to jump, drag to scrub (seeks ≥120 ms apart, final seek on release); `timeupdate` leaves the bar alone while `apDragging`; thumb 16px, grows while dragging.
+- **Cover-first loading** (#215): inline script at the top of `view.html` `<head>` fetches `/api/collection` (and preloads the cover image) before A-Frame/MindAR load; `loadCollection()` reuses it (`window.__popcodeEarly`). `#loading` is now plain black, spinner fades in after 0.6 s; with a cover, loading waits for the cover image (≤3 s). Popcodes without a cover still get the purple start screen.
+- **Capitalised links** (#216): a mixed-case path (e.g. `/BruceMuseum`) matches the `/:handle` rewrite and loads `scan.html`, which showed the purple "Loading experience…" before `resolveMiscasedSlug()` redirected. An inline `<head>` script now checks the lowercase form against `/api/collection` (200/410 → `location.replace`) with the page hidden on black meanwhile; handles (404) behave as before.
+
+#### Testing approach
+- Playwright (global, `/opt/node22/lib/node_modules/playwright`, Chromium at `/opt/pw-browsers`). Stub `**/api/collection*`, Supabase CDN, and **serve audio with byte ranges** (206) — without them seeking silently snaps to 0.
+- Editor saves: Supabase Proxy stub recording `insert`s, fake `MINDAR.IMAGE.Compiler` (no swiftshader needed), route `**/api/align-transcript`. In Playwright, **later `ctx.route` registrations take precedence** — register catch-alls first.
+- API handler tested in Node with mocked `fetch`, in a scratch copy with `npm install @supabase/supabase-js @sentry/node` (repo has no `node_modules`).
+- Rewrites emulated by routing `/BruceTest` → `scan.html` and `/brucetest` → `view.html`; a rAF sampler flags any visible purple gradient. Ran the same test against `main` as a control (caught the purple screen).
+
+#### Lessons
+- **Vercel was slow 2026-10-12:** production deploys took ~8 min after merge, and a PR preview only started building 13 min after the push. Not a failure — poll `popcode.app` for a marker string instead of assuming 80 s.
+- PR previews are behind Vercel Authentication, so Claude can't curl them; the user tests previews, Claude verifies production.
+- `merge_pull_request` needs the full 40-char head SHA; a guessed one returns 409.
+
+#### Open
+- iPhone: confirm the scrubber. (Cover-first loading via the placard's NFC/QR confirmed working after #216 went live, 2026-10-12.)
+- Re-save every existing audio stop with a transcript in Edit so it gets word timings.
+- `scan.html` (handle scanner) has its own audio player with none of the follow-along/scrubber work.
+- Maybe: show the image name as the stop's title in the viewer.
 
 ### 2026-10-12 — Pricing page: no quota line for admin accounts
 

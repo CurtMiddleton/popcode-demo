@@ -487,7 +487,25 @@
         -webkit-tap-highlight-color: transparent;
       }
       .ap-tmode.shown { display: flex; }
-      .ap-tmode.shown + .ap-transcript { margin-top: 0; }
+      /* The transcript is closed by default, so visitors look at the work, not
+         the screen: a quiet Transcript button opens it (and the toggle above). */
+      .ap-trow {
+        display: none; width: 100%; max-width: 360px; margin-top: 10px;
+        align-items: center; justify-content: center; gap: 8px;
+      }
+      .ap-trow.shown { display: flex; }
+      #audio-player.t-open .ap-trow { justify-content: space-between; }
+      .ap-trow .ap-tmode { width: auto; max-width: none; margin: 0; }
+      .ap-tbtn {
+        min-height: 44px; padding: 0 16px; border-radius: 999px; border: none;
+        background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.75);
+        font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+        display: inline-flex; align-items: center; gap: 7px;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .ap-tbtn svg { width: 15px; height: 15px; }
+      #audio-player:not(.t-open) .ap-transcript { display: none; }
+      #audio-player.t-open .ap-transcript { margin-top: 4px; }
       @media (prefers-reduced-motion: reduce) {
         .ap-tmode.shown { display: none; }
         .ap-transcript .tw { transition: none; }
@@ -830,7 +848,10 @@
         <button class="ap-play" id="ap-play" aria-label="Play/Pause">▶&#xFE0E;</button>
       </div>
       <div id="ap-tap-hint">Tap &#9654; to play</div>
-      <button class="ap-tmode" id="ap-tmode" type="button"></button>
+      <div class="ap-trow" id="ap-trow">
+        <button class="ap-tbtn" id="ap-tbtn" type="button" aria-expanded="false" aria-controls="ap-transcript"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="13" y2="17"/></svg><span>Transcript</span></button>
+        <button class="ap-tmode" id="ap-tmode" type="button"></button>
+      </div>
       <div class="ap-transcript" id="ap-transcript"></div>
       <audio id="ap-audio" preload="metadata" playsinline webkit-playsinline></audio>
     </div>
@@ -1624,6 +1645,13 @@
       }
       const apTranscript = document.getElementById('ap-transcript');
       const apTmode = document.getElementById('ap-tmode');
+      const apTrow = document.getElementById('ap-trow');
+      const apTbtn = document.getElementById('ap-tbtn');
+      // Closed unless this visitor opened it before (kept per phone, so
+      // someone who needs it doesn't have to open it at every work).
+      const TOPEN_KEY = 'popcode_transcript_open';
+      let tOpen = false;
+      try { tOpen = localStorage.getItem(TOPEN_KEY) === '1'; } catch (e) {}
 
       // ── Transcript: follow along, or read at my own pace ──────────────────
       // Follow-along timing: when the page has word timings (from ElevenLabs
@@ -1662,7 +1690,12 @@
         updateTranscript();
       }
       function updateTmodeButton() {
-        const show = tWords.length > 0 && !(reduceMotion && reduceMotion.matches);
+        const has = tWords.length > 0;
+        apTrow.classList.toggle('shown', has);
+        audioPlayer.classList.toggle('t-open', has && tOpen);
+        apTbtn.setAttribute('aria-expanded', String(tOpen));
+        apTbtn.querySelector('span').textContent = tOpen ? 'Hide transcript' : 'Transcript';
+        const show = has && tOpen && !(reduceMotion && reduceMotion.matches);
         apTmode.classList.toggle('shown', show);
         apTmode.textContent = transcriptMode() === 'follow' ? 'Read at my own pace' : 'Follow along';
       }
@@ -1670,7 +1703,7 @@
       // whole text shows at full opacity.
       function updateTranscript() {
         updateTmodeButton();
-        const following = tWords.length > 0 && transcriptMode() === 'follow'
+        const following = tWords.length > 0 && tOpen && transcriptMode() === 'follow'
           && audioPlayer.classList.contains('visible') && !apAudio.paused && !apAudio.ended
           && isFinite(apAudio.duration) && apAudio.duration > 0 && !apForceDurationPending;
         apTranscript.classList.toggle('following', following);
@@ -1719,6 +1752,13 @@
       ['playing', 'pause', 'ended', 'emptied', 'seeked', 'durationchange'].forEach(ev =>
         apAudio.addEventListener(ev, updateTranscript));
       if (reduceMotion && reduceMotion.addEventListener) reduceMotion.addEventListener('change', updateTranscript);
+      apTbtn.addEventListener('click', () => {
+        tOpen = !tOpen;
+        try { localStorage.setItem(TOPEN_KEY, tOpen ? '1' : '0'); } catch (e) {}
+        logEvent(tOpen ? 'transcript_open' : 'transcript_close', currentTargetIndex);
+        tScrolledLine = null;
+        updateTranscript();
+      });
       apTmode.addEventListener('click', () => {
         tmodePref = transcriptMode() === 'follow' ? 'own' : 'follow';
         try { localStorage.setItem(TMODE_KEY, tmodePref); } catch (e) {}
