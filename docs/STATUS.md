@@ -9,6 +9,20 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 ## Current state (updated 2026-10-13)
 
 **Live and recent**
+- **/exhibitions "Try it yourself" + the At Work demo tour** (PRs #223–#225, merged 2026-10-13):
+  `popcode.app/wrenalder` (made by the user: 3 audio stops, Sargent / Degas / Manet, cover
+  with the white WREN & ALDER wordmark) + a 3-page gilt-frame PDF `assets/at-work-audio-tour.pdf`.
+  The section self-hides unless `/api/collection?slug=wrenalder` is 200. Hero phone now has real
+  audio (Play with sound). Brief, scripts, files: `docs/exhibitions-try-it.md`. **Placard QR still
+  points at /exhibitions**: repoint it to `/wrenalder`.
+- **Headphones check** (PRs #226, #228): cover setting *Ask "Headphones on?" before an audio tour*
+  (`cover_config.headphones`, off by default). Once per visit (3 h). Test chime / I can hear it /
+  Read along instead (muted, transcript open, "Sound off · Turn on" pill). **Not tried on an
+  iPhone**: check the chime volume and that the first stop autoplays after the test.
+- **Editor additions** (PRs #225, #227, #228, #229): After video **Headline size** (`end.title_px`),
+  cover **Title line spacing** (`title_lh`), stronger **Background darkness** above 100%, fainter
+  cover halos (8%, `pop-swell-soft`). None of the editor sliders were driven in a browser here
+  (admin sign-in needed).
 - **Sign-up source tracking** (PR #222, merged 2026-10-13; migration
   `2026-10-13-signup-source.sql` **has been run in prod**): every new account now
   records how it found Popcode (outside referrer, utm/via/ref tags, landing page).
@@ -3693,3 +3707,40 @@ The user's Analytics → Map screenshot showed 9 countries, 15 accounts (Kazakhs
 - Do the private-window test sign-up above; delete the test account after.
 - Email the Kazakhstan / India / Colombia / Italy accounts to ask how they heard of Popcode.
 - Possibly: show source on the Map's account pins / Activity log signup rows.
+
+### 2026-10-13 (continued) — Gallery outreach, the At Work demo tour, headphones check, cover tweaks
+
+**PRs, all merged into `main` via the GitHub MCP when the user said "push to prod":** #223 (demo audio, fictional-gallery note, outreach emails) · #224 (Try it yourself + PDF) · #225 (After the Video headline size, smaller PDF labels, wordmark) · #226 (headphones check) · #227 (background darkness) · #228 (fainter halos, headphones once per visit) · #229 (title line spacing). Vercel deploys weren't checked from here; a live fetch confirmed #224 was deployed.
+
+#### Gallery outreach (not sent)
+- `docs/exhibitions-outreach-emails.md`: 3-email cold sequence for gallery owners/directors, with merge fields and utm-tagged links. Advice given: a second sending domain, warm-up, 30–50 sends a day, US only, a few hundred hand-researched galleries rather than a bought list. **Open decisions:** the founding offer (free scripts for the first 10?), "up to 30 works" vs 15 (MindAR with 30–100 targets is still untested), and the postal address. The gallery list (Google Sheet; NY/CT/Westchester first) wasn't started.
+
+#### The At Work demo tour (`popcode.app/wrenalder`)
+- Three AIC public-domain works: Sargent *The Fountain, Villa Torlonia*, Degas *Yellow Dancers (In the Wings)*, Manet *Woman Reading*. Scripts (~70 words, ~28 s) are in `docs/exhibitions-try-it.md`, written from the AIC catalogue entries. VO is ElevenLabs voice "Tala".
+- **Degas pronunciation:** no respelling stopped the voice saying the final "s". The fix was to silence the hiss in the MP3 (3.01–3.11 s). Manet: "Man-ay" worked; a sped-up version of that word was rejected ("sounds like the whole thing sped up").
+- **How the audio was edited:** `faster-whisper` (pip, in a scratch venv) for word timestamps, a numpy high-frequency energy scan to find the sibilant, ffmpeg to re-encode. Gotcha: `ffmpeg -i in -af atempo -ss/-to` trims *after* the filter, so use `atrim` in the filter chain.
+- **Images:** the AIC IIIF server (Cloudflare bot check) and Wikimedia (429) both block this container, so the user downloaded the two images. The scan images (`exh-try-*.jpg`) are exactly what's printed in the PDF and uploaded to the Popcode.
+- **PDF:** source in `scripts/exhibitions-try-pdf/` (HTML → headless Chromium `page.pdf`). Rebuild with `npm i --no-save playwright-core` and `CHROME=… node build.mjs [popcode.app/slug]`. Use `/opt/pw-browsers/chromium_headless_shell-*/…/headless_shell`; the full `chrome` binary refuses old headless mode.
+- **Section on /exhibitions:** `#try` after How it works, plus a "Try it" header link. It's gated on the Popcode existing. `CONFIG.TRY_SLUG = 'wrenalder'`. Downloads log `exh_try_download`.
+- **Cover for the demo:** the end screen should say "This could be your show." with buttons Book a demo → Calendly and See pricing. These are suggestions; the user set them up in the editor.
+
+#### Headphones check (`view.html`)
+- Asked after Start, before the camera, only when `cover_config.headphones === true` and the Popcode has audio pages. Copy: "Headphones on? This is an audio tour. Please use headphones so the gallery stays quiet for everyone."
+- The test chime (`assets/headphone-check.mp3`, generated with ffmpeg, peaks −21 dB) plays through `apAudio` itself, to unlock it on iOS. Its `ended`/`error` events are ignored (`hpTesting`) so the chime can't log `audio_complete` or open the end screen.
+- Stored as `localStorage popcode_headphones:{slug} = {c, at}`, valid 3 h. Read-along sets `apAudio.muted` and `tOpen = true` in `startAudio`.
+- **Bug the browser test caught:** the overlay at z-index 60 sat under `#wl-cover` (9999). It's now 10050.
+
+#### Cover / end-screen editor tweaks
+- `end.title_px` slider (20–44, default 34). Cover `title_lh` slider (0.80–1.50, default 0.92).
+- Background darkness: the old gradient only darkened the middle of the image 10–20% even at 200%. Above 100% an even layer now adds up to 55%; 0–100% is unchanged. The editor preview also snapped 0% back to 100% (`|| 100`); fixed.
+- Cover halos: 17% → 8% on custom covers only. The /exhibitions and /nonprofits phone mockups match.
+
+#### Lessons
+- **Verifying the viewer headlessly:** route `/api/collection` to a saved `?slug=` JSON, and use an iPhone user agent with `hasTouch` (otherwise the desktop "Open this on your phone" note covers the page). A `reading 'get'` page error after Start comes from MindAR on the fake camera; it happens on `main` too.
+- **The Read tool can show a cached image for a reused path.** Write comparison screenshots to new filenames.
+- **Don't `git checkout -B` the session branch onto `main` without checking for unmerged commits.** It dropped the session-notes commit once (cherry-picked back).
+
+#### Open
+- iPhone checks: the headphones chime and first-stop autoplay; the rings at 8% (the user's last screenshot looked like the old 17%, probably cached); the end-screen headline at ~28 px on one line; title line spacing on the Bruce cover.
+- Repoint the /exhibitions placard QR code and address to `/wrenalder`.
+- Outreach: the decisions above, then the gallery list.
