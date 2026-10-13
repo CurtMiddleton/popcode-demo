@@ -523,6 +523,30 @@
            first; the QR code and short address are the fallbacks. ── */
       .plac-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 56px; align-items: center; }
       @media (max-width: 960px) { .plac-grid { grid-template-columns: 1fr; gap: 36px; } }
+      /* ── Try it yourself (as on /nonprofits): the At Work handout + the demo
+         Popcode. Hidden until that Popcode exists (see TRY_SLUG). ── */
+      .try-band { background: #f0eeea; padding: 72px 0; }
+      .try-band[hidden] { display: none; }
+      @media (max-width: 640px) { .try-band { padding: 56px 0; } }
+      .try { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 40px; align-items: center; max-width: 880px; }
+      .try-card img { width: 100%; height: auto; display: block; border-radius: 3px; box-shadow: 0 18px 34px rgba(0,0,0,.18), 0 2px 6px rgba(0,0,0,.12); }
+      .try h2 { margin-bottom: 12px; }
+      .try-copy { font-size: 16px; line-height: 1.55; color: var(--ink); margin: 0 0 8px; }
+      .try-copy b { font-weight: 700; }
+      .try-btns { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+      /* Phones get the scan button; mouse-and-keyboard screens get "scan this screen". */
+      .try-touch { display: none; }
+      @media (hover: none) and (pointer: coarse) {
+        .try-desk { display: none; }
+        .try-touch { display: block; }
+        .try-btns { flex-direction: column; align-items: center; gap: 12px; }
+        .try-btns .btn { display: flex; justify-content: center; width: min(100%, 300px); }
+      }
+      @media (max-width: 700px) {
+        .try { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+        .try-card { width: 100%; max-width: 220px; margin: 0 auto; }
+        .try h2, .try .eyebrow { text-align: center; }
+      }
       .demo-note { font-size: 13px; line-height: 1.5; color: var(--faint); margin: 18px 0 0; max-width: 40em; }
       .placard-stage { background: #e9e5de; border-radius: var(--pc-radius-card); padding: 40px 30px; display: flex; justify-content: center; }
       @media (max-width: 560px) { .placard-stage { padding: 26px 14px; margin: 0 -6px; } }
@@ -668,6 +692,7 @@
       </a>
       <nav class="lp-links" aria-label="On this page">
         <a href="#how">How it works</a>
+        <a href="#try" class="try-link" hidden>Try it</a>
         <a href="#visitors">For visitors</a>
         <a href="#space">For your space</a>
         <a href="#pricing">Pricing</a>
@@ -839,6 +864,35 @@
               </div></div>
             </li>
           </ol>
+        </div>
+      </section>
+
+      <!-- Try it yourself. Hidden until the demo Popcode exists: the script at
+           the bottom shows it once /api/collection finds CONFIG.TRY_SLUG. -->
+      <section id="try" class="try-band" aria-labelledby="try-h" hidden>
+        <div class="wrap try">
+          <div class="try-card">
+            <img src="/assets/at-work-audio-tour-preview.jpg" width="935" height="1210" loading="lazy"
+                 alt="A page of the At Work audio tour handout: John Singer Sargent's The Fountain, Villa Torlonia in a gilt frame, with its wall label and three steps to try the tour">
+          </div>
+          <div>
+            <p class="eyebrow">Try it yourself</p>
+            <h2 id="try-h">Hear a stop from <em>At Work</em></h2>
+            <div class="try-desk">
+              <p class="try-copy">Download three works from the show and print them, or just open the PDF on this screen.</p>
+              <p class="try-copy">On your phone, go to <b class="try-addr">popcode.app/wrenalder</b>, tap Start and point your phone at a painting. Headphones on.</p>
+              <div class="try-btns">
+                <a class="btn btn-primary try-download" href="/assets/at-work-audio-tour.pdf" download="At-Work-audio-tour.pdf">Download the three works</a>
+              </div>
+            </div>
+            <div class="try-touch">
+              <p class="try-copy">Open the PDF on a computer or print it. Then tap below and point your phone at a painting. Headphones on.</p>
+              <div class="try-btns">
+                <a class="btn btn-primary try-scan" href="/wrenalder">Start the audio tour</a>
+                <a class="btn btn-secondary try-download" href="/assets/at-work-audio-tour.pdf" download="At-Work-audio-tour.pdf">Download the three works</a>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1101,7 +1155,12 @@
         // The hero phone's audio stop (ElevenLabs voice "Tala", 2026-10-13),
         // reading the transcript shown on the phone word for word. Empty would
         // hide "Play with sound" and leave the phone on its silent loop.
-        DEMO_AUDIO: '/assets/exhibitions-sargent-stop.mp3'
+        DEMO_AUDIO: '/assets/exhibitions-sargent-stop.mp3',
+        // The demo Popcode behind "Try it yourself": three works from At Work
+        // (scripts, recordings and how to make it: docs/exhibitions-try-it.md).
+        // The section stays hidden until this slug resolves, so the page never
+        // sends anyone to a Popcode that doesn't exist yet.
+        TRY_SLUG: 'wrenalder'
       };
       var FALLBACK_BOOKING = 'mailto:hello@popcodeapp.com?subject=' +
         encodeURIComponent('Popcode for Exhibitions — demo');
@@ -1144,6 +1203,25 @@
         if (CONFIG.BOOKING_URL) { a.target = '_blank'; a.rel = 'noopener'; }
         a.addEventListener('click', function () { logEvent('exh_book_demo_click'); });   // never blocks the navigation
       });
+
+      // ── Try it yourself: shown once the demo Popcode exists ──
+      (function () {
+        var sec = document.getElementById('try');
+        if (!sec || !CONFIG.TRY_SLUG) return;
+        var addr = 'popcode.app/' + CONFIG.TRY_SLUG;
+        sec.querySelectorAll('.try-addr').forEach(function (b) { b.textContent = addr; });
+        sec.querySelectorAll('.try-scan').forEach(function (a) { a.href = '/' + CONFIG.TRY_SLUG; });
+        sec.querySelectorAll('.try-download').forEach(function (a) {
+          a.addEventListener('click', function () { logEvent('exh_try_download'); });
+        });
+        fetch('/api/collection?slug=' + encodeURIComponent(CONFIG.TRY_SLUG))
+          .then(function (r) {
+            if (!r.ok) return;
+            sec.hidden = false;
+            document.querySelectorAll('.try-link').forEach(function (a) { a.hidden = false; });
+          })
+          .catch(function () {});
+      })();
 
       // ── FAQ ──
       document.querySelectorAll('.faq-q').forEach(function (btn, i) {
