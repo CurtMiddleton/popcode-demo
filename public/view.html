@@ -183,6 +183,15 @@
       @keyframes pop-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
       @keyframes pop-spinin  { from { transform: rotate(0); } to { transform: rotate(360deg); } }
       .pop-tap .pop-halo { animation: pop-swell 5s linear 1s infinite; }
+      /* Over a cover photo the stacked halos read as a milky haze, so a custom
+         cover gets the same motion, much fainter. */
+      @keyframes pop-swell-soft {
+        0%   { transform: scale(1);   opacity: 0; }
+        6%   {                        opacity: 0.08; }
+        74%  {                        opacity: 0.08; }
+        100% { transform: scale(5.6); opacity: 0; }
+      }
+      #wl-cover .pop-tap .pop-halo { animation-name: pop-swell-soft; }
       .pop-tap .h2 { animation-delay: 2s; }
       .pop-tap .h3 { animation-delay: 3s; }
       .pop-tap .h4 { animation-delay: 4s; }
@@ -1273,12 +1282,26 @@
       // quietly (peaks about -21 dB) so a forgotten pair means a murmur, not
       // an announcement. The chime plays through apAudio itself: on iOS that
       // tap unlocks the element, so the first stop's play() isn't blocked.
-      // The answer is kept per phone per tour: 'hear' or 'read'.
+      // The answer ('hear' or 'read') is kept per phone per tour for one
+      // visit: 3 hours from when it was given. Closing the tour, rescanning or
+      // reopening the link in the next room doesn't ask again; coming back
+      // another day (or much later the same day) does.
       const HP_KEY = 'popcode_headphones:' + id;
       // var, not let: the loader above sets hpWanted, and may run first.
       var hpWanted = hpWanted || false;
-      var hpChoice = null;
-      try { hpChoice = localStorage.getItem(HP_KEY); } catch (e) {}
+      const HP_VISIT_MS = 3 * 60 * 60 * 1000;
+      var hpChoice = null, hpAt = 0;
+      try {
+        // { c: 'hear' | 'read', at: ms }. Anything else (including the plain
+        // strings stored before the 3-hour visit) counts as no answer.
+        const v = JSON.parse(localStorage.getItem(HP_KEY) || 'null');
+        if (v && (v.c === 'hear' || v.c === 'read') && Date.now() - v.at < HP_VISIT_MS) { hpChoice = v.c; hpAt = v.at; }
+      } catch (e) {}
+      // Turning the sound on mid-visit changes the answer but not when the
+      // visit started, so it still expires 3 hours after the first answer.
+      function hpSave(choice, at) {
+        try { localStorage.setItem(HP_KEY, JSON.stringify({ c: choice, at: at || Date.now() })); } catch (e) {}
+      }
       var readAlong = hpChoice === 'read';
       var hpTesting = false; // the chime is playing: apAudio's stop handlers stand down
       const hpCheck = document.getElementById('hp-check');
@@ -1296,7 +1319,8 @@
       function hpAnswer(choice) {
         hpChoice = choice;
         readAlong = choice === 'read';
-        try { localStorage.setItem(HP_KEY, choice); } catch (e) {}
+        hpAt = Date.now();
+        hpSave(choice, hpAt);
         logEvent(choice === 'read' ? 'headphones_read' : 'headphones_yes');
         try { apAudio.pause(); } catch (e) {}
         hpTesting = false;
@@ -1309,7 +1333,8 @@
         readAlong = false;
         apAudio.muted = false;
         document.getElementById('ap-sound').classList.remove('show');
-        try { localStorage.setItem(HP_KEY, 'hear'); } catch (e) {}
+        hpChoice = 'hear';
+        hpSave('hear', hpAt);
         logEvent('headphones_sound_on', currentTargetIndex);
       });
 
