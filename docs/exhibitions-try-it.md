@@ -51,6 +51,8 @@ But it's a stage set. Manet built the café in his own studio, and the flowers b
 
 *ElevenLabs:* Édouard Manet is "ay-DWAR man-AY".
 
+**Recorded 2026-10-13:** `public/assets/exh-try-manet-stop.mp3` (25.5 s), voiced from the spelling "Man-ay". Both "Manet"s (1.30–2.02 s and 17.89–18.51 s in the original take) were sped up 25% with ffmpeg `atempo`, pitch unchanged, and joined with 8 ms crossfades, because the user found them drawn out. Pending the user's listen.
+
 ---
 
 ## Making the demo Popcode (in the app, signed in as the admin account)
