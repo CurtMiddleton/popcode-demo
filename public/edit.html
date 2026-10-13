@@ -924,6 +924,10 @@
 
               <label for="end-title">Headline (optional)</label>
               <input type="text" id="end-title" maxlength="60" placeholder="Thank you for watching."/>
+              <div class="wl-slider-row">
+                <div class="wl-slider-label"><span>Headline size</span><span class="wl-slider-val" id="end-title-px-val">34 px</span></div>
+                <input type="range" id="end-title-px" min="20" max="44" step="1" value="34"/>
+              </div>
               <label for="end-subtitle">Line under it (optional)</label>
               <input type="text" id="end-subtitle" maxlength="90" placeholder="Help bring back the next marsh."/>
 
@@ -1676,7 +1680,7 @@
       }
 
       // ── After the Video (admin only) ──────────────────────────────────────────
-      // Saved as cover_config.end = { enabled, title, subtitle, bg_url, replay,
+      // Saved as cover_config.end = { enabled, title, subtitle, bg_url, replay, title_px,
       // buttons: [{ label, sub, url }],
       // per_target: { "<target_index>": { title, subtitle, buttons, bg_url } } };
       // view.html shows it when a video ends. A photo listed in per_target gets
@@ -1691,6 +1695,7 @@
       // url is the saved image, file a newly picked one waiting to upload.
       const noBg = () => ({ url: null, file: null, preview: null });
       let endShared = { title: '', subtitle: '', buttons: [] };
+      const END_TITLE_PX = 34; // view.html's .end-title default
       let endOwn = {};       // target_index -> { title, subtitle, buttons }
       let endSel = 'all';    // 'all' or a target_index
 
@@ -1700,6 +1705,8 @@
         document.getElementById('end-preview-link').href = '/' + slug + '?preview=end';
         document.getElementById('end-enabled').checked = !!(e && e.enabled);
         document.getElementById('end-replay').checked = !(e && e.replay === false);
+        // One headline size for the whole end screen (per-photo headlines too).
+        document.getElementById('end-title-px').value = (e && Number(e.title_px)) || END_TITLE_PX;
         endShared = {
           title: (e && e.title) || '',
           subtitle: (e && e.subtitle) || '',
@@ -1736,7 +1743,7 @@
         });
         renderEndTargets();
         rows.addEventListener('input', updateEndPreview);
-        ['end-title', 'end-subtitle'].forEach(id => document.getElementById(id).addEventListener('input', updateEndPreview));
+        ['end-title', 'end-subtitle', 'end-title-px'].forEach(id => document.getElementById(id).addEventListener('input', updateEndPreview));
         document.getElementById('end-replay').addEventListener('change', updateEndPreview);
         document.getElementById('end-bg-pick').addEventListener('click', () => document.getElementById('end-bg-input').click());
         document.getElementById('end-bg-input').addEventListener('change', (ev) => {
@@ -1866,6 +1873,10 @@
         const logo = document.getElementById('ep-logo');
         if (wlCoverCfg.org_logo_url) { logo.src = wlCoverCfg.org_logo_url; logo.style.display = 'block'; } else { logo.style.display = 'none'; }
         document.getElementById('ep-title').textContent = document.getElementById('end-title').value.trim();
+        // The preview phone is drawn at 19px for the viewer's 34px; scale with it.
+        const endTitlePx = Number(document.getElementById('end-title-px').value) || END_TITLE_PX;
+        document.getElementById('end-title-px-val').textContent = endTitlePx + ' px';
+        document.getElementById('ep-title').style.fontSize = (endTitlePx * 19 / END_TITLE_PX).toFixed(1) + 'px';
         document.getElementById('ep-sub').textContent = document.getElementById('end-subtitle').value.trim();
         const wrap = document.getElementById('ep-btns');
         wrap.textContent = '';
@@ -1945,6 +1956,7 @@
               subtitle: endShared.subtitle || null,
               bg_url: bgUrl || null,
               replay: document.getElementById('end-replay').checked,
+              title_px: Number(document.getElementById('end-title-px').value) || END_TITLE_PX,
               buttons: buttons.map(b => ({ label: b.label, sub: b.sub || null, url: b.url })),
               per_target: perTarget
             }
