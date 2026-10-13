@@ -444,7 +444,7 @@
          The header and hero run the full window width, so on a wide window the
          centred .wrap drifted right until the bar ran into the phone. */
       @media (min-width: 861px) {
-        .codebar .wrap { max-width: none; margin: 0; padding-left: var(--hero-pad, 180px); }
+        .codebar .wrap { max-width: none; margin: 0; padding-left: var(--codebar-x, var(--hero-pad, 180px)); }
       }
       .codebar .lbl { font-family: var(--serif); font-size: 25px; margin-bottom: 14px; }
       .codebar form { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -1670,9 +1670,13 @@
           if (!hero) return;
           // Below nav.js's own breakpoint the header re-lays itself; the CSS
           // fallback takes over there.
-          if (!brand || !brand.offsetParent) { root.style.removeProperty('--hero-pad'); return; }
-          root.style.setProperty('--hero-pad',
+          if (!brand || !brand.offsetParent) root.style.removeProperty('--hero-pad');
+          else root.style.setProperty('--hero-pad',
             Math.round(brand.getBoundingClientRect().left + COPY_INSET) + 'px');
+          // The link bar starts under the Create button. The buttons are set
+          // flush right, so their left edge depends on their own widths.
+          var btn = document.querySelector('.hero-cta .btn');
+          if (btn) root.style.setProperty('--codebar-x', Math.round(btn.getBoundingClientRect().left) + 'px');
         }
         window.addEventListener('resize', alignHeroToNav);
         // nav.js is deferred and injects the header itself, so wait for it.
