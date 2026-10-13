@@ -47,9 +47,11 @@ the opening.
 Worth a 15-minute look? Here's a demo show to try:
 https://popcode.app/exhibitions?utm_source=email&utm_medium=cold&utm_campaign=galleries-oct
 
+Curt
+
 Curt Middleton
-Popcode
-[postal address]
+Founder, Popcode · popcode.app
+709 Main St, New Rochelle, NY 10801
 
 If this isn't for you, reply "no thanks" and I won't write again.
 
@@ -81,6 +83,12 @@ works.
 
 Curt
 
+Curt Middleton
+Founder, Popcode · popcode.app
+709 Main St, New Rochelle, NY 10801
+
+If this isn't for you, reply "no thanks" and I won't write again.
+
 ---
 
 ## Email 3 — Day 10
@@ -94,6 +102,12 @@ better person at {{gallery}} to talk to about the next show?
 
 Curt
 
+Curt Middleton
+Founder, Popcode · popcode.app
+709 Main St, New Rochelle, NY 10801
+
+If this isn't for you, reply "no thanks" and I won't write again.
+
 ---
 
 ## Before sending — check these
@@ -104,8 +118,9 @@ Curt
    cards on /exhibitions.
 2. **"Up to 15 works"** until a tour with 30+ works has been tested (MindAR
    with 30–100 targets in one Popcode is untested; STATUS.md).
-3. **Fill in `[postal address]`.** US cold email needs a physical address and a
-   way to opt out.
+3. **Signature + opt-out on every email (done 2026-10-13):** US cold email
+   (CAN-SPAM) needs the postal address and a way to opt out in each message,
+   not just the first. Honour "no thanks" replies promptly.
 4. **The demo works:** the hero phone plays sound, and the Try it yourself
    PDF opens the real tour at popcode.app/wrenalder.
 5. **Only US galleries for now.** UK, EU and Canadian rules on cold email are
