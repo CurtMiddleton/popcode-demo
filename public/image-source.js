@@ -1,6 +1,6 @@
 /* Where the "Image to scan" comes from — one menu, every source in it.
  *
- *   openImageSourceMenu({ onPick(imageFile) {} })
+ *   openImageSourceMenu({ onPick(imageFile) {}, onPickMany(imageFiles) {} })
  *
  * Tapping the scan-image tile opens this instead of going straight to the OS
  * picker, so "Frame from video" sits alongside the camera and the photo library
@@ -144,7 +144,7 @@
         <div class="ism-list">
           ${rows.map((r, i) => r.accept ? `
             <label class="ism-row" data-i="${i}">
-              <input type="file" accept="${r.accept}"${r.capture ? ` capture="${r.capture}"` : ''}/>
+              <input type="file" accept="${r.accept}"${r.capture ? ` capture="${r.capture}"` : ''}${r.runMany ? ' multiple' : ''}/>
               <span class="ism-icon">${r.icon}</span>
               <span class="ism-text"><span class="ism-name">${r.name}</span><span class="ism-desc">${r.desc}</span></span>
             </label>` : `
@@ -174,11 +174,12 @@
       const input = el.querySelector('input');
       if (input) {
         input.addEventListener('change', function () {
-          const file = this.files && this.files[0];
+          const files = this.files ? Array.from(this.files) : [];
           this.value = ''; // so re-picking the same file still fires
-          if (!file) return;
+          if (!files.length) return;
           close();
-          row.run(file);
+          if (row.runMany && files.length > 1) row.runMany(files);
+          else row.run(files[0]);
         });
       } else {
         el.addEventListener('click', () => { close(); row.run(); });
@@ -189,11 +190,16 @@
   // Where the scan image comes from. Photo Library and Choose File are one row
   // on purpose: on iOS they are two rows of Apple's own sheet, and a page cannot
   // open that sheet pre-narrowed to one of them.
+  //
+  // opts.onPickMany(files), when given, lets the library row take several
+  // images at once (one page each); picking just one still calls onPick.
   window.openImageSourceMenu = function openImageSourceMenu(opts) {
     opts = opts || {};
     const pick = (f) => { if (opts.onPick) opts.onPick(f); };
-    openMenu('Image to scan', [
-      { name: 'Photo Library or File', desc: 'Pick a photo you already have', icon: IC_LIBRARY, accept: 'image/*', run: pick },
+    const many = opts.onPickMany ? (fs) => opts.onPickMany(fs) : null;
+    openMenu(many ? 'Images to scan' : 'Image to scan', [
+      { name: 'Photo Library or File', desc: many ? 'Pick one photo, or several at once' : 'Pick a photo you already have',
+        icon: IC_LIBRARY, accept: 'image/*', run: pick, runMany: many },
       { name: 'Take Photo', desc: 'Shoot one with the camera now', icon: IC_CAMERA, accept: 'image/*', capture: 'environment', run: pick },
       { name: 'Frame from Video', desc: 'Scrub a video and grab a still from it', icon: IC_FRAME, accept: 'video/*',
         run: (videoFile) => showSheet(videoFile, { onPick: pick }) }

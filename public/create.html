@@ -625,6 +625,8 @@
         background: transparent; font: inherit; font-size: 15px; font-weight: 700; color: #1a1a1a; cursor: pointer; }
       .wiz-add:hover { border-color: #b9b9b9; background: #fff; }
       .wiz-note { font-size: 13px; color: var(--wiz-muted); text-align: center; margin-top: 12px; line-height: 1.45; }
+      .wiz-skip:not([hidden]) { display: block; margin: 16px auto 0; }
+      .wiz-multi-hint { max-width: 30em; margin-left: auto; margin-right: auto; }
 
       /* Name: the existing fields, restyled; the link in a white box with an Edit pill. */
       #wiz .field-label { max-width: none; margin-bottom: 10px; }
@@ -773,6 +775,7 @@
           <h2 class="wiz-h" id="wiz-image-title">Choose an image</h2>
           <p class="wiz-lede">This is the image people will scan with the Popcode app.<br class="wide-br"> When they scan it, your video or audio plays.</p>
           <div class="wiz-slot" id="wiz-image-slot"></div>
+          <p class="wiz-note wiz-multi-hint" id="wiz-multi-hint" hidden>Making a set? Pick several images at once. Each becomes its own page, and you add what plays for each next.</p>
           <div class="wiz-checking" id="wiz-checking"><span class="wiz-spin"></span>Checking your image…</div>
           <div class="wiz-warn" id="wiz-warn">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -815,6 +818,7 @@
             <button type="button" class="wiz-change wiz-change-montage" id="wiz-montage-again">Make a new montage</button>
           </div>
           <div class="wiz-slot" id="wiz-media-slot"></div>
+          <button type="button" class="wiz-textbtn wiz-skip" id="wiz-skip" hidden>Skip this one for now</button>
         </section>
 
         <section class="wiz-step" data-step="review">
@@ -1223,9 +1227,38 @@
           alert("The image picker didn't load. Reload the page and try again.");
           return;
         }
+        // Several at once (one page each), except for a Shop product, which
+        // takes one image, or when changing an image that's already in.
+        const batchOk = !document.body.classList.contains('from-shop') && !(window.wizState && wizState().editing);
         openImageSourceMenu({
-          onPick: (file) => applyMediaFile(file, 'photo', n, null).catch(e => console.error(e))
+          onPick: (file) => applyMediaFile(file, 'photo', n, null).catch(e => console.error(e)),
+          onPickMany: batchOk ? (files) => addImageBatch(n, files).catch(e => console.error(e)) : null
         });
+      }
+
+      // A batch of scan images: the first fills page n, each of the rest gets a
+      // new page, in the order picked. Their videos/audio are added afterwards,
+      // one image at a time (the wizard's What plays step walks through them).
+      // Capped at MAX_PAGES per Popcode, and at what the account has left.
+      const MAX_PAGES = 30;
+      async function addImageBatch(n, files) {
+        files = files.filter(f => /^image\//.test(f.type) || /\.(heic|heif|jpe?g|png|webp|gif)$/i.test(f.name || ''));
+        if (!files.length) return;
+        const others = pagesOnForm() - 1;            // page n is the one being filled
+        let room = MAX_PAGES - others, byQuota = false;
+        if (capped() && quota.remaining - others < room) { room = quota.remaining - others; byQuota = true; }
+        if (room <= 0) { showQuotaSheet(quota.remaining, quota.allowance, others + files.length, false); return; }
+        const take = files.slice(0, room);
+        await applyMediaFile(take[0], 'photo', n, null);
+        for (const f of take.slice(1)) {
+          addPage();
+          await applyMediaFile(f, 'photo', pageCount, null);
+        }
+        if (window.wizSync) wizSync();
+        if (files.length > take.length) {
+          if (byQuota) showQuotaSheet(quota.remaining, quota.allowance, others + files.length, false);
+          else alert(`Added the first ${take.length} images. A Popcode can hold up to ${MAX_PAGES}; make another Popcode for the rest.`);
+        }
       }
 
       function switchMediaType(n, mode) {
@@ -2162,6 +2195,13 @@
       const WIZ_LABELS = { image: 'Image', plays: 'What plays', review: 'Your images', name: 'Name' };
       const WIZ_ORDER = ['image', 'plays', 'review', 'name', 'gen'];
       const wiz = { step: 'image', n: 1, editing: false, mounted: null };
+      window.wizState = () => wiz;
+      // After a batch: the next image (in page order) that has its scan image
+      // but nothing to play yet.
+      const nextNeedingMedia = after => {
+        const ps = wizPages();
+        return ps.slice(ps.indexOf(after) + 1).find(m => pairs[m] && pairs[m].photo && !pageHasMedia(pairs[m]));
+      };
       const $w = id => document.getElementById(id);
       const wizUrls = new WeakMap();
       const wizUrl = f => { if (!f) return ''; if (!wizUrls.has(f)) wizUrls.set(f, URL.createObjectURL(f)); return wizUrls.get(f); };
@@ -2287,9 +2327,12 @@
           if (warn && window.PopcodeScanCheck) $w('wiz-warn-msg').textContent = PopcodeScanCheck.MESSAGES[p.scan.reason] || '';
           next.textContent = warn ? 'Use it anyway' : 'Next';
           next.disabled = !p.photo;
+          $w('wiz-multi-hint').hidden = SHOP || wiz.editing || !!p.photo;
         }
         if (s === 'plays') {
-          $w('wiz-plays-eyebrow').textContent = pages.length > 1 ? `Step 2 · Image ${k}` : 'Step 2';
+          $w('wiz-plays-eyebrow').textContent = pages.length > 1 ? `Step 2 · Image ${k} of ${pages.length}` : 'Step 2';
+          // Mid-batch: leave this one for later and go on to the next.
+          $w('wiz-skip').hidden = SHOP || wiz.editing || pages.length < 2 || pageHasMedia(p);
           $w('wiz-chip-img').src = wizUrl(p.photo);
           $w('wiz-chip-name').textContent = (p.name || '').trim() || `Image ${k}`;
           const kind = kindOf(p);
@@ -2320,9 +2363,12 @@
                 <button type="button" class="wiz-icon" title="Remove" aria-label="Remove image ${i + 1}" onclick="removePage(${n})">${ICON_TRASH}</button>
               </div></div>`;
           }).join('');
-          $w('wiz-review-lede').textContent = done.length === 1
-            ? 'One image is all you need. Add more to have each one play its own video or audio, all under one link.'
-            : `${done.length} images, each playing its own video or audio, all under one link.`;
+          const waiting = done.filter(n => !pageHasMedia(pairs[n])).length;
+          $w('wiz-review-lede').textContent = waiting
+            ? `${done.length} images under one link. ${waiting === 1 ? 'One still needs' : waiting + ' still need'} something to play: tap the pencil to add it. Images without one are left out.`
+            : done.length === 1
+              ? 'One image is all you need. Add more to have each one play its own video or audio, all under one link.'
+              : `${done.length} images, each playing its own video or audio, all under one link.`;
           next.textContent = 'Next: name it';
           next.disabled = !done.some(n => pageHasMedia(pairs[n]));
         }
@@ -2349,8 +2395,16 @@
       $w('wiz-next').addEventListener('click', () => {
         const s = wiz.step;
         if (s === 'image') return wizGo('plays');
-        if (s === 'plays') { wiz.editing = false; return wizGo(SHOP ? 'name' : 'review'); }
+        if (s === 'plays') {
+          if (!wiz.editing && !SHOP) { const nx = nextNeedingMedia(wiz.n); if (nx) return wizGo('plays', nx, 'fwd'); }
+          wiz.editing = false; return wizGo(SHOP ? 'name' : 'review');
+        }
         if (s === 'review') return wizGo('name');
+      });
+      $w('wiz-skip').addEventListener('click', () => {
+        const nx = nextNeedingMedia(wiz.n);
+        if (nx) return wizGo('plays', nx, 'fwd');
+        wiz.editing = false; return wizGo('review');
       });
       $w('wiz-back').addEventListener('click', () => {
         const s = wiz.step;
@@ -2421,19 +2475,33 @@
       $w('wiz-warn-other').addEventListener('click', () => pickScanImage(wiz.n));
 
       // "May be hard to scan": runs as soon as an image is picked, never blocks.
-      window.wizScanCheck = async function (n, file) {
+      // Checks run one at a time, so a batch of images doesn't check them all
+      // at once; the image on screen still gets its full sweep.
+      let scanChain = Promise.resolve();
+      window.wizScanCheck = function (n, file) {
         const p = pairs[n]; if (!p) return;
         p.scan = 'checking';
         const card = wizEls[n] && wizEls[n].photo.querySelector('.media-card');
         wizReplay(card, 'pop');
         wizSync();
-        const [result] = await Promise.all([
-          window.PopcodeScanCheck ? PopcodeScanCheck.check(file) : { ok: true, skipped: true },
-          new Promise(r => setTimeout(r, 1400))     // let the sweep finish a clean pass
-        ]);
-        if (!pairs[n] || pairs[n].photo !== file) return;
-        pairs[n].scan = result;
-        wizSync();
+        const run = async () => {
+          if (!pairs[n] || pairs[n].photo !== file) return;
+          const [result] = await Promise.all([
+            // A check that fails to run is no reason to warn, or to spin forever.
+            // Capped at 8 s: checks run in a queue, so one that hung would hold
+            // up every image after it.
+            Promise.race([
+              window.PopcodeScanCheck ? Promise.resolve().then(() => PopcodeScanCheck.check(file)) : { ok: true, skipped: true },
+              new Promise(r => setTimeout(() => r({ ok: true, skipped: true }), 8000))
+            ]).catch(() => ({ ok: true, skipped: true })),
+            new Promise(r => setTimeout(r, wiz.mounted === n ? 1400 : 0))     // let the sweep finish a clean pass
+          ]);
+          if (!pairs[n] || pairs[n].photo !== file) return;
+          pairs[n].scan = result;
+          wizSync();
+        };
+        scanChain = scanChain.then(run, run);
+        return scanChain;
       };
 
       wizGo('image', wizPages()[0]);

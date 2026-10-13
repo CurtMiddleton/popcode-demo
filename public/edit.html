@@ -2787,16 +2787,41 @@
 
       // Tapping a scan-image tile opens the source menu (library / camera /
       // frame from a video) rather than going straight to the OS picker.
-      function openScanImageMenu(onPick) {
+      function openScanImageMenu(onPick, onPickMany) {
         if (typeof openImageSourceMenu !== 'function') {
           alert("The image picker didn't load. Reload the page and try again.");
           return;
         }
-        openImageSourceMenu({ onPick });
+        openImageSourceMenu({ onPick, onPickMany: onPickMany || null });
       }
 
+      // New pages can take several scan images at once (create.html does the
+      // same): the first fills page n, each of the rest gets a new page, and
+      // their videos/audio are added afterwards, page by page.
       function pickScanImage(n) {
-        openScanImageMenu((file) => applyMediaFile(file, 'photo', n, null).catch(e => console.error(e)));
+        openScanImageMenu((file) => applyMediaFile(file, 'photo', n, null).catch(e => console.error(e)),
+          (files) => addNewImageBatch(n, files).catch(e => console.error(e)));
+      }
+      const MAX_PAGES = 30;   // as create.html
+      async function addNewImageBatch(n, files) {
+        files = files.filter(f => /^image\//.test(f.type) || /\.(heic|heif|jpe?g|png|webp|gif)$/i.test(f.name || ''));
+        if (!files.length) return;
+        await loadQuota();
+        const others = document.querySelectorAll('#pages .page').length - 1;   // page n is the one being filled
+        let room = MAX_PAGES - others, byQuota = false;
+        const quotaRoom = roomForNew() - (newPagesOnForm() - 1);
+        if (capped() && quotaRoom < room) { room = quotaRoom; byQuota = true; }
+        if (room <= 0) { showQuotaSheet(roomForNew(), quota.allowance, newPagesOnForm() - 1 + files.length); return; }
+        const take = files.slice(0, room);
+        await applyMediaFile(take[0], 'photo', n, null);
+        for (const f of take.slice(1)) {
+          addNewPage();
+          await applyMediaFile(f, 'photo', newPageKey, null);
+        }
+        if (files.length > take.length) {
+          if (byQuota) showQuotaSheet(roomForNew(), quota.allowance, newPagesOnForm() - take.length + files.length);
+          else alert(`Added the first ${take.length} images. A Popcode can hold up to ${MAX_PAGES}; make another Popcode for the rest.`);
+        }
       }
 
       // Apply a replacement photo to an existing page — same effect as picking a
@@ -2978,6 +3003,14 @@
         const keptItems = existingItems.filter(item => !deletedExistingIds.has(item.id));
         // Collect complete new pairs
         const readyNew = Object.values(newPairs).filter(newPairReady);
+        // New images still waiting for a video or audio (easy to leave after
+        // adding a batch) aren't saved: say so rather than drop them quietly.
+        const waiting = Object.values(newPairs).filter(p => p.photo && !newPairReady(p)).length;
+        if (waiting) {
+          const go = await popcodeConfirm(`${waiting === 1 ? 'One new image has' : waiting + ' new images have'} nothing to play yet, so ${waiting === 1 ? 'it' : 'they'} won\u2019t be saved. Add a video or audio first, or save the rest now.`,
+            { title: 'Some images have nothing to play', confirmText: 'Save the rest', cancelText: 'Go back' });
+          if (!go) return;
+        }
 
         // Validate that any kept item that's been switched TO audio actually has audio
         for (const item of keptItems) {
