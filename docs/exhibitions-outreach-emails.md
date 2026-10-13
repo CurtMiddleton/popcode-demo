@@ -9,6 +9,19 @@ sequence when someone replies.
 afternoon" or "shows that open on Friday" — we build and test the tour in time
 for the opening.
 
+## The list
+
+Google Sheet "Popcode gallery outreach list" (owner: the user's Drive):
+https://docs.google.com/spreadsheets/d/1qguOaOI37s7V1wjm0M9zWdsp13LMjbRJNeue4pTfOl0/edit
+
+142 venues, researched 2026-10-13 from each venue's own website: Chelsea 33, rest
+of Manhattan 34, Brooklyn & Long Island City 16, Westchester & Hudson Valley 26,
+Connecticut 33. 121 have a published email ("Ready"); 21 are "Find email"
+(contact form only). No emails were guessed. The Status column is a dropdown
+(Find email / Ready / In sequence / Replied / Demo booked / Pilot signed / Not
+interested / Opted out). "Your hook line" fills {{hook}}. Show dates were current
+on 2026-10-13: check before each send.
+
 ## Merge fields
 
 | Field | What goes in it | Example |
