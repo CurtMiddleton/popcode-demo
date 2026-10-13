@@ -2028,6 +2028,7 @@
           await ensureAllEvents();
           renderFunnel();
           renderWordOfMouth();
+          renderSignupSources();
         } catch (e) {
           console.error('loadFunnel error:', e);
           wrap.innerHTML = '<div class="empty" style="padding:20px">Could not build the funnel: ' +
@@ -2114,6 +2115,121 @@
        * All time, like the funnel above: whether a print eventually produced a
        * creator is a lifetime question, not a 30-day one.
        */
+      /*
+       * How sign-ups found Popcode. public/source.js remembers each browser's
+       * first visit and its latest visit from somewhere (outside referrer or a
+       * tagged link); auth.html sends both with the signup event, stored in
+       * scan_events.source (2026-10-13-signup-source.sql). The latest touch
+       * wins when there is one — it is what brought them back to sign up —
+       * and a "Create your own" tap (referral_signup) beats both.
+       *
+       * Its own query: get_events_with_users doesn't return `source`, and
+       * only signup rows carry it.
+       */
+      var SOURCE_HOSTS = [
+        [/(^|\.)google\./, 'Google search'], [/(^|\.)bing\.com$/, 'Bing'],
+        [/(^|\.)duckduckgo\.com$/, 'DuckDuckGo'], [/(^|\.)yandex\./, 'Yandex'],
+        [/(^|\.)(chatgpt\.com|openai\.com)$/, 'ChatGPT'], [/(^|\.)perplexity\.ai$/, 'Perplexity'],
+        [/(^|\.)claude\.ai$/, 'Claude'], [/(^|\.)gemini\.google\.com$/, 'Gemini'],
+        [/(^|\.)instagram\.com$/, 'Instagram'], [/(^|\.)(facebook\.com|fb\.com|messenger\.com)$/, 'Facebook'],
+        [/(^|\.)(t\.co|x\.com|twitter\.com)$/, 'X / Twitter'], [/(^|\.)reddit\.com$/, 'Reddit'],
+        [/(^|\.)tiktok\.com$/, 'TikTok'], [/(^|\.)(youtube\.com|youtu\.be)$/, 'YouTube'],
+        [/(^|\.)(linkedin\.com|lnkd\.in)$/, 'LinkedIn'], [/(^|\.)pinterest\./, 'Pinterest'],
+        [/(^|\.)producthunt\.com$/, 'Product Hunt'], [/(^|\.)calendly\.com$/, 'Calendly']
+      ];
+      function sourceChannel(src, viaPopcode) {
+        if (viaPopcode) return { label: 'A friend’s Popcode', detail: '“Create your own” on ' + viaPopcode };
+        if (!src || (!src.first && !src.last)) return { label: 'Not recorded', detail: 'before tracking began' };
+        const t = src.last || src.first;
+        const tag = t.utm_source || t.via || t.ref;
+        if (tag) {
+          const bits = [t.utm_medium, t.utm_campaign].filter(Boolean).join(' / ');
+          return { label: 'Campaign: ' + tag, detail: bits || ('landed on ' + (t.landing || '/')) };
+        }
+        if (t.click === 'google_ads') return { label: 'Google Ads', detail: 'landed on ' + (t.landing || '/') };
+        if (t.click === 'facebook') return { label: 'Facebook', detail: 'ad or post link' };
+        if (t.referrer) {
+          let host = t.referrer;
+          try { host = new URL(t.referrer).hostname.replace(/^www\./, ''); } catch (e) {}
+          const hit = SOURCE_HOSTS.find(h => h[0].test(host));
+          return { label: hit ? hit[1] : host, detail: t.referrer.replace(/^https?:\/\//, '') };
+        }
+        const landing = t.landing || '/';
+        // A first page that is a real project's slug means a shared link,
+        // opened from an app that passes no referrer (WhatsApp, iMessage…).
+        if (/^\/[a-z0-9][a-z0-9-]{2,29}$/.test(landing) && projectBySlug(landing.slice(1))) {
+          return { label: 'Opened someone’s Popcode', detail: 'first visit was ' + landing + ' (link shared without a referrer)' };
+        }
+        return { label: 'Direct / unknown', detail: 'typed it, a bookmark, or an app that hides the referrer — first page ' + landing };
+      }
+
+      async function renderSignupSources() {
+        const wrap = document.getElementById('src-wrap');
+        if (!wrap) return;
+        let rows;
+        try {
+          const { data, error } = await db.from('scan_events')
+            .select('user_id, created_at, city, region, country, source')
+            .eq('event_type', 'signup')
+            .order('created_at', { ascending: false })
+            .limit(2000);
+          if (error) throw error;
+          rows = data || [];
+        } catch (e) {
+          const missing = /source/.test((e && e.message) || '');
+          wrap.innerHTML = '<p class="muted" style="font-size:12px;margin:0">' + (missing
+            ? 'Waiting on the database: run <code>supabase/migrations/2026-10-13-signup-source.sql</code> in the Supabase SQL editor.'
+            : 'Could not read sign-ups: ' + escapeHtml((e && e.message) || String(e))) + '</p>';
+          return;
+        }
+        // "Create your own" taps that produced an account, by the new user.
+        const viaPopcode = {};
+        (cachedAllEvts || []).forEach(e => {
+          if (e.event_type === 'referral_signup' && e.user_id) viaPopcode[e.user_id] = e.slug;
+        });
+        // One row per account (a resend can log signup twice): keep the newest.
+        const seen = new Set();
+        rows = rows.filter(r => { if (!r.user_id || seen.has(r.user_id)) return false; seen.add(r.user_id); return true; });
+        if (!rows.length) {
+          wrap.innerHTML = '<p class="muted" style="font-size:12px;margin:0">No sign-ups yet.</p>';
+          return;
+        }
+        const tagged = rows.map(r => ({ r, ch: sourceChannel(r.source, viaPopcode[r.user_id]) }));
+
+        const counts = {};
+        tagged.forEach(x => { counts[x.ch.label] = (counts[x.ch.label] || 0) + 1; });
+        const order = Object.keys(counts).sort((a, b) =>
+          (a === 'Not recorded') - (b === 'Not recorded') || counts[b] - counts[a]);
+        const total = rows.length;
+        const bars = order.map(lbl => {
+          const pct = Math.round(counts[lbl] / total * 100);
+          return '<div class="fn-row"><div class="fn-head">' +
+            '<span class="fn-label">' + escapeHtml(lbl) + '</span>' +
+            '<span class="fn-n">' + counts[lbl] + '<span class="fn-of"> of ' + total + '</span></span></div>' +
+            '<div class="fn-track"><div class="fn-fill" style="width:' + pct + '%"></div></div></div>';
+        }).join('');
+
+        const users = cachedUsers || [];
+        const recent = tagged.slice(0, 25).map(x => {
+          const u = users.find(v => v.id === x.r.user_id);
+          const who = u ? (u.full_name || u.email || '') : '';
+          const place = [x.r.city, x.r.country].filter(Boolean).join(', ');
+          const when = new Date(x.r.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+          return '<tr><td class="muted" style="white-space:nowrap">' + when + '</td>' +
+            '<td>' + escapeHtml(who) + (u && u.email && u.full_name ? '<div class="muted" style="font-size:11px">' + escapeHtml(u.email) + '</div>' : '') + '</td>' +
+            '<td style="white-space:nowrap">' + countryFlag(x.r.country) + ' ' + escapeHtml(place) + '</td>' +
+            '<td><strong>' + escapeHtml(x.ch.label) + '</strong><div class="muted" style="font-size:11px;word-break:break-all">' + escapeHtml(x.ch.detail) + '</div></td></tr>';
+        }).join('');
+
+        wrap.innerHTML = bars +
+          '<div class="muted" style="font-size:11px;margin:16px 0 6px">Latest sign-ups</div>' +
+          '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Account</th><th>Place</th><th>Found us via</th></tr></thead>' +
+          '<tbody>' + recent + '</tbody></table></div>' +
+          '<p class="muted" style="font-size:11px;margin-top:12px;line-height:1.6">' +
+          'Place comes from the visitor’s IP, so a VPN can put someone in a country they aren’t in. ' +
+          '“Direct / unknown” includes links opened from WhatsApp, iMessage, email and most apps, which don’t pass a referrer — tag links you post yourself with <code>?utm_source=…</code> to tell them apart.</p>';
+      }
+
       function renderWordOfMouth() {
         const wrap = document.getElementById('wom-wrap');
         if (!wrap) return;
@@ -2704,6 +2820,11 @@
               <div class="section-title" style="margin-bottom:4px">Word of mouth</div>
               <p class="muted" style="font-size:12px;margin-bottom:16px">Whether a printed Popcode in someone's house turns its viewers into creators. Every product shipped is an advert that keeps working; this is the only place that says if it does. All time.</p>
               <div id="wom-wrap"><div class="loading-msg" style="padding:24px"><div class="spinner"></div>Counting referrals&hellip;</div></div>
+            </div>
+            <div class="section" style="margin-bottom:20px">
+              <div class="section-title" style="margin-bottom:4px">How sign-ups found Popcode</div>
+              <p class="muted" style="font-size:12px;margin-bottom:16px">Where each new account came from: the outside site that sent them, any campaign tags on the link, or the page they first opened. Recorded from 13 Oct 2026; older accounts show as not recorded. All time.</p>
+              <div id="src-wrap"><div class="loading-msg" style="padding:24px"><div class="spinner"></div>Reading sign-ups&hellip;</div></div>
             </div>
             <div class="cards">
               <div class="card"><div class="card-value">${opens}</div><div class="card-label">Total Opens</div></div>

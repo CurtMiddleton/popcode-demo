@@ -20,6 +20,16 @@
     document.head.appendChild(cartScript);
   }
 
+  // How this visitor first found Popcode (referrer, utm tags, landing page),
+  // sent with their signup event by auth.html. Loaded from here so every page
+  // with the nav records it without its own script tag.
+  if (!document.querySelector('script[src="/source.js"]')) {
+    var sourceScript = document.createElement('script');
+    sourceScript.src = '/source.js';
+    sourceScript.defer = true;
+    document.head.appendChild(sourceScript);
+  }
+
   // Signed in or not, decided NOW from the token supabase-js keeps in
   // localStorage (sb-<ref>-auth-token), so the header never flashes the wrong
   // items. getSession() below confirms it and flips the class if it was stale.

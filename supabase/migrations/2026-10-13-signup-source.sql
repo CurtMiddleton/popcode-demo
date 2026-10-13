@@ -1,0 +1,12 @@
+-- How a new account found Popcode: the signup event's outside referrer, utm
+-- tags and landing page, from public/source.js via /api/log-event.
+--
+-- Additive. RUN IN THE SUPABASE SQL EDITOR (prod).
+--
+-- Shape: { "first": {touch}, "last": {touch} | null }, where a touch has any of
+-- referrer (origin + path, no query string), landing, utm_source, utm_medium,
+-- utm_campaign, utm_content, utm_term, via, ref, click ('google_ads' |
+-- 'facebook'), at (ISO time). Only `signup` rows carry it; null elsewhere.
+-- Until this runs, log-event retries the insert without it, so signups still
+-- log — just without a source.
+alter table scan_events add column if not exists source jsonb;

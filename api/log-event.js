@@ -22,7 +22,7 @@ export default async function handler(req, res) {
 
   try {
     const { slug, event_type, target_index, device_type, browser, user_agent, user_id,
-            recipient_code, progress_pct, device_id, entry, segment } = req.body;
+            recipient_code, progress_pct, device_id, entry, segment, source } = req.body;
     // Account-level events (signup) belong to a person, not a project, so slug
     // is optional. Everything project-scoped still has to name one.
     // A montage is rendered before the project exists (and may be abandoned),
@@ -81,6 +81,12 @@ export default async function handler(req, res) {
     if (typeof device_id === 'string' && /^[a-z0-9-]{8,64}$/i.test(device_id)) extra.device_id = device_id;
     if (entry === 'custom' || entry === 'popcode') extra.entry = entry;
     if (typeof segment === 'string' && /^[a-z0-9][a-z0-9-]{0,19}$/.test(segment)) extra.segment = segment;
+    // How a new account found Popcode (public/source.js). Signup only, and
+    // rebuilt from known keys so the page can't store anything else.
+    if (event_type === 'signup') {
+      const clean = cleanSource(source);
+      if (clean) extra.source = clean;
+    }
     if (slug && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       try {
         const { data: col } = await db.from('collections').select('id').eq('slug', slug).maybeSingle();
@@ -92,7 +98,7 @@ export default async function handler(req, res) {
     // Before the migrations that add these columns run, naming one fails the
     // whole insert. Losing a pin or a device id beats losing the event.
     if (error && Object.keys(extra).length &&
-        /latitude|longitude|device_id|entry|collection_id|segment/.test(error.message || '')) {
+        /latitude|longitude|device_id|entry|collection_id|segment|source/.test(error.message || '')) {
       ({ error } = await db.from('scan_events').insert(row));
     }
     if (error) throw error;
@@ -103,4 +109,25 @@ export default async function handler(req, res) {
     await Sentry.flush(2000);
     res.status(500).json({ error: e.message });
   }
+}
+
+// { first, last } touches from source.js, each with known keys only and
+// strings capped. Returns null if nothing usable came in.
+const SOURCE_KEYS = ['referrer', 'landing', 'utm_source', 'utm_medium', 'utm_campaign',
+                     'utm_content', 'utm_term', 'via', 'ref', 'click'];
+function cleanTouch(t) {
+  if (!t || typeof t !== 'object') return null;
+  const out = {};
+  for (const k of SOURCE_KEYS) {
+    if (typeof t[k] === 'string' && t[k]) out[k] = t[k].slice(0, k === 'referrer' ? 200 : 120);
+  }
+  if (typeof t.at === 'string' && !Number.isNaN(Date.parse(t.at))) out.at = new Date(t.at).toISOString();
+  return Object.keys(out).length ? out : null;
+}
+function cleanSource(src) {
+  if (!src || typeof src !== 'object') return null;
+  const first = cleanTouch(src.first);
+  const last = cleanTouch(src.last);
+  if (!first && !last) return null;
+  return { first, last };
 }
