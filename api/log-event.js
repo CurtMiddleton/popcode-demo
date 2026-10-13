@@ -29,9 +29,11 @@ export default async function handler(req, res) {
     // so it is logged against the account rather than a slug.
     // book_demo_click, demo_postcard_download and pay_click_* come from the
     // /nonprofits landing page, exh_book_demo_click from /exhibitions:
-    // marketing clicks, before any account or project exists.
+    // marketing clicks, before any account or project exists. exh_try_download
+    // is /exhibitions' "Try it yourself" handout.
     const ACCOUNT_EVENTS = ['signup', 'create_montage', 'book_demo_click', 'demo_postcard_download',
-                            'pay_click_year_end', 'pay_click_gala', 'exh_book_demo_click'];
+                            'pay_click_year_end', 'pay_click_gala', 'exh_book_demo_click',
+                            'exh_try_download'];
     if (!event_type) return res.status(400).json({ error: 'Missing fields' });
     if (!slug && !ACCOUNT_EVENTS.includes(event_type)) {
       return res.status(400).json({ error: 'Missing fields' });

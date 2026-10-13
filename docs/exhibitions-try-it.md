@@ -55,6 +55,22 @@ But it's a stage set. Manet built the café in his own studio, and the flowers b
 
 ---
 
+## Files (built 2026-10-13)
+
+- Scan images, upload exactly these: `public/assets/exh-try-sargent.jpg`,
+  `exh-try-degas.jpg`, `exh-try-manet.jpg`. Degas and Manet come from the user's
+  AIC downloads, scaled to 1500 px tall. Sargent is the hero's
+  `exhibitions-sargent.webp` as a JPG.
+- Audio: `exhibitions-sargent-stop.mp3`, `exh-try-degas-stop.mp3`,
+  `exh-try-manet-stop.mp3`.
+- Handout: `public/assets/at-work-audio-tour.pdf` (3 Letter pages, gilt frame,
+  wall label, steps). Source: `scripts/exhibitions-try-pdf/` (`try-it.html` +
+  `build.mjs`). Rebuild with a new address via `node build.mjs popcode.app/<slug>`.
+  Preview: `at-work-audio-tour-preview.jpg` (page 1 at 110 dpi).
+- Page: `/exhibitions` `#try`, after How it works. **Hidden until
+  `/api/collection?slug=` + `CONFIG.TRY_SLUG` ('wrenalder') returns 200**, so it
+  switches itself on once the Popcode exists. Downloads log `exh_try_download`.
+
 ## Making the demo Popcode (in the app, signed in as the admin account)
 
 1. Create a Popcode named "At Work — Wren & Alder". Three pages, each an
@@ -67,5 +83,8 @@ But it's a stage set. Manet built the café in his own studio, and the flowers b
    Subjects", like the hero phone.
 3. After the Video buttons (optional): "Plan a visit", "Become a member",
    "Inquire about this work".
-4. Send Claude the slug. It goes into the try-it section's scan button, and the
-   entrance placard's QR code and address.
+4. **Set the address to `wrenalder`** (Edit next to popcode.app/… on the Name
+   step). It's printed in the PDF and set in `CONFIG.TRY_SLUG`. Once it exists,
+   the section appears on /exhibitions by itself. If you use another address,
+   change TRY_SLUG and rebuild the PDF.
+5. Then point the entrance placard's QR code and address at it too.
