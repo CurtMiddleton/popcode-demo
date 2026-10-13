@@ -41,8 +41,8 @@ own headphones. There's no app and no QR code beside the work. After each stop
 they can inquire about the piece or join your list, and you can see which works
 people listened to all the way through.
 
-We write the stops with you, record them, and test the tour in the room before
-the opening.
+Bring your own recordings or notes, or we'll write and record the stops for
+you, and we test the tour in the room before the opening.
 
 Worth a 15-minute look? Here's a demo show to try:
 https://popcode.app/exhibitions?utm_source=email&utm_medium=cold&utm_campaign=galleries-oct
