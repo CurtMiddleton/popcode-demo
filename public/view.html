@@ -539,6 +539,26 @@
       }
       /* Drawn, not a character: iOS renders U+25B6 (▶) as a blue emoji tile. */
       #tap-to-play .ttp-label { font-size: 17px; font-weight: 600; }
+      /* Headphones check (cover_config.headphones): asked once per phone per
+         tour, after Start and before the camera. */
+      #hp-check { position: fixed; inset: 0; z-index: 10050; /* over the custom cover (9999) */ display: none; align-items: center; justify-content: center;
+                  padding: 24px; background: rgba(10,8,14,.72); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+      #hp-check.open { display: flex; }
+      #hp-check .hp-card { width: min(100%, 360px); background: #fff; color: #1a1a1a; border-radius: 22px; padding: 28px 24px 22px; text-align: center;
+                           box-shadow: 0 24px 60px rgba(0,0,0,.35); font-family: var(--brand-body, 'DM Sans', sans-serif); }
+      #hp-check .hp-icon { width: 44px; height: 44px; margin: 0 auto 12px; display: block; color: #1a1a1a; }
+      #hp-check h2 { margin: 0 0 8px; font-family: var(--brand-head, 'CooperBT', Georgia, serif); font-weight: var(--brand-head-weight, bold); font-size: 26px; line-height: 1.1; }
+      #hp-check p { margin: 0 0 20px; font-size: 16px; line-height: 1.45; color: #4a4a4a; }
+      #hp-check button { display: block; width: 100%; padding: 15px 18px; border-radius: 999px; font: 700 16px var(--brand-body, 'DM Sans', sans-serif); cursor: pointer; }
+      #hp-check .hp-test { background: #fff; color: #1a1a1a; border: 2px solid #1a1a1a; }
+      #hp-check .hp-yes { background: #1a1a1a; color: #fff; border: 2px solid #1a1a1a; margin-top: 10px; }
+      #hp-check .hp-yes[hidden] { display: none; }
+      #hp-check .hp-read { background: none; border: none; color: #4a4a4a; font-weight: 600; font-size: 15px; margin-top: 8px; text-decoration: underline; text-underline-offset: 3px; }
+      #hp-check .hp-heard { min-height: 1.4em; margin: 10px 0 0; font-size: 14px; color: #6a6a6a; }
+      /* Read-along: sound off, transcript open. One tap turns the sound on. */
+      #ap-sound { display: none; margin: 12px auto 0; padding: 9px 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,.55);
+                  background: rgba(255,255,255,.12); color: #fff; font: 600 14px var(--brand-body, 'DM Sans', sans-serif); cursor: pointer; }
+      #ap-sound.show { display: block; }
       #ap-tap-hint {
         display: none; margin-top: 12px; text-align: center;
         font-size: 15px; font-weight: 600; color: #fff; opacity: 0.92;
@@ -831,6 +851,18 @@
       </div>
     </div>
 
+    <div id="hp-check" role="dialog" aria-modal="true" aria-labelledby="hp-title">
+      <div class="hp-card">
+        <svg class="hp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/></svg>
+        <h2 id="hp-title">Headphones on?</h2>
+        <p>This is an audio tour. Please use headphones so the gallery stays quiet for everyone.</p>
+        <button type="button" class="hp-test" id="hp-test">Play a test sound</button>
+        <button type="button" class="hp-yes" id="hp-yes" hidden>I can hear it</button>
+        <p class="hp-heard" id="hp-heard" aria-live="polite"></p>
+        <button type="button" class="hp-read" id="hp-read">Read along instead</button>
+      </div>
+    </div>
+
     <div id="audio-player">
       <button id="ap-close" aria-label="Close">✕</button>
       <div class="ap-photo">
@@ -849,6 +881,7 @@
         <button class="ap-play" id="ap-play" aria-label="Play/Pause">▶&#xFE0E;</button>
       </div>
       <div id="ap-tap-hint">Tap &#9654; to play</div>
+      <button id="ap-sound" type="button">Sound off &middot; Turn on</button>
       <div class="ap-trow" id="ap-trow">
         <button class="ap-tbtn" id="ap-tbtn" type="button" aria-expanded="false" aria-controls="ap-transcript"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="13" y2="17"/></svg><span>Transcript</span></button>
         <button class="ap-tmode" id="ap-tmode" type="button"></button>
@@ -1203,6 +1236,9 @@
           };
         });
         if (!mindUrl || Object.keys(mediaMap).length === 0) { showError(); return; }
+        // Admin switch in the cover settings; only meaningful with audio pages.
+        hpWanted = !!(col.cover_config && col.cover_config.headphones === true)
+          && Object.keys(mediaMap).some(k => mediaMap[k].type === 'audio');
 
         // Save for scene rebuilds on rescan
         savedMindUrl = mindUrl;
@@ -1226,7 +1262,54 @@
         wlBtn.addEventListener('click', handleStartTap);
       }
 
+      // ── Headphones check ────────────────────────────────────────────────
+      // A web page can't tell whether headphones are in, and iOS won't let a
+      // page set the volume, so this asks, and the test chime is recorded
+      // quietly (peaks about -21 dB) so a forgotten pair means a murmur, not
+      // an announcement. The chime plays through apAudio itself: on iOS that
+      // tap unlocks the element, so the first stop's play() isn't blocked.
+      // The answer is kept per phone per tour: 'hear' or 'read'.
+      const HP_KEY = 'popcode_headphones:' + id;
+      // var, not let: the loader above sets hpWanted, and may run first.
+      var hpWanted = hpWanted || false;
+      var hpChoice = null;
+      try { hpChoice = localStorage.getItem(HP_KEY); } catch (e) {}
+      var readAlong = hpChoice === 'read';
+      var hpTesting = false; // the chime is playing: apAudio's stop handlers stand down
+      const hpCheck = document.getElementById('hp-check');
+      document.getElementById('hp-test').addEventListener('click', () => {
+        hpTesting = true;
+        apAudio.muted = false;
+        apAudio.src = '/assets/headphone-check.mp3';
+        apAudio.play()
+          .then(() => { document.getElementById('hp-heard').textContent = 'Hear two soft notes?'; })
+          .catch(() => { document.getElementById('hp-heard').textContent = 'Couldn\u2019t play the sound. Check your volume and try again.'; });
+        document.getElementById('hp-test').textContent = 'Play it again';
+        document.getElementById('hp-yes').hidden = false;
+        logEvent('headphones_test');
+      });
+      function hpAnswer(choice) {
+        hpChoice = choice;
+        readAlong = choice === 'read';
+        try { localStorage.setItem(HP_KEY, choice); } catch (e) {}
+        logEvent(choice === 'read' ? 'headphones_read' : 'headphones_yes');
+        try { apAudio.pause(); } catch (e) {}
+        hpTesting = false;
+        hpCheck.classList.remove('open');
+        handleStartTap();
+      }
+      document.getElementById('hp-yes').addEventListener('click', () => hpAnswer('hear'));
+      document.getElementById('hp-read').addEventListener('click', () => hpAnswer('read'));
+      document.getElementById('ap-sound').addEventListener('click', () => {
+        readAlong = false;
+        apAudio.muted = false;
+        document.getElementById('ap-sound').classList.remove('show');
+        try { localStorage.setItem(HP_KEY, 'hear'); } catch (e) {}
+        logEvent('headphones_sound_on', currentTargetIndex);
+      });
+
       function handleStartTap() {
+        if (hpWanted && !hpChoice) { hpCheck.classList.add('open'); return; }
         hideStartScreen();
         // Fires on every camera start, first scan and rescans alike. scan_open
         // only records the page loading, which happens whether or not anyone
@@ -1842,6 +1925,12 @@
         scanner.style.display = 'none';
         document.getElementById('home-btn').style.display = 'none';
         audioPlayer.classList.add('visible');
+        // Read-along (from the headphones check): play muted with the
+        // transcript open. Not saved as the transcript preference.
+        hpTesting = false;
+        apAudio.muted = readAlong;
+        document.getElementById('ap-sound').classList.toggle('show', readAlong);
+        if (readAlong) tOpen = true;
         setTranscript(media.transcript, media.transcriptTiming);
 
         apAudio.play()
@@ -1896,6 +1985,7 @@
         }
       });
       apAudio.addEventListener('ended', () => {
+        if (hpTesting) { hpTesting = false; return; } // the headphones chime, not a stop
         progressPending = false;
         logEvent('audio_complete', currentTargetIndex);
         apPlay.textContent = '▶\uFE0E';
@@ -1919,6 +2009,7 @@
         }, 1000);
       });
       apAudio.addEventListener('error', () => {
+        if (hpTesting) return; // the prompt says so itself
         if (apAudio.src) showMediaError('Audio could not load — check your connection');
       });
       // Keyboard (arrow keys on the focused slider).
