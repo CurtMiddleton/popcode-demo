@@ -820,12 +820,12 @@
         <p class="end-sub"></p>
         <div class="end-back" hidden>
           <p>Welcome back. There&rsquo;s more to see.</p>
-          <button type="button" class="end-next">Scan another photo</button>
+          <button type="button" class="end-next">Keep scanning</button>
         </div>
         <div class="end-btns"></div>
         <div class="end-foot">
           <button type="button" class="end-replay">Watch again</button>
-          <button type="button" class="end-scan">Scan another photo</button>
+          <button type="button" class="end-scan">Keep scanning</button>
         </div>
       </div>
     </div>
@@ -2140,9 +2140,17 @@
           wrap.appendChild(a);
         });
       }
+      function isAudioTour() {
+        return Object.values(savedMediaMap || {}).some(m => m && m.type === 'audio');
+      }
       function showEndScreen(isPreview) {
         endPreview = !!isPreview;
         endScreen.querySelector('.end-replay').textContent = lastAudio ? 'Listen again' : 'Watch again';
+        // A gallery tour (audio stops) scans works; anything else gets a word
+        // that fits a photo, a mural, a book page or a sculpture alike.
+        const scanLabel = isAudioTour() ? 'Scan another work' : 'Keep scanning';
+        endScreen.querySelector('.end-scan').textContent = scanLabel;
+        endScreen.querySelector('.end-next').textContent = scanLabel;
         hideStartScreen();
         endScreen.style.display = 'block';
         const btns = endScreen.querySelectorAll('.end-btn');
@@ -2157,7 +2165,7 @@
       // it. When the viewer comes back, count it (cta_return, by photo) and make
       // the next scan the obvious thing to do. The camera is already off on the
       // end screen (stopped before the video played), so there's nothing frozen
-      // to rescue: "Scan another photo" restarts it the usual way.
+      // to rescue: "Keep scanning" restarts it the usual way.
       // sessionStorage covers iOS discarding the tab while they were away: the
       // reloaded page still counts the return, then starts fresh.
       const CTA_AWAY_KEY = 'popcode_cta_away';
