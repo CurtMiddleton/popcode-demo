@@ -23,6 +23,7 @@
     <script src="/dialog.js"></script>
     <script src="/activity.js"></script>
     <script src="/referral.js"></script>
+    <script src="/source.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="stylesheet" href="/ui.css">
     <script src="/nav.js" defer></script>
@@ -445,6 +446,11 @@
           // counts; this is the durable per-account copy.
           const refSlug = window.PopcodeReferral && window.PopcodeReferral.get();
           if (refSlug) meta.referred_from = refSlug;
+          // How they found Popcode at all (source.js): outside referrer, utm
+          // tags, landing page. Sent with the signup event for the dashboard;
+          // the first touch is also kept on the account.
+          const source = window.PopcodeSource && window.PopcodeSource.get();
+          if (source && source.first) meta.first_source = source.first;
           // The confirmation link returns them to where they were heading (a shop
           // product, say) rather than the homepage. popcode.app/** is on the
           // Supabase redirect allow list, which covers every page.
@@ -454,7 +460,7 @@
             // signUp returns the user even while the confirmation is pending,
             // so the top of the funnel is captured whether or not they confirm.
             const newUserId = signUpData && signUpData.user && signUpData.user.id;
-            logActivity('signup', { user_id: newUserId });
+            logActivity('signup', { user_id: newUserId, source: source || undefined });
             // Credit the print that produced this account, then forget it so
             // the same browser can't be counted twice.
             if (window.PopcodeReferral) window.PopcodeReferral.claim(newUserId);

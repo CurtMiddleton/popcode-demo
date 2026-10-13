@@ -40,6 +40,8 @@
    *                                 session id rather than this file holding a
    *                                 Supabase client, so there is no coupling to
    *                                 how each page builds its client.
+   * @param {object} [opts.source]   how they found Popcode (source.js);
+   *                                 only the signup event sends it.
    */
   window.logActivity = function (eventType, opts) {
     try {
@@ -57,7 +59,8 @@
           device_type: info.device,
           browser: info.browser,
           user_agent: navigator.userAgent,
-          user_id: opts.user_id || null
+          user_id: opts.user_id || null,
+          source: opts.source || undefined
         })
       }).catch(function () {});
     } catch (e) { /* never let analytics break the app */ }
