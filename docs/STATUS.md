@@ -44,8 +44,8 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 - **`popcode.app/exhibitions` is live** (PRs #203, #207–#209, 2026-10-10/11): Popcode for
   Exhibitions landing page, sibling of /nonprofits. Warm gallery-grey palette (no purple
   fields), Sargent hero, fictional demo gallery "Wren & Alder" / show *At Work: Artists and
-  Their Subjects*, **pilot prices** ($1,200 per show / $3,900 Gallery year / $7,500 Museum
-  year). Placeholders: hero audio (`CONFIG.DEMO_AUDIO` empty), placard QR → /exhibitions,
+  Their Subjects*, **pilot prices** ($1,500 per show / $3,900 Gallery year / $7,500 Museum
+  year; regular $2,500 / $6,500 / $12,000 struck through since 2026-10-13, and "up to 15 works"). Placeholders: hero audio (`CONFIG.DEMO_AUDIO` empty), placard QR → /exhibitions,
   sample dashboard numbers. Brief: `docs/exhibitions-handoff.md`. Demo target: the Bruce
   Museum. Scripts: `docs/exhibitions-demo-scripts.md`.
 - **Site nav has a Solutions menu** (PR #205): Nonprofits + Galleries & museums in `nav.js`
