@@ -65,7 +65,7 @@ Hi {{first_name}},
 
 A quick follow-up with the details:
 
-- We build your tour: up to 15 works, each with its own audio stop and
+- We build your tour: up to 30 works, each with its own audio stop and
   transcript, ready for the opening.
 - Your entrance card comes with a locked NFC tag, a QR code and a short address.
 - You get a dashboard of scans, listens and inquiries per work.
@@ -116,8 +116,9 @@ If this isn't for you, reply "no thanks" and I won't write again.
    Gallery year $3,900 (regular $6,500), Museum year $7,500 (regular $12,000),
    scripts + AI voice from $400 per 10 stops. Keep these in step with the
    cards on /exhibitions.
-2. **"Up to 15 works"** until a tour with 30+ works has been tested (MindAR
-   with 30–100 targets in one Popcode is untested; STATUS.md).
+2. **"Up to 30 works": tested 2026-10-13.** A 30-painting Popcode scanned
+   perfectly on the user's iPhone. Beyond 30 is still untested, and the create
+   wizard's batch upload caps a Popcode at 30 images.
 3. **Signature + opt-out on every email (done 2026-10-13):** US cold email
    (CAN-SPAM) needs the postal address and a way to opt out in each message,
    not just the first. Honour "no thanks" replies promptly.
