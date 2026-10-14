@@ -26,16 +26,17 @@ on 2026-10-13: check before each send.
 
 | Field | What goes in it | Example |
 |---|---|---|
-| `{{first_name}}` | Owner or director, by name | Dana |
+| `{{first_name}}` | The sheet's **Greeting name** column: the contact's first name, or "<Gallery> team" when none is published | Dana |
 | `{{gallery}}` | Gallery name | Marsh Street Gallery |
 | `{{show}}` | Current or next show title | *Low Tide* |
 | `{{artist}}` | The show's artist (or "the artists") | Ellen Park |
+| `{{short_link}}` | The sheet's **Short link** column (one per area, so visits and demo bookings show which area they came from) | popcode.app/exhibitions/4 |
 | `{{hook}}` | ONE specific line about the show — what a visitor would want to hear about. Write it by hand; this line is what makes the email get read. | the big harbour paintings were made from a rowboat |
 
-The link in every email (tagged so sign-ups show as "Campaign: email" in
-Analytics → How sign-ups found Popcode):
-
-`https://popcode.app/exhibitions?utm_source=email&utm_medium=cold&utm_campaign=galleries-oct`
+The link in every email is the area's short link, `https://{{short_link}}`.
+It forwards to /exhibitions tagged utm_source=email, utm_campaign=gallery-outreach,
+utm_content=<area> (vercel.json), so visits, sign-ups ("Campaign: email") and
+Calendly bookings show which area they came from. Email 2 adds `#try`.
 
 ---
 
@@ -58,7 +59,7 @@ Bring your own recordings or notes, or we'll write and record the stops for
 you, and we test the tour in the room before the opening.
 
 Worth a 15-minute look? Here's a demo show to try:
-https://popcode.app/exhibitions?utm_source=email&utm_medium=cold&utm_campaign=galleries-oct
+https://{{short_link}}
 
 Curt
 
@@ -89,7 +90,7 @@ A quick follow-up with the details:
 
 You can try it yourself: download three paintings from our demo show and point
 your phone at them.
-https://popcode.app/exhibitions?utm_source=email&utm_medium=cold&utm_campaign=galleries-oct#try
+https://{{short_link}}#try
 
 Would a short call next week work? I can show you a tour for one of your own
 works.
