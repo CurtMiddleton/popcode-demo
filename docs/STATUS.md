@@ -45,7 +45,7 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   Exhibitions landing page, sibling of /nonprofits. Warm gallery-grey palette (no purple
   fields), Sargent hero, fictional demo gallery "Wren & Alder" / show *At Work: Artists and
   Their Subjects*, **pilot prices** ($1,500 per show / $3,900 Gallery year / $7,500 Museum
-  year; regular $2,500 / $6,500 / $12,000 struck through since 2026-10-13, and "up to 15 works"). Placeholders: hero audio (`CONFIG.DEMO_AUDIO` empty), placard QR → /exhibitions,
+  year; regular $2,500 / $6,500 / $12,000 struck through since 2026-10-13; "up to 30 works", tested). Placeholders: hero audio (`CONFIG.DEMO_AUDIO` empty), placard QR → /exhibitions,
   sample dashboard numbers. Brief: `docs/exhibitions-handoff.md`. Demo target: the Bruce
   Museum. Scripts: `docs/exhibitions-demo-scripts.md`.
 - **Site nav has a Solutions menu** (PR #205): Nonprofits + Galleries & museums in `nav.js`
@@ -3744,3 +3744,12 @@ The user's Analytics → Map screenshot showed 9 countries, 15 accounts (Kazakhs
 - iPhone checks: the headphones chime and first-stop autoplay; the rings at 8% (the user's last screenshot looked like the old 17%, probably cached); the end-screen headline at ~28 px on one line; title line spacing on the Bruce cover.
 - Repoint the /exhibitions placard QR code and address to `/wrenalder`.
 - Outreach: the decisions above, then the gallery list.
+
+### 2026-10-13 (late) — 30-work scan test passed; batch image upload; pricing
+
+**PRs, all merged:** #231 (exhibitions pricing: $1,500 pilot, regular prices struck through; email 2) · #232 (pick several scan images at once in create and edit). The "up to 30 works" change below came after them.
+
+- **30-target test PASSED.** The user built a 30-page Popcode from a 30-page PDF (Cleveland Museum of Art CC0 paintings, `openaccess-api.clevelandart.org`, which is reachable from this container, unlike the AIC IIIF server and Wikimedia), and **all 30 scanned perfectly** on their iPhone. So the pricing card and email 2 say "up to 30 works" again. Above 30 is still untested; `MAX_PAGES = 30` in create.html and edit.html caps batch uploads.
+- **Batch upload (#232):** `image-source.js` gets `onPickMany` (adds `multiple` to the library row). In create.html, What plays walks through the batch ("Image k of N", Next goes to the next image still waiting, plus "Skip this one for now"). Scan checks are queued, with an 8 s cap each. edit.html confirms before dropping new images that have nothing to play. Tested headlessly with a stubbed session; the user confirmed it was live.
+- **Pricing (#231):** Single show $1,500 ~~$2,500~~, Gallery year $3,900 ~~$6,500~~, Museum year $7,500 ~~$12,000~~. $1,200 had come from the 2026-10-10 session, anchored at about half Smartify Starter ($2,300/yr).
+- **Emails:** the user's signature (Curt Middleton, Founder, Popcode · popcode.app, 709 Main St, New Rochelle, NY 10801) plus an opt-out line on all three. **Still open:** email 1's "We write the stops with you, record them" contradicts scripts being an add-on; the gallery list hasn't been started.
