@@ -46,11 +46,11 @@ Calendly bookings show which area they came from. Email 2 adds `#try`.
 
 Hi {{first_name}},
 
-I saw {{show}} at {{gallery}}. I'd love to hear the story behind it. For
-example, that {{hook}}.
+I saw that {{gallery}} is showing {{show}}. I'd love to hear the story behind
+it. For example, that {{hook}}.
 
 That's what Popcode does. Visitors tap a small card at your entrance, point
-their phone at any painting, and hear {{artist}} (or you) talk about it in their
+their phone at any work, and hear {{artist}} (or you) talk about it in their
 own headphones. There's no app and no QR code beside the work. After each stop
 they can inquire about the piece or join your list, and you can see which works
 people listened to all the way through.
