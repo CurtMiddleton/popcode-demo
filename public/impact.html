@@ -696,7 +696,11 @@
             ? '<h1>Not set up yet</h1>The dashboard\'s database functions haven\'t been installed (supabase/migrations/2026-09-26-impact-*.sql).'
             : '<h1>Something went wrong</h1>' + esc(err.message || err);
         $('main').innerHTML = '<div class="state">' + msg + '</div>';
-        if (window.Sentry) Sentry.captureException(err);
+        // Supabase errors are plain objects; Sentry files those as "Object
+        // captured as exception" and drops the message, so wrap them.
+        if (window.Sentry) Sentry.captureException(err instanceof Error ? err :
+          Object.assign(new Error(err.message || String(err)), { name: 'SupabaseError' }),
+          { tags: { mode: MODE, pg_code: err.code || 'none' }, extra: { details: err.details, hint: err.hint } });
       }
 
       function render() {
