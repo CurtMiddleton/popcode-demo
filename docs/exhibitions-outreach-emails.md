@@ -31,6 +31,7 @@ on 2026-10-13: check before each send.
 | `{{show}}` | Current or next show title | *Low Tide* |
 | `{{artist}}` | The show's artist (or "the artists") | Ellen Park |
 | `{{short_link}}` | The sheet's **Short link** column (one per area, so visits and demo bookings show which area they came from) | popcode.app/exhibitions/4 |
+| `{{nearby}}` | Westchester and Connecticut only (the user lives in New Rochelle and offers to drop by): "here" (New Rochelle), "next door" (Pelham), "in Westchester," (rest of Westchester), "just across the river" (Rockland), "just over the state line" (Connecticut). For Manhattan/Brooklyn, drop the sentence's first clause: "I'd be glad to show you how it works in your space, or try a demo show first:" | in Westchester, |
 | `{{hook}}` | ONE specific line about the show — what a visitor would want to hear about. Write it by hand; this line is what makes the email get read. | the big harbour paintings were made from a rowboat |
 
 The link in every email is the area's short link, `https://{{short_link}}`.
@@ -58,10 +59,11 @@ people listened to all the way through.
 Bring your own recordings or notes, or we'll write and record the stops for
 you, and we test the tour in the room before the opening.
 
-Worth a 15-minute look? Here's a demo show to try:
+I live {{nearby}} in New Rochelle, so I'd be glad to stop by, introduce myself
+and show you how it works in your space. Or try a demo show first:
 https://{{short_link}}
 
-Curt
+Best regards,
 
 Curt Middleton
 Founder, Popcode · popcode.app
@@ -95,7 +97,7 @@ https://{{short_link}}#try
 Would a short call next week work? I can show you a tour for one of your own
 works.
 
-Curt
+Best regards,
 
 Curt Middleton
 Founder, Popcode · popcode.app
@@ -114,7 +116,7 @@ Hi {{first_name}},
 I don't want to fill your inbox. Should I close the loop on this, or is there a
 better person at {{gallery}} to talk to about the next show?
 
-Curt
+Best regards,
 
 Curt Middleton
 Founder, Popcode · popcode.app
