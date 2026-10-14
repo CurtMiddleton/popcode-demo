@@ -50,8 +50,10 @@ Hi {{first_name}},
 I saw that {{gallery}} is showing {{show}}. I'd love to hear the story behind
 it. For example, that {{hook}}.
 
-That's what Popcode does. Visitors tap a small card at your entrance, point
-their phone at any work, and hear {{artist}} (or you) talk about it in their
+That's what Popcode does. I built it so that pointing a phone at a printed photo
+instantly plays its video or audio, and customers already use it for photo
+albums and nonprofit annual reports. Now I've adapted it for galleries: visitors
+tap a small card at your entrance, point their phone at any work, and hear {{artist}} (or you) talk about it in their
 own headphones. There's no app and no QR code beside the work. After each stop
 they can inquire about the piece or join your list, and you can see which works
 people listened to all the way through.
