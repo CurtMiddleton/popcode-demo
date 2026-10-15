@@ -92,7 +92,8 @@ export default async function handler(req, res) {
     // How a new account found Popcode (public/source.js), or which page a
     // visitor opened and from where (page_view). Rebuilt from known keys so
     // the page can't store anything else.
-    if (event_type === 'signup' || event_type === 'page_view') {
+    if (['signup', 'page_view', 'book_demo_click', 'exh_book_demo_click', 'exh_try_download',
+         'demo_postcard_download'].includes(event_type)) {
       const clean = cleanSource(source);
       if (clean) extra.source = clean;
     }
@@ -103,6 +104,18 @@ export default async function handler(req, res) {
       } catch (e) { /* the event matters more than the id */ }
     }
 
+    // First outreach-link visit from this browser? Checked before the insert
+    // so the row being written doesn't count.
+    let firstOutreachVisit = false;
+    const t0 = extra.source && extra.source.first;
+    if (event_type === 'page_view' && t0 && t0.utm_source === 'email' && extra.device_id) {
+      try {
+        const { count } = await db.from('scan_events').select('id', { count: 'exact', head: true })
+          .eq('event_type', 'page_view').eq('device_id', extra.device_id);
+        firstOutreachVisit = !count;
+      } catch (e) { /* no alert beats a wrong one */ }
+    }
+
     let { error } = await db.from('scan_events').insert({ ...row, ...extra });
     // Before the migrations that add these columns run, naming one fails the
     // whole insert. Losing a pin or a device id beats losing the event.
@@ -111,6 +124,8 @@ export default async function handler(req, res) {
       ({ error } = await db.from('scan_events').insert(row));
     }
     if (error) throw error;
+    // Awaited: Vercel may freeze the function once the response is sent.
+    await leadAlert(db, event_type, { ...row, ...extra }, firstOutreachVisit);
     res.status(200).json({ ok: true });
   } catch (e) {
     console.error('log-event error:', e);
@@ -139,4 +154,81 @@ function cleanSource(src) {
   const last = cleanTouch(src.last);
   if (!first && !last) return null;
   return { first, last };
+}
+
+// ── Lead alerts (2026-10-15) ──────────────────────────────────────────────
+// An email to the owner the moment something a person should follow up on
+// happens: a sign-up, a Book-a-demo click, a "Try it yourself" download, or
+// the first visit from an outreach-email link (utm_source=email). Sent via
+// Resend (popcodeapp.com is verified there). Needs RESEND_API_KEY in the
+// Vercel env; without it this does nothing. Never throws: an alert must not
+// cost the event. Calendly emails actual bookings itself.
+const ALERT_TO = process.env.LEAD_ALERT_TO || 'curt@popcodeapp.com';
+const PAGE_NAMES = { exh_book_demo_click: '/exhibitions', exh_try_download: '/exhibitions',
+                     book_demo_click: '/nonprofits', demo_postcard_download: '/nonprofits' };
+
+function describeTouch(t) {
+  if (!t) return 'not recorded';
+  const tag = t.utm_source || t.via || t.ref;
+  if (tag) return [t.utm_source, t.utm_campaign, t.utm_content].filter(Boolean).join(' / ');
+  if (t.referrer) return t.referrer.replace(/^https?:\/\//, '');
+  return 'direct / unknown (first page ' + (t.landing || '/') + ')';
+}
+
+async function leadAlert(db, type, r, firstOutreachVisit) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return;
+  const LEADS = ['signup', 'exh_book_demo_click', 'book_demo_click', 'exh_try_download', 'demo_postcard_download'];
+  if (!LEADS.includes(type) && !(type === 'page_view' && firstOutreachVisit)) return;
+  try {
+    // Flood guard: the endpoint is public, so cap alerts at 30 an hour.
+    const hourAgo = new Date(Date.now() - 3600e3).toISOString();
+    const { count } = await db.from('scan_events').select('id', { count: 'exact', head: true })
+      .in('event_type', LEADS).gte('created_at', hourAgo);
+    if ((count || 0) > 30) return;
+
+    const place = [r.city, r.region, r.country].filter(Boolean).join(', ') || 'unknown place';
+    const touch = r.source && (r.source.last || r.source.first);
+    let subject, lines;
+    if (type === 'signup') {
+      let who = '';
+      try {
+        const { data } = await db.auth.admin.getUserById(r.user_id);
+        const u = data && data.user;
+        if (u) who = [u.user_metadata && u.user_metadata.full_name, u.email].filter(Boolean).join(' · ');
+      } catch (e) {}
+      subject = 'New sign-up' + (who ? ': ' + who : '');
+      lines = ['Someone just created a Popcode account.', '', 'Who: ' + (who || 'unknown'),
+               'Where: ' + place, 'Found us via: ' + describeTouch(touch)];
+    } else if (type === 'page_view') {
+      const t = r.source.first;
+      subject = 'Outreach link opened: ' + [t.utm_campaign, t.utm_content].filter(Boolean).join(' · ');
+      lines = ['Someone opened a link from an outreach email (first visit from this browser).', '',
+               'Page: ' + (t.landing || '/'), 'Campaign: ' + describeTouch(t), 'Where: ' + place,
+               'Device: ' + (r.device_type || 'unknown'), '',
+               'The place comes from their internet connection, so it is approximate, but it often points to the gallery.'];
+    } else {
+      const what = { exh_book_demo_click: 'clicked Book a demo', book_demo_click: 'clicked Book a demo',
+                     exh_try_download: 'downloaded the Try it yourself handout',
+                     demo_postcard_download: 'downloaded the demo postcard' }[type];
+      subject = 'Lead: someone ' + what + ' on ' + PAGE_NAMES[type];
+      lines = ['Someone ' + what + ' on popcode.app' + PAGE_NAMES[type] + '.', '',
+               'Where: ' + place, 'Device: ' + (r.device_type || 'unknown'),
+               'Came from: ' + describeTouch(touch), '',
+               (type.indexOf('book_demo') !== -1
+                 ? 'A click is not a booking: Calendly emails you separately if they book.'
+                 : 'Worth a follow-up if you can match them to a gallery you emailed.')];
+    }
+    lines.push('', 'Analytics: https://popcode.app/analytics.html');
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 4000);
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST', signal: ctl.signal,
+      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'Popcode alerts <info@popcodeapp.com>', to: [ALERT_TO],
+                             subject: subject.slice(0, 150), text: lines.join('\n') })
+    }).finally(() => clearTimeout(timer));
+  } catch (e) {
+    console.error('lead alert failed:', e);
+  }
 }
