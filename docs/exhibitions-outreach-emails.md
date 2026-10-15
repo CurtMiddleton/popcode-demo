@@ -43,7 +43,7 @@ Calendly bookings show which area they came from. Email 2 adds `#try`.
 
 ## Email 1 — Day 1
 
-**Subject:** an audio tour for {{show}}
+**Subject:** an audio tour for your next show
 
 Hi {{first_name}},
 
@@ -77,7 +77,7 @@ If this isn't for you, reply "no thanks" and I won't write again.
 
 ## Email 2 — Day 4
 
-**Subject:** Re: an audio tour for {{show}}
+**Subject:** Re: an audio tour for your next show
 
 Hi {{first_name}},
 

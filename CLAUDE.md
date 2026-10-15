@@ -65,6 +65,9 @@ When anything AR-, video-, or MindAR-related misbehaves on iPhone/iPad, **push t
 
 A common gotcha: the console will appear empty if the page hit a parse-time SyntaxError, because nothing ran. `typeof someKnownTopLevelFunction` returning `"undefined"` is a quick test for "the inline `<script>` failed to parse at all".
 
+## Working style
+Be proactive about the business, not just the code (the user asked for this on 2026-10-15). When you notice a gap that matters for growing Popcode as a business — measurement (e.g. there was no website-traffic tracking until 2026-10-15), conversion, follow-up on outreach, pricing, retention, deliverability — say so and suggest the fix, without waiting to be asked. Keep it to a line or two and let the user decide.
+
 ## Session workflow
 **Trigger phrase: "save notes"** — when the user says this (or any close variant like "save session notes", "wrap the session", "save the notes"), treat it as an explicit instruction to append a new dated entry to the **Session history** in `docs/STATUS.md` (newest at the bottom), and to update that file's **Current state** section if what's open or next has changed. Do not wait to be asked twice.
 

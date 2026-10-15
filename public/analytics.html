@@ -205,6 +205,15 @@
       .fn-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #7657FC, #9d86ff); }
       .fn-foot { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; font-size: 11px; }
       .fn-step { font-weight: 700; color: #2b8a3e; }
+      /* Website panel: visits per day as thin columns, hover for the count. */
+      .web-days { display: flex; align-items: flex-end; gap: 2px; height: 90px; margin: 4px 0 4px; border-bottom: 1px solid #e0ddd6; }
+      .web-day { flex: 1; min-width: 2px; height: 100%; display: flex; align-items: flex-end; cursor: default; }
+      .web-day span { display: block; width: 100%; background: #7657FC; border-radius: 4px 4px 0 0; }
+      .web-day:hover span { background: #5b3df0; }
+      .web-axis { display: flex; justify-content: space-between; font-size: 11px; color: #999; margin-bottom: 18px; }
+      .web-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+      @media (max-width: 760px) { .web-grid { grid-template-columns: 1fr; } }
+      .web-sub { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #999; margin: 0 0 10px; }
       .fn-step.low { color: #e67700; }
       .lb-sheet { display: none; flex: 1; overflow-y: auto; padding: 18px 22px 26px; }
       .lb-sheet.on { display: block; }
@@ -568,6 +577,9 @@
         }
         if (!data.session) { window.location.href = '/auth.html'; return; }
         if (data.session.user.email !== ADMIN_EMAIL) { window.location.href = '/manage.html'; return; }
+        // Marks this browser as the owner's, so source.js stops logging its
+        // page views (they'd swamp the Website panel's real visitors).
+        try { localStorage.setItem('popcode_owner', '1'); } catch (e) {}
         const uName = data.session.user?.user_metadata?.full_name?.split(' ')[0] || data.session.user?.email?.split('@')[0] || '';
         if (uName) { const g = document.getElementById('user-greeting'); if (g) g.textContent = 'Hi, ' + uName + '!'; }
         document.getElementById('main-content').innerHTML = '<p class="empty">Session OK, loading data...</p>';
@@ -2009,11 +2021,13 @@
       }
       async function ensureAllEventsOnce() {
         try {
-          cachedAllEvts = await fetchAllRpc('get_events_with_users', { days_back: 0, max_rows: 100000 });
+          cachedAllEvts = (await fetchAllRpc('get_events_with_users', { days_back: 0, max_rows: 100000 }))
+            .filter(e => e.event_type !== 'page_view');
         } catch (e) {
           // Fall back to a direct read; the funnel needs slug + event_type only.
           try {
-            cachedAllEvts = await fetchAllRows('scan_events', 'slug, event_type, user_id, created_at');
+            cachedAllEvts = (await fetchAllRows('scan_events', 'slug, event_type, user_id, created_at'))
+              .filter(e => e.event_type !== 'page_view');
           } catch (e2) {
             console.warn('ensureAllEvents error', e2);
             cachedAllEvts = [];
@@ -2033,6 +2047,7 @@
           renderFunnel();
           renderWordOfMouth();
           renderSignupSources();
+          renderWebsite();
         } catch (e) {
           console.error('loadFunnel error:', e);
           wrap.innerHTML = '<div class="empty" style="padding:20px">Could not build the funnel: ' +
@@ -2165,6 +2180,137 @@
           return { label: 'Opened someone’s Popcode', detail: 'first visit was ' + landing + ' (link shared without a referrer)' };
         }
         return { label: 'Direct / unknown', detail: 'typed it, a bookmark, or an app that hides the referrer — first page ' + landing };
+      }
+
+      /*
+       * Website panel (2026-10-15). public/source.js logs a page_view on each
+       * marketing-page load with the same touch shape as signups, in
+       * scan_events.source.first. Respects the date range. Visitors are
+       * pc_device ids; a visitor's channel is the earliest of their visits in
+       * the range that came from somewhere (referrer or tagged link), since
+       * clicks between our own pages carry no referrer.
+       */
+      async function renderWebsite() {
+        const wrap = document.getElementById('web-wrap');
+        if (!wrap) return;
+        const since = activeDays > 0 ? new Date(Date.now() - activeDays * 86400000) : null;
+        let rows;
+        try {
+          rows = await fetchAllPages(function () {
+            let q = db.from('scan_events').select('created_at, country, device_id, device_type, source')
+              .eq('event_type', 'page_view').order('created_at', { ascending: true });
+            return since ? q.gte('created_at', since.toISOString()) : q;
+          });
+        } catch (e) {
+          wrap.innerHTML = '<p class="muted" style="font-size:12px;margin:0">Could not read page views: ' +
+            escapeHtml((e && e.message) || String(e)) + '</p>';
+          return;
+        }
+        if (!rows.length) {
+          wrap.innerHTML = '<p class="muted" style="font-size:12px;margin:0">No visits recorded in this period yet.</p>';
+          return;
+        }
+        const touch = r => (r.source && r.source.first) || {};
+        const vid = r => r.device_id || ('row-' + r.created_at);
+        const visitors = new Set(rows.map(vid));
+
+        // Channel per visitor: first sourced arrival, else Direct / unknown.
+        const chanOf = {};
+        rows.forEach(r => {
+          const t = touch(r), v = vid(r);
+          const sourced = t.referrer || t.click || t.utm_source || t.via || t.ref;
+          if (sourced && !chanOf[v]) chanOf[v] = sourceChannel({ first: t, last: null }).label;
+        });
+        const chanCounts = {};
+        visitors.forEach(v => { const c = chanOf[v] || 'Direct / unknown'; chanCounts[c] = (chanCounts[c] || 0) + 1; });
+
+        // Pages: visits and visitors.
+        const pageV = {}, pageU = {};
+        rows.forEach(r => {
+          const p = touch(r).landing || '?';
+          pageV[p] = (pageV[p] || 0) + 1;
+          (pageU[p] = pageU[p] || new Set()).add(vid(r));
+        });
+
+        // Campaigns: utm_campaign · utm_content.
+        const camp = {};
+        rows.forEach(r => {
+          const t = touch(r);
+          if (!t.utm_campaign && !t.utm_source) return;
+          const k = (t.utm_campaign || t.utm_source) + (t.utm_content ? ' · ' + t.utm_content : '');
+          (camp[k] = camp[k] || { u: new Set(), n: 0, src: t.utm_source || '' }).u.add(vid(r));
+          camp[k].n++;
+        });
+        const emailVisitors = new Set(rows.filter(r => touch(r).utm_source === 'email').map(vid));
+
+        // Countries by visitor.
+        const ctry = {};
+        const seenC = new Set();
+        rows.forEach(r => {
+          const v = vid(r);
+          if (seenC.has(v)) return; seenC.add(v);
+          const c = r.country || '??';
+          ctry[c] = (ctry[c] || 0) + 1;
+        });
+
+        // Demo clicks in the same period (all-time cache, filtered by date).
+        const demo = (cachedAllEvts || []).filter(e =>
+          (e.event_type === 'exh_book_demo_click' || e.event_type === 'book_demo_click') &&
+          (!since || new Date(e.created_at) >= since)).length;
+
+        // Visits per day, oldest left. All time starts at the first visit.
+        const dayKey = d => d.toISOString().slice(0, 10);
+        const start = since ? new Date(since) : new Date(rows[0].created_at);
+        start.setUTCHours(0, 0, 0, 0);
+        const perDay = {};
+        rows.forEach(r => { const k = (r.created_at || '').slice(0, 10); perDay[k] = (perDay[k] || 0) + 1; });
+        const days = [];
+        for (let d = new Date(start); d <= new Date(); d.setUTCDate(d.getUTCDate() + 1)) days.push(dayKey(d));
+        const maxDay = Math.max(1, ...days.map(k => perDay[k] || 0));
+        const fmt = k => new Date(k + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const cols = days.map(k => {
+          const n = perDay[k] || 0;
+          const h = n ? Math.max(3, Math.round(n / maxDay * 100)) : 0;
+          const tip = fmt(k) + ': ' + n + ' visit' + (n === 1 ? '' : 's');
+          return '<div class="web-day" title="' + tip + '" aria-label="' + tip + '"><span style="height:' + h + '%"></span></div>';
+        }).join('');
+
+        const bars = (obj, total, of) => Object.keys(obj).sort((a, b) => obj[b] - obj[a]).slice(0, 8).map(k => {
+          const pct = Math.round(obj[k] / total * 100);
+          const unit = obj[k] === 1 ? of.replace(/s$/, '') : of;
+          return '<div class="fn-row" style="margin-bottom:12px"><div class="fn-head">' +
+            '<span class="fn-label" style="font-size:12.5px">' + escapeHtml(k) + '</span>' +
+            '<span class="fn-n" style="font-size:15px">' + obj[k] + '<span class="fn-of"> ' + unit + '</span></span></div>' +
+            '<div class="fn-track" style="height:8px"><div class="fn-fill" style="width:' + pct + '%"></div></div></div>';
+        }).join('');
+
+        const pageCounts = {};
+        Object.keys(pageU).forEach(p => { pageCounts[p] = pageU[p].size; });
+        const campRows = Object.keys(camp).sort((a, b) => camp[b].u.size - camp[a].u.size).map(k =>
+          '<tr><td>' + escapeHtml(k) + '</td><td class="muted">' + escapeHtml(camp[k].src) + '</td>' +
+          '<td style="text-align:right">' + camp[k].u.size + '</td><td style="text-align:right">' + camp[k].n + '</td></tr>').join('');
+        const ctryTxt = Object.keys(ctry).sort((a, b) => ctry[b] - ctry[a]).slice(0, 8)
+          .map(c => (c === '??' ? '' : countryFlag(c) + ' ') + escapeHtml(c === '??' ? 'Unknown' : c) + ' ' + ctry[c]).join(' &nbsp;·&nbsp; ');
+
+        wrap.innerHTML =
+          '<div class="cards" style="margin-bottom:18px">' +
+            '<div class="card"><div class="card-value">' + rows.length + '</div><div class="card-label">Page views</div></div>' +
+            '<div class="card"><div class="card-value">' + visitors.size + '</div><div class="card-label">Visitors</div></div>' +
+            '<div class="card" title="Visitors who arrived on a link tagged utm_source=email (outreach emails)."><div class="card-value">' + emailVisitors.size + '</div><div class="card-label">From outreach emails</div></div>' +
+            '<div class="card" title="Book a call / Book a demo clicks on /exhibitions and /nonprofits."><div class="card-value">' + demo + '</div><div class="card-label">Demo clicks</div></div>' +
+          '</div>' +
+          '<div class="web-sub">Page views per day</div>' +
+          '<div class="web-days" role="img" aria-label="Page views per day">' + cols + '</div>' +
+          '<div class="web-axis"><span>' + fmt(days[0]) + '</span><span>peak ' + maxDay + '/day</span><span>' + fmt(days[days.length - 1]) + '</span></div>' +
+          '<div class="web-grid">' +
+            '<div><div class="web-sub">Where visitors came from</div>' + bars(chanCounts, visitors.size, 'visitors') + '</div>' +
+            '<div><div class="web-sub">Pages</div>' + bars(pageCounts, visitors.size, 'visitors') + '</div>' +
+          '</div>' +
+          (campRows ? '<div class="web-sub" style="margin-top:8px">Campaigns</div>' +
+            '<div class="table-wrap"><table><thead><tr><th>Campaign · area</th><th>Source</th><th style="text-align:right">Visitors</th><th style="text-align:right">Page views</th></tr></thead>' +
+            '<tbody>' + campRows + '</tbody></table></div>' : '') +
+          '<div class="web-sub" style="margin-top:16px">Countries</div>' +
+          '<p style="font-size:12.5px;margin:0 0 4px">' + ctryTxt + '</p>';
       }
 
       async function renderSignupSources() {
@@ -2719,6 +2865,10 @@
           }).catch(function () { return []; });
         }
 
+        // Website visits have their own panel (renderWebsite) and must not
+        // count as Popcode opens, visitors or activity.
+        evts = evts.filter(e => e.event_type !== 'page_view');
+
         if (evts.length === 0 && activeDays !== 0) {
           document.getElementById('main-content').innerHTML =
             '<p class="empty">No events in this period yet.</p>';
@@ -2815,6 +2965,11 @@
 
           <!-- Overview -->
           <div class="tab-body" data-tab="overview">
+            <div class="section" style="margin-bottom:20px">
+              <div class="section-title" style="margin-bottom:4px">Website</div>
+              <p class="muted" style="font-size:12px;margin-bottom:16px">Visits to popcode.app's own pages (home, pricing, exhibitions, nonprofits…), for the date range above. Recorded from 15 Oct 2026. Bots and any browser that has opened this dashboard are left out.</p>
+              <div id="web-wrap"><div class="loading-msg" style="padding:24px"><div class="spinner"></div>Counting visits&hellip;</div></div>
+            </div>
             <div class="section" style="margin-bottom:20px">
               <div class="section-title" style="margin-bottom:4px">Funnel</div>
               <p class="muted" style="font-size:12px;margin-bottom:16px">How far accounts get, all time — this one ignores the date range above, because whether a signup ever made something is a lifetime question.</p>

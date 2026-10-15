@@ -33,10 +33,16 @@ export default async function handler(req, res) {
     // is /exhibitions' "Try it yourself" handout.
     const ACCOUNT_EVENTS = ['signup', 'create_montage', 'book_demo_click', 'demo_postcard_download',
                             'pay_click_year_end', 'pay_click_gala', 'exh_book_demo_click',
-                            'exh_try_download'];
+                            'exh_try_download', 'page_view'];
     if (!event_type) return res.status(400).json({ error: 'Missing fields' });
     if (!slug && !ACCOUNT_EVENTS.includes(event_type)) {
       return res.status(400).json({ error: 'Missing fields' });
+    }
+    // Marketing-page visits (public/source.js). Crawlers that run JS still
+    // get here; drop them rather than count them.
+    if (event_type === 'page_view' &&
+        /bot|crawl|spider|slurp|headless|lighthouse|preview|facebookexternalhit/i.test(req.headers['user-agent'] || '')) {
+      return res.status(200).json({ ok: true, skipped: true });
     }
 
     // No IP address is stored (2026-09-26): the impact dashboard promises orgs
@@ -83,9 +89,10 @@ export default async function handler(req, res) {
     if (typeof device_id === 'string' && /^[a-z0-9-]{8,64}$/i.test(device_id)) extra.device_id = device_id;
     if (entry === 'custom' || entry === 'popcode') extra.entry = entry;
     if (typeof segment === 'string' && /^[a-z0-9][a-z0-9-]{0,19}$/.test(segment)) extra.segment = segment;
-    // How a new account found Popcode (public/source.js). Signup only, and
-    // rebuilt from known keys so the page can't store anything else.
-    if (event_type === 'signup') {
+    // How a new account found Popcode (public/source.js), or which page a
+    // visitor opened and from where (page_view). Rebuilt from known keys so
+    // the page can't store anything else.
+    if (event_type === 'signup' || event_type === 'page_view') {
       const clean = cleanSource(source);
       if (clean) extra.source = clean;
     }
