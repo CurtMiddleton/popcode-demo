@@ -6,9 +6,28 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-13)
+## Current state (updated 2026-10-15)
 
 **Live and recent**
+- **Gallery outreach round 1 SENT 2026-10-15** (9:45–10:55 ET, scheduled in Gmail from
+  curt@popcodeapp.com, BCC curt@theworkshop.works): Geary, Rye Arts Center, Pelham Art Center
+  (**free-pilot offer**, personal email, not in the follow-up sequence), Iona Chapman Gallery,
+  Blue Door, Hudson River Museum, Hopper House, WCC Art Gallery, Samuel Owen, Hammond.
+  **Next:** Mon 10/19 check replies → Email 2 to non-repliers (day 4), Email 3 day 10; set the sheet's
+  Status / Email-sent dates (not yet done). Track B (separate cold domain + Instantly/Smartlead +
+  2-week warm-up for the other ~130 venues in November) **not started**. Sheet:
+  https://docs.google.com/spreadsheets/d/1qguOaOI37s7V1wjm0M9zWdsp13LMjbRJNeue4pTfOl0/edit
+- **Website traffic tracking + Website panel** (PRs #237, #239, live 2026-10-15): marketing pages
+  log anonymous `page_view` and `page_engage` rows; Analytics → Overview → **Website** (sources by
+  day, recent visitors with town/campaign/sections read, outreach scorecard, visitor map, per-page
+  section read-through). No migration. See the 2026-10-14/15 entry.
+- **Lead alert emails** (PR #238, live but **inactive until `RESEND_API_KEY` is added in Vercel
+  (Production) and redeployed**): sign-ups, Book-a-demo clicks, handout downloads, first
+  outreach-link visit → email to curt@popcodeapp.com. Then send a test.
+- **Short links** `popcode.app/exhibitions/1`–`/5` (PR #235): chelsea, manhattan, brooklyn,
+  westchester, connecticut → /exhibitions with `utm_source=email&utm_campaign=gallery-outreach`.
+- **Tours card** on home + pricing: button is now "Learn more" → /exhibitions; Studio card no longer
+  lists "small museums" (PR #236).
 - **/exhibitions "Try it yourself" + the At Work demo tour** (PRs #223–#225, merged 2026-10-13):
   `popcode.app/wrenalder` (made by the user: 3 audio stops, Sargent / Degas / Manet, cover
   with the white WREN & ALDER wordmark) + a 3-page gilt-frame PDF `assets/at-work-audio-tour.pdf`.
@@ -3753,3 +3772,41 @@ The user's Analytics → Map screenshot showed 9 countries, 15 accounts (Kazakhs
 - **Batch upload (#232):** `image-source.js` gets `onPickMany` (adds `multiple` to the library row). In create.html, What plays walks through the batch ("Image k of N", Next goes to the next image still waiting, plus "Skip this one for now"). Scan checks are queued, with an 8 s cap each. edit.html confirms before dropping new images that have nothing to play. Tested headlessly with a stubbed session; the user confirmed it was live.
 - **Pricing (#231):** Single show $1,500 ~~$2,500~~, Gallery year $3,900 ~~$6,500~~, Museum year $7,500 ~~$12,000~~. $1,200 had come from the 2026-10-10 session, anchored at about half Smartify Starter ($2,300/yr).
 - **Emails:** the user's signature (Curt Middleton, Founder, Popcode · popcode.app, 709 Main St, New Rochelle, NY 10801) plus an opt-out line on all three. **Still open:** email 1's "We write the stops with you, record them" contradicts scripts being an add-on; the gallery list hasn't been started.
+
+### 2026-10-14 → 15 — Gallery outreach sent; website traffic tracking, visitor panel, lead alerts
+
+**PRs, all merged and live:** #235 (exhibitions short links `/exhibitions/1-5` + email copy) · #236 (Tours card → Learn more /exhibitions; Studio card drops "small museums"; email copy) · #237 (page_view tracking + Website panel) · #238 (lead alert emails) · #239 (engagement tracking; Website panel: sources by day, recent visitors, scorecard, map, section read-through). Plus doc commits on the branch.
+
+#### Gallery outreach, round 1 (manual, Gmail)
+- The user connected **Gmail, Google Calendar, Drive, Sheets** connectors on claude.ai. Gmail is curt@popcodeapp.com; past sends BCC curt@theworkshop.works (kept on every draft).
+- 10 galleries picked near New Rochelle (solo/two-artist shows; skipped juried/member shows and ones closing within days). Subagents read each show on the gallery's own site for a hook line; hooks written to sheet column M. Madelyn Jordon swapped for **Hammond Museum** (no artists named on her site).
+- **Copy evolution (final version is in the drafts, doc mirrors it):** opening "I've been looking at your website and really enjoyed seeing {show + one specific detail}. I've built something I think could help bring shows like this to life for your visitors." → "It's called Popcode… customers already use it for photo albums and nonprofit annual reports. Now I've adapted it for galleries [and museums]…" → local line "I live {here / next door / in Westchester, / just across the river / just over the state line} in New Rochelle, so I'd be glad to stop by, introduce myself…" → "Best regards," + signature + opt-out. Subject **"an audio tour for your next show"** (current shows close soon; the sale is the next show).
+- **Pelham Art Center** got a personal email: user lived in Pelham for years, held a benefit for the center during the pandemic; offers the **next exhibition free** (normally $1,500) for feedback + a quote. Noted in sheet R/S89; keep it out of the follow-up sequence.
+- **GOTCHA — the Gmail connector rewrites every link** (plain URLs, bare "popcode.app", HTML `<a href>`) into `https://www.google.com/url?q=…&source=gmail&ust=…` in drafts AND sent mail. Workaround used: drafts with `[PASTE DEMO LINK]` / `[PASTE WEBSITE]` markers, user pasted clean links with Paste and Match Style (⌥⇧⌘V / ⌘⇧V), test-sent a copy to themself. **Future: never put links in connector-made drafts.**
+- Auto-mode classifier randomly denied 2 of 10 `create_draft` calls and 2 sheet writes as "data exfiltration"; a retry after the user said "retry" went through.
+- Scheduled times (ET, Thu 10/15): Geary 9:45, Rye 9:52, Pelham 10:00, Iona 10:07, Blue Door 10:14, HRM 10:21, Hopper 10:28, WCC 10:35, Samuel Owen 10:43, Hammond 10:55. Gmail's "Tomorrow morning" preset is 8:00 — use Pick date & time; to change a time: Cancel send → reschedule.
+- Track B advice (not started): buy popcodetours.com (recommended) or popcodeexhibitions.com in Squarespace, add as a **secondary domain in the existing Google Workspace**, MX/SPF/DKIM/DMARC, forward the site to /exhibitions, Instantly or Smartlead, 2-week warm-up, tracking off, Tue–Thu 9:30–11:30 ET, 15→30/day.
+
+#### Website traffic (`public/source.js`, `api/log-event.js`, `public/analytics.html`)
+- **There was no web analytics at all before this** (no GA/Vercel/Plausible). Built our own instead of GA: cookie-free, no IP, lives in `scan_events`, no migration (everything rides in the existing `source` jsonb).
+- `source.js` (loaded on every marketing page directly or via nav.js) logs `page_view` for the PAGES allowlist (/, /pricing, /exhibitions, /nonprofits, /howto, /shop, /book, /boardbook, /calendar, /privacy, /terms): touch in `source.first` (landing, referrer origin+path, utm_*, `pv` per-load id), `device_id` = existing `pc_device` localStorage id (shared with view.html). Skips webdriver/bot UAs, prerender, same-tab reloads (sessionStorage `pc_pv:`), and **any browser that has opened analytics.html** (it sets `localStorage popcode_owner`). The user should open the dashboard once on their phone.
+- `page_engage`: 1 s ticker while visible (cap 1800 s), the `<section>` under mid-screen gets the second; deepest scroll %; sent cumulative on visibility hidden / pagehide via `sendBeacon`; dashboard keeps max per `pv`. Section keys: id, else "hero" from class, else aria-labelledby minus `-h`, else `end`/`s{i}`; friendly names in `SECTION_NAMES` in analytics.html.
+- log-event: `page_view`/`page_engage` are account-level events (no slug); crawler UAs dropped server-side; `cleanEngage` bounds everything. /exhibitions and /nonprofits click events now send `PopcodeSource.get()` and `device_id`, so actions join to visitors and alerts know the campaign.
+- analytics.html: `page_view` + `page_engage` are filtered out of every existing total (opens, unique visitors, activity, funnel). Website panel (top of Overview, follows the date range): cards, stacked views/day by group (Outreach email #2a78d6 / Search & AI #eb6834 / Social #1baf7a / Other #eda100 / Direct grey; validated with the dataviz script), recent 15 visitors, outreach scorecard by `utm_content`, Leaflet map (same CDN libs as reach-map.js; **set the view before adding the GeoJSON layer** or Leaflet throws `_clipPoints … 'min'`), per-page section read-through.
+- **Test row in prod:** `delete from scan_events where device_id = 'claude-deploy-check';` (a /__deploy_check page view from the deploy check) — not yet run.
+- First outreach emails went out before tracking was live (~12:30 ET), so the earliest clicks weren't recorded.
+
+#### Lead alerts (`api/log-event.js` → `leadAlert`)
+- Resend REST API from `info@popcodeapp.com` to `LEAD_ALERT_TO` (default curt@popcodeapp.com) for signup (name/email via `auth.admin.getUserById`), book-demo clicks, handout/postcard downloads, and the first `utm_source=email` page_view per device. 30/hour flood cap. Awaited (Vercel freezes after response), 4 s timeout, never throws. **No-op until `RESEND_API_KEY` is set in Vercel** — Resend's existing key is only in Supabase SMTP. Calendly already emails real bookings.
+
+#### Other
+- CLAUDE.md gained a **Working style** section: be proactive about business-critical gaps (the user asked for this).
+- Headless browser here: use `/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell` (the full chrome refuses old headless). `pkill -f "http.server 8790"` in a compound command killed the shell itself (exit 144) — kill the server in its own call.
+
+#### Open / next
+- Add `RESEND_API_KEY` in Vercel → redeploy → send a test alert.
+- Monday 10/19: check replies (Gmail connector), mark the sheet, draft Email 2 as replies in each thread (no links in connector drafts!). Email 3 ~10/25.
+- Run the deploy-check delete above.
+- Track B domain + tool setup for the November send.
+- Once Website data builds up, use the section read-through to rework weak parts of /exhibitions.
+
