@@ -17,7 +17,8 @@
  *
  * Privacy: only the referrer's origin + path are kept — never its query
  * string, which for webmail and search can carry personal text. No IP, no
- * cookies, nothing sent until the person actually signs up.
+ * cookies. The stored touches are sent only with the signup; marketing pages
+ * also log an anonymous page_view (see logPageView below).
  *
  * Storage is always reached through try/catch (private-mode Safari and
  * blocked site data throw on access). Loaded directly by the pages people
@@ -89,6 +90,55 @@
     if (!stored) write({ first: now, last: cameFromSomewhere(now) ? now : null });
     else if (cameFromSomewhere(now)) { stored.last = now; write(stored); }
   } catch (e) {}
+
+  // ── Page views (2026-10-15) ──────────────────────────────────────────────
+  // The marketing pages log one `page_view` each load, so the dashboard's
+  // Website panel can count visits nobody acted on (an outreach email opened,
+  // /exhibitions read, no demo booked). Same touch shape as above, sent as
+  // `source.first`; the random pc_device id (shared with view.html) counts
+  // visitors. No cookies, no IP stored. Skipped for bots, prerenders, and
+  // browsers the admin has used (analytics.html sets popcode_owner).
+  var PAGES = ['/', '/pricing', '/exhibitions', '/nonprofits', '/nonprofits/thanks',
+               '/nonprofits-thanks', '/howto', '/shop', '/book', '/boardbook',
+               '/calendar', '/privacy', '/terms'];
+  function logPageView() {
+    try {
+      var path = location.pathname.replace(/\.html$/, '').replace(/^\/index$/, '/') || '/';
+      if (path.length > 1) path = path.replace(/\/$/, '');
+      if (PAGES.indexOf(path) === -1) return;
+      if (navigator.webdriver) return;
+      if (/bot|crawl|spider|slurp|headless|lighthouse|preview|facebookexternalhit|pingdom|uptime/i.test(navigator.userAgent)) return;
+      try { if (localStorage.getItem('popcode_owner')) return; } catch (e) {}
+      if (sessionStorage.getItem('pc_pv:' + path + location.search)) return; // a reload isn't a visit
+      try { sessionStorage.setItem('pc_pv:' + path + location.search, '1'); } catch (e) {}
+      var d = null;
+      try { d = localStorage.getItem('pc_device'); } catch (e) {}
+      if (!d) {
+        d = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+          : Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+        try { localStorage.setItem('pc_device', d); } catch (e) {}
+      }
+      var t = touchFromThisPage();
+      t.landing = path;
+      t.at = new Date(t.at).toISOString();
+      var mobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+      fetch('/api/log-event', {
+        method: 'POST', keepalive: true,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_type: 'page_view', device_id: d,
+          device_type: mobile ? 'mobile' : 'desktop', source: { first: t, last: null } })
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  if (document.visibilityState === 'prerender') {
+    document.addEventListener('visibilitychange', function once() {
+      if (document.visibilityState === 'prerender') return;
+      document.removeEventListener('visibilitychange', once);
+      logPageView();
+    });
+  } else {
+    logPageView();
+  }
 
   window.PopcodeSource = {
     /**
