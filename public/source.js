@@ -101,25 +101,40 @@
   var PAGES = ['/', '/pricing', '/exhibitions', '/nonprofits', '/nonprofits/thanks',
                '/nonprofits-thanks', '/howto', '/shop', '/book', '/boardbook',
                '/calendar', '/privacy', '/terms'];
+  function pagePath() {
+    var path = location.pathname.replace(/\.html$/, '').replace(/^\/index$/, '/') || '/';
+    if (path.length > 1) path = path.replace(/\/$/, '');
+    return path;
+  }
+  function trackable() {
+    if (PAGES.indexOf(pagePath()) === -1) return false;
+    if (navigator.webdriver) return false;
+    if (/bot|crawl|spider|slurp|headless|lighthouse|preview|facebookexternalhit|pingdom|uptime/i.test(navigator.userAgent)) return false;
+    try { if (localStorage.getItem('popcode_owner')) return false; } catch (e) {}
+    return true;
+  }
+  function deviceId() {
+    var d = null;
+    try { d = localStorage.getItem('pc_device'); } catch (e) {}
+    if (!d) {
+      d = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+        : Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+      try { localStorage.setItem('pc_device', d); } catch (e) {}
+    }
+    return d;
+  }
+  // One id per page load, shared by its page_view and page_engage rows.
+  var PV = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   function logPageView() {
     try {
-      var path = location.pathname.replace(/\.html$/, '').replace(/^\/index$/, '/') || '/';
-      if (path.length > 1) path = path.replace(/\/$/, '');
-      if (PAGES.indexOf(path) === -1) return;
-      if (navigator.webdriver) return;
-      if (/bot|crawl|spider|slurp|headless|lighthouse|preview|facebookexternalhit|pingdom|uptime/i.test(navigator.userAgent)) return;
-      try { if (localStorage.getItem('popcode_owner')) return; } catch (e) {}
+      if (!trackable()) return;
+      var path = pagePath();
       if (sessionStorage.getItem('pc_pv:' + path + location.search)) return; // a reload isn't a visit
       try { sessionStorage.setItem('pc_pv:' + path + location.search, '1'); } catch (e) {}
-      var d = null;
-      try { d = localStorage.getItem('pc_device'); } catch (e) {}
-      if (!d) {
-        d = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
-          : Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
-        try { localStorage.setItem('pc_device', d); } catch (e) {}
-      }
+      var d = deviceId();
       var t = touchFromThisPage();
       t.landing = path;
+      t.pv = PV;
       t.at = new Date(t.at).toISOString();
       var mobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
       fetch('/api/log-event', {
@@ -130,6 +145,58 @@
       }).catch(function () {});
     } catch (e) {}
   }
+  // ── Engagement (2026-10-15) ──────────────────────────────────────────────
+  // Seconds the page was visible, deepest scroll, and seconds per <section>
+  // (the one under the middle of the screen gets each visible second). Sent
+  // as a page_engage row whenever the tab is hidden or closed, cumulative, so
+  // the dashboard keeps the largest per page load (pv).
+  function sectionKey(sec, i, all) {
+    if (sec.id) return sec.id.slice(0, 30);
+    if (/(^|\s|-)hero(\s|$)/.test(sec.className) || /-hero\b/.test(sec.className)) return 'hero';
+    var lb = (sec.getAttribute('aria-labelledby') || '').split(/\s+/)[0];
+    if (lb) return lb.replace(/-h$/, '').slice(0, 30);
+    return i === all.length - 1 ? 'end' : 's' + i;
+  }
+  function trackEngagement() {
+    if (!trackable()) return;
+    var secs = 0, scroll = 0, per = {}, sentSecs = -1;
+    function tick() {
+      if (document.visibilityState !== 'visible' || secs >= 1800) return;
+      secs++;
+      var all = document.querySelectorAll('section');
+      var mid = window.innerHeight / 2;
+      for (var i = 0; i < all.length; i++) {
+        var r = all[i].getBoundingClientRect();
+        if (r.height > 0 && r.top <= mid && r.bottom > mid) {
+          var k = sectionKey(all[i], i, all);
+          per[k] = (per[k] || 0) + 1;
+          break;
+        }
+      }
+      measure();
+    }
+    function measure() {
+      var h = Math.max(document.documentElement.scrollHeight, 1);
+      var pct = Math.round(Math.min(1, (window.scrollY + window.innerHeight) / h) * 100);
+      if (pct > scroll) scroll = pct;
+    }
+    function send() {
+      if (secs < 1 || secs === sentSecs) return;
+      sentSecs = secs;
+      var body = JSON.stringify({ event_type: 'page_engage', device_id: deviceId(),
+        source: { first: { landing: pagePath(), pv: PV }, engage: { secs: secs, scroll: scroll, sections: per } } });
+      try {
+        if (navigator.sendBeacon && navigator.sendBeacon('/api/log-event', new Blob([body], { type: 'application/json' }))) return;
+      } catch (e) {}
+      fetch('/api/log-event', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: body }).catch(function () {});
+    }
+    setInterval(tick, 1000);
+    window.addEventListener('scroll', measure, { passive: true });
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') send(); });
+    window.addEventListener('pagehide', send);
+  }
+  try { trackEngagement(); } catch (e) {}
+
   if (document.visibilityState === 'prerender') {
     document.addEventListener('visibilitychange', function once() {
       if (document.visibilityState === 'prerender') return;
