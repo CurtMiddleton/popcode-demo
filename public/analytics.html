@@ -208,8 +208,17 @@
       /* Website panel: visits per day as thin columns, hover for the count. */
       .web-days { display: flex; align-items: flex-end; gap: 2px; height: 90px; margin: 4px 0 4px; border-bottom: 1px solid #e0ddd6; }
       .web-day { flex: 1; min-width: 2px; height: 100%; display: flex; align-items: flex-end; cursor: default; }
-      .web-day span { display: block; width: 100%; background: #7657FC; border-radius: 4px 4px 0 0; }
-      .web-day:hover span { background: #5b3df0; }
+      .web-day { flex-direction: column; justify-content: flex-end; }
+      .web-day i { display: block; width: 100%; flex: none; }
+      .web-day i:first-child { border-radius: 4px 4px 0 0; }
+      .web-day i + i { border-top: 2px solid #fff; }
+      .web-day:hover { opacity: 0.8; }
+      .web-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 12px; color: #555; }
+      .web-key { display: inline-flex; align-items: center; gap: 6px; }
+      .web-key i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+      .web-key b { color: #1a1a1a; }
+      .web-map { height: 340px; border-radius: 12px; overflow: hidden; background: #eef0f7; }
+      .web-pg.active { background: #1a1a1a; color: #fff; }
       .web-axis { display: flex; justify-content: space-between; font-size: 11px; color: #999; margin-bottom: 18px; }
       .web-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
       @media (max-width: 760px) { .web-grid { grid-template-columns: 1fr; } }
@@ -2022,12 +2031,12 @@
       async function ensureAllEventsOnce() {
         try {
           cachedAllEvts = (await fetchAllRpc('get_events_with_users', { days_back: 0, max_rows: 100000 }))
-            .filter(e => e.event_type !== 'page_view');
+            .filter(e => e.event_type !== 'page_view' && e.event_type !== 'page_engage');
         } catch (e) {
           // Fall back to a direct read; the funnel needs slug + event_type only.
           try {
             cachedAllEvts = (await fetchAllRows('scan_events', 'slug, event_type, user_id, created_at'))
-              .filter(e => e.event_type !== 'page_view');
+              .filter(e => e.event_type !== 'page_view' && e.event_type !== 'page_engage');
           } catch (e2) {
             console.warn('ensureAllEvents error', e2);
             cachedAllEvts = [];
@@ -2184,23 +2193,57 @@
 
       /*
        * Website panel (2026-10-15). public/source.js logs a page_view on each
-       * marketing-page load with the same touch shape as signups, in
-       * scan_events.source.first. Respects the date range. Visitors are
-       * pc_device ids; a visitor's channel is the earliest of their visits in
-       * the range that came from somewhere (referrer or tagged link), since
-       * clicks between our own pages carry no referrer.
+       * marketing-page load (touch in scan_events.source.first, with a per-load
+       * id `pv`) and page_engage rows as the tab is hidden or closed (seconds,
+       * scroll, seconds per <section>; cumulative, so keep the max per pv).
+       * Respects the date range. Visitors are pc_device ids; a visitor's channel
+       * is the earliest of their visits in the range that came from somewhere
+       * (referrer or tagged link), since clicks between our pages carry none.
        */
+      var WEB_GROUPS = [
+        { key: 'outreach', label: 'Outreach email', color: '#2a78d6' },
+        { key: 'search',   label: 'Search & AI',    color: '#eb6834' },
+        { key: 'social',   label: 'Social',         color: '#1baf7a' },
+        { key: 'other',    label: 'Other sites',    color: '#eda100' },
+        { key: 'direct',   label: 'Direct / unknown', color: '#bdb9b0' }
+      ];
+      var SEARCH_LABELS = ['Google search', 'Bing', 'DuckDuckGo', 'Yandex', 'ChatGPT', 'Perplexity', 'Claude', 'Gemini'];
+      var SOCIAL_LABELS = ['Instagram', 'Facebook', 'X / Twitter', 'Reddit', 'TikTok', 'YouTube', 'LinkedIn', 'Pinterest'];
+      // Section keys come from source.js (id, else "hero", else aria-labelledby minus "-h").
+      var SECTION_NAMES = {
+        hero: 'Top of page', how: 'How it works', try: 'Try it yourself', visitors: 'For visitors',
+        space: 'For your space', edge: 'Why Popcode', placard: 'Entrance placard', pricing: 'Pricing',
+        faq: 'FAQ', end: 'Closing call to action', get: 'What you get', proofline: 'Proof line',
+        proof: 'Proof', fork: 'Choose a path', holiday: 'Holiday', moments: 'Moments', galleries: 'Galleries'
+      };
+      function sectionName(k) { return SECTION_NAMES[k] || k.replace(/-/g, ' '); }
+      function webGroup(t) {
+        if (!t) return 'direct';
+        if (t.utm_source === 'email') return 'outreach';
+        const label = sourceChannel({ first: t, last: null }).label;
+        if (SEARCH_LABELS.indexOf(label) !== -1 || t.click === 'google_ads') return 'search';
+        if (SOCIAL_LABELS.indexOf(label) !== -1 || t.click === 'facebook') return 'social';
+        if (label === 'Direct / unknown' || label === 'Not recorded') return 'direct';
+        return 'other';
+      }
+      let webMap = null, webPage = null;
+
       async function renderWebsite() {
         const wrap = document.getElementById('web-wrap');
         if (!wrap) return;
         const since = activeDays > 0 ? new Date(Date.now() - activeDays * 86400000) : null;
-        let rows;
+        const LEAD_TYPES = ['exh_book_demo_click', 'book_demo_click', 'exh_try_download', 'demo_postcard_download', 'signup'];
+        let rows, engRows, leadRows;
         try {
-          rows = await fetchAllPages(function () {
-            let q = db.from('scan_events').select('created_at, country, device_id, device_type, source')
-              .eq('event_type', 'page_view').order('created_at', { ascending: true });
-            return since ? q.gte('created_at', since.toISOString()) : q;
+          const q = (types, cols) => fetchAllPages(function () {
+            let x = db.from('scan_events').select(cols).in('event_type', types).order('created_at', { ascending: true });
+            return since ? x.gte('created_at', since.toISOString()) : x;
           });
+          [rows, engRows, leadRows] = await Promise.all([
+            q(['page_view'], 'created_at, country, region, city, latitude, longitude, device_id, device_type, source'),
+            q(['page_engage'], 'created_at, device_id, source'),
+            q(LEAD_TYPES, 'event_type, created_at, device_id, user_id, source')
+          ]);
         } catch (e) {
           wrap.innerHTML = '<p class="muted" style="font-size:12px;margin:0">Could not read page views: ' +
             escapeHtml((e && e.message) || String(e)) + '</p>';
@@ -2213,68 +2256,91 @@
         const touch = r => (r.source && r.source.first) || {};
         const vid = r => r.device_id || ('row-' + r.created_at);
         const visitors = new Set(rows.map(vid));
+        const plural = (n, w) => n + ' ' + (n === 1 ? w : w + 's');
+        const fmtSecs = n => n >= 60 ? Math.floor(n / 60) + 'm ' + (n % 60) + 's' : n + 's';
 
-        // Channel per visitor: first sourced arrival, else Direct / unknown.
-        const chanOf = {};
+        // ── Per visitor ──
+        const V = {};
         rows.forEach(r => {
-          const t = touch(r), v = vid(r);
+          const v = vid(r), t = touch(r);
+          const x = V[v] || (V[v] = { id: v, views: [], first: r, last: r, touch: null, sections: {}, secs: 0, leads: [] });
+          x.views.push(r); x.last = r;
           const sourced = t.referrer || t.click || t.utm_source || t.via || t.ref;
-          if (sourced && !chanOf[v]) chanOf[v] = sourceChannel({ first: t, last: null }).label;
+          if (sourced && !x.touch) x.touch = t;
         });
-        const chanCounts = {};
-        visitors.forEach(v => { const c = chanOf[v] || 'Direct / unknown'; chanCounts[c] = (chanCounts[c] || 0) + 1; });
-
-        // Pages: visits and visitors.
-        const pageV = {}, pageU = {};
-        rows.forEach(r => {
-          const p = touch(r).landing || '?';
-          pageV[p] = (pageV[p] || 0) + 1;
-          (pageU[p] = pageU[p] || new Set()).add(vid(r));
+        // Engagement: max per page load, then summed per visitor and per page.
+        const byPv = {};
+        engRows.forEach(r => {
+          const s0 = r.source || {}, f = s0.first || {}, e = s0.engage;
+          if (!e) return;
+          const k = f.pv || (vid(r) + '|' + (f.landing || '') + '|' + (r.created_at || '').slice(0, 13));
+          if (!byPv[k] || e.secs > byPv[k].e.secs) byPv[k] = { e, page: f.landing || '?', v: vid(r) };
+        });
+        const pageEng = {};
+        Object.keys(byPv).forEach(k => {
+          const { e, page, v } = byPv[k];
+          if (V[v]) {
+            V[v].secs += e.secs;
+            Object.keys(e.sections || {}).forEach(sk => { V[v].sections[sk] = (V[v].sections[sk] || 0) + e.sections[sk]; });
+          }
+          const pe = pageEng[page] || (pageEng[page] = { loads: 0, secs: [], scroll: 0, reach: {}, time: {} });
+          pe.loads++; pe.secs.push(e.secs); pe.scroll += e.scroll || 0;
+          Object.keys(e.sections || {}).forEach(sk => {
+            if (e.sections[sk] >= 2) { pe.reach[sk] = (pe.reach[sk] || 0) + 1; pe.time[sk] = (pe.time[sk] || 0) + e.sections[sk]; }
+          });
+        });
+        leadRows.forEach(r => { if (r.device_id && V[r.device_id]) V[r.device_id].leads.push(r); });
+        const signupsByArea = {}, demoByArea = {};
+        leadRows.forEach(r => {
+          const t = r.source && (r.source.last || r.source.first);
+          const area = t && t.utm_source === 'email' ? (t.utm_content || '(no area)') : null;
+          const fromV = r.device_id && V[r.device_id] && V[r.device_id].touch && V[r.device_id].touch.utm_source === 'email'
+            ? (V[r.device_id].touch.utm_content || '(no area)') : null;
+          const a = area || fromV;
+          if (!a) return;
+          if (r.event_type === 'signup') signupsByArea[a] = (signupsByArea[a] || 0) + 1;
+          if (/book_demo/.test(r.event_type)) demoByArea[a] = (demoByArea[a] || 0) + 1;
         });
 
-        // Campaigns: utm_campaign · utm_content.
-        const camp = {};
-        rows.forEach(r => {
-          const t = touch(r);
-          if (!t.utm_campaign && !t.utm_source) return;
-          const k = (t.utm_campaign || t.utm_source) + (t.utm_content ? ' · ' + t.utm_content : '');
-          (camp[k] = camp[k] || { u: new Set(), n: 0, src: t.utm_source || '' }).u.add(vid(r));
-          camp[k].n++;
-        });
-        const emailVisitors = new Set(rows.filter(r => touch(r).utm_source === 'email').map(vid));
+        // ── Cards ──
+        const emailVisitors = Object.values(V).filter(x => x.touch && x.touch.utm_source === 'email').length;
+        const demo = leadRows.filter(r => /book_demo/.test(r.event_type)).length;
+        const allLoads = Object.values(byPv);
+        const medianSecs = (() => {
+          const a = allLoads.map(x => x.e.secs).sort((p, q) => p - q);
+          return a.length ? a[Math.floor(a.length / 2)] : 0;
+        })();
 
-        // Countries by visitor.
-        const ctry = {};
-        const seenC = new Set();
-        rows.forEach(r => {
-          const v = vid(r);
-          if (seenC.has(v)) return; seenC.add(v);
-          const c = r.country || '??';
-          ctry[c] = (ctry[c] || 0) + 1;
-        });
-
-        // Demo clicks in the same period (all-time cache, filtered by date).
-        const demo = (cachedAllEvts || []).filter(e =>
-          (e.event_type === 'exh_book_demo_click' || e.event_type === 'book_demo_click') &&
-          (!since || new Date(e.created_at) >= since)).length;
-
-        // Visits per day, oldest left. All time starts at the first visit.
+        // ── Per day, stacked by channel group (a visitor's channel colours all their views) ──
         const dayKey = d => d.toISOString().slice(0, 10);
         const start = since ? new Date(since) : new Date(rows[0].created_at);
         start.setUTCHours(0, 0, 0, 0);
         const perDay = {};
-        rows.forEach(r => { const k = (r.created_at || '').slice(0, 10); perDay[k] = (perDay[k] || 0) + 1; });
+        rows.forEach(r => {
+          const k = (r.created_at || '').slice(0, 10);
+          const g = webGroup(V[vid(r)].touch);
+          const d = perDay[k] || (perDay[k] = { n: 0 });
+          d.n++; d[g] = (d[g] || 0) + 1;
+        });
         const days = [];
         for (let d = new Date(start); d <= new Date(); d.setUTCDate(d.getUTCDate() + 1)) days.push(dayKey(d));
-        const maxDay = Math.max(1, ...days.map(k => perDay[k] || 0));
+        const maxDay = Math.max(1, ...days.map(k => (perDay[k] || {}).n || 0));
         const fmt = k => new Date(k + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const groupTotals = {};
         const cols = days.map(k => {
-          const n = perDay[k] || 0;
-          const h = n ? Math.max(3, Math.round(n / maxDay * 100)) : 0;
-          const tip = fmt(k) + ': ' + n + ' visit' + (n === 1 ? '' : 's');
-          return '<div class="web-day" title="' + tip + '" aria-label="' + tip + '"><span style="height:' + h + '%"></span></div>';
+          const d = perDay[k] || { n: 0 };
+          const segs = WEB_GROUPS.filter(g => d[g.key]).map(g => {
+            groupTotals[g.key] = (groupTotals[g.key] || 0) + d[g.key];
+            return '<i style="height:' + (d[g.key] / maxDay * 100) + '%;background:' + g.color + '"></i>';
+          }).reverse().join('');
+          const tip = fmt(k) + ': ' + plural(d.n, 'view') +
+            WEB_GROUPS.filter(g => d[g.key]).map(g => ' · ' + g.label + ' ' + d[g.key]).join('');
+          return '<div class="web-day" title="' + escapeHtml(tip) + '" aria-label="' + escapeHtml(tip) + '">' + segs + '</div>';
         }).join('');
+        const legend = WEB_GROUPS.filter(g => groupTotals[g.key]).map(g =>
+          '<span class="web-key"><i style="background:' + g.color + '"></i>' + g.label + ' <b>' + groupTotals[g.key] + '</b></span>').join('');
 
+        // ── Bars helper ──
         const bars = (obj, total, of) => Object.keys(obj).sort((a, b) => obj[b] - obj[a]).slice(0, 8).map(k => {
           const pct = Math.round(obj[k] / total * 100);
           const unit = obj[k] === 1 ? of.replace(/s$/, '') : of;
@@ -2283,34 +2349,182 @@
             '<span class="fn-n" style="font-size:15px">' + obj[k] + '<span class="fn-of"> ' + unit + '</span></span></div>' +
             '<div class="fn-track" style="height:8px"><div class="fn-fill" style="width:' + pct + '%"></div></div></div>';
         }).join('');
+        const chanCounts = {}, pageCounts = {};
+        Object.values(V).forEach(x => {
+          const c = x.touch ? sourceChannel({ first: x.touch, last: null }).label : 'Direct / unknown';
+          chanCounts[c] = (chanCounts[c] || 0) + 1;
+          new Set(x.views.map(r => touch(r).landing || '?')).forEach(p => { pageCounts[p] = (pageCounts[p] || 0) + 1; });
+        });
 
-        const pageCounts = {};
-        Object.keys(pageU).forEach(p => { pageCounts[p] = pageU[p].size; });
-        const campRows = Object.keys(camp).sort((a, b) => camp[b].u.size - camp[a].u.size).map(k =>
-          '<tr><td>' + escapeHtml(k) + '</td><td class="muted">' + escapeHtml(camp[k].src) + '</td>' +
-          '<td style="text-align:right">' + camp[k].u.size + '</td><td style="text-align:right">' + camp[k].n + '</td></tr>').join('');
-        const ctryTxt = Object.keys(ctry).sort((a, b) => ctry[b] - ctry[a]).slice(0, 8)
+        // ── Recent visitors ──
+        const recent = Object.values(V).sort((a, b) => (b.last.created_at > a.last.created_at ? 1 : -1)).slice(0, 15).map(x => {
+          const when = new Date(x.last.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+          const r0 = x.first;
+          const place = [r0.city, r0.region].filter(Boolean).join(', ') || r0.country || '';
+          const t = x.touch;
+          const src = !t ? 'Direct / unknown'
+            : t.utm_source === 'email' ? 'Email · ' + [t.utm_campaign, t.utm_content].filter(Boolean).join(' · ')
+            : sourceChannel({ first: t, last: null }).label;
+          const path = [];
+          x.views.forEach(r => { const p = touch(r).landing || '?'; if (path[path.length - 1] !== p) path.push(p); });
+          const topSecs = Object.keys(x.sections).sort((a, b) => x.sections[b] - x.sections[a]).slice(0, 3)
+            .map(k => sectionName(k) + ' ' + fmtSecs(x.sections[k])).join(', ');
+          const leadTxt = [...new Set(x.leads.map(l => ({ exh_book_demo_click: 'clicked Book a demo', book_demo_click: 'clicked Book a demo',
+            exh_try_download: 'downloaded handout', demo_postcard_download: 'downloaded postcard', signup: 'signed up' })[l.event_type]))].join(', ');
+          return '<tr' + (leadTxt ? ' style="background:#f4f1ff"' : '') + '><td class="muted" style="white-space:nowrap">' + when + '</td>' +
+            '<td style="white-space:nowrap">' + countryFlag(r0.country) + ' ' + escapeHtml(place) +
+              '<div class="muted" style="font-size:11px">' + escapeHtml(r0.device_type || '') + '</div></td>' +
+            '<td>' + escapeHtml(src) + '</td>' +
+            '<td>' + escapeHtml(path.join(' → ')) + '<div class="muted" style="font-size:11px">' + plural(x.views.length, 'page view') +
+              (x.secs ? ' · ' + fmtSecs(x.secs) + ' on site' : '') + '</div></td>' +
+            '<td>' + (topSecs ? escapeHtml(topSecs) : '<span class="muted">—</span>') + '</td>' +
+            '<td>' + (leadTxt ? '<strong>' + escapeHtml(leadTxt) + '</strong>' : '<span class="muted">—</span>') + '</td></tr>';
+        }).join('');
+
+        // ── Outreach scorecard (utm_source=email, by area) ──
+        const areas = {};
+        Object.values(V).forEach(x => {
+          if (!x.touch || x.touch.utm_source !== 'email') return;
+          const a = x.touch.utm_content || '(no area)';
+          const s1 = areas[a] || (areas[a] = { visitors: 0, views: 0, secs: 0, camp: new Set() });
+          s1.visitors++; s1.views += x.views.length; s1.secs += x.secs;
+          if (x.touch.utm_campaign) s1.camp.add(x.touch.utm_campaign);
+        });
+        const areaRows = Object.keys(areas).sort((a, b) => areas[b].visitors - areas[a].visitors).map(a => {
+          const s1 = areas[a];
+          return '<tr><td><strong>' + escapeHtml(a) + '</strong><div class="muted" style="font-size:11px">' + escapeHtml([...s1.camp].join(', ')) + '</div></td>' +
+            '<td style="text-align:right">' + s1.visitors + '</td>' +
+            '<td style="text-align:right">' + (s1.views / s1.visitors).toFixed(1) + '</td>' +
+            '<td style="text-align:right">' + (s1.secs ? fmtSecs(Math.round(s1.secs / s1.visitors)) : '—') + '</td>' +
+            '<td style="text-align:right">' + (demoByArea[a] || 0) + '</td>' +
+            '<td style="text-align:right">' + (signupsByArea[a] || 0) + '</td></tr>';
+        }).join('');
+
+        // ── Section engagement, one page at a time ──
+        const engPages = Object.keys(pageEng).sort((a, b) => pageEng[b].loads - pageEng[a].loads);
+        if (!webPage || engPages.indexOf(webPage) === -1) webPage = engPages.indexOf('/exhibitions') !== -1 ? '/exhibitions' : engPages[0];
+        function engTable(page) {
+          const pe = pageEng[page];
+          if (!pe) return '<p class="muted" style="font-size:12px">No time-on-page data yet.</p>';
+          const sorted = pe.secs.slice().sort((a, b) => a - b);
+          const med = sorted[Math.floor(sorted.length / 2)];
+          const keys = Object.keys(pe.reach).sort((a, b) => pe.reach[b] - pe.reach[a]);
+          const rowsH = keys.map(k => {
+            const pct = Math.round(pe.reach[k] / pe.loads * 100);
+            return '<div class="fn-row" style="margin-bottom:10px"><div class="fn-head">' +
+              '<span class="fn-label" style="font-size:12.5px">' + escapeHtml(sectionName(k)) + '</span>' +
+              '<span class="fn-n" style="font-size:14px">' + pct + '%<span class="fn-of"> reached · avg ' + fmtSecs(Math.round(pe.time[k] / pe.reach[k])) + '</span></span></div>' +
+              '<div class="fn-track" style="height:8px"><div class="fn-fill" style="width:' + pct + '%"></div></div></div>';
+          }).join('');
+          return '<p class="muted" style="font-size:12px;margin:0 0 12px">' + plural(pe.loads, 'visit') + ' measured · median time ' + fmtSecs(med) +
+            ' · scrolled ' + Math.round(pe.scroll / pe.loads) + '% of the page on average. A section counts as reached after 2 seconds on screen.</p>' + rowsH;
+        }
+        const pageTabs = engPages.map(p => '<button class="btn btn-sm btn-quiet web-pg' + (p === webPage ? ' active' : '') + '" data-page="' + escapeHtml(p) + '">' + escapeHtml(p) + '</button>').join(' ');
+
+        // ── Countries ──
+        const ctry = {};
+        Object.values(V).forEach(x => { const c = x.first.country || '??'; ctry[c] = (ctry[c] || 0) + 1; });
+        const ctryTxt = Object.keys(ctry).sort((a, b) => ctry[b] - ctry[a]).slice(0, 10)
           .map(c => (c === '??' ? '' : countryFlag(c) + ' ') + escapeHtml(c === '??' ? 'Unknown' : c) + ' ' + ctry[c]).join(' &nbsp;·&nbsp; ');
 
         wrap.innerHTML =
           '<div class="cards" style="margin-bottom:18px">' +
             '<div class="card"><div class="card-value">' + rows.length + '</div><div class="card-label">Page views</div></div>' +
             '<div class="card"><div class="card-value">' + visitors.size + '</div><div class="card-label">Visitors</div></div>' +
-            '<div class="card" title="Visitors who arrived on a link tagged utm_source=email (outreach emails)."><div class="card-value">' + emailVisitors.size + '</div><div class="card-label">From outreach emails</div></div>' +
+            '<div class="card" title="Visitors who arrived on a link tagged utm_source=email (outreach emails)."><div class="card-value">' + emailVisitors + '</div><div class="card-label">From outreach emails</div></div>' +
             '<div class="card" title="Book a call / Book a demo clicks on /exhibitions and /nonprofits."><div class="card-value">' + demo + '</div><div class="card-label">Demo clicks</div></div>' +
+            '<div class="card" title="Median time a page was on screen, per visit."><div class="card-value">' + (allLoads.length ? fmtSecs(medianSecs) : '—') + '</div><div class="card-label">Median time on page</div></div>' +
           '</div>' +
-          '<div class="web-sub">Page views per day</div>' +
-          '<div class="web-days" role="img" aria-label="Page views per day">' + cols + '</div>' +
-          '<div class="web-axis"><span>' + fmt(days[0]) + '</span><span>peak ' + maxDay + '/day</span><span>' + fmt(days[days.length - 1]) + '</span></div>' +
-          '<div class="web-grid">' +
+          '<div class="web-sub">Page views per day, by where the visitor came from</div>' +
+          '<div class="web-days" role="img" aria-label="Page views per day by source">' + cols + '</div>' +
+          '<div class="web-axis"><span>' + fmt(days[0]) + '</span><span>peak ' + maxDay + '/day · hover a day for detail</span><span>' + fmt(days[days.length - 1]) + '</span></div>' +
+          '<div class="web-legend">' + legend + '</div>' +
+          '<div class="web-sub" style="margin-top:18px">Recent visitors</div>' +
+          '<div class="table-wrap"><table><thead><tr><th>Last seen</th><th>Place</th><th>Came from</th><th>Pages</th><th>Spent longest on</th><th>Action</th></tr></thead>' +
+          '<tbody>' + recent + '</tbody></table></div>' +
+          '<p class="muted" style="font-size:11px;margin:6px 0 20px">Place comes from the visitor’s internet connection: approximate, and a VPN can move it, but a town often points to the gallery. Highlighted rows took an action.</p>' +
+          (areaRows ? '<div class="web-sub">Outreach scorecard</div>' +
+            '<div class="table-wrap"><table><thead><tr><th>Area</th><th style="text-align:right">Visitors</th><th style="text-align:right">Pages each</th><th style="text-align:right">Time each</th><th style="text-align:right">Demo clicks</th><th style="text-align:right">Sign-ups</th></tr></thead>' +
+            '<tbody>' + areaRows + '</tbody></table></div>' +
+            '<p class="muted" style="font-size:11px;margin:6px 0 20px">Emails sent per area are in the outreach sheet; compare visitors here with that count.</p>' : '') +
+          '<div class="web-sub">Where visitors are</div>' +
+          '<div id="web-map" class="web-map"></div>' +
+          '<div class="web-legend" style="margin:8px 0 20px"><span class="web-key"><i style="background:#2a78d6"></i>Outreach email visitors</span><span class="web-key"><i style="background:#7657FC"></i>Other visitors</span><span class="muted" style="font-size:11px">Circle size = visitors from that town. Click a circle for detail.</span></div>' +
+          '<div class="web-sub">What people read</div>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + (pageTabs || '<span class="muted" style="font-size:12px">No time-on-page data yet (recorded from 15 Oct 2026, a little later than visits).</span>') + '</div>' +
+          '<div id="web-eng">' + (webPage ? engTable(webPage) : '') + '</div>' +
+          '<div class="web-grid" style="margin-top:20px">' +
             '<div><div class="web-sub">Where visitors came from</div>' + bars(chanCounts, visitors.size, 'visitors') + '</div>' +
             '<div><div class="web-sub">Pages</div>' + bars(pageCounts, visitors.size, 'visitors') + '</div>' +
           '</div>' +
-          (campRows ? '<div class="web-sub" style="margin-top:8px">Campaigns</div>' +
-            '<div class="table-wrap"><table><thead><tr><th>Campaign · area</th><th>Source</th><th style="text-align:right">Visitors</th><th style="text-align:right">Page views</th></tr></thead>' +
-            '<tbody>' + campRows + '</tbody></table></div>' : '') +
           '<div class="web-sub" style="margin-top:16px">Countries</div>' +
           '<p style="font-size:12.5px;margin:0 0 4px">' + ctryTxt + '</p>';
+
+        wrap.querySelectorAll('.web-pg').forEach(b => b.addEventListener('click', () => {
+          webPage = b.dataset.page;
+          wrap.querySelectorAll('.web-pg').forEach(x => x.classList.toggle('active', x === b));
+          document.getElementById('web-eng').innerHTML = engTable(webPage);
+        }));
+
+        drawWebMap(Object.values(V));
+      }
+
+      // Visitors by town on a plain world map (same libraries and country
+      // shapes as reach-map.js; no tile provider).
+      function loadWebMapLibs() {
+        if (window.__webMapLibs) return window.__webMapLibs;
+        const add = src => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+        if (!document.querySelector('link[href*="leaflet.min.css"]')) {
+          const l = document.createElement('link'); l.rel = 'stylesheet';
+          l.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'; document.head.appendChild(l);
+        }
+        window.__webMapLibs = Promise.all([
+          window.L ? null : add('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'),
+          window.topojson ? null : add('https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js'),
+          fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(r => r.json())
+        ]).then(r => r[2]).catch(e => { window.__webMapLibs = null; throw e; });
+        return window.__webMapLibs;
+      }
+      async function drawWebMap(list) {
+        const el = document.getElementById('web-map');
+        if (!el) return;
+        const places = {};
+        list.forEach(x => {
+          const r = x.views.find(v => Number.isFinite(v.latitude) && Number.isFinite(v.longitude));
+          if (!r) return;
+          const k = r.latitude.toFixed(2) + ',' + r.longitude.toFixed(2);
+          const p = places[k] || (places[k] = { lat: r.latitude, lon: r.longitude, name: [r.city, r.region, r.country].filter(Boolean).join(', '), n: 0, email: 0, areas: {} });
+          p.n++;
+          if (x.touch && x.touch.utm_source === 'email') { p.email++; const a = x.touch.utm_content || 'email'; p.areas[a] = (p.areas[a] || 0) + 1; }
+        });
+        const pts = Object.values(places);
+        if (!pts.length) { el.innerHTML = '<p class="muted" style="font-size:12px;padding:16px">No visitor locations yet.</p>'; el.style.height = 'auto'; return; }
+        try {
+          const world = await loadWebMapLibs();
+          const L = window.L;
+          if (webMap) { try { webMap.remove(); } catch (e) {} webMap = null; }
+          if (!document.body.contains(el)) return; // the panel was redrawn while the libraries loaded
+          webMap = L.map(el, { worldCopyJump: true, minZoom: 1, maxZoom: 10, zoomSnap: 0.5, preferCanvas: true, attributionControl: true });
+          // A view first: Leaflet can't clip the country shapes without one.
+          const b = L.latLngBounds(pts.map(p => [p.lat, p.lon]));
+          if (pts.length === 1) webMap.setView(b.getCenter(), 6); else webMap.fitBounds(b.pad(0.4), { maxZoom: 8 });
+          webMap.attributionControl.setPrefix(false);
+          webMap.attributionControl.addAttribution('Natural Earth');
+          const fc = window.topojson.feature(world, world.objects.countries);
+          fc.features = fc.features.filter(f => f.id !== '010');
+          L.geoJSON(fc, { style: { color: '#d8d4ea', weight: 0.7, fillColor: '#ffffff', fillOpacity: 1 }, interactive: false }).addTo(webMap);
+          pts.sort((a, b) => b.n - a.n).forEach(p => {
+            const areas = Object.keys(p.areas).map(a => a + ' ' + p.areas[a]).join(', ');
+            L.circleMarker([p.lat, p.lon], {
+              radius: Math.min(26, 5 + 4 * Math.sqrt(p.n)), color: '#ffffff', weight: 1.5,
+              fillColor: p.email ? '#2a78d6' : '#7657FC', fillOpacity: 0.75
+            }).bindPopup('<strong>' + escapeHtml(p.name || 'Unknown') + '</strong><br>' + p.n + ' visitor' + (p.n === 1 ? '' : 's') +
+              (p.email ? '<br>' + p.email + ' from outreach email' + (areas ? ' (' + escapeHtml(areas) + ')' : '') : '')).addTo(webMap);
+          });
+        } catch (e) {
+          console.error('web map:', e);
+          el.innerHTML = '<p class="muted" style="font-size:12px;padding:16px">Map could not load: ' + escapeHtml(e.message || String(e)) + '</p>';
+        }
       }
 
       async function renderSignupSources() {
@@ -2867,7 +3081,7 @@
 
         // Website visits have their own panel (renderWebsite) and must not
         // count as Popcode opens, visitors or activity.
-        evts = evts.filter(e => e.event_type !== 'page_view');
+        evts = evts.filter(e => e.event_type !== 'page_view' && e.event_type !== 'page_engage');
 
         if (evts.length === 0 && activeDays !== 0) {
           document.getElementById('main-content').innerHTML =

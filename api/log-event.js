@@ -33,14 +33,14 @@ export default async function handler(req, res) {
     // is /exhibitions' "Try it yourself" handout.
     const ACCOUNT_EVENTS = ['signup', 'create_montage', 'book_demo_click', 'demo_postcard_download',
                             'pay_click_year_end', 'pay_click_gala', 'exh_book_demo_click',
-                            'exh_try_download', 'page_view'];
+                            'exh_try_download', 'page_view', 'page_engage'];
     if (!event_type) return res.status(400).json({ error: 'Missing fields' });
     if (!slug && !ACCOUNT_EVENTS.includes(event_type)) {
       return res.status(400).json({ error: 'Missing fields' });
     }
     // Marketing-page visits (public/source.js). Crawlers that run JS still
     // get here; drop them rather than count them.
-    if (event_type === 'page_view' &&
+    if ((event_type === 'page_view' || event_type === 'page_engage') &&
         /bot|crawl|spider|slurp|headless|lighthouse|preview|facebookexternalhit/i.test(req.headers['user-agent'] || '')) {
       return res.status(200).json({ ok: true, skipped: true });
     }
@@ -97,6 +97,14 @@ export default async function handler(req, res) {
       const clean = cleanSource(source);
       if (clean) extra.source = clean;
     }
+    // Time on page, scroll and seconds per section (source.js), kept beside
+    // the touch so it needs no column of its own.
+    if (event_type === 'page_engage') {
+      const first = cleanTouch(source && source.first);
+      const engage = cleanEngage(source && source.engage);
+      if (!first || !engage) return res.status(400).json({ error: 'Missing fields' });
+      extra.source = { first, engage };
+    }
     if (slug && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       try {
         const { data: col } = await db.from('collections').select('id').eq('slug', slug).maybeSingle();
@@ -138,7 +146,20 @@ export default async function handler(req, res) {
 // { first, last } touches from source.js, each with known keys only and
 // strings capped. Returns null if nothing usable came in.
 const SOURCE_KEYS = ['referrer', 'landing', 'utm_source', 'utm_medium', 'utm_campaign',
-                     'utm_content', 'utm_term', 'via', 'ref', 'click'];
+                     'utm_content', 'utm_term', 'via', 'ref', 'click', 'pv'];
+// { secs, scroll, sections: { key: secs } } with everything bounded.
+function cleanEngage(e) {
+  if (!e || typeof e !== 'object') return null;
+  const n = (v, max) => (Number.isFinite(v) ? Math.max(0, Math.min(max, Math.round(v))) : 0);
+  const sections = {};
+  if (e.sections && typeof e.sections === 'object') {
+    Object.keys(e.sections).slice(0, 30).forEach(k => {
+      if (/^[a-z0-9][a-z0-9-]{0,29}$/i.test(k)) sections[k] = n(e.sections[k], 1800);
+    });
+  }
+  const secs = n(e.secs, 1800);
+  return secs ? { secs, scroll: n(e.scroll, 100), sections } : null;
+}
 function cleanTouch(t) {
   if (!t || typeof t !== 'object') return null;
   const out = {};
