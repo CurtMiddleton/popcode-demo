@@ -217,7 +217,14 @@
       .web-key { display: inline-flex; align-items: center; gap: 6px; }
       .web-key i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
       .web-key b { color: #1a1a1a; }
-      .web-map { height: 340px; border-radius: 12px; overflow: hidden; background: #eef0f7; }
+      .web-map-box { position: relative; height: 380px; border-radius: 12px; overflow: hidden; background: #eef0f7; }
+      .web-map { position: absolute; inset: 0; }
+      .web-map .web-tiles { filter: grayscale(0.85) contrast(0.9) brightness(1.06); }
+      .web-map-btns { position: absolute; top: 10px; right: 10px; z-index: 500; display: flex; gap: 6px; }
+      .web-map-btns .btn { background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+      .web-map-box.full { position: fixed; inset: 16px; height: auto; z-index: 10001; box-shadow: 0 10px 40px rgba(0,0,0,0.35); }
+      body.web-map-open { overflow: hidden; }
+      body.web-map-open::after { content: ''; position: fixed; inset: 0; background: rgba(20,18,30,0.45); z-index: 10000; }
       .web-pg.active { background: #1a1a1a; color: #fff; }
       .web-axis { display: flex; justify-content: space-between; font-size: 11px; color: #999; margin-bottom: 18px; }
       .web-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
@@ -2448,8 +2455,10 @@
             '<tbody>' + areaRows + '</tbody></table></div>' +
             '<p class="muted" style="font-size:11px;margin:6px 0 20px">Emails sent per area are in the outreach sheet; compare visitors here with that count.</p>' : '') +
           '<div class="web-sub">Where visitors are</div>' +
-          '<div id="web-map" class="web-map"></div>' +
-          '<div class="web-legend" style="margin:8px 0 20px"><span class="web-key"><i style="background:#2a78d6"></i>Outreach email visitors</span><span class="web-key"><i style="background:#7657FC"></i>Other visitors</span><span class="muted" style="font-size:11px">Circle size = visitors from that town. Click a circle for detail.</span></div>' +
+          '<div id="web-map-box" class="web-map-box"><div id="web-map" class="web-map"></div>' +
+            '<div class="web-map-btns"><button id="web-map-fit" class="btn btn-sm btn-quiet" type="button">Fit all</button>' +
+            '<button id="web-map-expand" class="btn btn-sm btn-quiet" type="button">Expand ⤢</button></div></div>' +
+          '<div class="web-legend" style="margin:8px 0 20px"><span class="web-key"><i style="background:#2a78d6"></i>Outreach email visitors</span><span class="web-key"><i style="background:#7657FC"></i>Other visitors</span><span class="muted" style="font-size:11px">Circle size = visitors from that town. Click a circle for who and when; Expand for full screen. Locations are town-level, from the visitor’s internet connection.</span></div>' +
           '<div class="web-sub">What people read</div>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + (pageTabs || '<span class="muted" style="font-size:12px">No time-on-page data yet (recorded from 15 Oct 2026, a little later than visits).</span>') + '</div>' +
           '<div id="web-eng">' + (webPage ? engTable(webPage) : '') + '</div>' +
@@ -2469,22 +2478,43 @@
         drawWebMap(Object.values(V));
       }
 
-      // Visitors by town on a plain world map (same libraries and country
-      // shapes as reach-map.js; no tile provider).
+      // Visitors by town. Base map: OpenStreetMap's own tiles (state lines, towns,
+      // streets as you zoom), muted with CSS so the dots stand out. No key; one
+      // admin page is well inside the OSM tile usage policy (attribution kept).
+      // CARTO's basemaps now need an API key (tested 2026-10-15). Expand opens
+      // it full screen.
+      // Locations are city-level (Vercel's IP geo), so zooming past a town
+      // shows where the town is, not where the visitor was.
       function loadWebMapLibs() {
+        if (window.L) return Promise.resolve();
         if (window.__webMapLibs) return window.__webMapLibs;
-        const add = src => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
         if (!document.querySelector('link[href*="leaflet.min.css"]')) {
           const l = document.createElement('link'); l.rel = 'stylesheet';
           l.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'; document.head.appendChild(l);
         }
-        window.__webMapLibs = Promise.all([
-          window.L ? null : add('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'),
-          window.topojson ? null : add('https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js'),
-          fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(r => r.json())
-        ]).then(r => r[2]).catch(e => { window.__webMapLibs = null; throw e; });
+        window.__webMapLibs = new Promise((res, rej) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+          s.onload = res; s.onerror = () => { window.__webMapLibs = null; rej(new Error('Could not load the map library')); };
+          document.head.appendChild(s);
+        });
         return window.__webMapLibs;
       }
+      function setWebMapFull(on) {
+        const box = document.getElementById('web-map-box');
+        if (!box) return;
+        box.classList.toggle('full', on);
+        document.body.classList.toggle('web-map-open', on);
+        const btn = document.getElementById('web-map-expand');
+        if (btn) btn.textContent = on ? 'Close ✕' : 'Expand ⤢';
+        if (webMap) {
+          setTimeout(() => webMap.invalidateSize(), 50);
+          if (on) webMap.scrollWheelZoom.enable(); else webMap.scrollWheelZoom.disable();
+        }
+      }
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && document.body.classList.contains('web-map-open')) setWebMapFull(false);
+      });
       async function drawWebMap(list) {
         const el = document.getElementById('web-map');
         if (!el) return;
@@ -2493,34 +2523,58 @@
           const r = x.views.find(v => Number.isFinite(v.latitude) && Number.isFinite(v.longitude));
           if (!r) return;
           const k = r.latitude.toFixed(2) + ',' + r.longitude.toFixed(2);
-          const p = places[k] || (places[k] = { lat: r.latitude, lon: r.longitude, name: [r.city, r.region, r.country].filter(Boolean).join(', '), n: 0, email: 0, areas: {} });
+          const p = places[k] || (places[k] = { lat: r.latitude, lon: r.longitude, name: [r.city, r.region, r.country].filter(Boolean).join(', '), n: 0, email: 0, people: [] });
           p.n++;
-          if (x.touch && x.touch.utm_source === 'email') { p.email++; const a = x.touch.utm_content || 'email'; p.areas[a] = (p.areas[a] || 0) + 1; }
+          const t = x.touch;
+          if (t && t.utm_source === 'email') p.email++;
+          p.people.push({
+            when: x.last.created_at,
+            src: !t ? 'Direct / unknown' : t.utm_source === 'email'
+              ? 'Email · ' + [t.utm_campaign, t.utm_content].filter(Boolean).join(' · ')
+              : sourceChannel({ first: t, last: null }).label,
+            pages: [...new Set(x.views.map(v => (v.source && v.source.first && v.source.first.landing) || '?'))].join(', '),
+            acted: x.leads.length > 0
+          });
         });
         const pts = Object.values(places);
-        if (!pts.length) { el.innerHTML = '<p class="muted" style="font-size:12px;padding:16px">No visitor locations yet.</p>'; el.style.height = 'auto'; return; }
+        const box = document.getElementById('web-map-box');
+        if (!pts.length) {
+          if (box) box.outerHTML = '<p class="muted" style="font-size:12px">No visitor locations yet.</p>';
+          return;
+        }
         try {
-          const world = await loadWebMapLibs();
+          await loadWebMapLibs();
           const L = window.L;
           if (webMap) { try { webMap.remove(); } catch (e) {} webMap = null; }
-          if (!document.body.contains(el)) return; // the panel was redrawn while the libraries loaded
-          webMap = L.map(el, { worldCopyJump: true, minZoom: 1, maxZoom: 10, zoomSnap: 0.5, preferCanvas: true, attributionControl: true });
-          // A view first: Leaflet can't clip the country shapes without one.
-          const b = L.latLngBounds(pts.map(p => [p.lat, p.lon]));
-          if (pts.length === 1) webMap.setView(b.getCenter(), 6); else webMap.fitBounds(b.pad(0.4), { maxZoom: 8 });
-          webMap.attributionControl.setPrefix(false);
-          webMap.attributionControl.addAttribution('Natural Earth');
-          const fc = window.topojson.feature(world, world.objects.countries);
-          fc.features = fc.features.filter(f => f.id !== '010');
-          L.geoJSON(fc, { style: { color: '#d8d4ea', weight: 0.7, fillColor: '#ffffff', fillOpacity: 1 }, interactive: false }).addTo(webMap);
+          if (!document.body.contains(el)) return; // the panel was redrawn while the library loaded
+          webMap = L.map(el, { minZoom: 2, maxZoom: 16, zoomSnap: 0.5, scrollWheelZoom: false, worldCopyJump: true });
+          L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19, className: 'web-tiles',
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          }).addTo(webMap);
+          const fit = () => {
+            const b = L.latLngBounds(pts.map(p => [p.lat, p.lon]));
+            if (pts.length === 1) webMap.setView(b.getCenter(), 9); else webMap.fitBounds(b.pad(0.3), { maxZoom: 10 });
+          };
+          fit();
           pts.sort((a, b) => b.n - a.n).forEach(p => {
-            const areas = Object.keys(p.areas).map(a => a + ' ' + p.areas[a]).join(', ');
+            const people = p.people.sort((a, b) => (b.when > a.when ? 1 : -1)).slice(0, 6).map(v =>
+              '<div style="margin-top:6px;' + (v.acted ? 'font-weight:700' : '') + '">' +
+              escapeHtml(new Date(v.when).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) +
+              ' · ' + escapeHtml(v.src) + '<br><span style="color:#888">' + escapeHtml(v.pages) + '</span></div>').join('');
             L.circleMarker([p.lat, p.lon], {
-              radius: Math.min(26, 5 + 4 * Math.sqrt(p.n)), color: '#ffffff', weight: 1.5,
-              fillColor: p.email ? '#2a78d6' : '#7657FC', fillOpacity: 0.75
-            }).bindPopup('<strong>' + escapeHtml(p.name || 'Unknown') + '</strong><br>' + p.n + ' visitor' + (p.n === 1 ? '' : 's') +
-              (p.email ? '<br>' + p.email + ' from outreach email' + (areas ? ' (' + escapeHtml(areas) + ')' : '') : '')).addTo(webMap);
+              radius: Math.min(26, 6 + 4 * Math.sqrt(p.n)), color: '#ffffff', weight: 1.5,
+              fillColor: p.email ? '#2a78d6' : '#7657FC', fillOpacity: 0.8
+            }).bindTooltip(escapeHtml(p.name || 'Unknown') + ' · ' + p.n)
+              .bindPopup('<strong>' + escapeHtml(p.name || 'Unknown') + '</strong> · ' + p.n + ' visitor' + (p.n === 1 ? '' : 's') +
+                (p.email ? ' (' + p.email + ' from outreach email)' : '') + people +
+                (p.people.length > 6 ? '<div style="margin-top:6px;color:#888">and ' + (p.people.length - 6) + ' more</div>' : ''),
+                { maxWidth: 300 }).addTo(webMap);
           });
+          const fitBtn = document.getElementById('web-map-fit');
+          if (fitBtn) fitBtn.onclick = fit;
+          const exp = document.getElementById('web-map-expand');
+          if (exp) exp.onclick = () => setWebMapFull(!box.classList.contains('full'));
         } catch (e) {
           console.error('web map:', e);
           el.innerHTML = '<p class="muted" style="font-size:12px;padding:16px">Map could not load: ' + escapeHtml(e.message || String(e)) + '</p>';
