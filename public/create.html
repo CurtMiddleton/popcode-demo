@@ -2622,6 +2622,7 @@
         // preview is still showing on close, keep it by applying it to the page.
         if (montageResult && montageState) mtgApplyToPage(montageState.page, montageResult);
         mtgHidePreview(true); // revoke the preview video + reset
+        mtgStopMusic();
         const ov = document.getElementById('mtg-overlay');
         ov.classList.remove('open');
         document.body.style.overflow = '';
@@ -2663,47 +2664,44 @@
         const wrap = document.getElementById('mtg-music');
         const tracks = window.MONTAGE_MUSIC || [];
         wrap.innerHTML = tracks.map(t => `
-          <button type="button" class="mtg-track${t.id === montageState.musicId ? ' active' : ''}" data-id="${t.id}">
-            <span class="mtg-track-name">${t.name}</span>
-            ${t.mood ? `<span class="mtg-track-mood">${t.mood}</span>` : ''}
-          </button>`).join('');
+          <div class="mtg-track-wrap">
+            <button type="button" class="mtg-track${t.id === montageState.musicId ? ' active' : ''}${t.src ? ' has-play' : ''}" data-id="${t.id}">
+              <span class="mtg-track-name">${t.name}</span>
+              ${t.mood ? `<span class="mtg-track-mood">${t.mood}</span>` : ''}
+            </button>
+            ${t.src ? `<button type="button" class="mtg-track-play" data-id="${t.id}" aria-label="Listen to ${t.name}">${MTG_PLAY_ICON}</button>` : ''}
+          </div>`).join('');
         wrap.querySelectorAll('.mtg-track').forEach(b => {
           b.addEventListener('click', () => {
             montageState.musicId = b.dataset.id;
             wrap.querySelectorAll('.mtg-track').forEach(x => x.classList.toggle('active', x === b));
           });
         });
+        wrap.querySelectorAll('.mtg-track-play').forEach(b => b.addEventListener('click', () => mtgPreviewMusic(b.dataset.id)));
       }
-
-      // Read a video clip's length and grab a poster frame for its thumbnail.
-      // Resolves null when the browser can't decode it (e.g. HEVC on some
-      // desktop browsers) — Shotstack could, but we'd have no length to give it.
-      function mtgProbeVideo(file) {
-        return new Promise((resolve) => {
-          const url = URL.createObjectURL(file);
-          const v = document.createElement('video');
-          v.muted = true; v.playsInline = true; v.preload = 'auto';
-          let done = false;
-          const finish = (val) => { if (done) return; done = true; clearTimeout(timer); v.removeAttribute('src'); v.load(); resolve(val); };
-          const timer = setTimeout(() => { URL.revokeObjectURL(url); finish(null); }, 15000);
-          v.addEventListener('loadedmetadata', () => {
-            if (!isFinite(v.duration) || v.duration <= 0) { URL.revokeObjectURL(url); finish(null); return; }
-            v.currentTime = Math.min(0.5, v.duration / 2);
-          });
-          v.addEventListener('seeked', () => {
-            let thumb = '';
-            try {
-              const w = v.videoWidth || 160, h = v.videoHeight || 160, s = 480 / Math.max(w, h);
-              const c = document.createElement('canvas');
-              c.width = Math.max(1, Math.round(w * s)); c.height = Math.max(1, Math.round(h * s));
-              c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-              thumb = c.toDataURL('image/jpeg', 0.8);
-            } catch (e) {}
-            finish({ url, duration: v.duration, thumb, w: v.videoWidth, h: v.videoHeight });
-          });
-          v.addEventListener('error', () => { URL.revokeObjectURL(url); finish(null); });
-          v.src = url;
-        });
+      // Listen to a track before choosing it. One plays at a time; tapping the
+      // playing one stops it. Stopped when the builder closes or a render starts.
+      const MTG_PLAY_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+      const MTG_STOP_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>';
+      let mtgMusicAudio = null, mtgMusicPlaying = null;
+      function mtgPreviewMusic(id) {
+        const was = mtgMusicPlaying;
+        mtgStopMusic();
+        if (was === id) return;
+        const t = (window.MONTAGE_MUSIC || []).find(x => x.id === id);
+        if (!t || !t.src) return;
+        mtgMusicAudio = mtgMusicAudio || new Audio();
+        mtgMusicAudio.src = t.src;
+        mtgMusicAudio.onended = mtgStopMusic;
+        mtgMusicAudio.play().catch(() => mtgStopMusic());
+        mtgMusicPlaying = id;
+        const b = document.querySelector(`.mtg-track-play[data-id="${id}"]`);
+        if (b) { b.classList.add('playing'); b.innerHTML = MTG_STOP_ICON; b.setAttribute('aria-label', 'Stop'); }
+      }
+      function mtgStopMusic() {
+        if (mtgMusicAudio) { mtgMusicAudio.pause(); mtgMusicAudio.removeAttribute('src'); mtgMusicAudio.load(); }
+        mtgMusicPlaying = null;
+        document.querySelectorAll('.mtg-track-play.playing').forEach(b => { b.classList.remove('playing'); b.innerHTML = MTG_PLAY_ICON; b.setAttribute('aria-label', 'Listen'); });
       }
 
       async function mtgAddPhotos(input) {
@@ -3040,6 +3038,7 @@
         if (st.photos.length < 2) { mtgStatus('Add at least 2 photos or videos.', null, 'err'); return; }
 
         montageBusy = true;
+        mtgStopMusic();
         const createBtn = document.getElementById('mtg-create');
         const closeBtn = document.getElementById('mtg-close-btn');
         createBtn.disabled = true; closeBtn.disabled = true;
@@ -3778,11 +3777,19 @@
     }
     .mtg-seg button.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
 
-    .mtg-music { display: flex; flex-wrap: wrap; gap: 8px; }
+    .mtg-music { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 8px; }
+    .mtg-track-wrap { position: relative; }
     .mtg-track {
       border: 1px solid #e4e2dc; background: #fff; border-radius: 12px; padding: 10px 14px;
-      cursor: pointer; text-align: left; min-width: 100px; font-family: 'Inter', sans-serif; transition: border-color .12s;
+      cursor: pointer; text-align: left; width: 100%; height: 100%; font-family: 'Inter', sans-serif; transition: border-color .12s;
     }
+    .mtg-track.has-play { padding-right: 46px; }
+    .mtg-track-play { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); width: 30px; height: 30px; border-radius: 50%;
+      border: 1px solid #e4e2dc; background: #fff; color: #1a1a1a; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+    .mtg-track-play svg { width: 13px; height: 13px; }
+    .mtg-track-play svg path { transform: translateX(1px); }
+    .mtg-track-play.playing { background: #1a1a1a; border-color: #1a1a1a; color: #fff; }
+    .mtg-track.active + .mtg-track-play:not(.playing) { border-color: rgba(255,255,255,.35); background: rgba(255,255,255,.12); color: #fff; }
     .mtg-track:hover { border-color: #d8d5cd; }
     .mtg-track.active { border-color: #1a1a1a; background: #1a1a1a; }
     .mtg-track.active .mtg-track-name { color: #fff; }
