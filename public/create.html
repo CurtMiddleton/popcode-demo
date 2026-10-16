@@ -2649,7 +2649,6 @@
         if (montageState) {
           if (groupId === 'mtg-transition') montageState.transition = val;
           if (groupId === 'mtg-aspect') montageState.aspect = val;
-          if (groupId === 'mtg-text-pos') { const it = mtgCropItem(); if (it) { it.textPos = val; mtgDrawText(); } }
         }
       }
       // Segmented-control clicks. Delegated on document because the overlay
@@ -3183,22 +3182,51 @@
       // moves or crops it. Sizes are fractions of the frame's shorter side;
       // the preview (.mtg-crop-text) uses the same numbers in cqmin.
       const MTG_OUT = { portrait: [720, 1280], square: [720, 720], landscape: [1280, 720] };
-      const MTG_TEXT = { size: 0.075, line: 1.15, width: 0.84, edge: 0.1 };
+      const MTG_TEXT = { line: 1.15, width: 0.84, size: [0.045, 0.16], defSize: 0.075 };
+      // Fonts for text. `scale` evens out how big each face looks at the same
+      // size; Google faces load the first time the framing panel opens.
+      const MTG_FONTS = {
+        classic:  { label: 'Classic',  family: 'CooperBT',           weight: 400, scale: 1 },
+        elegant:  { label: 'Elegant',  family: 'Cormorant Garamond', weight: 600, scale: 1.2,  gf: 'Cormorant+Garamond:wght@600' },
+        modern:   { label: 'Modern',   family: 'Inter',              weight: 600, scale: 0.95, gf: 'Inter:wght@600' },
+        bold:     { label: 'Bold',     family: 'Oswald',             weight: 600, scale: 1.05, gf: 'Oswald:wght@600', upper: true },
+        hand:     { label: 'Handwritten', family: 'Caveat',          weight: 600, scale: 1.3,  gf: 'Caveat:wght@600' },
+        type:     { label: 'Typewriter',  family: 'Special Elite',   weight: 400, scale: 0.95, gf: 'Special+Elite' },
+      };
+      function mtgLoadTextFonts() {
+        if (document.getElementById('mtg-text-fonts')) return;
+        const l = document.createElement('link');
+        l.id = 'mtg-text-fonts'; l.rel = 'stylesheet';
+        l.href = 'https://fonts.googleapis.com/css2?' + Object.values(MTG_FONTS).filter(f => f.gf).map(f => 'family=' + f.gf).join('&') + '&display=swap';
+        document.head.appendChild(l);
+      }
       function mtgTextOf(item) { return (item && item.text || '').trim(); }
+      // Where and how an item's text sits: centre as fractions of the frame,
+      // font key, size as a fraction of the frame's shorter side. (Older saved
+      // montages stored textPos top/middle/bottom.)
+      function mtgTextStyle(item) {
+        const y0 = { top: 0.15, middle: 0.5, bottom: 0.85 }[item.textPos] || 0.85;
+        const font = MTG_FONTS[item.textFont] ? item.textFont : 'classic';
+        const size = Math.min(MTG_TEXT.size[1], Math.max(MTG_TEXT.size[0], Number(item.textSize) || MTG_TEXT.defSize));
+        return { x: Number.isFinite(item.textX) ? item.textX : 0.5, y: Number.isFinite(item.textY) ? item.textY : y0, font, size };
+      }
       function escMtgText(t) { return String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
       async function mtgCaptionImage(item, aspect) {
-        const text = mtgTextOf(item);
-        if (!text) return null;
-        const pos = item.textPos || 'bottom';
-        const key = aspect + ':' + pos + ':' + text;
+        const raw = mtgTextOf(item);
+        if (!raw) return null;
+        const st = mtgTextStyle(item);
+        const F = MTG_FONTS[st.font];
+        const text = F.upper ? raw.toUpperCase() : raw;
+        const key = [aspect, text, st.x, st.y, st.font, st.size].join(':');
         if (item.textImg && item.textImg.key === key) return item.textImg.url;
         const [W, H] = MTG_OUT[aspect] || MTG_OUT.portrait;
-        let size = Math.round(Math.min(W, H) * MTG_TEXT.size);
-        await document.fonts.load(`${size}px CooperBT`).catch(() => {});
+        let size = Math.round(Math.min(W, H) * st.size * F.scale);
+        mtgLoadTextFonts();
+        await document.fonts.load(`${F.weight} ${size}px "${F.family}"`).catch(() => {});
         const c = document.createElement('canvas'); c.width = W; c.height = H;
         const ctx = c.getContext('2d');
         const maxW = W * MTG_TEXT.width;
-        const setFont = () => { ctx.font = `400 ${size}px CooperBT, Georgia, serif`; };
+        const setFont = () => { ctx.font = `${F.weight} ${size}px "${F.family}", Georgia, serif`; };
         setFont();
         // A single word wider than the line shrinks the whole text to fit.
         const widest = Math.max(...text.split(/\s+/).map(w => ctx.measureText(w).width));
@@ -3212,12 +3240,11 @@
           }
           lines.push(line);
         }
-        const lh = size * MTG_TEXT.line, blockH = lines.length * lh;
-        const edge = Math.min(W, H) * MTG_TEXT.edge;
-        const top = pos === 'top' ? edge : pos === 'middle' ? (H - blockH) / 2 : H - edge - blockH;
+        const lh = size * MTG_TEXT.line;
+        const top = st.y * H - lines.length * lh / 2;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
         ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = size * 0.35; ctx.shadowOffsetY = size * 0.04;
-        lines.forEach((l, i) => ctx.fillText(l, W / 2, top + lh * (i + 0.5)));
+        lines.forEach((l, i) => ctx.fillText(l, st.x * W, top + lh * (i + 0.5)));
         const blob = await new Promise(r => c.toBlob(r, 'image/png'));
         if (!blob) throw new Error("couldn't draw a photo's text");
         const path = `${mtgDraftDir()}/${item.id}-text-${aspect}.png`;
@@ -3231,17 +3258,56 @@
         const item = mtgCropItem();
         const el = document.getElementById('mtg-crop-text');
         if (!item || !el) return;
+        const st = mtgTextStyle(item), F = MTG_FONTS[st.font];
         el.textContent = mtgTextOf(item);
-        el.dataset.pos = item.textPos || 'bottom';
-        document.querySelectorAll('#mtg-text-pos button').forEach(b => b.classList.toggle('active', b.dataset.v === el.dataset.pos));
+        Object.assign(el.style, {
+          left: st.x * 100 + '%', top: st.y * 100 + '%',
+          fontFamily: `"${F.family}", Georgia, serif`, fontWeight: F.weight,
+          fontSize: (st.size * F.scale * 100).toFixed(2) + 'cqmin', textTransform: F.upper ? 'uppercase' : 'none',
+        });
+        document.querySelectorAll('#mtg-text-font button').forEach(b => b.classList.toggle('active', b.dataset.v === st.font));
+        document.getElementById('mtg-text-size').value = st.size;
+        document.getElementById('mtg-text-style').style.display = mtgTextOf(item) ? '' : 'none';
       }
       document.addEventListener('input', (e) => {
-        if (e.target.id !== 'mtg-crop-text-in') return;
         const item = mtgCropItem();
         if (!item) return;
-        item.text = e.target.value;
-        if (!item.text.trim()) { delete item.text; delete item.textPos; }
+        if (e.target.id === 'mtg-crop-text-in') {
+          item.text = e.target.value;
+          if (!item.text.trim()) delete item.text;
+        } else if (e.target.id === 'mtg-text-size') {
+          item.textSize = +e.target.value;
+        } else return;
         mtgDrawText();
+      });
+      document.addEventListener('click', (e) => {
+        const b = e.target.closest && e.target.closest('#mtg-text-font button');
+        const item = b && mtgCropItem();
+        if (!item) return;
+        item.textFont = b.dataset.v;
+        mtgDrawText();
+      });
+      // Drag the text to place it. Snaps to the centre line when close.
+      document.addEventListener('pointerdown', (e) => {
+        const el = e.target.closest && e.target.closest('#mtg-crop-text');
+        const item = el && mtgCropItem();
+        if (!item) return;
+        e.preventDefault();
+        const box = document.getElementById('mtg-crop-frame').getBoundingClientRect();
+        const st = mtgTextStyle(item);
+        const start = { px: e.clientX, py: e.clientY, x: st.x, y: st.y };
+        el.classList.add('dragging');
+        const move = (ev) => {
+          let x = Math.min(0.95, Math.max(0.05, start.x + (ev.clientX - start.px) / box.width));
+          const y = Math.min(0.95, Math.max(0.05, start.y + (ev.clientY - start.py) / box.height));
+          if (Math.abs(x - 0.5) < 0.03) x = 0.5;
+          item.textX = +x.toFixed(4); item.textY = +y.toFixed(4); delete item.textPos;
+          mtgDrawText();
+        };
+        const up = () => { el.classList.remove('dragging'); document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up); };
+        document.addEventListener('pointermove', move);
+        document.addEventListener('pointerup', up);
+        document.addEventListener('pointercancel', up);
       });
 
       // A framed video clip can't be cut here, so the renderer moves (and, when
@@ -3272,6 +3338,7 @@
         mtgItemSecRender();
         document.getElementById('mtg-crop-zoom').value = (item.crop && item.crop.z) || 1;
         document.getElementById('mtg-crop-text-in').value = item.text || '';
+        mtgLoadTextFonts();
         document.getElementById('mtg-body-scroll').style.display = 'none';
         document.getElementById('mtg-foot').style.display = 'none';
         document.getElementById('mtg-crop').style.display = 'flex';
@@ -3343,7 +3410,7 @@
         mtgDrawFrame();
       });
       document.addEventListener('pointerdown', (e) => {
-        const pic = e.target.closest && e.target.closest('#mtg-crop-pic');
+        const pic = e.target.closest && !e.target.closest('#mtg-crop-text') && e.target.closest('#mtg-crop-pic');
         const item = pic && mtgCropItem();
         if (!item) return;
         e.preventDefault();
@@ -3372,7 +3439,7 @@
       function mtgDraftDir(id) { return `montage-drafts/${currentUser.id}/${id || montageState.draftId}`; }
       function mtgSig() {
         const st = montageState;
-        return JSON.stringify([st.photos.map(p => [p.id, p.crop || 0, p.secs || 0, p.text || '', p.textPos || '']), st.perSec, st.transition, st.aspect, st.musicId, st.name || '']);
+        return JSON.stringify([st.photos.map(p => [p.id, p.crop || 0, p.secs || 0, p.text || '', p.textPos || '', p.textX || 0, p.textY || 0, p.textFont || '', p.textSize || 0]), st.perSec, st.transition, st.aspect, st.musicId, st.name || '']);
       }
       async function mtgUploadSources(pctSpan) {
         const st = montageState;
@@ -3416,7 +3483,8 @@
           perSec: st.perSec, transition: st.transition, aspect: st.aspect, musicId: st.musicId,
           items: st.photos.map(p => ({ id: p.id, kind: p.kind, url: p.remote, thumb: p.kind === 'video' ? p.thumb : undefined,
                                         seconds: p.seconds, secs: p.secs, trimmed: p.trimmed, w: p.w, h: p.h, crop: p.crop, framed: p.framed,
-                                        text: p.text, textPos: p.textPos, textImg: p.textImg })),
+                                        text: p.text, textPos: p.textPos, textX: p.textX, textY: p.textY,
+                                        textFont: p.textFont, textSize: p.textSize, textImg: p.textImg })),
         };
         const blob = new Blob([JSON.stringify(draft)], { type: 'application/json' });
         const { error } = await db.storage.from('experiences').upload(`${mtgDraftDir(st.draftId)}/draft.json`, blob, { contentType: 'application/json', upsert: true });
@@ -3643,17 +3711,25 @@
     .mtg-save-draft:disabled { opacity: .4; cursor: default; }
     /* Framing a photo or clip: the part inside the frame is what plays. */
     .mtg-crop { display: none; flex-direction: column; flex: 1; min-height: 0; padding: 12px 24px 20px; overflow-y: auto; }
+    .mtg-crop > *, .mtg-crop > .mtg-crop-stage { flex-shrink: 0; }  /* scroll, don't squash, when the text controls make it tall */
     .mtg-crop-note { font-size: 14px; color: #8a8a8a; font-family: 'Inter', sans-serif; margin: 0 0 12px; text-align: center; }
     .mtg-crop-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
     .mtg-crop-pic { position: relative; overflow: hidden; border-radius: 10px; touch-action: none; cursor: grab; user-select: none; line-height: 0; }
     .mtg-crop-pic img { display: block; max-width: 100%; max-height: 44vh; width: auto; height: auto; -webkit-user-drag: none; }
     .mtg-crop-frame { position: absolute; border: 2px solid #fff; border-radius: 4px; box-shadow: 0 0 0 9999px rgba(0,0,0,.55); pointer-events: none; container-type: size; }
-    /* Text preview: same proportions as mtgCaptionImage (MTG_TEXT), in cqmin of the frame. */
-    .mtg-crop-text { position: absolute; left: 8%; right: 8%; text-align: center; color: #fff; font-family: 'CooperBT', Georgia, serif;
-      font-size: 7.5cqmin; line-height: 1.15; white-space: pre-line; overflow-wrap: break-word; text-shadow: 0 .3cqmin 2.6cqmin rgba(0,0,0,.55); }
-    .mtg-crop-text[data-pos="top"] { top: 10cqmin; }
-    .mtg-crop-text[data-pos="middle"] { top: 50%; transform: translateY(-50%); }
-    .mtg-crop-text[data-pos="bottom"] { bottom: 10cqmin; }
+    /* Text preview: same proportions as mtgCaptionImage, in cqmin/cqw of the frame. Drag it to move it. */
+    .mtg-crop-text { position: absolute; transform: translate(-50%, -50%); width: max-content; max-width: 84cqw; text-align: center; color: #fff;
+      line-height: 1.15; white-space: pre-line; overflow-wrap: break-word; text-shadow: 0 .3cqmin 2.6cqmin rgba(0,0,0,.55);
+      pointer-events: auto; touch-action: none; cursor: move; user-select: none; border-radius: 4px; outline: 1px dashed rgba(255,255,255,.55); outline-offset: 4px; }
+    .mtg-crop-text:empty { display: none; }
+    .mtg-crop-text.dragging { outline-color: #fff; }
+    .mtg-text-style { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+    #mtg-text-font { justify-content: center; }
+    #mtg-text-font button { font-size: 15px; }
+    .mtg-text-size { display: flex; align-items: center; gap: 10px; width: min(100%, 320px); color: #8a8a8a; font-family: 'Inter', sans-serif; }
+    .mtg-text-size span { font-weight: 700; color: #1a1a1a; }
+    .mtg-text-size input { flex: 1; accent-color: #1a1a1a; }
+    .mtg-text-tip { font-size: 12px; color: #8a8a8a; margin: 0; }
     .mtg-crop-words { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 6px auto 12px; width: min(100%, 360px); font-family: 'Inter', sans-serif; }
     .mtg-crop-words .mtg-name { text-align: center; margin: 0; }
     .mtg-texted { font: 700 11px/1 'Inter', sans-serif; }
@@ -3817,10 +3893,17 @@
         </div>
         <div class="mtg-crop-words">
           <input type="text" class="mtg-name" id="mtg-crop-text-in" maxlength="80" placeholder="Add text (optional)" autocomplete="off" aria-label="Text on this photo"/>
-          <div class="mtg-seg" id="mtg-text-pos">
-            <button type="button" data-v="top">Top</button>
-            <button type="button" data-v="middle">Middle</button>
-            <button type="button" data-v="bottom" class="active">Bottom</button>
+          <div class="mtg-text-style" id="mtg-text-style" style="display:none">
+            <p class="mtg-text-tip">Drag the text on the photo to move it.</p>
+            <div class="mtg-seg" id="mtg-text-font">
+              <button type="button" data-v="classic" style="font-family:'CooperBT',serif">Classic</button>
+              <button type="button" data-v="elegant" style="font-family:'Cormorant Garamond',serif;font-weight:600;font-size:17px">Elegant</button>
+              <button type="button" data-v="modern" style="font-family:'Inter',sans-serif;font-weight:600">Modern</button>
+              <button type="button" data-v="bold" style="font-family:'Oswald',sans-serif;font-weight:600;text-transform:uppercase">Bold</button>
+              <button type="button" data-v="hand" style="font-family:'Caveat',cursive;font-weight:600;font-size:19px">Handwritten</button>
+              <button type="button" data-v="type" style="font-family:'Special Elite',monospace">Typewriter</button>
+            </div>
+            <label class="mtg-text-size"><span style="font-size:12px">A</span><input type="range" id="mtg-text-size" min="0.045" max="0.16" step="0.005" value="0.075" aria-label="Text size"/><span style="font-size:19px">A</span></label>
           </div>
         </div>
         <div class="mtg-crop-time" id="mtg-crop-time">
