@@ -5,8 +5,7 @@
 //                                  // ordered, public URLs (Supabase experiences bucket);
 //                                  // `seconds` is a video clip's length (capped at 10s);
 //                                  // `frame` {x,y,scale} optionally reframes a video clip;
-//                                  // `caption` is an https URL of a transparent PNG (text overlay);
-//                                  // `fit: 'whole'` shows a whole video clip over a blurred copy
+//                                  // `caption` is an https URL of a transparent PNG (text overlay)
 //   images?: [{ url }],            // legacy photos-only form of `items`
 //   perImageSeconds?: number,      // default 3 (photos only)
 //   transition?: 'kenburns'|'fade',

@@ -3549,7 +3549,7 @@
         if (montageState) {
           if (groupId === 'mtg-transition') montageState.transition = val;
           if (groupId === 'mtg-aspect') montageState.aspect = val;
-          if (groupId === 'mtg-fit') { const it = mtgCropItem(); if (it) { it.fit = val; mtgShowFit(); } }
+          if (groupId === 'mtg-fit') { const it = mtgCropItem(); if (it) { mtgSetCrop(it, 0.5, 0.5, val === 'whole' ? 0 : 1); mtgShowFit(); } }
         }
       }
       // Segmented-control clicks. Delegated on document because the overlay
@@ -3943,7 +3943,7 @@
           //    ones not already there) so the renderer can fetch them.
           await mtgUploadSources(45);
           const urls = [];
-          const needsFraming = p => p.kind === 'image' && (p.crop || mtgFitOf(p, st.aspect) === 'whole');
+          const needsFraming = p => p.kind === 'image' && !mtgIsPlainFill(p, st.aspect);
           if (st.photos.some(needsFraming)) mtgStatus('Framing photos…', 48, '');
           for (const p of st.photos) {
             urls.push(needsFraming(p) ? await mtgFramedPhoto(p, st.aspect) : p.remote);
@@ -3964,10 +3964,8 @@
               const it = p.kind === 'video'
                 ? { type: 'video', url: urls[i], seconds: p.seconds }
                 : { type: 'image', url: urls[i], ...(p.secs ? { seconds: p.secs } : {}) };
-              const wholeClip = p.kind === 'video' && mtgFitOf(p, st.aspect) === 'whole';
-              const frame = p.kind === 'video' && !wholeClip ? mtgVideoFrame(p, st.aspect) : null;
+              const frame = p.kind === 'video' ? mtgVideoFrame(p, st.aspect) : null;
               if (frame) it.frame = frame;
-              if (wholeClip) it.fit = 'whole';
               if (captions[i]) it.caption = captions[i];
               return it;
             }),
@@ -4027,68 +4025,51 @@
           im.src = url;
         });
       }
-      // The visible region, as fractions of the source: { x, y, w, h }.
+      // Framing: a centre point (fractions of the source) and a zoom, where
+      // z = 1 just fills the frame and smaller zooms out until the whole
+      // photo/clip shows with black around it (mtgMinZoom). A photo whose
+      // orientation fights the montage's shape (a portrait selfie in a
+      // landscape video, or the reverse) starts fully zoomed out, so it isn't
+      // cut to a strip. Stored only once the creator changes it.
+      function mtgMinZoom(item, aspect) {
+        const A = MTG_ASPECT[aspect] || MTG_ASPECT.portrait;
+        if (!item.w || !item.h) return 1;
+        const r = item.w / item.h;
+        return Math.min(1, r / A, A / r);
+      }
+      function mtgCropOf(item, aspect) {
+        if (item.crop) return item.crop;
+        const A = MTG_ASPECT[aspect] || MTG_ASPECT.portrait;
+        const fights = item.w && item.h && (item.w / item.h - 1) * (A - 1) < 0;
+        return { cx: 0.5, cy: 0.5, z: fights || item.fit === 'whole' ? mtgMinZoom(item, aspect) : 1 };
+      }
+      // Plain fill, centred: nothing to cut or move.
+      function mtgIsPlainFill(item, aspect) {
+        const c = mtgCropOf(item, aspect);
+        return (c.z || 1) === 1 && c.cx === 0.5 && c.cy === 0.5;
+      }
+      // The visible region, as fractions of the source: { x, y, w, h }. When
+      // zoomed out past fill, w or h is over 1 and x/y go negative (black).
       function mtgFrameOf(item, aspect) {
         const A = MTG_ASPECT[aspect] || MTG_ASPECT.portrait;
         if (!item.w || !item.h) return null;
-        const c = item.crop || { cx: 0.5, cy: 0.5, z: 1 };
+        const c = mtgCropOf(item, aspect);
+        const z = Math.min(3, Math.max(mtgMinZoom(item, aspect), c.z || 1));
         let fw, fh;
         if (item.w / item.h > A) { fh = 1; fw = (item.h * A) / item.w; } else { fw = 1; fh = (item.w / A) / item.h; }
-        fw /= c.z || 1; fh /= c.z || 1;
-        const x = Math.min(1 - fw, Math.max(0, c.cx - fw / 2));
-        const y = Math.min(1 - fh, Math.max(0, c.cy - fh / 2));
-        return { x, y, w: fw, h: fh };
-      }
-      // Fill the frame (crop) or show the whole photo/clip over a blurred copy
-      // of itself. A photo whose orientation fights the montage's shape (a
-      // portrait selfie in a landscape video, or the reverse) shows whole by
-      // default, so it isn't cut down to a strip; the framing panel can switch it.
-      function mtgFitOf(item, aspect) {
-        if (item.fit === 'fill' || item.fit === 'whole') return item.fit;
-        const A = MTG_ASPECT[aspect] || MTG_ASPECT.portrait;
-        if (!item.w || !item.h) return 'fill';
-        return (item.w / item.h - 1) * (A - 1) < 0 ? 'whole' : 'fill';
-      }
-      // Draw `img` whole and centred on a W×H canvas, over a soft, dimmed,
-      // frame-filling copy of itself. The blur is a tiny copy scaled back up,
-      // which works in every browser (ctx.filter doesn't on older iOS).
-      function mtgDrawWhole(ctx, img, W, H) {
-        const iw = img.naturalWidth || img.videoWidth || img.width, ih = img.naturalHeight || img.videoHeight || img.height;
-        const cover = Math.max(W / iw, H / ih) * 1.15;
-        ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-        if (typeof ctx.filter === 'string') {
-          ctx.filter = `blur(${Math.round(Math.min(W, H) * 0.035)}px)`;
-          ctx.drawImage(img, (W - iw * cover) / 2, (H - ih * cover) / 2, iw * cover, ih * cover);
-          ctx.filter = 'none';
-        } else {
-          // No canvas filter (older iOS): shrink a lot, then grow back in steps.
-          let t = document.createElement('canvas');
-          t.width = Math.max(4, Math.round(W / 32)); t.height = Math.max(4, Math.round(H / 32));
-          const s0 = cover * t.width / W;
-          t.getContext('2d').drawImage(img, (t.width - iw * s0) / 2, (t.height - ih * s0) / 2, iw * s0, ih * s0);
-          for (const k of [8, 3]) {
-            const u = document.createElement('canvas');
-            u.width = Math.round(W / k); u.height = Math.round(H / k);
-            const uc = u.getContext('2d'); uc.imageSmoothingQuality = 'high';
-            uc.drawImage(t, 0, 0, u.width, u.height);
-            t = u;
-          }
-          ctx.drawImage(t, 0, 0, W, H);
-        }
-        ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(0, 0, W, H);
-        const s = Math.min(W / iw, H / ih);
-        ctx.save();
-        ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = Math.min(W, H) * 0.03;
-        ctx.drawImage(img, (W - iw * s) / 2, (H - ih * s) / 2, iw * s, ih * s);
-        ctx.restore();
+        fw /= z; fh /= z;
+        // Inside the picture when the frame is smaller; keep the picture inside
+        // the frame when it's larger.
+        const pos = (p, f) => Math.min(Math.max(0, 1 - f), Math.max(Math.min(0, 1 - f), p - f / 2));
+        return { x: pos(c.cx, fw), y: pos(c.cy, fh), w: fw, h: fh, z };
       }
       // A framed photo is cut to its frame here, in the browser, and that image
-      // is what renders — it fills the frame exactly and Ken Burns moves over
-      // the framed picture. (Shotstack's own asset crop trims the placed image
-      // and leaves black where it cut, so it isn't used.) Cached per framing.
+      // is what renders — it fills the frame exactly (black where zoomed out)
+      // and Ken Burns moves over it. (Shotstack's own asset crop trims the
+      // placed image and leaves black where it cut, so it isn't used.)
+      // Cached per framing.
       async function mtgFramedPhoto(item, aspect) {
-        const whole = mtgFitOf(item, aspect) === 'whole';
-        const key = aspect + ':' + (whole ? 'whole' : JSON.stringify(item.crop));
+        const key = aspect + ':' + JSON.stringify(mtgCropOf(item, aspect));
         if (item.framed && item.framed.key === key) return item.framed.url;
         const img = await new Promise((res, rej) => {
           const im = new Image();
@@ -4098,18 +4079,19 @@
           im.src = item.file ? item.url : item.remote;
         });
         const W = img.naturalWidth, H = img.naturalHeight;
-        const f = mtgFrameOf({ w: W, h: H, crop: item.crop }, aspect);
+        const f = mtgFrameOf({ w: W, h: H, crop: mtgCropOf(item, aspect) }, aspect);
         const A = MTG_ASPECT[aspect] || MTG_ASPECT.portrait;
-        const outW = Math.max(2, Math.round(whole ? (A >= 1 ? 1920 : 1080) : Math.min(f.w * W, A >= 1 ? 1920 : 1080)));
+        const outW = Math.max(2, Math.round(Math.min(f.w * W, A >= 1 ? 1920 : 1080)));
         const outH = Math.max(2, Math.round(outW / A));
         const c = document.createElement('canvas'); c.width = outW; c.height = outH;
         const ctx = c.getContext('2d');
         ctx.fillStyle = '#000'; ctx.fillRect(0, 0, outW, outH);
-        if (whole) mtgDrawWhole(ctx, img, outW, outH);
-        else ctx.drawImage(img, f.x * W, f.y * H, f.w * W, f.h * H, 0, 0, outW, outH);
+        const s = outW / (f.w * W);
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, -f.x * W * s, -f.y * H * s, W * s, H * s);
         const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9));
         if (!blob) throw new Error("couldn't frame a photo");
-        const path = `${mtgDraftDir()}/${item.id}-${whole ? 'whole' : 'framed'}-${aspect}.jpg`;
+        const path = `${mtgDraftDir()}/${item.id}-framed-${aspect}.jpg`;
         const { error } = await db.storage.from('experiences').upload(path, blob, { contentType: 'image/jpeg', upsert: true });
         if (error) throw new Error('Upload failed: ' + error.message);
         // Same path each time it's reframed, so bust any cached copy.
@@ -4117,6 +4099,7 @@
         item.framed = { key, url };
         return url;
       }
+
       // ── Text on a photo or clip ──
       // Drawn here onto a transparent PNG the size of the finished video, then
       // laid over that photo/clip by the renderer — so it's the site's own
@@ -4254,15 +4237,16 @@
         document.addEventListener('pointercancel', up);
       });
 
-      // A framed video clip can't be cut here, so the renderer moves (and, when
-      // zoomed, enlarges) the clip until the frame's centre is on screen centre.
-      // Offsets are in viewport widths/heights, +y up (Shotstack clip offset).
+      // A framed video clip can't be cut here, so the renderer moves the clip
+      // and scales it (below 1 = smaller, black around) until the frame's
+      // centre is on screen centre. Offsets are in viewport widths/heights,
+      // +y up (Shotstack clip offset).
       function mtgVideoFrame(item, aspect) {
-        if (!item.crop) return null;
+        if (mtgIsPlainFill(item, aspect)) return null;
         const f = mtgFrameOf(item, aspect);
         if (!f) return null;
         const cx = f.x + f.w / 2, cy = f.y + f.h / 2;
-        return { x: +((0.5 - cx) / f.w).toFixed(4), y: +((cy - 0.5) / f.h).toFixed(4), scale: +(item.crop.z || 1).toFixed(4) };
+        return { x: +((0.5 - cx) / f.w).toFixed(4), y: +((cy - 0.5) / f.h).toFixed(4), scale: +f.z.toFixed(4) };
       }
 
       let mtgCropId = null;
@@ -4273,14 +4257,13 @@
         if (!item.w || !item.h) { const d = await mtgImageSize(item.kind === 'video' ? item.thumb : item.url); item.w = d.w; item.h = d.h; }
         if (!item.w) { mtgStatus("That one can't be framed.", null, 'err'); return; }
         mtgCropId = id;
-        const img = document.getElementById('mtg-crop-img');
-        img.dataset.src = '';
+        document.getElementById('mtg-crop-img').src = item.kind === 'video' ? item.thumb : item.url;
         document.getElementById('mtg-crop-note').textContent = item.kind === 'video'
-          ? 'Drag to choose what shows in the frame. The whole clip is framed the same way. Add text if you like.'
-          : 'Drag to choose what shows in the frame, add text, and set how long it stays on screen.';
+          ? 'Drag to move it, pinch or slide to size it. The whole clip is framed the same way.'
+          : 'Drag to move it, pinch or slide to size it. Add text and set how long it stays on screen.';
         document.getElementById('mtg-crop-time').style.display = item.kind === 'video' ? 'none' : '';
+        document.querySelector('#mtg-fit [data-v="whole"]').textContent = item.kind === 'video' ? 'Whole clip' : 'Whole photo';
         mtgItemSecRender();
-        document.getElementById('mtg-crop-zoom').value = (item.crop && item.crop.z) || 1;
         document.getElementById('mtg-crop-text-in').value = item.text || '';
         mtgLoadTextFonts();
         document.getElementById('mtg-body-scroll').style.display = 'none';
@@ -4289,30 +4272,14 @@
         mtgShowFit();
         mtgDrawText();
       }
-      // Fill vs whole in the framing panel. Whole shows a preview of the
-      // composed frame (blurred backdrop) with no frame to drag or zoom.
+      // The zoom slider runs from "whole" up to 3x; Fill / Whole are shortcuts.
       function mtgShowFit() {
         const item = mtgCropItem();
         if (!item || !montageState) return;
-        const whole = mtgFitOf(item, montageState.aspect) === 'whole';
-        document.querySelector('#mtg-fit [data-v="whole"]').textContent = item.kind === 'video' ? 'Show whole clip' : 'Show whole photo';
-        document.querySelectorAll('#mtg-fit button').forEach(b => b.classList.toggle('active', b.dataset.v === (whole ? 'whole' : 'fill')));
-        document.getElementById('mtg-crop-zoom-row').style.visibility = whole ? 'hidden' : '';
-        document.getElementById('mtg-crop-pic').classList.toggle('whole', whole);
-        const img = document.getElementById('mtg-crop-img');
-        const src = item.kind === 'video' ? item.thumb : item.url;
-        if (!whole) { if (img.dataset.src !== src) { img.src = src; img.dataset.src = src; } mtgDrawFrame(); return; }
-        const im = new Image();
-        im.onload = () => {
-          if (mtgCropItem() !== item || mtgFitOf(item, montageState.aspect) !== 'whole') return;
-          const A = MTG_ASPECT[montageState.aspect] || MTG_ASPECT.portrait;
-          const W = A >= 1 ? 900 : Math.round(900 * A), H = Math.round(W / A);
-          const c = document.createElement('canvas'); c.width = W; c.height = H;
-          mtgDrawWhole(c.getContext('2d'), im, W, H);
-          img.src = c.toDataURL('image/jpeg', 0.85); img.dataset.src = '';
-          mtgDrawFrame();
-        };
-        im.src = src;
+        const zr = document.getElementById('mtg-crop-zoom');
+        zr.min = mtgMinZoom(item, montageState.aspect).toFixed(3);
+        zr.value = mtgFrameOf(item, montageState.aspect).z;
+        mtgDrawFrame();
       }
       function mtgHideCrop() {
         if (!document.getElementById('mtg-crop')) return;
@@ -4353,51 +4320,95 @@
         delete item.fit;
         delete item.secs;
         mtgItemSecRender();
-        document.getElementById('mtg-crop-zoom').value = 1;
         mtgShowFit();
       }
+      // The preview IS the frame: the montage's shape on black, with the
+      // picture placed in it exactly as it will render.
       function mtgDrawFrame() {
         const item = mtgCropItem();
         if (!item) return;
-        const f = mtgFitOf(item, montageState.aspect) === 'whole' ? { x: 0, y: 0, w: 1, h: 1 } : mtgFrameOf(item, montageState.aspect);
-        const fr = document.getElementById('mtg-crop-frame');
-        fr.style.left = f.x * 100 + '%'; fr.style.top = f.y * 100 + '%';
-        fr.style.width = f.w * 100 + '%'; fr.style.height = f.h * 100 + '%';
+        const A = MTG_ASPECT[montageState.aspect] || MTG_ASPECT.portrait;
+        const f = mtgFrameOf(item, montageState.aspect);
+        const pic = document.getElementById('mtg-crop-pic');
+        pic.style.aspectRatio = String(A);
+        pic.style.width = `min(100%, ${(44 * A).toFixed(2)}vh)`;
+        const img = document.getElementById('mtg-crop-img');
+        img.style.width = 100 / f.w + '%'; img.style.height = 100 / f.h + '%';
+        img.style.left = -f.x / f.w * 100 + '%'; img.style.top = -f.y / f.h * 100 + '%';
+        const zMin = mtgMinZoom(item, montageState.aspect);
+        document.querySelectorAll('#mtg-fit button').forEach(b => b.classList.toggle('active',
+          b.dataset.v === 'fill' ? Math.abs(f.z - 1) < 0.005 : Math.abs(f.z - zMin) < 0.005 && zMin < 1));
+        document.querySelector('#mtg-fit [data-v="whole"]').disabled = zMin >= 1;
       }
-      // Keep the stored centre inside the reachable range, so a later drag
-      // responds at once instead of first "unwinding" past the edge.
+      // Store a framing, keeping the centre where the frame can actually reach
+      // so a later drag responds at once instead of first "unwinding".
       function mtgSetCrop(item, cx, cy, z) {
-        const base = mtgFrameOf({ w: item.w, h: item.h, crop: { cx: 0.5, cy: 0.5, z } }, montageState.aspect);
-        const hw = base.w / 2, hh = base.h / 2;
-        item.crop = { cx: Math.min(1 - hw, Math.max(hw, cx)), cy: Math.min(1 - hh, Math.max(hh, cy)), z };
+        const zz = Math.min(3, Math.max(mtgMinZoom(item, montageState.aspect), z));
+        const f = mtgFrameOf({ w: item.w, h: item.h, crop: { cx, cy, z: zz } }, montageState.aspect);
+        item.crop = { cx: +(f.x + f.w / 2).toFixed(4), cy: +(f.y + f.h / 2).toFixed(4), z: +zz.toFixed(4) };
+        delete item.fit;
+      }
+      function mtgZoomTo(item, z) {
+        const f = mtgFrameOf(item, montageState.aspect);
+        mtgSetCrop(item, f.x + f.w / 2, f.y + f.h / 2, z);
+        document.getElementById('mtg-crop-zoom').value = mtgFrameOf(item, montageState.aspect).z;
+        mtgDrawFrame();
       }
       document.addEventListener('input', (e) => {
         if (e.target.id !== 'mtg-crop-zoom') return;
         const item = mtgCropItem();
-        if (!item) return;
-        const c = item.crop || { cx: 0.5, cy: 0.5 };
-        mtgSetCrop(item, c.cx, c.cy, +e.target.value);
-        mtgDrawFrame();
+        if (item) mtgZoomTo(item, +e.target.value);
       });
+      // Drag to move the picture (it follows the finger); two fingers pinch to
+      // size it; a mouse wheel or trackpad zooms too.
+      const mtgPtrs = new Map();
+      let mtgPinch = null;
       document.addEventListener('pointerdown', (e) => {
         const pic = e.target.closest && !e.target.closest('#mtg-crop-text') && e.target.closest('#mtg-crop-pic');
         const item = pic && mtgCropItem();
-        if (!item || mtgFitOf(item, montageState.aspect) === 'whole') return;
+        if (!item) return;
         e.preventDefault();
+        mtgPtrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
         const box = pic.getBoundingClientRect();
-        const c0 = item.crop || { cx: 0.5, cy: 0.5, z: 1 };
-        // Start from where the frame actually is (it may be pinned to an edge).
-        const f0 = mtgFrameOf(item, montageState.aspect);
-        const start = { x: e.clientX, y: e.clientY, cx: f0.x + f0.w / 2, cy: f0.y + f0.h / 2, z: c0.z || 1 };
+        const begin = () => {
+          const f = mtgFrameOf(item, montageState.aspect);
+          const pts = [...mtgPtrs.values()];
+          const mid = { x: pts.reduce((a, p) => a + p.x, 0) / pts.length, y: pts.reduce((a, p) => a + p.y, 0) / pts.length };
+          const dist = pts.length > 1 ? Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) : 0;
+          mtgPinch = { mid, dist, cx: f.x + f.w / 2, cy: f.y + f.h / 2, fw: f.w, fh: f.h, z: f.z };
+        };
+        begin();
+        if (mtgPtrs.size > 1) return; // the first pointer's listeners already run
         const move = (ev) => {
-          mtgSetCrop(item, start.cx + (ev.clientX - start.x) / box.width, start.cy + (ev.clientY - start.y) / box.height, start.z);
+          if (!mtgPtrs.has(ev.pointerId)) return;
+          mtgPtrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+          const pts = [...mtgPtrs.values()];
+          if (pts.length !== (mtgPinch.dist ? 2 : 1)) begin();
+          const mid = { x: pts.reduce((a, p) => a + p.x, 0) / pts.length, y: pts.reduce((a, p) => a + p.y, 0) / pts.length };
+          let z = mtgPinch.z;
+          if (pts.length > 1 && mtgPinch.dist) z = mtgPinch.z * Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) / mtgPinch.dist;
+          mtgSetCrop(item, mtgPinch.cx - (mid.x - mtgPinch.mid.x) / box.width * mtgPinch.fw,
+                           mtgPinch.cy - (mid.y - mtgPinch.mid.y) / box.height * mtgPinch.fh, z);
+          document.getElementById('mtg-crop-zoom').value = mtgFrameOf(item, montageState.aspect).z;
           mtgDrawFrame();
         };
-        const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up); };
+        const up = (ev) => {
+          mtgPtrs.delete(ev.pointerId);
+          if (mtgPtrs.size) { begin(); return; }
+          mtgPinch = null;
+          document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up);
+        };
         document.addEventListener('pointermove', move);
         document.addEventListener('pointerup', up);
         document.addEventListener('pointercancel', up);
       });
+      document.addEventListener('wheel', (e) => {
+        const pic = e.target.closest && e.target.closest('#mtg-crop-pic');
+        const item = pic && mtgCropItem();
+        if (!item) return;
+        e.preventDefault();
+        mtgZoomTo(item, mtgFrameOf(item, montageState.aspect).z * Math.exp(-e.deltaY * 0.0025));
+      }, { passive: false });
       // Changing Shape while framing redraws the frame at the new shape.
       document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('#mtg-aspect')) setTimeout(mtgShowFit, 0); });
 
@@ -4709,9 +4720,12 @@
     .mtg-crop > *, .mtg-crop > .mtg-crop-stage { flex-shrink: 0; }  /* scroll, don't squash, when the text controls make it tall */
     .mtg-crop-note { font-size: 14px; color: #8a8a8a; font-family: 'Inter', sans-serif; margin: 0 0 12px; text-align: center; }
     .mtg-crop-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
-    .mtg-crop-pic { position: relative; overflow: hidden; border-radius: 10px; touch-action: none; cursor: grab; user-select: none; line-height: 0; }
-    .mtg-crop-pic img { display: block; max-width: 100%; max-height: 44vh; width: auto; height: auto; -webkit-user-drag: none; }
-    .mtg-crop-frame { position: absolute; border: 2px solid #fff; border-radius: 4px; box-shadow: 0 0 0 9999px rgba(0,0,0,.55); pointer-events: none; container-type: size; }
+    /* The preview is the frame itself: the montage's shape on black (aspect and
+       width set by mtgDrawFrame), the picture placed inside as it will render. */
+    .mtg-crop-pic { position: relative; overflow: hidden; border-radius: 10px; touch-action: none; cursor: grab; user-select: none; line-height: 0;
+      background: #000; width: 100%; aspect-ratio: 9 / 16; max-height: 44vh; }
+    .mtg-crop-pic img { position: absolute; display: block; max-width: none; max-height: none; -webkit-user-drag: none; pointer-events: none; }
+    .mtg-crop-frame { position: absolute; inset: 0; border-radius: 10px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); pointer-events: none; container-type: size; }
     /* Text preview: same proportions as mtgCaptionImage, in cqmin/cqw of the frame. Drag it to move it. */
     .mtg-crop-text { position: absolute; transform: translate(-50%, -50%); width: max-content; max-width: 84cqw; text-align: center; color: #fff;
       line-height: 1.15; white-space: pre-line; overflow-wrap: break-word; text-shadow: 0 .3cqmin 2.6cqmin rgba(0,0,0,.55);
@@ -4729,8 +4743,6 @@
     .mtg-crop-words .mtg-name { text-align: center; margin: 0; }
     .mtg-texted { font: 700 11px/1 'Inter', sans-serif; }
     .mtg-fit { align-self: center; margin: 14px auto 0; }
-    .mtg-crop-pic.whole { cursor: default; }
-    .mtg-crop-pic.whole .mtg-crop-frame { box-shadow: none; }
     .mtg-crop-zoom { display: flex; align-items: center; gap: 10px; margin: 16px auto 4px; width: min(100%, 320px); color: #8a8a8a; }
     .mtg-crop-zoom svg { width: 18px; height: 18px; flex: none; }
     .mtg-crop-zoom input { flex: 1; accent-color: #1a1a1a; }
@@ -4893,12 +4905,12 @@
         <p class="mtg-crop-note" id="mtg-crop-note">Drag to choose what shows in the frame.</p>
         <div class="mtg-crop-stage"><div class="mtg-crop-pic" id="mtg-crop-pic"><img id="mtg-crop-img" alt="" draggable="false"/><div class="mtg-crop-frame" id="mtg-crop-frame"><div class="mtg-crop-text" id="mtg-crop-text" data-pos="bottom"></div></div></div></div>
         <div class="mtg-seg mtg-fit" id="mtg-fit">
-          <button type="button" data-v="fill" class="active">Fill the frame</button>
-          <button type="button" data-v="whole">Show whole photo</button>
+          <button type="button" data-v="fill" class="active">Fill</button>
+          <button type="button" data-v="whole">Whole photo</button>
         </div>
         <div class="mtg-crop-zoom" id="mtg-crop-zoom-row">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
-          <input type="range" id="mtg-crop-zoom" min="1" max="3" step="0.01" value="1" aria-label="Zoom"/>
+          <input type="range" id="mtg-crop-zoom" min="0.3" max="3" step="0.005" value="1" aria-label="Size"/>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/><line x1="8" y1="11" x2="14" y2="11"/><line x1="11" y1="8" x2="11" y2="14"/></svg>
         </div>
         <div class="mtg-crop-words">
