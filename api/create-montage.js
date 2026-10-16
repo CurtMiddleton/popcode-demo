@@ -4,7 +4,8 @@
 //   items:   [{ type: 'image'|'video', url, seconds? }],
 //                                  // ordered, public URLs (Supabase experiences bucket);
 //                                  // `seconds` is a video clip's length (capped at 10s);
-//                                  // `frame` {x,y,scale} optionally reframes a video clip
+//                                  // `frame` {x,y,scale} optionally reframes a video clip;
+//                                  // `caption` is an https URL of a transparent PNG (text overlay)
 //   images?: [{ url }],            // legacy photos-only form of `items`
 //   perImageSeconds?: number,      // default 3 (photos only)
 //   transition?: 'kenburns'|'fade',
@@ -50,6 +51,9 @@ export default async function handler(req, res) {
     for (const it of items) {
       if (!it || typeof it.url !== 'string' || !/^https:\/\//.test(it.url)) {
         return res.status(400).json({ error: 'Each photo or video must have a public https URL.' });
+      }
+      if (it.caption !== undefined && (typeof it.caption !== 'string' || !/^https:\/\//.test(it.caption))) {
+        return res.status(400).json({ error: 'Text on a photo must be a public https image.' });
       }
       if (it.type !== undefined && it.type !== 'image' && it.type !== 'video') {
         return res.status(400).json({ error: 'Unknown montage item type.' });
