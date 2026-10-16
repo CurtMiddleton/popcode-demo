@@ -2705,20 +2705,53 @@
         document.querySelectorAll('.mtg-track-play.playing').forEach(b => { b.classList.remove('playing'); b.innerHTML = MTG_PLAY_ICON; b.setAttribute('aria-label', 'Listen'); });
       }
 
+      // Read a video clip's length, size and a thumbnail. Resolves null if the
+      // browser can't play it (or takes over 15s), never hangs.
+      function mtgProbeVideo(file) {
+        return new Promise((resolve) => {
+          const url = URL.createObjectURL(file);
+          const v = document.createElement('video');
+          v.muted = true; v.playsInline = true; v.preload = 'auto';
+          let done = false;
+          const finish = (val) => { if (done) return; done = true; clearTimeout(timer); v.removeAttribute('src'); v.load(); resolve(val); };
+          const timer = setTimeout(() => { URL.revokeObjectURL(url); finish(null); }, 15000);
+          v.addEventListener('loadedmetadata', () => {
+            if (!isFinite(v.duration) || v.duration <= 0) { URL.revokeObjectURL(url); finish(null); return; }
+            v.currentTime = Math.min(0.5, v.duration / 2);
+          });
+          v.addEventListener('seeked', () => {
+            let thumb = '';
+            try {
+              const w = v.videoWidth || 160, h = v.videoHeight || 160, s = 480 / Math.max(w, h);
+              const c = document.createElement('canvas');
+              c.width = Math.max(1, Math.round(w * s)); c.height = Math.max(1, Math.round(h * s));
+              c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+              thumb = c.toDataURL('image/jpeg', 0.8);
+            } catch (e) {}
+            finish({ url, duration: v.duration, thumb, w: v.videoWidth, h: v.videoHeight });
+          });
+          v.addEventListener('error', () => { URL.revokeObjectURL(url); finish(null); });
+          v.src = url;
+        });
+      }
       async function mtgAddPhotos(input) {
         const files = Array.from(input.files || []);
         input.value = '';
         const problems = [];
         let skipped = 0;
-        for (const f of files) {
+        const addBtn = document.querySelector('.mtg-add');
+        if (addBtn) addBtn.classList.add('busy');
+        try {
+        for (const [i, f] of files.entries()) {
+          const of = files.length > 1 ? ` ${i + 1} of ${files.length}` : '';
           if (montageState.photos.length >= MTG_MAX_PHOTOS) { problems.push(`Up to ${MTG_MAX_PHOTOS} photos and videos.`); break; }
           const newId = 'p' + Math.random().toString(36).slice(2, 8);
           const isVid = f.type.startsWith('video/') || /\.(mov|mp4|m4v|webm)$/i.test(f.name);
           if (isVid) {
             if (f.size / (1024 * 1024) > MTG_MAX_VIDEO_MB) { problems.push(`"${f.name}" is over ${MTG_MAX_VIDEO_MB} MB.`); continue; }
-            mtgStatus('Reading video…', null, '');
+            mtgStatus(`Reading video${of}…`, files.length > 1 ? i / files.length * 100 : null, 'busy');
             const probe = await mtgProbeVideo(f);
-            if (!probe) { problems.push(`"${f.name}" couldn't be played here.`); continue; }
+            if (!probe) { problems.push(`"${f.name}" couldn't be played in this browser. Try Safari, or export it as an MP4.`); continue; }
             if (probe.duration > MTG_MAX_SOURCE_SECONDS) {
               URL.revokeObjectURL(probe.url);
               problems.push(`"${f.name}" is ${Math.round(probe.duration)}s — use clips under a minute (trim it in Photos first).`);
@@ -2730,11 +2763,12 @@
               trimmed: probe.duration > MTG_MAX_CLIP_SECONDS,
               w: probe.w, h: probe.h,
             });
+            mtgRenderStrip();
             continue;
           }
           const isImg = f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name);
           if (!isImg) continue;
-          mtgStatus('Optimizing photos…', null, '');
+          mtgStatus(`Adding photo${of}…`, files.length > 1 ? i / files.length * 100 : null, 'busy');
           // Downscale large photos instead of rejecting them (montage sources only
           // need to match the video output size; keeps uploads + render fast).
           const opt = await optimizePhotoDim(f, 1920);
@@ -2742,6 +2776,14 @@
           const url = URL.createObjectURL(opt);
           const dim = await mtgImageSize(url);
           montageState.photos.push({ id: newId, kind: 'image', file: opt, url, w: dim.w, h: dim.h });
+          mtgRenderStrip();
+        }
+        } catch (e) {
+          // Never leave "Reading video…" up: say what failed and keep what was added.
+          console.error('montage add failed', e);
+          problems.push('Something went wrong adding those (' + (e && e.message || e) + ').');
+        } finally {
+          if (addBtn) addBtn.classList.remove('busy');
         }
         if (skipped) problems.push(`${skipped} photo(s) couldn't be read and were skipped.`);
         mtgStatus(problems.join(' '), null, problems.length ? 'err' : '');
@@ -2991,7 +3033,7 @@
         const el = document.getElementById('mtg-status');
         if (!msg) { el.innerHTML = ''; el.className = 'mtg-status'; return; }
         el.className = 'mtg-status show' + (kind ? ' ' + kind : '');
-        el.innerHTML = `<div class="mtg-status-msg">${msg}</div>` +
+        el.innerHTML = `<div class="mtg-status-msg">${kind === 'busy' || (typeof pct === 'number' && kind !== 'err' && kind !== 'ok') ? '<span class="mtg-spin"></span>' : ''}${msg}</div>` +
           (typeof pct === 'number' ? `<div class="mtg-bar-wrap"><div class="mtg-bar" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>` : '');
       }
 
@@ -3928,16 +3970,22 @@
     .mtg-track-name { display: block; font-weight: 700; font-size: 13px; color: #1a1a1a; }
     .mtg-track-mood { display: block; font-size: 11px; color: #999; margin-top: 2px; }
 
-    .mtg-status { display: none; margin-top: 8px; }
+    /* Lives in the footer, which is always on screen, so progress and errors
+       are seen without scrolling. */
+    .mtg-status { display: none; flex-basis: 100%; order: -1; }
+    .mtg-status-msg { display: flex; align-items: center; gap: 8px; }
+    .mtg-spin { width: 14px; height: 14px; flex: none; border-radius: 50%; border: 2px solid #ddd; border-top-color: #1a1a1a; animation: mtg-spin .8s linear infinite; }
+    @keyframes mtg-spin { to { transform: rotate(360deg); } }
+    .mtg-add.busy { opacity: .5; pointer-events: none; }
     .mtg-status.show { display: block; }
     .mtg-status-msg { font-size: 13px; color: #555; font-weight: 600; font-family: 'Inter', sans-serif; }
     .mtg-status.ok .mtg-status-msg { color: #1a1a1a; }
     .mtg-status.err .mtg-status-msg { color: #c92a2a; }
-    .mtg-bar-wrap { height: 6px; background: #eee; border-radius: 4px; overflow: hidden; margin-top: 10px; }
+    .mtg-bar-wrap { height: 6px; background: #eee; border-radius: 4px; overflow: hidden; margin-top: 8px; }
     .mtg-bar { height: 100%; background: #1a1a1a; transition: width .3s; }
 
     .mtg-foot {
-      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
       padding: 16px 24px; border-top: 1px solid #eee; background: #fff;
     }
     .mtg-est { font-size: 13px; color: #8a8a8a; font-weight: 600; font-family: 'Inter', sans-serif; }
@@ -4014,9 +4062,9 @@
           <div class="mtg-music" id="mtg-music"></div>
         </div>
 
-        <div class="mtg-status" id="mtg-status"></div>
       </div>
       <div class="mtg-foot" id="mtg-foot">
+        <div class="mtg-status" id="mtg-status" role="status" aria-live="polite"></div>
         <div class="mtg-est" id="mtg-est">Add at least 2 photos</div>
         <div class="mtg-foot-btns">
           <button type="button" class="mtg-save-draft" id="mtg-save-draft" onclick="mtgSaveDraft()">Save</button>
