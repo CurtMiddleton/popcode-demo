@@ -4134,30 +4134,50 @@
       // placed image and leaves black where it cut, so it isn't used.)
       // Cached per framing.
       async function mtgFramedPhoto(item, aspect) {
-        const key = aspect + ':' + JSON.stringify(mtgCropOf(item, aspect));
+        // 'v2': frames cached before the blank-frame check below may be black,
+        // so every saved montage re-frames once.
+        const key = 'v2:' + aspect + ':' + JSON.stringify(mtgCropOf(item, aspect));
         if (item.framed && item.framed.key === key) return item.framed.url;
-        const img = await new Promise((res, rej) => {
-          const im = new Image();
-          if (!item.file) im.crossOrigin = 'anonymous'; // a saved photo, read back from storage
-          im.onload = () => res(im);
-          im.onerror = () => rej(new Error("couldn't read a photo to frame it"));
-          im.src = item.file ? item.url : item.remote;
-        });
-        const W = img.naturalWidth, H = img.naturalHeight;
-        const f = mtgFrameOf({ w: W, h: H, crop: mtgCropOf(item, aspect) }, aspect);
+        // Decode with the same guarded path as photo uploads: it orients from
+        // EXIF and refuses a decoder that hands back a blank bitmap (Safari
+        // does, under memory pressure or with some files). A blank draw used to
+        // be uploaded as a solid black slide.
+        let blob = item.file || null;
+        if (!blob) {
+          const r = await fetch(item.remote).catch(() => null);
+          if (!r || !r.ok) throw new Error("couldn't read a photo to frame it");
+          blob = await r.blob();
+        }
         const A = MTG_ASPECT[aspect] || MTG_ASPECT.portrait;
-        const outW = Math.max(2, Math.round(Math.min(f.w * W, A >= 1 ? 1920 : 1080)));
-        const outH = Math.max(2, Math.round(outW / A));
-        const c = document.createElement('canvas'); c.width = outW; c.height = outH;
-        const ctx = c.getContext('2d');
-        ctx.fillStyle = '#000'; ctx.fillRect(0, 0, outW, outH);
-        const s = outW / (f.w * W);
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, -f.x * W * s, -f.y * H * s, W * s, H * s);
-        const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9));
-        if (!blob) throw new Error("couldn't frame a photo");
+        let out = null;
+        for (let attempt = 0; attempt < 2 && !out; attempt++) {
+          if (attempt) await new Promise(res => setTimeout(res, 400));
+          const src = await decodeDrawable(blob);
+          if (!src) continue;
+          const W = src.width || src.naturalWidth, H = src.height || src.naturalHeight;
+          const f = mtgFrameOf({ w: W, h: H, crop: mtgCropOf(item, aspect) }, aspect);
+          const outW = Math.max(2, Math.round(Math.min(f.w * W, A >= 1 ? 1920 : 1080)));
+          const outH = Math.max(2, Math.round(outW / A));
+          const c = document.createElement('canvas'); c.width = outW; c.height = outH;
+          const ctx = c.getContext('2d');
+          ctx.fillStyle = '#000'; ctx.fillRect(0, 0, outW, outH);
+          const s = outW / (f.w * W);
+          ctx.imageSmoothingQuality = 'high';
+          try { ctx.drawImage(src, -f.x * W * s, -f.y * H * s, W * s, H * s); } catch (e) {}
+          releaseSource(src);
+          // The picture must actually be there: a frame that came out black
+          // while the photo itself isn't is a failed draw, not a dark photo.
+          if (sourcePaints(c)) out = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9));
+          c.width = c.height = 0; // free the canvas memory now, not at GC
+        }
+        if (!out) {
+          // Better the unframed photo than a black slide.
+          console.warn('montage: framing came out blank, using the photo as-is', item.id);
+          if (window.Sentry) Sentry.captureMessage('Montage framing came out blank; used unframed photo');
+          return item.remote;
+        }
         const path = `${mtgDraftDir()}/${item.id}-framed-${aspect}.jpg`;
-        const { error } = await db.storage.from('experiences').upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+        const { error } = await db.storage.from('experiences').upload(path, out, { contentType: 'image/jpeg', upsert: true });
         if (error) throw new Error('Upload failed: ' + error.message);
         // Same path each time it's reframed, so bust any cached copy.
         const url = db.storage.from('experiences').getPublicUrl(path).data.publicUrl + '?v=' + Date.now();
