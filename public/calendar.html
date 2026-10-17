@@ -3035,7 +3035,26 @@
         im.src = sample;
         sheet.appendChild(pf.frame);
         host.appendChild(sheet);
+        addWireCoil(sheet);
         syncCalGallery(host);
+      }
+      /* The wire binding across the join between the two pages, drawn on a
+         canvas strip over the sheet (PopcodePreview.drawWireCoil, shared with
+         the My Designs drawing). Redrawn at 2× the sheet's width for sharpness. */
+      function addWireCoil(sheet) {
+        if (!window.PopcodePreview || !window.PopcodePreview.drawWireCoil) return;
+        requestAnimationFrame(() => {
+          const w = sheet.clientWidth; if (!w) return;
+          const pitch = Math.max(5, w / 28), h = Math.ceil(pitch * 1.8);
+          const cv = document.createElement('canvas');
+          cv.className = 'wire-coil';
+          cv.width = w * 2; cv.height = h * 2;
+          cv.style.cssText = `position:absolute;left:0;top:calc(50% - ${h / 2}px);width:${w}px;height:${h}px;pointer-events:none;z-index:2;`;
+          const ctx = cv.getContext('2d'); ctx.scale(2, 2);
+          window.PopcodePreview.drawWireCoil(ctx, 0, h / 2, w);
+          sheet.style.position = 'relative';
+          sheet.appendChild(cv);
+        });
       }
       /* Gallery under the calendar: this live sheet first, then Prodigi's
          close-ups of the real calendar (PopcodeGallery.IMAGES.calendar). The

@@ -663,6 +663,34 @@
     }
     ctx.strokeStyle = 'rgba(0,0,0,0.10)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(x, y + pageH + 0.5); ctx.lineTo(x + sheetW, y + pageH + 0.5); ctx.stroke();
+    drawWireCoil(ctx, x, y + pageH, sheetW);
+  }
+  /* The calendar's wire binding across the join between its two pages (y):
+     a row of silver loops through punched holes, with a gap in the middle
+     where the hanger sits (like Prodigi's and Printify's spiral calendars). */
+  function drawWireCoil(ctx, x, y, w) {
+    var pitch = Math.max(5, w / 28);
+    var n = Math.floor(w / pitch);
+    var x0 = x + (w - n * pitch) / 2 + pitch / 2;
+    var rw = pitch * 0.34, rh = pitch * 0.62, lw = Math.max(1, pitch * 0.2);
+    var mid = (n - 1) / 2;
+    for (var i = 0; i < n; i++) {
+      if (Math.abs(i - mid) < 1.2) continue; // the hanger gap
+      var cx = x0 + i * pitch;
+      // Punched holes, either side of the join.
+      ctx.fillStyle = 'rgba(40,40,40,0.55)';
+      [-1, 1].forEach(function (d) {
+        ctx.beginPath(); ctx.ellipse(cx, y + d * rh * 0.62, pitch * 0.13, pitch * 0.11, 0, 0, Math.PI * 2); ctx.fill();
+      });
+      // The loop: a soft shadow, then a silver ring lit from the left.
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.28)'; ctx.shadowBlur = lw * 1.5; ctx.shadowOffsetY = lw * 0.6;
+      var g = ctx.createLinearGradient(cx - rw, 0, cx + rw, 0);
+      g.addColorStop(0, '#7d7f84'); g.addColorStop(0.35, '#f6f7f8'); g.addColorStop(0.65, '#c9cbcf'); g.addColorStop(1, '#6f7176');
+      ctx.strokeStyle = g; ctx.lineWidth = lw;
+      ctx.beginPath(); ctx.ellipse(cx, y, rw, rh, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
   }
   // A photo in a frame of any colour (w/h aspect), with a soft shadow.
   var FRAME_HEX = { white: '#f7f6f3', natural: '#c9a97e' };
@@ -682,6 +710,7 @@
 
   window.PopcodePreview = {
     drawCalendarSheet: drawCalendarSheet,
+    drawWireCoil: drawWireCoil,
     drawColouredFrame: drawColouredFrame,
     FRAME_HEX: FRAME_HEX,
     MOCKUPS: MOCKUPS,
