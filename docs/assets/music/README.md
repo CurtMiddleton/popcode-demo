@@ -41,6 +41,23 @@ hand on 2026-07-14 (commit `f3f306a`); their source wasn't recorded.
 check each page (the badge sits under the player). Search with
 `?content_type=authentic` to drop AI-generated tracks.
 
+## Added 2026-10-17 — supplied by Curt
+
+Four short pieces (31–45 s, AAC `.m4a`, encoded by Apple Core Media) that Curt
+uploaded. Shotstack soundtracks must be MP3 and simply stop when the file ends,
+so each was looped with 2.5 s triangular crossfades to ~3 min, levelled to
+-16 LUFS (true peak ≤ -1.5 dBTP) and encoded at 192 kbps (`light-airy` first had
+its last 1.3 s of silence trimmed). Built with ffmpeg `acrossfade` + `loudnorm`.
+
+| File | Picker name | Original file |
+|---|---|---|
+| `bossa-cafe.mp3` | Café Bossa | Bossa_Nova_2.m4a |
+| `bossa-sunset.mp3` | Sunset Bossa | Bossa_Nova_3.m4a |
+| `angelic.mp3` | Angelic | Angelic.m4a |
+| `light-airy.mp3` | Light & Airy | LightAiry.m4a |
+
+**Source/licence not yet recorded** — fill in where these came from.
+
 ## Licensing — IMPORTANT
 
 Only use tracks you have the right to redistribute on shared AR links. Popcode
