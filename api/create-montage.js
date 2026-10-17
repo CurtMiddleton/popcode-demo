@@ -13,6 +13,7 @@
 //   aspect?: 'portrait'|'landscape'|'square'
 // }
 // 200 { renderId, dryRun }
+// 402 { error, code: 'out_of_credits' } when the Shotstack account has run out
 //
 // Env: SHOTSTACK_API_KEY, SHOTSTACK_BASE_URL (default the stage/sandbox host),
 //      MONTAGE_DRY_RUN ('true' forces mock mode even if a key is set).
@@ -22,6 +23,7 @@
 // the paid key is live. It never calls Shotstack and never produces a real MP4.
 
 import { Sentry } from './_sentry.js';
+import { isOutOfCredits, alertOutOfCredits } from './_montage-credits.js';
 
 const SHOTSTACK_BASE_URL = (process.env.SHOTSTACK_BASE_URL || 'https://api.shotstack.io/edit/stage').trim().replace(/\/+$/, '');
 const SHOTSTACK_API_KEY = (process.env.SHOTSTACK_API_KEY || '').trim();
@@ -95,6 +97,10 @@ export default async function handler(req, res) {
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data?.response?.id) {
       const msg = data?.message || `Shotstack render failed (${resp.status})`;
+      if (isOutOfCredits(msg)) {
+        await alertOutOfCredits(msg);
+        return res.status(402).json({ error: 'Montage making is paused for a moment.', code: 'out_of_credits' });
+      }
       // Alert the team — this is where an out-of-credits / rejected render surfaces
       // (Shotstack refuses the render request). Best-effort; never blocks the reply.
       Sentry.captureException(new Error('Shotstack render rejected: ' + msg));

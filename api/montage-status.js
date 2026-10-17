@@ -3,6 +3,7 @@
 // 200 { status, url, dryRun }
 //   status: 'queued' | 'rendering' | 'done' | 'failed'
 //   url:    the rendered MP4 (only when status === 'done', real mode)
+//   code:   'out_of_credits' on a render refused for lack of Shotstack credits
 //
 // Dry-run ids (prefixed DRYRUN-) resolve straight to a "done" preview state with
 // no url — the builder shows a "preview mode" banner instead of a real video.
@@ -10,6 +11,7 @@
 // Env: SHOTSTACK_API_KEY, SHOTSTACK_BASE_URL.
 
 import { Sentry } from './_sentry.js';
+import { isOutOfCredits, alertOutOfCredits } from './_montage-credits.js';
 
 const SHOTSTACK_BASE_URL = (process.env.SHOTSTACK_BASE_URL || 'https://api.shotstack.io/edit/stage').trim().replace(/\/+$/, '');
 const SHOTSTACK_API_KEY = (process.env.SHOTSTACK_API_KEY || '').trim();
@@ -51,6 +53,11 @@ export default async function handler(req, res) {
       return res.status(502).json({ error: msg });
     }
     const status = mapStatus(data.response.status);
+    const failReason = status === 'failed' ? String(data.response.error || '') : '';
+    if (status === 'failed' && isOutOfCredits(failReason)) {
+      await alertOutOfCredits(failReason, id);
+      return res.status(200).json({ status, url: null, dryRun: false, code: 'out_of_credits', reason: null });
+    }
     if (status === 'failed') {
       // A render that started but errored out (bad asset, out-of-credits mid-render,
       // etc.). Alert the team so a silent failure doesn't go unnoticed once montage
