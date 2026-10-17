@@ -58,6 +58,13 @@ its last 1.3 s of silence trimmed). Built with ffmpeg `acrossfade` + `loudnorm`.
 
 **Source/licence not yet recorded** — fill in where these came from.
 
+## 2026-10-17 — leading silence trimmed
+
+`bossa-nova.mp3` opened with 3.25 s of digital silence (the listen button and
+the montage both seemed to "hang"), `sentimental.mp3` with 0.45 s. Both cut
+losslessly (`ffmpeg -ss … -c copy`). Check new tracks with
+`silencedetect=n=-60dB:d=0.3` before adding them.
+
 ## Licensing — IMPORTANT
 
 Only use tracks you have the right to redistribute on shared AR links. Popcode
