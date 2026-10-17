@@ -8,13 +8,16 @@
 // Shotstack fetches the track by its public URL (popcode.app + src) at render
 // time, so a track only works once its file is deployed.
 //
+// Replacing a track's file? Bump its ?v= — Shotstack and browsers cache by URL
+// (bossa-nova/sentimental: v=2 after their leading silence was trimmed).
+//
 // To add a track: add an entry here + drop the matching .mp3 in assets/music/,
 // and record where it came from (`source`, `license`) — the first five predate
 // that and their source wasn't recorded.
 window.MONTAGE_MUSIC = [
   { id: 'none',       name: 'No music',   mood: '',           src: null },
   { id: 'uplifting',  name: 'Uplifting',  mood: 'Bright & hopeful', src: '/assets/music/uplifting.mp3' },
-  { id: 'sentimental',name: 'Sentimental',mood: 'Warm & reflective', src: '/assets/music/sentimental.mp3' },
+  { id: 'sentimental',name: 'Sentimental',mood: 'Warm & reflective', src: '/assets/music/sentimental.mp3?v=2' },
   { id: 'cinematic',  name: 'Cinematic',  mood: 'Epic & sweeping',  src: '/assets/music/cinematic.mp3' },
   { id: 'playful',    name: 'Playful',    mood: 'Light & fun',      src: '/assets/music/playful.mp3' },
   { id: 'calm',       name: 'Calm',       mood: 'Gentle & mellow',  src: '/assets/music/calm.mp3' },
@@ -25,7 +28,7 @@ window.MONTAGE_MUSIC = [
     credit: 'WELC0MEИ0 – 190223 Nostalgic Piano / Twilight Sky', source: 'https://pixabay.com/music/solo-piano-190223-nostalgic-piano-twilight-sky-emotional-155489/', license: 'Pixabay' },
   { id: 'golden-hour',name: 'Golden Hour',mood: 'Warm acoustic', src: '/assets/music/golden-hour.mp3',
     credit: 'Musinova – By The Lake', source: 'https://pixabay.com/music/acoustic-group-by-the-lake-solo-acoustic-guitar-folk-276490/', license: 'Pixabay' },
-  { id: 'bossa-nova', name: 'Bossa Nova', mood: 'Breezy & sunny',   src: '/assets/music/bossa-nova.mp3',
+  { id: 'bossa-nova', name: 'Bossa Nova', mood: 'Breezy & sunny',   src: '/assets/music/bossa-nova.mp3?v=2',
     credit: 'Musicalmix2020 – Bossa Nova Summer', source: 'https://pixabay.com/music/bossa-nova-bossa-nova-summer-instrumental-brazil-7969/', license: 'Pixabay' },
   // Added 2026-10-17 from short pieces Curt supplied (31–45s .m4a files),
   // looped with 2.5s crossfades to ~3 min (a soundtrack shorter than the
