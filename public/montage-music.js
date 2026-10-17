@@ -27,6 +27,13 @@ window.MONTAGE_MUSIC = [
     credit: 'Musinova – By The Lake', source: 'https://pixabay.com/music/acoustic-group-by-the-lake-solo-acoustic-guitar-folk-276490/', license: 'Pixabay' },
   { id: 'bossa-nova', name: 'Bossa Nova', mood: 'Breezy & sunny',   src: '/assets/music/bossa-nova.mp3',
     credit: 'Musicalmix2020 – Bossa Nova Summer', source: 'https://pixabay.com/music/bossa-nova-bossa-nova-summer-instrumental-brazil-7969/', license: 'Pixabay' },
+  // Added 2026-10-17 from short pieces Curt supplied (31–45s .m4a files),
+  // looped with 2.5s crossfades to ~3 min (a soundtrack shorter than the
+  // montage just stops) and levelled to -16 LUFS like the others.
+  { id: 'bossa-cafe', name: 'Café Bossa', mood: 'Easy-going bossa', src: '/assets/music/bossa-cafe.mp3',
+    credit: 'Supplied by Curt ("Bossa Nova 2")', source: null, license: 'Supplied by Curt — source to record' },
+  { id: 'bossa-sunset', name: 'Sunset Bossa', mood: 'Mellow bossa', src: '/assets/music/bossa-sunset.mp3',
+    credit: 'Supplied by Curt ("Bossa Nova 3")', source: null, license: 'Supplied by Curt — source to record' },
   { id: 'vintage',    name: 'Vintage',    mood: 'Cocktail jazz',    src: '/assets/music/vintage.mp3',
     credit: 'alex-morgan – Cocktail Jazz', source: 'https://pixabay.com/music/modern-jazz-cocktail-jazz-556233/', license: 'Pixabay' },
   { id: 'after-dark', name: 'After Dark', mood: 'Late-night jazz',  src: '/assets/music/after-dark.mp3',
@@ -35,4 +42,8 @@ window.MONTAGE_MUSIC = [
     credit: 'aidanpinsent – The Venture', source: 'https://pixabay.com/music/classical-string-quartet-the-venture-255612/', license: 'Pixabay' },
   { id: 'reflective', name: 'Reflective', mood: 'Tender violins',   src: '/assets/music/reflective.mp3',
     credit: 'Luis_Humanoide – Nostalgic Violins', source: 'https://pixabay.com/music/modern-classical-nostalgic-violins-209948/', license: 'Pixabay' },
+  { id: 'angelic',    name: 'Angelic',    mood: 'Heavenly & soft',  src: '/assets/music/angelic.mp3',
+    credit: 'Supplied by Curt ("Angelic")', source: null, license: 'Supplied by Curt — source to record' },
+  { id: 'light-airy', name: 'Light & Airy', mood: 'Bright & breezy', src: '/assets/music/light-airy.mp3',
+    credit: 'Supplied by Curt ("LightAiry")', source: null, license: 'Supplied by Curt — source to record' },
 ];
