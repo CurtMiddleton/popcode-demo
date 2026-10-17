@@ -4007,14 +4007,34 @@
           //    ones not already there) so the renderer can fetch them.
           await mtgUploadSources(45);
           const urls = [];
-          const needsFraming = p => p.kind === 'image' && !mtgIsPlainFill(p, st.aspect);
-          if (st.photos.some(needsFraming)) mtgStatus('Framing photos…', 48, '');
-          for (const p of st.photos) {
-            urls.push(needsFraming(p) ? await mtgFramedPhoto(p, st.aspect) : p.remote);
+          // Every photo is redrawn at the video's size and checked (mtgFramedPhoto),
+          // never sent as whatever was uploaded (possibly a 12MP original).
+          const needsFraming = p => p.kind === 'image';
+          if (st.photos.some(needsFraming)) mtgStatus('Preparing photos…', 48, '');
+          const unread = [];
+          for (const [i, p] of st.photos.entries()) {
+            try { urls.push(needsFraming(p) ? await mtgFramedPhoto(p, st.aspect) : p.remote); }
+            catch (e) { unread.push(i + 1); urls.push(null); }
           }
+          if (unread.length) throw Object.assign(new Error('unreadable'), { friendly: `${unread.length > 1 ? 'Items' : 'Item'} ${unread.join(', ')} couldn't be read. Remove ${unread.length > 1 ? 'them' : 'it'} and add ${unread.length > 1 ? 'them' : 'it'} again, then Create.` });
           const captions = [];
           if (st.photos.some(p => mtgHasText(p))) mtgStatus('Adding text…', 50, '');
           for (const p of st.photos) captions.push(await mtgCaptionImage(p, st.aspect));
+
+          // 1b. Every file the renderer will fetch must actually be there and be
+          //     a picture/video — a missing one renders as a black slide.
+          mtgStatus('Checking photos…', 52, '');
+          const bad = [];
+          await Promise.all(urls.map(async (u, i) => {
+            const r = await fetch(u, { method: 'HEAD', cache: 'no-store' }).catch(() => null);
+            const type = r && r.headers.get('content-type') || '';
+            const empty = r && r.headers.get('content-length') === '0';
+            if (!r || !r.ok || empty || !/^(image|video)\//.test(type)) bad.push(i + 1);
+          }));
+          if (bad.length) {
+            if (window.Sentry) Sentry.captureMessage('Montage source unreadable before render: items ' + bad.join(', '));
+            throw Object.assign(new Error('unreadable'), { friendly: `${bad.length > 1 ? 'Items' : 'Item'} ${bad.sort((a, b) => a - b).join(', ')} couldn't be read. Remove ${bad.length > 1 ? 'them' : 'it'} and add ${bad.length > 1 ? 'them' : 'it'} again, then Create.` });
+          }
 
           // 2. Kick off the render.
           mtgStatus('Starting render…', 55, '');
@@ -4133,10 +4153,30 @@
       // and Ken Burns moves over it. (Shotstack's own asset crop trims the
       // placed image and leaves black where it cut, so it isn't used.)
       // Cached per framing.
+      // Decode a photo straight at (about) the size the frame needs, which takes
+      // a fraction of the memory of a full 12MP decode — Safari runs out and
+      // hands back blank images when a montage decodes many full-size photos.
+      // Falls back to the plain guarded decode.
+      async function mtgDecodeScaled(blob, item, aspect, attempt) {
+        const A = MTG_ASPECT[aspect] || MTG_ASPECT.portrait;
+        if (!attempt && item.w && item.h && typeof createImageBitmap === 'function') {
+          const f = mtgFrameOf(item, aspect);
+          const need = (A >= 1 ? 1920 : 1080) / (f.w * item.w);
+          const scale = Math.min(1, need * 1.1);
+          if (scale < 0.98) {
+            try {
+              const bm = await createImageBitmap(blob, { resizeWidth: Math.max(2, Math.round(item.w * scale)), resizeHeight: Math.max(2, Math.round(item.h * scale)), resizeQuality: 'high', imageOrientation: 'from-image' });
+              if (sourcePaints(bm)) return bm;
+              releaseSource(bm);
+            } catch (e) { /* option unsupported: fall through */ }
+          }
+        }
+        return decodeDrawable(blob);
+      }
       async function mtgFramedPhoto(item, aspect) {
         // 'v2': frames cached before the blank-frame check below may be black,
         // so every saved montage re-frames once.
-        const key = 'v2:' + aspect + ':' + JSON.stringify(mtgCropOf(item, aspect));
+        const key = 'v3:' + aspect + ':' + JSON.stringify(mtgCropOf(item, aspect));
         if (item.framed && item.framed.key === key) return item.framed.url;
         // Decode with the same guarded path as photo uploads: it orients from
         // EXIF and refuses a decoder that hands back a blank bitmap (Safari
@@ -4152,7 +4192,7 @@
         let out = null;
         for (let attempt = 0; attempt < 2 && !out; attempt++) {
           if (attempt) await new Promise(res => setTimeout(res, 400));
-          const src = await decodeDrawable(blob);
+          const src = await mtgDecodeScaled(blob, item, aspect, attempt);
           if (!src) continue;
           const W = src.width || src.naturalWidth, H = src.height || src.naturalHeight;
           const f = mtgFrameOf({ w: W, h: H, crop: mtgCropOf(item, aspect) }, aspect);

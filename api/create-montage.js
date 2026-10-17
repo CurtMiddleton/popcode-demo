@@ -62,6 +62,27 @@ export default async function handler(req, res) {
       }
     }
 
+    // Every photo/clip/caption must be fetchable and be media — one Shotstack
+    // can't read becomes a black slide. Check them all (in parallel, short
+    // timeout) and name the bad ones instead of rendering black; report the
+    // details so the cause is visible.
+    const checks = await Promise.all(items.flatMap((it, i) => [[i, 'src', it.url], ...(it.caption ? [[i, 'caption', it.caption]] : [])]).map(async ([i, what, url]) => {
+      try {
+        const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 8000);
+        const r = await fetch(url, { method: 'HEAD', signal: ctl.signal }); clearTimeout(t);
+        const type = r.headers.get('content-type') || '', lenH = r.headers.get('content-length'), len = +lenH || 0;
+        const ok = r.ok && lenH !== '0' && /^(image|video)\//.test(type);
+        return { i, what, url, status: r.status, type, len, ok };
+      } catch (e) { return { i, what, url, status: 0, type: '', len: 0, ok: false, err: e.message }; }
+    }));
+    const bad = checks.filter(c => !c.ok);
+    if (bad.length) {
+      Sentry.captureMessage(`Montage sources unreadable: ${bad.map(b => `#${b.i + 1} ${b.what} ${b.status} ${b.type || '-'} ${b.len}`).join('; ')}`, { level: 'error', extra: { bad } });
+      await Sentry.flush(2000);
+      const nums = [...new Set(bad.map(b => b.i + 1))];
+      return res.status(400).json({ error: `${nums.length > 1 ? 'Items' : 'Item'} ${nums.join(', ')} couldn't be read. Remove and add ${nums.length > 1 ? 'them' : 'it'} again.` });
+    }
+
     // A soundtrack Shotstack can't fetch fails the WHOLE render. Verify the music
     // URL first and drop it (render silent) rather than hard-failing — e.g. when a
     // track's file hasn't been uploaded to /assets/music yet.
