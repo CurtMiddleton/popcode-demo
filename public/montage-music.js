@@ -45,8 +45,8 @@ window.MONTAGE_MUSIC = [
     credit: 'aidanpinsent – The Venture', source: 'https://pixabay.com/music/classical-string-quartet-the-venture-255612/', license: 'Pixabay' },
   { id: 'reflective', name: 'Reflective', mood: 'Tender violins',   src: '/assets/music/reflective.mp3',
     credit: 'Luis_Humanoide – Nostalgic Violins', source: 'https://pixabay.com/music/modern-classical-nostalgic-violins-209948/', license: 'Pixabay' },
-  { id: 'angelic',    name: 'Angelic',    mood: 'Heavenly & soft',  src: '/assets/music/angelic.mp3',
-    credit: 'Supplied by Curt ("Angelic")', source: null, license: 'Supplied by Curt — source to record' },
+  { id: 'angelic',    name: 'Angelic',    mood: 'Heavenly & soft',  src: '/assets/music/angelic.mp3?v=2',
+    credit: 'Supplied by Curt ("Angelic2", replaced 2026-10-17)', source: null, license: 'Supplied by Curt — source to record' },
   { id: 'light-airy', name: 'Light & Airy', mood: 'Bright & breezy', src: '/assets/music/light-airy.mp3',
     credit: 'Supplied by Curt ("LightAiry")', source: null, license: 'Supplied by Curt — source to record' },
 ];

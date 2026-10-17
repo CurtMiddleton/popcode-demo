@@ -53,7 +53,7 @@ its last 1.3 s of silence trimmed). Built with ffmpeg `acrossfade` + `loudnorm`.
 |---|---|---|
 | `bossa-cafe.mp3` | Café Bossa | Bossa_Nova_2.m4a |
 | `bossa-sunset.mp3` | Sunset Bossa | Bossa_Nova_3.m4a |
-| `angelic.mp3` | Angelic | Angelic.m4a |
+| `angelic.mp3` | Angelic | Angelic2.m4a (replaced the first version 2026-10-17: 62 s piece looped ×3 with 3 s crossfades, two-pass loudnorm to -16 LUFS, 5 s fade-out at the end of the file; served as `?v=2`) |
 | `light-airy.mp3` | Light & Airy | LightAiry.m4a |
 
 **Source/licence not yet recorded** — fill in where these came from.
