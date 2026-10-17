@@ -356,6 +356,9 @@
       .add-page-btn { width: 100%; max-width: 360px; padding: 16px; border-radius: 30px; border: none; background: #eeeeee; color: #333333; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 16px; transition: background 0.2s; font-family: 'Inter', sans-serif; }
       .add-page-btn:hover { background: #e0e0e0; }
       .save-btn { width: 100%; max-width: 360px; padding: 16px; border-radius: 30px; border: none; background: #1a1a1a; color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: opacity 0.2s; font-family: 'Inter', sans-serif; }
+      .unsaved-banner.ok { background: #eef8f0; border-color: #b7dfc0; color: #1e6b34; }
+      .mtg-swap { display: inline-block; margin: -6px 0 18px; padding: 0; border: none; background: none; color: #1a1a1a; font: 600 14px 'Inter', sans-serif; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+      .mtg-swap[hidden] { display: none; }
       .unsaved-banner { width: 100%; max-width: 360px; background: #fff8e1; border: 1px solid #ffe082; border-radius: 12px; padding: 10px 16px; font-size: 13px; color: #7a5c00; margin-bottom: 12px; display: none; }
       .save-btn:hover { opacity: 0.9; }
       .save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -2281,7 +2284,17 @@
 
       // Existing-page playback menu. Montage opens the builder (its output
       // replaces the video); Video/Audio switch the slot like the old toggle did.
-      function pickExistingPlayback(item, key) {
+      async function pickExistingPlayback(item, key, skipMontage) {
+        // A photo that plays a montage made here reopens that montage.
+        if (!skipMontage) {
+          const linked = await mtgLinkedDraft(item).catch(() => null);
+          if (linked) {
+            openMontage({ kind: 'existing', itemId: item.id, key });
+            mtgOpenDraftData(linked);
+            mtgShowSwap(item, key);
+            return;
+          }
+        }
         if (typeof openMediaSourceMenu !== 'function') {
           alert("The media picker didn't load. Reload the page and try again.");
           return;
@@ -3492,6 +3505,8 @@
         if (montageBusy) return;
         montageState = { page: n, photos: [], perSec: 3, transition: 'kenburns', aspect: 'portrait', musicId: 'none',
                          name: '', draftId: mtgNewId(), savedSig: null };
+        const swap = document.getElementById('mtg-swap');
+        if (swap) swap.hidden = true;
         mtgSyncControls();
         mtgRenderStrip();
         mtgStatus('');
@@ -4613,8 +4628,8 @@
         }).join('') + '</div>';
         wrap.hidden = false;
       }
-      function mtgOpenDraft(i) {
-        const d = mtgDrafts[i];
+      function mtgOpenDraft(i) { mtgOpenDraftData(mtgDrafts[i]); }
+      function mtgOpenDraftData(d) {
         if (!d || !montageState || montageBusy) return;
         Object.assign(montageState, {
           draftId: d.id, name: d.name || '', perSec: d.perSec || 3, transition: d.transition === 'fade' ? 'fade' : 'kenburns',
@@ -4663,7 +4678,86 @@
         setVideoPreview(`video-preview-${key}`, file);
         const badge = document.getElementById(`video-badge-${key}`);
         if (badge) badge.textContent = '✓ Replaced';
-        markUnsaved('New montage added', 'put it on this Popcode');
+        mtgCommitExisting(ref, file, montageState && montageState.draftId);
+      }
+
+      // A montage used on an existing photo goes straight onto the Popcode —
+      // just its video, no recompile — instead of waiting for Save Changes
+      // (creators saved the montage and assumed that was it). Then the montage
+      // is linked to that photo so its pencil reopens it.
+      async function mtgCommitExisting(ref, file, draftId) {
+        const item = existingItems.find(i => i.id === ref.itemId);
+        if (!item) { markUnsaved('New montage added', 'put it on this Popcode'); return; }
+        const banner = document.getElementById('unsaved-banner');
+        const say = (html, ok) => { banner.innerHTML = html; banner.classList.toggle('ok', !!ok); banner.style.display = 'block'; };
+        say('Putting your montage on this Popcode&hellip;');
+        try {
+          const path = `${slug}/video_${item.target_index}.mp4`;
+          const old = urlToStoragePath(item.video_url);
+          const { error: upErr } = await db.storage.from('experiences').upload(path, file, { contentType: file.type || 'video/mp4', upsert: true });
+          if (upErr) throw new Error(upErr.message);
+          const video_url = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+          const { error: dbErr } = await db.from('collection_items').update({ video_url, media_type: 'video' }).eq('id', item.id);
+          if (dbErr) throw new Error(dbErr.message);
+          if (old && old !== path) db.storage.from('experiences').remove([old]).catch(() => {});
+          item.video_url = video_url; item.media_type = 'video';
+          const rep = replacements[item.id];
+          if (rep) { delete rep.video; delete rep.mediaType; if (!Object.keys(rep).length) delete replacements[item.id]; }
+          if (draftId) await mtgLinkDraft(draftId, { slug, itemId: item.id, targetIndex: item.target_index, bytes: file.size, at: new Date().toISOString() });
+          mtgLinkedCache = null;
+          const more = Object.keys(replacements).length || deletedExistingIds.size || Object.values(newPairs).some(p => p && p.photo);
+          say('&#10003; Montage saved. It now plays when this photo is scanned.' + (more ? ' Your other changes still need <strong>Save Changes</strong>.' : ''), true);
+          if (!more) setTimeout(() => { if (banner.classList.contains('ok')) { banner.style.display = 'none'; banner.classList.remove('ok'); } }, 6000);
+        } catch (e) {
+          console.error('montage commit failed', e);
+          banner.classList.remove('ok');
+          markUnsaved(`Couldn't save the montage (${e.message})`, 'try again');
+        }
+      }
+      // Record on the saved montage which photo it plays on.
+      async function mtgLinkDraft(draftId, link) {
+        try {
+          const path = `montage-drafts/${currentUser.id}/${draftId}/draft.json`;
+          const url = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+          const r = await fetch(url + '?t=' + Date.now());
+          if (!r.ok) return;
+          const d = await r.json();
+          d.appliedTo = link;
+          await db.storage.from('experiences').upload(path, new Blob([JSON.stringify(d)], { type: 'application/json' }), { contentType: 'application/json', upsert: true });
+        } catch (e) { console.warn('montage link failed', e); }
+      }
+      // The saved montage this photo plays, if any. Checked against the file
+      // that's actually there (its size), so a video uploaded since then wins.
+      let mtgLinkedCache = null;
+      function mtgLinkedDrafts() {
+        if (mtgLinkedCache) return mtgLinkedCache;
+        mtgLinkedCache = (async () => {
+          if (!currentUser) return [];
+          const dir = `montage-drafts/${currentUser.id}`;
+          const { data } = await db.storage.from('experiences').list(dir, { limit: 100 });
+          const got = await Promise.all((data || []).filter(d => !d.id).map(async (d) => {
+            const url = db.storage.from('experiences').getPublicUrl(`${dir}/${d.name}/draft.json`).data.publicUrl;
+            try { const r = await fetch(url + '?t=' + Date.now()); return r.ok ? await r.json() : null; } catch (e) { return null; }
+          }));
+          return got.filter(d => d && d.appliedTo && d.appliedTo.slug === slug && Array.isArray(d.items) && d.items.length);
+        })().catch(() => []);
+        return mtgLinkedCache;
+      }
+      async function mtgLinkedDraft(item) {
+        if (!item.video_url || (item.media_type || 'video') !== 'video' || (replacements[item.id] && (replacements[item.id].video || replacements[item.id].mediaType === 'audio'))) return null;
+        const mine = (await mtgLinkedDrafts()).filter(d => d.appliedTo.itemId === item.id)
+          .sort((a, b) => String(b.appliedTo.at).localeCompare(String(a.appliedTo.at)));
+        if (!mine.length) return null;
+        let bytes = null;
+        try { const h = await fetch(item.video_url, { method: 'HEAD', cache: 'no-store' }); bytes = +h.headers.get('content-length') || null; } catch (e) {}
+        return mine.find(d => !bytes || d.appliedTo.bytes === bytes) || null;
+      }
+      // Opened from a photo's montage: offer the plain chooser instead.
+      function mtgShowSwap(item, key) {
+        const b = document.getElementById('mtg-swap');
+        if (!b) return;
+        b.hidden = false;
+        b.onclick = async () => { await closeMontage(); if (!montageState) pickExistingPlayback(item, key, true); };
       }
 
       // Drop a finished montage MP4 into a NEW page's video slot, mirroring the
@@ -4936,6 +5030,7 @@
       </div>
       <div class="mtg-body" id="mtg-body-scroll">
         <p class="mtg-sub">Pick photos and short videos, set the order, add music. We'll turn them into a memory video and link it to this page's photo.</p>
+        <button type="button" class="mtg-swap" id="mtg-swap" hidden>Play a video or audio instead</button>
 
         <div class="mtg-drafts" id="mtg-drafts" hidden></div>
         <div class="mtg-field mtg-name-field">
@@ -4986,7 +5081,7 @@
         <div class="mtg-status" id="mtg-status" role="status" aria-live="polite"></div>
         <div class="mtg-est" id="mtg-est">Add at least 2 photos</div>
         <div class="mtg-foot-btns">
-          <button type="button" class="mtg-save-draft" id="mtg-save-draft" onclick="mtgSaveDraft()">Save</button>
+          <button type="button" class="mtg-save-draft" id="mtg-save-draft" onclick="mtgSaveDraft()" title="Keep this montage to finish or change later">Save draft</button>
           <button type="button" class="mtg-create" id="mtg-create" onclick="mtgCreate()">Create montage</button>
         </div>
       </div>
