@@ -1519,15 +1519,7 @@
                 const sizeEl = document.getElementById(`video-size-${n}`);
                 sizeEl.textContent = formatFileSize(compressedFile.size);
                 sizeEl.className = 'file-size';
-                const videoEl = document.createElement('video');
-                videoEl.src = URL.createObjectURL(compressedFile);
-                videoEl.muted = true; videoEl.playsInline = true; videoEl.currentTime = 0.5;
-                videoEl.addEventListener('seeked', () => {
-                  const c = document.createElement('canvas'); c.width = 130; c.height = 110;
-                  c.getContext('2d').drawImage(videoEl, 0, 0, 130, 110);
-                  document.getElementById(`video-preview-${n}`).src = c.toDataURL('image/jpeg');
-                });
-                videoEl.load();
+                paintVideoThumb(URL.createObjectURL(compressedFile), `video-preview-${n}`);
                 return;
               } else {
                 msgEl.innerHTML = `<div class="video-msg-banner">Still too large (${compressedMB < Infinity ? compressedMB.toFixed(0) : sizeMB.toFixed(0)} MB). Try <a href="https://clideo.com/compress-video" target="_blank" rel="noopener">clideo.com</a> to compress further.</div>`;
@@ -1578,20 +1570,7 @@
         if (type === 'photo') {
           document.getElementById(`photo-preview-${n}`).src = URL.createObjectURL(file);
         } else {
-          const videoEl = document.createElement('video');
-          videoEl.src = URL.createObjectURL(file);
-          videoEl.muted = true;
-          videoEl.playsInline = true;
-          videoEl.currentTime = 0.5;
-          videoEl.addEventListener('seeked', () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 130;
-            canvas.height = 110;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(videoEl, 0, 0, 130, 110);
-            document.getElementById(`video-preview-${n}`).src = canvas.toDataURL('image/jpeg');
-          });
-          videoEl.load();
+          paintVideoThumb(URL.createObjectURL(file), `video-preview-${n}`);
         }
         checkReady();
       }
@@ -2705,6 +2684,48 @@
         document.querySelectorAll('.mtg-track-play.playing').forEach(b => { b.classList.remove('playing'); b.innerHTML = MTG_PLAY_ICON; b.setAttribute('aria-label', 'Listen'); });
       }
 
+      // The picture on a video tile: the first real frame, not black. Seeks
+      // to 1.5s (past a montage's fade-in from black), waits until that frame
+      // has actually loaded (drawing too early gives black on Safari), and if
+      // it's still near-black tries later points. Drawn large enough to stay
+      // sharp on the big tiles. Leaves the tile as it was if it can't read it.
+      function paintVideoThumb(src, targetId, cors) {
+        const v = document.createElement('video');
+        if (cors) v.crossOrigin = 'anonymous';
+        v.muted = true; v.playsInline = true; v.preload = 'auto';
+        let times = [], done = false;
+        const finish = () => { if (done) return; done = true; clearTimeout(timer); v.removeAttribute('src'); v.load(); };
+        const timer = setTimeout(finish, 20000);
+        v.addEventListener('loadedmetadata', () => {
+          const D = v.duration || 0;
+          times = [1.5, 3, 5, D * 0.3, D * 0.5].filter(t => t > 0 && t < D - 0.05);
+          v.currentTime = times.length ? times.shift() : 0;
+        });
+        v.addEventListener('seeked', () => {
+          const grab = () => {
+            if (done) return;
+            try {
+              const W = 480, H = 400, c = document.createElement('canvas'); c.width = W; c.height = H;
+              const ctx = c.getContext('2d');
+              const sw = v.videoWidth, sh = v.videoHeight;
+              if (sw && sh) { const s = Math.max(W / sw, H / sh); ctx.drawImage(v, (W - sw * s) / 2, (H - sh * s) / 2, sw * s, sh * s); }
+              else ctx.drawImage(v, 0, 0, W, H);
+              const px = ctx.getImageData(0, 0, W, H).data;
+              let sum = 0, n = 0;
+              for (let i = 0; i < px.length; i += 64) { sum += px[i] + px[i + 1] + px[i + 2]; n++; }
+              if (sum / n / 3 < 14 && times.length) { v.currentTime = times.shift(); return; }
+              const el = document.getElementById(targetId);
+              if (el) el.src = c.toDataURL('image/jpeg', 0.85);
+            } catch (e) { /* cross-origin or decode trouble: leave the tile as it was */ }
+            finish();
+          };
+          if (v.readyState >= 2) requestAnimationFrame(() => requestAnimationFrame(grab));
+          else v.addEventListener('loadeddata', () => requestAnimationFrame(grab), { once: true });
+        });
+        v.addEventListener('error', finish);
+        v.src = src;
+      }
+
       // Read a video clip's length, size and a thumbnail. Resolves null if the
       // browser can't play it (or takes over 15s), never hangs.
       function mtgProbeVideo(file) {
@@ -3766,16 +3787,7 @@
         const sizeEl = document.getElementById(`video-size-${n}`);
         sizeEl.textContent = formatFileSize(file.size);
         sizeEl.className = 'file-size';
-        const videoEl = document.createElement('video');
-        videoEl.src = URL.createObjectURL(file);
-        videoEl.muted = true; videoEl.playsInline = true; videoEl.currentTime = 0.5;
-        videoEl.addEventListener('seeked', () => {
-          const c = document.createElement('canvas'); c.width = 130; c.height = 110;
-          c.getContext('2d').drawImage(videoEl, 0, 0, 130, 110);
-          const prev = document.getElementById(`video-preview-${n}`);
-          if (prev) prev.src = c.toDataURL('image/jpeg');
-        });
-        videoEl.load();
+        paintVideoThumb(URL.createObjectURL(file), `video-preview-${n}`);
         checkReady();
       }
     </script>
