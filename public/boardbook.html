@@ -17,6 +17,7 @@
     <title>Popcode — Design a Board Book</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/media-check.js"></script>
     <script src="/dialog.js"></script>
     <script src="/undo.js"></script>
     <script src="/activity.js"></script>
@@ -3239,6 +3240,9 @@
         if (!recipient.name || !recipient.email || !recipient.address.line1 || !recipient.address.townOrCity || !recipient.address.postalOrZipCode) {
           note.textContent = 'Please fill in your name, email and address.'; note.classList.add('bad'); return;
         }
+        // Each photo next to what it plays, before it goes to print.
+        if (savedCollectionId &&
+            !(await PopcodeMediaCheck.confirm({ db, lines: [{ collectionId: savedCollectionId, productType: 'boardbook' }] }))) return;
         const btn = document.getElementById('order-btn');
         btn.disabled = true; btn.textContent = 'Preparing your book…';
         try {

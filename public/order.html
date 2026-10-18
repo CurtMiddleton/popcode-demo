@@ -14,6 +14,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/postcard-render.js"></script>
     <script src="/config.js"></script>
+    <script src="/media-check.js"></script>
     <script src="/dialog.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/activity.js"></script>
@@ -2824,6 +2825,10 @@
         }
         const photo = state.selectedPhoto;
         if (!photo) { showError('Pick a photo to print.'); return; }
+        // The photo next to what it plays, before it goes to print.
+        if (photo.collectionId && !(await PopcodeMediaCheck.confirm({ db, lines: [{
+          collectionId: photo.collectionId, productType: state.productType,
+          assetUrls: [{ target_index: photo.target_index }] }] }))) return;
 
         const payBtn = document.getElementById('pay-btn');
         payBtn.disabled = true; payBtn.textContent = 'Preparing…';

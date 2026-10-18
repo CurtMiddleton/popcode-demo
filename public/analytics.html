@@ -20,6 +20,7 @@
     <title>Popcode — Analytics</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/media-check.js"></script>
     <script src="/dialog.js"></script>
     <script src="/reach-map.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
@@ -536,6 +537,7 @@
         </div>
         <button class="lb-back" id="lb-back" hidden>&#8592; All photos</button>
         <a id="lb-open" href="#" target="_blank" rel="noopener">Open viewer &#8599;</a>
+        <button class="lb-x" id="lb-check" type="button" title="Every photo next to a frame of what it plays; red means two photos share one file">Check videos</button>
         <button class="lb-x" id="lb-peek" type="button" hidden>Peek</button>
         <button class="lb-x" id="lb-blur" type="button" title="Blur this project's photos and videos in Analytics, so the page can be shown to others. Viewers aren't affected.">Blur</button>
         <button class="lb-x" id="lb-disable" type="button">Disable</button>
@@ -2966,6 +2968,16 @@
       }
 
       document.getElementById('lb-disable').addEventListener('click', toggleDisabled);
+      // The same side-by-side check customers see before they pay.
+      document.getElementById('lb-check').addEventListener('click', function () {
+        lbStopMedia();
+        const col = projectBySlug(lbSlug);
+        PopcodeMediaCheck.show({
+          title: ((col && shortName(col.name)) || lbSlug) + ' · what each photo plays',
+          items: lbItems.map(it => ({ target_index: it.target_index, photo: it.url, video: it.video,
+                                      audio: it.audio, media: it.media, name: it.name })),
+        });
+      });
       document.getElementById('lb-blur').addEventListener('click', toggleBlurred);
       // Peek is for you only, for this visit: it is never saved.
       document.getElementById('lb-peek').addEventListener('click', function () {

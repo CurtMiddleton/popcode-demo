@@ -26,6 +26,7 @@
     <script src="/storage-copy.js"></script>
     <script src="/postcard-render.js"></script>
     <script src="/book-spine.js"></script>
+    <script src="/media-check.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
     <script src="/product-gallery.js"></script>
@@ -3881,6 +3882,13 @@
       }
 
       async function orderPrintedBook() {
+        // Show each photo next to what it plays before it goes to print (the
+        // cart does the same at its checkout, so Add to cart doesn't).
+        if (editingCollection && editingCollection.id) {
+          closeSheet();
+          const ok = await PopcodeMediaCheck.confirm({ db, lines: [{ collectionId: editingCollection.id, productType: 'book' }] });
+          if (!ok) return;
+        }
         const built = await buildBookPrintAsset('order a printed copy');
         if (!built) return;
         openBookAddressSheet(built.pdfUrl, built.pageCount);
