@@ -3144,8 +3144,8 @@
           const finalType = getExistingMediaType(item);
 
           if (rep.video) {
-            const vPath = `${slug}/video_${idx}.mp4`;
-            await db.storage.from('experiences').remove([urlToStoragePath(item.video_url)].filter(Boolean));
+            const vPath = `${slug}/video_${idx}_${Date.now().toString(36)}.mp4`;
+            await db.storage.from('experiences').remove([urlToStoragePath(item.video_url)].filter(p => p && !pathInUse(p, item.id)));
             const { error: vErr } = await db.storage.from('experiences')
               .upload(vPath, rep.video, { contentType: rep.video.type || 'video/mp4', upsert: true });
             if (vErr) throw new Error(`Replacing video: ${vErr.message}`);
@@ -3153,9 +3153,9 @@
           }
           if (rep.audio) {
             const audioExt = (rep.audio.name && rep.audio.name.split('.').pop()) || 'webm';
-            const aPath = `${slug}/audio_${idx}.${audioExt}`;
+            const aPath = `${slug}/audio_${idx}_${Date.now().toString(36)}.${audioExt}`;
             if (item.audio_url) {
-              await db.storage.from('experiences').remove([urlToStoragePath(item.audio_url)].filter(Boolean));
+              await db.storage.from('experiences').remove([urlToStoragePath(item.audio_url)].filter(p => p && !pathInUse(p, item.id)));
             }
             const { error: aErr } = await db.storage.from('experiences')
               .upload(aPath, rep.audio, { contentType: rep.audio.type || 'audio/webm', upsert: true });
@@ -3165,8 +3165,8 @@
           }
           if (rep.photo) {
             const photoExt = rep.photo.name.split('.').pop() || 'jpg';
-            const pPath = `${slug}/photo_${idx}.${photoExt}`;
-            await db.storage.from('experiences').remove([urlToStoragePath(item.photo_url)].filter(Boolean));
+            const pPath = `${slug}/photo_${idx}_${Date.now().toString(36)}.${photoExt}`;
+            await db.storage.from('experiences').remove([urlToStoragePath(item.photo_url)].filter(p => p && !pathInUse(p, item.id)));
             const { error: pErr } = await db.storage.from('experiences')
               .upload(pPath, rep.photo, { contentType: rep.photo.type || 'image/jpeg', upsert: true });
             if (pErr) throw new Error(`Replacing photo: ${pErr.message}`);
@@ -3202,7 +3202,7 @@
             const pair = readyNew[i];
 
             const photoExt = pair.photo.name.split('.').pop() || 'jpg';
-            const photoPath = `${slug}/photo_${idx}.${photoExt}`;
+            const photoPath = `${slug}/photo_${idx}_${Date.now().toString(36)}.${photoExt}`;
             const { error: pErr } = await db.storage
               .from('experiences')
               .upload(photoPath, pair.photo, { contentType: pair.photo.type || 'image/jpeg', upsert: true });
@@ -3219,7 +3219,7 @@
             };
 
             if (pair.mediaType === 'video') {
-              const videoPath = `${slug}/video_${idx}.mp4`;
+              const videoPath = `${slug}/video_${idx}_${Date.now().toString(36)}.mp4`;
               const { error: vErr } = await db.storage
                 .from('experiences')
                 .upload(videoPath, pair.video, { contentType: pair.video.type || 'video/mp4', upsert: true });
@@ -3227,7 +3227,7 @@
               item.video_url = db.storage.from('experiences').getPublicUrl(videoPath).data.publicUrl;
             } else {
               const audioExt = (pair.audio.name && pair.audio.name.split('.').pop()) || 'webm';
-              const audioPath = `${slug}/audio_${idx}.${audioExt}`;
+              const audioPath = `${slug}/audio_${idx}_${Date.now().toString(36)}.${audioExt}`;
               const { error: aErr } = await db.storage
                 .from('experiences')
                 .upload(audioPath, pair.audio, { contentType: pair.audio.type || 'audio/webm', upsert: true });
@@ -3262,9 +3262,7 @@
               const vPath = urlToStoragePath(item.video_url);
               const aPath = urlToStoragePath(item.audio_url);
               const pPath = urlToStoragePath(item.photo_url);
-              if (vPath) paths.push(vPath);
-              if (aPath) paths.push(aPath);
-              if (pPath) paths.push(pPath);
+              for (const p of [vPath, aPath, pPath]) if (p && !pathInUse(p, item.id)) paths.push(p);
             }
             if (paths.length > 0) {
               const { error } = await db.storage.from('experiences').remove(paths);
@@ -3387,6 +3385,14 @@
         resized.src = rc.toDataURL('image/jpeg', 0.92);
         await new Promise(r => resized.onload = r);
         return resized;
+      }
+
+      // True when another item that's staying still plays this file. Saves before
+      // 2026-10-18 could point two photos at one file, so deleting it would
+      // break the other photo.
+      function pathInUse(path, exceptId) {
+        return existingItems.some(it => it.id !== exceptId && !deletedExistingIds.has(it.id)
+          && [it.video_url, it.audio_url, it.photo_url].some(u => urlToStoragePath(u) === path));
       }
 
       function urlToStoragePath(url) {
@@ -4760,14 +4766,14 @@
         const say = (html, ok) => { banner.innerHTML = html; banner.classList.toggle('ok', !!ok); banner.style.display = 'block'; };
         say('Putting your montage on this Popcode&hellip;');
         try {
-          const path = `${slug}/video_${item.target_index}.mp4`;
+          const path = `${slug}/video_${item.target_index}_${Date.now().toString(36)}.mp4`;
           const old = urlToStoragePath(item.video_url);
           const { error: upErr } = await db.storage.from('experiences').upload(path, file, { contentType: file.type || 'video/mp4', upsert: true });
           if (upErr) throw new Error(upErr.message);
           const video_url = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
           const { error: dbErr } = await db.from('collection_items').update({ video_url, media_type: 'video' }).eq('id', item.id);
           if (dbErr) throw new Error(dbErr.message);
-          if (old && old !== path) db.storage.from('experiences').remove([old]).catch(() => {});
+          if (old && old !== path && !pathInUse(old, item.id)) db.storage.from('experiences').remove([old]).catch(() => {});
           item.video_url = video_url; item.media_type = 'video';
           const rep = replacements[item.id];
           if (rep) { delete rep.video; delete rep.mediaType; if (!Object.keys(rep).length) delete replacements[item.id]; }
