@@ -30,7 +30,8 @@
     'qr-test', 'reset', 'scan', 'scan-check', 'sentry-init', 'shop', 'slug', 'terms', 'view',
     'views', 'audio-wav', 'image-source', 'unsplash-samples',
     'admin', 'api', 'app', 'assets', 'static', 'public', 'vendor', 'video',
-    'about', 'nonprofits', 'exhibitions', 'dashboard', 'help', 'home', 'login', 'logout', 'new', 'popcode',
+    'about', 'nonprofits', 'exhibitions', 'photo-book-that-plays-videos',
+    'popcode-vs-artivive', 'popcode-vs-qr-codes', 'guides', 'dashboard', 'help', 'home', 'login', 'logout', 'new', 'popcode',
     'pricing', 'profile', 'settings', 'signin', 'signup', 'support', 'www'
   ]);
 
