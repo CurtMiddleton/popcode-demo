@@ -1490,6 +1490,7 @@
                   c.from_purchases ? c.from_purchases + ' from orders' : ''].filter(Boolean).join(', ') + ')</span>' : '') + '</span>',
           '<span><b>Popcodes</b> ' + all + ' made' + (all > capped ? ' <span class="muted">(' + (all - capped) + ' in prints, not counted)</span>' : '') + '</span>',
           src ? '<span><b>Found us</b> ' + escapeHtml(src.label) + (src.detail ? ' <span class="muted">' + escapeHtml(src.detail) + '</span>' : '') + '</span>' : '',
+          signup && signup.source && HEARD_LABELS[signup.source.heard] ? '<span><b>They said</b> ' + escapeHtml(HEARD_LABELS[signup.source.heard]) + '</span>' : '',
         ].filter(Boolean).join('');
 
         const projects = (cachedCols || []).filter(p => p.user_id === uid)
@@ -2336,6 +2337,9 @@
         [/(^|\.)(linkedin\.com|lnkd\.in)$/, 'LinkedIn'], [/(^|\.)pinterest\./, 'Pinterest'],
         [/(^|\.)producthunt\.com$/, 'Product Hunt'], [/(^|\.)calendly\.com$/, 'Calendly']
       ];
+      // The sign-up form's "How did you hear about Popcode?" (auth.html, 2026-10-18).
+      const HEARD_LABELS = { ai: 'ChatGPT / AI assistant', search: 'Google / search', friend: 'Friend or family',
+                             popcode: 'Someone’s Popcode', social: 'Social media', other: 'Somewhere else' };
       function sourceChannel(src, viaPopcode) {
         if (viaPopcode) return { label: 'A friend’s Popcode', detail: '“Create your own” on ' + viaPopcode };
         if (!src || (!src.first && !src.last)) return { label: 'Not recorded', detail: 'before tracking began' };
@@ -2800,10 +2804,24 @@
           return '<tr><td class="muted" style="white-space:nowrap">' + when + '</td>' +
             '<td>' + escapeHtml(who) + (u && u.email && u.full_name ? '<div class="muted" style="font-size:11px">' + escapeHtml(u.email) + '</div>' : '') + '</td>' +
             '<td style="white-space:nowrap">' + countryFlag(x.r.country) + ' ' + escapeHtml(place) + '</td>' +
-            '<td><strong>' + escapeHtml(x.ch.label) + '</strong><div class="muted" style="font-size:11px;word-break:break-all">' + escapeHtml(x.ch.detail) + '</div></td></tr>';
+            '<td><strong>' + escapeHtml(x.ch.label) + '</strong><div class="muted" style="font-size:11px;word-break:break-all">' + escapeHtml(x.ch.detail) + '</div>' +
+              (x.r.source && HEARD_LABELS[x.r.source.heard] ? '<div style="font-size:11px">They said: ' + escapeHtml(HEARD_LABELS[x.r.source.heard]) + '</div>' : '') + '</td></tr>';
         }).join('');
 
-        wrap.innerHTML = bars +
+        // What people told us, beside what tracking saw: AI recommendations and
+        // word of mouth mostly arrive as "Direct / unknown".
+        const said = {};
+        rows.forEach(r => { const h = r.source && r.source.heard; if (HEARD_LABELS[h]) said[h] = (said[h] || 0) + 1; });
+        const saidKeys = Object.keys(said).sort((a, b) => said[b] - said[a]);
+        const saidTotal = saidKeys.reduce((n, k) => n + said[k], 0);
+        const saidBars = saidTotal
+          ? '<div class="muted" style="font-size:11px;margin:16px 0 6px">What they told us (' + saidTotal + ' answered “How did you hear about Popcode?”)</div>' +
+            saidKeys.map(k => '<div class="fn-row"><div class="fn-head"><span class="fn-label">' + escapeHtml(HEARD_LABELS[k]) + '</span>' +
+              '<span class="fn-n">' + said[k] + '<span class="fn-of"> of ' + saidTotal + '</span></span></div>' +
+              '<div class="fn-track"><div class="fn-fill" style="width:' + Math.round(said[k] / saidTotal * 100) + '%"></div></div></div>').join('')
+          : '';
+
+        wrap.innerHTML = bars + saidBars +
           '<div class="muted" style="font-size:11px;margin:16px 0 6px">Latest sign-ups</div>' +
           '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Account</th><th>Place</th><th>Found us via</th></tr></thead>' +
           '<tbody>' + recent + '</tbody></table></div>' +

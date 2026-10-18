@@ -169,12 +169,15 @@ function cleanTouch(t) {
   if (typeof t.at === 'string' && !Number.isNaN(Date.parse(t.at))) out.at = new Date(t.at).toISOString();
   return Object.keys(out).length ? out : null;
 }
+// The sign-up form's "How did you hear about Popcode?" answer (auth.html).
+const HEARD = ['ai', 'search', 'friend', 'popcode', 'social', 'other'];
 function cleanSource(src) {
   if (!src || typeof src !== 'object') return null;
   const first = cleanTouch(src.first);
   const last = cleanTouch(src.last);
-  if (!first && !last) return null;
-  return { first, last };
+  const heard = HEARD.includes(src.heard) ? src.heard : null;
+  if (!first && !last && !heard) return null;
+  return heard ? { first, last, heard } : { first, last };
 }
 
 // ── Lead alerts (2026-10-15) ──────────────────────────────────────────────
@@ -221,6 +224,10 @@ async function leadAlert(db, type, r, firstOutreachVisit) {
       subject = 'New sign-up' + (who ? ': ' + who : '');
       lines = ['Someone just created a Popcode account.', '', 'Who: ' + (who || 'unknown'),
                'Where: ' + place, 'Found us via: ' + describeTouch(touch)];
+      const said = { ai: 'ChatGPT or another AI assistant', search: 'Google or another search engine',
+                     friend: 'A friend or family member', popcode: "Someone's Popcode",
+                     social: 'Social media', other: 'Somewhere else' }[r.source && r.source.heard];
+      if (said) lines.push('They said: ' + said);
     } else if (type === 'page_view') {
       const t = r.source.first;
       subject = 'Outreach link opened: ' + [t.utm_campaign, t.utm_content].filter(Boolean).join(' · ');
