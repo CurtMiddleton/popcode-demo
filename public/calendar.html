@@ -19,6 +19,7 @@
     <title>Popcode — Design a Calendar</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/media-check.js"></script>
     <script src="/dialog.js"></script>
     <script src="/undo.js"></script>
     <script src="/activity.js"></script>
@@ -2803,6 +2804,9 @@
       // ── Order a printed calendar right now (Prodigi via Stripe) ──
       async function orderPrintedCalendar() {
         closeSheet();
+        // Each photo next to what it plays, before it goes to print.
+        if (editingCollection && editingCollection.id &&
+            !(await PopcodeMediaCheck.confirm({ db, lines: [{ collectionId: editingCollection.id, productType: 'calendar' }] }))) return;
         const pdfUrl = await buildCalendarPrintAsset('order a printed copy');
         if (!pdfUrl) return;
         openCalAddressSheet(pdfUrl);
