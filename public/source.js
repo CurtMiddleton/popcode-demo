@@ -100,7 +100,8 @@
   // browsers the admin has used (analytics.html sets popcode_owner).
   var PAGES = ['/', '/pricing', '/exhibitions', '/nonprofits', '/nonprofits/thanks',
                '/nonprofits-thanks', '/howto', '/shop', '/book', '/boardbook',
-               '/calendar', '/privacy', '/terms'];
+               '/calendar', '/privacy', '/terms', '/photo-book-that-plays-videos',
+               '/popcode-vs-artivive', '/popcode-vs-qr-codes'];
   function pagePath() {
     var path = location.pathname.replace(/\.html$/, '').replace(/^\/index$/, '/') || '/';
     if (path.length > 1) path = path.replace(/\/$/, '');
