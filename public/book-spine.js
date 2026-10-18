@@ -9,9 +9,9 @@
    South Africa orders went to Prodigi with no spine file and printed a blank
    spine. Callers now treat a missing spine as an error, not a skip.
 
-   Design (ported from Bashō, unchanged from book.html's earlier
-   html2canvas version): a #1a1a1a strip widthMm × the book height, the cover eyebrow
-   (italic) + title in Cormorant Garamond reading bottom-to-top from 16.5mm in,
+   Design (ported from Bashō; reading direction and centring changed 2026-10-18):
+   a #1a1a1a strip widthMm × the book height, the cover eyebrow
+   (italic) + title in Cormorant Garamond reading top-to-bottom, centred,
    the year in Inter at the far end. Type scales to the spine thickness, capped
    at the reference sizes (title 32pt, eyebrow 14pt, year 12pt). 300 DPI. */
 (function () {
@@ -82,19 +82,31 @@
     var c = document.createElement('canvas'); c.width = T; c.height = L;
     var ctx = c.getContext('2d');
     ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 0, T, L);
-    // Rotate so +x runs UP the spine (bottom → top) and +y across it.
-    ctx.translate(0, L); ctx.rotate(-Math.PI / 2);
+    // Rotate so +x runs DOWN the spine (top → bottom), letter tops toward the
+    // front cover: the US/UK convention, readable with the book lying face up.
+    // (It read bottom → top until 2026-10-18.)
+    ctx.translate(T, 0); ctx.rotate(Math.PI / 2);
     ctx.fillStyle = '#ffffff';
     ctx.textBaseline = 'alphabetic';
     // Optical vertical centring on the title's x-height.
     var baseline = T / 2 + px.big * 0.32;
-    var x = inset;
+    // Eyebrow + title as one block, centred along the spine.
+    var eyeW = 0, bigW = 0;
     if (parts.eyebrow && px.name > 0) {
       ctx.font = 'italic 400 ' + px.name + 'px ' + SERIF;
-      ctx.fillText(parts.eyebrow, x, baseline);
-      x += ctx.measureText(parts.eyebrow).width + px.gap;
+      eyeW = ctx.measureText(parts.eyebrow).width + px.gap;
     }
     if (px.big > 0) {
+      ctx.font = '400 ' + px.big + 'px ' + SERIF;
+      bigW = ctx.measureText(parts.big).width;
+    }
+    var x = Math.max(inset, (L - eyeW - bigW) / 2);
+    if (eyeW) {
+      ctx.font = 'italic 400 ' + px.name + 'px ' + SERIF;
+      ctx.fillText(parts.eyebrow, x, baseline);
+      x += eyeW;
+    }
+    if (bigW) {
       ctx.font = '400 ' + px.big + 'px ' + SERIF;
       ctx.fillText(parts.big, x, baseline);
     }
