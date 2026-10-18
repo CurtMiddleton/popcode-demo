@@ -65,20 +65,24 @@
     } catch (e) { /* falls back to Georgia / Arial */ }
   }
 
-  // The spine strip as a single-page PDF Blob, widthMm × heightMm at 300 DPI.
-  async function buildPdf(widthMm, parts, heightMm) {
+  // The spine strip drawn on a canvas, widthMm × heightMm, at `pxPerMm`
+  // (300 DPI by default). Shared by the print PDF and the print preview, so
+  // the preview shows exactly the strip that's printed.
+  async function drawCanvas(widthMm, parts, heightMm, pxPerMm) {
     var H_MM = heightMm || 210;
+    var PPM = pxPerMm || PX_PER_MM;
+    var s = PPM / PX_PER_MM;                                         // vs 300 DPI
     if (!(widthMm > 0)) throw new Error('No spine width');
     await ensureLibs();
     var usablePt = Math.max(0, (widthMm - 4) * PT_PER_MM);         // 2mm safety each long edge
     var bigPt = Math.min(32, usablePt / 1.25);
     var k = bigPt > 0 ? bigPt / 32 : 0;
-    var px = { big: bigPt * PX_PER_PT, name: 14 * k * PX_PER_PT, year: 12 * k * PX_PER_PT, gap: 5 * PT_PER_MM * k * PX_PER_PT };
+    var px = { big: bigPt * PX_PER_PT * s, name: 14 * k * PX_PER_PT * s, year: 12 * k * PX_PER_PT * s, gap: 5 * PT_PER_MM * k * PX_PER_PT * s };
     await ensureFonts(px);
 
-    var T = Math.max(1, Math.round(widthMm * PX_PER_MM));            // thickness
-    var L = Math.round(H_MM * PX_PER_MM);                            // length
-    var inset = 16.5 * PX_PER_MM;
+    var T = Math.max(1, Math.round(widthMm * PPM));                  // thickness
+    var L = Math.round(H_MM * PPM);                                  // length
+    var inset = 16.5 * PPM;
     var c = document.createElement('canvas'); c.width = T; c.height = L;
     var ctx = c.getContext('2d');
     ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 0, T, L);
@@ -115,6 +119,13 @@
       ctx.textAlign = 'right';
       ctx.fillText(parts.year, L - inset, T / 2 + px.year * 0.36);
     }
+    return c;
+  }
+
+  // The spine strip as a single-page PDF Blob, widthMm × heightMm at 300 DPI.
+  async function buildPdf(widthMm, parts, heightMm) {
+    var H_MM = heightMm || 210;
+    var c = await drawCanvas(widthMm, parts, H_MM);
     var data = c.toDataURL('image/jpeg', 0.95);
     c.width = c.height = 0;
     var doc = new window.jspdf.jsPDF({ unit: 'mm', format: [widthMm, H_MM], orientation: 'portrait', compress: true });
@@ -163,5 +174,5 @@
     return { url: opts.db.storage.from('experiences').getPublicUrl(path).data.publicUrl, print_area: 'spine' };
   }
 
-  window.PopcodeSpine = { buildPdf: buildPdf, fetchWidthMm: fetchWidthMm, prepare: prepare, partsFromLayout: partsFromLayout, heightFor: heightFor };
+  window.PopcodeSpine = { buildPdf: buildPdf, drawCanvas: drawCanvas, fetchWidthMm: fetchWidthMm, prepare: prepare, partsFromLayout: partsFromLayout, heightFor: heightFor };
 })();
