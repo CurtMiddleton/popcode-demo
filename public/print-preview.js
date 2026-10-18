@@ -49,7 +49,7 @@
       '.pp-face img{display:block;width:100%;height:auto}' +
       '.pp-safe{position:absolute;border:1.5px dashed rgba(255,255,255,.9);outline:1px dashed rgba(0,0,0,.45);pointer-events:none}' +
       '.pp-tag{position:absolute;left:6px;top:6px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;font-weight:600;padding:2px 7px;border-radius:9px}' +
-      '.pp-spinebox{background:#1a1a1a;display:flex}' +
+      '.pp-spinebox{background:#fff;display:flex;box-shadow:inset 1px 0 0 #e3ded6,inset -1px 0 0 #e3ded6}' +
       '.pp-spinebox img{width:100%;height:100%;object-fit:fill;display:block}' +
       '.pp-spread{margin-bottom:18px}' +
       '.pp-slabel{font-size:12px;color:#8a857d;margin:0 0 5px;min-height:1em}' +
