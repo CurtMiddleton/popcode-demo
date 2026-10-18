@@ -104,13 +104,17 @@
       h1 { font-size: 30px; margin-bottom: 24px; text-align: center; color: #1a1a1a; letter-spacing: -0.01em; }
       .field { margin-bottom: 16px; }
       label { font-size: 13px; font-weight: 700; color: #555; display: block; margin-bottom: 6px; }
-      input[type="text"], input[type="email"], input[type="password"] {
+      input[type="text"], input[type="email"], input[type="password"], select {
         width: 100%; padding: 13px 16px; border-radius: 12px;
         border: 1px solid #e3e3e3;
         font-size: 15px; color: #1a1a1a; outline: none;
         font-family: 'Inter', sans-serif;
         background: #fff;
       }
+      select { appearance: none; -webkit-appearance: none; padding-right: 40px; cursor: pointer;
+        background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23888' stroke-width='1.8'/%3E%3C/svg%3E") no-repeat right 16px center; }
+      select:invalid { color: #999; }
+      label .opt { font-weight: 400; color: #999; }
       /* .btn .btn-primary .btn-block — only the spacing is local. */
       .submit-btn { margin-top: 8px; }
       .terms-field {
@@ -187,6 +191,20 @@
         <label for="password">Password</label>
         <input type="password" id="password" autocomplete="current-password" placeholder="Password"/>
       </div>
+      <!-- Asked because tracking can't see most of it: a name copied out of a
+           ChatGPT answer or a friend's message arrives as "direct". Optional. -->
+      <div class="field" id="heard-field" style="display:none;">
+        <label for="heard">How did you hear about Popcode? <span class="opt">(optional)</span></label>
+        <select id="heard" required>
+          <option value="" selected>Choose one</option>
+          <option value="ai">ChatGPT or another AI assistant</option>
+          <option value="search">Google or another search engine</option>
+          <option value="friend">A friend or family member</option>
+          <option value="popcode">I saw or scanned someone's Popcode</option>
+          <option value="social">Social media</option>
+          <option value="other">Somewhere else</option>
+        </select>
+      </div>
       <div class="forgot" id="forgot-wrap">
         <a id="forgot-link">Forgot password?</a>
       </div>
@@ -258,6 +276,7 @@
         document.getElementById('forgot-wrap').style.display = mode === 'signin' ? 'block' : 'none';
         document.getElementById('terms-field').style.display = isSignUp ? 'flex' : 'none';
         document.getElementById('marketing-field').style.display = isSignUp ? 'flex' : 'none';
+        document.getElementById('heard-field').style.display = isSignUp ? 'block' : 'none';
         if (!isSignUp) document.getElementById('marketing-checkbox').checked = false;
         if (!isSignUp) document.getElementById('terms-checkbox').checked = false;
         document.getElementById('password').autocomplete = isSignUp ? 'new-password' : 'current-password';
@@ -449,8 +468,12 @@
           // How they found Popcode at all (source.js): outside referrer, utm
           // tags, landing page. Sent with the signup event for the dashboard;
           // the first touch is also kept on the account.
-          const source = window.PopcodeSource && window.PopcodeSource.get();
-          if (source && source.first) meta.first_source = source.first;
+          const tracked = window.PopcodeSource && window.PopcodeSource.get();
+          if (tracked && tracked.first) meta.first_source = tracked.first;
+          // What they told us, alongside what we could see.
+          const heard = document.getElementById('heard').value;
+          if (heard) meta.heard_about = heard;
+          const source = (tracked || heard) ? Object.assign({}, tracked || {}, heard ? { heard } : {}) : null;
           // The confirmation link returns them to where they were heading (a shop
           // product, say) rather than the homepage. popcode.app/** is on the
           // Supabase redirect allow list, which covers every page.
