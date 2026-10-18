@@ -27,6 +27,7 @@
     <script src="/postcard-render.js"></script>
     <script src="/book-spine.js"></script>
     <script src="/media-check.js"></script>
+    <script src="/print-preview.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/unsplash-samples.js"></script>
     <script src="/product-gallery.js"></script>
@@ -506,34 +507,6 @@
          are two pages wide. ── */
       #proof { position: fixed; left: -20000px; top: 0; background: #fff; z-index: -1; pointer-events: none; }
       .proof-page { background: #fff; }
-      /* Print preview */
-      .pp { position: fixed; inset: 0; z-index: 9000; background: #f2f0ec; display: flex; flex-direction: column; font-family: 'Inter', sans-serif; }
-      .pp-head { display: flex; justify-content: space-between; gap: 12px; padding: 18px 20px 12px; background: #fff; border-bottom: 1px solid #e6e1da; }
-      .pp-head h2 { margin: 0 0 4px; font-size: 20px; }
-      .pp-head p { margin: 0; font-size: 14px; color: #5f5a52; line-height: 1.45; max-width: 720px; }
-      .pp-x { background: none; border: none; cursor: pointer; padding: 6px; flex: 0 0 auto; }
-      .pp-body { flex: 1; overflow: auto; padding: 18px 16px 30px; }
-      .pp-body > * { max-width: 1100px; margin-left: auto; margin-right: auto; }
-      .pp-body h3 { font-size: 15px; margin: 6px auto 4px; }
-      .pp-note { font-size: 13px; color: #6b665e; margin: 0 auto 12px; line-height: 1.5; }
-      .pp-wrap { display: flex; align-items: stretch; margin-bottom: 28px; box-shadow: 0 4px 18px rgba(0,0,0,.14); }
-      .pp-face { position: relative; }
-      .pp-face img { display: block; width: 100%; height: auto; }
-      .pp-safe { position: absolute; border: 1.5px dashed rgba(255,255,255,.9); outline: 1px dashed rgba(0,0,0,.45); pointer-events: none; }
-      .pp-tag { position: absolute; left: 6px; top: 6px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 9px; }
-      .pp-spinebox { background: #1a1a1a; display: flex; }
-      .pp-spinebox img { width: 100%; height: 100%; object-fit: fill; display: block; }
-      .pp-spread { margin-bottom: 18px; }
-      .pp-slabel { font-size: 12px; color: #8a857d; margin: 0 0 5px; min-height: 1em; }
-      .pp-pair { display: flex; width: 100%; box-shadow: 0 3px 14px rgba(0,0,0,.12); background: #fff; }
-      .pp-half { flex: 1 1 50%; position: relative; overflow: hidden; }
-      .pp-half + .pp-half { border-left: 1px solid #e3ded6; }
-      .pp-half img { display: block; width: 100%; height: 100%; object-fit: cover; }
-      .pp-blankside { background: #fbfaf8; display: flex; align-items: center; justify-content: center; text-align: center; color: #9b968d; font-size: 12px; }
-      .pp-foot { display: flex; gap: 10px; justify-content: flex-end; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid #e6e1da; }
-      .pp-btn { border: none; border-radius: 24px; padding: 13px 20px; font: 600 15px 'Inter', sans-serif; cursor: pointer; }
-      .pp-back { background: #eee; color: #1a1a1a; } .pp-go { background: #1a1a1a; color: #fff; }
-      @media (max-width: 560px) { .pp-foot { flex-direction: column-reverse; } .pp-btn { width: 100%; } }
       .proof-canvas { box-shadow: none !important; border-radius: 0 !important; aspect-ratio: auto !important; width: 1400px; height: 993px; }
       .proof-spread { display: flex; }
       .proof-spread .proof-canvas { width: 1400px; height: 993px; }
@@ -3842,60 +3815,17 @@
           spineUrl = sc.toDataURL('image/png');
         } catch (e) { console.warn('spine preview', e); }
 
-        const SAFE_MM = 8;   // keep words and faces this far in from the edge
-        const safe = `left:${SAFE_MM / wMm * 100}%;right:${SAFE_MM / wMm * 100}%;top:${SAFE_MM / hMm * 100}%;bottom:${SAFE_MM / hMm * 100}%`;
-        const total = 2 * wMm + spineMm;
-        const face = (src, label) => `<div class="pp-face" style="flex:0 0 ${wMm / total * 100}%">
-            <img src="${src}" alt="${label}"/><div class="pp-safe" style="${safe}"></div><span class="pp-tag">${label}</span></div>`;
-        const wrapHtml = face(imgs[imgs.length - 1], 'Back cover')
-          + `<div class="pp-spinebox" style="flex:0 0 ${spineMm / total * 100}%">${spineUrl ? `<img src="${spineUrl}" alt="Spine"/>` : ''}</div>`
-          + face(imgs[0], 'Front cover');
-
-        // The open book: inside front cover | page 1, 2 | 3, … , last | inside back cover.
-        const interior = imgs.slice(1, -1);
-        const seq = [{ blank: 'Inside front cover' }].concat(interior.map((src, i) => ({ src, n: i + 1 })), [{ blank: 'Inside back cover' }]);
-        const half = (x) => x.blank
-          ? `<div class="pp-half pp-blankside"><span>${x.blank}<br><small>left blank</small></span></div>`
-          : `<div class="pp-half"><img src="${x.src}" alt="Page ${x.n}" loading="lazy"/></div>`;
-        let spreads = '';
-        for (let i = 0; i < seq.length; i += 2) {
-          const a = seq[i], b = seq[i + 1] || { blank: 'Inside back cover' };
-          const label = [a, b].filter(x => !x.blank).map(x => x.n).join('–');
-          spreads += `<div class="pp-spread"><div class="pp-slabel">${label ? (label.includes('–') ? 'Pages ' : 'Page ') + label : ''}</div>
-            <div class="pp-pair" style="aspect-ratio:${2 * size.wIn} / ${size.hIn}">${half(a)}${half(b)}</div></div>`;
-        }
-
-        const go = mode === 'cart' ? 'Looks good, add to cart' : mode === 'order' ? 'Looks good, continue' : '';
-        const el = document.createElement('div');
-        el.className = 'pp';
-        el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true');
-        el.innerHTML = `
-          <div class="pp-head">
-            <div><h2>Print preview</h2>
-              <p>This is exactly what we’ll print: ${interior.length} pages, the cover and the spine. Take a minute to check each page before you order.</p></div>
-            <button class="pp-x" aria-label="Close">${IC_X}</button>
-          </div>
-          <div class="pp-body">
-            <h3>Cover</h3>
-            <p class="pp-note">Laid out flat: back cover, spine, front cover. Keep words and faces inside the dashed line; the edges are trimmed and wrap around the cover board.${spineKnown ? '' : ' The spine’s exact width is set when you enter your address.'}</p>
-            <div class="pp-wrap">${wrapHtml}</div>
-            <h3>Pages</h3>
-            <p class="pp-note">As the book opens. The insides of the front and back covers are left blank.</p>
-            ${spreads}
-          </div>
-          <div class="pp-foot">
-            ${go ? `<button class="pp-btn pp-back">Keep editing</button><button class="pp-btn pp-go">${go}</button>`
-                 : `<button class="pp-btn pp-go">Close</button>`}
-          </div>`;
-        document.body.appendChild(el);
-        const prevOverflow = document.body.style.overflow;
-        document.body.style.overflow = 'hidden';
-        return new Promise(resolve => {
-          const done = (v) => { el.remove(); document.body.style.overflow = prevOverflow; resolve(v); };
-          el.querySelector('.pp-x').addEventListener('click', () => done(false));
-          const back = el.querySelector('.pp-back');
-          if (back) back.addEventListener('click', () => done(false));
-          el.querySelector('.pp-go').addEventListener('click', () => done(!!go));
+        return PopcodePrintPreview.open({
+          mode,
+          intro: `This is exactly what we’ll print: ${imgs.length - 2} pages, the cover and the spine. Take a minute to check each page before you order.`,
+          sections: [
+            { heading: 'Cover',
+              note: 'Laid out flat: back cover, spine, front cover. Keep words and faces inside the dashed line; the edges are trimmed and wrap around the cover board.'
+                + (spineKnown ? '' : ' The spine’s exact width is set when you enter your address.'),
+              html: PopcodePrintPreview.wrap({ back: imgs[imgs.length - 1], front: imgs[0], spineUrl, wMm, hMm, spineMm, safeMm: 8 }) },
+            { heading: 'Pages', note: 'As the book opens. The insides of the front and back covers are left blank.',
+              html: PopcodePrintPreview.spreads({ pages: imgs.slice(1, -1), wIn: size.wIn, hIn: size.hIn }) },
+          ],
         });
       }
 

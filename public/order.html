@@ -15,6 +15,7 @@
     <script src="/postcard-render.js"></script>
     <script src="/config.js"></script>
     <script src="/media-check.js"></script>
+    <script src="/print-preview.js"></script>
     <script src="/dialog.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/activity.js"></script>
@@ -2585,12 +2586,41 @@
       // upload it to the public experiences bucket. Both "Add to cart" and
       // "Buy this one now" go through here, so a cart line and an express order
       // always print exactly the same file.
-      async function buildPrintAsset() {
+      // The print image itself, before upload, so the preview can show exactly
+      // the file the printer gets.
+      async function makePrintImage() {
         const photo = state.selectedPhoto;
-        const calibrate = qs.get('calibrate');
-        const dataUrl = calibrate
+        return qs.get('calibrate')
           ? await buildCalibrationSheet(photo.url, currentAspect())
           : await compositeBadgedImage(photo.url, Object.assign({ scale: state.scale, aspect: currentAspect(), adjust: state.photoAdjust }, giftArtOpts(photo)));
+      }
+
+      // Print preview of that image (and an ornament's back). Resolves true to
+      // go ahead, false to keep editing. mode: 'cart' | 'order'. A preview that
+      // fails never blocks an order.
+      async function previewShopPrint(dataUrl, mode) {
+        try {
+          const photo = state.selectedPhoto;
+          const meta = CATEGORY_META[state.productType] || {};
+          const items = [{ src: dataUrl, label: HAS_BACK_PANEL.has(state.productType) ? 'Front' : (meta.noun || meta.name || 'Print') }];
+          if (HAS_BACK_PANEL.has(state.productType) && photo.slug) items.push({ src: await drawOrnamentBack(photo.slug, BACK_PANEL_PX), label: 'Back' });
+          return await PopcodePrintPreview.open({
+            mode,
+            intro: 'This is exactly the image we’ll send to the printer, with your crop and the Popcode symbol where it will print.',
+            sections: [{ heading: 'Print file',
+              note: 'The very edges can be trimmed or wrap around a frame or mug, so keep words and faces away from them.',
+              html: PopcodePrintPreview.list({ cols: Math.min(2, items.length), items }) }],
+          });
+        } catch (e) {
+          console.warn('preview failed', e);
+          return true;
+        }
+      }
+
+      async function buildPrintAsset(preparedDataUrl) {
+        const photo = state.selectedPhoto;
+        const calibrate = qs.get('calibrate');
+        const dataUrl = preparedDataUrl || await makePrintImage();
         const blob = dataUrlToBlob(dataUrl);
         const scalePct = Math.round(state.scale * 100);
         // Stickers are uploaded as PNG because Prodigi's kiss-cut products only
@@ -2661,8 +2691,13 @@
           const fcl = frameColorsFor(state.productType);
           const fcn = fcl ? fcl.find(c => c.id === state.frameColor) : null;
           // The print file is built NOW, while this page still has the photo and
-          // the chosen crop — the cart can't re-render it later.
-          const publicUrl = await buildPrintAsset();
+          // the chosen crop — the cart can't re-render it later. Shown first.
+          const printImage = await makePrintImage();
+          if (!(await previewShopPrint(printImage, 'cart'))) {
+            btn.disabled = false; btn.textContent = editingCartItem ? 'Update cart' : 'Add to cart';
+            return false;
+          }
+          const publicUrl = await buildPrintAsset(printImage);
           const line = {
             collectionId: photo.collectionId,
             productType: state.productType,
@@ -2825,15 +2860,18 @@
         }
         const photo = state.selectedPhoto;
         if (!photo) { showError('Pick a photo to print.'); return; }
-        // The photo next to what it plays, before it goes to print.
-        if (photo.collectionId && !(await PopcodeMediaCheck.confirm({ db, lines: [{
-          collectionId: photo.collectionId, productType: state.productType,
-          assetUrls: [{ target_index: photo.target_index }] }] }))) return;
-
         const payBtn = document.getElementById('pay-btn');
         payBtn.disabled = true; payBtn.textContent = 'Preparing…';
+        // The print image, then the photo next to what it plays, before it goes to print.
+        let printImage;
+        try { printImage = await makePrintImage(); } catch (e) { printImage = null; }
+        const ok = (!printImage || await previewShopPrint(printImage, 'order'))
+          && (!photo.collectionId || await PopcodeMediaCheck.confirm({ db, lines: [{
+            collectionId: photo.collectionId, productType: state.productType,
+            assetUrls: [{ target_index: photo.target_index }] }] }));
+        if (!ok) { payBtn.disabled = false; payBtn.textContent = 'Pay with card'; return; }
         try {
-          const publicUrl = await buildPrintAsset();
+          const publicUrl = await buildPrintAsset(printImage);
 
           const { data: sess } = await db.auth.getSession();
           const token = sess?.session?.access_token;
