@@ -3819,7 +3819,7 @@ The user's Analytics → Map screenshot showed 9 countries, 15 accounts (Kazakhs
 
 ### 2026-10-18 — A customer's book played the wrong videos: overwrite bug, free book Popcodes, a pre-checkout video check
 
-**PRs, all merged into `main` via the GitHub MCP when the user said "push to prod":** #253 (unique upload filenames) · #254 (migration `2026-10-18-books-not-counted.sql`, **run in prod** by the user before merge) · #255 (media check). #253 confirmed live (polled for `pathInUse` in edit.html); #255 deploy was still pending at the time of writing.
+**PRs, all merged into `main` via the GitHub MCP when the user said "push to prod":** #253 (unique upload filenames) · #254 (migration `2026-10-18-books-not-counted.sql`, **run in prod** by the user before merge) · #255 (media check). #253 and #255 both confirmed live (polled popcode.app for `pathInUse` in edit.html and for `/media-check.js`).
 
 #### The customer
 - Elena Kuher (Stripe: **Olena Kucher**, Spokane WA, elenakuherqaz@gmail.com) emailed info@ at 12:32 AM: book **"Only 80 Years Young"** (`only80yearsyoung`, 19 photos) — "videos get mixed up even after I save".
@@ -3863,7 +3863,7 @@ The user's Analytics → Map screenshot showed 9 countries, 15 accounts (Kazakhs
 
 #### Open
 - Elena: wait for her reply → check her birthday date vs shipping → when she orders, run the spine query and look at the order in Prodigi.
-- Confirm #255 is live, then on a phone: Analytics → Elena's book → Check videos; and cart → Pay shows the check (Go back to avoid paying).
+- #255 is live; on a phone: Analytics → Elena's book → Check videos; and cart → Pay shows the check (Go back to avoid paying).
 - Optional: tell Prodigi the blank Rwanda & SA spines were our missing artwork, not their print.
 - Maybe: flip the spine text to top-to-bottom (US convention) before her book prints.
 - Maybe later: auto-flag a photo that doesn't resemble its own video's first frame.
