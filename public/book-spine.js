@@ -9,13 +9,18 @@
    South Africa orders went to Prodigi with no spine file and printed a blank
    spine. Callers now treat a missing spine as an error, not a skip.
 
-   Design (ported from Bashō, unchanged from book.html's earlier
-   html2canvas version): a #1a1a1a strip widthMm × 210mm, the cover eyebrow
-   (italic) + title in Cormorant Garamond reading bottom-to-top from 16.5mm in,
+   Design (ported from Bashō; reading direction and centring changed 2026-10-18):
+   a #1a1a1a strip widthMm × the book height, the cover eyebrow
+   (italic) + title in Cormorant Garamond reading top-to-bottom, centred,
    the year in Inter at the far end. Type scales to the spine thickness, capped
    at the reference sizes (title 32pt, eyebrow 14pt, year 12pt). 300 DPI. */
 (function () {
-  var DPI = 300, H_MM = 210;
+  var DPI = 300;
+  // The spine runs the book's full height: 210mm for A4 landscape and 8×8",
+  // 297mm for the 12×12" square. Until 2026-10-18 every spine was 210mm, so a
+  // 12×12" book's spine came out 87mm short.
+  var HEIGHT_MM = { 'book-a4l-layflat': 210, 'book-21sq-layflat': 210, 'book-30sq-layflat': 297 };
+  function heightFor(variantId) { return HEIGHT_MM[variantId] || 210; }
   var PX_PER_MM = DPI / 25.4, PX_PER_PT = DPI / 72, PT_PER_MM = 72 / 25.4;
   var SERIF = "'Cormorant Garamond', Georgia, serif";
   var SANS = "'Inter', 'Helvetica Neue', Arial, sans-serif";
@@ -60,8 +65,9 @@
     } catch (e) { /* falls back to Georgia / Arial */ }
   }
 
-  // The spine strip as a single-page PDF Blob, widthMm × 210mm at 300 DPI.
-  async function buildPdf(widthMm, parts) {
+  // The spine strip as a single-page PDF Blob, widthMm × heightMm at 300 DPI.
+  async function buildPdf(widthMm, parts, heightMm) {
+    var H_MM = heightMm || 210;
     if (!(widthMm > 0)) throw new Error('No spine width');
     await ensureLibs();
     var usablePt = Math.max(0, (widthMm - 4) * PT_PER_MM);         // 2mm safety each long edge
@@ -76,19 +82,31 @@
     var c = document.createElement('canvas'); c.width = T; c.height = L;
     var ctx = c.getContext('2d');
     ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 0, T, L);
-    // Rotate so +x runs UP the spine (bottom → top) and +y across it.
-    ctx.translate(0, L); ctx.rotate(-Math.PI / 2);
+    // Rotate so +x runs DOWN the spine (top → bottom), letter tops toward the
+    // front cover: the US/UK convention, readable with the book lying face up.
+    // (It read bottom → top until 2026-10-18.)
+    ctx.translate(T, 0); ctx.rotate(Math.PI / 2);
     ctx.fillStyle = '#ffffff';
     ctx.textBaseline = 'alphabetic';
     // Optical vertical centring on the title's x-height.
     var baseline = T / 2 + px.big * 0.32;
-    var x = inset;
+    // Eyebrow + title as one block, centred along the spine.
+    var eyeW = 0, bigW = 0;
     if (parts.eyebrow && px.name > 0) {
       ctx.font = 'italic 400 ' + px.name + 'px ' + SERIF;
-      ctx.fillText(parts.eyebrow, x, baseline);
-      x += ctx.measureText(parts.eyebrow).width + px.gap;
+      eyeW = ctx.measureText(parts.eyebrow).width + px.gap;
     }
     if (px.big > 0) {
+      ctx.font = '400 ' + px.big + 'px ' + SERIF;
+      bigW = ctx.measureText(parts.big).width;
+    }
+    var x = Math.max(inset, (L - eyeW - bigW) / 2);
+    if (eyeW) {
+      ctx.font = 'italic 400 ' + px.name + 'px ' + SERIF;
+      ctx.fillText(parts.eyebrow, x, baseline);
+      x += eyeW;
+    }
+    if (bigW) {
       ctx.font = '400 ' + px.big + 'px ' + SERIF;
       ctx.fillText(parts.big, x, baseline);
     }
@@ -138,12 +156,12 @@
         ? 'Please choose a state — we need it to size your book’s spine.'
         : 'We couldn’t get your book’s spine size from the printer. Please try again in a minute.');
     }
-    var blob = await buildPdf(widthMm, opts.parts);
+    var blob = await buildPdf(widthMm, opts.parts, heightFor(opts.variantId));
     var path = opts.slug + '/print/spine_' + Date.now() + '.pdf';
     var up = await opts.db.storage.from('experiences').upload(path, blob, { contentType: 'application/pdf', upsert: true });
     if (up.error) throw new Error('We couldn’t upload your book’s spine: ' + up.error.message);
     return { url: opts.db.storage.from('experiences').getPublicUrl(path).data.publicUrl, print_area: 'spine' };
   }
 
-  window.PopcodeSpine = { buildPdf: buildPdf, fetchWidthMm: fetchWidthMm, prepare: prepare, partsFromLayout: partsFromLayout };
+  window.PopcodeSpine = { buildPdf: buildPdf, fetchWidthMm: fetchWidthMm, prepare: prepare, partsFromLayout: partsFromLayout, heightFor: heightFor };
 })();
