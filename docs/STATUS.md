@@ -6,9 +6,16 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-15)
+## Current state (updated 2026-10-18)
 
 **Live and recent**
+- **Video mix-up bug fixed + customer handled (2026-10-18, PRs #253–#255; see that entry).**
+  Uploads now get unique filenames; books/calendars/board books no longer count toward the
+  Popcode limit (migration **run in prod**); every checkout shows a "Check what each photo
+  plays" step, and Analytics → Content → a project has **Check videos**. **Open:** Elena Kuher
+  (Olena Kucher, Spokane, `only80yearsyoung`) — reply pending; when she orders, confirm her
+  `print_orders` row has `default, spine` (first real order with a spine file) and the order
+  in Prodigi's dashboard lists a spine. #255 not yet tried on an iPhone or a real checkout.
 - **Gallery outreach round 1 SENT 2026-10-15** (9:45–10:55 ET, scheduled in Gmail from
   curt@popcodeapp.com, BCC curt@theworkshop.works): Geary, Rye Arts Center, Pelham Art Center
   (**free-pilot offer**, personal email, not in the follow-up sequence), Iona Chapman Gallery,
@@ -3810,3 +3817,53 @@ The user's Analytics → Map screenshot showed 9 countries, 15 accounts (Kazakhs
 - Track B domain + tool setup for the November send.
 - Once Website data builds up, use the section read-through to rework weak parts of /exhibitions.
 
+### 2026-10-18 — A customer's book played the wrong videos: overwrite bug, free book Popcodes, a pre-checkout video check
+
+**PRs, all merged into `main` via the GitHub MCP when the user said "push to prod":** #253 (unique upload filenames) · #254 (migration `2026-10-18-books-not-counted.sql`, **run in prod** by the user before merge) · #255 (media check). #253 confirmed live (polled for `pathInUse` in edit.html); #255 deploy was still pending at the time of writing.
+
+#### The customer
+- Elena Kuher (Stripe: **Olena Kucher**, Spokane WA, elenakuherqaz@gmail.com) emailed info@ at 12:32 AM: book **"Only 80 Years Young"** (`only80yearsyoung`, 19 photos) — "videos get mixed up even after I save".
+- **Diagnosis:** `/api/collection?slug=` gave each item's `video_url`; several items shared one file (`video_4.mp4` ×3, `video_10.mp4` ×3, `video_6.mp4` ×2). HEAD on each file's `Last-Modified` vs the URL's `?v=` timestamp showed which ones had been overwritten later → **5 photos played another photo's video**, originals gone. Quick recipe for next time: compare `split_part(video_url,'?',1)` across rows + `Last-Modified` vs `?v=`.
+- **Handled:** reply sent from curt@popcodeapp.com (CC info@, BCC theworkshop) at 9:23 AM ET with the 5 photos attached: apology, explanation, re-attach the five, asked the birthday date (we'll expedite if needed), **$29 25-pack refunded** in Stripe (reason "Other"; Stripe keeps the $1.14 fee) — she keeps the 25 credits, and **`THANKYOU25`** (25% off once, 1 redemption, expires Nov 30 2026) made in Stripe → Coupons. The email was sent before the refund so a bare Stripe refund notice didn't arrive first.
+- She re-uploaded the five within ~30 min and added 3 photos (now **22**); a contact sheet (photo + frame at 1.5 s, ffmpeg over HTTP + PIL) showed all 22 correct and no shared files. **No reply yet** when notes were saved.
+- `popcode_credits` for her: purchased 25, granted 0, from_purchases 0 — the book's quota forced the pack.
+
+#### #253 — uploads overwrote other photos' videos
+- **Root cause:** `book.html`, `calendar.html`, `boardbook.html`, `edit.html`, `order.html` uploaded to `{slug}/video_{index}.mp4` (also `audio_`, and `photo_` in edit). After adding/removing/reordering popcodes, *unchanged* photos keep their URL at an old index path, so the next new upload at that index (upsert) replaced a file another photo still played. The comment in book.html even said "a reused file at an old index path is fine". `?v=` cache-busters differed, so rows *looked* different.
+- **Fix:** every upload path is now `…_{index}_{Date.now().toString(36)}.ext`. `edit.html` gained `pathInUse(path, exceptId)` and no longer deletes a storage file another kept item still references (replace, remove, montage commit). Old orphan files are left (manage.html's delete lists the whole folder anyway). `create.html` untouched (fresh slug).
+- **Prod sweep (user ran the SQL):** only `only80yearsyoung` was hit. Rows like `1, 1, 1` are legacy duplicate `collection_items` for one target pointing at the same file — harmless (`6yu2wya1` Rwanda book has 9 for photo 1). `3xebvmdv` "Addie & Max Xmas" (Apr 9) has photos 1 and 2 on `video_0.mp4` from the start — never had a `video_1`; not this bug.
+
+#### #254 — book Popcodes no longer count toward the limit
+- Before: `popcode_used()` counted every collection, so a book over 5 photos hit `POPCODE_QUOTA_EXCEEDED` mid-build (pricing page promises the opposite), and since `book.html` deletes all items then re-inserts, a blocked save would leave a book with **no videos linked** (raw error toast; book.html has no friendly quota message).
+- Now `popcode_free_kind(kind)` (`book`, `calendar`, `boardbook`) is excluded from `popcode_used()`, skipped by `enforce_popcode_quota()`, and `popcode_settle_print_order()` no longer credits those kinds back. Shop products made from a standard Popcode still get credited on order. Accounts that already got `from_purchases` for a book keep them (bonus credits).
+- Tested on a scratch Postgres 16 (`/usr/lib/postgresql/16/bin`, initdb in `/var/tmp` — the scratchpad isn't writable by the postgres user; stub `auth.users`, `auth.uid()`, `is_popcode_admin()` and the roles, then apply 09-17 → 09-18 → this). After running in prod: `popcode_used` for her = 0.
+- Known loophole (user told): an unordered book is a free, shareable Popcode set. Revisit only if abused.
+
+#### #255 — "Check what each photo plays" before checkout + admin Check videos
+- `public/media-check.js` → `PopcodeMediaCheck.confirm({ db, lines })` (cart-style lines) and `.show({ title, items })`. Loads `collection_items` per line; books/calendars/board books = whole project, other products = only `assetUrls[].target_index`. Dedupes legacy duplicate rows by `target_index`. Each card: photo + `<video preload="metadata" src="…#t=1.5">` set lazily by IntersectionObserver (or an `<audio>`); two items sharing a storage file → red outline + header warning. **Never blocks a sale** (nothing to show / load error → resolves true).
+- Hooked into: `cart.html` `pay()` (all lines), `book.html` `orderPrintedBook`, `calendar.html` `orderPrintedCalendar`, `boardbook.html` `placeOrder`, `order.html` `pay()`. Add-to-cart paths don't show it (the cart does). `analytics.html` lightbox: **Check videos** button (`#lb-check`), labels by target index.
+- Tested headless (playwright-core in the scratchpad + `chromium_headless_shell-1194`): flag, both buttons, single-photo and empty cases, all six pages define `PopcodeMediaCheck`. **The headless shell can't decode H.264** — video boxes render black; a WebM copy proved the `#t=1.5` frame paints. Not tried: a signed-in checkout, iPhone Safari.
+
+#### Spines
+- The Rwanda & SA copy that just arrived with a blank spine is the **09-30 reorder** (`ord_14579891`), placed before the 10-01 spine fix (#149). `print_orders` query showed every book order (07-10 test, 09-21, 09-30) with only `default` — no order since the fix. Re-checked on `main`: both book paths (book.html Order now, cart `withSpines`) attach a spine and throw without one. **Elena's will be the first real order with a spine file.** Query (handles cart `items`):
+  ```sql
+  select o.created_at, o.prodigi_order_id, o.status,
+         (select string_agg(coalesce(a->>'print_area','default'), ', ')
+            from jsonb_array_elements(coalesce(i->'asset_urls', o.asset_urls)) a) as files
+  from print_orders o
+  left join lateral jsonb_array_elements(case when jsonb_typeof(o.items)='array' then o.items else '[]'::jsonb end) i on true
+  where coalesce(i->>'product_type', o.product_type) = 'book' order by o.created_at desc;
+  ```
+  (`print_orders` has `prodigi_order_id`, not `provider_order_id`.)
+
+#### Lessons
+- **Anon REST/storage reads return nothing** (RLS on `collections` and storage list); `/api/collection?slug=` + HEAD on public storage URLs is what works from here. The user runs anything else in the SQL editor.
+- Gmail connector: the customer's email went to info@, which isn't the connected mailbox (curt@popcodeapp.com), so the reply was a new thread. Auto-mode blocked base64-encoding customer photos into a draft attachment — the user attached them by hand.
+- `pkill -f "http.server …"` in a call kills that shell (exit 144) — harmless, run it alone (same as 10-14 note).
+
+#### Open
+- Elena: wait for her reply → check her birthday date vs shipping → when she orders, run the spine query and look at the order in Prodigi.
+- Confirm #255 is live, then on a phone: Analytics → Elena's book → Check videos; and cart → Pay shows the check (Go back to avoid paying).
+- Optional: tell Prodigi the blank Rwanda & SA spines were our missing artwork, not their print.
+- Maybe: flip the spine text to top-to-bottom (US convention) before her book prints.
+- Maybe later: auto-flag a photo that doesn't resemble its own video's first frame.
