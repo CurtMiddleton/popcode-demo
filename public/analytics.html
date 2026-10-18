@@ -145,6 +145,20 @@
       .prints-cards { grid-template-columns: repeat(4, 1fr); }
       @media (max-width: 720px) { .prints-cards { grid-template-columns: repeat(2, 1fr); } }
 
+      /* Expandable account detail */
+      tr.acct-row { cursor: pointer; }
+      tr.acct-row:hover td { background: #fbfaf8; }
+      tr.acct-row.ad-open .pd-caret { transform: rotate(90deg); color: #1a1a1a; }
+      .ad-wrap { padding: 16px 18px 20px; }
+      .ad-facts { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 12.5px; margin-bottom: 16px; }
+      .ad-facts b { font-weight: 700; }
+      .ad-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+      @media (max-width: 860px) { .ad-grid { grid-template-columns: 1fr; } }
+      .ad-sec table { width: 100%; font-size: 12px; }
+      .ad-sec td, .ad-sec th { padding: 6px 8px !important; }
+      .ad-empty { font-size: 12px; color: #999; padding: 4px 0; }
+      .ad-link { background: none; border: none; padding: 0; color: #5b3fd6; font: inherit; font-weight: 600; cursor: pointer; text-align: left; }
+
       /* Expandable print-order detail editor */
       tr.print-row { cursor: pointer; }
       .pd-caret { display: inline-block; color: #bbb; transition: transform 0.15s; font-size: 10px; }
@@ -577,7 +591,11 @@
       let cachedUsers = null;    // [{ id, email, full_name, ... }] for owner lookup
       let cachedCredits = null;  // { userId: { purchased, granted, from_purchases } }
       let creditsError = false;  // true if popcode_credits could not be read
-      let cachedPopcodes = null; // { userId: popcodes made } — matches popcode_used() in SQL
+      let cachedPopcodes = null; // { userId: popcodes made, all kinds }
+      // { userId: popcodes that count toward the cap } — matches popcode_used()
+      // in SQL, which leaves out books, calendars and board books (2026-10-18).
+      let cachedCapped = null;
+      const FREE_KINDS = new Set(['book', 'calendar', 'boardbook']);
       let librarySearch = '';
 
       const ADMIN_EMAIL = 'curtmid@gmail.com';
@@ -1186,6 +1204,7 @@
             loadCredits(),
             loadThumbs().catch(() => {}),
             loadOptIns(),
+            loadPrintsData(),
           ]);
           renderAccounts();
         } catch (e) {
@@ -1309,7 +1328,9 @@
         const rowHtml = function(u) {
           const nameDisplay = u.full_name || '—';
           const plan = planFor(u);
-          const made = (cachedPopcodes && cachedPopcodes[u.id]) || 0;
+          const all = (cachedPopcodes && cachedPopcodes[u.id]) || 0;
+          const made = (cachedCapped && cachedCapped[u.id]) || 0;
+          const inPrints = all - made;
 
           let quota;
           if (plan.key === 'admin') {
@@ -1322,9 +1343,18 @@
             quota = '<span' + (spent ? ' style="color:#c92a2a;font-weight:700"' : '') + '>' +
               made + ' of ' + allowance + '</span>';
           }
+          if (inPrints > 0) {
+            quota += '<div class="muted" style="font-size:10.5px" title="In books, calendars and board books, which never count toward the limit">+' +
+              inPrints + ' in prints</div>';
+          }
+          const paid = ordersFor(u.id);
+          const ordersCell = cachedPrints === null ? '<span class="muted">—</span>'
+            : paid.length ? '<span style="font-weight:600">' + paid.length + '</span> <span class="muted" style="font-size:11px">' +
+                money(paid.reduce((t, o) => t + (o.total_charged_minor || 0), 0), 'USD') + '</span>'
+            : '<span class="muted">0</span>';
 
-          return '<tr>' +
-            '<td class="muted" style="white-space:nowrap">' + formatDate(u.created_at) + '</td>' +
+          return '<tr class="acct-row' + (openAccount === u.id ? ' ad-open' : '') + '" data-uid="' + escapeHtml(u.id) + '">' +
+            '<td class="muted" style="white-space:nowrap"><span class="pd-caret">▶</span> ' + formatDate(u.created_at) + '</td>' +
             '<td style="font-weight:600">' + escapeHtml(nameDisplay) + '</td>' +
             '<td class="muted">' + escapeHtml(u.email || '—') + '</td>' +
             '<td><span class="badge ' + plan.cls + '"' +
@@ -1332,9 +1362,14 @@
               escapeHtml(plan.label) + '</span></td>' +
             '<td class="muted" style="text-align:right;white-space:nowrap">' + quota + '</td>' +
             '<td class="muted" style="text-align:right">' + (u.project_count || 0) + '</td>' +
+            '<td style="text-align:right;white-space:nowrap">' + ordersCell + '</td>' +
             '<td style="text-align:center">' + optInCell(u) + '</td>' +
             '<td style="text-align:center">' + grantCell(u) + '</td>' +
-            '</tr>';
+            '</tr>' +
+            (openAccount === u.id
+              ? '<tr class="ad-row"><td class="pd-detail-cell" colspan="9"><div class="ad-wrap" id="ad-' + escapeHtml(u.id) + '">' +
+                  '<div class="loading-msg" style="padding:10px"><div class="spinner"></div>Loading…</div></div></td></tr>'
+              : '');
         };
 
         var tbody = users.slice(0, visibleCount).map(rowHtml).join('');
@@ -1343,7 +1378,7 @@
           const label = accountsExpanded
             ? 'Show fewer ▲'
             : 'Show ' + (users.length - 10) + ' more ▼';
-          tbody += '<tr class="accounts-toggle-row"><td colspan="8">' +
+          tbody += '<tr class="accounts-toggle-row"><td colspan="9">' +
             '<button class="accounts-toggle" id="accounts-toggle-btn">' + label + '</button>' +
             '</td></tr>';
         }
@@ -1382,6 +1417,7 @@
               '<th>Plan</th>' +
               '<th style="text-align:right">Popcodes</th>' +
               '<th style="text-align:right">Projects</th>' +
+              '<th style="text-align:right" title="Paid print orders and what they were charged">Orders</th>' +
               '<th style="text-align:center" title="Agreed to tips and news emails">Emails</th>' +
               '<th style="text-align:center" title="Comp free Popcodes on top of the free five">Comp</th>' +
             '</tr></thead>' +
@@ -1400,10 +1436,118 @@
         // listener on the wrapper would be lost anyway — and re-attaching to a
         // surviving wrapper would stack duplicates.
         wrap.querySelectorAll('.grant-btn').forEach(function (b) {
-          b.addEventListener('click', function () {
+          b.addEventListener('click', function (e) {
+            e.stopPropagation();   // the row itself opens the account
             grantCredits(b.dataset.uid, b.dataset.label, b);
           });
         });
+        wrap.querySelectorAll('tr.acct-row').forEach(function (row) {
+          row.addEventListener('click', function () {
+            openAccount = openAccount === row.dataset.uid ? null : row.dataset.uid;
+            // An account past the first ten stays visible once opened.
+            renderAccounts();
+          });
+        });
+        if (openAccount) {
+          const u = users.find(x => x.id === openAccount);
+          if (u) renderAccountDetail(u);
+        }
+      }
+
+      // ── Account detail (click a row) ─────────────────────────────────────
+      let openAccount = null;
+
+      function ordersFor(uid) {
+        return (cachedPrints || []).filter(o => o.user_id === uid && PAID_PLUS.has(o.status));
+      }
+
+      async function renderAccountDetail(u) {
+        const el = document.getElementById('ad-' + u.id);
+        if (!el) return;
+        const uid = u.id;
+        const [packs, events] = await Promise.all([
+          db.from('credit_orders').select('created_at, pack_id, credits, status, amount_minor, currency')
+            .eq('user_id', uid).order('created_at', { ascending: false })
+            .then(r => r.error ? null : (r.data || []), () => null),
+          db.from('scan_events').select('created_at, event_type, slug, city, region, country, source')
+            .eq('user_id', uid).order('created_at', { ascending: false }).limit(40)
+            .then(r => r.error ? null : (r.data || []), () => null),
+        ]);
+        if (openAccount !== uid || !el.isConnected) return;   // closed while loading
+
+        const plan = planFor(u);
+        const c = (cachedCredits && cachedCredits[uid]) || {};
+        const signup = (events || []).find(e => e.event_type === 'signup');
+        const src = signup ? sourceChannel(signup.source) : null;
+        const all = (cachedPopcodes && cachedPopcodes[uid]) || 0;
+        const capped = (cachedCapped && cachedCapped[uid]) || 0;
+        const facts = [
+          '<span><b>Joined</b> ' + formatDate(u.created_at) + '</span>',
+          '<span><b>Email</b> ' + escapeHtml(u.email || '—') + '</span>',
+          '<span><b>Plan</b> ' + escapeHtml(plan.label) +
+            (c.purchased || c.granted || c.from_purchases
+              ? ' <span class="muted">(' + [c.purchased ? c.purchased + ' bought' : '', c.granted ? c.granted + ' comped' : '',
+                  c.from_purchases ? c.from_purchases + ' from orders' : ''].filter(Boolean).join(', ') + ')</span>' : '') + '</span>',
+          '<span><b>Popcodes</b> ' + all + ' made' + (all > capped ? ' <span class="muted">(' + (all - capped) + ' in prints, not counted)</span>' : '') + '</span>',
+          src ? '<span><b>Found us</b> ' + escapeHtml(src.label) + (src.detail ? ' <span class="muted">' + escapeHtml(src.detail) + '</span>' : '') + '</span>' : '',
+        ].filter(Boolean).join('');
+
+        const projects = (cachedCols || []).filter(p => p.user_id === uid)
+          .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+        const kindLabel = k => ({ book: 'Book', calendar: 'Calendar', boardbook: 'Board book' }[k] || (k && k !== 'standard' ? k.charAt(0).toUpperCase() + k.slice(1) : 'Popcode'));
+        const projHtml = projects.length
+          ? '<table><thead><tr><th>Project</th><th>Type</th><th style="text-align:right">With media</th><th>Made</th></tr></thead><tbody>' +
+            projects.map(p => {
+              const n = projectItems(p.id).filter(i => i.video || i.audio).length;
+              return '<tr><td><button class="ad-link" data-slug="' + escapeHtml(p.slug) + '">' + escapeHtml(shortName(p.name) || p.slug) + '</button>' +
+                ' <a class="muted" style="font-size:11px" href="/' + encodeURIComponent(p.slug) + '" target="_blank" rel="noopener">/' + escapeHtml(p.slug) + ' ↗</a></td>' +
+                '<td class="muted">' + escapeHtml(kindLabel(p.kind)) + '</td>' +
+                '<td class="muted" style="text-align:right">' + n + '</td>' +
+                '<td class="muted" style="white-space:nowrap">' + (p.created_at ? formatDate(p.created_at) : '—') + '</td></tr>';
+            }).join('') + '</tbody></table>'
+          : '<div class="ad-empty">No projects.</div>';
+
+        const orders = (cachedPrints || []).filter(o => o.user_id === uid);
+        const ordersHtml = cachedPrints === null ? '<div class="ad-empty">Could not load orders.</div>'
+          : orders.length
+          ? '<table><thead><tr><th>Date</th><th>Product</th><th>Amount</th><th>Status</th></tr></thead><tbody>' +
+            orders.map(o => '<tr><td class="muted" style="white-space:nowrap">' + formatDate(o.created_at) + '</td>' +
+              '<td>' + escapeHtml(o.product_type || '—') + (o.project_name ? ' <span class="muted">· ' + escapeHtml(o.project_name) + '</span>' : '') + '</td>' +
+              '<td style="white-space:nowrap">' + money(o.total_charged_minor, o.currency) + '</td>' +
+              '<td><span class="ps ' + (PS_CLASS[o.status] || 'ps-gray') + '">' + (PS_LABEL[o.status] || escapeHtml(o.status)) + '</span></td></tr>').join('') +
+            '</tbody></table>'
+          : '<div class="ad-empty">No print orders.</div>';
+
+        const packsHtml = packs === null ? '<div class="ad-empty">Could not load pack purchases.</div>'
+          : packs.length
+          ? '<table><tbody>' + packs.map(p => '<tr><td class="muted" style="white-space:nowrap">' + formatDate(p.created_at) + '</td>' +
+              '<td>' + escapeHtml(p.credits + ' Popcodes') + '</td>' +
+              '<td>' + money(p.amount_minor, (p.currency || 'usd').toUpperCase()) + '</td>' +
+              '<td class="muted">' + escapeHtml(p.status) + '</td></tr>').join('') + '</tbody></table>' +
+            '<div class="muted" style="font-size:10.5px;margin-top:4px">Refunds made in Stripe don’t show here.</div>'
+          : '<div class="ad-empty">No packs bought.</div>';
+
+        const evHtml = events === null ? '<div class="ad-empty">Could not load activity.</div>'
+          : events.length
+          ? '<table><tbody>' + events.map(e => '<tr><td class="muted" style="white-space:nowrap">' + formatDate(e.created_at) + '</td>' +
+              '<td>' + eventBadge(e.event_type) + '</td>' +
+              '<td>' + escapeHtml((e.slug && projectBySlug(e.slug) && shortName(projectBySlug(e.slug).name)) || e.slug || '') + '</td>' +
+              '<td class="muted">' + escapeHtml([e.city, e.region].filter(Boolean).join(', ')) + '</td></tr>').join('') + '</tbody></table>' +
+            '<div class="muted" style="font-size:10.5px;margin-top:4px">Only what they did while signed in, newest first (last 40). Scans of their prints by others are in the Activity Log.</div>'
+          : '<div class="ad-empty">No signed-in activity recorded.</div>';
+
+        el.innerHTML =
+          '<div class="ad-facts">' + facts + '</div>' +
+          '<div class="ad-grid">' +
+            '<div class="ad-sec"><div class="pd-label">Projects (' + projects.length + ')</div>' + projHtml + '</div>' +
+            '<div class="ad-sec"><div class="pd-label">Print orders</div>' + ordersHtml +
+              '<div class="pd-label" style="margin-top:16px">Popcode packs</div>' + packsHtml + '</div>' +
+            '<div class="ad-sec" style="grid-column:1/-1"><div class="pd-label">Recent activity</div>' + evHtml + '</div>' +
+          '</div>';
+        el.querySelectorAll('.ad-link').forEach(b => b.addEventListener('click', e => {
+          e.stopPropagation();
+          openLightbox(b.dataset.slug);
+        }));
       }
 
       /*
@@ -1482,6 +1626,22 @@
       // scan-analytics date range, so it lives outside #main-content and loads
       // once. A "Retry" button resubmits a failed order to Prodigi.
       let cachedPrints = null;
+
+      // The orders without rendering the Prints tab — Accounts needs them for
+      // its Orders column and account detail. Shares the same cache.
+      let printsDataPromise = null;
+      function loadPrintsData() {
+        if (cachedPrints !== null) return Promise.resolve(cachedPrints);
+        if (!printsDataPromise) {
+          printsDataPromise = db.rpc('get_all_print_orders', { max_rows: 1000 }).then(({ data, error }) => {
+            if (error) throw error;
+            cachedPrints = data || [];
+            try { renderFunnel(); } catch (e) {}
+            return cachedPrints;
+          }).catch(e => { console.warn('loadPrintsData error', e); printsDataPromise = null; return null; });
+        }
+        return printsDataPromise;
+      }
 
       const PS_CLASS = {
         pending: 'ps-amber', paid: 'ps-blue', submitting: 'ps-blue',
@@ -1883,10 +2043,11 @@
           // it, so legacy duplicate rows collapse and photo-only rows never
           // count. Kept separate from cachedThumbs, which keeps whichever row it
           // saw first and would miss media on a later duplicate.
-          const ownerOf = {};
-          cachedCols.forEach(c => { ownerOf[c.id] = c.user_id; });
+          const ownerOf = {}, kindOf = {};
+          cachedCols.forEach(c => { ownerOf[c.id] = c.user_id; kindOf[c.id] = c.kind; });
           const counted = {};
           cachedPopcodes = {};
+          cachedCapped = {};
           (items || []).forEach(it => {
             if (!it.video_url && !it.audio_url) return;
             const key = it.collection_id + '|' + it.target_index;
@@ -1895,6 +2056,7 @@
             const uid = ownerOf[it.collection_id];
             if (!uid) return;
             cachedPopcodes[uid] = (cachedPopcodes[uid] || 0) + 1;
+            if (!FREE_KINDS.has(kindOf[it.collection_id])) cachedCapped[uid] = (cachedCapped[uid] || 0) + 1;
           });
         } catch (e) {
           // Let a later tab click retry instead of caching the empty result.
