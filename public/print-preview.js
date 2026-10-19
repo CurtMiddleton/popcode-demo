@@ -16,7 +16,8 @@
      Single pages or products in a grid, each optionally with a keep-inside line.
    PopcodePrintPreview.warn(level, title, text)
      A notice to put first in a section: 'soft' (amber) or 'bad' (red).
-   open() also takes goLabel / backLabel to rename the two buttons.
+   open() also takes goLabel / backLabel to rename the two buttons, and
+   extraLabel for a third button that resolves 'extra' (e.g. "Enhance this photo").
 
    Built after the first 12×12" book order (2026-10-18) printed an editor
    placeholder on its cover, a short upside-down spine and a cover photo cropped
@@ -72,7 +73,8 @@
       '.pp-foot{display:flex;gap:10px;justify-content:flex-end;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #e6e1da}' +
       '.pp-btn{border:none;border-radius:24px;padding:13px 20px;font:600 15px Inter,system-ui,sans-serif;cursor:pointer}' +
       '.pp-back{background:#eee;color:#1a1a1a}.pp-go{background:#1a1a1a;color:#fff}' +
-      '@media (max-width:560px){.pp-foot{flex-direction:column-reverse}.pp-btn{width:100%}.pp-list{grid-template-columns:1fr !important}}';
+      '.pp-extra{background:#fff;color:#1a1a1a;box-shadow:inset 0 0 0 1.5px #1a1a1a;margin-right:auto}' +
+      '@media (max-width:560px){.pp-foot{flex-direction:column-reverse}.pp-btn{width:100%}.pp-extra{order:1}.pp-list{grid-template-columns:1fr !important}}';
     document.head.appendChild(s);
   }
 
@@ -136,7 +138,7 @@
       '<div class="pp-body">' + (o.sections || []).map(function (s) {
         return (s.heading ? '<h3>' + esc(s.heading) + '</h3>' : '') + (s.note ? '<p class="pp-note">' + esc(s.note) + '</p>' : '') + s.html;
       }).join('') + '</div>' +
-      '<div class="pp-foot">' + (go
+      '<div class="pp-foot">' + (o.extraLabel ? '<button class="pp-btn pp-extra">' + esc(o.extraLabel) + '</button>' : '') + (go
         ? '<button class="pp-btn pp-back">' + esc(backLabel) + '</button><button class="pp-btn pp-go">' + esc(go) + '</button>'
         : '<button class="pp-btn pp-go">Close</button>') + '</div>';
     document.body.appendChild(el);
@@ -148,6 +150,8 @@
       var back = el.querySelector('.pp-back');
       if (back) back.addEventListener('click', function () { done(false); });
       el.querySelector('.pp-go').addEventListener('click', function () { done(!!go); });
+      var extra = el.querySelector('.pp-extra');
+      if (extra) extra.addEventListener('click', function () { done('extra'); });
     });
   }
 

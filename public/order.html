@@ -884,7 +884,7 @@
         const el = document.getElementById('size-quality'); if (!el) return;
         const photo = state.selectedPhoto;
         const want = state.variantId;
-        const d = photo && photo.url ? await photoDims(photo.url) : null;
+        const d = photo && photo.url ? await photoDims(printPhotoUrl(photo)) : null;
         if (state.variantId !== want) return;          // a newer update is on its way
         el.textContent = '';
         if (!d) return;
@@ -905,7 +905,7 @@
       // photo prints sharply at. Same rule as updateSizeQuality.
       async function printSharpness() {
         const photo = state.selectedPhoto;
-        const d = photo && photo.url ? await photoDims(photo.url) : null;
+        const d = photo && photo.url ? await photoDims(printPhotoUrl(photo)) : null;
         if (!d) return null;
         const scale = (state.photoAdjust && state.photoAdjust.scale) || 1;
         const dpi = effectiveDpi(d.w, d.h, scale);
@@ -2611,13 +2611,120 @@
         const photo = state.selectedPhoto;
         return qs.get('calibrate')
           ? await buildCalibrationSheet(photo.url, currentAspect())
-          : await compositeBadgedImage(photo.url, Object.assign({ scale: state.scale, aspect: currentAspect(), adjust: state.photoAdjust }, giftArtOpts(photo)));
+          : await compositeBadgedImage(printPhotoUrl(photo), Object.assign({ scale: state.scale, aspect: currentAspect(), adjust: state.photoAdjust }, giftArtOpts(photo)));
       }
 
-      // Print preview of that image (and an ornament's back). Resolves true to
-      // go ahead, false to keep editing. mode: 'cart' | 'order'. A preview that
-      // fails never blocks an order.
+      /* AI-enhanced copies of photos too small to print sharply, by original url.
+         Only the print uses them: the scan target, the thumbnail and the
+         Popcode itself keep the customer's own photo. */
+      const enhancedPhotos = new Map();
+      function printPhotoUrl(photo) { return enhancedPhotos.get(photo.url) || photo.url; }
+
+      function enhanceBusy(on) {
+        let el = document.getElementById('enhance-busy');
+        if (!on) { if (el) el.remove(); return; }
+        if (el) return;
+        el = document.createElement('div');
+        el.id = 'enhance-busy';
+        el.style.cssText = 'position:fixed;inset:0;z-index:9100;background:rgba(242,240,236,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font:600 16px Inter,system-ui,sans-serif;color:#1a1a1a;text-align:center;padding:20px';
+        el.innerHTML = '<div>Enhancing your photo…</div><div style="font-weight:400;font-size:14px;color:#5f5a52">This usually takes 10–30 seconds.</div>';
+        document.body.appendChild(el);
+      }
+
+      function loadImg(src) {
+        return new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = rej; im.src = src; });
+      }
+
+      /* Upscale the selected photo 4× (2× if it is already large; Real-ESRGAN, faces not redrawn), show
+         the customer a close-up before and after, and use it for the print if
+         they choose to. A quarter of the original is blended back in so skin
+         keeps its texture. Resolves true when the enhanced photo is in use. */
+      async function enhanceSelectedPhoto() {
+        const photo = state.selectedPhoto;
+        enhanceBusy(true);
+        let blended;
+        try {
+          const { data: sess } = await db.auth.getSession();
+          const token = sess?.session?.access_token;
+          const orig = await loadImg(photo.url);
+          const scale = Math.max(orig.naturalWidth, orig.naturalHeight) > 1600 ? 2 : 4;
+          let body = { url: photo.url, scale }, out = null;
+          for (let i = 0; i < 6 && !out; i++) {
+            const r = await fetch('/api/enhance-photo', { method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (token || '') },
+              body: JSON.stringify(body) });
+            const j = await r.json().catch(() => ({}));
+            if (r.status === 202 && j.pending) { body = { url: photo.url, scale, id: j.pending }; continue; }
+            if (!r.ok || !j.url) throw new Error(j.error || 'We couldn’t enhance this photo right now.');
+            out = j.url;
+          }
+          if (!out) throw new Error('Enhancing is taking too long. Please try again in a minute.');
+          const up = await loadImg(out);
+          // iPhone Safari won't draw a canvas over ~16.7M pixels, and the badge
+          // compositor redraws this at full size. 16M is still ~290 DPI at 12×16.
+          const fit = Math.min(1, Math.sqrt(16e6 / (up.naturalWidth * up.naturalHeight)));
+          const c = document.createElement('canvas');
+          c.width = Math.floor(up.naturalWidth * fit); c.height = Math.floor(up.naturalHeight * fit);
+          const ctx = c.getContext('2d');
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(orig, 0, 0, c.width, c.height);
+          ctx.globalAlpha = 0.75;
+          ctx.drawImage(up, 0, 0, c.width, c.height);
+          blended = c;
+        } catch (e) {
+          enhanceBusy(false);
+          console.warn('enhance failed', e);
+          if (window.Sentry) Sentry.captureException(e);
+          alert(e.message || 'We couldn’t enhance this photo right now.');
+          return false;
+        }
+        enhanceBusy(false);
+
+        // A close-up from the upper middle, where faces usually are.
+        const W = blended.width, H = blended.height, side = Math.round(Math.min(W, H) * 0.4);
+        const cx = Math.round((W - side) / 2), cy = Math.round(Math.max(0, Math.min(H - side, H * 0.38 - side / 2)));
+        const crop = (src) => {
+          const k = document.createElement('canvas'); k.width = k.height = 600;
+          const kc = k.getContext('2d'); kc.imageSmoothingQuality = 'high';
+          kc.drawImage(src, cx * src.width / W, cy * src.height / H, side * src.width / W, side * src.height / H, 0, 0, 600, 600);
+          return k.toDataURL('image/jpeg', 0.9);
+        };
+        const origImg = await loadImg(photo.url);
+        const ok = await PopcodePrintPreview.open({
+          mode: 'order',
+          title: 'Your enhanced photo',
+          intro: 'We’ve made your photo sharper for printing. Faces are kept as they are; only the detail is filled in. Your Popcode and its video don’t change.',
+          goLabel: 'Use enhanced photo', backLabel: 'Keep my original',
+          sections: [{ heading: 'Close-up', note: 'The same part of the photo, enlarged.',
+            html: PopcodePrintPreview.list({ cols: 2, maxWidth: 900, items: [
+              { src: crop(origImg), label: 'Your photo' }, { src: crop(blended), label: 'Enhanced' }] }) }],
+        });
+        if (!ok) return false;
+
+        const blob = await new Promise(res => blended.toBlob(res, 'image/jpeg', 0.93));
+        const path = photo.slug + '/photo_' + (photo.target_index ?? 0) + '_enhanced_' + Date.now().toString(36) + '.jpg';
+        const upl = await db.storage.from('experiences').upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+        if (upl.error) { alert('Could not save the enhanced photo: ' + upl.error.message); return false; }
+        enhancedPhotos.set(photo.url, db.storage.from('experiences').getPublicUrl(path).data.publicUrl);
+        updateSizeQuality();
+        return true;
+      }
+
+      // Print preview of that image (and an ornament's back). Resolves the
+      // image to print (the same one, or a sharper one if the customer chose to
+      // enhance the photo), or false to keep editing. mode: 'cart' | 'order'.
+      // A preview that fails never blocks an order.
       async function previewShopPrint(dataUrl, mode) {
+        for (;;) {
+          const r = await previewShopPrintOnce(dataUrl, mode);
+          if (r !== 'extra') return r ? dataUrl : false;
+          if (await enhanceSelectedPhoto()) {
+            try { dataUrl = await makePrintImage(); } catch (e) { console.warn('re-render failed', e); }
+          }
+        }
+      }
+
+      async function previewShopPrintOnce(dataUrl, mode) {
         try {
           const photo = state.selectedPhoto;
           const meta = CATEGORY_META[state.productType] || {};
@@ -2628,15 +2735,20 @@
           // went out as a 12×16″ frame at ~80 DPI, 2026-10-19): ordering it
           // becomes a deliberate choice.
           const bad = q && q.dpi < 100;
+          // Offered once per photo, and not on the calibration sheet.
+          const canEnhance = !!q && !!photo.slug && !enhancedPhotos.has(photo.url) && !qs.get('calibrate')
+            && String(photo.url || '').indexOf('/storage/v1/object/public/experiences/') > 0;
           const notice = !q ? '' : PopcodePrintPreview.warn(bad ? 'bad' : 'soft',
             bad ? `This photo is too small for a sharp ${q.size} print.` : `This photo is a little small for ${q.size}.`,
             ` It has about ${q.dpi} pixels per inch at this size (300 is ideal), so it will look ${bad ? 'blurry' : 'soft'} up close.`
             + (q.best ? ` It prints sharply up to ${q.best}.` : ' A smaller size will look sharper.')
-            + ' For the best result, use a larger copy of the photo, such as the original file or a high-resolution scan.');
+            + (canEnhance ? ' We can enhance it for you for free, or you can use a larger copy of the photo, such as the original file or a high-resolution scan.'
+              : ' For the best result, use a larger copy of the photo, such as the original file or a high-resolution scan.'));
           return await PopcodePrintPreview.open({
             mode,
             intro: 'This is exactly the image we’ll send to the printer, with your crop and the Popcode symbol where it will print.',
             backLabel: bad ? 'Choose a smaller size' : undefined,
+            extraLabel: canEnhance ? 'Enhance this photo (free)' : undefined,
             goLabel: bad ? (mode === 'cart' ? 'Add to cart anyway' : 'Order anyway') : undefined,
             sections: [{ heading: 'Print file',
               note: 'The very edges can be trimmed or wrap around a frame or mug, so keep words and faces away from them.',
@@ -2723,8 +2835,8 @@
           const fcn = fcl ? fcl.find(c => c.id === state.frameColor) : null;
           // The print file is built NOW, while this page still has the photo and
           // the chosen crop — the cart can't re-render it later. Shown first.
-          const printImage = await makePrintImage();
-          if (!(await previewShopPrint(printImage, 'cart'))) {
+          const printImage = await previewShopPrint(await makePrintImage(), 'cart');
+          if (!printImage) {
             btn.disabled = false; btn.textContent = editingCartItem ? 'Update cart' : 'Add to cart';
             return false;
           }
@@ -2896,7 +3008,8 @@
         // The print image, then the photo next to what it plays, before it goes to print.
         let printImage;
         try { printImage = await makePrintImage(); } catch (e) { printImage = null; }
-        const ok = (!printImage || await previewShopPrint(printImage, 'order'))
+        if (printImage) printImage = await previewShopPrint(printImage, 'order');
+        const ok = (printImage !== false)
           && (!photo.collectionId || await PopcodeMediaCheck.confirm({ db, lines: [{
             collectionId: photo.collectionId, productType: state.productType,
             assetUrls: [{ target_index: photo.target_index }] }] }));
