@@ -6,9 +6,18 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-18)
+## Current state (updated 2026-10-19)
 
 **Live and recent**
+- **Centurion (nonprofit) demo 2026-10-19 + video scrubber fix (PR #269, merged, live).** Scans and
+  videos worked; Android viewers had no scrubber. The viewer's `<video>` never had controls (iPhone
+  only showed one because iOS hands landscape videos to the system player). Now `#vid-bar` in
+  `view.html`: play/pause, times, tap/drag scrubber, fades after 3 s. Not tried on a real Android yet.
+  **Follow-up:** Laila S. Wilson-McCoy (Director of Development, laila.wilson@centurion.org) sent the
+  gala video (Google Drive) and photo gallery (pic-time, `centurion-gala-2026`). **Sample to build:** the
+  presenters introducing the honorees + the honorees speaking, and Jozelyn Davis's call for support.
+  Reply drafted in Gmail (curt@popcodeapp.com, new thread: her email isn't in that mailbox). It thanks her,
+  confirms the sample and mentions the Android fix. **Not sent yet.**
 - **Video mix-up bug fixed + customer handled (2026-10-18, PRs #253–#255; see that entry).**
   Uploads now get unique filenames; books/calendars/board books no longer count toward the
   Popcode limit (migration **run in prod**); every checkout shows a "Check what each photo
