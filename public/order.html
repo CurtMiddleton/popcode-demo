@@ -900,6 +900,25 @@
         el.textContent = `This photo will look soft at ${cur.size.replace(/"$/, '″')} (about ${dpi} DPI; 300 is ideal).`
           + (best ? ` It prints well up to ${best.size.replace(/"$/, '″')}.` : ' Try a smaller size, or re-add the original photo to its Popcode.');
       }
+      // The print's sharpness for the preview: null when it prints well (or
+      // can't be measured), else { dpi, size, best } with the largest size the
+      // photo prints sharply at. Same rule as updateSizeQuality.
+      async function printSharpness() {
+        const photo = state.selectedPhoto;
+        const d = photo && photo.url ? await photoDims(photo.url) : null;
+        if (!d) return null;
+        const scale = (state.photoAdjust && state.photoAdjust.scale) || 1;
+        const dpi = effectiveDpi(d.w, d.h, scale);
+        if (dpi == null || dpi >= SOFT_DPI) return null;
+        const cur = variantOf(state.productType, state.variantId);
+        let best = null;
+        for (const v of activeSizeList()) {
+          const dv = effectiveDpi(d.w, d.h, scale, v);
+          if (dv != null && dv >= SOFT_DPI && (!best || printLongInches(v) > printLongInches(best))) best = v;
+        }
+        const nice = (s) => String(s).replace(/"$/, '″');
+        return { dpi, size: nice(cur.size), best: best ? nice(best.size) : null };
+      }
       // Clamp the pan so the photo always covers the crop box (no background bleed).
       
       // Canvas bake: draw `img` into rect (x,y,w,h) honoring crop/zoom/rotate. At the
@@ -2604,12 +2623,24 @@
           const meta = CATEGORY_META[state.productType] || {};
           const items = [{ src: dataUrl, label: HAS_BACK_PANEL.has(state.productType) ? 'Front' : (meta.noun || meta.name || 'Print') }];
           if (HAS_BACK_PANEL.has(state.productType) && photo.slug) items.push({ src: await drawOrnamentBack(photo.slug, BACK_PANEL_PX), label: 'Back' });
+          const q = await printSharpness();
+          // Below 100 DPI the print visibly blurs (a customer's 960×1280 photo
+          // went out as a 12×16″ frame at ~80 DPI, 2026-10-19): ordering it
+          // becomes a deliberate choice.
+          const bad = q && q.dpi < 100;
+          const notice = !q ? '' : PopcodePrintPreview.warn(bad ? 'bad' : 'soft',
+            bad ? `This photo is too small for a sharp ${q.size} print.` : `This photo is a little small for ${q.size}.`,
+            ` It has about ${q.dpi} pixels per inch at this size (300 is ideal), so it will look ${bad ? 'blurry' : 'soft'} up close.`
+            + (q.best ? ` It prints sharply up to ${q.best}.` : ' A smaller size will look sharper.')
+            + ' For the best result, use a larger copy of the photo, such as the original file or a high-resolution scan.');
           return await PopcodePrintPreview.open({
             mode,
             intro: 'This is exactly the image we’ll send to the printer, with your crop and the Popcode symbol where it will print.',
+            backLabel: bad ? 'Choose a smaller size' : undefined,
+            goLabel: bad ? (mode === 'cart' ? 'Add to cart anyway' : 'Order anyway') : undefined,
             sections: [{ heading: 'Print file',
               note: 'The very edges can be trimmed or wrap around a frame or mug, so keep words and faces away from them.',
-              html: PopcodePrintPreview.list({ cols: Math.min(2, items.length), items }) }],
+              html: notice + PopcodePrintPreview.list({ cols: Math.min(2, items.length), items, maxWidth: items.length > 1 ? 900 : 460 }) }],
           });
         } catch (e) {
           console.warn('preview failed', e);
