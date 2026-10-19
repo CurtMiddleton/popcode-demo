@@ -14,6 +14,9 @@
      A book as it opens: inside front cover | page 1, 2 | 3, …, last | inside back cover.
    PopcodePrintPreview.list({ items: [{ src, label, safeMm, wMm, hMm }], cols })
      Single pages or products in a grid, each optionally with a keep-inside line.
+   PopcodePrintPreview.warn(level, title, text)
+     A notice to put first in a section: 'soft' (amber) or 'bad' (red).
+   open() also takes goLabel / backLabel to rename the two buttons.
 
    Built after the first 12×12" book order (2026-10-18) printed an editor
    placeholder on its cover, a short upside-down spine and a cover photo cropped
@@ -44,6 +47,10 @@
       '.pp-body>*{max-width:1100px;margin-left:auto;margin-right:auto}' +
       '.pp-body h3{font-size:15px;margin:6px auto 4px}' +
       '.pp-note{font-size:13px;color:#6b665e;margin:0 auto 12px;line-height:1.5}' +
+      '.pp-warn{border-radius:12px;padding:12px 14px;margin:0 auto 18px;font-size:14px;line-height:1.5}' +
+      '.pp-warn b{display:block;margin-bottom:2px}' +
+      '.pp-warn-soft{background:#fff6e0;color:#6b4b00;border:1px solid #f1d9a0}' +
+      '.pp-warn-bad{background:#fdeceb;color:#8a1c14;border:1px solid #f3c2bd}' +
       '.pp-wrap{display:flex;align-items:stretch;margin-bottom:28px;box-shadow:0 4px 18px rgba(0,0,0,.14)}' +
       '.pp-face{position:relative}' +
       '.pp-face img{display:block;width:100%;height:auto}' +
@@ -107,7 +114,8 @@
 
   function list(o) {
     var cols = o.cols || 2;
-    return '<div class="pp-list" style="grid-template-columns:repeat(' + cols + ',minmax(0,1fr))">' +
+    // maxWidth (px) keeps a single portrait print from filling the screen.
+    return '<div class="pp-list" style="grid-template-columns:repeat(' + cols + ',minmax(0,1fr))' + (o.maxWidth ? ';max-width:' + o.maxWidth + 'px' : '') + '">' +
       o.items.map(function (it) {
         return '<div class="pp-item"><figure><div class="pp-face"><img src="' + it.src + '" alt="' + esc(it.label || '') + '" loading="lazy"/>' +
           safeBox(it.safeMm, it.wMm, it.hMm) + '</div>' + (it.label ? '<figcaption>' + esc(it.label) + '</figcaption>' : '') + '</figure></div>';
@@ -118,6 +126,7 @@
     injectStyle();
     var mode = o.mode || 'view';
     var go = o.goLabel || (mode === 'cart' ? 'Looks good, add to cart' : mode === 'order' ? 'Looks good, continue' : '');
+    var backLabel = o.backLabel || 'Keep editing';
     var el = document.createElement('div');
     el.className = 'pp';
     el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true');
@@ -128,7 +137,7 @@
         return (s.heading ? '<h3>' + esc(s.heading) + '</h3>' : '') + (s.note ? '<p class="pp-note">' + esc(s.note) + '</p>' : '') + s.html;
       }).join('') + '</div>' +
       '<div class="pp-foot">' + (go
-        ? '<button class="pp-btn pp-back">Keep editing</button><button class="pp-btn pp-go">' + esc(go) + '</button>'
+        ? '<button class="pp-btn pp-back">' + esc(backLabel) + '</button><button class="pp-btn pp-go">' + esc(go) + '</button>'
         : '<button class="pp-btn pp-go">Close</button>') + '</div>';
     document.body.appendChild(el);
     var prev = document.body.style.overflow;
@@ -142,5 +151,10 @@
     });
   }
 
-  window.PopcodePrintPreview = { open: open, wrap: wrap, spreads: spreads, list: list };
+  // A notice above the preview. level: 'soft' (amber) | 'bad' (red).
+  function warn(level, title, text) {
+    return '<div class="pp-warn pp-warn-' + (level === 'bad' ? 'bad' : 'soft') + '" role="alert"><b>' + esc(title) + '</b>' + esc(text) + '</div>';
+  }
+
+  window.PopcodePrintPreview = { open: open, wrap: wrap, spreads: spreads, list: list, warn: warn };
 })();
