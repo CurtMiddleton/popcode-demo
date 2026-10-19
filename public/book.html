@@ -20,6 +20,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <script src="/dialog.js"></script>
+    <script src="/montage-music.js"></script>
+    <script src="/montage.js"></script>
+    <script src="/image-source.js"></script>
     <script src="/undo.js"></script>
     <script src="/activity.js"></script>
     <script src="/slug.js"></script>
@@ -4661,14 +4664,36 @@
         return s.mediaType === 'video' ? !!(s.video || s.existingVideoUrl) : !!(s.audio || s.existingAudioUrl);
       }
 
+      /* The montage builder is shared (/montage.js) with the New Popcode and Edit
+         screens, so "Video / Montage / Audio" means the same thing everywhere.
+         Montage is an action rather than a stored media type: what it renders
+         goes into this Popcode's video slot, so the save path is unchanged. */
+      PopcodeMontage.init({
+        db: db,
+        getUser: function () { return currentUser; },
+        onApply: function (target, file) {
+          const st = target || popEditState;
+          if (!st) return;
+          st.video = file;
+          st.mediaType = 'video';
+          st.existingVideoUrl = null;   // the montage replaces whatever was linked
+          st.isMontage = true;
+          if (popEditState) renderPopcodeSheet();   // repaint the preview + Save button
+        },
+        onRendered: function () {
+          try { logActivity('create_montage', { user_id: currentUser && currentUser.id }); } catch (e) {}
+        },
+      });
+
       function renderPopcodeSheet() {
         const s = popEditState;
         const hasMedia = popEditHasMedia(s);
         openSheet(`
           <h2>${s.photo.popcode ? 'Edit' : 'Add a'} Popcode</h2>
-          <p class="sheet-sub">Link a video or audio clip. When someone scans this printed page, it plays automatically.</p>
+          <p class="sheet-sub">Link a video, a montage you build from photos, or an audio clip. When someone scans this printed page, it plays automatically.</p>
           <div class="pop-media-toggle">
             <button data-mode="video" class="${s.mediaType === 'video' ? 'active' : ''}">Video</button>
+            <button data-mode="montage">Montage</button>
             <button data-mode="audio" class="${s.mediaType === 'audio' ? 'active' : ''}">Audio</button>
           </div>
           <div id="pop-body"></div>
@@ -4678,7 +4703,12 @@
           </div>
         `);
         document.querySelectorAll('#sheet .pop-media-toggle button').forEach(b => {
-          b.addEventListener('click', () => { s.mediaType = b.dataset.mode; renderPopcodeSheet(); });
+          b.addEventListener('click', () => {
+            // Montage opens the builder; what it produces lands in the video slot,
+            // so mediaType stays 'video' | 'audio' and nothing downstream changes.
+            if (b.dataset.mode === 'montage') { openMontage(s); return; }
+            s.mediaType = b.dataset.mode; renderPopcodeSheet();
+          });
         });
         document.getElementById('pop-save').addEventListener('click', savePopcode);
         const unlink = document.getElementById('pop-unlink');
