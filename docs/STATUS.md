@@ -6,9 +6,15 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-18)
+## Current state (updated 2026-10-19)
 
 **Live and recent**
+- **Montage is now on every Popcode surface (2026-10-19, `9743928`).** The builder
+  moved out of create.html/edit.html into **`public/montage.js`**, shared by all five
+  pages; book, calendar and board book gained the third choice. Montage is an action,
+  not a stored media type, so there was no migration. **Not yet exercised end to end** —
+  a real render goes through Shotstack, so the first montage built from the book maker
+  is the live check. See the 2026-10-19 entry for the host interface.
 - **Video mix-up bug fixed + customer handled (2026-10-18, PRs #253–#255; see that entry).**
   Uploads now get unique filenames; books/calendars/board books no longer count toward the
   Popcode limit (migration **run in prod**); every checkout shows a "Check what each photo
@@ -3867,3 +3873,133 @@ The user's Analytics → Map screenshot showed 9 countries, 15 accounts (Kazakhs
 - Optional: tell Prodigi the blank Rwanda & SA spines were our missing artwork, not their print.
 - Maybe: flip the spine text to top-to-bottom (US convention) before her book prints.
 - Maybe later: auto-flag a photo that doesn't resemble its own video's first frame.
+
+### 2026-10-19 — Montage everywhere: the builder became a shared module
+
+**Merged straight to `main` as `9743928` (no PR) and live in prod.** Branch
+`claude/book-calendar-creation-bugs-vr2spe`, restarted from `origin/main` (the
+checkout was **576 commits behind** — see the fetch rule in CLAUDE.md, it keeps
+earning its place).
+
+**The report:** "you can't create a montage for a calendar — verify that any
+time you add a Popcode to any project you get video, montage or audio, always
+three choices." Verified, and it was true:
+
+| Entry point | Video | Montage | Audio |
+|---|---|---|---|
+| create.html (New Popcode) | ✓ | ✓ | ✓ |
+| edit.html | ✓ | ✓ | ✓ |
+| book / calendar / boardbook | ✓ | **✗** | ✓ |
+
+**Why it was missing is the whole point.** The builder lived *inline* in
+create.html and edit.html carried a near-identical copy, so it could only ever
+exist on a page someone had remembered to paste ~1,700 lines into. Three pages
+never got it. Copying it a third, fourth and fifth time was not an option.
+
+**So it is now one module: `public/montage.js`, used by all five pages.**
+
+**It is an extraction, not a rewrite, and that was measurable before starting.**
+The two copies shared 71 top-level functions and **67 had byte-identical
+bodies**; the 4 that differed (`mtgApplyToPage`, `mtgOpenDraft`, `mtgPoll`,
+`openMontage`) were all host-boundary. Better still, the create-only globals
+(`switchMediaType`, `checkReady`, `pairs`, `formatFileSize`) were used
+**only inside `mtgApplyToPage`** — so the seam was a single function. Only `db`
+and `currentUser` crossed the boundary anywhere else.
+
+The move was **scripted**, then the emitted module was diffed back against the
+original 1,371 lines: the only changes are the 5 intended substitutions. Do it
+that way again — hand-editing 1,400 lines of working code is how this goes wrong.
+
+**The host interface (`montage.js` header has the full doc):**
+```js
+PopcodeMontage.init({
+  db,                                 // Supabase client
+  getUser: () => currentUser,         // for draft storage
+  onApply: (target, file) => {...},   // THE seam: where the finished MP4 goes
+  onRendered: () => logActivity(...), // optional
+});
+openMontage(target);                  // target is opaque, handed back to onApply
+PopcodeMontage.openDraft(d);          // load a draft the host fetched itself
+```
+`target` is opaque on purpose — the three makers pass their popcode-sheet state
+object, create/edit pass a page index or an `{kind:'existing', itemId}` ref.
+
+**Two unifications, both taken FROM edit.html so nothing it had was lost:** its
+null-safe `#mtg-swap` hide (that button is now in the shared markup, so editing
+keeps "Play a video or audio instead"), and its split of draft-opening into
+`mtgOpenDraftData`, published as `PopcodeMontage.openDraft` so edit.html can
+still reopen the draft already linked to the Popcode being edited.
+
+**Montage is an ACTION, not a stored media type.** What it renders fills the
+video slot — which is how create/edit already worked. `mediaType` stays
+`'video' | 'audio'`, nothing downstream changed, **no migration**. In the three
+makers the third button doesn't switch `mediaType`, it calls `openMontage(s)`.
+
+**What stays per-host, and why:** the Safe-photo-decoding cluster
+(`decodeDrawable`, `drawOpaque`, `shrinkPhotoForLimit`, `optimizePhotoDim`, …)
+sits *in the middle* of the old montage region but the ordinary photo/video
+pickers use it too (create.html:1538, :1922; edit.html:2852, :3383). So each
+host keeps its copy and the module carries its own — consistent with the
+deliberate "do not centralise this block" decision from 2026-09-02.
+
+**Analytics:** create.html still logs `create_montage`, edit.html still doesn't
+(editing an existing Popcode isn't a new project). The three makers **do** log
+it — the montage itself is new whether or not the book is. Change the
+`onRendered` hook if that reads wrong.
+
+**Net −2,972 lines** (create.html 4231→2700, edit.html 5216→3683).
+
+**Gotchas worth not relearning:**
+- **A script-level `let` is not a window property.** `window.popEditState = {...}`
+  from `page.evaluate` silently does nothing; `eval('popEditState = ...')` reaches
+  the real binding. Same shape as the `rows` note from 2026-09-21.
+- **`montageState` is exposed via `Object.defineProperty`**, not a plain copy,
+  because the injected markup's `oninput` writes to it and the module reassigns it.
+- The injected markup uses inline `onclick=`, which resolves against **global**
+  scope — hence the explicit `window.mtg*` exports at the bottom of the module.
+  If you add a handler to the markup, export it too or it silently does nothing.
+- **CSS and overlay are injected on first open**, so a page that never opens the
+  builder pays nothing. `.mtg-swap` has no CSS rule in either old copy — that
+  button has always been unstyled; not a regression.
+- **Don't hand-roll a JS tokenizer.** My "strip strings and comments before
+  counting references" regex ate the file on an apostrophe inside a block comment
+  and reported *zero* external references when there were three. Raw word-boundary
+  matching over ~100 candidate names, reviewed by eye, was both faster and right.
+- **`curl` writing `http=000` is a dropped transfer, not a 404.** Two of six
+  byte-comparisons against prod came back 000 and were fine on retry.
+
+**Verified:** all three makers render exactly `["Video","Montage","Audio"]`;
+tapping Montage opens the builder with the correct target; a finished montage
+lights the preview and enables Save; all five pages load the module with **0
+page errors**; edit.html shows 59 buttons vs create's 58 (the swap button
+survived); kept helpers defined exactly once per page. All six files
+byte-identical in prod after deploy.
+**Not verified:** a real end-to-end render — that goes through Shotstack, so the
+first montage built from the book maker is the live check.
+
+#### Also live but never written down: the 2026-09-24 session
+A parallel session that day shipped these to prod (`2663cbd`, `7d557da`) and no
+entry was ever made. A fresh Claude would not find them otherwise:
+- **Rearrange Pages was a rendering bug, not data loss.** Badges and cover photos
+  are sized in JS (`sizeSlotBadges`, `layoutPhotoInSlot`) and `renderRearrange()`
+  called neither — badges stretched to the full slot (185px vs 21px) and the cover
+  photo rendered at 1400px in a 261px cell. Both now run against the rearrange
+  grid. Also added the back cover to that view and a per-page delete button.
+- **`sizeSlotBadges(root)` gained a parameter** — and the resize listener passed
+  `requestAnimationFrame(sizeSlotBadges)`, which hands it a *timestamp* as `root`.
+  Now `() => sizeSlotBadges()`. Watch for that whenever a callback gains an arg.
+- **Cormorant Garamond back to weight 400** in book/calendar/boardbook (it had
+  been bolted to 600 with the sans faces, which flattens a display serif).
+- **Calendar back cover** now prints the book's branding panel, within 0.03% of
+  the book's placement (the two pages are the same physical size).
+- **Duplicate on every design in My Designs** (`?duplicate=1` on each editor,
+  which detaches it from the source row), board books regained **Edit**.
+- **`public/storage-copy.js`** — duplicates re-home their assets server-side via
+  Supabase Storage `copy()` at save time, so deleting the original no longer guts
+  the copy. Self-gating: an ordinary edit makes **0** copies.
+- **The print-render race** ("Unable to find element in cloned iframe", a real
+  production Sentry error): `#proof` is one scratch container shared by every
+  print render and each clears it on entry, so overlapping renders detached each
+  other's pages. `withProofStage()` now serialises them in book.html and
+  calendar.html, and the calendar admin proof path opens the blocking progress
+  panel it was already writing progress into.
