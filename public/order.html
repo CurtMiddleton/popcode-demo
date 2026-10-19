@@ -113,6 +113,9 @@
       .size-chips { display:flex; flex-wrap:wrap; gap:10px; margin:10px 0 6px; }
       .size-quality { font-size:13px; line-height:1.45; color:#8a5a00; background:#fff6e0; border-radius:10px; padding:9px 12px; margin:4px 0 10px; }
       .size-quality:empty { display:none; }
+      .size-quality.bad { color:#8a1c14; background:#fdeceb; }
+      .size-quality.good { color:#1f5130; background:#e8f5ec; }
+      .size-quality .sq-enhance { display:block; margin-top:8px; border:none; border-radius:20px; padding:8px 14px; font:600 13px Inter,system-ui,sans-serif; background:#1a1a1a; color:#fff; cursor:pointer; }
       /* .btn .btn-sm .btn-quiet — the selected state is local. The 1.5px
          border is gone: ui.css gives every variant 1px so selecting a chip
          cannot change its height or shuffle the row. */
@@ -870,6 +873,18 @@
       const SOFT_DPI = 150;
       // Pixel size of a photo URL (cached) — project photos don't carry it.
       const photoDimsCache = new Map();
+      /* AI-enhanced copies of photos too small to print sharply, by original url.
+         Only the print uses them: the scan target, the thumbnail and the
+         Popcode itself keep the customer's own photo. */
+      const enhancedPhotos = new Map();
+      function printPhotoUrl(photo) { return enhancedPhotos.get(photo.url) || photo.url; }
+      // Offered once per photo, only for photos stored in a Popcode, and not on
+      // the calibration sheet.
+      function canEnhancePhoto(photo) {
+        return !!photo && !!photo.slug && !enhancedPhotos.has(photo.url) && !qs.get('calibrate')
+          && String(photo.url || '').indexOf('/storage/v1/object/public/experiences/') > 0;
+      }
+
       function photoDims(url) {
         if (!photoDimsCache.has(url)) photoDimsCache.set(url, new Promise(res => {
           const im = new Image(); im.crossOrigin = 'anonymous';
@@ -886,19 +901,36 @@
         const want = state.variantId;
         const d = photo && photo.url ? await photoDims(printPhotoUrl(photo)) : null;
         if (state.variantId !== want) return;          // a newer update is on its way
-        el.textContent = '';
+        el.textContent = ''; el.className = 'size-quality';
         if (!d) return;
         const scale = (state.photoAdjust && state.photoAdjust.scale) || 1;
         const dpi = effectiveDpi(d.w, d.h, scale);
-        if (dpi == null || dpi >= SOFT_DPI) return;
+        const enhanced = enhancedPhotos.has(photo.url);
+        if (dpi == null || dpi >= SOFT_DPI) {
+          // Say so once the enhanced copy is what makes it sharp.
+          if (enhanced && dpi != null) { el.classList.add('good'); el.textContent = '✓ Enhanced for printing. This photo will print sharply at this size.'; }
+          return;
+        }
         const cur = variantOf(state.productType, state.variantId);
         let best = null;
         for (const v of activeSizeList()) {
           const dv = effectiveDpi(d.w, d.h, scale, v);
           if (dv != null && dv >= SOFT_DPI && (!best || printLongInches(v) > printLongInches(best))) best = v;
         }
-        el.textContent = `This photo will look soft at ${cur.size.replace(/"$/, '″')} (about ${dpi} DPI; 300 is ideal).`
-          + (best ? ` It prints well up to ${best.size.replace(/"$/, '″')}.` : ' Try a smaller size, or re-add the original photo to its Popcode.');
+        const bad = dpi < 100;
+        if (bad) el.classList.add('bad');
+        const offer = canEnhancePhoto(photo);
+        el.textContent = `This photo is ${bad ? 'too small for a sharp' : 'a little small for a'} ${cur.size.replace(/"$/, '″')} print (about ${dpi} DPI; 300 is ideal).`
+          + (best ? ` It prints sharply up to ${best.size.replace(/"$/, '″')}.` : '')
+          + (offer ? ' We can enhance it for you, for free.' : best ? '' : ' Try a smaller size, or re-add the original photo to its Popcode.');
+        // Offered here, as soon as the photo and size don't match, rather than
+        // only in the preview after the customer has set everything else up.
+        if (offer) {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'sq-enhance'; b.textContent = 'Enhance this photo (free)';
+          b.addEventListener('click', async () => { b.disabled = true; await enhanceSelectedPhoto(); b.disabled = false; });
+          el.appendChild(b);
+        }
       }
       // The print's sharpness for the preview: null when it prints well (or
       // can't be measured), else { dpi, size, best } with the largest size the
@@ -2614,12 +2646,6 @@
           : await compositeBadgedImage(printPhotoUrl(photo), Object.assign({ scale: state.scale, aspect: currentAspect(), adjust: state.photoAdjust }, giftArtOpts(photo)));
       }
 
-      /* AI-enhanced copies of photos too small to print sharply, by original url.
-         Only the print uses them: the scan target, the thumbnail and the
-         Popcode itself keep the customer's own photo. */
-      const enhancedPhotos = new Map();
-      function printPhotoUrl(photo) { return enhancedPhotos.get(photo.url) || photo.url; }
-
       function enhanceBusy(on) {
         let el = document.getElementById('enhance-busy');
         if (!on) { if (el) el.remove(); return; }
@@ -2735,9 +2761,7 @@
           // went out as a 12×16″ frame at ~80 DPI, 2026-10-19): ordering it
           // becomes a deliberate choice.
           const bad = q && q.dpi < 100;
-          // Offered once per photo, and not on the calibration sheet.
-          const canEnhance = !!q && !!photo.slug && !enhancedPhotos.has(photo.url) && !qs.get('calibrate')
-            && String(photo.url || '').indexOf('/storage/v1/object/public/experiences/') > 0;
+          const canEnhance = !!q && canEnhancePhoto(photo);
           const notice = !q ? '' : PopcodePrintPreview.warn(bad ? 'bad' : 'soft',
             bad ? `This photo is too small for a sharp ${q.size} print.` : `This photo is a little small for ${q.size}.`,
             ` It has about ${q.dpi} pixels per inch at this size (300 is ideal), so it will look ${bad ? 'blurry' : 'soft'} up close.`
