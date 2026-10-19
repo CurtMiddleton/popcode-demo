@@ -426,6 +426,28 @@
 
       #fullscreen-video { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 9000; background: black; }
       #fullscreen-video video { width: 100%; height: 100%; object-fit: cover; }
+      /* Video controls: shown on start, fade after 3 s of play, a tap on the
+         video brings them back. Always shown while paused. */
+      #vid-bar {
+        position: absolute; left: 0; right: 0; bottom: 0; z-index: 9001;
+        display: flex; align-items: center; gap: 12px;
+        padding: 28px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+        background: linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0));
+        font-family: 'DM Sans', sans-serif; color: white;
+        transition: opacity 0.3s ease;
+      }
+      #vid-bar.hidden { opacity: 0; pointer-events: none; }
+      #vid-bar .vid-scrub-hit { flex: 1; min-width: 0; }
+      .vid-time { font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; color: rgba(255,255,255,0.85); min-width: 34px; text-align: center; }
+      #vid-play {
+        flex: none; width: 40px; height: 40px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.35); border: none; padding: 0; cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #vid-play svg { width: 22px; height: 22px; }
+      #vid-play .i-play, #vid-play.paused .i-pause { display: none; }
+      #vid-play.paused .i-play { display: block; margin-left: 3px; }
 
       /* Audio player overlay */
       #audio-player {
@@ -843,6 +865,16 @@
 <video id="fullvideo" playsinline webkit-playsinline muted></video>
       <button id="tap-to-play" type="button"><span class="ttp-icon"><svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true"><path d="M8 5.2v13.6a1 1 0 0 0 1.5.86l10.9-6.8a1 1 0 0 0 0-1.72L9.5 4.34A1 1 0 0 0 8 5.2z" fill="#fff"/></svg></span><span class="ttp-label">Tap to play</span></button>
       <button id="close-btn">✕</button>
+      <!-- Our own controls: Android (and portrait videos on iPhone) never get
+           the system player, so without these there was no way to seek. -->
+      <div id="vid-bar">
+        <button id="vid-play" type="button" aria-label="Pause"><svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="#fff"/><rect x="14" y="5" width="4" height="14" rx="1" fill="#fff"/></svg><svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6a1 1 0 0 0 1.5.86l10.9-6.8a1 1 0 0 0 0-1.72L9.5 4.34A1 1 0 0 0 8 5.2z" fill="#fff"/></svg></button>
+        <span class="vid-time" id="vid-time">0:00</span>
+        <div class="ap-scrub-hit vid-scrub-hit" id="vid-scrub-hit">
+          <input class="ap-scrub" id="vid-scrub" type="range" min="0" max="100" value="0" step="any" aria-label="Seek"/>
+        </div>
+        <span class="vid-time" id="vid-remaining">-0:00</span>
+      </div>
     </div>
 
     <div id="end-screen" role="dialog" aria-label="What's next">
@@ -1682,6 +1714,7 @@
           } catch(e) {}
           fullVid.src = url;
           fullVid.load();
+          vidResetUi();
           scanner.style.display = 'none';
           document.getElementById('home-btn').style.display = 'none';
           fullScreen.style.display = 'block';
@@ -2095,6 +2128,118 @@
 
       apClose.addEventListener('click', returnToScanner);
 
+      // ── Video controls ──────────────────────────────────────────────────
+      // Same tap/drag scrubbing as the audio player. The bar fades out while
+      // the video plays; tapping the video toggles it.
+      const vidBar = document.getElementById('vid-bar');
+      const vidPlay = document.getElementById('vid-play');
+      const vidScrub = document.getElementById('vid-scrub');
+      const vidScrubHit = document.getElementById('vid-scrub-hit');
+      const vidTime = document.getElementById('vid-time');
+      const vidRemaining = document.getElementById('vid-remaining');
+      let vidDragging = false, vidLastSeek = 0, vidSeekTimer = null, vidHideTimer = null;
+      function vidSetFill(pct) {
+        const p = Math.max(0, Math.min(100, pct));
+        vidScrub.style.backgroundImage = `linear-gradient(to right, #fff 0%, #fff ${p}%, rgba(255,255,255,0.25) ${p}%, rgba(255,255,255,0.25) 100%)`;
+      }
+      function vidShowTimes(t, d) {
+        vidTime.textContent = fmtTime(t);
+        vidRemaining.textContent = '-' + fmtTime(Math.max(0, d - t));
+      }
+      function vidShowBar() {
+        vidBar.classList.remove('hidden');
+        clearTimeout(vidHideTimer);
+        if (!fullVid.paused) vidHideTimer = setTimeout(() => { if (!vidDragging) vidBar.classList.add('hidden'); }, 3000);
+      }
+      function vidResetUi() {
+        vidDragging = false;
+        clearTimeout(vidSeekTimer);
+        vidScrubHit.classList.remove('dragging');
+        vidScrub.value = 0;
+        vidSetFill(0);
+        vidShowTimes(0, 0);
+        vidPlay.classList.remove('paused');
+        vidPlay.setAttribute('aria-label', 'Pause');
+        vidShowBar();
+      }
+      fullVid.addEventListener('timeupdate', () => {
+        const d = fullVid.duration;
+        if (vidDragging || !isFinite(d) || d <= 0) return;
+        vidScrub.max = d;
+        vidScrub.value = fullVid.currentTime;
+        vidSetFill((fullVid.currentTime / d) * 100);
+        vidShowTimes(fullVid.currentTime, d);
+      });
+      fullVid.addEventListener('durationchange', () => {
+        if (isFinite(fullVid.duration)) vidShowTimes(fullVid.currentTime, fullVid.duration);
+      });
+      fullVid.addEventListener('play', () => {
+        vidPlay.classList.remove('paused');
+        vidPlay.setAttribute('aria-label', 'Pause');
+        vidShowBar();
+      });
+      fullVid.addEventListener('pause', () => {
+        if (fullVid.ended) return;
+        vidPlay.classList.add('paused');
+        vidPlay.setAttribute('aria-label', 'Play');
+        vidShowBar();
+      });
+      vidPlay.addEventListener('click', () => {
+        if (fullVid.paused) {
+          hideTapToPlay();
+          fullVid.muted = false;
+          fullVid.play().catch(() => showTapToPlay());
+        } else {
+          fullVid.pause();
+        }
+      });
+      fullVid.addEventListener('click', () => {
+        if (vidBar.classList.contains('hidden')) vidShowBar();
+        else { clearTimeout(vidHideTimer); vidBar.classList.add('hidden'); }
+      });
+      vidScrub.addEventListener('input', () => {
+        if (isFinite(fullVid.duration) && fullVid.duration > 0) {
+          const v = parseFloat(vidScrub.value) || 0;
+          fullVid.currentTime = v;
+          vidSetFill((v / fullVid.duration) * 100);
+          vidShowBar();
+        }
+      });
+      function vidScrubTo(clientX, final) {
+        const dur = fullVid.duration;
+        if (!isFinite(dur) || dur <= 0) return;
+        const r = vidScrub.getBoundingClientRect();
+        const frac = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+        // Not quite the end, or 'ended' fires and the end screen takes over.
+        const t = Math.min(frac * dur, Math.max(0, dur - 0.25));
+        vidScrub.value = t;
+        vidSetFill(frac * 100);
+        vidShowTimes(t, dur);
+        const seek = () => { vidLastSeek = performance.now(); vidSeekTimer = null; try { fullVid.currentTime = t; } catch (e) {} };
+        clearTimeout(vidSeekTimer);
+        if (final || performance.now() - vidLastSeek > 120) seek();
+        else vidSeekTimer = setTimeout(seek, 120);
+      }
+      vidScrubHit.addEventListener('pointerdown', e => {
+        if (!isFinite(fullVid.duration) || fullVid.duration <= 0) return;
+        vidDragging = true;
+        vidScrubHit.classList.add('dragging');
+        clearTimeout(vidHideTimer);
+        try { vidScrubHit.setPointerCapture(e.pointerId); } catch (err) {}
+        vidScrubTo(e.clientX, true);
+        e.preventDefault();
+      });
+      vidScrubHit.addEventListener('pointermove', e => { if (vidDragging) vidScrubTo(e.clientX, false); });
+      const vidScrubEnd = e => {
+        if (!vidDragging) return;
+        if (e.type === 'pointerup') vidScrubTo(e.clientX, true);
+        vidDragging = false;
+        vidScrubHit.classList.remove('dragging');
+        vidShowBar();
+      };
+      vidScrubHit.addEventListener('pointerup', vidScrubEnd);
+      vidScrubHit.addEventListener('pointercancel', vidScrubEnd);
+
       // ── Fullscreen helpers (hides browser chrome for landscape videos) ─────
       function tryGoFullscreen() {
         const el = fullScreen;
@@ -2334,6 +2479,7 @@
         progressPending = true;
         fullVid.src = lastVideoUrl;
         fullVid.load();
+        vidResetUi();
         fullScreen.style.display = 'block';
         closeBtn.style.display = 'flex';
         hideTapToPlay();
