@@ -20,6 +20,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <script src="/media-check.js"></script>
+    <script src="/print-preview.js"></script>
     <script src="/dialog.js"></script>
     <script src="/undo.js"></script>
     <script src="/activity.js"></script>
@@ -500,6 +501,8 @@
       #proof { position: fixed; left: -20000px; top: 0; background: #fff; z-index: -1; pointer-events: none; }
       #proof .page-frame { width: 1400px; height: 993px; aspect-ratio: auto; border-radius: 0; box-shadow: none; }
       #proof .pf-add { display: none; }
+      /* Editor hint, never print: an untitled cover printed "Your calendar title". */
+      #proof .cf-title.ph { visibility: hidden; }
     </style>
   </head>
   <body>
@@ -2093,6 +2096,10 @@
         openSheet(`
           <h2>Options</h2>
           <p class="sheet-sub">Your calendar’s title, year and printing.</p>
+          <div class="menu-row" data-act="preview">
+            <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg></div>
+            <div><div>Preview print</div><div class="menu-sub">See the cover, every month and the back exactly as they’ll be printed</div></div>
+          </div>
           <div class="menu-row" data-act="cart" style="background:#f0eefe">
             <div class="menu-ic" style="background:#1a1a1a;color:#fff"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></div>
             <div><div>Add to cart</div><div class="menu-sub">A4 landscape · Wire-O · ships with the rest of your order</div></div>
@@ -2132,6 +2139,10 @@
             <div><div>Proof: download print PDF</div><div class="menu-sub">Admin · the exact 26-page file sent to print</div></div>
           </div>` : ''}
         `);
+        document.querySelector('#sheet [data-act="preview"]').addEventListener('click', () => {
+          if (!editingCollection) { showToast('Save your calendar first, then preview it.'); closeSheet(); return; }
+          openCalendarPreview('view');
+        });
         document.querySelector('#sheet [data-act="cart"]').addEventListener('click', addCalendarToCart);
         document.querySelector('#sheet [data-act="order"]').addEventListener('click', orderPrintedCalendar);
         document.querySelector('#sheet [data-act="title"]').addEventListener('click', () => {
@@ -2640,7 +2651,9 @@
       }
 
       async function buildCalendarPrintPdf() { return withProofStage(buildCalendarPrintPdfInner); }
-      async function buildCalendarPrintPdfInner() {
+      // Lay out every print page on the proof stage exactly as the print file
+      // has them. Shared by the print PDF and the print preview.
+      async function prepareCalendarUnits() {
         await loadProofLibs();
         const proof = document.getElementById('proof');
         proof.innerHTML = '';
@@ -2705,7 +2718,11 @@
         // scale up again). One page of full-size photos in memory at a time.
         if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
         await new Promise(r => setTimeout(r, 120));
+        return { units, badgePng };
+      }
 
+      async function buildCalendarPrintPdfInner() {
+        const { units, badgePng } = await prepareCalendarUnits();
         const { jsPDF } = window.jspdf;
         const fmt = [PRINT.wIn, PRINT.hIn];
         const doc = new jsPDF({ unit: 'in', format: fmt, orientation: 'landscape', compress: true });
@@ -2731,12 +2748,85 @@
         return { blob: doc.output('blob'), pageCount: units.length };
       }
 
+      // ── Print preview ──
+      // Every page rendered by the print file's own layout at screen size: the
+      // cover, each month as it hangs (dates above the photo), the back.
+      const PREVIEW_W = 760;
+      async function renderCalendarPreviewInner() {
+        const { units, badgePng } = await prepareCalendarUnits();
+        const scale = PREVIEW_W / PRINT.PXW;
+        let badgeImg = null;
+        if (badgePng) { badgeImg = new Image(); await new Promise(r => { badgeImg.onload = badgeImg.onerror = r; badgeImg.src = badgePng; }); }
+        const canvases = [];
+        for (let i = 0; i < units.length; i++) {
+          setPrintProgress(i, units.length, `Laying out page ${i + 1} of ${units.length}`);
+          for (const img of [...units[i].querySelectorAll('.pf-photo-img, .cf-photo-img')]) {
+            const baked = bakeSlotImgForPrint(img, { scale: scale * 2, canvas: true });
+            if (baked) img.replaceWith(baked);
+          }
+          const c = await html2canvas(units[i], { useCORS: true, backgroundColor: '#ffffff', scale, logging: false, width: PRINT.PXW, height: PRINT.PXH });
+          if (badgeImg) {
+            const ctx = c.getContext('2d'), ur = units[i].getBoundingClientRect();
+            units[i].querySelectorAll('.print-badge').forEach(b => {
+              const r = b.getBoundingClientRect();
+              if (r.width && r.height) ctx.drawImage(badgeImg, (r.left - ur.left) * scale, (r.top - ur.top) * scale, r.width * scale, r.height * scale);
+            });
+          }
+          canvases.push(c);
+        }
+        const url = (c) => c.toDataURL('image/jpeg', 0.85);
+        // A hanging month: the dates panel above the photo, one sheet.
+        const months = [];
+        for (let m = 0; m < 12; m++) {
+          const g = canvases[1 + 2 * m], ph = canvases[2 + 2 * m];
+          const sheet = document.createElement('canvas');
+          sheet.width = g.width; sheet.height = g.height + ph.height;
+          const sctx = sheet.getContext('2d');
+          sctx.drawImage(g, 0, 0); sctx.drawImage(ph, 0, g.height);
+          months.push({ src: url(sheet), label: MONTH_NAMES[m] });
+          sheet.width = sheet.height = 0;
+        }
+        const out = { cover: url(canvases[0]), back: url(canvases[canvases.length - 1]), months };
+        canvases.forEach(c => { c.width = c.height = 0; });
+        return out;
+      }
+
+      // Resolves true to go ahead, false to keep editing. mode: 'cart' | 'order' | 'view'.
+      async function openCalendarPreview(mode) {
+        closeSheet();
+        openPrintProgress('Preparing your print preview', 'Laying out every page exactly as it will be printed.');
+        let out;
+        try {
+          out = await withProofStage(renderCalendarPreviewInner);
+        } catch (err) {
+          console.error(err);
+          if (window.Sentry) try { Sentry.captureException(err); } catch (e) {}
+          showToast('Could not prepare the preview: ' + (err.message || 'error'));
+          return mode !== 'view';   // a preview that fails must not block an order
+        } finally {
+          closePrintProgress();
+        }
+        const wMm = PRINT.wIn * 25.4, hMm = PRINT.hIn * 25.4;
+        return PopcodePrintPreview.open({
+          mode,
+          intro: 'This is exactly what we’ll print: the cover, all 12 months and the back. Take a minute to check each page before you order.',
+          sections: [
+            { heading: 'Cover and back', note: 'Keep words and faces inside the dashed line; the edges are trimmed.',
+              html: PopcodePrintPreview.list({ cols: 2, items: [
+                { src: out.cover, label: 'Cover', safeMm: 6, wMm, hMm },
+                { src: out.back, label: 'Back', safeMm: 6, wMm, hMm }] }) },
+            { heading: 'Months', note: 'As each month hangs on the wall: the dates above, your photo below.',
+              html: PopcodePrintPreview.list({ cols: 3, items: out.months }) },
+          ],
+        });
+      }
+
       // ── Printing: shared prep for both "add to cart" and "order now" ──
       // The print PDF can only be rendered here, where the calendar's DOM lives —
       // so it is built and uploaded now, and a cart line carries its URL.
       // Returns the public PDF url, or null when something is missing (the reason
       // is already shown as a toast).
-      async function buildCalendarPrintAsset(verb) {
+      async function buildCalendarPrintAsset(verb, mode) {
         if (!editingCollection || !editingCollection.id || !editingCollection.slug) {
           showToast(`Save your calendar first, then ${verb}.`);
           return null;
@@ -2752,6 +2842,10 @@
         // the print PDF uses durable URLs.
         const unsaved = [...placedIds()].some(id => { const p = photos.get(id); return p && p.file; });
         if (unsaved) { showToast(`Save your changes first, then ${verb}.`); return null; }
+        // Show the calendar exactly as it will print, while it can still be changed.
+        if (mode && !(await openCalendarPreview(mode))) return null;
+        // Ordering straight from here skips the cart's own photo-and-video check.
+        if (mode === 'order' && !(await PopcodeMediaCheck.confirm({ db, lines: [{ collectionId: editingCollection.id, productType: 'calendar' }] }))) return null;
 
         openPrintProgress('Preparing your calendar', 'Rendering every page at print resolution.');
         try {
@@ -2778,7 +2872,7 @@
       async function addCalendarToCart() {
         closeSheet();
         document.getElementById('result').classList.remove('visible');
-        const pdfUrl = await buildCalendarPrintAsset('add it to your cart');
+        const pdfUrl = await buildCalendarPrintAsset('add it to your cart', 'cart');
         if (!pdfUrl) return;
         try {
           await PopcodeCart.add({
@@ -2804,10 +2898,8 @@
       // ── Order a printed calendar right now (Prodigi via Stripe) ──
       async function orderPrintedCalendar() {
         closeSheet();
-        // Each photo next to what it plays, before it goes to print.
-        if (editingCollection && editingCollection.id &&
-            !(await PopcodeMediaCheck.confirm({ db, lines: [{ collectionId: editingCollection.id, productType: 'calendar' }] }))) return;
-        const pdfUrl = await buildCalendarPrintAsset('order a printed copy');
+        // Print preview, then each photo next to what it plays.
+        const pdfUrl = await buildCalendarPrintAsset('order a printed copy', 'order');
         if (!pdfUrl) return;
         openCalAddressSheet(pdfUrl);
       }

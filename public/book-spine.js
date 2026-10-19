@@ -9,11 +9,11 @@
    South Africa orders went to Prodigi with no spine file and printed a blank
    spine. Callers now treat a missing spine as an error, not a skip.
 
-   Design (ported from Bashō; reading direction and centring changed 2026-10-18):
-   a #1a1a1a strip widthMm × the book height, the cover eyebrow
-   (italic) + title in Cormorant Garamond reading top-to-bottom, centred,
-   the year in Inter at the far end. Type scales to the spine thickness, capped
-   at the reference sizes (title 32pt, eyebrow 14pt, year 12pt). 300 DPI. */
+   Design (matched to the editor's spine 2026-10-18): a white strip widthMm ×
+   the book height; the cover eyebrow (italic) + title in the book's cover
+   font, dark type, reading top-to-bottom from the head; the year in Inter at
+   the foot. Type scales to the spine thickness (title capped at 32pt; eyebrow
+   and year in the editor's proportions to it). 300 DPI. */
 (function () {
   var DPI = 300;
   // The spine runs the book's full height: 210mm for A4 landscape and 8×8",
@@ -22,8 +22,19 @@
   var HEIGHT_MM = { 'book-a4l-layflat': 210, 'book-21sq-layflat': 210, 'book-30sq-layflat': 297 };
   function heightFor(variantId) { return HEIGHT_MM[variantId] || 210; }
   var PX_PER_MM = DPI / 25.4, PX_PER_PT = DPI / 72, PT_PER_MM = 72 / 25.4;
-  var SERIF = "'Cormorant Garamond', Georgia, serif";
   var SANS = "'Inter', 'Helvetica Neue', Arial, sans-serif";
+  // The book's cover fonts (book.html COVER_FONTS / COVER_WEIGHT): the spine is
+  // set in the font the customer chose, as the editor's spine shows it.
+  var FONTS = {
+    cooper:    { family: 'CooperBT', stack: "'CooperBT', Georgia, serif", weight: 400 },
+    dmsans:    { family: 'DM Sans', stack: "'DM Sans', sans-serif", weight: 700 },
+    inter:     { family: 'Inter', stack: "'Inter', sans-serif", weight: 700 },
+    filson:    { family: 'FilsonPro', stack: "'FilsonPro', 'Nunito', sans-serif", weight: 700 },
+    cormorant: { family: 'Cormorant Garamond', stack: "'Cormorant Garamond', Georgia, serif", weight: 400 },
+    libre:     { family: 'Libre Baskerville', stack: "'Libre Baskerville', Georgia, serif", weight: 700 },
+  };
+  function fontFor(id) { return FONTS[id] || FONTS.cooper; }
+  var INK = '#1A1814';   // the editor's spine text colour, on white
 
   function coverYear(s) { var m = (s || '').match(/\b(19|20)\d{2}\b/); return m ? m[0] : ''; }
 
@@ -35,6 +46,7 @@
       eyebrow: (c.eyebrow || '').trim() || null,
       big: (c.title || fallbackTitle || 'My book').trim(),
       year: (coverYear(c.subtitle) || coverYear(c.title) || '').trim() || null,
+      font: c.font || null,
     };
   }
 
@@ -50,19 +62,25 @@
     if (!document.querySelector('link[data-spine-fonts]')) {
       var l = document.createElement('link');
       l.rel = 'stylesheet'; l.dataset.spineFonts = '1';
-      l.href = 'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;1,400&family=Inter:wght@400&display=swap';
+      l.href = 'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;1,400&family=DM+Sans:ital,wght@0,400;0,700;1,400&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;700&display=swap';
       document.head.appendChild(l);
     }
+    // Filson is self-hosted (book.html declares it; the cart doesn't).
+    if (!document.querySelector('style[data-spine-filson]')) {
+      var st = document.createElement('style'); st.dataset.spineFilson = '1';
+      st.textContent = "@font-face{font-family:'FilsonPro';src:url('/assets/fonts/FilsonProBold/font.woff2') format('woff2');font-weight:600 700;font-display:swap}";
+      document.head.appendChild(st);
+    }
   }
-  async function ensureFonts(sizes) {
+  async function ensureFonts(sizes, f) {
     if (!document.fonts || !document.fonts.load) return;
     try {
       await Promise.all([
-        document.fonts.load('400 ' + sizes.big + 'px "Cormorant Garamond"'),
-        document.fonts.load('italic 400 ' + sizes.name + 'px "Cormorant Garamond"'),
+        document.fonts.load(f.weight + ' ' + sizes.big + 'px "' + f.family + '"'),
+        document.fonts.load('italic 400 ' + sizes.name + 'px "' + f.family + '"'),
         document.fonts.load('400 ' + sizes.year + 'px "Inter"'),
       ]);
-    } catch (e) { /* falls back to Georgia / Arial */ }
+    } catch (e) { /* falls back to the stack's next face */ }
   }
 
   // The spine strip drawn on a canvas, widthMm × heightMm, at `pxPerMm`
@@ -77,41 +95,52 @@
     var usablePt = Math.max(0, (widthMm - 4) * PT_PER_MM);         // 2mm safety each long edge
     var bigPt = Math.min(32, usablePt / 1.25);
     var k = bigPt > 0 ? bigPt / 32 : 0;
-    var px = { big: bigPt * PX_PER_PT * s, name: 14 * k * PX_PER_PT * s, year: 12 * k * PX_PER_PT * s, gap: 5 * PT_PER_MM * k * PX_PER_PT * s };
-    await ensureFonts(px);
+    // Eyebrow and year in the editor's proportions to the title (1.35 : 2.1 : 1.25).
+    var px = { big: bigPt * PX_PER_PT * s, name: bigPt * 0.64 * PX_PER_PT * s, year: bigPt * 0.6 * PX_PER_PT * s, gap: 5 * PT_PER_MM * k * PX_PER_PT * s };
+    var f = fontFor(parts.font);
+    await ensureFonts(px, f);
 
     var T = Math.max(1, Math.round(widthMm * PPM));                  // thickness
     var L = Math.round(H_MM * PPM);                                  // length
     var inset = 16.5 * PPM;
     var c = document.createElement('canvas'); c.width = T; c.height = L;
     var ctx = c.getContext('2d');
-    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 0, T, L);
+    // White with dark type, as the editor's spine shows it. (Until 2026-10-18
+    // the print was a black strip with white Cormorant whatever the design.)
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, T, L);
     // Rotate so +x runs DOWN the spine (top → bottom), letter tops toward the
     // front cover: the US/UK convention, readable with the book lying face up.
     // (It read bottom → top until 2026-10-18.)
     ctx.translate(T, 0); ctx.rotate(Math.PI / 2);
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = INK;
     ctx.textBaseline = 'alphabetic';
     // Optical vertical centring on the title's x-height.
     var baseline = T / 2 + px.big * 0.32;
-    // Eyebrow + title as one block, centred along the spine.
-    var eyeW = 0, bigW = 0;
+    // A long title in a wide font can run into the year: scale everything
+    // down until eyebrow + title + year fit between the insets.
+    var measure = function () {
+      var w = 0;
+      if (parts.eyebrow && px.name > 0) { ctx.font = 'italic 400 ' + px.name + 'px ' + f.stack; w += ctx.measureText(parts.eyebrow).width + px.gap; }
+      if (px.big > 0) { ctx.font = f.weight + ' ' + px.big + 'px ' + f.stack; w += ctx.measureText(parts.big).width; }
+      if (parts.year && px.year > 0) { ctx.font = '400 ' + px.year + 'px ' + SANS; w += px.gap + ctx.measureText(parts.year).width; }
+      return w;
+    };
+    var need = measure(), room = L - 2 * inset;
+    if (need > room && need > 0) {
+      var fit = room / need;
+      px.big *= fit; px.name *= fit; px.year *= fit; px.gap *= fit;
+      baseline = T / 2 + px.big * 0.32;
+    }
+    // Eyebrow + title from the head of the spine, year at the foot: the
+    // editor's layout.
+    var x = inset;
     if (parts.eyebrow && px.name > 0) {
-      ctx.font = 'italic 400 ' + px.name + 'px ' + SERIF;
-      eyeW = ctx.measureText(parts.eyebrow).width + px.gap;
+      ctx.font = 'italic 400 ' + px.name + 'px ' + f.stack;
+      ctx.fillText(parts.eyebrow, x, baseline);
+      x += ctx.measureText(parts.eyebrow).width + px.gap;
     }
     if (px.big > 0) {
-      ctx.font = '400 ' + px.big + 'px ' + SERIF;
-      bigW = ctx.measureText(parts.big).width;
-    }
-    var x = Math.max(inset, (L - eyeW - bigW) / 2);
-    if (eyeW) {
-      ctx.font = 'italic 400 ' + px.name + 'px ' + SERIF;
-      ctx.fillText(parts.eyebrow, x, baseline);
-      x += eyeW;
-    }
-    if (bigW) {
-      ctx.font = '400 ' + px.big + 'px ' + SERIF;
+      ctx.font = f.weight + ' ' + px.big + 'px ' + f.stack;
       ctx.fillText(parts.big, x, baseline);
     }
     if (parts.year && px.year > 0) {

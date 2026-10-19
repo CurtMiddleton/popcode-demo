@@ -18,6 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
     <script src="/media-check.js"></script>
+    <script src="/print-preview.js"></script>
     <script src="/dialog.js"></script>
     <script src="/undo.js"></script>
     <script src="/activity.js"></script>
@@ -531,6 +532,7 @@
       <div class="link" id="result-link"></div>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:10px 0 14px;">
         <button class="btn-primary" id="cart-btn">Add to cart</button>
+        <button class="btn-secondary" id="preview-btn">Preview print</button>
         <a class="btn-secondary" id="result-view" href="#">View book</a>
         <button class="btn-secondary" id="result-copy">Copy link</button>
         <a class="btn-secondary" href="/manage.html">Back to My Designs</a>
@@ -2879,16 +2881,49 @@
       // Build the 11 Printify print images (cover wrap + 10 two-page spreads) and
       // upload them. Shared by "add to cart" and "order now" — the images can only
       // be rendered here, from the live board, so a cart line stores their URLs.
-      async function buildBoardBookPrintAssets() {
+      // The print images themselves, before upload, so the preview can show
+      // exactly the files the printer gets.
+      async function makeBoardBookPrintBlobs() {
         // Same reason as the compile step: never print a fallback face.
         await ensureTextFonts();
+        const jobs = [{ pos: 'cover', make: compositeCoverWrap }].concat(
+          PRINT_SPREADS.map(sp => ({ pos: sp.pos, make: () => compositeSpread(sp) })));
+        const out = [];
+        for (const job of jobs) out.push({ pos: job.pos, blob: await job.make() });
+        return out;
+      }
+
+      // Print preview of those images. Resolves true to go ahead, false to keep
+      // editing. mode: 'cart' | 'order' | 'view'.
+      const BB_PAGE_NAME = (k) => k === 'inside_front' ? 'Inside front cover' : k === 'inside_back' ? 'Inside back cover'
+        : k.replace(/^page_(\d+)$/, 'Page $1');
+      async function previewBoardBook(blobs, mode) {
+        const urls = blobs.map(b => URL.createObjectURL(b.blob));
+        try {
+          return await PopcodePrintPreview.open({
+            mode,
+            intro: 'This is exactly what we’ll print: the cover and every page. Take a minute to check each page before you order.',
+            sections: [
+              { heading: 'Cover', note: 'Laid out flat: back cover, spine, front cover. The edges wrap around the board, so keep words and faces away from them.',
+                html: PopcodePrintPreview.list({ cols: 1, items: [{ src: urls[0], label: 'Cover' }] }) },
+              { heading: 'Pages', note: 'As the book opens, two pages at a time.',
+                html: PopcodePrintPreview.list({ cols: 1, items: blobs.slice(1).map((b, i) => {
+                  const sp = PRINT_SPREADS[i];
+                  return { src: urls[i + 1], label: BB_PAGE_NAME(sp.left) + ' · ' + BB_PAGE_NAME(sp.right) };
+                }) }) },
+            ],
+          });
+        } finally {
+          urls.forEach(u => URL.revokeObjectURL(u));
+        }
+      }
+
+      async function uploadBoardBookPrintBlobs(blobs) {
         const bucket = 'experiences';
         const pub = (path) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
         const assetUrls = [];
-        const jobs = [{ pos: 'cover', make: compositeCoverWrap }].concat(
-          PRINT_SPREADS.map(sp => ({ pos: sp.pos, make: () => compositeSpread(sp) })));
-        for (const job of jobs) {
-          const blob = await job.make();
+        for (const job of blobs) {
+          const blob = job.blob;
           const path = `${savedSlug}/board/print_${job.pos}.jpg`;
           const { error } = await uploadWithRetry(bucket, path, blob, { contentType: 'image/jpeg', upsert: true });
           if (error) throw new Error('Could not prepare a page: ' + error.message);
@@ -2908,7 +2943,12 @@
         try {
           setProgress('Preparing your book for print…', 25);
           await yieldToPaint();
-          const assetUrls = await buildBoardBookPrintAssets();
+          const blobs = await makeBoardBookPrintBlobs();
+          hidePanel();
+          // Show the book exactly as it will print, while it can still be changed.
+          if (!(await previewBoardBook(blobs, 'cart'))) { if (btn) { btn.disabled = false; btn.textContent = 'Add to cart'; } return false; }
+          setProgress('Adding to your cart…', 70);
+          const assetUrls = await uploadBoardBookPrintBlobs(blobs);
           setProgress('Adding to your cart…', 85);
           const coverId = slots['cover'] || slots[POSITIONS[0]];
           const coverPhoto = coverId ? photos.get(coverId) : null;
@@ -3223,6 +3263,13 @@
 
       document.getElementById('order-btn').addEventListener('click', placeOrder);
       document.getElementById('cart-btn').addEventListener('click', addBoardBookToCart);
+      document.getElementById('preview-btn').addEventListener('click', async () => {
+        const b = document.getElementById('preview-btn');
+        b.disabled = true; b.textContent = 'Preparing…';
+        try { await previewBoardBook(await makeBoardBookPrintBlobs(), 'view'); }
+        catch (e) { console.error(e); showToast('Could not prepare the preview: ' + (e.message || 'error')); }
+        finally { b.disabled = false; b.textContent = 'Preview print'; }
+      });
       async function placeOrder() {
         const note = document.getElementById('order-note'); note.classList.remove('bad'); note.textContent = '';
         const recipient = {
@@ -3240,13 +3287,15 @@
         if (!recipient.name || !recipient.email || !recipient.address.line1 || !recipient.address.townOrCity || !recipient.address.postalOrZipCode) {
           note.textContent = 'Please fill in your name, email and address.'; note.classList.add('bad'); return;
         }
-        // Each photo next to what it plays, before it goes to print.
-        if (savedCollectionId &&
-            !(await PopcodeMediaCheck.confirm({ db, lines: [{ collectionId: savedCollectionId, productType: 'boardbook' }] }))) return;
         const btn = document.getElementById('order-btn');
         btn.disabled = true; btn.textContent = 'Preparing your book…';
         try {
-          const assetUrls = await buildBoardBookPrintAssets();
+          const blobs = await makeBoardBookPrintBlobs();
+          // Print preview, then each photo next to what it plays.
+          const ok = await previewBoardBook(blobs, 'order')
+            && (!savedCollectionId || await PopcodeMediaCheck.confirm({ db, lines: [{ collectionId: savedCollectionId, productType: 'boardbook' }] }));
+          if (!ok) { btn.disabled = false; btn.textContent = 'Continue to payment'; return; }
+          const assetUrls = await uploadBoardBookPrintBlobs(blobs);
           btn.textContent = 'Going to checkout…';
           const { data: { session } } = await db.auth.getSession();
           const resp = await fetch('/api/create-checkout', {
