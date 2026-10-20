@@ -480,8 +480,9 @@
     Object.keys(agg.countries).forEach(function (cc) { maxC = Math.max(maxC, visibleCount(agg.countries[cc])); });
     S.layers.countries.eachLayer(function (layer) {
       var c = agg.countries[layer.feature._a2], n = c ? visibleCount(c) : 0;
-      var a = n && S.show.shade ? 0.12 + 0.5 * Math.log(1 + n) / Math.log(1 + maxC) : 0;
-      layer.setStyle({ fillColor: n && S.show.shade ? '#7657FC' : '#ffffff', fillOpacity: n && S.show.shade ? a : 1 });
+      // Light enough that the base map's labels read through it.
+      var a = n && S.show.shade ? 0.08 + 0.3 * Math.log(1 + n) / Math.log(1 + maxC) : 0;
+      layer.setStyle({ fillColor: '#7657FC', fillOpacity: a });
     });
 
     var lines = L.layerGroup();
@@ -591,6 +592,8 @@
     if (!S || !S.model) return;
     var agg = aggregate();
     draw(agg); stats(agg); countryTable(agg); note(); sliderSync();
+    S.visiblePts = Object.keys(agg.places).filter(function (k) { return visibleCount(agg.places[k]); })
+      .map(function (k) { return [agg.places[k].p.lat, agg.places[k].p.lon]; });
     if (S.fitNext) {
       S.fitNext = false;
       var pts = Object.keys(agg.places).map(function (k) { return [agg.places[k].p.lat, agg.places[k].p.lon]; });
@@ -625,14 +628,40 @@
         '</div>' +
       '</div>' +
       '<div class="rm-body">' +
-        '<div class="rm-map-wrap"><div class="rm-map"></div></div>' +
+        '<div class="rm-map-wrap"><div class="rm-map"></div>' +
+          '<div class="rm-map-btns"><button type="button" class="btn btn-sm btn-quiet rm-fit">Fit all</button>' +
+          '<button type="button" class="btn btn-sm btn-quiet rm-expand">Expand ⤢</button></div></div>' +
         '<div class="rm-side"><div class="section-title" style="margin-bottom:10px">By country</div><div class="rm-countries table-wrap"></div></div>' +
       '</div>' +
       '<p class="rm-note muted"></p>';
   }
 
+  // Fit all: the pins currently shown, else the whole world.
+  function fitAll() {
+    var pts = S.visiblePts || [];
+    if (pts.length > 1) S.map.fitBounds(window.L.latLngBounds(pts).pad(0.2), { maxZoom: 6 });
+    else if (pts.length === 1) S.map.setView(pts[0], 6);
+    else S.map.fitBounds([[-50, -150], [72, 165]]);
+  }
+  // Expand: the map full screen, like the Web traffic map. Esc closes.
+  function setFull(on) {
+    var wrap = S.opts.container.querySelector('.rm-map-wrap');
+    wrap.classList.toggle('full', on);
+    document.body.classList.toggle('rm-map-open', on);
+    S.opts.container.querySelector('.rm-expand').textContent = on ? 'Close ✕' : 'Expand ⤢';
+    if (on) S.map.scrollWheelZoom.enable(); else S.map.scrollWheelZoom.disable();
+    setTimeout(function () { S.map.invalidateSize(); }, 50);
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && S && document.body.classList.contains('rm-map-open')) setFull(false);
+  });
+
   function wire() {
     var c = S.opts.container;
+    c.querySelector('.rm-fit').onclick = fitAll;
+    c.querySelector('.rm-expand').onclick = function () {
+      setFull(!c.querySelector('.rm-map-wrap').classList.contains('full'));
+    };
     var search = c.querySelector('.rm-search');
     function pick() {
       var v = search.value.trim();
@@ -712,11 +741,14 @@
     var L = window.L;
     var el = S.opts.container.querySelector('.rm-map');
     var map = L.map(el, {
-      worldCopyJump: true, minZoom: 1, maxZoom: 9, zoomSnap: 0.5,
-      attributionControl: true, preferCanvas: true,
+      worldCopyJump: true, minZoom: 1, maxZoom: 12, zoomSnap: 0.5,
+      attributionControl: true, preferCanvas: true, scrollWheelZoom: false,
     });
     map.attributionControl.setPrefix(false);
-    map.attributionControl.addAttribution('Natural Earth · place names © OpenStreetMap');
+    map.attributionControl.addAttribution('Shading: Natural Earth');
+    // A real base map underneath, every label in English (basemap.js). The
+    // country shapes below are now only the shading, drawn over it.
+    if (window.PopcodeBasemap) window.PopcodeBasemap.add(map);
     var fc = window.topojson.feature(world, world.objects.countries);
     fc.features = fc.features.filter(function (f) { return f.id !== '010'; }); // Antarctica
     fc.features.forEach(function (f) {
@@ -724,13 +756,22 @@
       unwrap(f.geometry);
     });
     S.layers.countries = L.geoJSON(fc, {
-      style: { color: '#d8d4ea', weight: 0.7, fillColor: '#ffffff', fillOpacity: 1 },
+      style: { weight: 0, fillColor: '#7657FC', fillOpacity: 0 },
       onEachFeature: function (f, layer) {
         layer.bindTooltip(function () { return esc(countryName(f._a2) || f.properties.name); }, { sticky: true, className: 'rm-tip' });
       },
     }).addTo(map);
-    map.fitBounds([[-50, -150], [72, 165]]);
     S.map = map;
+    fitMinZoom();
+    map.on('resize', fitMinZoom);
+    map.fitBounds([[-50, -150], [72, 165]]);
+  }
+
+  // Never zoom out past the point where the world fills the map's height —
+  // full screen at zoom 1 left empty bands above and below it.
+  function fitMinZoom() {
+    var h = S.map.getSize().y;
+    S.map.setMinZoom(Math.max(1, Math.ceil(Math.log2(h / 256) * 2) / 2));
   }
 
   async function load(opts) {
