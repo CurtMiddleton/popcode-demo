@@ -22,6 +22,9 @@
     <script src="/media-check.js"></script>
     <script src="/print-preview.js"></script>
     <script src="/dialog.js"></script>
+    <script src="/montage-music.js"></script>
+    <script src="/montage.js"></script>
+    <script src="/image-source.js"></script>
     <script src="/undo.js"></script>
     <script src="/activity.js"></script>
     <script src="/slug.js"></script>
@@ -196,6 +199,25 @@
       .month-sheet .page-frame { border-radius: 0; box-shadow: none; }
       .month-label { font-size: 14px; font-weight: 700; color: #6b6558; padding: 0 2px; display: flex; align-items: center; justify-content: space-between; }
       .month-label .ml-sub { font-size: 12px; font-weight: 500; color: #b3ac9d; }
+      .month-label .ml-right { display: flex; align-items: center; gap: 10px; }
+      /* Page theme dot — the page's background colour; tap to change it. */
+      .theme-dot { width: 32px; height: 32px; border-radius: 50%; border: none; background: #ebe9e4; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; flex: 0 0 auto; }
+      .theme-dot:hover { background: #e0ddd6; }
+      .theme-dot span { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px rgba(0,0,0,0.14); }
+
+      /* ── Themes sheet (Popsa-style page colours) ───────────────── */
+      .th-scope { display: inline-flex; align-items: center; gap: 4px; position: relative; font: 600 15px 'Inter', sans-serif; color: #555; margin: -8px 0 6px; }
+      .th-scope select { appearance: none; -webkit-appearance: none; border: none; background: transparent; font: inherit; color: inherit; padding: 4px 18px 4px 0; cursor: pointer; }
+      .th-scope svg { position: absolute; right: 0; pointer-events: none; }
+      .th-group { margin-top: 18px; }
+      .th-group h3 { font-size: 16px; font-weight: 600; color: #444; margin-bottom: 4px; }
+      .th-group p { font-size: 13px; color: #888; margin-bottom: 10px; }
+      .th-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+      .th-sw { width: 40px; height: 40px; border-radius: 50%; border: none; padding: 0; cursor: pointer; box-shadow: inset 0 0 0 2px rgba(0,0,0,0.10); }
+      .th-sw.active { outline: 2.5px solid #1a1a1a; outline-offset: 3px; }
+      .th-sw.loading { background: #f2f0ea; cursor: default; animation: th-pulse 1.2s ease-in-out infinite; }
+      @keyframes th-pulse { 50% { opacity: 0.5; } }
+      .th-reset { margin-top: 18px; }
 
       /* A page — fixed 1400×993 internal canvas scaled to fit its frame, so the
          editor preview and the print render are pixel-identical (and html2canvas
@@ -230,20 +252,20 @@
          All sizes are px within the fixed 1400×993 inner canvas. The month name
          stays top-left; the dates block + holiday list sit LOW on the page, near
          the photo that hangs directly below. */
-      .gp-month { position: absolute; left: 90px; top: 64px; font-family: var(--cal-font, 'FilsonPro', 'Inter', sans-serif); font-weight: 700; font-size: 148px; letter-spacing: -0.02em; color: #141414; line-height: 1; }
+      .gp-month { position: absolute; left: 90px; top: 64px; font-family: var(--cal-font, 'FilsonPro', 'Inter', sans-serif); font-weight: 700; font-size: 148px; letter-spacing: -0.02em; color: var(--pg-ink, #141414); line-height: 1; }
       .gp-holidays { position: absolute; left: 92px; top: 476px; width: 420px; }
-      .gp-hrow { display: flex; gap: 20px; margin-bottom: 13px; font-family: 'Inter', sans-serif; font-size: 21px; color: #333; line-height: 1.3; }
-      .gp-hday { width: 34px; text-align: right; color: #8a8a8a; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+      .gp-hrow { display: flex; gap: 20px; margin-bottom: 13px; font-family: 'Inter', sans-serif; font-size: 21px; color: var(--pg-body, #333); line-height: 1.3; }
+      .gp-hday { width: 34px; text-align: right; color: var(--pg-sub, #8a8a8a); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
       .gp-hname { flex: 1; }
       .gp-grid { position: absolute; left: 610px; top: 440px; right: 82px; bottom: 92px; display: flex; }
-      .gp-col { position: relative; flex: 1 1 0; border-left: 1.5px solid #d9d9d9; }
+      .gp-col { position: relative; flex: 1 1 0; border-left: 1.5px solid var(--pg-rule, #d9d9d9); }
       .gp-col:first-child { border-left: none; }
-      .gp-dow { position: absolute; top: 0; right: 16px; font-family: 'Inter', sans-serif; font-size: 18px; font-weight: 600; color: #8a8a8a; }
-      .gp-day { position: absolute; right: 14px; font-family: 'FilsonPro', 'Inter', sans-serif; font-weight: 500; font-size: 40px; color: #141414; line-height: 1; font-variant-numeric: tabular-nums; }
-      .gp-day .gp-dot { position: absolute; left: 50%; transform: translateX(-50%); bottom: -13px; width: 8px; height: 8px; border-radius: 50%; background: #141414; }
+      .gp-dow { position: absolute; top: 0; right: 16px; font-family: 'Inter', sans-serif; font-size: 18px; font-weight: 600; color: var(--pg-sub, #8a8a8a); }
+      .gp-day { position: absolute; right: 14px; font-family: 'FilsonPro', 'Inter', sans-serif; font-weight: 500; font-size: 40px; color: var(--pg-ink, #141414); line-height: 1; font-variant-numeric: tabular-nums; }
+      .gp-day .gp-dot { position: absolute; left: 50%; transform: translateX(-50%); bottom: -13px; width: 8px; height: 8px; border-radius: 50%; background: var(--pg-ink, #141414); }
       .gp-num { position: absolute; left: 90px; bottom: 66px; display: flex; align-items: flex-start; gap: 18px; }
-      .gp-num .gp-num-rule { width: 2px; height: 96px; background: #cfcfcf; }
-      .gp-num .gp-num-text { font-family: var(--cal-font, 'FilsonPro', 'Inter', sans-serif); font-weight: 500; font-size: 88px; color: #c2c2c2; line-height: 0.95; }
+      .gp-num .gp-num-rule { width: 2px; height: 96px; background: var(--pg-numrule, #cfcfcf); }
+      .gp-num .gp-num-text { font-family: var(--cal-font, 'FilsonPro', 'Inter', sans-serif); font-weight: 500; font-size: 88px; color: var(--pg-num, #c2c2c2); line-height: 0.95; }
 
       /* ── Cover page ────────────────────────────────────────────── */
       .cover-frame .cf-photo { position: absolute; inset: 0; background-size: cover; background-position: center; }
@@ -258,8 +280,8 @@
       /* Mirrors .bc-brand in book.html — same block, same place on the page. */
       .bk-brand { position: absolute; left: 0; right: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; }
       .bk-logo { width: auto; height: auto; display: block; }   /* width set inline */
-      .bk-inst { font-family: 'Inter', sans-serif; font-weight: 600; text-align: center; color: #1a1a1a; }
-      .bk-inst b { color: #1a1a1a; font-weight: 600; }
+      .bk-inst { font-family: 'Inter', sans-serif; font-weight: 600; text-align: center; color: var(--pg-ink, #1a1a1a); }
+      .bk-inst b { color: inherit; font-weight: 600; }
       .bk-symbol { display: block; height: auto; }   /* width + margin set inline */
 
       /* ── Sticky create bar ─────────────────────────────────────── */
@@ -734,6 +756,107 @@
       // rather than the CSS fallback, which only matched by luck.
       applyCalFont(calFont);
 
+      // ── Page themes (background colour, Popsa-style) ──────────────
+      // calTheme colours every page; months[m].theme overrides one month (its
+      // dates page and, if the photo is fitted, the photo page around it).
+      // null = white, which renders exactly as calendars did before themes.
+      // Type and rules take their colours from the background (themeColors).
+      let calTheme = null;
+      const THEME_GROUPS = [
+        { name: 'Pastel', colors: ['#fde3e3', '#fbdbe3', '#f3def0', '#e8e2f5', '#e3e5f6', '#e0eefa', '#dff1fb', '#dcf3f5', '#dcefe9', '#e0f2e1', '#eef5dc'] },
+        { name: 'Bright', colors: ['#e5484d', '#e24a8d', '#9b51e0', '#6e56cf', '#3e63dd', '#0090ff', '#00a2c7', '#12a594', '#30a46c', '#46a758', '#8ec63f',
+                                   '#bdcf47', '#e3cd48', '#f5b942', '#f08c33', '#d65a32', '#7a5a4c'] },
+        { name: 'Deep',   colors: ['#a12a25', '#7e1e4f', '#4a1a8a', '#2e1f8c', '#1b2275', '#20469d', '#245c98', '#285f63', '#1e4a43', '#2a5227', '#456b29',
+                                   '#7f7a2f', '#c4893a', '#bd5625', '#9b3d1a', '#6b1e12', '#3d2826'] },
+        { name: 'Neutral', colors: ['#ffffff', '#f7f7f5', '#ecedef', '#a2a2a2', '#687c88', '#2b3238', '#222222', '#000000'] },
+      ];
+      const HEX6 = /^#[0-9a-f]{6}$/;
+      // The calendar-wide colour: white is stored as null. A month's override
+      // keeps white as '#ffffff' (white on a coloured calendar); null follows it.
+      const normHex = (c) => { c = (c || '').toLowerCase(); return HEX6.test(c) ? c : null; };
+      const normTheme = (c) => { c = normHex(c); return c === '#ffffff' ? null : c; };
+      const monthTheme = (m) => (months[m] && months[m].theme) || calTheme;
+      function hexRgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+      function rgbHex(r, g, b) { return '#' + [r, g, b].map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join(''); }
+      function rgbHsl(r, g, b) {
+        r /= 255; g /= 255; b /= 255;
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+        if (!d) return [0, 0, l];
+        const s = d / (1 - Math.abs(2 * l - 1));
+        const h = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+        return [h * 60, s, l];
+      }
+      function hslHex(h, s, l) {
+        s = Math.max(0, Math.min(1, s)); l = Math.max(0, Math.min(1, l));
+        const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2;
+        const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+        return rgbHex((r + m) * 255, (g + m) * 255, (b + m) * 255);
+      }
+      function luminance(hex) {
+        const lin = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+        const [r, g, b] = hexRgb(hex);
+        return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+      }
+      function mixHex(a, b, t) { const A = hexRgb(a), B = hexRgb(b); return rgbHex(A[0] * t + B[0] * (1 - t), A[1] * t + B[1] * (1 - t), A[2] * t + B[2] * (1 - t)); }
+      // The type colours for a background: white on dark colours, a deep shade of
+      // the same hue on light ones (near-black on greys), and the secondary inks
+      // (weekday letters, rules, the big month number) mixed toward the paper.
+      function themeColors(bg) {
+        if (!bg) return null;
+        const dark = luminance(bg) < 0.3;
+        const [h, s, l] = rgbHsl(...hexRgb(bg));
+        const ink = dark ? '#ffffff' : s < 0.12 ? '#141414' : hslHex(h, Math.max(0.45, Math.min(0.8, s)), l > 0.8 ? 0.34 : 0.2);
+        return { bg, dark, ink, body: mixHex(ink, bg, 0.85), sub: mixHex(ink, bg, 0.6), num: mixHex(ink, bg, dark ? 0.4 : 0.3), numrule: mixHex(ink, bg, 0.22), rule: mixHex(ink, bg, 0.18) };
+      }
+      // Paint a page's background and set its type colours (CSS custom properties
+      // the .gp-* / .bk-* rules read, defaulting to the white design).
+      function applyPageTheme(inner, bg) {
+        const t = themeColors(normTheme(bg));
+        ['ink', 'body', 'sub', 'num', 'numrule', 'rule'].forEach(k => {
+          if (t) inner.style.setProperty('--pg-' + k, t[k]); else inner.style.removeProperty('--pg-' + k);
+        });
+        inner.style.background = t ? t.bg : '';
+        return t;
+      }
+
+      // Dynamic themes: five tones of the strongest colour in the photos.
+      const photoHueCache = new Map();   // url → { h, s, w } | null
+      function photoHue(url) {
+        if (photoHueCache.has(url)) return Promise.resolve(photoHueCache.get(url));
+        return new Promise(resolve => {
+          const im = new Image();
+          im.crossOrigin = 'anonymous';
+          im.onload = () => {
+            let out = null;
+            try {
+              const c = document.createElement('canvas'); c.width = c.height = 48;
+              const ctx = c.getContext('2d'); ctx.drawImage(im, 0, 0, 48, 48);
+              const d = ctx.getImageData(0, 0, 48, 48).data;
+              const bins = Array.from({ length: 24 }, () => ({ w: 0, x: 0, y: 0, s: 0 }));
+              for (let i = 0; i < d.length; i += 4) {
+                const [h, s, l] = rgbHsl(d[i], d[i + 1], d[i + 2]);
+                const w = s * (1 - Math.abs(2 * l - 1));     // vivid, mid-lightness pixels count most
+                if (w < 0.08) continue;
+                const b = bins[Math.floor(h / 15) % 24];
+                b.w += w; b.s += s * w; b.x += Math.cos(h * Math.PI / 180) * w; b.y += Math.sin(h * Math.PI / 180) * w;
+              }
+              const top = bins.reduce((a, b) => b.w > a.w ? b : a);
+              if (top.w > 0) out = { h: (Math.atan2(top.y, top.x) * 180 / Math.PI + 360) % 360, s: top.s / top.w, w: top.w };
+            } catch (e) { out = null; }   // a CORS-tainted photo just sits this out
+            photoHueCache.set(url, out); resolve(out);
+          };
+          im.onerror = () => { photoHueCache.set(url, null); resolve(null); };
+          im.src = url;
+        });
+      }
+      async function dynamicThemes(urls) {
+        const hues = (await Promise.all(urls.map(photoHue))).filter(Boolean);
+        if (!hues.length) return ['#f7f6f2', '#ebe7de', '#b9b2a4', '#6f685c', '#36322b'];
+        const best = hues.reduce((a, b) => b.w > a.w ? b : a);
+        const h = best.h, s = Math.max(0.35, Math.min(0.75, best.s));
+        return [hslHex(h, s * 0.6, 0.96), hslHex(h, s * 0.7, 0.88), hslHex(h, s, 0.6), hslHex(h, s * 0.6, 0.38), hslHex(h, s * 0.45, 0.2)];
+      }
+
       // ── Undo / redo (see /undo.js) ─────────────────────────────────
       // Every change to the design (photos, months, cover, year, font) is a
       // step; a burst of edits in quick succession collapses into one.
@@ -743,15 +866,16 @@
           photos: [...photos].map(([id, p]) => [id, PopcodeUndo.clonePhoto(p)]),
           months: months.map(m => Object.assign({}, m)),
           cover: Object.assign({}, cover),
-          calYear, holidaysOn, calFont,
+          calYear, holidaysOn, calFont, calTheme,
         }),
-        signature: (s) => ({ p: s.photos.map(([id, p]) => [id, PopcodeUndo.photoSig(p)]), m: s.months, c: s.cover, y: s.calYear, h: s.holidaysOn, f: s.calFont }),
+        signature: (s) => ({ p: s.photos.map(([id, p]) => [id, PopcodeUndo.photoSig(p)]), m: s.months, c: s.cover, y: s.calYear, h: s.holidaysOn, f: s.calFont, t: s.calTheme }),
         restore: (s) => {
           PopcodeUndo.restorePhotos(photos, s.photos);
           months = s.months.map(m => Object.assign({}, m));
           cover = Object.assign({}, s.cover);
           calYear = s.calYear; holidaysOn = s.holidaysOn;
           applyCalFont(s.calFont);
+          calTheme = s.calTheme || null;
           selectedTrayId = null;
           render();
         },
@@ -907,6 +1031,7 @@
         const hrows = holidays.map(h =>
           `<div class="gp-hrow"><div class="gp-hday">${h.d}</div><div class="gp-hname">${escapeHtml(h.name)}</div></div>`).join('');
 
+        applyPageTheme(inner, monthTheme(m));
         inner.innerHTML =
           `<div class="gp-month">${MONTH_NAMES[m]}</div>` +
           `<div class="gp-holidays">${hrows}</div>` +
@@ -1031,8 +1156,10 @@
         return div;
       }
 
-      function buildPhotoInner(inner, photoId, isCover) {
+      // bg: the page's theme colour — it shows around a fitted photo.
+      function buildPhotoInner(inner, photoId, isCover, bg) {
         const url = photoUrlFor(photoId);
+        applyPageTheme(inner, url ? bg : null);   // an empty page keeps its grey placeholder
         const p0 = photoId && photos.get(photoId);
         let html = '';
         if (url) {
@@ -1092,9 +1219,12 @@
       function buildBackInner(inner) {
         const slug = (editingCollection && editingCollection.slug) || chosenSlug() || 'yourlink';
         const B = BK_BRAND;
+        const t = applyPageTheme(inner, calTheme);
+        // White wordmark on a dark theme (the same reversed print file book.html uses).
+        const logo = t && t.dark ? '/assets/Popcode_logo.rev.print.png' : '/assets/Popcode_logo.png';
         inner.innerHTML =
           `<div class="bk-brand" style="top:${bkIn(B.top)}px">` +
-            `<img class="bk-logo" style="width:${bkIn(B.logoW)}px" src="/assets/Popcode_logo.png" alt="Popcode"/>` +
+            `<img class="bk-logo" style="width:${bkIn(B.logoW)}px" src="${logo}" alt="Popcode"/>` +
             `<div class="bk-inst" style="margin-top:${bkIn(B.gapLogo)}px;font-size:${bkPt(B.textPt)}px;line-height:${(B.leadPt / B.textPt).toFixed(3)}">` +
               `Go to <b>popcode.app/${escapeHtml(slug)}</b> on your phone.<br>Scan photos with the Popcode symbol.` +
             `</div>` +
@@ -1199,9 +1329,10 @@
         // Cover card
         const coverCard = document.createElement('div');
         coverCard.className = 'month-card';
-        coverCard.innerHTML = `<div class="month-label"><span>Front Cover</span><span class="ml-sub">${calYear}</span></div>`;
+        coverCard.innerHTML = `<div class="month-label"><span>Front Cover</span><span class="ml-right"><span class="ml-sub">${calYear}</span>${themeDotHTML(calTheme, 'Calendar colour')}</span></div>`;
+        coverCard.querySelector('.theme-dot').addEventListener('click', () => openThemeSheet('all'));
         const cf = mkFrame('photo-frame cover-frame' + (cover.photoId ? '' : ' empty'));
-        buildPhotoInner(cf.inner, cover.photoId, true);
+        buildPhotoInner(cf.inner, cover.photoId, true, calTheme);
         cf.frame.classList.toggle('place-target', !!selectedTrayId);
         cf.frame.addEventListener('click', () => onPhotoTap('cover'));
         coverCard.appendChild(cf.frame);
@@ -1212,14 +1343,16 @@
         for (let m = 0; m < 12; m++) {
           const card = document.createElement('div');
           card.className = 'month-card';
-          card.innerHTML = `<div class="month-label"><span>${MONTH_NAMES[m]} ${calYear}</span><span class="ml-sub">${months[m].photoId ? '' : 'No photo yet'}</span></div>`;
+          card.innerHTML = `<div class="month-label"><span>${MONTH_NAMES[m]} ${calYear}</span><span class="ml-right"><span class="ml-sub">${months[m].photoId ? '' : 'No photo yet'}</span>${themeDotHTML(monthTheme(m), `${MONTH_NAMES[m]} colour`)}</span></div>`;
+          card.querySelector('.theme-dot').addEventListener('click', () => openThemeSheet(m));
           const sheet = document.createElement('div');
           sheet.className = 'month-sheet';
+          sheet.style.background = normTheme(monthTheme(m)) || '';   // no white hairline between the two pages
           const gf = mkFrame('grid-frame');
           buildGridInner(gf.inner, calYear, m);
           sheet.appendChild(gf.frame);
           const pf = mkFrame('photo-frame' + (months[m].photoId ? '' : ' empty'));
-          buildPhotoInner(pf.inner, months[m].photoId, false);
+          buildPhotoInner(pf.inner, months[m].photoId, false, monthTheme(m));
           pf.frame.classList.toggle('place-target', !!selectedTrayId);
           pf.frame.addEventListener('click', () => onPhotoTap(m));
           sheet.appendChild(pf.frame);
@@ -1327,6 +1460,10 @@
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>
             <div><div>Choose a different photo</div></div>
           </div>
+          ${target === 'cover' ? '' : `<div class="menu-row" id="fm-theme">
+            <div class="menu-ic"><span style="width:18px;height:18px;border-radius:50%;background:${monthTheme(target) || '#ffffff'};box-shadow:inset 0 0 0 1.5px rgba(0,0,0,0.18)"></span></div>
+            <div><div>Change theme</div><div class="menu-sub">This month only</div></div>
+          </div>`}
           <div class="menu-row destructive" id="fm-remove">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></div>
             <div><div>Remove photo</div><div class="menu-sub">It stays in your tray</div></div>
@@ -1336,6 +1473,8 @@
         document.getElementById('fm-popcode').addEventListener('click', () => { closeSheet(); openPopcodeSheet(photo); });
         document.getElementById('fm-edit').addEventListener('click', () => openEditPhotoFor(target));
         document.getElementById('fm-replace').addEventListener('click', () => openPhotoPicker(target));
+        const fmTheme = document.getElementById('fm-theme');
+        if (fmTheme) fmTheme.addEventListener('click', () => openThemeSheet(target));
         document.getElementById('fm-remove').addEventListener('click', () => { setPhotoAt(target, null); closeSheet(); render(); });
       }
 
@@ -1537,14 +1676,36 @@
         return s.mediaType === 'video' ? !!(s.video || s.existingVideoUrl) : !!(s.audio || s.existingAudioUrl);
       }
 
+      /* The montage builder is shared (/montage.js) with the New Popcode and Edit
+         screens, so "Video / Montage / Audio" means the same thing everywhere.
+         Montage is an action rather than a stored media type: what it renders
+         goes into this Popcode's video slot, so the save path is unchanged. */
+      PopcodeMontage.init({
+        db: db,
+        getUser: function () { return currentUser; },
+        onApply: function (target, file) {
+          const st = target || popEditState;
+          if (!st) return;
+          st.video = file;
+          st.mediaType = 'video';
+          st.existingVideoUrl = null;   // the montage replaces whatever was linked
+          st.isMontage = true;
+          if (popEditState) renderPopcodeSheet();   // repaint the preview + Save button
+        },
+        onRendered: function () {
+          try { logActivity('create_montage', { user_id: currentUser && currentUser.id }); } catch (e) {}
+        },
+      });
+
       function renderPopcodeSheet() {
         const s = popEditState;
         const hasMedia = popEditHasMedia(s);
         openSheet(`
           <h2>${s.photo.popcode ? 'Edit' : 'Add a'} Popcode</h2>
-          <p class="sheet-sub">Link a video or audio clip. When someone scans this photo on the printed calendar, it plays automatically.</p>
+          <p class="sheet-sub">Link a video, a montage you build from photos, or an audio clip. When someone scans this photo on the printed calendar, it plays automatically.</p>
           <div class="pop-media-toggle">
             <button data-mode="video" class="${s.mediaType === 'video' ? 'active' : ''}">Video</button>
+            <button data-mode="montage">Montage</button>
             <button data-mode="audio" class="${s.mediaType === 'audio' ? 'active' : ''}">Audio</button>
           </div>
           <div id="pop-body"></div>
@@ -1554,7 +1715,12 @@
           </div>
         `);
         document.querySelectorAll('#sheet .pop-media-toggle button').forEach(b => {
-          b.addEventListener('click', () => { s.mediaType = b.dataset.mode; renderPopcodeSheet(); });
+          b.addEventListener('click', () => {
+            // Montage opens the builder; what it produces lands in the video slot,
+            // so mediaType stays 'video' | 'audio' and nothing downstream changes.
+            if (b.dataset.mode === 'montage') { openMontage(s); return; }
+            s.mediaType = b.dataset.mode; renderPopcodeSheet();
+          });
         });
         document.getElementById('pop-save').addEventListener('click', savePopcode);
         const unlink = document.getElementById('pop-unlink');
@@ -2116,6 +2282,10 @@
             <div class="menu-ic" style="font-family:var(--cal-font,'FilsonPro',sans-serif);font-size:19px;font-weight:700">Aa</div>
             <div><div>Change font</div><div class="menu-sub">${escapeHtml((CAL_FONTS.find(f => f.id === calFont) || CAL_FONTS[0]).name)}</div></div>
           </div>
+          <div class="menu-row" data-act="theme">
+            <div class="menu-ic"><span style="width:18px;height:18px;border-radius:50%;background:${calTheme || '#ffffff'};box-shadow:inset 0 0 0 1.5px rgba(0,0,0,0.18)"></span></div>
+            <div><div>Change theme</div><div class="menu-sub">The background colour of every page</div></div>
+          </div>
           <div class="menu-row" data-act="events">
             <div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
             <div><div>Year &amp; holidays</div><div class="menu-sub">${calYear} · US holidays ${holidaysOn ? 'on' : 'off'}</div></div>
@@ -2152,6 +2322,7 @@
           setTimeout(() => inp.focus(), 350);
         });
         document.querySelector('#sheet [data-act="font"]').addEventListener('click', openCalFontSheet);
+        document.querySelector('#sheet [data-act="theme"]').addEventListener('click', () => openThemeSheet('all'));
         document.querySelector('#sheet [data-act="events"]').addEventListener('click', openEventsSheet);
         document.querySelector('#sheet [data-act="duplicate"]').addEventListener('click', duplicateCalendar);
         document.querySelector('#sheet [data-act="share"]').addEventListener('click', shareCalendar);
@@ -2205,6 +2376,65 @@
           document.querySelectorAll('#sheet .font-card').forEach(x => x.classList.toggle('active', x.dataset.font === calFont));
           renderMonths();
         }));
+      }
+
+      // The colour dot in a page header.
+      function themeDotHTML(c, label) {
+        return `<button type="button" class="theme-dot" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}"><span style="background:${c || '#ffffff'}"></span></button>`;
+      }
+
+      // Themes sheet — Popsa-style page colours. scope: 'all' or a month 0–11.
+      // A colour applies the moment it's tapped; the sheet stays open to try more.
+      function openThemeSheet(scope) {
+        const isAll = scope === 'all';
+        const current = () => isAll ? (calTheme || '#ffffff') : (monthTheme(scope) || '#ffffff');
+        const sw = (c) => `<button type="button" class="th-sw" data-c="${c}" style="background:${c}" aria-label="${c}"></button>`;
+        const chev = '<svg width="12" height="8" viewBox="0 0 12 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 1.5 6 6.5 11 1.5"/></svg>';
+        const opts = `<option value="all"${isAll ? ' selected' : ''}>All pages</option>`
+          + MONTH_NAMES.map((n, i) => `<option value="${i}"${scope === i ? ' selected' : ''}>${n} only</option>`).join('');
+        openSheet(`
+          <div class="ep-head"><h2>Themes</h2><button class="ep-x" id="th-x" aria-label="Close">${IC_X}</button></div>
+          <label class="th-scope"><select id="th-scope" aria-label="Apply to">${opts}</select>${chev}</label>
+          <div class="th-group">
+            <h3>Dynamic</h3>
+            <p>Automatic themes based on the colours in your photos</p>
+            <div class="th-row" id="th-dynamic">${'<span class="th-sw loading"></span>'.repeat(5)}</div>
+          </div>
+          ${THEME_GROUPS.map(g => `<div class="th-group"><h3>${g.name}</h3><div class="th-row">${g.colors.map(sw).join('')}</div></div>`).join('')}
+          ${!isAll && months[scope].theme ? `<div class="th-reset"><button type="button" class="link-btn" id="th-reset">Match the rest of the calendar</button></div>` : ''}
+        `);
+        const sheet = document.getElementById('sheet');
+        const mark = () => sheet.querySelectorAll('.th-sw[data-c]').forEach(b => b.classList.toggle('active', b.dataset.c === current()));
+        const choose = (c) => {
+          c = normHex(c); if (!c) return;
+          if (isAll) {
+            const hadOverrides = months.some(m => m.theme);
+            calTheme = normTheme(c);
+            months.forEach(m => { m.theme = null; });
+            if (hadOverrides) showToast('Applied to every page');
+          } else {
+            months[scope].theme = c === (calTheme || '#ffffff') ? null : c;
+          }
+          mark();
+          renderMonths();
+        };
+        const wire = (root) => root.querySelectorAll('.th-sw[data-c]').forEach(b => b.addEventListener('click', () => choose(b.dataset.c)));
+        wire(sheet);
+        document.getElementById('th-x').addEventListener('click', closeSheet);
+        document.getElementById('th-scope').addEventListener('change', (e) => openThemeSheet(e.target.value === 'all' ? 'all' : +e.target.value));
+        const reset = document.getElementById('th-reset');
+        if (reset) reset.addEventListener('click', () => { months[scope].theme = null; renderMonths(); openThemeSheet(scope); });
+        mark();
+        // Dynamic swatches from this month's photo (or every placed photo).
+        const own = !isAll && photoUrlFor(months[scope].photoId);
+        const urls = own ? [own] : [cover.photoId, ...months.map(m => m.photoId)].map(photoUrlFor).filter(Boolean);
+        dynamicThemes([...new Set(urls)]).then(cols => {
+          const row = document.getElementById('th-dynamic');
+          if (!row || document.getElementById('th-scope').value !== String(scope)) return;
+          row.innerHTML = cols.map(sw).join('');
+          wire(row);
+          mark();
+        });
       }
 
       // ── Save (create or update the design) ──────────────────────
@@ -2390,8 +2620,9 @@
               year: calYear,
               holidays: holidaysOn ? 'us' : 'none',
               font: calFont,
+              theme: calTheme,
               cover: { title, photo_url: cover.photoId ? urlById[cover.photoId] || null : null, photo_adjust: cover.photoId ? (photos.get(cover.photoId) || {}).adjust || null : null },
-              months: months.map(m => ({ photo_url: m.photoId ? urlById[m.photoId] || null : null, photo_adjust: m.photoId ? (photos.get(m.photoId) || {}).adjust || null : null })),
+              months: months.map(m => ({ photo_url: m.photoId ? urlById[m.photoId] || null : null, photo_adjust: m.photoId ? (photos.get(m.photoId) || {}).adjust || null : null, theme: m.theme || null })),
               // Photos added but not placed on a month yet (restored on reopen).
               tray: trayIds.map(id => urlById[id]).filter(Boolean),
               print_urls: printUrls,
@@ -2678,10 +2909,10 @@
         // hangs open, PDF page 2N is the upper panel and 2N+1 the lower — so
         // grid-then-photo puts the dates on top and the photo below, matching
         // the builder's connected-sheet preview.
-        addUnit((inner, f) => { f.classList.add('cover-frame'); buildPhotoInner(inner, cover.photoId, true); });
+        addUnit((inner, f) => { f.classList.add('cover-frame'); buildPhotoInner(inner, cover.photoId, true, calTheme); });
         for (let m = 0; m < 12; m++) {
           addUnit((inner) => buildGridInner(inner, calYear, m));
-          addUnit((inner, f) => { f.classList.add('photo-frame'); buildPhotoInner(inner, months[m].photoId, false); });
+          addUnit((inner, f) => { f.classList.add('photo-frame'); buildPhotoInner(inner, months[m].photoId, false, monthTheme(m)); });
         }
         addUnit((inner, f) => { f.classList.add('back-frame'); buildBackInner(inner); });
 
@@ -3049,6 +3280,7 @@
           calYear = parseInt(cal.year, 10) || calYear;
           holidaysOn = cal.holidays !== 'none';
           applyCalFont(cal.font || 'filson');
+          calTheme = normTheme(cal.theme);
 
           // Popcoded media, keyed by the photo URL the item was linked to.
           const { data: items } = await db.from('collection_items')
@@ -3082,7 +3314,7 @@
             idByUrl[url] = id;
             return id;
           };
-          months = (cal.months || []).slice(0, 12).map(m => ({ photoId: getPhotoId(m && m.photo_url) }));
+          months = (cal.months || []).slice(0, 12).map(m => ({ photoId: getPhotoId(m && m.photo_url), theme: normHex(m && m.theme) }));
           while (months.length < 12) months.push({ photoId: null });
           cover = { photoId: getPhotoId(cal.cover && cal.cover.photo_url) };
           (cal.tray || []).forEach(url => getPhotoId(url));

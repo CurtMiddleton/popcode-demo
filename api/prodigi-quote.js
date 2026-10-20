@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     const blocked = destinationRestriction(destinationCountryCode, address && address.postalOrZipCode);
     if (blocked) return res.status(400).json({ error: blocked.message, restricted: true });
 
-    const { findVariant, markupFor, priceParts, providerFor, normalizeCopies, minCopiesFor } = await import('../lib/print/catalog.mjs');
+    const { findVariant, priceGroup, providerFor, normalizeCopies, minCopiesFor } = await import('../lib/print/catalog.mjs');
     const variant = findVariant(productType, variantId);
     if (!variant) return res.status(400).json({ error: 'Unknown product' });
 
@@ -71,6 +71,7 @@ export default async function handler(req, res) {
     }
 
     const { getProvider } = await import('../lib/print/providers/index.mjs');
+    const { quoteRetryDelayMs, sleep } = await import('../lib/print/providers/statuses.mjs');
     const provider = getProvider(providerFor(productType));
     if (!provider.isConfigured()) return res.status(500).json({ error: 'Print provider not configured' });
     // Retry a couple of times — the print provider occasionally returns an empty
@@ -87,14 +88,16 @@ export default async function handler(req, res) {
         // Deterministic failures (an unknown SKU) answer the same way every
         // time — surface them instead of asking twice more.
         if (err.noRetry || attempt === 2) throw err;
+        await sleep(quoteRetryDelayMs(err, attempt));
       }
     }
     if (!summed) return res.status(502).json({ error: 'Could not price this product/destination', unservable: true });
 
-    // Markup is per product type (see catalog.TYPE_MARKUPS); MARKUP is only the
-    // fallback for a type with no entry.
-    const typeMarkup = markupFor(productType, MARKUP);
-    const parts = priceParts(summed, typeMarkup);
+    // Retail price where the catalogue sets one, else the type markup; never
+    // under catalog.MIN_MARKUP on the goods. The same function prices checkout.
+    const parts = priceGroup([{ productType, variant, copies: qty, pageCount: pages }], summed, MARKUP);
+    const goodsMinor = summed.itemsMinor ?? Math.max(0, summed.totalMinor - (summed.shippingMinor || 0));
+    const typeMarkup = goodsMinor > 0 ? Math.round((parts.printingMinor / goodsMinor) * 1000) / 1000 : null;
     res.status(200).json({
       quote_cost_minor: summed.totalMinor,
       markup: typeMarkup,

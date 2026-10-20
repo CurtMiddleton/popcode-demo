@@ -6,25 +6,37 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-19)
+## Current state (updated 2026-10-20)
 
 **Live and recent**
-- **Centurion (nonprofit) demo 2026-10-19 + video scrubber fix (PR #269, merged, live).** Scans and
-  videos worked; Android viewers had no scrubber. The viewer's `<video>` never had controls (iPhone
-  only showed one because iOS hands landscape videos to the system player). Now `#vid-bar` in
-  `view.html`: play/pause, times, tap/drag scrubber, fades after 3 s. Not tried on a real Android yet.
-  **Follow-up:** Laila S. Wilson-McCoy (Director of Development, laila.wilson@centurion.org) sent the
-  gala video (Google Drive) and photo gallery (pic-time, `centurion-gala-2026`). **Sample to build:** the
-  presenters introducing the honorees + the honorees speaking, and Jozelyn Davis's call for support.
-  Reply drafted in Gmail (curt@popcodeapp.com, new thread: her email isn't in that mailbox). It thanks her,
-  confirms the sample and mentions the Android fix. **Not sent yet.**
+- **Centurion (nonprofit) — sample in progress (2026-10-19 → 20; see that entry).** Demo went well;
+  Android had no video scrubber → fixed (PR #269, live). Laila S. Wilson-McCoy (Director of Development,
+  laila.wilson@centurion.org) asked for a sample: honoree presenters + honorees speaking, and **Jozelyn
+  Davis's call for support**. **Photos picked + cut list made**; the clips could NOT be cut here (Drive
+  throttled the 24.5 GB file). **Next:** the user trims the 8 clips on the Mac (or asks Centurion for
+  the speech files) → uploads on /create → Claude makes a one-page PDF of the 8 photos → user sends the
+  email from curt@theworkshop.works (text drafted in chat on 10-19). Delete the stale unsent
+  "sample coming" draft in curt@popcodeapp.com.
+- **Montage is now on every Popcode surface (2026-10-19, `9743928`).** The builder
+  moved out of create.html/edit.html into **`public/montage.js`**, shared by all five
+  pages; book, calendar and board book gained the third choice. Montage is an action,
+  not a stored media type, so there was no migration. **Not yet exercised end to end** —
+  a real render goes through Shotstack, so the first montage built from the book maker
+  is the live check. See the 2026-10-19 entry for the host interface.
 - **Video mix-up bug fixed + customer handled (2026-10-18, PRs #253–#255; see that entry).**
   Uploads now get unique filenames; books/calendars/board books no longer count toward the
   Popcode limit (migration **run in prod**); every checkout shows a "Check what each photo
-  plays" step, and Analytics → Content → a project has **Check videos**. **Open:** Elena Kuher
-  (Olena Kucher, Spokane, `only80yearsyoung`) — reply pending; when she orders, confirm her
-  `print_orders` row has `default, spine` (first real order with a spine file) and the order
-  in Prodigi's dashboard lists a spine. #255 not yet tried on an iPhone or a real checkout.
+  plays" step, and Analytics → Content → a project has **Check videos**. **Elena Kuher**
+  (Olena Kucher, Spokane, `only80yearsyoung`) **has ordered** — Prodigi 14652102 (her book,
+  spine file attached, est. despatch Mon 26 Oct), 14653577 (her second order) and 14656283
+  (the user's hand-made photo fix). See 2026-10-20. Still open: confirm the spine PDF
+  actually carries the title text. #255 not yet tried on an iPhone or a real checkout.
+- **Sentry triage follow-up: [PR #271](https://github.com/CurtMiddleton/popcode-demo/pull/271)
+  merged 2026-10-20** — Prodigi's reply now rides on failed-order events, and quote retries
+  back off (429 → Retry-After / 1 s, 2 s). **Sentry is now watched:** two email alert rules
+  (failed paid order / fatal outage; spikes) + the **Daily Sentry check** scheduled task at
+  8:45 ET every day (push only when something is real). **Shotstack balance was 0.17 credits on 10-17** — top up before
+  promoting montage in books (a render needs ~1.13).
 - **Gallery outreach round 1 SENT 2026-10-15** (9:45–10:55 ET, scheduled in Gmail from
   curt@popcodeapp.com, BCC curt@theworkshop.works): Geary, Rye Arts Center, Pelham Art Center
   (**free-pilot offer**, personal email, not in the follow-up sequence), Iona Chapman Gallery,
@@ -279,17 +291,12 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    on Scout's is lower right at **12%** of the diameter on a white ring (the
    user's mockup, 2026-09-26); real orders print it at 6% — decide whether
    orders should get the bigger symbol too.
-10. **Privacy/trust fixes — Monday 2026-10-05 (reminder set in session
-    `session_01Kf5EHms85CmqqyN3UHuXfu`, 9:00 ET).** (a) `scan_events.ip_address`
-    still holds real IPs for every event before 2026-09-26 (log-event stopped
-    writing them in `eb81c4c`, but nothing deleted the old ones) — so the impact
-    dashboard's "Popcode doesn't keep IP addresses" isn't yet true for history.
-    Plan: migration that replaces each with a one-way hash (keeps old
-    unique-visitor counts), then nulls the raw column; first check every RPC
-    that reads `ip_address` (`get_reach_events`, `get_events_with_users`
-    (prod-only definition), viewer-insights). (b) `privacy.html` says local
-    storage is only for sign-in and UI preferences — the anonymous `device_id`
-    lives there now; add a sentence.
+10. ~~**Privacy/trust fixes**~~ — **done 2026-10-20 (PR #270).** Every stored
+    `scan_events.ip_address` was replaced in prod with a keyed one-way code
+    (`supabase/migrations/2026-10-20-erase-stored-ips.sql`, run by the user;
+    check query returned 0). `privacy.html` names the anonymous viewer ID.
+    "Popcode doesn't keep IP addresses" is now true for history too — worth
+    saying on `/nonprofits` (suggested to the user, not done).
 11. **New engagement insights — plan agreed 2026-10-02, build in a fresh
     session.** One data source (`scan_events`), three audiences, each insight
     only where it answers that audience's question:
@@ -3876,3 +3883,263 @@ The user's Analytics → Map screenshot showed 9 countries, 15 accounts (Kazakhs
 - Optional: tell Prodigi the blank Rwanda & SA spines were our missing artwork, not their print.
 - Maybe: flip the spine text to top-to-bottom (US convention) before her book prints.
 - Maybe later: auto-flag a photo that doesn't resemble its own video's first frame.
+
+### 2026-10-19 — Montage everywhere: the builder became a shared module
+
+**Merged straight to `main` as `9743928` (no PR) and live in prod.** Branch
+`claude/book-calendar-creation-bugs-vr2spe`, restarted from `origin/main` (the
+checkout was **576 commits behind** — see the fetch rule in CLAUDE.md, it keeps
+earning its place).
+
+**The report:** "you can't create a montage for a calendar — verify that any
+time you add a Popcode to any project you get video, montage or audio, always
+three choices." Verified, and it was true:
+
+| Entry point | Video | Montage | Audio |
+|---|---|---|---|
+| create.html (New Popcode) | ✓ | ✓ | ✓ |
+| edit.html | ✓ | ✓ | ✓ |
+| book / calendar / boardbook | ✓ | **✗** | ✓ |
+
+**Why it was missing is the whole point.** The builder lived *inline* in
+create.html and edit.html carried a near-identical copy, so it could only ever
+exist on a page someone had remembered to paste ~1,700 lines into. Three pages
+never got it. Copying it a third, fourth and fifth time was not an option.
+
+**So it is now one module: `public/montage.js`, used by all five pages.**
+
+**It is an extraction, not a rewrite, and that was measurable before starting.**
+The two copies shared 71 top-level functions and **67 had byte-identical
+bodies**; the 4 that differed (`mtgApplyToPage`, `mtgOpenDraft`, `mtgPoll`,
+`openMontage`) were all host-boundary. Better still, the create-only globals
+(`switchMediaType`, `checkReady`, `pairs`, `formatFileSize`) were used
+**only inside `mtgApplyToPage`** — so the seam was a single function. Only `db`
+and `currentUser` crossed the boundary anywhere else.
+
+The move was **scripted**, then the emitted module was diffed back against the
+original 1,371 lines: the only changes are the 5 intended substitutions. Do it
+that way again — hand-editing 1,400 lines of working code is how this goes wrong.
+
+**The host interface (`montage.js` header has the full doc):**
+```js
+PopcodeMontage.init({
+  db,                                 // Supabase client
+  getUser: () => currentUser,         // for draft storage
+  onApply: (target, file) => {...},   // THE seam: where the finished MP4 goes
+  onRendered: () => logActivity(...), // optional
+});
+openMontage(target);                  // target is opaque, handed back to onApply
+PopcodeMontage.openDraft(d);          // load a draft the host fetched itself
+```
+`target` is opaque on purpose — the three makers pass their popcode-sheet state
+object, create/edit pass a page index or an `{kind:'existing', itemId}` ref.
+
+**Two unifications, both taken FROM edit.html so nothing it had was lost:** its
+null-safe `#mtg-swap` hide (that button is now in the shared markup, so editing
+keeps "Play a video or audio instead"), and its split of draft-opening into
+`mtgOpenDraftData`, published as `PopcodeMontage.openDraft` so edit.html can
+still reopen the draft already linked to the Popcode being edited.
+
+**Montage is an ACTION, not a stored media type.** What it renders fills the
+video slot — which is how create/edit already worked. `mediaType` stays
+`'video' | 'audio'`, nothing downstream changed, **no migration**. In the three
+makers the third button doesn't switch `mediaType`, it calls `openMontage(s)`.
+
+**What stays per-host, and why:** the Safe-photo-decoding cluster
+(`decodeDrawable`, `drawOpaque`, `shrinkPhotoForLimit`, `optimizePhotoDim`, …)
+sits *in the middle* of the old montage region but the ordinary photo/video
+pickers use it too (create.html:1538, :1922; edit.html:2852, :3383). So each
+host keeps its copy and the module carries its own — consistent with the
+deliberate "do not centralise this block" decision from 2026-09-02.
+
+**Analytics:** create.html still logs `create_montage`, edit.html still doesn't
+(editing an existing Popcode isn't a new project). The three makers **do** log
+it — the montage itself is new whether or not the book is. Change the
+`onRendered` hook if that reads wrong.
+
+**Net −2,972 lines** (create.html 4231→2700, edit.html 5216→3683).
+
+**Gotchas worth not relearning:**
+- **A script-level `let` is not a window property.** `window.popEditState = {...}`
+  from `page.evaluate` silently does nothing; `eval('popEditState = ...')` reaches
+  the real binding. Same shape as the `rows` note from 2026-09-21.
+- **`montageState` is exposed via `Object.defineProperty`**, not a plain copy,
+  because the injected markup's `oninput` writes to it and the module reassigns it.
+- The injected markup uses inline `onclick=`, which resolves against **global**
+  scope — hence the explicit `window.mtg*` exports at the bottom of the module.
+  If you add a handler to the markup, export it too or it silently does nothing.
+- **CSS and overlay are injected on first open**, so a page that never opens the
+  builder pays nothing. `.mtg-swap` has no CSS rule in either old copy — that
+  button has always been unstyled; not a regression.
+- **Don't hand-roll a JS tokenizer.** My "strip strings and comments before
+  counting references" regex ate the file on an apostrophe inside a block comment
+  and reported *zero* external references when there were three. Raw word-boundary
+  matching over ~100 candidate names, reviewed by eye, was both faster and right.
+- **`curl` writing `http=000` is a dropped transfer, not a 404.** Two of six
+  byte-comparisons against prod came back 000 and were fine on retry.
+
+**Verified:** all three makers render exactly `["Video","Montage","Audio"]`;
+tapping Montage opens the builder with the correct target; a finished montage
+lights the preview and enables Save; all five pages load the module with **0
+page errors**; edit.html shows 59 buttons vs create's 58 (the swap button
+survived); kept helpers defined exactly once per page. All six files
+byte-identical in prod after deploy.
+**Not verified:** a real end-to-end render — that goes through Shotstack, so the
+first montage built from the book maker is the live check.
+
+#### Also live but never written down: the 2026-09-24 session
+A parallel session that day shipped these to prod (`2663cbd`, `7d557da`) and no
+entry was ever made. A fresh Claude would not find them otherwise:
+- **Rearrange Pages was a rendering bug, not data loss.** Badges and cover photos
+  are sized in JS (`sizeSlotBadges`, `layoutPhotoInSlot`) and `renderRearrange()`
+  called neither — badges stretched to the full slot (185px vs 21px) and the cover
+  photo rendered at 1400px in a 261px cell. Both now run against the rearrange
+  grid. Also added the back cover to that view and a per-page delete button.
+- **`sizeSlotBadges(root)` gained a parameter** — and the resize listener passed
+  `requestAnimationFrame(sizeSlotBadges)`, which hands it a *timestamp* as `root`.
+  Now `() => sizeSlotBadges()`. Watch for that whenever a callback gains an arg.
+- **Cormorant Garamond back to weight 400** in book/calendar/boardbook (it had
+  been bolted to 600 with the sans faces, which flattens a display serif).
+- **Calendar back cover** now prints the book's branding panel, within 0.03% of
+  the book's placement (the two pages are the same physical size).
+- **Duplicate on every design in My Designs** (`?duplicate=1` on each editor,
+  which detaches it from the source row), board books regained **Edit**.
+- **`public/storage-copy.js`** — duplicates re-home their assets server-side via
+  Supabase Storage `copy()` at save time, so deleting the original no longer guts
+  the copy. Self-gating: an ordinary edit makes **0** copies.
+- **The print-render race** ("Unable to find element in cloned iframe", a real
+  production Sentry error): `#proof` is one scratch container shared by every
+  print render and each clears it on entry, so overlapping renders detached each
+  other's pages. `withProofStage()` now serialises them in book.html and
+  calendar.html, and the calendar admin proof path opens the blocking progress
+  panel it was already writing progress into.
+
+### 2026-10-20 — Stored IPs erased; English labels on both analytics maps; Popcode map expandable
+
+**PR #270 (merged by Claude at the user's request).** Session `session_01Kf5EHms85CmqqyN3UHuXfu` (the Map-tab session from 09-26, resumed).
+
+#### Privacy (Next item 10, now done)
+- `supabase/migrations/2026-10-20-erase-stored-ips.sql`: converts `ip_address` to text if it isn't, then sets every remaining IP to `'x' || left(md5(secret || ip), 16)` with a random `secret` that lives only inside the `do` block — irreversible (an unkeyed md5 of an IPv4 could be brute-forced), but the same IP → same code, so every RPC's `md5(ip_address || user_agent)` visitor key still counts old viewers the same. Re-runnable (skips `^x[0-9a-f]{16}$`). Tested on local Postgres 16 (`pg_ctlcluster 16 main start`; it exists in the container) with inet and text columns. **User ran it in prod; the check returned 0.** Note: `2026-09-26-no-ip-addresses.sql` had said "the user chose not to erase them" — the user reversed that on 10-02 and confirmed 10-20.
+- `analytics.html`: Activity log's IP column and IP search removed (internal session grouping still reads the column; codes work the same).
+- `privacy.html`: local storage also holds "a random ID … so repeat views count once"; Last updated → October 20, 2026. Wording deliberately avoids "not linked to your name" — signed-in views do carry user_id alongside device_id.
+
+#### Maps
+- **New `public/basemap.js`** — `PopcodeBasemap.add(leafletMap)`: OpenFreeMap Positron vector tiles (free, no key, commercial OK) via MapLibre GL 4.7.1 + `@maplibre/maplibre-gl-leaflet` 0.1.4 (jsdelivr), so pin/popup code stays Leaflet. Every label layer's `text-field` rewritten to `coalesce(name:en, name:latin, name)`. **Gotcha: don't use `name_en`** — in OpenMapTiles it silently falls back to the local name, so Cyrillic won before the Latin spelling was tried. Tiny villages with neither (e.g. Мякинино) still show local script at city zoom. Falls back to OSM raster tiles without WebGL.
+- **Web traffic map** (`drawWebMap`, analytics.html): `tile.openstreetmap.org` → `PopcodeBasemap.add`. Those OSM tiles labelled places in local script (the user's screenshot: Россия, 中国, مصر); OSM has no English tile set. CARTO tiles answered 200 from the sandbox but an earlier session found they need a key, so not used.
+- **Map tab** (`reach-map.js`): same base map under the pins; the Natural Earth country shapes are now shading only (`fillOpacity` 0.08–0.38, no stroke). **Fit all** (`fitAll`, to the visible pins) and **Expand** (`setFull`, `.rm-map-wrap.full` + `body.rm-map-open` overlay, Esc closes) copy the Web traffic map. maxZoom 9 → 12; scroll-wheel zoom only when expanded; `fitMinZoom()` stops zoom-out past the world filling the height (full screen at z1 showed empty bands).
+- Test harness: Playwright `page.route` can't reach the internet directly in this sandbox; real tiles were served by shelling out to `curl` (which honours the proxy) inside the route handler.
+
+### 2026-10-20 — Sentry triage: what the four "real" issues actually were
+
+**PR [#271](https://github.com/CurtMiddleton/popcode-demo/pull/271) — merged.** The first
+"push to prod" was blocked by the auto-mode classifier; the second went through after
+merging `main` in (conflicts in `docs/STATUS.md` and `lib/print/cart.mjs`, where #273 had
+swapped `priceParts` for `priceGroup` in the import line).
+**Also in #271 — POPCODE-WEB-K (Prodigi quote 429):** 23 quotes in ~1 s at 14:55 UTC with no
+user agent (a script, not a shopper; caller unknown). Both quote loops retried instantly, so
+`quoteRetryDelayMs` in `lib/print/providers/statuses.mjs` now paces them, and `prodigi.mjs`
+reads `Retry-After`. Resolved in Sentry with a comment. Branch `claude/epic-thompson-tc57hv`, commit `c99e486`, mergeable/clean.
+
+**Context:** the user triaged all 26 Sentry issues in a claude.ai chat (Sentry connector),
+resolved them, and flagged four as real. Sentry org `popcode-inc`, project `popcode-web`.
+The Sentry MCP works here: `get_sentry_resource(resourceType='issue', organizationSlug=
+'popcode-inc', resourceId='POPCODE-WEB-19')`, and `search_errors` with `issue:<id>` lists
+every event with browser/city. **Cross-check with the release tag** (`release` = commit
+SHA) — two of the four had already been fixed by later commits.
+
+| Issue | What it was | Outcome |
+|---|---|---|
+| WEB-19 Prodigi 500 in stripe-webhook (10-18 18:10 UTC) | Elena's book, `print_orders.id` `e35707ce…` | Someone pressed **Retry** ~1 h later; it is Prodigi **14652102**, in production, spine attached. Nothing to do. |
+| WEB-R Shotstack out of credits (10-17 16:13 UTC) | Fired on release `68f4bc4`, 14 min before `fe94563` added the friendly pause + `fatal` "Shotstack OUT OF CREDITS" alert | No out-of-credits alert since → no render attempted, or topped up. Balance unknown from here. |
+| WEB-V "scan check timed out" ×5 | Advisory photo check in `public/scan-check.js` giving up after 15 s; all Safari/iOS (2 from New Rochelle = the user) | Stopped reporting timeouts (#271) |
+| WEB-16 POPCODE_QUOTA_EXCEEDED in book.html (10-17) | Elena, before #254 | Already fixed by #254 |
+
+**Found in passing:** POPCODE-WEB-1B, a `SyntaxError: No identifiers allowed directly after
+numeric literal` at `manage.html:1` from the same Athens Firefox-iOS creator. **Not ours** —
+manage.html has no inline handlers and its one inline script parses; line 1 + no stack on
+Firefox iOS = the browser's injected scripts. Left resolved.
+
+**#271 changes:**
+- `api/stripe-webhook.js` / `api/finalize-order.js` `onError`: attach `httpStatus` and
+  Prodigi's reply as Sentry `extra` (WEB-19 was a bare "500"; the reply was only in
+  `print_orders.prodigi_response`). **Latent bug fixed:** `settlePopcodeCredits`
+  (`lib/print/fulfill.mjs:140`) calls `onError(err, { order_id })` with no `response`, and
+  `JSON.stringify(undefined).slice` threw a TypeError before `captureException` — a failed
+  credit refund would have 500'd the request and never reached Sentry.
+- `public/scan-check.js`: timeout no longer sent to Sentry; other failures still are.
+- `public/create.html` (Generate compile catch, ~:1950): now `captureException` with
+  `step: compile` — before, a failed compile was only shown on screen.
+Syntax-checked only; not run in a browser or a real checkout.
+
+**Finding a Prodigi order by our id:** the dashboard list has no reference column. Open an
+order — the Summary panel shows **Order reference** = our `print_orders.id` (that's the
+`merchantReference`). The Search box may also take it.
+
+**Elena's orders (all accounted for):** 14652102 (book, 10-18 15:07, the retried failure,
+spine + postcard + sticker), 14653577 ($74.78, her own second order), 14656283 ($28.20,
+"Online order" — the user made it by hand to fix her photo).
+
+#### Later the same day: Sentry is now watched automatically
+
+**Sentry alert rules (made by the user in Sentry → Alerts, project popcode-web, env production, notify Member → Curt by email):**
+- **Popcode: paid order failed / outage** — WHEN a new issue is created OR a resolved issue
+  regresses; IF *any*: message contains `order failed`, message contains `Order submission
+  failed`, level equals `fatal` (catches Shotstack out-of-credits). Every trigger.
+- **Popcode: something is spiking** — WHEN an issue escalates; no filter; 60-minute throttle.
+- Default **"Send a notification for high priority issues"**: told to disable it (noise the
+  daily check now handles). Not confirmed done. "Send a notification when pull requests are
+  ready" left alone (Seer only).
+- In Sentry's new alert builder the filters are **"The event's [message] attribute
+  [contains]"** and **"The event's level [equals]"** — not "Message"/"Level". The alert name
+  is the editable title next to "Alerts /" (defaults to "Notify <member>").
+
+**Scheduled task "Daily Sentry check"** (`trig_01Y7yeD3u5JZGFDdcC8uVLZc`, fresh session per
+run, **daily 8:45 ET incl. weekends**, push only, auto-fix PRs off). Read-only on code:
+triages new/regressed issues from the last 24 h, resolves NOISE / already-fixed with a
+reason, leaves REAL ones open and pushes a phone-readable summary with the fix it suggests;
+the user says "fix it" in a session to get it built.
+- **Gotcha:** created via `create_trigger` it got **no repository and no connector** (this
+  org rejects the `connectors` param, and the call passed no source). The user added both by
+  hand: claude.ai → Scheduled tasks → Daily Sentry check → Edit → **Advanced settings** →
+  General → Repository `CurtMiddleton/popcode-demo`, Connectors → Sentry. Do the same for any
+  future scheduled task that needs a repo or connector.
+- **Test run worked:** resolved one noise issue (a one-off Leaflet map error on the
+  owner-only analytics page), "nothing needs you".
+
+#### Open
+- Elena's spine PDF: open **View PDF** under Spine on 14652102 and check the title is on it.
+- Check the Shotstack balance before montage in books gets used.
+- Confirm the default Sentry "high priority issues" alert is disabled.
+
+
+### 2026-10-19 → 20 — Centurion demo: Android video scrubber, and a sample from the gala footage
+
+**PR:** [CurtMiddleton/popcode-demo#269](https://github.com/CurtMiddleton/popcode-demo/pull/269), merged at the user's "push to prod", confirmed live (polled popcode.app for `id="vid-bar"`). Plus STATUS commits on `claude/friendly-euler-stnvpv`.
+
+#### The demo
+- Popcode for nonprofits was demoed to **Centurion** (Princeton NJ; works to free the wrongly convicted). Scans and videos worked; viewers on **Android couldn't see a scrubber**.
+- Laila S. Wilson-McCoy (Director of Development, laila.wilson@centurion.org) followed up with the gala video + photo gallery and asked for a sample: **the presenters for the honorees + the honorees speaking, and Jozelyn Davis's call for support**.
+
+#### #269 — video scrubber on the viewer
+- **Root cause:** `view.html`'s `<video id="fullvideo">` never had controls. iPhones only *seemed* to have a scrubber because landscape videos go to iOS's system player (`webkitEnterFullscreen`); Android (element fullscreen on `#fullscreen-video`) and portrait videos everywhere had none.
+- **Fix:** `#vid-bar` inside `#fullscreen-video`: drawn SVG play/pause (not ▶, iOS emoji), elapsed/remaining, and the audio player's tap/drag scrub pattern (`.ap-scrub-hit`/`.ap-scrub` classes reused; seeks ≥120 ms apart; drag stops 0.25 s short of the end so `ended` → end screen doesn't fire mid-drag). Fades after 3 s of play; tap the video to toggle; always shown when paused. `vidResetUi()` is called from `triggerVideo()` and the end-screen Replay path.
+- Tested headless (Pixel 7 profile, WebM clip loaded as a **blob URL**: Python's `http.server` has no Range support, so seeks snapped to 0 until then). **Not tried on a real Android.**
+
+#### The sample (not finished: clips not cut)
+- **Video:** `Program.mp4`, Drive id `1iYms9vtPhOTAROQi_QI1Oykh6mDbJEQ7`, owner tyler@centurion.org, **24.5 GB**, 2:31:39, 1080p ~21 Mbps, moov at the front.
+- **Program map** (from 15 s samples every 90 s + Whisper): 13:30 welcome · 28:30–42 Paul Castellaro legal update · 43:30 Jim Cousins → Brian Pippett (video 49:30–54) · 55:30–61 presenter (curly hair, dark ruffled dress) → Jose Carreon (video ~61:30) · 64:30–69 **Jose speaks** (bow tie) · **70:30–77 Jozelyn Davis's appeal** (green brocade jacket; she gives Laila a shout-out) · 78–90 break · 91:30 → Paul Castellaro + Michael Shannon (Michael speaks ~102–104) · 108–119 presenter (bald, grey suit) → Barry (video 120–123) · **124:30+ Barry speaks** (maroon striped suit; Montana contractor). 130–152 not sampled (throttled).
+- **Gallery:** pic-time `phillipvn.pic-time.com/client/centurion-gala-2026` (photographer Phillip Van Nostrand), 378 photos. JS-rendered: scrape with headless Chromium (`waitUntil: 'domcontentloaded'`, not networkidle), then swap `/thumbres/` or `/smallres/` → `/lowres/` in the URL for 1600×1064 (~600 KB). `/highres/` is 404.
+- **Picks + cut list** (zip sent to the user; times are approximate, nudge to sentences): 1 Cousins (gallery `12550832085`) 47:20–48:40 · 2 Jose's presenter (`12550832108`) 58:10–59:30 · 3 Jose (`12541524659`) 67:50–69:15 · 4 **Jozelyn** (`12550832133`) 75:40–77:00 · 5 Castellaro (`12541524653`) 97:20–98:40 · 6 Shannon (`12541524664`) 102:20–103:40 · 7 Barry's presenter (`12541524665`) 117:50–119:10 · 8 Barry (`12541524666`) 126:10–127:30.
+- ORB + homography cross-match of the 8 (phone-shot simulation): self 540–720 inliers, worst cross-match 75 (#3 Jose vs #8 Barry, shared podium sign). Safe as MindAR targets.
+- **Email to Laila:** the user sends it from curt@theworkshop.works (Gmail connector only reaches curt@popcodeapp.com). Text drafted in chat on 10-19 with a link placeholder + "attached PDF of the photos". The earlier popcodeapp draft (`r-1935952549805512744`) is stale; delete it.
+
+#### Lessons (the big rabbit hole)
+- **Drive throttles big files hard.** The confirm URL (`drive.usercontent.google.com/download?id=…&export=download&confirm=t`) supports Range, but after ~7 GB in ~10 min responses get **truncated to 2,040 bytes** (still HTTP 206) and the rate fell to ~6.5 MB/min, then ~0.3 MB/min. A fresh `uuid` didn't help. **For a multi-GB event video, ask for the clips (or have the user trim locally) up front.**
+- What worked before the throttle: a **sparse local copy** (`truncate -s SIZE`, `dd conv=notrunc oflag=seek_bytes` each fetched range in), a Python parser of the moov (stts/stsz/stsc/co64) for per-second byte offsets, then plain `ffmpeg -ss` on the sparse file. ffmpeg can't open the Drive URL itself through the proxy; a Python requests-based range relay returned corrupt data.
+- faster-whisper in a venv: its PyAV call fails (`metadata_errors` kwarg), so pass a numpy array read with `wave` instead of a path. `small.en` int8 on 4 CPUs is fine.
+- `pkill -f <pattern>` matches the calling shell's own command line → exit 144. Use `pkill -f "relay[.]py"`.
+
+#### Open
+- The user trims the 8 clips (or gets them from Centurion) → upload on /create → send Claude the slug → Claude makes the one-page PDF of the 8 photos → the user sends the email.
+- Double-check the spellings "Jozelyn" and Barry's surname (the transcript only gave first names).
+- Try #269 on a real Android phone.
