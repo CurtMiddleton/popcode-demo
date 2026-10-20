@@ -9,6 +9,11 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 ## Current state (updated 2026-10-20)
 
 **Live and recent**
+- **Calendar page themes are live (2026-10-20, [PR #277](https://github.com/CurtMiddleton/popcode-demo/pull/277)).**
+  Popsa-style background colours, for all pages or one month at a time, in `public/calendar.html`.
+  **Not yet tried on live:** saving and reopening a themed calendar, the real print PDF, an iPhone, or
+  a printed test calendar. Calendar only so far: the photo book and board book don't have themes yet.
+  See the 2026-10-20 (calendar themes) entry.
 - **Montage is now on every Popcode surface (2026-10-19, `9743928`).** The builder
   moved out of create.html/edit.html into **`public/montage.js`**, shared by all five
   pages; book, calendar and board book gained the third choice. Montage is an action,
@@ -4102,4 +4107,82 @@ the user says "fix it" in a session to get it built.
 - Elena's spine PDF: open **View PDF** under Spine on 14652102 and check the title is on it.
 - Check the Shotstack balance before montage in books gets used.
 - Confirm the default Sentry "high priority issues" alert is disabled.
+
+### 2026-10-20 — Calendar page themes (Popsa-style background colours)
+
+**PR:** [#277](https://github.com/CurtMiddleton/popcode-demo/pull/277) `Calendar: page themes
+(background colours), Popsa-style`. Merged into main (`bb8925d`) and confirmed live on
+popcode.app/calendar.html about a minute later. The only file changed is `public/calendar.html`.
+
+**Background:** the user asked "where are we with letting users pick background colours like Popsa?
+We started but never finished." Nothing had been built: no commit on main or on any of the ~90
+unmerged branches. The "Change Theme" menu they remembered was the Popsa screenshot logged as a
+"Phantom parallel build" in the 2026-08-31 entry (a design reference, never code).
+
+**What was built** (line numbers as of `bb8925d`):
+- **State.** `calTheme` is the colour for the whole calendar, with null meaning white. Each month can
+  override it with `months[m].theme`, where null follows `calTheme` and `'#ffffff'` is an explicit
+  white override. `monthTheme(m)` picks the right one. `normTheme` and `normHex` normalise colours;
+  white is stored as null for the whole calendar.
+- **Palettes.** `THEME_GROUPS` (`public/calendar.html:765`) holds Pastel ×11, Bright ×17, Deep ×17
+  and Neutral ×8, copied by eye from the user's Popsa screenshots.
+- **Type colours.** `themeColors(bg)` (`:804`) works out the type colours from the background:
+  - Background luminance below 0.3 gets white type. Otherwise the type is a deep shade of the same
+    hue, or `#141414` when the background is nearly grey (saturation under 0.12).
+  - The lighter inks (body, sub, num, numrule, rule) are mixed from the type colour toward the
+    background.
+  - `applyPageTheme(inner, bg)` (`:813`) sets them as `--pg-*` CSS variables plus an inline
+    background on the page.
+- **CSS.** The `.gp-*` (dates page) and `.bk-inst` rules now read `var(--pg-ink, #141414)` and so on,
+  with the old colours as the defaults. **Calendars without a theme render exactly as before.**
+- **Dynamic swatches.** `dynamicThemes(urls)` (`:852`) draws each photo at 48×48 and builds a hue
+  histogram in 24 bins, weighting vivid mid-lightness pixels most. It returns five lightness steps of
+  the strongest hue. Results are cached per photo URL, and CORS-tainted photos are skipped.
+- **Which pages get the colour.**
+  - The dates page: `buildGridInner`.
+  - The photo page, behind a "Fit" photo: `buildPhotoInner` takes a 4th `bg` argument. Empty photo
+    pages keep their grey `#ededed` placeholder.
+  - The back cover: `buildBackInner` switches to `Popcode_logo.rev.print.png` when the theme is
+    dark.
+  - The front cover is a full-bleed photo, so the colour only shows there when the cover photo is
+    fitted.
+  - `.month-sheet` also gets the colour, which removes a white hairline between the dates page and
+    the photo.
+- **UI.**
+  - `themeDotHTML` puts a colour dot on each page header: Front Cover opens "All pages", a month
+    opens that month.
+  - **Options → Change theme** opens the sheet for all pages.
+  - A month photo's ⋯ menu has **Change theme · This month only**.
+  - `openThemeSheet(scope)` (`:2388`) has a native `<select>` for scope (All pages, then each month).
+    A colour applies on tap. Choosing a colour for **All pages clears every month's override**, with
+    an "Applied to every page" toast. A month with its own colour shows a "Match the rest of the
+    calendar" link.
+- **Saving and undo.** Saved as `book_layout.calendar.theme` and `months[i].theme`, with no
+  migration. `loadCalendarForEdit` restores them. The undo state now includes `calTheme`; month
+  themes come along because months are cloned whole.
+
+**Tested** in headless Chromium using the STATUS recipe (python http.server; supabase stubbed with a
+session user; photos injected straight into `photos`, `cover` and `months` from page.evaluate):
+- Pastel on all pages, a deep colour on one month, and navy on all pages.
+- Dynamic colours pulled from the test photos.
+- Undo and redo.
+- `withProofStage(renderCalendarPreviewInner)` produced the expected colours through the real
+  html2canvas.
+- No page errors.
+
+**New trick:** html2canvas 1.4.1 and jsPDF 2.5.1 *can* be used in the sandbox. `npm pack` both into
+the scratchpad, then `page.route` the cdnjs URLs to the local `dist/` files. This means the
+print-preview and PDF paths **are** testable here, which the old notes said they weren't.
+
+**Gotcha:** `pkill -f "http.server ..."` in the same Bash call as a commit killed the shell (exit
+144) before the commit ran. Kill the server in its own call.
+
+**Not done / open:**
+- Not yet tried on the live site: saving and reopening a themed calendar, the real print PDF (Options →
+  Preview print / Proof), an iPhone. **Order one test calendar** with a Deep and a Pastel colour
+  before promoting the feature; white type on deep colours is the most likely to print differently.
+- A Popsa-style cover (photo inset with a coloured border) was deliberately left out. It changes
+  the cover layout and print, so it's a follow-up if the user wants it.
+- Bringing the same picker to `book.html` and `boardbook.html` was offered, not started. The board
+  book already has its own text-page swatches (`swatchesHTML`).
 
