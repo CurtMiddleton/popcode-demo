@@ -164,6 +164,9 @@
       .toggle button { border: none; background: none; border-radius: 14px; padding: 8px 18px; font-size: 13px; font-weight: 500; color: #666; cursor: pointer; font-family: 'Inter', sans-serif; }
       .toggle button.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 4px rgba(0,0,0,0.12); font-weight: 600; }
       .side-hint { text-align: center; font-size: 13px; color: #777; margin-top: 12px; min-height: 1.3em; }
+      .card-face img { -webkit-user-drag: none; user-select: none; }
+      .card-face .cf-text[data-zone]:hover { outline: 1px dashed rgba(118,87,252,0.75); outline-offset: 3px; cursor: grab; }
+      .card-face .cf-text.dragging { outline: 1.5px solid #7657FC; outline-offset: 3px; cursor: grabbing; user-select: none; }
       .side-hint a { color: #7657FC; font-weight: 600; text-decoration: none; }
       .text-input.qty-select { appearance: none; -webkit-appearance: none; cursor: pointer; font-weight: 600; padding-right: 40px;
         background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%231a1a1a' stroke-width='1.8'/%3E%3C/svg%3E") no-repeat right 16px center; }
@@ -419,8 +422,14 @@
         }
 
         C.resolveText(tpl, opts.text || {}, opts.greeting).forEach((z) => {
+          // A line the buyer dragged (opts.moves, fractions of the card) sits
+          // where they put it: the fitter no longer nudges it into a band or
+          // away from its neighbours.
+          const mv = opts.moves && opts.moves[z.id];
+          if (mv) z = { ...z, x: z.x + mv.dx, y: z.y + mv.dy, free: true };
           const t = document.createElement('div');
           t.className = 'cf-text';
+          if (mv) t.dataset.moved = '1';
           t.style.top = z.y * 100 + '%';
           // fitCardText resets to this before it centres the zone in a band.
           t.dataset.zid = z.id;
@@ -633,7 +642,7 @@
           const fr = face.getBoundingClientRect();
           const scale = fr.height / face.offsetHeight || 1;   // a transformed preview
           bands.forEach((band) => {
-            const els = zones.filter((el) => band.zones.includes(el.dataset.zid) && el.textContent.trim());
+            const els = zones.filter((el) => band.zones.includes(el.dataset.zid) && !el.dataset.moved && el.textContent.trim());
             if (!els.length) return;
             const rs = els.map((el) => el.getBoundingClientRect());
             const top = Math.min(...rs.map((r) => r.top)), bottom = Math.max(...rs.map((r) => r.bottom));
@@ -926,6 +935,64 @@
           });
         });
       }
+      // Drag any line of a design to move it (2026-10-20: type is hard to place
+      // on some photos). A press that moves more than a few pixels is a drag;
+      // a plain click still puts the cursor in the text to type.
+      function enableZoneDrag(face) {
+        // The browser's own drag (of the photo under the words, or of selected
+        // text) would take over the pointer mid-move.
+        face.addEventListener('dragstart', (e) => e.preventDefault());
+        face.querySelectorAll('.cf-text[data-zone]').forEach((el) => {
+          el.style.touchAction = 'none';
+
+          el.addEventListener('pointerdown', (e) => {
+            if (e.button) return;
+            const sx = e.clientX, sy = e.clientY, l0 = el.offsetLeft, t0 = el.offsetTop;
+            const scale = face.getBoundingClientRect().width / face.offsetWidth || 1;
+            let dragging = false;
+            const move = (ev) => {
+              const dx = (ev.clientX - sx) / scale, dy = (ev.clientY - sy) / scale;
+              if (!dragging) {
+                if (Math.hypot(dx, dy) < 5) return;
+                dragging = true;
+                el.blur();
+                el.classList.add('dragging');
+              }
+              ev.preventDefault();
+              window.getSelection().removeAllRanges();
+              el.style.left = l0 + dx + 'px';
+              el.style.top = t0 + dy + 'px';
+            };
+            const up = () => {
+              window.removeEventListener('pointermove', move);
+              window.removeEventListener('pointerup', up);
+              window.removeEventListener('pointercancel', up);
+              if (!dragging) return;
+              const W = face.offsetWidth, H = face.offsetHeight;
+              const zid = el.dataset.zid;
+              const z = state.template.text.find((x) => x.id === zid);
+              const prev = (state.moves || {})[zid] || { dx: 0, dy: 0 };
+              // The line's top on screen IS its new y (a band may have centred
+              // it before, so measure where it was shown, not the design's y).
+              // Left is offset by its alignment, so x moves by the drag.
+              const nx = Math.min(0.98, Math.max(0.02, z.x + prev.dx + (el.offsetLeft - l0) / W));
+              const ny = Math.min(0.97, Math.max(0, el.offsetTop / H));
+              state.moves = { ...(state.moves || {}), [zid]: { dx: nx - z.x, dy: ny - z.y } };
+              drawEditorCard();
+              paintMoveReset();
+            };
+            // On the window, not the line: a quick first move can leave the
+            // line before the drag has begun.
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+            window.addEventListener('pointercancel', up);
+          });
+        });
+      }
+      function paintMoveReset() {
+        const r = $('move-reset');
+        if (r) r.classList.toggle('hidden', !Object.keys(state.moves || {}).length);
+      }
       const swatchColor = (id) => (id[0] === '#' ? id : (C.COLORWAYS[state.colorway] || {})[id] || '#999');
       // One block of controls per text box.
       function renderBoxFields() {
@@ -990,6 +1057,7 @@
         state.text = {};
         state.photos = {};
         state.samples = {};
+        state.moves = {};
         fillMyPhoto(tpl);
         state.popcode = null;
         state.script = null;
@@ -1024,7 +1092,9 @@
               '<div class="panel"><h3>' + (state.custom ? 'Your text' : 'Your words') + '</h3>' +
                 '<p class="hint">' + (state.custom
                   ? 'Add as many lines as you like and style each one. Drag text on the card to move it.'
-                  : 'Everything on the card is yours to change. Pick a greeting above or type your own, here or straight onto the card.') + '</p>' +
+                  : 'Everything on the card is yours to change. Pick a greeting above or type your own, here or straight onto the card. ' +
+                    'Drag any line on the card to move it.' +
+                    ' <a href="#" id="move-reset" class="hidden">Put the words back</a>') + '</p>' +
                 '<div id="zone-fields"></div></div>' +
               '<div class="panel"><h3>Back of the card</h3>' +
                 '<p class="hint">How to play the card, as on every Popcode product. Add a photo above it if you like. ' +
@@ -1081,6 +1151,10 @@
         // Editing the words is front work: show the front.
         $('zone-fields').addEventListener('focusin', () => { if (state.side === 'back') showSide('front'); });
         drawBackPreview();
+        if ($('move-reset')) {
+          $('move-reset').addEventListener('click', (e) => { e.preventDefault(); state.moves = {}; drawEditorCard(); paintMoveReset(); });
+          paintMoveReset();
+        }
         $('save-btn').addEventListener('click', onSave);
         $('cart-btn').addEventListener('click', addToCart);
       }
@@ -1147,6 +1221,7 @@
         const next = C.familyTemplates(state.template.family).find((t) => t.orientation === o);
         if (!next || next === state.template) return;
         state.template = next;
+        state.moves = {};   // positions belong to one layout
         if (!(next.colorways || []).includes(state.colorway)) state.colorway = next.colorways[0];
         renderEditor();
       }
@@ -1229,12 +1304,12 @@
         });
         const face = renderCard(state.template, {
           width: w, editable: !state.custom, samples: state.samples, text: state.text, photos: state.photos, bw: state.bw,
-          greeting: state.greeting, corners: state.corners, script: state.script,
+          greeting: state.greeting, corners: state.corners, script: state.script, moves: state.moves,
           colorway: state.colorway, onPickPhoto: onPhotoTap,
         });
         stage.appendChild(face);
         fitCardText(face);
-        if (state.custom) enableDrag(face);
+        if (state.custom) enableDrag(face); else enableZoneDrag(face);
       }
 
       // Side inputs and on-card editing are two views of the same string.
@@ -1506,7 +1581,8 @@
         const holder = document.createElement('div');
         holder.style.cssText = 'position:fixed;left:-20000px;top:0;pointer-events:none;';
         const face = renderCard(tpl, { width: FRONT_CSS_W, text: state.text, photos: state.photos,
-          colorway: state.colorway, crossOrigin: true, bw: state.bw, greeting: state.greeting, script: state.script });
+          colorway: state.colorway, crossOrigin: true, bw: state.bw, greeting: state.greeting, script: state.script,
+          moves: state.custom ? null : state.moves });
         face.style.boxShadow = 'none';
         holder.appendChild(face);
         document.body.appendChild(holder);
@@ -1891,7 +1967,7 @@
               templateId: tpl.id, formatId: tpl.formatId, orientation: tpl.orientation,
               occasionId: state.occasionId, text: state.text, photos: photoUrls,
               colorway: state.colorway, pack: state.pack, bw: state.bw, frontUrl,
-              greeting: state.greeting, corners: state.corners, script: state.script, backPhoto: backUrl, backShape: state.back ? backShape(await loadImg(backUrl).catch(() => null)) : null,
+              greeting: state.greeting, corners: state.corners, script: state.script, moves: state.custom ? null : state.moves, backPhoto: backUrl, backShape: state.back ? backShape(await loadImg(backUrl).catch(() => null)) : null,
               custom: state.custom ? JSON.parse(JSON.stringify(state.custom)) : null,
               // Edit Photo crops, per slot.
               adjust: Object.fromEntries(Object.entries(state.photos).filter(([, p]) => p.adjust).map(([k, p]) => [k, p.adjust])),
@@ -2026,6 +2102,7 @@
         state.greeting = cfg.greeting || 'holiday';
         state.corners = cfg.corners === 'rounded' ? 'rounded' : 'square';
         state.script = C.SCRIPTS.some((x) => x.id === cfg.script) ? cfg.script : null;
+        state.moves = (cfg.moves && typeof cfg.moves === 'object') ? cfg.moves : {};
         state.back = cfg.backPhoto ? { url: cfg.backPhoto, shape: cfg.backShape || null } : null;
         editing = duplicate ? null : { id: col.id, slug: col.slug };
         $('step-browse').classList.add('hidden');
