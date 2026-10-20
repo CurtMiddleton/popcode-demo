@@ -39,26 +39,29 @@
   },
   "OCCASIONS": [
     {
+      "id": "holiday",
+      "label": "Holiday Photo Cards",
+      "section": "Holiday",
+      "group": "Holiday Cards",
+      "tags": [
+        "holiday"
+      ]
+    },
+    {
       "id": "christmas",
       "label": "Christmas Cards",
-      "group": "Christmas & Holiday Cards",
+      "section": "Holiday",
+      "group": "Holiday Cards",
       "tags": [
         "christmas"
       ],
       "greeting": "christmas"
     },
     {
-      "id": "holiday",
-      "label": "Holiday Cards",
-      "group": "Christmas & Holiday Cards",
-      "tags": [
-        "holiday"
-      ]
-    },
-    {
       "id": "religious-xmas",
       "label": "Religious Christmas",
-      "group": "Christmas & Holiday Cards",
+      "section": "Holiday",
+      "group": "Holiday Cards",
       "tags": [
         "christmas",
         "religious"
@@ -68,156 +71,326 @@
     {
       "id": "new-year",
       "label": "New Year's Cards",
-      "group": "Christmas & Holiday Cards",
+      "section": "Holiday",
+      "group": "Holiday Cards",
       "tags": [
         "newyear"
       ],
       "greeting": "newyear"
     },
     {
+      "id": "hanukkah",
+      "label": "Hanukkah Cards",
+      "section": "Holiday",
+      "group": "Holiday Cards",
+      "tags": [
+        "hanukkah"
+      ]
+    },
+    {
       "id": "thanksgiving",
       "label": "Thanksgiving Cards",
-      "group": "Christmas & Holiday Cards",
+      "section": "Holiday",
+      "group": "Holiday Cards",
       "tags": [
         "thanksgiving"
       ]
     },
     {
-      "id": "holiday-party",
-      "label": "Holiday Party Invites",
-      "group": "Christmas & Holiday Cards",
-      "tags": [
-        "holiday",
-        "invitation"
-      ]
-    },
-    {
       "id": "baby-first-xmas",
       "label": "Baby's First Christmas",
-      "group": "Christmas Cards By Theme",
+      "section": "Holiday",
+      "group": "By Theme",
       "tags": [
         "christmas",
         "baby"
-      ]
+      ],
+      "greeting": "christmas"
     },
     {
       "id": "newlywed-xmas",
-      "label": "Newlywed Christmas",
-      "group": "Christmas Cards By Theme",
+      "label": "Newlywed Holiday Cards",
+      "section": "Holiday",
+      "group": "By Theme",
       "tags": [
-        "christmas",
+        "holiday",
         "newlywed"
       ]
     },
     {
       "id": "pet-xmas",
-      "label": "Pet Christmas Cards",
-      "group": "Christmas Cards By Theme",
+      "label": "Pet Holiday Cards",
+      "section": "Holiday",
+      "group": "By Theme",
       "tags": [
-        "christmas",
+        "holiday",
         "pet"
       ]
     },
     {
       "id": "year-in-review",
       "label": "Year in Review",
-      "group": "Christmas Cards By Theme",
+      "section": "Holiday",
+      "group": "By Theme",
       "tags": [
-        "christmas",
+        "holiday",
         "multiphoto"
       ]
     },
     {
       "id": "xmas-moving",
-      "label": "Christmas Moving",
-      "group": "Christmas Cards By Theme",
+      "label": "Holiday Moving Announcements",
+      "section": "Holiday",
+      "group": "By Theme",
       "tags": [
-        "christmas",
+        "holiday",
         "moving"
+      ]
+    },
+    {
+      "id": "holiday-party",
+      "label": "Holiday Party Invitations",
+      "section": "Holiday",
+      "group": "Party",
+      "tags": [
+        "holiday",
+        "invitation"
+      ]
+    },
+    {
+      "id": "save-the-date",
+      "label": "Save the Dates",
+      "section": "Wedding",
+      "group": "Wedding",
+      "tags": [
+        "savethedate"
+      ]
+    },
+    {
+      "id": "wedding-inv",
+      "label": "Wedding Invitations",
+      "section": "Wedding",
+      "group": "Wedding",
+      "tags": [
+        "wedding",
+        "invitation"
+      ]
+    },
+    {
+      "id": "wedding-thanks",
+      "label": "Wedding Thank You Cards",
+      "section": "Wedding",
+      "group": "Wedding",
+      "tags": [
+        "wedding",
+        "thankyou"
+      ]
+    },
+    {
+      "id": "just-married",
+      "label": "Just Married Announcements",
+      "section": "Wedding",
+      "group": "Wedding",
+      "tags": [
+        "justmarried"
+      ]
+    },
+    {
+      "id": "engagement",
+      "label": "Engagement Party",
+      "section": "Wedding",
+      "group": "Parties",
+      "tags": [
+        "engagement",
+        "invitation"
+      ]
+    },
+    {
+      "id": "rehearsal",
+      "label": "Rehearsal Dinner",
+      "section": "Wedding",
+      "group": "Parties",
+      "tags": [
+        "rehearsal",
+        "invitation"
       ]
     },
     {
       "id": "birth",
       "label": "Birth Announcements",
+      "section": "Baby",
       "group": "Announcements",
       "tags": [
         "birth"
       ]
     },
     {
-      "id": "graduation-ann",
-      "label": "Graduation Announcements",
+      "id": "birth-holiday",
+      "label": "Holiday Birth Announcements",
+      "section": "Baby",
       "group": "Announcements",
       "tags": [
-        "graduation"
+        "birth",
+        "holiday"
       ]
     },
     {
-      "id": "moving",
-      "label": "Moving Announcements",
+      "id": "pregnancy",
+      "label": "Pregnancy Announcements",
+      "section": "Baby",
       "group": "Announcements",
       "tags": [
-        "moving"
-      ]
-    },
-    {
-      "id": "save-the-date",
-      "label": "Save The Date Cards",
-      "group": "Announcements",
-      "tags": [
-        "savethedate"
-      ]
-    },
-    {
-      "id": "birthday-inv",
-      "label": "Birthday Invitations",
-      "group": "Invitations",
-      "tags": [
-        "birthday",
-        "invitation"
+        "pregnancy"
       ]
     },
     {
       "id": "baby-shower",
       "label": "Baby Shower Invitations",
-      "group": "Invitations",
+      "section": "Baby",
+      "group": "Invitations & Thank Yous",
       "tags": [
         "babyshower",
         "invitation"
       ]
     },
     {
-      "id": "graduation-inv",
-      "label": "Graduation Invitations",
-      "group": "Invitations",
+      "id": "baby-thanks",
+      "label": "Baby Thank You Cards",
+      "section": "Baby",
+      "group": "Invitations & Thank Yous",
       "tags": [
-        "graduation",
-        "invitation"
-      ]
-    },
-    {
-      "id": "thank-you",
-      "label": "Thank You Cards",
-      "group": "Shop by Occasion",
-      "tags": [
+        "baby",
         "thankyou"
       ]
     },
     {
-      "id": "birthday",
-      "label": "Birthday Cards",
-      "group": "Shop by Occasion",
+      "id": "baptism",
+      "label": "Baptism & Christening",
+      "section": "Baby",
+      "group": "Invitations & Thank Yous",
       "tags": [
-        "birthday"
+        "baptism",
+        "invitation"
+      ]
+    },
+    {
+      "id": "first-birthday",
+      "label": "First Birthday",
+      "section": "Baby",
+      "group": "Invitations & Thank Yous",
+      "tags": [
+        "firstbirthday",
+        "invitation"
+      ]
+    },
+    {
+      "id": "kids-birthday",
+      "label": "Kids Birthday",
+      "section": "Invitations",
+      "group": "Birthdays",
+      "tags": [
+        "birthday",
+        "kids",
+        "invitation"
+      ]
+    },
+    {
+      "id": "adult-birthday",
+      "label": "Adult & Milestone Birthday",
+      "section": "Invitations",
+      "group": "Birthdays",
+      "tags": [
+        "birthday",
+        "adult",
+        "invitation"
+      ]
+    },
+    {
+      "id": "sweet-sixteen",
+      "label": "Sweet Sixteen & Quinceañera",
+      "section": "Invitations",
+      "group": "Birthdays",
+      "tags": [
+        "sweetsixteen",
+        "invitation"
+      ]
+    },
+    {
+      "id": "mitzvah",
+      "label": "Bar & Bat Mitzvah",
+      "section": "Invitations",
+      "group": "Milestones",
+      "tags": [
+        "mitzvah",
+        "invitation"
+      ]
+    },
+    {
+      "id": "communion",
+      "label": "First Communion & Confirmation",
+      "section": "Invitations",
+      "group": "Milestones",
+      "tags": [
+        "communion",
+        "invitation"
+      ]
+    },
+    {
+      "id": "graduation",
+      "label": "Graduation",
+      "section": "Invitations",
+      "group": "Milestones",
+      "tags": [
+        "graduation"
+      ]
+    },
+    {
+      "id": "anniversary",
+      "label": "Anniversary Party",
+      "section": "Invitations",
+      "group": "Parties",
+      "tags": [
+        "anniversary",
+        "invitation"
+      ]
+    },
+    {
+      "id": "bridal-shower",
+      "label": "Bridal Shower",
+      "section": "Invitations",
+      "group": "Parties",
+      "tags": [
+        "bridalshower",
+        "invitation"
+      ]
+    },
+    {
+      "id": "dinner-party",
+      "label": "Dinner Party",
+      "section": "Invitations",
+      "group": "Parties",
+      "tags": [
+        "dinnerparty",
+        "invitation"
       ]
     }
   ],
+  "SECTIONS": [
+    "Holiday",
+    "Wedding",
+    "Baby",
+    "Invitations"
+  ],
   "OCCASION_GROUPS": [
-    "Christmas & Holiday Cards",
-    "Christmas Cards By Theme",
+    "Holiday Cards",
+    "By Theme",
+    "Party",
+    "Wedding",
+    "Parties",
     "Announcements",
-    "Invitations",
-    "Shop by Occasion"
+    "Invitations & Thank Yous",
+    "Birthdays",
+    "Milestones"
   ],
   "TEXT_ROLES": {
     "headline": {
@@ -4074,7 +4247,9 @@
   };
   C.occasionsWithCounts = function () {
     return C.OCCASIONS.map(function (o) {
-      var c = C.templatesForOccasion(o.id).length;
+      var fams = {};
+      C.templatesForOccasion(o.id).forEach(function (t) { fams[t.family] = 1; });
+      var c = Object.keys(fams).length;
       return Object.assign({}, o, { count: c });
     }).filter(function (o) { return o.count > 0; });
   };

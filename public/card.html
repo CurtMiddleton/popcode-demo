@@ -50,6 +50,9 @@
 
       /* ── Step 1: occasion + template grid ────────────────────────────── */
       .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px 120px; }
+      .sec-tabs { display: flex; gap: 26px; border-bottom: 1px solid #e4e2dc; margin-bottom: 22px; overflow-x: auto; }
+      .sec-tab { background: none; border: none; padding: 0 0 12px; font: 600 16px 'Inter', sans-serif; color: #8a857d; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+      .sec-tab.active { color: #1a1a1a; border-bottom-color: #1a1a1a; }
       .occ-group { margin-bottom: 26px; }
       .occ-group-name { font-family: 'CooperBT', serif; font-size: 20px; margin-bottom: 10px; }
       .occ-row { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -187,7 +190,7 @@
     <div class="top-bar">
       <a class="bi-back" href="/shop.html">&larr; Back to Shop</a>
       <h1 id="page-title">Holiday Cards</h1>
-      <p class="subtitle" id="page-sub">Flat 5&times;7&Prime; photo cards. Scan the photo and your video plays.</p>
+      <p class="subtitle" id="page-sub">Flat 5&times;7&Prime; photo cards that play a video when they're scanned.</p>
     </div>
 
     <div class="wrap">
@@ -539,9 +542,27 @@
       function renderBrowse() {
         const host = $('step-browse');
         host.innerHTML = '';
-        const live = C.occasionsWithCounts();
-        if (!live.some((o) => o.id === state.occasionId)) state.occasionId = live[0].id;
+        const all = C.occasionsWithCounts();
+        if (!all.some((o) => o.id === state.occasionId)) state.occasionId = all[0].id;
+        const section = C.occasionById(state.occasionId).section;
 
+        // Holiday · Wedding · Baby · Invitations, as tabs. A section with no
+        // designs yet isn't shown.
+        const tabs = document.createElement('div');
+        tabs.className = 'sec-tabs';
+        C.SECTIONS.filter((sec) => all.some((o) => o.section === sec)).forEach((sec) => {
+          const t = document.createElement('button');
+          t.className = 'sec-tab' + (sec === section ? ' active' : '');
+          t.textContent = sec;
+          t.addEventListener('click', () => {
+            state.occasionId = all.find((o) => o.section === sec).id;
+            renderBrowse();
+          });
+          tabs.appendChild(t);
+        });
+        host.appendChild(tabs);
+
+        const live = all.filter((o) => o.section === section);
         const groups = [...new Set(live.map((o) => o.group))];
         groups.forEach((g) => {
           const wrap = document.createElement('div');
@@ -1487,6 +1508,11 @@
         }
         const q = new URLSearchParams(location.search);
         if (q.get('occasion')) state.occasionId = q.get('occasion');
+        // ?section=wedding opens that tab on its first occasion with designs.
+        if (q.get('section')) {
+          const first = C.occasionsWithCounts().find((o) => o.section.toLowerCase() === q.get('section').toLowerCase());
+          if (first) state.occasionId = first.id;
+        }
         db.auth.getSession().then(({ data }) => {
           if (!data.session) { location.href = '/auth.html?next=' + encodeURIComponent(location.pathname + location.search); return; }
           currentUser = data.session.user;
