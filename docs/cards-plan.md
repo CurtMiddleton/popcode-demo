@@ -173,8 +173,9 @@ What a card is now:
    sides, so `toBleed()` crops to it (`CARD_FORMATS['flat-5x7'].printPx`). The
    probe lists 49 variants; the other 37 (round corners, other papers, 500/1000
    packs) weren't printed in full and aren't used.
-2. **Cost and price.** One `send_to_production:false` order → `baseCostMinor`
-   per pack variant. Check in the same order that quantity 1 of a pack variant
+2. **Cost and price.** `PRINTIFY_API_TOKEN=... node scripts/printify-card-cost.mjs --to "street, city, ST, zip"`
+   places one held order with all four packs, prints each line's cost and
+   shipping, and cancels it → `baseCostMinor` per pack variant. Check in the same order that quantity 1 of a pack variant
    is the whole pack.
    Then a `RETAIL_PRICES.card` entry per pack (the pack buttons say only
    "cards" until then), and drop `card` from the exemption in
