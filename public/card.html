@@ -1029,7 +1029,8 @@
                 '<p class="hint">How to play the card, as on every Popcode product. Add a photo above it if you like. ' +
                 'Switch to <a href="#" id="see-back">Back</a> under the card to see it full size.</p>' +
                 '<div class="pack-row"><button class="btn-ghost" id="back-photo" style="margin-top:0">Add a photo</button>' +
-                '<button class="btn-ghost hidden" id="back-clear" style="margin-top:0">Remove photo</button></div></div>' +
+                '<button class="btn-ghost hidden" id="back-clear" style="margin-top:0">Remove photo</button></div>' +
+                '<div class="opt hidden" id="opt-bshape" style="margin:16px 0 0"><h3>Photo shape <span id="bshape-name"></span></h3><div class="pack-row" id="bshape-row"></div></div></div>' +
               '<div class="panel"><h3>Popcode</h3>' +
                 '<p class="hint" id="pop-hint"></p>' +
                 '<button type="button" class="popcode-cta" id="pop-btn"><span class="pc-sym"><img src="/assets/popcode_symbol_color.svg" alt=""/></span>' +
@@ -1310,6 +1311,15 @@
         const mine = ++backSeq;
         $('back-photo').textContent = state.back ? 'Change photo' : 'Add a photo';
         $('back-clear').classList.toggle('hidden', !state.back);
+        $('opt-bshape').classList.toggle('hidden', !state.back);
+        if (state.back) {
+          let natural = null;
+          try { natural = await loadImg(state.back.url); } catch (_) {}
+          if (mine !== backSeq) return;
+          optionRow('bshape-row', 'bshape-name',
+            [{ id: 'landscape', label: 'Landscape' }, { id: 'portrait', label: 'Portrait' }, { id: 'square', label: 'Square' }],
+            backShape(natural), (id) => { state.back.shape = id; drawBackPreview(true); });
+        }
         if (!show) return;
         state.side = 'back';
         paintSideToggle();
@@ -1606,9 +1616,18 @@
       // differs from the books ("Scan photos with the Popcode symbol"): a card's
       // front carries no symbol, the whole front is what scans.
       const BACK = {
-        logoW: 1.1, gapLogo: 0.19, textPt: 9, leadPt: 14, gapSym: 0.16, symW: 0.36, bottom: 0.62,
+        logoW: 1.1, gapLogo: 0.19, textPt: 9, leadPt: 14, gapSym: 0.16, symW: 0.36, bottom: 0.40,
         logo: '/assets/Popcode_logo.png', logoAspect: 591 / 2232,
       };
+      // Back photo shapes, as width / height.
+      const BACK_SHAPES = { landscape: 3 / 2, portrait: 4 / 5, square: 1 };
+      function backShape(img) {
+        const set = state.back && state.back.shape;
+        if (BACK_SHAPES[set]) return set;
+        if (!img || !img.naturalWidth) return 'square';
+        const r = img.naturalWidth / img.naturalHeight;
+        return r > 1.15 ? 'landscape' : r < 0.87 ? 'portrait' : 'square';
+      }
       async function renderBack(slug, opts) {
         opts = opts || {};
         const tpl = state.template;
@@ -1630,14 +1649,22 @@
         // no shadow. In the editor (opts.placeholder) an empty spot is a light
         // grey square with a picture icon, so it's clear it can be tapped; the
         // print file never has it.
-        const land = tpl.orientation === 'landscape';
-        const side = (land ? 1.75 : 2.7) * inch;
-        const top = b.offsetY + (land ? 0.32 : 0.5) * inch;
-        const py = top + Math.max(0, (y - top - side) / 2);
-        const px = cx - side / 2;
-        if (!(state.back && state.back.url) && opts.placeholder) {
+        // The photo is as big as the space above the block allows, in the
+        // shape the buyer picks (landscape / portrait / square; by default the
+        // photo's own shape). An empty spot is drawn square.
+        let img = null;
+        if (state.back && state.back.url) { try { img = await loadImg(state.back.url); } catch (_) {} }
+        const shape = backShape(img);
+        const ratio = BACK_SHAPES[shape];
+        const trimW = b.w - 2 * b.offsetX;
+        const top = b.offsetY + 0.42 * inch;
+        const boxW = trimW - 0.84 * inch, boxH = Math.max(0.5 * inch, y - 0.34 * inch - top);
+        const pw = Math.min(boxW, boxH * ratio), ph = pw / ratio;
+        const px = cx - pw / 2, py = top + (boxH - ph) / 2;
+        const side = Math.min(pw, ph);
+        if (!img && opts.placeholder) {
           ctx.fillStyle = '#efefef';
-          ctx.fillRect(px, py, side, side);
+          ctx.fillRect(px, py, pw, ph);
           // A 24-unit picture icon, 28% of the square, a little above centre.
           const isz = side * 0.28, ix = cx - isz / 2, iy = py + side / 2 - isz * 0.7;
           ctx.save();
@@ -1653,15 +1680,12 @@
           ctx.fillText('Add a photo', cx, iy + isz + side * 0.06);
           ctx.textAlign = 'left';
         }
-        if (state.back && state.back.url) {
-          try {
-            const img = await loadImg(state.back.url);
-            ctx.save();
-            ctx.beginPath(); ctx.rect(px, py, side, side); ctx.clip();
-            ctx.translate(px, py);
-            drawCover(ctx, img, side, side);
-            ctx.restore();
-          } catch (_) {}
+        if (img) {
+          ctx.save();
+          ctx.beginPath(); ctx.rect(px, py, pw, ph); ctx.clip();
+          ctx.translate(px, py);
+          drawCover(ctx, img, pw, ph);
+          ctx.restore();
         }
 
         try {
@@ -1778,7 +1802,7 @@
         if (state.back) {
           if (state.back.file) {
             backUrl = await uploadWithRetry(`${slug}/card/back-photo-${stamp}.jpg`, state.back.file, state.back.file.type || 'image/jpeg');
-            state.back = { url: backUrl };
+            state.back = { url: backUrl, shape: state.back.shape };
           } else {
             backUrl = (await remap(state.back.url)) || state.back.url;
           }
@@ -1839,7 +1863,7 @@
               templateId: tpl.id, formatId: tpl.formatId, orientation: tpl.orientation,
               occasionId: state.occasionId, text: state.text, photos: photoUrls,
               colorway: state.colorway, pack: state.pack, bw: state.bw, frontUrl,
-              greeting: state.greeting, corners: state.corners, script: state.script, backPhoto: backUrl,
+              greeting: state.greeting, corners: state.corners, script: state.script, backPhoto: backUrl, backShape: state.back ? backShape(await loadImg(backUrl).catch(() => null)) : null,
               custom: state.custom ? JSON.parse(JSON.stringify(state.custom)) : null,
               // Edit Photo crops, per slot.
               adjust: Object.fromEntries(Object.entries(state.photos).filter(([, p]) => p.adjust).map(([k, p]) => [k, p.adjust])),
@@ -1974,7 +1998,7 @@
         state.greeting = cfg.greeting || 'holiday';
         state.corners = cfg.corners === 'rounded' ? 'rounded' : 'square';
         state.script = C.SCRIPTS.some((x) => x.id === cfg.script) ? cfg.script : null;
-        state.back = cfg.backPhoto ? { url: cfg.backPhoto } : null;
+        state.back = cfg.backPhoto ? { url: cfg.backPhoto, shape: cfg.backShape || null } : null;
         editing = duplicate ? null : { id: col.id, slug: col.slug };
         $('step-browse').classList.add('hidden');
         $('step-edit').classList.remove('hidden');
