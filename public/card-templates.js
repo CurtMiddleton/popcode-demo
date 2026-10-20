@@ -5954,6 +5954,733 @@
       "label": "Pen"
     }
   ],
+  "CARD_LAYOUTS": [
+    {
+      "id": "full",
+      "label": "Full photo",
+      "ground": "bleed",
+      "scrim": 0.16,
+      "portrait": {
+        "photos": [
+          {
+            "id": "p1",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1
+          }
+        ],
+        "boxes": [
+          {
+            "text": "Your words here",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": false,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.775,
+            "size": 0.046,
+            "maxW": 0.84,
+            "color": "onPhoto",
+            "font": "cormorant"
+          },
+          {
+            "text": "YOUR NAMES",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": true,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.865,
+            "size": 0.018,
+            "maxW": 0.84,
+            "color": "onPhoto",
+            "font": "grotesk"
+          }
+        ]
+      },
+      "landscape": {
+        "photos": [
+          {
+            "id": "p1",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1
+          }
+        ],
+        "boxes": [
+          {
+            "text": "Your words here",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": false,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.745,
+            "size": 0.064,
+            "maxW": 0.84,
+            "color": "onPhoto",
+            "font": "cormorant"
+          },
+          {
+            "text": "YOUR NAMES",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": true,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.865,
+            "size": 0.025,
+            "maxW": 0.84,
+            "color": "onPhoto",
+            "font": "grotesk"
+          }
+        ]
+      }
+    },
+    {
+      "id": "border",
+      "label": "Photo with a border",
+      "ground": "inset",
+      "portrait": {
+        "photos": [
+          {
+            "id": "p1",
+            "x": 0.06,
+            "y": 0.043,
+            "w": 0.88,
+            "h": 0.914
+          }
+        ],
+        "boxes": [
+          {
+            "text": "Your words here",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": false,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.765,
+            "size": 0.046,
+            "maxW": 0.84,
+            "color": "onPhoto",
+            "font": "cormorant"
+          },
+          {
+            "text": "YOUR NAMES",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": true,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.855,
+            "size": 0.018,
+            "maxW": 0.84,
+            "color": "onPhoto",
+            "font": "grotesk"
+          }
+        ]
+      },
+      "landscape": {
+        "photos": [
+          {
+            "id": "p1",
+            "x": 0.043,
+            "y": 0.06,
+            "w": 0.914,
+            "h": 0.88
+          }
+        ],
+        "boxes": [
+          {
+            "text": "Your words here",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": false,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.735,
+            "size": 0.064,
+            "maxW": 0.84,
+            "color": "onPhoto",
+            "font": "cormorant"
+          },
+          {
+            "text": "YOUR NAMES",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": true,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.85,
+            "size": 0.025,
+            "maxW": 0.84,
+            "color": "onPhoto",
+            "font": "grotesk"
+          }
+        ]
+      }
+    },
+    {
+      "id": "top",
+      "label": "Photo above the words",
+      "ground": "inset",
+      "portrait": {
+        "photos": [
+          {
+            "id": "p1",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 0.68
+          }
+        ],
+        "boxes": [
+          {
+            "text": "Your words here",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": false,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.735,
+            "size": 0.05,
+            "maxW": 0.84,
+            "color": "ink",
+            "font": "cormorant"
+          },
+          {
+            "text": "YOUR NAMES",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": true,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.855,
+            "size": 0.018,
+            "maxW": 0.84,
+            "color": "ink",
+            "font": "grotesk"
+          }
+        ]
+      },
+      "landscape": {
+        "photos": [
+          {
+            "id": "p1",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 0.64
+          }
+        ],
+        "boxes": [
+          {
+            "text": "Your words here",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": false,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.7,
+            "size": 0.07,
+            "maxW": 0.84,
+            "color": "ink",
+            "font": "cormorant"
+          },
+          {
+            "text": "YOUR NAMES",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": true,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.855,
+            "size": 0.025,
+            "maxW": 0.84,
+            "color": "ink",
+            "font": "grotesk"
+          }
+        ]
+      }
+    },
+    {
+      "id": "side",
+      "label": "Photo beside the words",
+      "ground": "inset",
+      "portrait": {
+        "photos": [
+          {
+            "id": "p1",
+            "x": 0,
+            "y": 0,
+            "w": 0.58,
+            "h": 1
+          }
+        ],
+        "boxes": [
+          {
+            "text": "Your words here",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": false,
+            "italic": false,
+            "x": 0.79,
+            "y": 0.4,
+            "size": 0.04,
+            "maxW": 0.38,
+            "color": "ink",
+            "font": "cormorant"
+          },
+          {
+            "text": "YOUR NAMES",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": true,
+            "italic": false,
+            "x": 0.79,
+            "y": 0.56,
+            "size": 0.016,
+            "maxW": 0.38,
+            "color": "ink",
+            "font": "grotesk"
+          }
+        ]
+      },
+      "landscape": {
+        "photos": [
+          {
+            "id": "p1",
+            "x": 0,
+            "y": 0,
+            "w": 0.6,
+            "h": 1
+          }
+        ],
+        "boxes": [
+          {
+            "text": "Your words here",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": false,
+            "italic": false,
+            "x": 0.8,
+            "y": 0.38,
+            "size": 0.06,
+            "maxW": 0.34,
+            "color": "ink",
+            "font": "cormorant"
+          },
+          {
+            "text": "YOUR NAMES",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": true,
+            "italic": false,
+            "x": 0.8,
+            "y": 0.56,
+            "size": 0.022,
+            "maxW": 0.34,
+            "color": "ink",
+            "font": "grotesk"
+          }
+        ]
+      }
+    },
+    {
+      "id": "framed",
+      "label": "Photo in the middle",
+      "ground": "inset",
+      "portrait": {
+        "photos": [
+          {
+            "id": "p1",
+            "x": 0.14,
+            "y": 0.18,
+            "w": 0.72,
+            "h": 0.56
+          }
+        ],
+        "boxes": [
+          {
+            "text": "Your words here",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": false,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.06,
+            "size": 0.04,
+            "maxW": 0.84,
+            "color": "ink",
+            "font": "cormorant"
+          },
+          {
+            "text": "YOUR NAMES",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": true,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.82,
+            "size": 0.018,
+            "maxW": 0.84,
+            "color": "ink",
+            "font": "grotesk"
+          }
+        ]
+      },
+      "landscape": {
+        "photos": [
+          {
+            "id": "p1",
+            "x": 0.27,
+            "y": 0.2,
+            "w": 0.46,
+            "h": 0.6
+          }
+        ],
+        "boxes": [
+          {
+            "text": "Your words here",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": false,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.055,
+            "size": 0.056,
+            "maxW": 0.84,
+            "color": "ink",
+            "font": "cormorant"
+          },
+          {
+            "text": "YOUR NAMES",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": true,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.85,
+            "size": 0.025,
+            "maxW": 0.84,
+            "color": "ink",
+            "font": "grotesk"
+          }
+        ]
+      }
+    },
+    {
+      "id": "two",
+      "label": "Two photos",
+      "ground": "inset",
+      "portrait": {
+        "photos": [
+          {
+            "id": "p1",
+            "x": 0.06,
+            "y": 0.05,
+            "w": 0.435,
+            "h": 0.62
+          },
+          {
+            "id": "p2",
+            "x": 0.505,
+            "y": 0.05,
+            "w": 0.435,
+            "h": 0.62
+          }
+        ],
+        "boxes": [
+          {
+            "text": "Your words here",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": false,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.73,
+            "size": 0.045,
+            "maxW": 0.84,
+            "color": "ink",
+            "font": "cormorant"
+          },
+          {
+            "text": "YOUR NAMES",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": true,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.85,
+            "size": 0.018,
+            "maxW": 0.84,
+            "color": "ink",
+            "font": "grotesk"
+          }
+        ]
+      },
+      "landscape": {
+        "photos": [
+          {
+            "id": "p1",
+            "x": 0.05,
+            "y": 0.07,
+            "w": 0.44,
+            "h": 0.62
+          },
+          {
+            "id": "p2",
+            "x": 0.51,
+            "y": 0.07,
+            "w": 0.44,
+            "h": 0.62
+          }
+        ],
+        "boxes": [
+          {
+            "text": "Your words here",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": false,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.735,
+            "size": 0.06,
+            "maxW": 0.84,
+            "color": "ink",
+            "font": "cormorant"
+          },
+          {
+            "text": "YOUR NAMES",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": true,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.875,
+            "size": 0.022,
+            "maxW": 0.84,
+            "color": "ink",
+            "font": "grotesk"
+          }
+        ]
+      }
+    },
+    {
+      "id": "four",
+      "label": "Four photos",
+      "ground": "inset",
+      "portrait": {
+        "photos": [
+          {
+            "id": "p1",
+            "x": 0.06,
+            "y": 0.05,
+            "w": 0.435,
+            "h": 0.3
+          },
+          {
+            "id": "p2",
+            "x": 0.505,
+            "y": 0.05,
+            "w": 0.435,
+            "h": 0.3
+          },
+          {
+            "id": "p3",
+            "x": 0.06,
+            "y": 0.36,
+            "w": 0.435,
+            "h": 0.3
+          },
+          {
+            "id": "p4",
+            "x": 0.505,
+            "y": 0.36,
+            "w": 0.435,
+            "h": 0.3
+          }
+        ],
+        "boxes": [
+          {
+            "text": "Your words here",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": false,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.72,
+            "size": 0.045,
+            "maxW": 0.84,
+            "color": "ink",
+            "font": "cormorant"
+          },
+          {
+            "text": "YOUR NAMES",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": true,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.845,
+            "size": 0.018,
+            "maxW": 0.84,
+            "color": "ink",
+            "font": "grotesk"
+          }
+        ]
+      },
+      "landscape": {
+        "photos": [
+          {
+            "id": "p1",
+            "x": 0.05,
+            "y": 0.06,
+            "w": 0.44,
+            "h": 0.3
+          },
+          {
+            "id": "p2",
+            "x": 0.51,
+            "y": 0.06,
+            "w": 0.44,
+            "h": 0.3
+          },
+          {
+            "id": "p3",
+            "x": 0.05,
+            "y": 0.37,
+            "w": 0.44,
+            "h": 0.3
+          },
+          {
+            "id": "p4",
+            "x": 0.51,
+            "y": 0.37,
+            "w": 0.44,
+            "h": 0.3
+          }
+        ],
+        "boxes": [
+          {
+            "text": "Your words here",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": false,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.735,
+            "size": 0.06,
+            "maxW": 0.84,
+            "color": "ink",
+            "font": "cormorant"
+          },
+          {
+            "text": "YOUR NAMES",
+            "sample": true,
+            "align": "center",
+            "bold": false,
+            "upper": true,
+            "italic": false,
+            "x": 0.5,
+            "y": 0.87,
+            "size": 0.022,
+            "maxW": 0.84,
+            "color": "ink",
+            "font": "grotesk"
+          }
+        ]
+      }
+    }
+  ],
+  "CUSTOM_FONTS": [
+    "cormorant",
+    "didone",
+    "serif",
+    "editorial",
+    "cinzel",
+    "grotesk",
+    "condensed",
+    "sans",
+    "parisienne",
+    "doulaise",
+    "windsong",
+    "meaculpa",
+    "sacramento"
+  ],
+  "CUSTOM_COLORS": [
+    {
+      "id": "ink",
+      "label": "Card colour"
+    },
+    {
+      "id": "accent",
+      "label": "Card accent"
+    },
+    {
+      "id": "#FFFFFF",
+      "label": "White"
+    },
+    {
+      "id": "#1F1F1F",
+      "label": "Black"
+    },
+    {
+      "id": "#B3262D",
+      "label": "Red"
+    },
+    {
+      "id": "#2E4A3A",
+      "label": "Green"
+    },
+    {
+      "id": "#1F2B44",
+      "label": "Navy"
+    },
+    {
+      "id": "#A8834A",
+      "label": "Gold"
+    }
+  ],
+  "CUSTOM_COLORWAYS": [
+    "snow",
+    "ivory",
+    "cranberry",
+    "evergreen",
+    "navy",
+    "sage",
+    "ink",
+    "cocoa"
+  ],
   "CARD_PACKS": [
     {
       "qty": 10,

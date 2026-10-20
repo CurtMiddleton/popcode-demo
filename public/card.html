@@ -64,6 +64,10 @@
       .occ-chip.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
       .occ-chip .n { opacity: 0.45; margin-left: 5px; font-weight: 400; }
 
+      .mine-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 4px 0 6px; }
+      .mine-bar .mine-btn { width: auto; padding: 12px 22px; margin: 0; }
+      .mine-hint, .mine-bar span { font-size: 13px; color: #8a857d; }
+      .mine-thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 8px; }
       .tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; margin-top: 26px; }
       .tpl-card { cursor: pointer; }
       /* Minted-style presentation: the card on a warm cream ground with a soft
@@ -122,6 +126,7 @@
       /* ── Step 2: editor ──────────────────────────────────────────────── */
       .editor { display: flex; gap: 34px; align-items: flex-start; flex-wrap: wrap; }
       .ed-stage { flex: 1 1 320px; display: flex; justify-content: center; align-items: center; padding: 40px 20px; background: #efebe3; border-radius: 4px; }
+      @media (min-width: 781px) { .ed-stage { position: sticky; top: 20px; } }
       .ed-stage .card-face { box-shadow: 0 1px 3px rgba(60,45,30,0.12), 0 14px 34px rgba(60,45,30,0.26); }
       .ed-side { flex: 0 0 340px; max-width: 100%; }
       @media (max-width: 780px) { .ed-side { flex: 1 1 100%; } }
@@ -168,6 +173,17 @@
       .opt h3 span { font-weight: 400; color: #8a857d; margin-left: 4px; }
       .opt h3 { margin-bottom: 8px; }
       .chip-row { display: flex; flex-wrap: wrap; gap: 7px; }
+      .box-ed { border-top: 1px solid #eeebe5; padding-top: 14px; margin-top: 14px; }
+      .box-ed:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+      .box-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; font-size: 13px; }
+      .box-del { background: none; border: none; color: #8a857d; font: 600 12px 'Inter', sans-serif; cursor: pointer; text-decoration: underline; }
+      .box-ed textarea { resize: vertical; margin-bottom: 8px; }
+      .box-row { display: flex; gap: 10px; align-items: center; margin-bottom: 4px; }
+      .box-font { flex: 1; min-width: 0; padding: 8px 10px; }
+      .box-size { font-size: 12px; color: #8a857d; display: flex; align-items: center; gap: 6px; }
+      .box-size input { width: 96px; }
+      .box-tog { margin-top: 8px; gap: 6px; }
+      .box-tog .pack-btn { flex: 1 1 54px; padding: 7px 4px; font-size: 12px; font-weight: 600; }
       .back-wrap { display: flex; gap: 14px; align-items: center; }
       .back-wrap img { width: 110px; height: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.14); flex: none; }
       .back-btns { flex: 1; min-width: 0; }
@@ -227,6 +243,8 @@
         corners: 'square',      // 'square' | 'rounded' (a separate Printify variant)
         script: null,           // one of C.SCRIPTS for every script line, or null for the design's own
         back: null,             // { url, file? } an optional photo on the back
+        custom: null,           // Design your own: { layout, orientation, boxes }
+        myPhoto: null,          // Use your photo: { file, url } shown in every design
       };
 
       function openSheet(html) { $('sheet').innerHTML = html; $('overlay').classList.add('visible'); }
@@ -357,7 +375,7 @@
           if (z.upper) t.style.textTransform = 'uppercase';
           // A tight shadow lifts type off a photo without the muddy halo a wide
           // blur gives; scaled in cq units so it holds at print resolution.
-          if (tpl.ground === 'bleed' || z.color === 'onPhoto') t.style.textShadow = '0 0.12cqh 0.7cqh rgba(0,0,0,0.34)';
+          if (tpl.ground === 'bleed' || z.color === 'onPhoto' || z.shadow) t.style.textShadow = '0 0.12cqh 0.7cqh rgba(0,0,0,0.34)';
           const fin = C.FINISHES[z.finish || 'flat'];
           if (fin && fin.gradient) { t.classList.add('foil'); t.style.backgroundImage = fin.gradient; }
           const w = (z.maxW || 0.84) * 100;
@@ -617,6 +635,21 @@
           host.appendChild(wrap);
         });
 
+        // Use your photo: every design below is drawn with it, and it is already
+        // in place when a design is opened.
+        const mine = document.createElement('div');
+        mine.className = 'mine-bar';
+        mine.innerHTML = state.myPhoto
+          ? '<img class="mine-thumb" src="' + state.myPhoto.url + '" alt=""/><span>Showing every design with your photo.</span>' +
+            '<button class="btn-ghost mine-btn" id="mine-change">Change photo</button><button class="box-del" id="mine-clear">Use sample photos</button>'
+          : '<button class="btn-primary mine-btn" id="mine-pick"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:8px"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Use your photo</button>' +
+            '<span class="mine-hint">See every design with your own photo.</span>';
+        host.appendChild(mine);
+        const pickMine = () => { pendingSlot = '__browse'; $('photo-input').click(); };
+        if ($('mine-pick')) $('mine-pick').addEventListener('click', pickMine);
+        if ($('mine-change')) $('mine-change').addEventListener('click', pickMine);
+        if ($('mine-clear')) $('mine-clear').addEventListener('click', () => { state.myPhoto = null; renderBrowse(); });
+
         const grid = document.createElement('div');
         grid.className = 'tpl-grid';
         // One tile per design (family), shown in portrait; the editor offers
@@ -626,14 +659,33 @@
           .filter((t) => t.orientation === 'portrait' || !C.familyTemplates(t.family).some((x) => x.orientation === 'portrait'))
           .filter((t) => (seen.has(t.family) ? false : seen.add(t.family)));
         const occGreeting = (C.occasionById(state.occasionId) || {}).greeting || 'holiday';
-        const samples = window.unsplashSamples ? window.unsplashSamples(tpls.length, 700) : [];
+        const samples = window.unsplashSamples ? window.unsplashSamples(tpls.length + 1, 700) : [];
+        // Design your own, first in every occasion.
+        {
+          const card = document.createElement('div');
+          card.className = 'tpl-card';
+          const stage = document.createElement('div');
+          stage.className = 'tpl-stage';
+          const saved = state.custom;
+          state.custom = newCustom(state.occasionId);
+          const thumb = renderCard(customTemplate(), { width: 168, sample: (state.myPhoto && state.myPhoto.url) || samples[tpls.length] || '/assets/sample-photo.jpg', colorway: C.CUSTOM_COLORWAYS[0] });
+          state.custom = saved;
+          stage.appendChild(thumb);
+          card.appendChild(stage);
+          requestAnimationFrame(() => fitCardText(thumb));
+          card.insertAdjacentHTML('beforeend', '<div class="tpl-name">Design your own</div>' +
+            '<div class="tpl-meta">Start blank &middot; any occasion &middot; your layout and words</div>');
+          card.addEventListener('click', startCustom);
+          grid.appendChild(card);
+        }
         tpls.forEach((t, i) => {
           const card = document.createElement('div');
           card.className = 'tpl-card';
           const stage = document.createElement('div');
           stage.className = 'tpl-stage';
           const tw = t.orientation === 'landscape' ? 200 : 168;
-          const thumb = renderCard(t, { width: tw, sample: samples[i] || '/assets/sample-photo.jpg',
+          const sampleUrl = (state.myPhoto && state.myPhoto.url) || samples[i] || '/assets/sample-photo.jpg';
+          const thumb = renderCard(t, { width: tw, sample: sampleUrl,
             colorway: (t.colorways && t.colorways[0]) || C.DEFAULT_COLORWAY, greeting: occGreeting });
           stage.appendChild(thumb);
           card.appendChild(stage);
@@ -659,7 +711,7 @@
                 ev.stopPropagation();
                 sw.querySelectorAll('.sw').forEach((x) => x.classList.remove('active'));
                 dot.classList.add('active');
-                const fresh = renderCard(t, { width: tw, sample: samples[i] || '/assets/sample-photo.jpg', colorway: id, greeting: occGreeting });
+                const fresh = renderCard(t, { width: tw, sample: sampleUrl, colorway: id, greeting: occGreeting });
                 stage.innerHTML = ''; stage.appendChild(fresh);
                 requestAnimationFrame(() => fitCardText(fresh));
                 card.dataset.colorway = id;
@@ -681,11 +733,179 @@
         $('page-title').textContent = occ ? occ.label : 'Cards';
       }
 
+      // ── Design your own ─────────────────────────────────────────────────
+      // A blank card: a layout (C.CARD_LAYOUTS) plus text boxes the buyer
+      // styles and drags. customTemplate() turns that into an ordinary
+      // template, so the renderer, print bake, scan target and cart treat it
+      // like any other design.
+      let boxSeq = 0;
+      const GREET_TEXT = { christmas: 'Merry Christmas', religious: 'Joy to the World', newyear: 'Happy New Year', holiday: 'Happy Holidays' };
+      function layoutById(id) { return C.CARD_LAYOUTS.find((l) => l.id === id) || C.CARD_LAYOUTS[0]; }
+      function layoutBoxes(layoutId, orientation) {
+        return layoutById(layoutId)[orientation].boxes.map((b) => ({ ...b, id: 'b' + (++boxSeq) }));
+      }
+      function newCustom(occasionId) {
+        const occ = C.occasionById(occasionId) || {};
+        const boxes = layoutBoxes('top', 'portrait');
+        // On a holiday occasion the first line starts as that greeting, which
+        // is fine to keep; elsewhere it is a placeholder that must be replaced.
+        if (occ.section === 'Holiday') {
+          boxes[0].text = GREET_TEXT[occ.greeting || 'holiday'];
+          boxes[0].sample = false;
+        }
+        boxes.forEach((b) => { b.sampleText = b.text; });
+        return { layout: 'top', orientation: 'portrait', boxes };
+      }
+      // Move the boxes to where the new layout puts its text; the words and
+      // their styling stay. Extra boxes keep their place.
+      function relayoutBoxes() {
+        const cu = state.custom;
+        const spots = layoutById(cu.layout)[cu.orientation].boxes;
+        cu.boxes.forEach((b, i) => {
+          const sp = spots[i];
+          if (!sp) return;
+          Object.assign(b, { x: sp.x, y: sp.y, maxW: sp.maxW });
+          // A box made for one card shape is resized for the other.
+          if (b.color === 'onPhoto' && sp.color !== 'onPhoto') b.color = sp.color;
+          if (sp.color === 'onPhoto' && (b.color === 'ink' || b.color === 'accent')) b.color = 'onPhoto';
+        });
+      }
+      function customTemplate() {
+        const cu = state.custom, L = layoutById(cu.layout), side = L[cu.orientation];
+        return {
+          id: 'custom', family: 'custom', name: 'Design your own', custom: true,
+          formatId: 'flat-5x7', orientation: cu.orientation, tags: [], ornament: 'none',
+          ground: L.ground, scrim: L.scrim, photoEdge: 'square',
+          colorways: C.CUSTOM_COLORWAYS, popcodeSlot: side.photos[0].id,
+          photos: side.photos.map((p) => ({ ...p, fit: 'cover' })),
+          text: cu.boxes.map((b, i) => {
+            const w = b.maxW || 0.84;
+            const x = b.align === 'left' ? b.x - w / 2 : b.align === 'right' ? b.x + w / 2 : b.x;
+            return {
+              id: b.id, role: 'message', label: 'Text ' + (i + 1), default: b.text,
+              x, y: b.y, size: b.size, maxW: w, align: b.align, color: b.color, font: b.font,
+              weight: b.bold ? 600 : (b.font === 'grotesk' ? 500 : 400), upper: !!b.upper, italic: !!b.italic,
+              track: b.upper ? 0.22 : 0, lead: 1.15, lines: 4, finish: 'flat', free: true,
+              shadow: b.color === 'onPhoto' || b.color === '#FFFFFF',
+            };
+          }),
+        };
+      }
+      // Put the browse photo (Use your photo) in every slot of the design.
+      function fillMyPhoto(tpl) {
+        if (!state.myPhoto) return;
+        (tpl.photos || []).forEach((sl) => { state.photos[sl.id] = { file: state.myPhoto.file, url: state.myPhoto.url }; });
+      }
+      function startCustom() {
+        state.custom = newCustom(state.occasionId);
+        state.text = {};
+        state.photos = {};
+        state.popcode = null;
+        state.script = null;
+        state.colorway = C.CUSTOM_COLORWAYS[0];
+        state.template = customTemplate();
+        fillMyPhoto(state.template);
+        $('step-browse').classList.add('hidden');
+        $('step-edit').classList.remove('hidden');
+        renderEditor();
+        window.scrollTo(0, 0);
+      }
+      function refreshCustom() {
+        state.template = customTemplate();
+        drawEditorCard();
+      }
+      // Drag a box on the card to move it.
+      function enableDrag(face) {
+        face.querySelectorAll('.cf-text').forEach((el) => {
+          const box = state.custom.boxes.find((b) => b.id === el.dataset.zid);
+          if (!box) return;
+          el.style.cursor = 'move';
+          el.style.touchAction = 'none';
+          el.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            el.setPointerCapture(e.pointerId);
+            const fr = face.getBoundingClientRect();
+            const sx = e.clientX, sy = e.clientY, bx0 = box.x, by0 = box.y, l0 = el.offsetLeft, t0 = el.offsetTop;
+            const move = (ev) => {
+              box.x = Math.min(1, Math.max(0, bx0 + (ev.clientX - sx) / fr.width));
+              box.y = Math.min(0.97, Math.max(0, by0 + (ev.clientY - sy) / fr.height));
+              el.style.left = l0 + (ev.clientX - sx) + 'px';
+              el.style.top = t0 + (ev.clientY - sy) + 'px';
+            };
+            const up = () => {
+              el.removeEventListener('pointermove', move);
+              el.removeEventListener('pointerup', up);
+              refreshCustom();
+            };
+            el.addEventListener('pointermove', move);
+            el.addEventListener('pointerup', up);
+          });
+        });
+      }
+      const swatchColor = (id) => (id[0] === '#' ? id : (C.COLORWAYS[state.colorway] || {})[id] || '#999');
+      // One block of controls per text box.
+      function renderBoxFields() {
+        const host = $('zone-fields');
+        host.innerHTML = '';
+        const tog = (on, act, label, extra) => '<button class="pack-btn' + (on ? ' active' : '') + '" data-act="' + act + '"' + (extra || '') + '>' + label + '</button>';
+        state.custom.boxes.forEach((b, i) => {
+          const d = document.createElement('div');
+          d.className = 'box-ed';
+          d.innerHTML =
+            '<div class="box-head"><b>Text ' + (i + 1) + '</b>' +
+              (state.custom.boxes.length > 1 ? '<button class="box-del" data-act="del">Remove</button>' : '') + '</div>' +
+            '<textarea class="text-input" rows="2" maxlength="240" aria-label="Text ' + (i + 1) + '">' + esc(b.text) + '</textarea>' +
+            '<div class="box-row"><select class="text-input box-font" aria-label="Font">' +
+              C.CUSTOM_FONTS.map((f) => '<option value="' + f + '"' + (f === b.font ? ' selected' : '') + '>' +
+                esc(C.FONTS[f].label) + (C.SCRIPTS.some((x) => x.id === f) ? ' script' : '') + '</option>').join('') +
+            '</select><label class="box-size">Size <input type="range" min="10" max="170" value="' + Math.round(b.size * 1000) + '" aria-label="Size"/></label></div>' +
+            '<div class="sw-row box-colors">' + C.CUSTOM_COLORS.map((c) =>
+              '<button class="sw' + (c.id === b.color || (c.id === '#FFFFFF' && b.color === 'onPhoto') ? ' active' : '') + '" data-c="' + c.id + '" title="' + esc(c.label) + '" style="background:' + swatchColor(c.id) + '"></button>').join('') + '</div>' +
+            '<div class="pack-row box-tog">' +
+              tog(b.align === 'left', 'left', 'Left') + tog(b.align === 'center', 'center', 'Centre') + tog(b.align === 'right', 'right', 'Right') +
+              tog(b.bold, 'bold', 'Bold') + tog(b.upper, 'upper', 'Caps') + tog(b.italic, 'italic', 'Italic') +
+            '</div>';
+          host.appendChild(d);
+          const ta = d.querySelector('textarea');
+          ta.addEventListener('input', () => {
+            b.text = ta.value;
+            state.template = customTemplate();
+            const el = $('ed-stage').querySelector('[data-zid="' + b.id + '"]');
+            if (el) { el.textContent = b.text; fitCardText(el.closest('.card-face')); }
+          });
+          d.querySelector('.box-font').addEventListener('change', (e) => { b.font = e.target.value; refreshCustom(); });
+          d.querySelector('input[type=range]').addEventListener('input', (e) => { b.size = Number(e.target.value) / 1000; refreshCustom(); });
+          d.querySelectorAll('.box-colors .sw').forEach((sw) => sw.addEventListener('click', () => {
+            b.color = sw.dataset.c; refreshCustom(); renderBoxFields();
+          }));
+          d.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', () => {
+            const a = btn.dataset.act;
+            if (a === 'del') state.custom.boxes.splice(i, 1);
+            else if (a === 'left' || a === 'center' || a === 'right') b.align = a;
+            else b[a] = !b[a];
+            refreshCustom(); renderBoxFields();
+          }));
+        });
+        const add = document.createElement('button');
+        add.className = 'btn-ghost';
+        add.textContent = '+ Add text';
+        add.addEventListener('click', () => {
+          const last = state.custom.boxes[state.custom.boxes.length - 1];
+          const nb = { text: 'More words', sample: true, sampleText: 'More words', x: 0.5, y: Math.min(0.9, last ? last.y + 0.06 : 0.5),
+            size: 0.024, maxW: 0.84, color: last ? last.color : 'ink', font: 'cormorant', align: 'center', bold: false, upper: false, italic: false, id: 'b' + (++boxSeq) };
+          state.custom.boxes.push(nb);
+          refreshCustom(); renderBoxFields();
+        });
+        host.appendChild(add);
+      }
+
       function chooseTemplate(tpl) {
+        state.custom = null;
         state.template = tpl;
         state.colorway = (tpl.colorways && tpl.colorways[0]) || C.DEFAULT_COLORWAY;
         state.text = {};
         state.photos = {};
+        fillMyPhoto(tpl);
         state.popcode = null;
         state.script = null;
         $('step-browse').classList.add('hidden');
@@ -703,6 +923,7 @@
             '<div class="ed-stage" id="ed-stage"></div>' +
             '<div class="ed-side">' +
               '<div class="panel"><h2 class="ed-name">' + esc(tpl.name) + '</h2>' +
+                '<div class="opt hidden" id="opt-layout"><h3>Layout <span id="layout-name"></span></h3><div class="chip-row" id="layout-row"></div></div>' +
                 '<div class="opt hidden" id="opt-orient"><h3>Orientation <span id="orient-name"></span></h3><div class="pack-row" id="orient-row"></div></div>' +
                 '<div class="opt hidden" id="opt-greet"><h3>Greeting <span id="greet-name"></span></h3><div class="chip-row" id="greet-row"></div></div>' +
                 '<div class="opt hidden" id="opt-script"><h3>Script <span id="script-name"></span></h3><div class="pack-row" id="script-row"></div></div>' +
@@ -711,8 +932,10 @@
                 '<div class="opt"><h3>Photo <span id="bw-name"></span></h3><div class="pack-row"><button class="pack-btn" id="bw-off">Colour</button>' +
                 '<button class="pack-btn" id="bw-on">Black &amp; white</button></div></div>' +
               '</div>' +
-              '<div class="panel"><h3>Your words</h3>' +
-                '<p class="hint">Everything on the card is yours to change. Pick a greeting above or type your own, here or straight onto the card.</p>' +
+              '<div class="panel"><h3>' + (state.custom ? 'Your text' : 'Your words') + '</h3>' +
+                '<p class="hint">' + (state.custom
+                  ? 'Add as many lines as you like and style each one. Drag text on the card to move it.'
+                  : 'Everything on the card is yours to change. Pick a greeting above or type your own, here or straight onto the card.') + '</p>' +
                 '<div id="zone-fields"></div></div>' +
               '<div class="panel"><h3>Back of the card</h3>' +
                 '<p class="hint">How to play the card, as on every Popcode product. Add a photo above it if you like.</p>' +
@@ -734,7 +957,7 @@
           '</div>';
 
         drawEditorCard();
-        renderZoneFields();
+        if (state.custom) renderBoxFields(); else renderZoneFields();
         renderColorways();
         renderOptions();
         renderPacks();
@@ -777,7 +1000,15 @@
       }
       function renderOptions() {
         const tpl = state.template;
-        const fam = C.familyTemplates(tpl.family);
+        $('opt-layout').classList.toggle('hidden', !state.custom);
+        if (state.custom) {
+          optionRow('layout-row', 'layout-name', C.CARD_LAYOUTS, state.custom.layout, (id) => {
+            state.custom.layout = id; relayoutBoxes(); state.template = customTemplate(); renderEditor();
+          });
+        }
+        const fam = state.custom
+          ? [{ orientation: 'portrait' }, { orientation: 'landscape' }]
+          : C.familyTemplates(tpl.family);
         $('opt-orient').classList.toggle('hidden', fam.length < 2);
         if (fam.length > 1) {
           optionRow('orient-row', 'orient-name',
@@ -807,6 +1038,11 @@
       }
       // Same design, the other layout. Words, photos and colour carry over.
       function switchOrientation(o) {
+        if (state.custom) {
+          if (state.custom.orientation === o) return;
+          state.custom.orientation = o; relayoutBoxes(); state.template = customTemplate(); renderEditor();
+          return;
+        }
         const next = C.familyTemplates(state.template.family).find((t) => t.orientation === o);
         if (!next || next === state.template) return;
         state.template = next;
@@ -838,12 +1074,13 @@
         const land = state.template.orientation === 'landscape';
         const w = Math.min(land ? 500 : 360, Math.max(240, window.innerWidth - 80));
         const face = renderCard(state.template, {
-          width: w, editable: true, text: state.text, photos: state.photos, bw: state.bw,
+          width: w, editable: !state.custom, text: state.text, photos: state.photos, bw: state.bw,
           greeting: state.greeting, corners: state.corners, script: state.script,
           colorway: state.colorway, onPickPhoto: pickPhotoFor,
         });
         stage.appendChild(face);
         fitCardText(face);
+        if (state.custom) enableDrag(face);
       }
 
       // Side inputs and on-card editing are two views of the same string.
@@ -946,6 +1183,12 @@
         const file = e.target.files && e.target.files[0];
         e.target.value = '';
         if (!file || !pendingSlot) return;
+        if (pendingSlot === '__browse') {
+          state.myPhoto = { file, url: URL.createObjectURL(file) };
+          pendingSlot = null;
+          renderBrowse();
+          return;
+        }
         if (pendingSlot === '__back') {
           state.back = { file, url: URL.createObjectURL(file) };
           pendingSlot = null;
@@ -1315,6 +1558,10 @@
       // `sample` in cards.mjs; the role alone can't say (Modern Signature's
       // "signature" zone is the word HOLIDAYS).
       function unchangedSample() {
+        if (state.custom) {
+          const b = state.custom.boxes.find((x) => x.sample && x.text.trim() === (x.sampleText || '').trim());
+          return b ? { value: b.text } : null;
+        }
         return C.resolveText(state.template, state.text, state.greeting)
           .filter((z) => z.sample && z.value && z.value === z.default)[0] || null;
       }
@@ -1402,7 +1649,8 @@
         // The greeting, whole: a split one (Brighton's MERRY / CHRISTMAS) joined.
         const zones = C.resolveText(tpl, state.text, state.greeting);
         const greetLines = zones.filter((z) => z.greet).map((z) => z.value.trim()).filter(Boolean);
-        const headline = (greetLines.length ? greetLines.join(' ').replace(/\s+&$/, ' & …') : (zones.find((z) => z.role === 'headline') || {}).value) || tpl.name;
+        const headline = (state.custom ? (state.custom.boxes.find((b) => b.text.trim()) || {}).text
+          : greetLines.length ? greetLines.join(' ').replace(/\s+&$/, ' & …') : (zones.find((z) => z.role === 'headline') || {}).value) || tpl.name;
         const row = {
           name: 'Cards · 5×7 — ' + headline,
           kind: 'card',
@@ -1413,6 +1661,7 @@
               occasionId: state.occasionId, text: state.text, photos: photoUrls,
               colorway: state.colorway, pack: state.pack, bw: state.bw, frontUrl,
               greeting: state.greeting, corners: state.corners, script: state.script, backPhoto: backUrl,
+              custom: state.custom ? JSON.parse(JSON.stringify(state.custom)) : null,
             },
           },
         };
@@ -1516,7 +1765,13 @@
         const { data: col, error } = await db.from('collections')
           .select('id, slug, kind, book_layout, user_id').eq('slug', slug).maybeSingle();
         const cfg = col && col.book_layout && col.book_layout.card;
-        const tpl = cfg && C.templateById(cfg.templateId);
+        if (cfg && cfg.custom) {
+          state.custom = cfg.custom;
+          boxSeq = Math.max(0, ...cfg.custom.boxes.map((b) => parseInt(String(b.id).slice(1), 10) || 0));
+        } else {
+          state.custom = null;
+        }
+        const tpl = cfg && (cfg.custom ? customTemplate() : C.templateById(cfg.templateId));
         if (error || !col || col.kind !== 'card' || !tpl || col.user_id !== currentUser.id) {
           renderBrowse();
           alert('That card couldn’t be opened.');
