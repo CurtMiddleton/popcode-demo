@@ -159,20 +159,25 @@ What a card is now:
   `toBleed()` mirrors the edges out to 1575×2175. `renderBack()` draws the
   how-to-play side: symbol, "This card plays a video", `popcode.app/{slug}`.
   Both go through the shared print preview before anything reaches the cart.
-- **A cart line** `card` / `card-5x7`, copies = the pack (10/25/50/75; a cart line
-  holds at most 99), assets `front` + `back` → Printify placements by name.
+- **A cart line** `card` / `card-5x7-{pack}`, one copy per pack (10/30/50/100),
+  assets `front` + `back` → Printify placements by name.
 - Refuses to save with the template's sample signature ("The Middleton Family").
 
 ## Still to do, in order
 
-1. **Pin the product.** `PRINTIFY_API_TOKEN=... node scripts/probe-printify-cards.mjs --blueprint 10717`
-   → fill `printProviderId` and `variantId` in `lib/print/catalog.mjs` (`card`).
-   Check the print-area size: a third-party mirror of the listing says
-   1538×2175 per side, against our 1575×2175. If so, change `CARD_FORMATS['flat-5x7']`
-   (or resample in `toBleed()`) so nothing is cropped.
-2. **Cost and price.** One `send_to_production:false` order → `baseCostMinor`.
-   Then a `RETAIL_PRICES.card` entry with the pack discounts (the "save 10%"
-   labels are shown but NOT applied yet), and drop `card` from the exemption in
+1. ~~Pin the product.~~ Done 2026-10-20 from the probe: provider **28, District
+   Photo**; Printify sells **by the pack** (each pack size is a variant), so ours
+   are the square-corner Eggshell variants 399502 (10), 399503 (30), 399504 (50),
+   399505 (100) as `card-5x7-{10,30,50,100}`, one copy per pack. Print areas are
+   front and back **1538×2175**: full 1/8in bleed top and bottom, ~1/16in at the
+   sides, so `toBleed()` crops to it (`CARD_FORMATS['flat-5x7'].printPx`). The
+   probe lists 49 variants; the other 37 (round corners, other papers, 500/1000
+   packs) weren't printed in full and aren't used.
+2. **Cost and price.** One `send_to_production:false` order → `baseCostMinor`
+   per pack variant. Check in the same order that quantity 1 of a pack variant
+   is the whole pack.
+   Then a `RETAIL_PRICES.card` entry per pack (the pack buttons say only
+   "cards" until then), and drop `card` from the exemption in
    `scripts/check-pricing.mjs`.
 3. **Run `supabase/migrations/2026-10-20-cards-free.sql` in prod**, or a card
    counts as one of the free plan's five Popcodes.

@@ -702,7 +702,7 @@
           const b = document.createElement('button');
           b.className = 'pack-btn' + (p.qty === state.pack ? ' active' : '');
           b.innerHTML = '<div class="pack-qty">' + p.qty + '</div>' +
-            '<div class="pack-each">' + (p.discount ? 'save ' + Math.round(p.discount * 100) + '%' : 'cards') + '</div>';
+            '<div class="pack-each">cards</div>';
           b.addEventListener('click', () => { state.pack = p.qty; renderPacks(); refreshPrice(); });
           row.appendChild(b);
         });
@@ -949,13 +949,25 @@
         snap.getContext('2d').drawImage(out, 0, 0);
         mirror(snap, ox, 0, ox, b.h, 0, 0, true, false);                        // left, corners included
         mirror(snap, ox + W - (b.w - ox - W), 0, b.w - ox - W, b.h, ox + W, 0, true, false);   // right
+        // The lab's print area can be smaller than a full 1/8in bleed (District
+        // Photo's is ~1/16in at the sides). Crop to it, centred, so Printify
+        // gets exactly its size and nothing inside the trim moves.
+        const pp = C.CARD_FORMATS[tpl.formatId].printPx;
+        if (pp && (pp.w !== b.w || pp.h !== b.h)) {
+          const crop = document.createElement('canvas');
+          crop.width = pp.w; crop.height = pp.h;
+          crop.getContext('2d').drawImage(out, Math.round((b.w - pp.w) / 2), Math.round((b.h - pp.h) / 2), pp.w, pp.h, 0, 0, pp.w, pp.h);
+          return crop;
+        }
         return out;
       }
 
       // The back: how to play the card. Same colourway as the front.
       async function renderBack(slug) {
         const tpl = state.template;
-        const b = C.cardBleedSize(tpl.formatId, tpl.orientation);
+        const b = { ...C.cardBleedSize(tpl.formatId, tpl.orientation) };
+        const pp = C.CARD_FORMATS[tpl.formatId].printPx;
+        if (pp) { b.offsetY -= (b.h - pp.h) / 2; b.w = pp.w; b.h = pp.h; }
         const cw = C.COLORWAYS[state.colorway] || C.COLORWAYS[C.DEFAULT_COLORWAY];
         const c = document.createElement('canvas');
         c.width = b.w; c.height = b.h;
@@ -1162,14 +1174,20 @@
           const frontBlob = await toJpeg(toBleed(saved.front), 0.95);
           const backBlob = await toJpeg(await renderBack(saved.slug), 0.95);
           const urls = [URL.createObjectURL(frontBlob), URL.createObjectURL(backBlob)];
+          // The print file in mm (it is 300 DPI). The preview draws one inset on
+          // all four sides, so it uses the deeper top/bottom bleed: the safe line
+          // sits at least 1/4in inside the trim everywhere.
+          const pp = C.CARD_FORMATS[state.template.formatId].printPx;
+          const mm = (px) => px / 300 * 25.4;
+          const face = { wMm: mm(pp.w), hMm: mm(pp.h), safeMm: 6.35 + mm((pp.h - 2100) / 2) };
           let go;
           try {
             go = await PopcodePrintPreview.open({
               mode: 'cart',
               intro: 'This is exactly what we’ll print, front and back. The outer edge is trimmed off, so keep faces and words inside the dashed line.',
               sections: [{ heading: state.pack + ' cards, 5×7″, with envelopes', html: PopcodePrintPreview.list({ cols: 2, items: [
-                { src: urls[0], label: 'Front', wMm: 133.35, hMm: 184.15, safeMm: 6.35 + 3.175 },
-                { src: urls[1], label: 'Back', wMm: 133.35, hMm: 184.15, safeMm: 6.35 + 3.175 },
+                { src: urls[0], label: 'Front', ...face },
+                { src: urls[1], label: 'Back', ...face },
               ] }) }],
             });
           } finally {
@@ -1183,10 +1201,11 @@
           await PopcodeCart.add({
             collectionId: saved.collectionId,
             productType: 'card',
-            variantId: 'card-5x7',
-            copies: state.pack,
+            // Printify sells each pack as its own variant, so a pack is one copy.
+            variantId: 'card-5x7-' + state.pack,
+            copies: 1,
             assetUrls: [{ url: frontUrl, print_area: 'front' }, { url: backUrl, print_area: 'back' }],
-            title: saved.headline + ' — 5×7″ cards',
+            title: saved.headline + ' — ' + state.pack + ' cards, 5×7″',
             thumbUrl: saved.frontUrl,
             options: { sizeLabel: '5×7″ flat cards', orientationLabel: 'with envelopes' },
           });

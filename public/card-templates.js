@@ -16,7 +16,11 @@
       "bleedIn": 0.125,
       "safeIn": 0.25,
       "duplex": true,
-      "dpi": 300
+      "dpi": 300,
+      "printPx": {
+        "w": 1538,
+        "h": 2175
+      }
     },
     "flat-5.5sq": {
       "id": "flat-5.5sq",
@@ -1021,7 +1025,7 @@
       "discount": 0
     },
     {
-      "qty": 25,
+      "qty": 30,
       "discount": 0.1
     },
     {
@@ -1029,11 +1033,11 @@
       "discount": 0.15
     },
     {
-      "qty": 75,
+      "qty": 100,
       "discount": 0.2
     }
   ],
-  "DEFAULT_PACK": 25
+  "DEFAULT_PACK": 30
 };
 
   // Pure helpers mirrored from cards.mjs so the builder and the server agree.
