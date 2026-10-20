@@ -25,7 +25,9 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   actually carries the title text. #255 not yet tried on an iPhone or a real checkout.
 - **Sentry triage follow-up: [PR #271](https://github.com/CurtMiddleton/popcode-demo/pull/271)
   merged 2026-10-20** — Prodigi's reply now rides on failed-order events, and quote retries
-  back off (429 → Retry-After / 1 s, 2 s). **Shotstack balance was 0.17 credits on 10-17** — top up before
+  back off (429 → Retry-After / 1 s, 2 s). **Sentry is now watched:** two email alert rules
+  (failed paid order / fatal outage; spikes) + the **Daily Sentry check** scheduled task at
+  8:45 ET every day (push only when something is real). **Shotstack balance was 0.17 credits on 10-17** — top up before
   promoting montage in books (a render needs ~1.13).
 - **Gallery outreach round 1 SENT 2026-10-15** (9:45–10:55 ET, scheduled in Gmail from
   curt@popcodeapp.com, BCC curt@theworkshop.works): Geary, Rye Arts Center, Pelham Art Center
@@ -4069,7 +4071,35 @@ order — the Summary panel shows **Order reference** = our `print_orders.id` (t
 spine + postcard + sticker), 14653577 ($74.78, her own second order), 14656283 ($28.20,
 "Online order" — the user made it by hand to fix her photo).
 
+#### Later the same day: Sentry is now watched automatically
+
+**Sentry alert rules (made by the user in Sentry → Alerts, project popcode-web, env production, notify Member → Curt by email):**
+- **Popcode: paid order failed / outage** — WHEN a new issue is created OR a resolved issue
+  regresses; IF *any*: message contains `order failed`, message contains `Order submission
+  failed`, level equals `fatal` (catches Shotstack out-of-credits). Every trigger.
+- **Popcode: something is spiking** — WHEN an issue escalates; no filter; 60-minute throttle.
+- Default **"Send a notification for high priority issues"**: told to disable it (noise the
+  daily check now handles). Not confirmed done. "Send a notification when pull requests are
+  ready" left alone (Seer only).
+- In Sentry's new alert builder the filters are **"The event's [message] attribute
+  [contains]"** and **"The event's level [equals]"** — not "Message"/"Level". The alert name
+  is the editable title next to "Alerts /" (defaults to "Notify <member>").
+
+**Scheduled task "Daily Sentry check"** (`trig_01Y7yeD3u5JZGFDdcC8uVLZc`, fresh session per
+run, **daily 8:45 ET incl. weekends**, push only, auto-fix PRs off). Read-only on code:
+triages new/regressed issues from the last 24 h, resolves NOISE / already-fixed with a
+reason, leaves REAL ones open and pushes a phone-readable summary with the fix it suggests;
+the user says "fix it" in a session to get it built.
+- **Gotcha:** created via `create_trigger` it got **no repository and no connector** (this
+  org rejects the `connectors` param, and the call passed no source). The user added both by
+  hand: claude.ai → Scheduled tasks → Daily Sentry check → Edit → **Advanced settings** →
+  General → Repository `CurtMiddleton/popcode-demo`, Connectors → Sentry. Do the same for any
+  future scheduled task that needs a repo or connector.
+- **Test run worked:** resolved one noise issue (a one-off Leaflet map error on the
+  owner-only analytics page), "nothing needs you".
+
 #### Open
 - Elena's spine PDF: open **View PDF** under Spine on 14652102 and check the title is on it.
 - Check the Shotstack balance before montage in books gets used.
+- Confirm the default Sentry "high priority issues" alert is disabled.
 
