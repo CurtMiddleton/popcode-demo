@@ -9,6 +9,14 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 ## Current state (updated 2026-10-20)
 
 **Live and recent**
+- **AI-search pages (2026-10-18 → 20, PRs #263, #264, both merged and live; see that entry).**
+  `/photo-book-that-plays-videos`, `/popcode-vs-artivive`, `/popcode-vs-qr-codes`,
+  `/audio-tour-without-an-app`, `/printed-appeal-with-video`; `llms.txt` rewritten; FAQ
+  markup on /exhibitions. All five submitted for indexing in Google Search Console and Bing.
+  **Baseline 2026-10-20: Bing 0 impressions, Copilot 0 citations (3 months).** **Next:**
+  ~Nov 9, re-check Bing Search Performance / AI Performance and re-ask ChatGPT + Perplexity
+  (search on) the test questions; off-site work (gift guides, Reddit, Product Hunt) is the user's.
+  Held: a "Popcode vs Bloomberg Connects" page (user's call). Optional: IndexNow.
 - **Montage is now on every Popcode surface (2026-10-19, `9743928`).** The builder
   moved out of create.html/edit.html into **`public/montage.js`**, shared by all five
   pages; book, calendar and board book gained the third choice. Montage is an action,
@@ -4103,3 +4111,38 @@ the user says "fix it" in a session to get it built.
 - Check the Shotstack balance before montage in books gets used.
 - Confirm the default Sentry "high priority issues" alert is disabled.
 
+### 2026-10-18 → 20 — Pages so AI assistants (and Google/Bing) find Popcode; Search Console and Bing set up
+
+**PRs, both merged when the user said "push to prod":** #263 (three photo-book pages, llms.txt, wiring) · #264 (playing book on the photo-book page; gallery and nonprofit pages; /exhibitions FAQ markup). Live checks passed (each URL 200 with its own copy).
+
+#### Why
+Elena (Spokane) found Popcode because ChatGPT recommended it, but the user's own ChatGPT query "Where can I make a photo album where photos play videos, shipped in the US?" didn't mention Popcode. It offered Artivive + a Mixbook/Shutterfly book, books with QR codes, and books with built-in video screens. So the job was plain-language pages that say Popcode is the all-in-one answer.
+
+#### What shipped
+- **`/photo-book-that-plays-videos`**: steps, products (no prices, they're live-quoted), "why not a regular book and an app", 8-question FAQ, Organization + FAQPage JSON-LD. Hero shows the home page's open Venice album (`scenes/Album.webp`) with a phone playing `/video/Album.mp4`.
+- **`/popcode-vs-artivive`**, **`/popcode-vs-qr-codes`**: comparison tables, which stack into cards under 600px (`td[data-label]`).
+- **`/audio-tour-without-an-app`** (gallery-grey hero, framed Sargent) and **`/printed-appeal-with-video`** (Common Tide postcard): steps, comparison with the usual options, pilot prices copied from /exhibitions and /nonprofits, FAQ, demo-booking links straight to Calendly with `utm_campaign={page}` (so they **don't** log `*_book_demo_click`).
+- Shared CSS: `public/guides.css` (pages use nav.js, a pricing-style gradient hero and footer).
+- Wiring for every page: `vercel.json` rewrites (must sit **before** the slug rules, or the URL opens view.html), `slug.js` RESERVED, `source.js` PAGES, `sitemap.xml` (+ /exhibitions, which was missing), `llms.txt`, analytics `SECTION_NAMES` (`products`, `compare`). Footer links: home + pricing → photo-book page; /exhibitions and /nonprofits footers → their guide page. **Main nav unchanged** (user wasn't asked to change it).
+- `/exhibitions` JSON-LD gained a FAQPage built from its visible FAQ (/nonprofits already had one).
+
+#### Competitor facts (checked on official sites, Oct 2026)
+- **Artivive does offer app-free browser viewing (WebAR), but only on Pro Plus and above, opened by scanning a QR code**; the free app works on any plan. So "no app" is **not** a fair difference versus Artivive. The honest differences are that Popcode prints the product and there's no QR code on the page. Artivive sells no printed products, as far as its site shows.
+- Mixbook and Shutterfly: no built-in video-in-book feature in their help centres (their QR codes are for uploading photos; Mixbook Movies is a separate slideshow sent by link). The page describes the DIY QR route without claiming they lack a feature.
+- **Not claimed anywhere: "printed in the US."** Confirmed US-made for US orders: board book (District Photo), ornaments (Printify), mugs, wall art, the 8×8" book. **Not confirmed: the 12×12" and A4 books, and the calendar.** The pages only say "ships across the US". The user never answered this question; ask before adding it.
+
+#### Search Console / Bing (user did these by hand)
+- Google Search Console: **popcode.app is a Domain property owned by curtmid@gmail.com** (Verified); **curt@popcodeapp.com is also an Owner**. The curt@theworkshop.works account holds other sites (basho.travel, popcodeapp.com, theworkshop.works, parkinsonswf.org), and the browser kept opening basho.travel first. No `google-site-verification` TXT is visible on popcode.app DNS, yet GSC says Verified, so verification is via some other method. Sitemap was already submitted 2026-09-28 (last read Oct 14, 7 pages); a Domain property wants the **full** URL to resubmit (`https://popcode.app/sitemap.xml`). Request indexing was done for all five pages on 10-20.
+- Bing Webmaster Tools: popcode.app was already added. The user submitted the five URLs. **Baseline 2026-10-20 (3 months): 0 clicks, 0 impressions; AI Performance (Copilot citations) 0.** ChatGPT's web search leans on Bing, so that's likely part of why it didn't surface Popcode.
+
+#### Lessons
+- The headless shell can't decode H.264: the video phone renders black in screenshots. Judge layout only.
+- `Album.webp` has transparent space under the book, so a phone placed with `bottom:` hangs below it. Anchor it with `top:`.
+- `p { color: var(--muted) }` in guides.css beat the hero eyebrow colour (grey on gradient); set `color` on `.g-hero .eyebrow` explicitly.
+- The user's mid-turn "should we do the same for nonprofits and exhibitions" meant **AI findability**, not the playing-book visual. Ask, or answer both readings, when a "same thing" is ambiguous.
+
+#### Open
+- ~**Nov 9:** Bing Search Performance + AI Performance (Grounding Queries list the real questions); GSC "URL is on Google" for each page; re-ask ChatGPT/Perplexity (search on): "photo album where photos play videos shipped in the US", "video photo book", "audio tour for a small gallery without an app", "add video to a printed fundraising appeal".
+- The user's off-site list: gift guides, honest founder answers on Reddit (r/GiftIdeas, r/Scrapbooking, r/Genealogy), Product Hunt.
+- Held for the user: "Popcode vs Bloomberg Connects" (must be scrupulously fair; it's free and loved). Optional: IndexNow key + ping on deploy.
+- Unanswered: are 12×12/A4 books and calendars US-printed? Has Android viewing been tested enough to say "iPhone or Android" (it's on the photo-book page and in llms.txt)?
