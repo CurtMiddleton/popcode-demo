@@ -1017,23 +1017,23 @@
   ],
   "CARD_PACKS": [
     {
-      "qty": 25,
+      "qty": 10,
       "discount": 0
     },
     {
-      "qty": 50,
+      "qty": 25,
       "discount": 0.1
     },
     {
-      "qty": 75,
+      "qty": 50,
       "discount": 0.15
     },
     {
-      "qty": 100,
+      "qty": 75,
       "discount": 0.2
     }
   ],
-  "DEFAULT_PACK": 50
+  "DEFAULT_PACK": 25
 };
 
   // Pure helpers mirrored from cards.mjs so the builder and the server agree.

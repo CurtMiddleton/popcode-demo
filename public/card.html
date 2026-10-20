@@ -20,6 +20,8 @@
     <script src="/slug.js"></script>
     <script src="/card-templates.js"></script>
     <script src="/unsplash-samples.js"></script>
+    <script src="/storage-copy.js"></script>
+    <script src="/print-preview.js"></script>
     <!-- MindAR compiler only (no AR rendering here) — stub AFRAME so the bundle
          loads without booting WebGL. Same trick as create.html / calendar.html. -->
     <script>
@@ -86,6 +88,8 @@
       /* Inset photos get a hairline + small radius. A bare hard-edged rectangle
          dropped on a flat ground is what makes an inset card look like clip art. */
       .cf-photo.inset { border-radius: 0.9cqw; box-shadow: 0 0 0 1px rgba(0,0,0,0.07); }
+      /* After .inset, which would otherwise flatten the arch into a rectangle. */
+      .cf-photo.inset.arch { border-radius: 50% 50% 0.9cqw 0.9cqw / 34% 34% 0.9cqw 0.9cqw; }
       /* EASED scrim. A two-stop linear gradient has a visible onset line across
          the photo -- the giveaway. These stops approximate an ease-in curve so
          the darkening has no perceptible edge, at roughly half the old strength. */
@@ -188,6 +192,8 @@
     <script>
       const C = window.PopcodeCards;
       const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      // /cart.js (injected by nav.js) reuses this client instead of making its own.
+      window.__popcodeCartDb = db;
       const $ = (id) => document.getElementById(id);
 
       let currentUser = null;
@@ -596,7 +602,8 @@
                 '<div class="pack-row" id="pack-row"></div>' +
                 '<div class="price-row"><span class="price-big" id="price-big">&mdash;</span>' +
                 '<span class="price-note" id="price-note"></span></div></div>' +
-              '<button class="btn-primary" id="save-btn">Save this card</button>' +
+              '<button class="btn-primary" id="cart-btn">Add to cart</button>' +
+              '<button class="btn-ghost" id="save-btn">Save for later</button>' +
               '<button class="btn-ghost" id="back-btn">&larr; Pick a different design</button>' +
             '</div>' +
           '</div>';
@@ -613,7 +620,8 @@
           renderBrowse();
         });
         $('pop-btn').addEventListener('click', () => $('video-input').click());
-        $('save-btn').addEventListener('click', saveCard);
+        $('save-btn').addEventListener('click', onSave);
+        $('cart-btn').addEventListener('click', addToCart);
       }
 
       function renderColorways() {
@@ -707,7 +715,7 @@
       // number we'd have to walk back.
       async function refreshPrice() {
         $('price-big').textContent = '—';
-        $('price-note').textContent = state.pack + ' cards · pricing once the card SKU is live';
+        $('price-note').textContent = state.pack + ' cards · price shown in your cart';
       }
 
       function updatePopHint() {
@@ -738,76 +746,486 @@
         const file = e.target.files && e.target.files[0];
         e.target.value = '';
         if (!file) return;
+        if (file.size > 200 * 1024 * 1024) { alert('That video is over 200 MB. Try a shorter one.'); return; }
         state.popcode = { file, url: URL.createObjectURL(file) };
         updatePopHint();
       });
 
+      // ── Print files ─────────────────────────────────────────────────────
+      // The front is captured from renderCard() itself, so the print can't drift
+      // from the editor. html2canvas 1.4.1 (cdnjs), the library postcard-render.js
+      // and calendar.html already print with. It reads computed styles, so the
+      // cq-unit type sizes arrive as pixels. The two things it can't draw are
+      // handled around it:
+      //   - object-fit:cover <img>: each photo is pre-cropped onto a <canvas>
+      //   - background-clip:text (foil): hidden for the capture, painted after
+      const FRONT_CSS_W = 750;   // captured at x2 = 1500px = 5in at 300 DPI
+      let h2cPromise = null;
+      function loadHtml2canvas() {
+        if (window.html2canvas) return Promise.resolve();
+        if (h2cPromise) return h2cPromise;
+        h2cPromise = new Promise((res, rej) => {
+          const el = document.createElement('script');
+          el.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+          el.onload = res;
+          el.onerror = () => rej(new Error('Could not load the print renderer. Check your connection and try again.'));
+          document.head.appendChild(el);
+        }).catch((e) => { h2cPromise = null; throw e; });
+        return h2cPromise;
+      }
+      function loadImg(src) {
+        return new Promise((res, rej) => {
+          const i = new Image(); i.crossOrigin = 'anonymous';
+          i.onload = () => res(i); i.onerror = () => rej(new Error('Could not load ' + src)); i.src = src;
+        });
+      }
+      // Clip to an element's border-radius (each corner may be elliptical, as the
+      // arch is). html2canvas doesn't clip a child canvas to its parent's radius.
+      function clipToRadius(ctx, el, w, h, scale) {
+        const cs = getComputedStyle(el);
+        const corner = (v) => {
+          const [a, b] = v.split(' ').map((x) => parseFloat(x) || 0);
+          return [a * scale, (b == null || isNaN(b) ? a : b) * scale];
+        };
+        const fit = (r) => [Math.min(r[0], w / 2), Math.min(r[1], h / 2)];
+        const tl = fit(corner(cs.borderTopLeftRadius)), tr = fit(corner(cs.borderTopRightRadius));
+        const br = fit(corner(cs.borderBottomRightRadius)), bl = fit(corner(cs.borderBottomLeftRadius));
+        ctx.beginPath();
+        ctx.moveTo(tl[0], 0);
+        ctx.lineTo(w - tr[0], 0);
+        ctx.ellipse(w - tr[0], tr[1], tr[0], tr[1], 0, -Math.PI / 2, 0);
+        ctx.lineTo(w, h - br[1]);
+        ctx.ellipse(w - br[0], h - br[1], br[0], br[1], 0, 0, Math.PI / 2);
+        ctx.lineTo(bl[0], h);
+        ctx.ellipse(bl[0], h - bl[1], bl[0], bl[1], 0, Math.PI / 2, Math.PI);
+        ctx.lineTo(0, tl[1]);
+        ctx.ellipse(tl[0], tl[1], tl[0], tl[1], 0, Math.PI, Math.PI * 1.5);
+        ctx.closePath();
+        ctx.clip();
+      }
+      function drawCover(ctx, img, w, h) {
+        const s = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+        const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+        ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+      }
+
+      // A CSS linear-gradient(<deg>, colour p%, ...) as a canvas gradient over a
+      // box. Read back from the DOM the colours come as rgb(), not the hex in
+      // cards.mjs, so both are accepted.
+      function cssGradient(ctx, css, x, y, w, h) {
+        const deg = parseFloat((css.match(/\(\s*(-?[\d.]+)deg/) || [0, 180])[1]);
+        const a = deg * Math.PI / 180, dx = Math.sin(a), dy = -Math.cos(a);
+        const len = Math.abs(w * dx) + Math.abs(h * dy);
+        const cx = x + w / 2, cy = y + h / 2;
+        const g = ctx.createLinearGradient(cx - dx * len / 2, cy - dy * len / 2, cx + dx * len / 2, cy + dy * len / 2);
+        for (const m of css.matchAll(/(rgba?\([^)]*\)|#[0-9a-f]{3,8})\s+([\d.]+)%/gi)) g.addColorStop(parseFloat(m[2]) / 100, m[1]);
+        return g;
+      }
+
+      // Paint one foil zone glyph by glyph at the positions the browser laid it
+      // out at, so wrapping, tracking and alignment match the editor exactly.
+      function paintFoil(ctx, el, origin, scale, faceH) {
+        const cs = getComputedStyle(el);
+        const fs = parseFloat(cs.fontSize);
+        const font = `${cs.fontStyle} ${cs.fontWeight} ${fs * scale}px ${cs.fontFamily}`;
+        ctx.save();
+        ctx.font = font;
+        const asc = ctx.measureText('Hg').fontBoundingBoxAscent;
+        const box = el.getBoundingClientRect();
+        ctx.fillStyle = cssGradient(ctx, el.style.backgroundImage,
+          (box.left - origin.left) * scale, (box.top - origin.top) * scale, box.width * scale, box.height * scale);
+        // The editor's drop-shadow(0 0.35cqh 0.5cqh rgba(0,0,0,0.16)).
+        ctx.shadowColor = 'rgba(0,0,0,0.16)';
+        ctx.shadowOffsetY = 0.0035 * faceH * scale;
+        ctx.shadowBlur = 0.005 * faceH * scale;
+        ctx.textBaseline = 'alphabetic';
+        const upper = cs.textTransform === 'uppercase';
+        const range = document.createRange();
+        for (const node of el.childNodes) {
+          if (node.nodeType !== 3) continue;
+          const text = node.textContent;
+          for (let i = 0; i < text.length; i++) {
+            if (/\s/.test(text[i])) continue;
+            range.setStart(node, i); range.setEnd(node, i + 1);
+            const r = range.getClientRects()[0];
+            if (!r) continue;
+            ctx.fillText(upper ? text[i].toUpperCase() : text[i],
+              (r.left - origin.left) * scale, (r.top - origin.top) * scale + asc);
+          }
+        }
+        ctx.restore();
+      }
+
+      // The front at trim size (1500 x 2100 for a 5x7), exactly as the editor shows it.
+      async function renderFrontTrim() {
+        await loadHtml2canvas();
+        const tpl = state.template;
+        const trim = C.cardTrimSize(tpl.formatId, tpl.orientation);
+        const holder = document.createElement('div');
+        holder.style.cssText = 'position:fixed;left:-20000px;top:0;pointer-events:none;';
+        const face = renderCard(tpl, { width: FRONT_CSS_W, text: state.text, photos: state.photos,
+          colorway: state.colorway, crossOrigin: true });
+        face.style.boxShadow = 'none';
+        holder.appendChild(face);
+        document.body.appendChild(holder);
+        try {
+          await document.fonts.ready;
+          fitCardText(face);
+          const scale = trim.w / face.offsetWidth;
+          for (const box of face.querySelectorAll('.cf-photo')) {
+            const im = box.querySelector('img');
+            if (!im) continue;
+            if (!im.complete || !im.naturalWidth) await im.decode().catch(() => {});
+            if (!im.naturalWidth) throw new Error('A photo didn’t load. Try adding it again.');
+            const r = box.getBoundingClientRect();
+            const c = document.createElement('canvas');
+            c.width = Math.round(r.width * scale); c.height = Math.round(r.height * scale);
+            const cx = c.getContext('2d');
+            cx.imageSmoothingQuality = 'high';
+            clipToRadius(cx, box, c.width, c.height, scale);
+            drawCover(cx, im, c.width, c.height);
+            c.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
+            im.replaceWith(c);
+          }
+          const foil = [...face.querySelectorAll('.cf-text.foil')];
+          foil.forEach((el) => { el.style.visibility = 'hidden'; });
+          const canvas = await window.html2canvas(face, {
+            scale, backgroundColor: null, useCORS: true, logging: false,
+            width: face.offsetWidth, height: face.offsetHeight,
+          });
+          foil.forEach((el) => { el.style.visibility = ''; });
+          const origin = face.getBoundingClientRect();
+          const ctx = canvas.getContext('2d');
+          // html2canvas leaves its own scale on the context; foil is placed in canvas pixels.
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          foil.forEach((el) => paintFoil(ctx, el, origin, scale, face.offsetHeight));
+          if (canvas.width !== trim.w || canvas.height !== trim.h) {
+            const out = document.createElement('canvas');
+            out.width = trim.w; out.height = trim.h;
+            out.getContext('2d').drawImage(canvas, 0, 0, trim.w, trim.h);
+            return out;
+          }
+          return canvas;
+        } finally {
+          holder.remove();
+        }
+      }
+
+      // Trim → bleed. Template geometry is fractions of TRIM (cards.mjs), so the
+      // bleed is made by mirroring the outermost strip of the finished card
+      // outward. Whatever touches an edge (photo, ground, scrim) carries on past
+      // the cut, and nothing inside the card moves. Mirrored rather than
+      // stretched: a stretched edge shows as streaks in the print preview.
+      function toBleed(trimCanvas) {
+        const tpl = state.template;
+        const b = C.cardBleedSize(tpl.formatId, tpl.orientation);
+        const out = document.createElement('canvas');
+        out.width = b.w; out.height = b.h;
+        const ctx = out.getContext('2d');
+        const W = trimCanvas.width, H = trimCanvas.height, ox = b.offsetX, oy = b.offsetY;
+        // html2canvas leaves the outermost pixel row a shade dark (the face's own
+        // ground antialiasing in under the photo), and mirroring would double it
+        // into a line along the cut. Repaint the outer 2px from just inside.
+        const tctx = trimCanvas.getContext('2d');
+        const E = 2;
+        for (let i = 0; i < E; i++) {
+          tctx.drawImage(trimCanvas, 0, E, W, 1, 0, i, W, 1);
+          tctx.drawImage(trimCanvas, 0, H - 1 - E, W, 1, 0, H - 1 - i, W, 1);
+          tctx.drawImage(trimCanvas, E, 0, 1, H, i, 0, 1, H);
+          tctx.drawImage(trimCanvas, W - 1 - E, 0, 1, H, W - 1 - i, 0, 1, H);
+        }
+        const mirror = (src, sx, sy, sw, sh, dx, dy, flipX, flipY) => {
+          ctx.save();
+          ctx.translate(dx + (flipX ? sw : 0), dy + (flipY ? sh : 0));
+          ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+          ctx.drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh);
+          ctx.restore();
+        };
+        ctx.drawImage(trimCanvas, ox, oy);
+        mirror(trimCanvas, 0, 0, W, oy, ox, 0, false, true);                    // top
+        mirror(trimCanvas, 0, H - (b.h - oy - H), W, b.h - oy - H, ox, oy + H, false, true);   // bottom
+        const snap = document.createElement('canvas');
+        snap.width = b.w; snap.height = b.h;
+        snap.getContext('2d').drawImage(out, 0, 0);
+        mirror(snap, ox, 0, ox, b.h, 0, 0, true, false);                        // left, corners included
+        mirror(snap, ox + W - (b.w - ox - W), 0, b.w - ox - W, b.h, ox + W, 0, true, false);   // right
+        return out;
+      }
+
+      // The back: how to play the card. Same colourway as the front.
+      async function renderBack(slug) {
+        const tpl = state.template;
+        const b = C.cardBleedSize(tpl.formatId, tpl.orientation);
+        const cw = C.COLORWAYS[state.colorway] || C.COLORWAYS[C.DEFAULT_COLORWAY];
+        const c = document.createElement('canvas');
+        c.width = b.w; c.height = b.h;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = cw.ground;
+        ctx.fillRect(0, 0, b.w, b.h);
+        await Promise.all(['400', '600', '700'].map((w) => document.fonts.load(`${w} 40px Inter`))).catch(() => {});
+        const inch = b.dpi, cx = b.w / 2;
+        const sans = (wt, pt) => `${wt} ${pt / 72 * inch}px 'Inter', sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+
+        let y = b.h * 0.30;
+        try {
+          const sym = await loadImg('/assets/popcode_symbol_color.svg');
+          const sw = 0.85 * inch;
+          ctx.drawImage(sym, cx - sw / 2, y - sw, sw, sw);
+        } catch (_) {}
+        y += 0.55 * inch;
+        ctx.fillStyle = cw.ink;
+        ctx.font = sans(700, 17);
+        ctx.fillText('This card plays a video', cx, y);
+        y += 0.42 * inch;
+        ctx.font = sans(400, 11.5);
+        ctx.globalAlpha = 0.8;
+        ctx.fillText('On your phone, go to', cx, y);
+        ctx.globalAlpha = 1;
+        y += 0.5 * inch;
+        ctx.font = sans(700, 19);
+        ctx.fillText('popcode.app/' + slug, cx, y);
+        y += 0.46 * inch;
+        ctx.font = sans(400, 11.5);
+        ctx.globalAlpha = 0.8;
+        ctx.fillText('then point your camera at the photo', cx, y);
+        y += 0.2 * inch;
+        ctx.fillText('on the front of this card.', cx, y);
+        ctx.globalAlpha = 0.55;
+        ctx.font = sans(600, 8);
+        ctx.fillText('Made with Popcode  ·  popcode.app', cx, b.h - b.offsetY - 0.4 * inch);
+        ctx.globalAlpha = 1;
+        return c;
+      }
+
+      const toJpeg = (canvas, q) => new Promise((res, rej) =>
+        canvas.toBlob((bl) => (bl ? res(bl) : rej(new Error('Could not encode the card image.'))), 'image/jpeg', q || 0.92));
+
+      async function uploadWithRetry(path, blob, contentType, tries = 3) {
+        let last = null;
+        for (let i = 0; i < tries; i++) {
+          const { error } = await db.storage.from('experiences').upload(path, blob, { contentType, upsert: true });
+          if (!error) return db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+          last = error;
+          await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+        }
+        throw new Error('Upload failed: ' + (last && last.message));
+      }
+
       // ── Save ────────────────────────────────────────────────────────────
-      // Persists as a design (kind:'card') the same way order.html saves print
-      // designs — reuses collections + book_layout jsonb, so My Designs, rename
-      // and delete all work with no migration.
+      // A card is a Popcode: its printed front is the AR target and plays the
+      // attached video. It saves as kind:'card' (no migration beyond counting it
+      // free, 2026-10-20-cards-free.sql) with the design in book_layout.card, so
+      // My Designs can reopen it here.
+      let editing = null;   // { id, slug } once saved or when opened from My Designs
+
+      function setBusy(text) {
+        const btn = $('cart-btn');
+        if (btn) { btn.disabled = !!text; btn.textContent = text || 'Add to cart'; }
+        const sb = $('save-btn');
+        if (sb) sb.disabled = !!text;
+      }
+
+      // The template's sample words are only an example. Printing "The Middleton
+      // Family" on someone's cards is the mistake this stops.
+      function unchangedSample() {
+        return C.resolveText(state.template, state.text)
+          .filter((z) => z.role === 'signature' && z.value && z.value === z.default)[0] || null;
+      }
+
       async function saveCard() {
         const tpl = state.template;
         const need = tpl.photos.filter((s) => !state.photos[s.id]);
-        if (need.length) { alert('Add ' + (need.length === 1 ? 'a photo' : need.length + ' photos') + ' first.'); return; }
+        if (need.length) throw new Error('Add ' + (need.length === 1 ? 'a photo' : need.length + ' photos') + ' first.');
+        if (!state.popcode) throw new Error('Attach a video. It’s what plays when someone scans the card.');
+        const sample = unchangedSample();
+        if (sample) throw new Error('Change “' + sample.value + '” to your own name. It’s the example text.');
+        if (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler) {
+          throw new Error('Still loading. Wait a moment and try again.');
+        }
 
-        const btn = $('save-btn');
-        btn.disabled = true;
-        btn.textContent = 'Saving…';
-        try {
-          // PopcodeSlug.randomSlug() is 8 chars from the same alphabet the rest of
-          // the app uses; isAvailable() checks it against existing collections.
-          // Retry a few times rather than trusting one draw (collisions are rare
-          // but a duplicate slug would silently collide with someone's project).
-          let slug = null;
+        let slug = editing && editing.slug;
+        if (!slug) {
           for (let i = 0; i < 6 && !slug; i++) {
             const cand = PopcodeSlug.randomSlug();
             if (await PopcodeSlug.isAvailable(db, cand)) slug = cand;
           }
-          if (!slug) throw new Error('Could not reserve a link — please try again.');
-          const uploaded = {};
-          for (const s of tpl.photos) {
-            const p = state.photos[s.id];
-            const ext = (p.file.name.split('.').pop() || 'jpg').toLowerCase();
-            const path = slug + '/card/' + s.id + '.' + ext;
-            const up = await db.storage.from('experiences').upload(path, p.file, { upsert: true });
-            if (up.error) throw up.error;
-            uploaded[s.id] = db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
-          }
-
-          const headline = (C.resolveText(tpl, state.text).find((z) => z.role === 'headline') || {}).value || tpl.name;
-          const row = {
-            slug,
-            name: 'Cards · ' + C.CARD_FORMATS[tpl.formatId].label.replace('Flat Card ', '') + ' — ' + headline,
-            kind: 'card',
-            user_id: currentUser.id,
-            mind_file_url: '',
-            book_layout: {
-              card: {
-                templateId: tpl.id,
-                formatId: tpl.formatId,
-                orientation: tpl.orientation,
-                occasionId: state.occasionId,
-                text: state.text,
-                photos: uploaded,
-                colorway: state.colorway,
-                pack: state.pack,
-              },
-            },
-          };
-          const ins = await db.from('collections').insert(row).select();
-          if (ins.error) throw ins.error;
-          if (!ins.data || !ins.data.length) throw new Error('Save was blocked — check you are signed in.');
-
-          openSheet('<h2>Card saved</h2><p class="sheet-sub">It is in My Designs. Ordering opens up once the flat 5&times;7 card SKU is wired to Printify.</p>' +
-            '<div class="sheet-actions"><button style="background:#f0efec" onclick="location.href=\'/manage.html\'">My Designs</button>' +
-            '<button style="background:#1a1a1a;color:#fff" onclick="location.reload()">Make another</button></div>');
-        } catch (err) {
-          alert('Could not save: ' + (err.message || err));
-        } finally {
-          btn.disabled = false;
-          btn.textContent = 'Save this card';
+          if (!slug) throw new Error('Could not reserve a link. Please try again.');
         }
+        const stamp = Date.now().toString(36);
+        // A duplicate (or a design reopened under a new slug) still points at the
+        // original's files. Copy them under this slug so deleting one can't gut the other.
+        const remap = PopcodeStorageCopy.makeRemapper(db, 'experiences', slug, {
+          onError: (err) => { if (window.Sentry) try { Sentry.captureException(err); } catch (e) {} },
+        });
+
+        // 1. The photos as chosen, so the design can be reopened and re-cropped.
+        setBusy('Saving your photos…');
+        const photoUrls = {};
+        for (const s of tpl.photos) {
+          const p = state.photos[s.id];
+          if (p.file) {
+            const ext = ((p.file.name || '').split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+            photoUrls[s.id] = await uploadWithRetry(`${slug}/card/${s.id}-${stamp}.${ext}`, p.file, p.file.type || 'image/jpeg');
+            state.photos[s.id] = { url: photoUrls[s.id] };
+          } else {
+            photoUrls[s.id] = (await remap(p.url)) || p.url;
+          }
+        }
+
+        // 2. The front as it will print. It is the scan target and the thumbnail.
+        setBusy('Laying out your card…');
+        const front = await renderFrontTrim();
+        const frontUrl = await uploadWithRetry(`${slug}/card/front-${stamp}.jpg`, await toJpeg(front, 0.9), 'image/jpeg');
+
+        // 3. Make the front scannable. Compiled from the whole printed face, type
+        //    and all, because that is what the phone will see.
+        setBusy('Making it scannable…');
+        const small = document.createElement('canvas');
+        small.width = 1000; small.height = Math.round(1000 * front.height / front.width);
+        small.getContext('2d').drawImage(front, 0, 0, small.width, small.height);
+        const targetImg = await loadImg(small.toDataURL('image/jpeg', 0.92));
+        const compiler = new MINDAR.IMAGE.Compiler();
+        await compiler.compileImageTargets([targetImg], () => {});
+        const mindUrl = await uploadWithRetry(`${slug}/target.mind`, new Blob([await compiler.exportData()]), 'application/octet-stream')
+          + '?v=' + stamp;
+
+        // 4. The video.
+        setBusy('Uploading your video…');
+        let videoUrl;
+        if (state.popcode.file) {
+          videoUrl = await uploadWithRetry(`${slug}/video_0_${stamp}.mp4`, state.popcode.file, state.popcode.file.type || 'video/mp4');
+          state.popcode = { url: videoUrl };
+        } else {
+          videoUrl = (await remap(state.popcode.url)) || state.popcode.url;
+        }
+
+        // 5. The row and its one Popcode.
+        setBusy('Saving…');
+        const headline = (C.resolveText(tpl, state.text).find((z) => z.role === 'headline') || {}).value || tpl.name;
+        const row = {
+          name: 'Cards · 5×7 — ' + headline,
+          kind: 'card',
+          mind_file_url: mindUrl,
+          book_layout: {
+            card: {
+              templateId: tpl.id, formatId: tpl.formatId, orientation: tpl.orientation,
+              occasionId: state.occasionId, text: state.text, photos: photoUrls,
+              colorway: state.colorway, pack: state.pack, frontUrl,
+            },
+          },
+        };
+        let collectionId;
+        if (editing && editing.id) {
+          const { error } = await db.from('collections').update(row).eq('id', editing.id);
+          if (error) throw new Error('Could not save: ' + error.message);
+          collectionId = editing.id;
+          await db.from('collection_items').delete().eq('collection_id', collectionId);
+        } else {
+          const { data, error } = await db.from('collections')
+            .insert({ ...row, slug, user_id: currentUser.id }).select().single();
+          if (error) throw new Error('Could not save: ' + error.message);
+          collectionId = data.id;
+        }
+        const { error: iErr } = await db.from('collection_items').insert({
+          collection_id: collectionId, target_index: 0, media_type: 'video',
+          video_url: videoUrl, audio_url: null, photo_url: frontUrl,
+        });
+        if (iErr) throw new Error('Saved, but linking the video failed: ' + iErr.message);
+        editing = { id: collectionId, slug };
+        const u = new URL(location.href);
+        u.searchParams.set('id', slug); u.searchParams.delete('duplicate');
+        history.replaceState(null, '', u);
+        return { slug, collectionId, front, frontUrl, headline };
+      }
+
+      async function onSave() {
+        try {
+          const saved = await saveCard();
+          setBusy(null);
+          openSheet('<h2>Card saved</h2><p class="sheet-sub">It’s in My Designs, and its video plays at <b>popcode.app/' + esc(saved.slug) + '</b>.</p>' +
+            '<div class="sheet-actions"><button style="background:#f0efec" onclick="location.href=\'/manage.html?tab=designs\'">My Designs</button>' +
+            '<button style="background:#1a1a1a;color:#fff" onclick="closeSheet()">Keep editing</button></div>');
+        } catch (err) {
+          setBusy(null);
+          console.error(err);
+          if (window.Sentry && !/first|Attach|Change|Still loading/.test(err.message)) try { Sentry.captureException(err); } catch (e) {}
+          alert(err.message || String(err));
+        }
+      }
+
+      async function addToCart() {
+        try {
+          const saved = await saveCard();
+          setBusy('Preparing the print files…');
+          const frontBlob = await toJpeg(toBleed(saved.front), 0.95);
+          const backBlob = await toJpeg(await renderBack(saved.slug), 0.95);
+          const urls = [URL.createObjectURL(frontBlob), URL.createObjectURL(backBlob)];
+          let go;
+          try {
+            go = await PopcodePrintPreview.open({
+              mode: 'cart',
+              intro: 'This is exactly what we’ll print, front and back. The outer edge is trimmed off, so keep faces and words inside the dashed line.',
+              sections: [{ heading: state.pack + ' cards, 5×7″, with envelopes', html: PopcodePrintPreview.list({ cols: 2, items: [
+                { src: urls[0], label: 'Front', wMm: 133.35, hMm: 184.15, safeMm: 6.35 + 3.175 },
+                { src: urls[1], label: 'Back', wMm: 133.35, hMm: 184.15, safeMm: 6.35 + 3.175 },
+              ] }) }],
+            });
+          } finally {
+            urls.forEach((x) => URL.revokeObjectURL(x));
+          }
+          if (go !== true) { setBusy(null); return; }
+          setBusy('Adding to your cart…');
+          const stamp = Date.now().toString(36);
+          const frontUrl = await uploadWithRetry(`${saved.slug}/card/print-front-${stamp}.jpg`, frontBlob, 'image/jpeg');
+          const backUrl = await uploadWithRetry(`${saved.slug}/card/print-back-${stamp}.jpg`, backBlob, 'image/jpeg');
+          await PopcodeCart.add({
+            collectionId: saved.collectionId,
+            productType: 'card',
+            variantId: 'card-5x7',
+            copies: state.pack,
+            assetUrls: [{ url: frontUrl, print_area: 'front' }, { url: backUrl, print_area: 'back' }],
+            title: saved.headline + ' — 5×7″ cards',
+            thumbUrl: saved.frontUrl,
+            options: { sizeLabel: '5×7″ flat cards', orientationLabel: 'with envelopes' },
+          });
+          location.href = '/cart.html';
+        } catch (err) {
+          setBusy(null);
+          console.error(err);
+          if (window.Sentry && !/first|Attach|Change|Still loading/.test(err.message)) try { Sentry.captureException(err); } catch (e) {}
+          alert(err.message || String(err));
+        }
+      }
+
+      // Reopen a saved card (?id=slug from My Designs or the cart). With
+      // &duplicate=1 it opens unattached, so saving makes a new card.
+      async function loadCard(slug, duplicate) {
+        const { data: col, error } = await db.from('collections')
+          .select('id, slug, kind, book_layout, user_id').eq('slug', slug).maybeSingle();
+        const cfg = col && col.book_layout && col.book_layout.card;
+        const tpl = cfg && C.templateById(cfg.templateId);
+        if (error || !col || col.kind !== 'card' || !tpl || col.user_id !== currentUser.id) {
+          renderBrowse();
+          alert('That card couldn’t be opened.');
+          return;
+        }
+        const { data: items } = await db.from('collection_items')
+          .select('video_url').eq('collection_id', col.id).order('target_index').limit(1);
+        state.occasionId = cfg.occasionId || state.occasionId;
+        state.template = tpl;
+        state.text = cfg.text || {};
+        state.colorway = cfg.colorway || (tpl.colorways && tpl.colorways[0]) || C.DEFAULT_COLORWAY;
+        state.pack = C.CARD_PACKS.some((p) => p.qty === cfg.pack) ? cfg.pack : C.DEFAULT_PACK;
+        state.photos = {};
+        Object.entries(cfg.photos || {}).forEach(([k, url]) => { if (url) state.photos[k] = { url }; });
+        const v = items && items[0] && items[0].video_url;
+        state.popcode = v ? { url: v } : null;
+        editing = duplicate ? null : { id: col.id, slug: col.slug };
+        $('step-browse').classList.add('hidden');
+        $('step-edit').classList.remove('hidden');
+        renderEditor();
       }
 
       // ── Boot ────────────────────────────────────────────────────────────
@@ -822,11 +1240,13 @@
         const q = new URLSearchParams(location.search);
         if (q.get('occasion')) state.occasionId = q.get('occasion');
         db.auth.getSession().then(({ data }) => {
-          if (!data.session) { location.href = '/auth.html'; return; }
+          if (!data.session) { location.href = '/auth.html?next=' + encodeURIComponent(location.pathname + location.search); return; }
           currentUser = data.session.user;
-          renderBrowse();
+          if (q.get('id')) loadCard(q.get('id'), q.get('duplicate') === '1');
+          else renderBrowse();
         });
       });
     </script>
+    <script src="/nav.js"></script>
   </body>
 </html>

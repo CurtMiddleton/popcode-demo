@@ -137,22 +137,49 @@ retail price. `cardPackPrice()` floors the result just above cost, so a tier
 discount eats margin and never principal — same posture as the shipping-inclusive
 markup. Whole-dollar rounding matches `priceFromQuote` so display and charge agree.
 
-## State
+## State (2026-10-20)
 
-Built and headless-tested (0 page errors): `public/card.html` — category browse,
-template picker, inline on-card typing with two-way side-panel sync, auto-fit,
-photo slots, video Popcode attach, pack selector, save to My Designs
-(`kind:'card'`, reusing `book_layout` jsonb — no migration).
+Brought onto current `main` from `claude/holiday-cards-categories-3t5cbo` (that
+branch shares no history with main, so the files were copied, not merged), then
+wired end to end. Tested headless with Supabase and the cart stubbed: all eight
+templates' code paths, save → reopen → re-save → duplicate, print files checked
+by eye. **Not tried with a real account, a real phone scan or a printed card.**
 
-**Not linked from the Shop yet**, deliberately — same posture as the board book:
-it stays reachable at `/card.html` until ordering is wired. Pricing shows a
-placeholder rather than a number, because the card SKU isn't pinned down.
+What a card is now:
 
-## Next
+- **A Popcode.** Saving renders the front exactly as the editor shows it,
+  compiles it into `{slug}/target.mind` (type and all, since that's what the
+  phone sees), uploads the video, and writes a `kind:'card'` collection with one
+  `collection_items` row (`photo_url` = the rendered front, also the thumbnail).
+  The design lives in `book_layout.card`, so My Designs and the cart's
+  "Edit design" reopen it at `/card.html?id={slug}` (`&duplicate=1` for a copy).
+- **Two print files.** `renderFrontTrim()` captures `renderCard()` with
+  html2canvas 1.4.1 at 1500×2100 (photos pre-cropped onto canvases, foil painted
+  glyph by glyph afterwards, since html2canvas can't do `background-clip:text`);
+  `toBleed()` mirrors the edges out to 1575×2175. `renderBack()` draws the
+  how-to-play side: symbol, "This card plays a video", `popcode.app/{slug}`.
+  Both go through the shared print preview before anything reaches the cart.
+- **A cart line** `card` / `card-5x7`, copies = the pack (10/25/50/75; a cart line
+  holds at most 99), assets `front` + `back` → Printify placements by name.
+- Refuses to save with the template's sample signature ("The Middleton Family").
 
-1. Run the probe; pin the SKU; add the catalog entry.
-2. Print bake: trim render → bleed canvas, plus the card **back** (both candidate
-   SKUs are duplex) carrying the `popcode.app/{slug}` panel — cards are the ideal
-   home for the back-panel branding already designed for book back covers.
-3. Wire quote/checkout through the existing cart, then link from `shop.html`.
-4. Grow the template library; every new design lights up more categories for free.
+## Still to do, in order
+
+1. **Pin the product.** `PRINTIFY_API_TOKEN=... node scripts/probe-printify-cards.mjs --blueprint 10717`
+   → fill `printProviderId` and `variantId` in `lib/print/catalog.mjs` (`card`).
+   Check the print-area size: a third-party mirror of the listing says
+   1538×2175 per side, against our 1575×2175. If so, change `CARD_FORMATS['flat-5x7']`
+   (or resample in `toBleed()`) so nothing is cropped.
+2. **Cost and price.** One `send_to_production:false` order → `baseCostMinor`.
+   Then a `RETAIL_PRICES.card` entry with the pack discounts (the "save 10%"
+   labels are shown but NOT applied yet), and drop `card` from the exemption in
+   `scripts/check-pricing.mjs`.
+3. **Run `supabase/migrations/2026-10-20-cards-free.sql` in prod**, or a card
+   counts as one of the free plan's five Popcodes.
+4. **Order one sample** and scan it with an iPhone: first scan speed, and
+   whether the type over the photo hurts tracking.
+5. **Link it**: Shop tile and the home-page holiday panel → `/card.html`.
+
+Known gaps, not blocking: video is upload-only (no record / montage / audio as
+the other builders have); photos are centre-cropped with no adjust; the arch
+template's laurel overlaps the photo's upper corners.
