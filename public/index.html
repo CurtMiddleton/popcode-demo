@@ -1127,7 +1127,7 @@
           <div class="venue-art">
             <img class="art" src="/assets/mockups/scenes/exhibit.webp" alt="A painting in an ornate frame"/>
             <div class="venue-phone">
-              <video src="/video/exhibit.mp4" muted loop playsinline autoplay preload="metadata"></video>
+              <video src="/video/exhibit.mp4" poster="/video/exhibit-poster.jpg" muted loop playsinline autoplay preload="metadata"></video>
             </div>
           </div>
           <div class="venue-body">
@@ -1461,7 +1461,14 @@
           };
           v.src = src;
           media.appendChild(v);
-          v.play().catch(function () {});
+          // Autoplay refused (Low Power Mode, a browser setting): the video would
+          // sit there as a black screen, so show the still instead. Other
+          // rejections come with an error event, which onerror handles.
+          v.play().catch(function (e) {
+            if (!e || e.name !== 'NotAllowedError' || v.parentNode !== media) return;
+            media.innerHTML = '';
+            showStill(scene);
+          });
         }
 
         // No clip for this scene (or none that would play): show the thing
