@@ -34,7 +34,7 @@
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Mrs+Saint+Delafield&family=Pinyon+Script&family=Oswald:wght@500;600&family=Ballet&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,600;1,6..96,400&family=Cinzel:wght@400;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500&family=Jost:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Parisienne&family=Monsieur+La+Doulaise&family=WindSong&family=Mea+Culpa&family=Sacramento&family=Oswald:wght@500;600&family=Ballet&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,600;1,6..96,400&family=Cinzel:wght@400;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500&family=Jost:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
@@ -66,7 +66,10 @@
 
       .tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; margin-top: 26px; }
       .tpl-card { cursor: pointer; }
-      .tpl-stage { background: #eceae4; border-radius: 10px; padding: 16px; display: flex; justify-content: center; }
+      /* Minted-style presentation: the card on a warm cream ground with a soft
+         drop shadow, so it reads as a printed object rather than a picture. */
+      .tpl-stage { background: #efebe3; border-radius: 4px; padding: 26px 20px; display: flex; justify-content: center; align-items: center; min-height: 290px; }
+      .tpl-stage .card-face { box-shadow: 0 1px 2px rgba(60,45,30,0.10), 0 8px 22px rgba(60,45,30,0.22); }
       .tpl-name { font-size: 13px; font-weight: 600; margin-top: 9px; }
       .tpl-meta { font-size: 12px; color: #8a857d; margin-top: 1px; }
 
@@ -118,7 +121,8 @@
 
       /* ── Step 2: editor ──────────────────────────────────────────────── */
       .editor { display: flex; gap: 34px; align-items: flex-start; flex-wrap: wrap; }
-      .ed-stage { flex: 1 1 320px; display: flex; justify-content: center; padding: 8px 0 20px; }
+      .ed-stage { flex: 1 1 320px; display: flex; justify-content: center; align-items: center; padding: 40px 20px; background: #efebe3; border-radius: 4px; }
+      .ed-stage .card-face { box-shadow: 0 1px 3px rgba(60,45,30,0.12), 0 14px 34px rgba(60,45,30,0.26); }
       .ed-side { flex: 0 0 340px; max-width: 100%; }
       @media (max-width: 780px) { .ed-side { flex: 1 1 100%; } }
 
@@ -221,6 +225,7 @@
         bw: false,              // print the photos in black and white
         greeting: 'holiday',    // which of C.GREETINGS fills the greeting zones
         corners: 'square',      // 'square' | 'rounded' (a separate Printify variant)
+        script: null,           // one of C.SCRIPTS for every script line, or null for the design's own
         back: null,             // { url, file? } an optional photo on the back
       };
 
@@ -335,6 +340,7 @@
           t.style.top = z.y * 100 + '%';
           // fitCardText resets to this before it centres the zone in a band.
           t.dataset.zid = z.id;
+          if (z.free) t.dataset.free = '1';
           t.dataset.baseTop = z.y * 100 + '%';
           t.style.fontSize = (z.size * 100) + 'cqh';
           // Leading tightens as type grows -- a flat 1.15 makes display lines
@@ -345,18 +351,25 @@
           t.style.textAlign = z.align;
           t.style.fontWeight = String(z.weight || 400);
           if (z.italic) t.style.fontStyle = 'italic';
-          t.style.fontFamily = (C.FONTS[z.font] || C.FONTS.cormorant).css;
+          const fontId = z.scriptable && opts.script ? opts.script : z.font;
+          t.style.fontFamily = (C.FONTS[fontId] || C.FONTS.cormorant).css;
           if (z.track) t.style.letterSpacing = z.track + 'em';
           if (z.upper) t.style.textTransform = 'uppercase';
           // A tight shadow lifts type off a photo without the muddy halo a wide
           // blur gives; scaled in cq units so it holds at print resolution.
-          if (tpl.ground === 'bleed') t.style.textShadow = '0 0.12cqh 0.7cqh rgba(0,0,0,0.34)';
+          if (tpl.ground === 'bleed' || z.color === 'onPhoto') t.style.textShadow = '0 0.12cqh 0.7cqh rgba(0,0,0,0.34)';
           const fin = C.FINISHES[z.finish || 'flat'];
           if (fin && fin.gradient) { t.classList.add('foil'); t.style.backgroundImage = fin.gradient; }
           const w = (z.maxW || 0.84) * 100;
           t.style.width = w + '%';
           t.style.left = (z.align === 'center' ? (z.x * 100 - w / 2)
                         : z.align === 'right' ? (z.x * 100 - w) : z.x * 100) + '%';
+          // A rotated (or `center`) zone sits with its centre at (x, y).
+          if (z.rotate || z.center) {
+            t.style.left = z.x * 100 + '%';
+            t.style.transform = 'translate(-50%, -50%)' + (z.rotate ? ' rotate(' + z.rotate + 'deg)' : '');
+            t.style.transformOrigin = 'center';
+          }
           t.textContent = z.value;
           t.dataset.maxLines = String(z.lines || (C.TEXT_ROLES[z.role] || {}).maxLines || 1);
 
@@ -512,7 +525,7 @@
           a.right > b.left + 0.5 && b.right > a.left + 0.5 &&
           a.bottom > b.top + 0.5 && b.bottom > a.top + 0.5;
         for (let pass = 0; pass < 24; pass++) {
-          const rects = zones.map((el) => ({ el, r: el.getBoundingClientRect() }));
+          const rects = zones.filter((el) => !el.dataset.free).map((el) => ({ el, r: el.getBoundingClientRect() }));
           let hit = null;
           for (let i = 0; i < rects.length && !hit; i++) {
             for (let j = i + 1; j < rects.length; j++) {
@@ -674,6 +687,7 @@
         state.text = {};
         state.photos = {};
         state.popcode = null;
+        state.script = null;
         $('step-browse').classList.add('hidden');
         $('step-edit').classList.remove('hidden');
         renderEditor();
@@ -691,6 +705,7 @@
               '<div class="panel"><h2 class="ed-name">' + esc(tpl.name) + '</h2>' +
                 '<div class="opt hidden" id="opt-orient"><h3>Orientation <span id="orient-name"></span></h3><div class="pack-row" id="orient-row"></div></div>' +
                 '<div class="opt hidden" id="opt-greet"><h3>Greeting <span id="greet-name"></span></h3><div class="chip-row" id="greet-row"></div></div>' +
+                '<div class="opt hidden" id="opt-script"><h3>Script <span id="script-name"></span></h3><div class="pack-row" id="script-row"></div></div>' +
                 '<div class="opt" id="cw-panel"><h3>Colour theme <span id="cw-name"></span></h3><div class="sw-row" id="cw-row"></div></div>' +
                 '<div class="opt"><h3>Corners <span id="corner-name"></span></h3><div class="pack-row" id="corner-row"></div></div>' +
                 '<div class="opt"><h3>Photo <span id="bw-name"></span></h3><div class="pack-row"><button class="pack-btn" id="bw-off">Colour</button>' +
@@ -779,6 +794,14 @@
             renderOptions(); drawEditorCard(); renderZoneFields();
           });
         }
+        const scripted = (tpl.text || []).some((z) => z.scriptable);
+        $('opt-script').classList.toggle('hidden', !scripted);
+        if (scripted) {
+          const own = (tpl.text.find((z) => z.scriptable) || {}).font;
+          optionRow('script-row', 'script-name', C.SCRIPTS, state.script || own, (id) => { state.script = id; renderOptions(); drawEditorCard(); });
+          // Each button is set in its own script so the choice is visible.
+          [...$('script-row').children].forEach((b, i) => { b.style.fontFamily = C.FONTS[C.SCRIPTS[i].id].css; b.style.fontSize = '20px'; b.style.fontWeight = '400'; });
+        }
         optionRow('corner-row', 'corner-name', [{ id: 'square', label: 'Square' }, { id: 'rounded', label: 'Rounded' }],
           state.corners, (c) => { state.corners = c; renderOptions(); drawEditorCard(); });
       }
@@ -816,7 +839,7 @@
         const w = Math.min(land ? 500 : 360, Math.max(240, window.innerWidth - 80));
         const face = renderCard(state.template, {
           width: w, editable: true, text: state.text, photos: state.photos, bw: state.bw,
-          greeting: state.greeting, corners: state.corners,
+          greeting: state.greeting, corners: state.corners, script: state.script,
           colorway: state.colorway, onPickPhoto: pickPhotoFor,
         });
         stage.appendChild(face);
@@ -1055,7 +1078,7 @@
         const holder = document.createElement('div');
         holder.style.cssText = 'position:fixed;left:-20000px;top:0;pointer-events:none;';
         const face = renderCard(tpl, { width: FRONT_CSS_W, text: state.text, photos: state.photos,
-          colorway: state.colorway, crossOrigin: true, bw: state.bw, greeting: state.greeting });
+          colorway: state.colorway, crossOrigin: true, bw: state.bw, greeting: state.greeting, script: state.script });
         face.style.boxShadow = 'none';
         holder.appendChild(face);
         document.body.appendChild(holder);
@@ -1389,7 +1412,7 @@
               templateId: tpl.id, formatId: tpl.formatId, orientation: tpl.orientation,
               occasionId: state.occasionId, text: state.text, photos: photoUrls,
               colorway: state.colorway, pack: state.pack, bw: state.bw, frontUrl,
-              greeting: state.greeting, corners: state.corners, backPhoto: backUrl,
+              greeting: state.greeting, corners: state.corners, script: state.script, backPhoto: backUrl,
             },
           },
         };
@@ -1513,6 +1536,7 @@
         state.bw = !!cfg.bw;
         state.greeting = cfg.greeting || 'holiday';
         state.corners = cfg.corners === 'rounded' ? 'rounded' : 'square';
+        state.script = C.SCRIPTS.some((x) => x.id === cfg.script) ? cfg.script : null;
         state.back = cfg.backPhoto ? { url: cfg.backPhoto } : null;
         editing = duplicate ? null : { id: col.id, slug: col.slug };
         $('step-browse').classList.add('hidden');

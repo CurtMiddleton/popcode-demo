@@ -413,7 +413,7 @@
     },
     "year": {
       "label": "Year",
-      "maxChars": 9,
+      "maxChars": 24,
       "maxLines": 1,
       "hint": "2026"
     },
@@ -425,6 +425,31 @@
     }
   },
   "FONTS": {
+    "parisienne": {
+      "label": "Classic",
+      "css": "'Parisienne', 'Snell Roundhand', cursive",
+      "google": "Parisienne"
+    },
+    "doulaise": {
+      "label": "Formal",
+      "css": "'Monsieur La Doulaise', 'Snell Roundhand', cursive",
+      "google": "Monsieur+La+Doulaise"
+    },
+    "meaculpa": {
+      "label": "Calligraphy",
+      "css": "'Mea Culpa', 'Snell Roundhand', cursive",
+      "google": "Mea+Culpa"
+    },
+    "sacramento": {
+      "label": "Pen",
+      "css": "'Sacramento', 'Snell Roundhand', cursive",
+      "google": "Sacramento"
+    },
+    "windsong": {
+      "label": "Sweeping",
+      "css": "'WindSong', 'Snell Roundhand', cursive",
+      "google": "WindSong"
+    },
     "pinyon": {
       "label": "Formal Script",
       "css": "'Pinyon Script', 'Snell Roundhand', cursive",
@@ -603,6 +628,42 @@
       "panel": "#F4F2EC",
       "ink": "#1F2B44",
       "accent": "#5B6478",
+      "mat": "#1F2B44",
+      "onPhoto": "#FFFFFF"
+    },
+    "cocoa": {
+      "label": "Cocoa",
+      "ground": "#4A2C2A",
+      "panel": "#F4EEE6",
+      "ink": "#4A2C2A",
+      "accent": "#7A5A52",
+      "mat": "#4A2C2A",
+      "onPhoto": "#FFFFFF"
+    },
+    "wred": {
+      "label": "Red",
+      "ground": "#B3262D",
+      "panel": "#FFFFFF",
+      "ink": "#B3262D",
+      "accent": "#B3262D",
+      "mat": "#B3262D",
+      "onPhoto": "#FFFFFF"
+    },
+    "wgreen": {
+      "label": "Green",
+      "ground": "#2E4A3A",
+      "panel": "#FFFFFF",
+      "ink": "#2E4A3A",
+      "accent": "#2E4A3A",
+      "mat": "#2E4A3A",
+      "onPhoto": "#FFFFFF"
+    },
+    "wnavy": {
+      "label": "Navy",
+      "ground": "#1F2B44",
+      "panel": "#FFFFFF",
+      "ink": "#1F2B44",
+      "accent": "#1F2B44",
       "mat": "#1F2B44",
       "onPhoto": "#FFFFFF"
     },
@@ -879,7 +940,7 @@
           "id": "signature",
           "role": "signature",
           "default": "the Bennetts",
-          "font": "hand",
+          "font": "parisienne",
           "weight": 400,
           "color": "onPhoto",
           "align": "center",
@@ -893,7 +954,8 @@
           "x": 0.5,
           "y": 0.77,
           "size": 0.062,
-          "maxW": 0.7
+          "maxW": 0.7,
+          "scriptable": true
         }
       ]
     },
@@ -988,7 +1050,7 @@
           "id": "signature",
           "role": "signature",
           "default": "the Bennetts",
-          "font": "hand",
+          "font": "parisienne",
           "weight": 400,
           "color": "onPhoto",
           "align": "center",
@@ -1002,7 +1064,8 @@
           "x": 0.5,
           "y": 0.69,
           "size": 0.085,
-          "maxW": 0.6
+          "maxW": 0.6,
+          "scriptable": true
         }
       ]
     },
@@ -1205,7 +1268,7 @@
           "id": "headline",
           "role": "headline",
           "default": "Happy Holidays",
-          "font": "pinyon",
+          "font": "parisienne",
           "weight": 400,
           "color": "onPhoto",
           "align": "center",
@@ -1225,7 +1288,8 @@
           "x": 0.5,
           "y": 0.72,
           "size": 0.088,
-          "maxW": 0.92
+          "maxW": 0.92,
+          "scriptable": true
         },
         {
           "id": "signature",
@@ -1286,7 +1350,7 @@
           "id": "headline",
           "role": "headline",
           "default": "Happy Holidays",
-          "font": "pinyon",
+          "font": "parisienne",
           "weight": 400,
           "color": "onPhoto",
           "align": "center",
@@ -1306,7 +1370,8 @@
           "x": 0.5,
           "y": 0.64,
           "size": 0.125,
-          "maxW": 0.85
+          "maxW": 0.85,
+          "scriptable": true
         },
         {
           "id": "signature",
@@ -1394,7 +1459,7 @@
           "id": "signature",
           "role": "signature",
           "default": "The Alphersons ’26",
-          "font": "hand",
+          "font": "parisienne",
           "weight": 400,
           "color": "onPhoto",
           "align": "right",
@@ -1408,7 +1473,8 @@
           "x": 0.93,
           "y": 0.88,
           "size": 0.058,
-          "maxW": 0.7
+          "maxW": 0.7,
+          "scriptable": true
         }
       ]
     },
@@ -1476,7 +1542,7 @@
           "id": "signature",
           "role": "signature",
           "default": "The Alphersons ’26",
-          "font": "hand",
+          "font": "parisienne",
           "weight": 400,
           "color": "onPhoto",
           "align": "right",
@@ -1490,7 +1556,8 @@
           "x": 0.95,
           "y": 0.83,
           "size": 0.08,
-          "maxW": 0.55
+          "maxW": 0.55,
+          "scriptable": true
         }
       ]
     },
@@ -1556,7 +1623,7 @@
           "id": "signature",
           "role": "signature",
           "default": "Catherine, Christian and Bella",
-          "font": "hand",
+          "font": "parisienne",
           "weight": 400,
           "color": "onPhoto",
           "align": "center",
@@ -1570,7 +1637,8 @@
           "x": 0.5,
           "y": 0.85,
           "size": 0.05,
-          "maxW": 0.85
+          "maxW": 0.85,
+          "scriptable": true
         }
       ]
     },
@@ -1636,7 +1704,7 @@
           "id": "signature",
           "role": "signature",
           "default": "Catherine, Christian and Bella",
-          "font": "hand",
+          "font": "parisienne",
           "weight": 400,
           "color": "onPhoto",
           "align": "center",
@@ -1650,7 +1718,8 @@
           "x": 0.5,
           "y": 0.82,
           "size": 0.07,
-          "maxW": 0.75
+          "maxW": 0.75,
+          "scriptable": true
         }
       ]
     },
@@ -1716,7 +1785,7 @@
           "id": "signature",
           "role": "signature",
           "default": "The Parkers",
-          "font": "hand",
+          "font": "parisienne",
           "weight": 400,
           "color": "onPhoto",
           "align": "center",
@@ -1730,7 +1799,8 @@
           "x": 0.5,
           "y": 0.835,
           "size": 0.075,
-          "maxW": 0.8
+          "maxW": 0.8,
+          "scriptable": true
         }
       ]
     },
@@ -1796,7 +1866,7 @@
           "id": "signature",
           "role": "signature",
           "default": "The Parkers",
-          "font": "hand",
+          "font": "parisienne",
           "weight": 400,
           "color": "onPhoto",
           "align": "center",
@@ -1810,7 +1880,8 @@
           "x": 0.5,
           "y": 0.79,
           "size": 0.1,
-          "maxW": 0.6
+          "maxW": 0.6,
+          "scriptable": true
         }
       ]
     },
@@ -2997,7 +3068,7 @@
           "id": "signature",
           "role": "signature",
           "default": "The Parkers",
-          "font": "hand",
+          "font": "parisienne",
           "weight": 400,
           "color": "accent",
           "align": "center",
@@ -3011,7 +3082,8 @@
           "x": 0.5,
           "y": 0.8,
           "size": 0.075,
-          "maxW": 0.8
+          "maxW": 0.8,
+          "scriptable": true
         }
       ],
       "bands": [
@@ -3092,7 +3164,7 @@
           "id": "signature",
           "role": "signature",
           "default": "The Parkers",
-          "font": "hand",
+          "font": "parisienne",
           "weight": 400,
           "color": "accent",
           "align": "center",
@@ -3106,7 +3178,8 @@
           "x": 0.81,
           "y": 0.545,
           "size": 0.1,
-          "maxW": 0.33
+          "maxW": 0.33,
+          "scriptable": true
         }
       ],
       "bands": [
@@ -3116,6 +3189,1326 @@
             "signature"
           ],
           "top": 0,
+          "bottom": 1
+        }
+      ]
+    },
+    {
+      "id": "p-pen",
+      "family": "pen",
+      "name": "Pen & Ink",
+      "formatId": "flat-5x7",
+      "orientation": "portrait",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "religious",
+        "baby",
+        "pet",
+        "newlywed"
+      ],
+      "ornament": "none",
+      "ground": "inset",
+      "photoEdge": "square",
+      "fill": "ground",
+      "colorways": [
+        "cocoa",
+        "evergreen",
+        "navy",
+        "ink"
+      ],
+      "popcodeSlot": "main",
+      "photos": [
+        {
+          "id": "main",
+          "x": 0.063,
+          "y": 0.045,
+          "w": 0.874,
+          "h": 0.91,
+          "fit": "cover"
+        }
+      ],
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "Happy Holidays",
+          "font": "sacramento",
+          "weight": 400,
+          "color": "onPhoto",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 1.1,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "greet": {
+            "holiday": "Happy Holidays",
+            "christmas": "Merry Christmas",
+            "newyear": "Happy New Year",
+            "religious": "Joy to the World"
+          },
+          "x": 0.5,
+          "y": 0.7,
+          "size": 0.085,
+          "maxW": 0.82,
+          "scriptable": true
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "With Love, The Anderson Family",
+          "font": "sacramento",
+          "weight": 400,
+          "color": "onPhoto",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 1.2,
+          "finish": "flat",
+          "lines": 1,
+          "sample": true,
+          "italic": false,
+          "x": 0.5,
+          "y": 0.815,
+          "size": 0.034,
+          "maxW": 0.8,
+          "scriptable": true
+        }
+      ]
+    },
+    {
+      "id": "l-pen",
+      "family": "pen",
+      "name": "Pen & Ink",
+      "formatId": "flat-5x7",
+      "orientation": "landscape",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "religious",
+        "baby",
+        "pet",
+        "newlywed"
+      ],
+      "ornament": "none",
+      "ground": "inset",
+      "photoEdge": "square",
+      "fill": "ground",
+      "colorways": [
+        "cocoa",
+        "evergreen",
+        "navy",
+        "ink"
+      ],
+      "popcodeSlot": "main",
+      "photos": [
+        {
+          "id": "main",
+          "x": 0.045,
+          "y": 0.063,
+          "w": 0.91,
+          "h": 0.874,
+          "fit": "cover"
+        }
+      ],
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "Happy Holidays",
+          "font": "sacramento",
+          "weight": 400,
+          "color": "onPhoto",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 1.1,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "greet": {
+            "holiday": "Happy Holidays",
+            "christmas": "Merry Christmas",
+            "newyear": "Happy New Year",
+            "religious": "Joy to the World"
+          },
+          "x": 0.5,
+          "y": 0.64,
+          "size": 0.12,
+          "maxW": 0.8,
+          "scriptable": true
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "With Love, The Anderson Family",
+          "font": "sacramento",
+          "weight": 400,
+          "color": "onPhoto",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 1.2,
+          "finish": "flat",
+          "lines": 1,
+          "sample": true,
+          "italic": false,
+          "x": 0.5,
+          "y": 0.8,
+          "size": 0.046,
+          "maxW": 0.7,
+          "scriptable": true
+        }
+      ]
+    },
+    {
+      "id": "p-harbor",
+      "family": "harbor",
+      "name": "Harbor",
+      "formatId": "flat-5x7",
+      "orientation": "portrait",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "religious",
+        "newlywed",
+        "pet"
+      ],
+      "ornament": "none",
+      "ground": "inset",
+      "photoEdge": "square",
+      "colorways": [
+        "wred",
+        "wgreen",
+        "wnavy",
+        "snow"
+      ],
+      "popcodeSlot": "main",
+      "photos": [
+        {
+          "id": "main",
+          "x": 0.05,
+          "y": 0.036,
+          "w": 0.9,
+          "h": 0.928,
+          "fit": "cover"
+        }
+      ],
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "Happy",
+          "font": "windsong",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 0.9,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "greet": {
+            "holiday": "Happy",
+            "christmas": "Merry",
+            "newyear": "Happy",
+            "religious": "Joy to"
+          },
+          "label": "Greeting, first word",
+          "x": 0.34,
+          "y": 0.11,
+          "size": 0.11,
+          "maxW": 0.52,
+          "rotate": -7,
+          "scriptable": true,
+          "free": true
+        },
+        {
+          "id": "subhead",
+          "role": "subhead",
+          "default": "Holidays",
+          "font": "windsong",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 0.9,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "greet": {
+            "holiday": "Holidays",
+            "christmas": "Christmas",
+            "newyear": "New Year",
+            "religious": "the World"
+          },
+          "label": "Greeting, second word",
+          "x": 0.56,
+          "y": 0.23,
+          "size": 0.11,
+          "maxW": 0.68,
+          "rotate": -7,
+          "scriptable": true,
+          "free": true
+        },
+        {
+          "id": "message",
+          "role": "message",
+          "default": "from",
+          "font": "cormorant",
+          "weight": 500,
+          "color": "ink",
+          "align": "right",
+          "track": 0,
+          "upper": false,
+          "lead": 1.1,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": true,
+          "label": "Small line",
+          "x": 0.86,
+          "y": 0.86,
+          "size": 0.026,
+          "maxW": 0.3
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "THE HARRISONS ’26",
+          "font": "cormorant",
+          "weight": 600,
+          "color": "ink",
+          "align": "right",
+          "track": 0.1,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": 1,
+          "sample": true,
+          "italic": false,
+          "x": 0.86,
+          "y": 0.895,
+          "size": 0.018,
+          "maxW": 0.46
+        }
+      ]
+    },
+    {
+      "id": "l-harbor",
+      "family": "harbor",
+      "name": "Harbor",
+      "formatId": "flat-5x7",
+      "orientation": "landscape",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "religious",
+        "newlywed",
+        "pet"
+      ],
+      "ornament": "none",
+      "ground": "inset",
+      "photoEdge": "square",
+      "colorways": [
+        "wred",
+        "wgreen",
+        "wnavy",
+        "snow"
+      ],
+      "popcodeSlot": "main",
+      "photos": [
+        {
+          "id": "main",
+          "x": 0.036,
+          "y": 0.05,
+          "w": 0.928,
+          "h": 0.9,
+          "fit": "cover"
+        }
+      ],
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "Happy",
+          "font": "windsong",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 0.9,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "greet": {
+            "holiday": "Happy",
+            "christmas": "Merry",
+            "newyear": "Happy",
+            "religious": "Joy to"
+          },
+          "label": "Greeting, first word",
+          "x": 0.23,
+          "y": 0.165,
+          "size": 0.16,
+          "maxW": 0.36,
+          "rotate": -7,
+          "scriptable": true,
+          "free": true
+        },
+        {
+          "id": "subhead",
+          "role": "subhead",
+          "default": "Holidays",
+          "font": "windsong",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 0.9,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "greet": {
+            "holiday": "Holidays",
+            "christmas": "Christmas",
+            "newyear": "New Year",
+            "religious": "the World"
+          },
+          "label": "Greeting, second word",
+          "x": 0.46,
+          "y": 0.39,
+          "size": 0.16,
+          "maxW": 0.5,
+          "rotate": -7,
+          "scriptable": true,
+          "free": true
+        },
+        {
+          "id": "message",
+          "role": "message",
+          "default": "from",
+          "font": "cormorant",
+          "weight": 500,
+          "color": "ink",
+          "align": "right",
+          "track": 0,
+          "upper": false,
+          "lead": 1.1,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": true,
+          "label": "Small line",
+          "x": 0.92,
+          "y": 0.1,
+          "size": 0.036,
+          "maxW": 0.24
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "THE HARRISONS ’26",
+          "font": "cormorant",
+          "weight": 600,
+          "color": "ink",
+          "align": "right",
+          "track": 0.1,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": 1,
+          "sample": true,
+          "italic": false,
+          "x": 0.92,
+          "y": 0.15,
+          "size": 0.025,
+          "maxW": 0.3
+        }
+      ]
+    },
+    {
+      "id": "p-lettered",
+      "family": "lettered",
+      "name": "Hand Lettered",
+      "formatId": "flat-5x7",
+      "orientation": "portrait",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "religious",
+        "baby",
+        "pet"
+      ],
+      "ornament": "none",
+      "ground": "inset",
+      "photoEdge": "square",
+      "colorways": [
+        "cranberry",
+        "evergreen",
+        "navy",
+        "snow"
+      ],
+      "popcodeSlot": "main",
+      "photos": [
+        {
+          "id": "main",
+          "x": 0.14,
+          "y": 0.12,
+          "w": 0.76,
+          "h": 0.78,
+          "fit": "cover"
+        }
+      ],
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "Happy",
+          "font": "meaculpa",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 0.9,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "greet": {
+            "holiday": "Happy",
+            "christmas": "Merry",
+            "newyear": "Happy",
+            "religious": "Joy to"
+          },
+          "label": "Greeting, first word",
+          "x": 0.33,
+          "y": 0.112,
+          "size": 0.118,
+          "maxW": 0.56,
+          "rotate": -5,
+          "scriptable": true,
+          "free": true
+        },
+        {
+          "id": "subhead",
+          "role": "subhead",
+          "default": "Holidays",
+          "font": "meaculpa",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 0.9,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "greet": {
+            "holiday": "Holidays",
+            "christmas": "Christmas",
+            "newyear": "New Year",
+            "religious": "the World"
+          },
+          "label": "Greeting, second word",
+          "x": 0.47,
+          "y": 0.222,
+          "size": 0.118,
+          "maxW": 0.7,
+          "rotate": -5,
+          "scriptable": true,
+          "free": true
+        },
+        {
+          "id": "message",
+          "role": "message",
+          "default": "from the",
+          "font": "meaculpa",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 1,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "label": "Small line",
+          "x": 0.8,
+          "y": 0.775,
+          "size": 0.034,
+          "maxW": 0.34,
+          "scriptable": true
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "FRANKLINS",
+          "font": "meaculpa",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 1,
+          "finish": "flat",
+          "lines": 1,
+          "sample": true,
+          "italic": false,
+          "x": 0.78,
+          "y": 0.815,
+          "size": 0.048,
+          "maxW": 0.4,
+          "scriptable": true
+        },
+        {
+          "id": "year",
+          "role": "year",
+          "default": "2026",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "ink",
+          "align": "center",
+          "track": 0.34,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "x": 0.8,
+          "y": 0.885,
+          "size": 0.018,
+          "maxW": 0.3
+        }
+      ]
+    },
+    {
+      "id": "l-lettered",
+      "family": "lettered",
+      "name": "Hand Lettered",
+      "formatId": "flat-5x7",
+      "orientation": "landscape",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "religious",
+        "baby",
+        "pet"
+      ],
+      "ornament": "none",
+      "ground": "inset",
+      "photoEdge": "square",
+      "colorways": [
+        "cranberry",
+        "evergreen",
+        "navy",
+        "snow"
+      ],
+      "popcodeSlot": "main",
+      "photos": [
+        {
+          "id": "main",
+          "x": 0.16,
+          "y": 0.14,
+          "w": 0.68,
+          "h": 0.74,
+          "fit": "cover"
+        }
+      ],
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "Happy",
+          "font": "meaculpa",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 0.9,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "greet": {
+            "holiday": "Happy",
+            "christmas": "Merry",
+            "newyear": "Happy",
+            "religious": "Joy to"
+          },
+          "label": "Greeting, first word",
+          "x": 0.24,
+          "y": 0.16,
+          "size": 0.14,
+          "maxW": 0.4,
+          "rotate": -5,
+          "scriptable": true,
+          "free": true
+        },
+        {
+          "id": "subhead",
+          "role": "subhead",
+          "default": "Holidays",
+          "font": "meaculpa",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 0.9,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "greet": {
+            "holiday": "Holidays",
+            "christmas": "Christmas",
+            "newyear": "New Year",
+            "religious": "the World"
+          },
+          "label": "Greeting, second word",
+          "x": 0.36,
+          "y": 0.305,
+          "size": 0.14,
+          "maxW": 0.5,
+          "rotate": -5,
+          "scriptable": true,
+          "free": true
+        },
+        {
+          "id": "message",
+          "role": "message",
+          "default": "from the",
+          "font": "meaculpa",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 1,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "label": "Small line",
+          "x": 0.8,
+          "y": 0.69,
+          "size": 0.048,
+          "maxW": 0.26,
+          "scriptable": true
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "FRANKLINS",
+          "font": "meaculpa",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 1,
+          "finish": "flat",
+          "lines": 1,
+          "sample": true,
+          "italic": false,
+          "x": 0.79,
+          "y": 0.75,
+          "size": 0.066,
+          "maxW": 0.28,
+          "scriptable": true
+        },
+        {
+          "id": "year",
+          "role": "year",
+          "default": "2026",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "ink",
+          "align": "center",
+          "track": 0.34,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "x": 0.8,
+          "y": 0.85,
+          "size": 0.025,
+          "maxW": 0.24
+        }
+      ]
+    },
+    {
+      "id": "p-abovebelow",
+      "family": "abovebelow",
+      "name": "Above & Below",
+      "formatId": "flat-5x7",
+      "orientation": "portrait",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "religious",
+        "newlywed",
+        "baby"
+      ],
+      "ornament": "none",
+      "ground": "inset",
+      "photoEdge": "square",
+      "colorways": [
+        "cranberry",
+        "ivory",
+        "evergreen",
+        "navy"
+      ],
+      "popcodeSlot": "main",
+      "photos": [
+        {
+          "id": "main",
+          "x": 0.32,
+          "y": 0.3,
+          "w": 0.36,
+          "h": 0.37,
+          "fit": "cover"
+        }
+      ],
+      "text": [
+        {
+          "id": "year",
+          "role": "year",
+          "default": "TWENTY TWENTY-SIX",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "ink",
+          "align": "left",
+          "track": 0.3,
+          "upper": true,
+          "lead": 1.5,
+          "finish": "flat",
+          "lines": 2,
+          "sample": false,
+          "italic": false,
+          "label": "Year",
+          "x": 0.08,
+          "y": 0.05,
+          "size": 0.014,
+          "maxW": 0.3
+        },
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "Happy",
+          "font": "doulaise",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 0.9,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "greet": {
+            "holiday": "Happy",
+            "christmas": "Merry",
+            "newyear": "Happy",
+            "religious": "Joy to"
+          },
+          "label": "Greeting, above",
+          "x": 0.5,
+          "y": 0.3,
+          "size": 0.12,
+          "maxW": 0.8,
+          "center": true,
+          "scriptable": true,
+          "free": true
+        },
+        {
+          "id": "subhead",
+          "role": "subhead",
+          "default": "Holidays",
+          "font": "doulaise",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 0.9,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "greet": {
+            "holiday": "Holidays",
+            "christmas": "Christmas",
+            "newyear": "New Year",
+            "religious": "the World"
+          },
+          "label": "Greeting, below",
+          "x": 0.5,
+          "y": 0.675,
+          "size": 0.12,
+          "maxW": 0.86,
+          "center": true,
+          "scriptable": true,
+          "free": true
+        },
+        {
+          "id": "message",
+          "role": "message",
+          "default": "with love",
+          "font": "doulaise",
+          "weight": 400,
+          "color": "ink",
+          "align": "right",
+          "track": 0,
+          "upper": false,
+          "lead": 1,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "label": "Small line",
+          "x": 0.92,
+          "y": 0.865,
+          "size": 0.026,
+          "maxW": 0.3,
+          "scriptable": true
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "THE SAMUELS",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "ink",
+          "align": "right",
+          "track": 0.3,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": 1,
+          "sample": true,
+          "italic": false,
+          "x": 0.92,
+          "y": 0.905,
+          "size": 0.015,
+          "maxW": 0.4
+        }
+      ]
+    },
+    {
+      "id": "l-abovebelow",
+      "family": "abovebelow",
+      "name": "Above & Below",
+      "formatId": "flat-5x7",
+      "orientation": "landscape",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "religious",
+        "newlywed",
+        "baby"
+      ],
+      "ornament": "none",
+      "ground": "inset",
+      "photoEdge": "square",
+      "colorways": [
+        "cranberry",
+        "ivory",
+        "evergreen",
+        "navy"
+      ],
+      "popcodeSlot": "main",
+      "photos": [
+        {
+          "id": "main",
+          "x": 0.36,
+          "y": 0.2,
+          "w": 0.28,
+          "h": 0.6,
+          "fit": "cover"
+        }
+      ],
+      "text": [
+        {
+          "id": "year",
+          "role": "year",
+          "default": "TWENTY TWENTY-SIX",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "ink",
+          "align": "left",
+          "track": 0.3,
+          "upper": true,
+          "lead": 1.5,
+          "finish": "flat",
+          "lines": 2,
+          "sample": false,
+          "italic": false,
+          "label": "Year",
+          "x": 0.05,
+          "y": 0.07,
+          "size": 0.02,
+          "maxW": 0.24
+        },
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "Happy",
+          "font": "doulaise",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 0.9,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "greet": {
+            "holiday": "Happy",
+            "christmas": "Merry",
+            "newyear": "Happy",
+            "religious": "Joy to"
+          },
+          "label": "Greeting, left",
+          "x": 0.3,
+          "y": 0.3,
+          "size": 0.17,
+          "maxW": 0.5,
+          "center": true,
+          "scriptable": true,
+          "free": true
+        },
+        {
+          "id": "subhead",
+          "role": "subhead",
+          "default": "Holidays",
+          "font": "doulaise",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 0.9,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "greet": {
+            "holiday": "Holidays",
+            "christmas": "Christmas",
+            "newyear": "New Year",
+            "religious": "the World"
+          },
+          "label": "Greeting, right",
+          "x": 0.68,
+          "y": 0.7,
+          "size": 0.17,
+          "maxW": 0.6,
+          "center": true,
+          "scriptable": true,
+          "free": true
+        },
+        {
+          "id": "message",
+          "role": "message",
+          "default": "with love",
+          "font": "doulaise",
+          "weight": 400,
+          "color": "ink",
+          "align": "left",
+          "track": 0,
+          "upper": false,
+          "lead": 1,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "label": "Small line",
+          "x": 0.05,
+          "y": 0.86,
+          "size": 0.036,
+          "maxW": 0.3,
+          "scriptable": true
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "THE SAMUELS",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "ink",
+          "align": "left",
+          "track": 0.3,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": 1,
+          "sample": true,
+          "italic": false,
+          "x": 0.05,
+          "y": 0.915,
+          "size": 0.021,
+          "maxW": 0.3
+        }
+      ]
+    },
+    {
+      "id": "p-vertical",
+      "family": "vertical",
+      "name": "Vertical Script",
+      "formatId": "flat-5x7",
+      "orientation": "portrait",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "religious",
+        "multiphoto",
+        "newlywed"
+      ],
+      "ornament": "none",
+      "ground": "inset",
+      "photoEdge": "square",
+      "colorways": [
+        "ivory",
+        "snow",
+        "sage",
+        "ink"
+      ],
+      "popcodeSlot": "p2",
+      "photos": [
+        {
+          "id": "p1",
+          "x": 0.27,
+          "y": 0.045,
+          "w": 0.665,
+          "h": 0.24,
+          "fit": "cover"
+        },
+        {
+          "id": "p2",
+          "x": 0.27,
+          "y": 0.295,
+          "w": 0.665,
+          "h": 0.4,
+          "fit": "cover"
+        },
+        {
+          "id": "p3",
+          "x": 0.27,
+          "y": 0.705,
+          "w": 0.3275,
+          "h": 0.19,
+          "fit": "cover"
+        },
+        {
+          "id": "p4",
+          "x": 0.6075,
+          "y": 0.705,
+          "w": 0.3275,
+          "h": 0.19,
+          "fit": "cover"
+        }
+      ],
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "Happy Holidays",
+          "font": "doulaise",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 1.1,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "greet": {
+            "holiday": "Happy Holidays",
+            "christmas": "Merry Christmas",
+            "newyear": "Happy New Year",
+            "religious": "Joy to the World"
+          },
+          "x": 0.14,
+          "y": 0.5,
+          "size": 0.15,
+          "maxW": 1.22,
+          "rotate": -90,
+          "scriptable": true,
+          "free": true
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "love, the parkers",
+          "font": "cormorant",
+          "weight": 500,
+          "color": "accent",
+          "align": "center",
+          "track": 0.08,
+          "upper": false,
+          "lead": 1.3,
+          "finish": "flat",
+          "lines": null,
+          "sample": true,
+          "italic": true,
+          "x": 0.6025,
+          "y": 0.918,
+          "size": 0.024,
+          "maxW": 0.66
+        }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "signature"
+          ],
+          "top": 0.895,
+          "bottom": 1
+        }
+      ]
+    },
+    {
+      "id": "l-vertical",
+      "family": "vertical",
+      "name": "Vertical Script",
+      "formatId": "flat-5x7",
+      "orientation": "landscape",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "religious",
+        "multiphoto",
+        "newlywed"
+      ],
+      "ornament": "none",
+      "ground": "inset",
+      "photoEdge": "square",
+      "colorways": [
+        "ivory",
+        "snow",
+        "sage",
+        "ink"
+      ],
+      "popcodeSlot": "p2",
+      "photos": [
+        {
+          "id": "p1",
+          "x": 0.2,
+          "y": 0.07,
+          "w": 0.36,
+          "h": 0.78,
+          "fit": "cover"
+        },
+        {
+          "id": "p2",
+          "x": 0.57,
+          "y": 0.07,
+          "w": 0.365,
+          "h": 0.385,
+          "fit": "cover"
+        },
+        {
+          "id": "p3",
+          "x": 0.57,
+          "y": 0.465,
+          "w": 0.365,
+          "h": 0.385,
+          "fit": "cover"
+        }
+      ],
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "Happy Holidays",
+          "font": "doulaise",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 1.1,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "greet": {
+            "holiday": "Happy Holidays",
+            "christmas": "Merry Christmas",
+            "newyear": "Happy New Year",
+            "religious": "Joy to the World"
+          },
+          "x": 0.1,
+          "y": 0.5,
+          "size": 0.205,
+          "maxW": 0.68,
+          "rotate": -90,
+          "scriptable": true,
+          "free": true
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "love, the parkers",
+          "font": "cormorant",
+          "weight": 500,
+          "color": "accent",
+          "align": "center",
+          "track": 0.08,
+          "upper": false,
+          "lead": 1.3,
+          "finish": "flat",
+          "lines": null,
+          "sample": true,
+          "italic": true,
+          "x": 0.5675,
+          "y": 0.885,
+          "size": 0.034,
+          "maxW": 0.7
+        }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "signature"
+          ],
+          "top": 0.85,
           "bottom": 1
         }
       ]
@@ -3439,7 +4832,7 @@
           "id": "signature",
           "role": "signature",
           "default": "Love, The Parks",
-          "font": "hand",
+          "font": "parisienne",
           "weight": 400,
           "color": "ink",
           "align": "right",
@@ -3453,7 +4846,8 @@
           "x": 0.92,
           "y": 0.76,
           "size": 0.075,
-          "maxW": 0.4
+          "maxW": 0.4,
+          "scriptable": true
         }
       ],
       "bands": [
@@ -3548,7 +4942,7 @@
           "id": "signature",
           "role": "signature",
           "default": "Love, The Parks",
-          "font": "hand",
+          "font": "parisienne",
           "weight": 400,
           "color": "ink",
           "align": "right",
@@ -3562,7 +4956,8 @@
           "x": 0.93,
           "y": 0.745,
           "size": 0.1,
-          "maxW": 0.4
+          "maxW": 0.4,
+          "scriptable": true
         }
       ],
       "bands": [
@@ -4507,6 +5902,11 @@
     "modern",
     "band",
     "side",
+    "pen",
+    "harbor",
+    "lettered",
+    "abovebelow",
+    "vertical",
     "quartet",
     "handwritten",
     "gallery",
@@ -4530,6 +5930,28 @@
     {
       "id": "religious",
       "label": "Religious Christmas"
+    }
+  ],
+  "SCRIPTS": [
+    {
+      "id": "parisienne",
+      "label": "Classic"
+    },
+    {
+      "id": "doulaise",
+      "label": "Formal"
+    },
+    {
+      "id": "windsong",
+      "label": "Sweeping"
+    },
+    {
+      "id": "meaculpa",
+      "label": "Calligraphy"
+    },
+    {
+      "id": "sacramento",
+      "label": "Pen"
     }
   ],
   "CARD_PACKS": [
