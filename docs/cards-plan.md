@@ -186,6 +186,8 @@ What a card is now:
    whether the type over the photo hurts tracking.
 5. **Link it**: Shop tile and the home-page holiday panel → `/card.html`.
 
-Known gaps, not blocking: video is upload-only (no record / montage / audio as
-the other builders have); photos are centre-cropped with no adjust; the arch
-template's laurel overlaps the photo's upper corners.
+Known gaps, not blocking: the calendar, book and board book still carry their
+own copies of the Add a Popcode sheet and Edit Photo; `public/popcode-tools.js`
+(2026-10-20) is the shared version the card maker uses, and they can move to it
+one at a time. Cards don't yet offer audio upload or a transcript (the calendar
+sheet they copy doesn't either; create.html does).

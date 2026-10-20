@@ -22,6 +22,13 @@
     <script src="/unsplash-samples.js"></script>
     <script src="/storage-copy.js"></script>
     <script src="/print-preview.js"></script>
+    <!-- The shared Add a Popcode sheet and Edit Photo (same as the calendar),
+         with what the montage builder and audio recorder need. -->
+    <script src="/dialog.js"></script>
+    <script src="/montage-music.js"></script>
+    <script src="/montage.js"></script>
+    <script src="/audio-wav.js"></script>
+    <script src="/popcode-tools.js"></script>
     <!-- MindAR compiler only (no AR rendering here) — stub AFRAME so the bundle
          loads without booting WebGL. Same trick as create.html / calendar.html. -->
     <script>
@@ -220,7 +227,6 @@
 
     <div class="overlay" id="overlay"><div class="sheet" id="sheet"></div></div>
     <input type="file" id="photo-input" accept="image/*" class="hidden"/>
-    <input type="file" id="video-input" accept="video/*" class="hidden"/>
 
     <script>
       const C = window.PopcodeCards;
@@ -310,11 +316,19 @@
           d.style.top = slot.y * 100 + '%';
           d.style.width = slot.w * 100 + '%';
           d.style.height = slot.h * 100 + '%';
+          d.dataset.slot = slot.id;
           const got = (opts.photos || {})[slot.id];
           const src = (got && got.url) || opts.sample;
           if (src) {
             const im = document.createElement('img');
             im.src = src;
+            // A photo the buyer has cropped (Edit Photo) is laid out by the same
+            // geometry the print bake uses (PopcodeTools.layoutPhoto).
+            if (got && got.adjust && window.PopcodeTools) {
+              const lay = () => PopcodeTools.layoutPhoto(d, im, got.adjust);
+              im.addEventListener('load', () => requestAnimationFrame(lay));
+              requestAnimationFrame(() => { if (im.complete && im.naturalWidth) lay(); });
+            }
             if (opts.bw) im.style.filter = 'grayscale(1)';
             if (opts.crossOrigin) im.crossOrigin = 'anonymous';
             d.appendChild(im);
@@ -929,7 +943,7 @@
                 '<div class="opt hidden" id="opt-script"><h3>Script <span id="script-name"></span></h3><div class="pack-row" id="script-row"></div></div>' +
                 '<div class="opt" id="cw-panel"><h3>Colour theme <span id="cw-name"></span></h3><div class="sw-row" id="cw-row"></div></div>' +
                 '<div class="opt"><h3>Corners <span id="corner-name"></span></h3><div class="pack-row" id="corner-row"></div></div>' +
-                '<div class="opt"><h3>Photo <span id="bw-name"></span></h3><div class="pack-row"><button class="pack-btn" id="bw-off">Colour</button>' +
+                '<div class="opt"><h3>Photo <span id="bw-name"></span></h3><p class="hint" style="margin:-4px 0 8px">Tap a photo on the card to crop, zoom, rotate or replace it.</p><div class="pack-row"><button class="pack-btn" id="bw-off">Colour</button>' +
                 '<button class="pack-btn" id="bw-on">Black &amp; white</button></div></div>' +
               '</div>' +
               '<div class="panel"><h3>' + (state.custom ? 'Your text' : 'Your words') + '</h3>' +
@@ -976,7 +990,10 @@
           $('step-browse').classList.remove('hidden');
           renderBrowse();
         });
-        $('pop-btn').addEventListener('click', () => $('video-input').click());
+        $('pop-btn').addEventListener('click', () => PopcodeTools.popcodeSheet({
+          current: state.popcode, noun: 'card', db, getUser: () => currentUser,
+          onSave: (pc) => { state.popcode = pc; updatePopHint(); },
+        }));
         $('back-photo').addEventListener('click', () => { pendingSlot = '__back'; $('photo-input').click(); });
         $('back-clear').addEventListener('click', () => { state.back = null; drawBackPreview(); });
         drawBackPreview();
@@ -1076,7 +1093,7 @@
         const face = renderCard(state.template, {
           width: w, editable: !state.custom, text: state.text, photos: state.photos, bw: state.bw,
           greeting: state.greeting, corners: state.corners, script: state.script,
-          colorway: state.colorway, onPickPhoto: pickPhotoFor,
+          colorway: state.colorway, onPickPhoto: onPhotoTap,
         });
         stage.appendChild(face);
         fitCardText(face);
@@ -1149,13 +1166,34 @@
       }
 
       function updatePopHint() {
-        const slot = state.template.popcodeSlot;
-        const has = !!state.popcode;
-        $('pop-hint').textContent = has
-          ? 'Popcode added. Scanning the printed card plays it.'
-          : 'Add a Popcode and the card comes to life: point a phone at it and your video plays.';
-        $('pop-btn').textContent = has ? 'Change Popcode' : 'Add a Popcode';
-        void slot;
+        const pc = state.popcode;
+        $('pop-hint').textContent = pc
+          ? (pc.mediaType === 'audio' ? 'Audio added.' : 'Video added.') + ' Scanning the printed card plays it.'
+          : 'Add a Popcode and the card comes to life: point a phone at it and your video, montage or audio plays.';
+        $('pop-btn').textContent = pc ? 'Edit Popcode' : 'Add a Popcode';
+      }
+
+      // Tap an empty photo to add one; tap a photo to edit it (the calendar's
+      // Edit Photo: fill or fit, zoom, drag, rotate, replace, remove).
+      function onPhotoTap(slotId) {
+        if (!state.photos[slotId]) { pickPhotoFor(slotId); return; }
+        const slot = state.template.photos.find((p) => p.id === slotId);
+        const fmt = C.CARD_FORMATS[state.template.formatId];
+        const land = state.template.orientation === 'landscape';
+        const W = land ? fmt.hIn : fmt.wIn, H = land ? fmt.wIn : fmt.hIn;
+        const p = state.photos[slotId];
+        PopcodeTools.editPhoto({
+          url: p.url, adjust: p.adjust, aspect: (slot.w * W) / (slot.h * H),
+          source: p.file ? 'Device' : 'Saved',
+          onSave: (a) => { p.adjust = a; drawEditorCard(); },
+          onReplace: (f) => {
+            const url = URL.createObjectURL(f);
+            state.photos[slotId] = { file: f, url };
+            drawEditorCard();
+            return url;
+          },
+          onRemove: () => { delete state.photos[slotId]; drawEditorCard(); },
+        });
       }
 
       // A small live picture of the back, from the same renderer as the print.
@@ -1198,14 +1236,6 @@
         state.photos[pendingSlot] = { file, url: URL.createObjectURL(file) };
         pendingSlot = null;
         drawEditorCard();
-      });
-      $('video-input').addEventListener('change', (e) => {
-        const file = e.target.files && e.target.files[0];
-        e.target.value = '';
-        if (!file) return;
-        if (file.size > 200 * 1024 * 1024) { alert('That video is over 200 MB. Try a shorter one.'); return; }
-        state.popcode = { file, url: URL.createObjectURL(file) };
-        updatePopHint();
       });
 
       // ── Print files ─────────────────────────────────────────────────────
@@ -1340,7 +1370,9 @@
             const cx = c.getContext('2d');
             cx.imageSmoothingQuality = 'high';
             clipToRadius(cx, box, c.width, c.height, scale);
-            drawCover(cx, im, c.width, c.height);
+            const adj = (state.photos[box.dataset.slot] || {}).adjust;
+            if (adj) PopcodeTools.drawPhotoAdjusted(cx, im, adj, 0, 0, c.width, c.height);
+            else drawCover(cx, im, c.width, c.height);
             // html2canvas ignores CSS filters, so black and white is baked into
             // the pixels here (ctx.filter isn't in every Safari).
             if (state.bw) {
@@ -1600,7 +1632,7 @@
           if (p.file) {
             const ext = ((p.file.name || '').split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
             photoUrls[s.id] = await uploadWithRetry(`${slug}/card/${s.id}-${stamp}.${ext}`, p.file, p.file.type || 'image/jpeg');
-            state.photos[s.id] = { url: photoUrls[s.id] };
+            state.photos[s.id] = { url: photoUrls[s.id], adjust: p.adjust };   // keep the crop
           } else {
             photoUrls[s.id] = (await remap(p.url)) || p.url;
           }
@@ -1634,14 +1666,26 @@
         const mindUrl = await uploadWithRetry(`${slug}/target.mind`, new Blob([await compiler.exportData()]), 'application/octet-stream')
           + '?v=' + stamp;
 
-        // 4. The video.
-        setBusy('Uploading your video…');
-        let videoUrl;
-        if (state.popcode.file) {
-          videoUrl = await uploadWithRetry(`${slug}/video_0_${stamp}.mp4`, state.popcode.file, state.popcode.file.type || 'video/mp4');
-          state.popcode = { url: videoUrl };
+        // 4. What it plays: a video (or montage) or an audio clip.
+        const pc = state.popcode;
+        let videoUrl = null, audioUrl = null;
+        if (pc.mediaType === 'audio') {
+          setBusy('Uploading your audio…');
+          if (pc.audio) {
+            const ext = ((pc.audio.name || '').split('.').pop() || 'webm').toLowerCase();
+            audioUrl = await uploadWithRetry(`${slug}/audio_0_${stamp}.${ext}`, pc.audio, pc.audio.type || 'audio/webm');
+          } else {
+            audioUrl = (await remap(pc.existingAudioUrl)) || pc.existingAudioUrl;
+          }
+          state.popcode = { mediaType: 'audio', existingAudioUrl: audioUrl };
         } else {
-          videoUrl = (await remap(state.popcode.url)) || state.popcode.url;
+          setBusy('Uploading your video…');
+          if (pc.video) {
+            videoUrl = await uploadWithRetry(`${slug}/video_0_${stamp}.mp4`, pc.video, pc.video.type || 'video/mp4');
+          } else {
+            videoUrl = (await remap(pc.existingVideoUrl)) || pc.existingVideoUrl;
+          }
+          state.popcode = { mediaType: 'video', existingVideoUrl: videoUrl };
         }
 
         // 5. The row and its one Popcode.
@@ -1662,6 +1706,8 @@
               colorway: state.colorway, pack: state.pack, bw: state.bw, frontUrl,
               greeting: state.greeting, corners: state.corners, script: state.script, backPhoto: backUrl,
               custom: state.custom ? JSON.parse(JSON.stringify(state.custom)) : null,
+              // Edit Photo crops, per slot.
+              adjust: Object.fromEntries(Object.entries(state.photos).filter(([, p]) => p.adjust).map(([k, p]) => [k, p.adjust])),
             },
           },
         };
@@ -1678,8 +1724,8 @@
           collectionId = data.id;
         }
         const { error: iErr } = await db.from('collection_items').insert({
-          collection_id: collectionId, target_index: 0, media_type: 'video',
-          video_url: videoUrl, audio_url: null, photo_url: frontUrl,
+          collection_id: collectionId, target_index: 0, media_type: pc.mediaType === 'audio' ? 'audio' : 'video',
+          video_url: videoUrl, audio_url: audioUrl, photo_url: frontUrl,
         });
         if (iErr) throw new Error('Saved, but linking the video failed: ' + iErr.message);
         editing = { id: collectionId, slug };
@@ -1778,16 +1824,17 @@
           return;
         }
         const { data: items } = await db.from('collection_items')
-          .select('video_url').eq('collection_id', col.id).order('target_index').limit(1);
+          .select('media_type, video_url, audio_url').eq('collection_id', col.id).order('target_index').limit(1);
         state.occasionId = cfg.occasionId || state.occasionId;
         state.template = tpl;
         state.text = cfg.text || {};
         state.colorway = cfg.colorway || (tpl.colorways && tpl.colorways[0]) || C.DEFAULT_COLORWAY;
         state.pack = C.CARD_PACKS.some((p) => p.qty === cfg.pack) ? cfg.pack : C.DEFAULT_PACK;
         state.photos = {};
-        Object.entries(cfg.photos || {}).forEach(([k, url]) => { if (url) state.photos[k] = { url }; });
-        const v = items && items[0] && items[0].video_url;
-        state.popcode = v ? { url: v } : null;
+        Object.entries(cfg.photos || {}).forEach(([k, url]) => { if (url) state.photos[k] = { url, adjust: (cfg.adjust || {})[k] }; });
+        const it = items && items[0];
+        state.popcode = it && it.media_type === 'audio' && it.audio_url ? { mediaType: 'audio', existingAudioUrl: it.audio_url }
+          : it && it.video_url ? { mediaType: 'video', existingVideoUrl: it.video_url } : null;
         state.bw = !!cfg.bw;
         state.greeting = cfg.greeting || 'holiday';
         state.corners = cfg.corners === 'rounded' ? 'rounded' : 'square';
