@@ -1080,6 +1080,8 @@
             '<div class="ed-side">' +
               '<div class="panel"><h2 class="ed-name">' + esc(tpl.name) + '</h2>' +
                 '<div class="ed-tag">Flat 5&times;7&Prime; card &middot; envelopes included</div>' +
+                '<div class="field"><label for="card-name">Name this card <span class="lim">so you can find it in My Designs</span></label>' +
+                '<input class="text-input" id="card-name" maxlength="80" placeholder="e.g. Christmas 2026" value="' + esc(state.name || '') + '"/></div>' +
                 '<div class="opt hidden" id="opt-layout"><h3>Layout <span id="layout-name"></span></h3><div class="chip-row" id="layout-row"></div></div>' +
                 '<div class="opt hidden" id="opt-orient"><h3>Orientation <span id="orient-name"></span></h3><div class="pack-row" id="orient-row"></div></div>' +
                 '<div class="opt hidden" id="opt-greet"><h3>Greeting <span id="greet-name"></span></h3><div class="chip-row" id="greet-row"></div></div>' +
@@ -1151,6 +1153,7 @@
         // Editing the words is front work: show the front.
         $('zone-fields').addEventListener('focusin', () => { if (state.side === 'back') showSide('front'); });
         drawBackPreview();
+        $('card-name').addEventListener('input', (e) => { state.name = e.target.value; });
         if ($('move-reset')) {
           $('move-reset').addEventListener('click', (e) => { e.preventDefault(); state.moves = {}; drawEditorCard(); paintMoveReset(); });
           paintMoveReset();
@@ -1861,14 +1864,19 @@
           .filter((z) => z.sample && z.value && z.value === z.default)[0] || null;
       }
 
-      async function saveCard() {
+      // `draft` (Save for later): keep a card in progress -- no Popcode, a photo
+      // still to add, the example words still in. It is made scannable only
+      // once it has its Popcode and every photo; Add to cart checks it all.
+      async function saveCard(opts) {
+        const draft = !!(opts && opts.draft);
         const tpl = state.template;
         const need = tpl.photos.filter((s) => !state.photos[s.id]);
-        if (need.length) throw new Error('Add ' + (need.length === 1 ? 'a photo' : need.length + ' photos') + ' first.');
-        if (!state.popcode) throw new Error('Add a Popcode. It’s what plays when someone scans the card.');
+        if (need.length && !draft) throw new Error('Add ' + (need.length === 1 ? 'a photo' : need.length + ' photos') + ' first.');
+        if (!state.popcode && !draft) throw new Error('Add a Popcode. It’s what plays when someone scans the card.');
         const sample = unchangedSample();
-        if (sample) throw new Error('Change “' + sample.value + '” to your own words. It’s the example text.');
-        if (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler) {
+        if (sample && !draft) throw new Error('Change “' + sample.value + '” to your own words. It’s the example text.');
+        const scannable = !!state.popcode && !need.length;
+        if (scannable && (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler)) {
           throw new Error('Still loading. Wait a moment and try again.');
         }
 
@@ -1892,6 +1900,7 @@
         const photoUrls = {};
         for (const s of tpl.photos) {
           const p = state.photos[s.id];
+          if (!p) continue;
           if (p.file) {
             const ext = ((p.file.name || '').split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
             photoUrls[s.id] = await uploadWithRetry(`${slug}/card/${s.id}-${stamp}.${ext}`, p.file, p.file.type || 'image/jpeg');
@@ -1919,6 +1928,8 @@
 
         // 3. Make the front scannable. Compiled from the whole printed face, type
         //    and all, because that is what the phone will see.
+        let mindUrl = '';
+        if (scannable) {
         setBusy('Making it scannable…');
         const small = document.createElement('canvas');
         small.width = 1000; small.height = Math.round(1000 * front.height / front.width);
@@ -1926,13 +1937,16 @@
         const targetImg = await loadImg(small.toDataURL('image/jpeg', 0.92));
         const compiler = new MINDAR.IMAGE.Compiler();
         await compiler.compileImageTargets([targetImg], () => {});
-        const mindUrl = await uploadWithRetry(`${slug}/target.mind`, new Blob([await compiler.exportData()]), 'application/octet-stream')
+        mindUrl = await uploadWithRetry(`${slug}/target.mind`, new Blob([await compiler.exportData()]), 'application/octet-stream')
           + '?v=' + stamp;
+        }
 
         // 4. What it plays: a video (or montage) or an audio clip.
         const pc = state.popcode;
         let videoUrl = null, audioUrl = null;
-        if (pc.mediaType === 'audio') {
+        if (!pc) {
+          // A draft with nothing to play yet.
+        } else if (pc.mediaType === 'audio') {
           setBusy('Uploading your audio…');
           if (pc.audio) {
             const ext = ((pc.audio.name || '').split('.').pop() || 'webm').toLowerCase();
@@ -1959,12 +1973,13 @@
         const headline = (state.custom ? (state.custom.boxes.find((b) => b.text.trim()) || {}).text
           : greetLines.length ? greetLines.join(' ').replace(/\s+&$/, ' & …') : (zones.find((z) => z.role === 'headline') || {}).value) || tpl.name;
         const row = {
-          name: 'Cards · 5×7 — ' + headline,
+          name: (state.name || '').trim() || ('Cards · 5×7 — ' + headline),
           kind: 'card',
           mind_file_url: mindUrl,
           book_layout: {
             card: {
               templateId: tpl.id, formatId: tpl.formatId, orientation: tpl.orientation,
+              title: (state.name || '').trim() || null,
               occasionId: state.occasionId, text: state.text, photos: photoUrls,
               colorway: state.colorway, pack: state.pack, bw: state.bw, frontUrl,
               greeting: state.greeting, corners: state.corners, script: state.script, moves: state.custom ? null : state.moves, backPhoto: backUrl, backShape: state.back ? backShape(await loadImg(backUrl).catch(() => null)) : null,
@@ -1981,28 +1996,34 @@
           collectionId = editing.id;
           await db.from('collection_items').delete().eq('collection_id', collectionId);
         } else {
+          if (!currentUser) throw new Error('Sign in to save your card.');
           const { data, error } = await db.from('collections')
             .insert({ ...row, slug, user_id: currentUser.id }).select().single();
           if (error) throw new Error('Could not save: ' + error.message);
           collectionId = data.id;
         }
-        const { error: iErr } = await db.from('collection_items').insert({
-          collection_id: collectionId, target_index: 0, media_type: pc.mediaType === 'audio' ? 'audio' : 'video',
-          video_url: videoUrl, audio_url: audioUrl, photo_url: frontUrl,
-        });
-        if (iErr) throw new Error('Saved, but linking the video failed: ' + iErr.message);
+        if (pc) {
+          const { error: iErr } = await db.from('collection_items').insert({
+            collection_id: collectionId, target_index: 0, media_type: pc.mediaType === 'audio' ? 'audio' : 'video',
+            video_url: videoUrl, audio_url: audioUrl, photo_url: frontUrl,
+          });
+          if (iErr) throw new Error('Saved, but linking the video failed: ' + iErr.message);
+        }
         editing = { id: collectionId, slug };
         const u = new URL(location.href);
         u.searchParams.set('id', slug); u.searchParams.delete('duplicate');
         history.replaceState(null, '', u);
-        return { slug, collectionId, front, frontUrl, headline };
+        return { slug, collectionId, front, frontUrl, headline, scannable };
       }
 
       async function onSave() {
         try {
-          const saved = await saveCard();
+          const saved = await saveCard({ draft: true });
           setBusy(null);
-          openSheet('<h2>Card saved</h2><p class="sheet-sub">It’s in My Designs, and its video plays at <b>popcode.app/' + esc(saved.slug) + '</b>.</p>' +
+          const where = '<b>' + esc((state.name || '').trim() || 'Your card') + '</b> is in My Designs';
+          openSheet('<h2>Card saved</h2><p class="sheet-sub">' + where + (saved.scannable
+            ? ', and it plays at <b>popcode.app/' + esc(saved.slug) + '</b>.'
+            : '. Open it from there any time to finish it' + (state.popcode ? '.' : ' and add its Popcode.')) + '</p>' +
             '<div class="sheet-actions"><button style="background:#f0efec" onclick="location.href=\'/manage.html?tab=designs\'">My Designs</button>' +
             '<button style="background:#1a1a1a;color:#fff" onclick="closeSheet()">Keep editing</button></div>');
         } catch (err) {
@@ -2103,6 +2124,7 @@
         state.corners = cfg.corners === 'rounded' ? 'rounded' : 'square';
         state.script = C.SCRIPTS.some((x) => x.id === cfg.script) ? cfg.script : null;
         state.moves = (cfg.moves && typeof cfg.moves === 'object') ? cfg.moves : {};
+        state.name = cfg.title || '';
         state.back = cfg.backPhoto ? { url: cfg.backPhoto, shape: cfg.backShape || null } : null;
         editing = duplicate ? null : { id: col.id, slug: col.slug };
         $('step-browse').classList.add('hidden');
