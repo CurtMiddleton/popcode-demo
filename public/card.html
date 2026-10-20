@@ -163,7 +163,8 @@
       .toggle { display: inline-flex; background: #eee; border-radius: 16px; padding: 3px; gap: 2px; }
       .toggle button { border: none; background: none; border-radius: 14px; padding: 8px 18px; font-size: 13px; font-weight: 500; color: #666; cursor: pointer; font-family: 'Inter', sans-serif; }
       .toggle button.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 4px rgba(0,0,0,0.12); font-weight: 600; }
-      .side-hint { text-align: center; font-size: 13px; color: #777; margin-top: 10px; min-height: 1.3em; }
+      .side-hint { text-align: center; font-size: 13px; color: #777; margin-top: 12px; min-height: 1.3em; }
+      .side-hint a { color: #7657FC; font-weight: 600; text-decoration: none; }
       .text-input.qty-select { appearance: none; -webkit-appearance: none; cursor: pointer; font-weight: 600; padding-right: 40px;
         background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%231a1a1a' stroke-width='1.8'/%3E%3C/svg%3E") no-repeat right 16px center; }
       /* Add a Popcode: the Shop's pinwheel button (order.html .popcode-cta), full width. */
@@ -1176,9 +1177,36 @@
       function paintSideToggle() {
         document.querySelectorAll('#side-toggle [data-side]').forEach((b) =>
           b.classList.toggle('active', b.dataset.side === (state.side || 'front')));
+        paintPhotoLinks();
+      }
+      // Under the preview: change / remove the photo on the side showing.
+      function paintPhotoLinks() {
         const h = $('side-hint');
-        if (h) h.textContent = state.side === 'back'
-          ? (state.back ? 'Tap the back to change its photo.' : 'Tap the back to add a photo above the message.') : '';
+        if (!h) return;
+        const link = (id, label) => '<a href="#" data-act="' + id + '">' + label + '</a>';
+        const slots = (state.template.photos || []).filter((sl) => state.photos[sl.id]);
+        if (state.side === 'back') {
+          h.innerHTML = state.back
+            ? link('back-change', 'Change photo') + ' &middot; ' + link('back-remove', 'Remove photo')
+            : link('back-change', 'Add a photo') + ' above the message';
+        } else if (!slots.length) {
+          h.innerHTML = link('front-add', 'Add your photo') + (state.template.photos.length > 1 ? ' &middot; or tap any photo spot' : '');
+        } else if (state.template.photos.length === 1) {
+          h.innerHTML = link('front-edit', 'Edit photo') + ' &middot; ' + link('front-remove', 'Remove photo');
+        } else {
+          h.innerHTML = 'Tap a photo to edit it &middot; ' + link('front-remove', 'Remove all photos');
+        }
+        h.onclick = (e) => {
+          const a = e.target.closest('[data-act]');
+          if (!a) return;
+          e.preventDefault();
+          const act = a.dataset.act;
+          if (act === 'back-change') { pendingSlot = '__back'; $('photo-input').click(); }
+          if (act === 'back-remove') { state.back = null; drawBackPreview(true); }
+          if (act === 'front-edit') onPhotoTap(state.template.photos[0].id);
+          if (act === 'front-add') pickPhotoFor(state.template.photos[0].id);
+          if (act === 'front-remove') { state.photos = {}; drawEditorCard(); }
+        };
       }
       function editorCardWidth() {
         const stage = $('ed-stage');
