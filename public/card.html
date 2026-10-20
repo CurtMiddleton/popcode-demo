@@ -165,6 +165,8 @@
       .toggle button.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 4px rgba(0,0,0,0.12); font-weight: 600; }
       .side-hint { text-align: center; font-size: 13px; color: #777; margin-top: 12px; min-height: 1.3em; }
       .card-face img { -webkit-user-drag: none; user-select: none; }
+      .cf-guide { position: absolute; left: 50%; top: 0; bottom: 0; width: 0; border-left: 1px dashed #ff3b9a; z-index: 9; pointer-events: none; display: none; }
+      .cf-guide.on { display: block; }
       .card-face .cf-text[data-zone]:hover { outline: 1px dashed rgba(118,87,252,0.75); outline-offset: 3px; cursor: grab; }
       .card-face .cf-text.dragging { outline: 1.5px solid #7657FC; outline-offset: 3px; cursor: grabbing; user-select: none; }
       .side-hint a { color: #7657FC; font-weight: 600; text-decoration: none; }
@@ -908,6 +910,14 @@
         drawEditorCard();
       }
       // Drag a box on the card to move it.
+      // Snapping to the card's centre line while dragging text: within this
+      // many screen pixels of centre it locks on, and a guide line shows.
+      const SNAP_PX = 8;
+      function centreGuide(face, on) {
+        let g = face.querySelector('.cf-guide');
+        if (on && !g) { g = document.createElement('div'); g.className = 'cf-guide'; face.appendChild(g); }
+        if (g) g.classList.toggle('on', !!on);
+      }
       function enableDrag(face) {
         face.querySelectorAll('.cf-text').forEach((el) => {
           const box = state.custom.boxes.find((b) => b.id === el.dataset.zid);
@@ -920,14 +930,19 @@
             const fr = face.getBoundingClientRect();
             const sx = e.clientX, sy = e.clientY, bx0 = box.x, by0 = box.y, l0 = el.offsetLeft, t0 = el.offsetTop;
             const move = (ev) => {
-              box.x = Math.min(1, Math.max(0, bx0 + (ev.clientX - sx) / fr.width));
+              let x = Math.min(1, Math.max(0, bx0 + (ev.clientX - sx) / fr.width));
+              const snap = Math.abs(x - 0.5) * fr.width < SNAP_PX;
+              if (snap) x = 0.5;
+              box.x = x;
               box.y = Math.min(0.97, Math.max(0, by0 + (ev.clientY - sy) / fr.height));
-              el.style.left = l0 + (ev.clientX - sx) + 'px';
+              el.style.left = l0 + (x - bx0) * fr.width / (fr.width / face.offsetWidth) + 'px';
               el.style.top = t0 + (ev.clientY - sy) + 'px';
+              centreGuide(face, snap);
             };
             const up = () => {
               el.removeEventListener('pointermove', move);
               el.removeEventListener('pointerup', up);
+              centreGuide(face, false);
               refreshCustom();
             };
             el.addEventListener('pointermove', move);
@@ -960,13 +975,22 @@
               }
               ev.preventDefault();
               window.getSelection().removeAllRanges();
-              el.style.left = l0 + dx + 'px';
+              // The line's middle: a rotated / `center` zone is placed by its
+              // middle already; the others by their left edge.
+              const mid0 = el.style.transform ? l0 : l0 + el.offsetWidth / 2;
+              const W = face.offsetWidth;
+              let nx = dx;
+              const snap = Math.abs(mid0 + dx - W / 2) * scale < SNAP_PX;
+              if (snap) nx = W / 2 - mid0;
+              el.style.left = l0 + nx + 'px';
               el.style.top = t0 + dy + 'px';
+              centreGuide(face, snap);
             };
             const up = () => {
               window.removeEventListener('pointermove', move);
               window.removeEventListener('pointerup', up);
               window.removeEventListener('pointercancel', up);
+              centreGuide(face, false);
               if (!dragging) return;
               const W = face.offsetWidth, H = face.offsetHeight;
               const zid = el.dataset.zid;
@@ -1103,7 +1127,8 @@
                 'Switch to <a href="#" id="see-back">Back</a> under the card to see it full size.</p>' +
                 '<div class="pack-row"><button class="btn-ghost" id="back-photo" style="margin-top:0">Add a photo</button>' +
                 '<button class="btn-ghost hidden" id="back-clear" style="margin-top:0">Remove photo</button></div>' +
-                '<div class="opt hidden" id="opt-bshape" style="margin:16px 0 0"><h3>Photo shape <span id="bshape-name"></span></h3><div class="pack-row" id="bshape-row"></div></div></div>' +
+                '<div class="opt hidden" id="opt-bshape" style="margin:16px 0 0"><h3>Photo shape <span id="bshape-name"></span></h3><div class="pack-row" id="bshape-row"></div></div>' +
+                '<div class="opt hidden" id="opt-bsize" style="margin:16px 0 0"><h3>Photo size <span id="bsize-name"></span></h3><div class="pack-row" id="bsize-row"></div></div></div>' +
               '<div class="panel"><h3>Popcode</h3>' +
                 '<p class="hint" id="pop-hint"></p>' +
                 '<button type="button" class="popcode-cta" id="pop-btn"><span class="pc-sym"><img src="/assets/popcode_symbol_color.svg" alt=""/></span>' +
@@ -1418,6 +1443,12 @@
         $('back-photo').textContent = state.back ? 'Change photo' : 'Add a photo';
         $('back-clear').classList.toggle('hidden', !state.back);
         $('opt-bshape').classList.toggle('hidden', !state.back);
+        $('opt-bsize').classList.toggle('hidden', !state.back);
+        if (state.back) {
+          optionRow('bsize-row', 'bsize-name',
+            [{ id: 'small', label: 'Small' }, { id: 'medium', label: 'Medium' }, { id: 'large', label: 'Large' }],
+            state.back.size || 'large', (id) => { state.back.size = id; drawBackPreview(true); });
+        }
         if (state.back) {
           let natural = null;
           try { natural = await loadImg(state.back.url); } catch (_) {}
@@ -1728,6 +1759,8 @@
       };
       // Back photo shapes, as width / height.
       const BACK_SHAPES = { landscape: 3 / 2, portrait: 4 / 5, square: 1 };
+      // Back photo size, as a share of the biggest that fits.
+      const BACK_SIZES = { small: 0.55, medium: 0.78, large: 1 };
       function backShape(img) {
         const set = state.back && state.back.shape;
         if (BACK_SHAPES[set]) return set;
@@ -1766,7 +1799,8 @@
         const trimW = b.w - 2 * b.offsetX;
         const top = b.offsetY + 0.42 * inch;
         const boxW = trimW - 0.84 * inch, boxH = Math.max(0.5 * inch, y - 0.34 * inch - top);
-        const pw = Math.min(boxW, boxH * ratio), ph = pw / ratio;
+        const scaleBy = BACK_SIZES[(state.back && state.back.size) || 'large'] || 1;
+        const pw = Math.min(boxW, boxH * ratio) * scaleBy, ph = pw / ratio;
         const px = cx - pw / 2, py = top + (boxH - ph) / 2;
         const side = Math.min(pw, ph);
         if (!img && opts.placeholder) {
@@ -1915,7 +1949,7 @@
         if (state.back) {
           if (state.back.file) {
             backUrl = await uploadWithRetry(`${slug}/card/back-photo-${stamp}.jpg`, state.back.file, state.back.file.type || 'image/jpeg');
-            state.back = { url: backUrl, shape: state.back.shape };
+            state.back = { url: backUrl, shape: state.back.shape, size: state.back.size };
           } else {
             backUrl = (await remap(state.back.url)) || state.back.url;
           }
@@ -1982,7 +2016,7 @@
               title: (state.name || '').trim() || null,
               occasionId: state.occasionId, text: state.text, photos: photoUrls,
               colorway: state.colorway, pack: state.pack, bw: state.bw, frontUrl,
-              greeting: state.greeting, corners: state.corners, script: state.script, moves: state.custom ? null : state.moves, backPhoto: backUrl, backShape: state.back ? backShape(await loadImg(backUrl).catch(() => null)) : null,
+              greeting: state.greeting, corners: state.corners, script: state.script, moves: state.custom ? null : state.moves, backPhoto: backUrl, backShape: state.back ? backShape(await loadImg(backUrl).catch(() => null)) : null, backSize: state.back ? (state.back.size || 'large') : null,
               custom: state.custom ? JSON.parse(JSON.stringify(state.custom)) : null,
               // Edit Photo crops, per slot.
               adjust: Object.fromEntries(Object.entries(state.photos).filter(([, p]) => p.adjust).map(([k, p]) => [k, p.adjust])),
@@ -2125,7 +2159,7 @@
         state.script = C.SCRIPTS.some((x) => x.id === cfg.script) ? cfg.script : null;
         state.moves = (cfg.moves && typeof cfg.moves === 'object') ? cfg.moves : {};
         state.name = cfg.title || '';
-        state.back = cfg.backPhoto ? { url: cfg.backPhoto, shape: cfg.backShape || null } : null;
+        state.back = cfg.backPhoto ? { url: cfg.backPhoto, shape: cfg.backShape || null, size: cfg.backSize || 'large' } : null;
         editing = duplicate ? null : { id: col.id, slug: col.slug };
         $('step-browse').classList.add('hidden');
         $('step-edit').classList.remove('hidden');
