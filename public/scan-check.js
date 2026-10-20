@@ -106,7 +106,11 @@
       var reason = ok ? null : (meanBrightness(canvas) < DARK_MEAN ? 'dark' : 'detail');
       return { ok: ok, reason: reason, tracking: tracking, matching: matching, ms: Math.round(performance.now() - t0) };
     } catch (e) {
-      if (window.Sentry) try { Sentry.captureException(e); } catch (_) {}
+      // A timeout is the expected "give up quietly" case above (slow or WebGL-less
+      // Safari/iOS; POPCODE-WEB-V), not a bug, so only real failures go to Sentry.
+      // If the device really can't compile, Generate's compile catch reports that.
+      var timedOut = e && e.message === 'scan check timed out';
+      if (window.Sentry && !timedOut) try { Sentry.captureException(e); } catch (_) {}
       return { ok: true, skipped: true, error: String(e && e.message || e) };
     }
   }

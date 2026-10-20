@@ -71,6 +71,7 @@ export default async function handler(req, res) {
     }
 
     const { getProvider } = await import('../lib/print/providers/index.mjs');
+    const { quoteRetryDelayMs, sleep } = await import('../lib/print/providers/statuses.mjs');
     const provider = getProvider(providerFor(productType));
     if (!provider.isConfigured()) return res.status(500).json({ error: 'Print provider not configured' });
     // Retry a couple of times — the print provider occasionally returns an empty
@@ -87,6 +88,7 @@ export default async function handler(req, res) {
         // Deterministic failures (an unknown SKU) answer the same way every
         // time — surface them instead of asking twice more.
         if (err.noRetry || attempt === 2) throw err;
+        await sleep(quoteRetryDelayMs(err, attempt));
       }
     }
     if (!summed) return res.status(502).json({ error: 'Could not price this product/destination', unservable: true });
