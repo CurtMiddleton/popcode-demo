@@ -34,7 +34,7 @@
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Mrs+Saint+Delafield&family=Ballet&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,600;1,6..96,400&family=Cinzel:wght@400;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500&family=Jost:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Mrs+Saint+Delafield&family=Pinyon+Script&family=Oswald:wght@500;600&family=Ballet&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,600;1,6..96,400&family=Cinzel:wght@400;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500&family=Jost:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
@@ -98,6 +98,7 @@
           rgba(0,0,0,0) 30%, rgba(0,0,0,0.012) 44%, rgba(0,0,0,0.05) 56%,
           rgba(0,0,0,0.115) 66%, rgba(0,0,0,0.21) 76%, rgba(0,0,0,0.33) 86%,
           rgba(0,0,0,0.46) 94%, rgba(0,0,0,0.55) 100%); }
+      .cf-scrim.top { transform: scaleY(-1); }
       /* Foil = a banded metallic gradient clipped to the glyphs. A flat gold fill
          reads as yellow text; the bands are what read as reflected light. */
       .cf-text.foil { -webkit-background-clip: text; background-clip: text;
@@ -154,6 +155,15 @@
         cursor: pointer; margin-top: 9px;
       }
 
+      .ed-name { font-family: 'CooperBT', serif; font-weight: 400; font-size: 26px; margin-bottom: 14px; }
+      .opt { margin-bottom: 16px; }
+      .opt:last-child { margin-bottom: 0; }
+      .opt h3 span { font-weight: 400; color: #8a857d; margin-left: 4px; }
+      .opt h3 { margin-bottom: 8px; }
+      .chip-row { display: flex; flex-wrap: wrap; gap: 7px; }
+      .back-wrap { display: flex; gap: 14px; align-items: center; }
+      .back-wrap img { width: 110px; height: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.14); flex: none; }
+      .back-btns { flex: 1; min-width: 0; }
       .sw-row { display: flex; gap: 6px; margin-top: 9px; flex-wrap: wrap; }
       .sw { width: 18px; height: 18px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.16); cursor: pointer; padding: 0; }
       .sw.active { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px #1a1a1a; }
@@ -206,6 +216,9 @@
         colorway: C.DEFAULT_COLORWAY,
         popcode: null,          // { file, url } video attached to the popcode slot
         bw: false,              // print the photos in black and white
+        greeting: 'holiday',    // which of C.GREETINGS fills the greeting zones
+        corners: 'square',      // 'square' | 'rounded' (a separate Printify variant)
+        back: null,             // { url, file? } an optional photo on the back
       };
 
       function openSheet(html) { $('sheet').innerHTML = html; $('overlay').classList.add('visible'); }
@@ -288,13 +301,23 @@
           face.appendChild(d);
         });
 
-        // Scrim: only full-bleed cards need type legible over a photo.
+        // Scrim: only full-bleed cards need type legible over a photo. A design
+        // with type at the top (Brighton, Corner Title) has one there too.
         if (tpl.ground === 'bleed' && tpl.scrim) {
           const sc = document.createElement('div');
           sc.className = 'cf-scrim';
           sc.style.opacity = String(Math.min(1, tpl.scrim / 0.55));
           face.appendChild(sc);
         }
+        if (tpl.ground === 'bleed' && tpl.scrimTop) {
+          const st = document.createElement('div');
+          st.className = 'cf-scrim top';
+          st.style.opacity = String(Math.min(1, tpl.scrimTop / 0.55));
+          face.appendChild(st);
+        }
+        // Rounded corners are cut by the lab (a separate variant), so they are
+        // shown on screen but never drawn into the print file. Radius 1/8in.
+        if (opts.corners === 'rounded') face.style.borderRadius = (0.125 / (land ? fmt.hIn : fmt.wIn)) * widthPx + 'px';
 
         // Ornament is drawn, never licensed — see the note in cards.mjs.
         if (tpl.ornament && tpl.ornament !== 'none') {
@@ -302,7 +325,7 @@
           if (o) face.appendChild(o);
         }
 
-        C.resolveText(tpl, opts.text || {}).forEach((z) => {
+        C.resolveText(tpl, opts.text || {}, opts.greeting).forEach((z) => {
           const t = document.createElement('div');
           t.className = 'cf-text';
           t.style.top = z.y * 100 + '%';
@@ -539,7 +562,13 @@
 
         const grid = document.createElement('div');
         grid.className = 'tpl-grid';
-        const tpls = C.templatesForOccasion(state.occasionId);
+        // One tile per design (family), shown in portrait; the editor offers
+        // the landscape layout too.
+        const seen = new Set();
+        const tpls = C.templatesForOccasion(state.occasionId)
+          .filter((t) => t.orientation === 'portrait' || !C.familyTemplates(t.family).some((x) => x.orientation === 'portrait'))
+          .filter((t) => (seen.has(t.family) ? false : seen.add(t.family)));
+        const occGreeting = (C.occasionById(state.occasionId) || {}).greeting || 'holiday';
         const samples = window.unsplashSamples ? window.unsplashSamples(tpls.length, 700) : [];
         tpls.forEach((t, i) => {
           const card = document.createElement('div');
@@ -548,16 +577,15 @@
           stage.className = 'tpl-stage';
           const tw = t.orientation === 'landscape' ? 200 : 168;
           const thumb = renderCard(t, { width: tw, sample: samples[i] || '/assets/sample-photo.jpg',
-            colorway: (t.colorways && t.colorways[0]) || C.DEFAULT_COLORWAY });
+            colorway: (t.colorways && t.colorways[0]) || C.DEFAULT_COLORWAY, greeting: occGreeting });
           stage.appendChild(thumb);
           card.appendChild(stage);
           requestAnimationFrame(() => fitCardText(thumb));
           const fmt = C.CARD_FORMATS[t.formatId];
           card.insertAdjacentHTML('beforeend',
             '<div class="tpl-name">' + esc(t.name) + '</div>' +
-            '<div class="tpl-meta">' + esc(fmt.label.replace('Flat Card ', '')) + ' flat &middot; ' +
-            (t.orientation === 'landscape' ? 'landscape &middot; ' : '') +
-            (t.photos.length) + ' photo' + (t.photos.length > 1 ? 's' : '') + '</div>');
+            '<div class="tpl-meta">' + (C.familyTemplates(t.family).length > 1 ? 'Portrait or landscape' : esc(t.orientation)) +
+            ' &middot; ' + (t.photos.length) + ' photo' + (t.photos.length > 1 ? 's' : '') + '</div>');
           // Swatch row: clicking one re-renders the thumbnail in that colourway
           // and carries the choice into the editor, so what you clicked is what
           // you get.
@@ -574,7 +602,7 @@
                 ev.stopPropagation();
                 sw.querySelectorAll('.sw').forEach((x) => x.classList.remove('active'));
                 dot.classList.add('active');
-                const fresh = renderCard(t, { width: tw, sample: samples[i] || '/assets/sample-photo.jpg', colorway: id });
+                const fresh = renderCard(t, { width: tw, sample: samples[i] || '/assets/sample-photo.jpg', colorway: id, greeting: occGreeting });
                 stage.innerHTML = ''; stage.appendChild(fresh);
                 requestAnimationFrame(() => fitCardText(fresh));
                 card.dataset.colorway = id;
@@ -584,6 +612,7 @@
             card.appendChild(sw);
           }
           card.addEventListener('click', () => {
+            state.greeting = occGreeting;
             chooseTemplate(t);
             if (card.dataset.colorway) { state.colorway = card.dataset.colorway; renderEditor(); }
           });
@@ -615,21 +644,27 @@
           '<div class="editor">' +
             '<div class="ed-stage" id="ed-stage"></div>' +
             '<div class="ed-side">' +
-              '<div class="panel"><h3>Your words</h3>' +
-                '<p class="hint">Type straight onto the card, or edit here. The layout is fixed so it always prints clean.</p>' +
-                '<div id="zone-fields"></div></div>' +
-              '<div class="panel"><h3>Photo</h3>' +
-                '<p class="hint">Black and white suits most of these designs, and hides mismatched colours.</p>' +
-                '<div class="pack-row"><button class="pack-btn" id="bw-off">Colour</button>' +
+              '<div class="panel"><h2 class="ed-name">' + esc(tpl.name) + '</h2>' +
+                '<div class="opt hidden" id="opt-orient"><h3>Orientation <span id="orient-name"></span></h3><div class="pack-row" id="orient-row"></div></div>' +
+                '<div class="opt hidden" id="opt-greet"><h3>Greeting <span id="greet-name"></span></h3><div class="chip-row" id="greet-row"></div></div>' +
+                '<div class="opt" id="cw-panel"><h3>Colour theme <span id="cw-name"></span></h3><div class="sw-row" id="cw-row"></div></div>' +
+                '<div class="opt"><h3>Corners <span id="corner-name"></span></h3><div class="pack-row" id="corner-row"></div></div>' +
+                '<div class="opt"><h3>Photo <span id="bw-name"></span></h3><div class="pack-row"><button class="pack-btn" id="bw-off">Colour</button>' +
                 '<button class="pack-btn" id="bw-on">Black &amp; white</button></div></div>' +
-              '<div class="panel" id="cw-panel"><h3>Colour</h3>' +
-                '<p class="hint">Every element recolours together.</p>' +
-                '<div class="sw-row" id="cw-row"></div></div>' +
-              '<div class="panel"><h3>Bring it to life</h3>' +
+              '</div>' +
+              '<div class="panel"><h3>Your words</h3>' +
+                '<p class="hint">Everything on the card is yours to change. Pick a greeting above or type your own, here or straight onto the card.</p>' +
+                '<div id="zone-fields"></div></div>' +
+              '<div class="panel"><h3>Back of the card</h3>' +
+                '<p class="hint">How to play the card, as on every Popcode product. Add a photo above it if you like.</p>' +
+                '<div class="back-wrap"><img id="back-prev" alt="The back of the card"/>' +
+                '<div class="back-btns"><button class="btn-ghost" id="back-photo" style="margin-top:0">Add a photo</button>' +
+                '<button class="btn-ghost hidden" id="back-clear">Remove photo</button></div></div></div>' +
+              '<div class="panel"><h3>Popcode</h3>' +
                 '<p class="hint" id="pop-hint"></p>' +
-                '<button class="btn-ghost" id="pop-btn" style="margin-top:0">Attach a video</button></div>' +
+                '<button class="btn-ghost" id="pop-btn" style="margin-top:0">Add a Popcode</button></div>' +
               '<div class="panel"><h3>How many?</h3>' +
-                '<p class="hint">Envelopes included. The more you order, the less each one costs.</p>' +
+                '<p class="hint">Flat card &middot; 5&times;7&Prime; &middot; Eggshell paper &middot; envelopes included. The more you order, the less each one costs.</p>' +
                 '<div class="pack-row" id="pack-row"></div>' +
                 '<div class="price-row"><span class="price-big" id="price-big">&mdash;</span>' +
                 '<span class="price-note" id="price-note"></span></div></div>' +
@@ -642,10 +677,12 @@
         drawEditorCard();
         renderZoneFields();
         renderColorways();
+        renderOptions();
         renderPacks();
         const paintBw = () => {
           $('bw-on').classList.toggle('active', state.bw);
           $('bw-off').classList.toggle('active', !state.bw);
+          $('bw-name').textContent = state.bw ? 'Black & white' : 'Colour';
         };
         $('bw-on').addEventListener('click', () => { state.bw = true; paintBw(); drawEditorCard(); });
         $('bw-off').addEventListener('click', () => { state.bw = false; paintBw(); drawEditorCard(); });
@@ -658,14 +695,63 @@
           renderBrowse();
         });
         $('pop-btn').addEventListener('click', () => $('video-input').click());
+        $('back-photo').addEventListener('click', () => { pendingSlot = '__back'; $('photo-input').click(); });
+        $('back-clear').addEventListener('click', () => { state.back = null; drawBackPreview(); });
+        drawBackPreview();
         $('save-btn').addEventListener('click', onSave);
         $('cart-btn').addEventListener('click', addToCart);
+      }
+
+      // Orientation, greeting and corners: Minted's product options.
+      function optionRow(rowId, nameId, items, current, onPick) {
+        const row = $(rowId);
+        row.innerHTML = '';
+        items.forEach((it) => {
+          const b = document.createElement('button');
+          b.className = (row.classList.contains('chip-row') ? 'occ-chip' : 'pack-btn') + (it.id === current ? ' active' : '');
+          b.textContent = it.label;
+          b.addEventListener('click', () => onPick(it.id));
+          row.appendChild(b);
+        });
+        const cur = items.find((it) => it.id === current);
+        $(nameId).textContent = cur ? cur.label : '';
+      }
+      function renderOptions() {
+        const tpl = state.template;
+        const fam = C.familyTemplates(tpl.family);
+        $('opt-orient').classList.toggle('hidden', fam.length < 2);
+        if (fam.length > 1) {
+          optionRow('orient-row', 'orient-name',
+            fam.map((t) => ({ id: t.orientation, label: t.orientation === 'portrait' ? 'Portrait' : 'Landscape' })),
+            tpl.orientation, (o) => switchOrientation(o));
+        }
+        const greets = (tpl.text || []).some((z) => z.greet);
+        $('opt-greet').classList.toggle('hidden', !greets);
+        if (greets) {
+          optionRow('greet-row', 'greet-name', C.GREETINGS, state.greeting, (id) => {
+            state.greeting = id;
+            // A new greeting replaces what the greeting lines say, typed or not.
+            (state.template.text || []).forEach((z) => { if (z.greet) delete state.text[z.id]; });
+            renderOptions(); drawEditorCard(); renderZoneFields();
+          });
+        }
+        optionRow('corner-row', 'corner-name', [{ id: 'square', label: 'Square' }, { id: 'rounded', label: 'Rounded' }],
+          state.corners, (c) => { state.corners = c; renderOptions(); drawEditorCard(); });
+      }
+      // Same design, the other layout. Words, photos and colour carry over.
+      function switchOrientation(o) {
+        const next = C.familyTemplates(state.template.family).find((t) => t.orientation === o);
+        if (!next || next === state.template) return;
+        state.template = next;
+        if (!(next.colorways || []).includes(state.colorway)) state.colorway = next.colorways[0];
+        renderEditor();
       }
 
       function renderColorways() {
         const tpl = state.template;
         const row = $('cw-row');
         const list = tpl.colorways || [C.DEFAULT_COLORWAY];
+        $('cw-name').textContent = (C.COLORWAYS[state.colorway] || {}).label || '';
         if (list.length < 2) { $('cw-panel').classList.add('hidden'); return; }
         row.innerHTML = '';
         list.forEach((id) => {
@@ -686,6 +772,7 @@
         const w = Math.min(land ? 500 : 360, Math.max(240, window.innerWidth - 80));
         const face = renderCard(state.template, {
           width: w, editable: true, text: state.text, photos: state.photos, bw: state.bw,
+          greeting: state.greeting, corners: state.corners,
           colorway: state.colorway, onPickPhoto: pickPhotoFor,
         });
         stage.appendChild(face);
@@ -696,12 +783,12 @@
       function renderZoneFields() {
         const host = $('zone-fields');
         host.innerHTML = '';
-        C.resolveText(state.template, state.text).forEach((z) => {
+        C.resolveText(state.template, state.text, state.greeting).forEach((z) => {
           const role = C.TEXT_ROLES[z.role] || {};
           const f = document.createElement('div');
           f.className = 'field';
           f.innerHTML =
-            '<label for="zf-' + z.id + '">' + esc(role.label || z.id) +
+            '<label for="zf-' + z.id + '">' + esc(z.label || role.label || z.id) +
             '<span class="lim" id="lim-' + z.id + '"></span></label>' +
             '<input class="text-input" id="zf-' + z.id + '" maxlength="' + (role.maxChars || 120) +
             '" value="' + esc(z.value) + '" placeholder="' + esc(role.hint || '') + '"/>';
@@ -727,7 +814,7 @@
       }
       // On-card typing → mirror into the side inputs.
       function syncSideInputs() {
-        C.resolveText(state.template, state.text).forEach((z) => {
+        C.resolveText(state.template, state.text, state.greeting).forEach((z) => {
           const input = $('zf-' + z.id);
           if (input && input.value !== z.value) input.value = z.value;
           updateLimit(z.id, z.value.length, (C.TEXT_ROLES[z.role] || {}).maxChars || 120);
@@ -761,10 +848,25 @@
         const slot = state.template.popcodeSlot;
         const has = !!state.popcode;
         $('pop-hint').textContent = has
-          ? 'Video attached. Scanning the photo on the printed card plays it.'
-          : 'Attach a video and the photo on this card becomes scannable — point a phone at it and the video plays.';
-        $('pop-btn').textContent = has ? 'Replace video' : 'Attach a video';
+          ? 'Popcode added. Scanning the printed card plays it.'
+          : 'Add a Popcode and the card comes to life: point a phone at it and your video plays.';
+        $('pop-btn').textContent = has ? 'Change Popcode' : 'Add a Popcode';
         void slot;
+      }
+
+      // A small live picture of the back, from the same renderer as the print.
+      let backSeq = 0;
+      async function drawBackPreview() {
+        const mine = ++backSeq;
+        $('back-photo').textContent = state.back ? 'Change photo' : 'Add a photo';
+        $('back-clear').classList.toggle('hidden', !state.back);
+        const full = await renderBack(editing ? editing.slug : 'yourlink');
+        if (mine !== backSeq || !$('back-prev')) return;
+        const sm = document.createElement('canvas');
+        sm.width = 300; sm.height = Math.round(300 * full.height / full.width);
+        if (state.template.orientation === 'landscape') { sm.height = 300; sm.width = Math.round(300 * full.width / full.height); }
+        sm.getContext('2d').drawImage(full, 0, 0, sm.width, sm.height);
+        $('back-prev').src = sm.toDataURL('image/jpeg', 0.85);
       }
 
       // ── Photos ──────────────────────────────────────────────────────────
@@ -777,6 +879,12 @@
         const file = e.target.files && e.target.files[0];
         e.target.value = '';
         if (!file || !pendingSlot) return;
+        if (pendingSlot === '__back') {
+          state.back = { file, url: URL.createObjectURL(file) };
+          pendingSlot = null;
+          drawBackPreview();
+          return;
+        }
         state.photos[pendingSlot] = { file, url: URL.createObjectURL(file) };
         pendingSlot = null;
         drawEditorCard();
@@ -903,7 +1011,7 @@
         const holder = document.createElement('div');
         holder.style.cssText = 'position:fixed;left:-20000px;top:0;pointer-events:none;';
         const face = renderCard(tpl, { width: FRONT_CSS_W, text: state.text, photos: state.photos,
-          colorway: state.colorway, crossOrigin: true, bw: state.bw });
+          colorway: state.colorway, crossOrigin: true, bw: state.bw, greeting: state.greeting });
         face.style.boxShadow = 'none';
         holder.appendChild(face);
         document.body.appendChild(holder);
@@ -1033,53 +1141,77 @@
       }
 
       // The back: how to play the card. Same colourway as the front.
+      // The back, laid out like the books' back cover so every Popcode product
+      // reads the same: the wordmark, two lines, the symbol, anchored near the
+      // bottom of a white back, with an optional square photo above. Line two
+      // differs from the books ("Scan photos with the Popcode symbol"): a card's
+      // front carries no symbol, the whole front is what scans.
+      const BACK = {
+        logoW: 1.1, gapLogo: 0.19, textPt: 9, leadPt: 14, gapSym: 0.16, symW: 0.36, bottom: 0.62,
+        logo: '/assets/Popcode_logo.png', logoAspect: 591 / 2232,
+      };
       async function renderBack(slug) {
         const tpl = state.template;
         const b = { ...C.cardBleedSize(tpl.formatId, tpl.orientation) };
         const pp = printArea(tpl);
         if (pp) { b.offsetX -= (b.w - pp.w) / 2; b.offsetY -= (b.h - pp.h) / 2; b.w = pp.w; b.h = pp.h; }
-        const cw = C.COLORWAYS[state.colorway] || C.COLORWAYS[C.DEFAULT_COLORWAY];
         const c = document.createElement('canvas');
         c.width = b.w; c.height = b.h;
         const ctx = c.getContext('2d');
-        // The card's own colour (`panel`), so type in `ink` reads on it: on a
-        // red frame design that's a cream back with red type, not red on red.
-        ctx.fillStyle = cw.panel || cw.ground;
+        ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, b.w, b.h);
-        await Promise.all(['400', '600', '700'].map((w) => document.fonts.load(`${w} 40px Inter`))).catch(() => {});
-        const inch = b.dpi, cx = b.w / 2;
-        const sans = (wt, pt) => `${wt} ${pt / 72 * inch}px 'Inter', sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'alphabetic';
+        await Promise.all(['600', '700'].map((w) => document.fonts.load(`${w} 40px Inter`))).catch(() => {});
+        const inch = b.dpi, cx = b.w / 2, k = BACK;
+        const trimBottom = b.h - b.offsetY;
+        const blockH = (k.logoW * k.logoAspect + k.gapLogo + (k.leadPt * 2) / 72 + k.gapSym + k.symW) * inch;
+        let y = trimBottom - k.bottom * inch - blockH;
 
-        let y = b.h * 0.30;
+        // The photo, square, centred in the space above the block.
+        if (state.back && state.back.url) {
+          try {
+            const img = await loadImg(state.back.url);
+            const land = tpl.orientation === 'landscape';
+            const side = (land ? 1.75 : 2.7) * inch;
+            const top = b.offsetY + (land ? 0.32 : 0.5) * inch;
+            const py = top + Math.max(0, (y - top - side) / 2);
+            const px = cx - side / 2;
+            ctx.save();
+            ctx.shadowColor = 'rgba(0,0,0,0.16)'; ctx.shadowBlur = 0.12 * inch; ctx.shadowOffsetY = 0.03 * inch;
+            ctx.fillStyle = '#fff'; ctx.fillRect(px, py, side, side);
+            ctx.restore();
+            ctx.save();
+            ctx.beginPath(); ctx.rect(px, py, side, side); ctx.clip();
+            ctx.translate(px, py);
+            drawCover(ctx, img, side, side);
+            ctx.restore();
+          } catch (_) {}
+        }
+
+        try {
+          const logo = await loadImg(k.logo);
+          const lw = k.logoW * inch;
+          ctx.drawImage(logo, cx - lw / 2, y, lw, lw * k.logoAspect);
+        } catch (_) {}
+        y += (k.logoW * k.logoAspect + k.gapLogo) * inch;
+        const fs = k.textPt / 72 * inch, lead = k.leadPt / 72 * inch;
+        const font = (wt) => `${wt} ${fs}px 'Inter', sans-serif`;
+        ctx.fillStyle = '#1a1a1a';
+        ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+        const line = (runs, baseY) => {
+          let total = 0;
+          for (const r of runs) { ctx.font = font(r[1]); total += ctx.measureText(r[0]).width; }
+          let lx = cx - total / 2;
+          for (const r of runs) { ctx.font = font(r[1]); ctx.fillText(r[0], lx, baseY); lx += ctx.measureText(r[0]).width; }
+        };
+        const base = (n) => y + lead * n + lead * 0.5 + fs * 0.35;
+        line([['Go to ', 600], ['popcode.app/' + slug, 700], [' on your phone.', 600]], base(0));
+        line([['Scan the front of this card.', 600]], base(1));
+        y += lead * 2 + k.gapSym * inch;
         try {
           const sym = await loadImg('/assets/popcode_symbol_color.svg');
-          const sw = 0.85 * inch;
-          ctx.drawImage(sym, cx - sw / 2, y - sw, sw, sw);
+          const sw = k.symW * inch;
+          ctx.drawImage(sym, cx - sw / 2, y, sw, sw);
         } catch (_) {}
-        y += 0.55 * inch;
-        ctx.fillStyle = cw.ink;
-        ctx.font = sans(700, 17);
-        ctx.fillText('This card plays a video', cx, y);
-        y += 0.42 * inch;
-        ctx.font = sans(400, 11.5);
-        ctx.globalAlpha = 0.8;
-        ctx.fillText('On your phone, go to', cx, y);
-        ctx.globalAlpha = 1;
-        y += 0.5 * inch;
-        ctx.font = sans(700, 19);
-        ctx.fillText('popcode.app/' + slug, cx, y);
-        y += 0.46 * inch;
-        ctx.font = sans(400, 11.5);
-        ctx.globalAlpha = 0.8;
-        ctx.fillText('then point your camera at the photo', cx, y);
-        y += 0.2 * inch;
-        ctx.fillText('on the front of this card.', cx, y);
-        ctx.globalAlpha = 0.55;
-        ctx.font = sans(600, 8);
-        ctx.fillText('Made with Popcode  ·  popcode.app', cx, b.h - b.offsetY - 0.4 * inch);
-        ctx.globalAlpha = 1;
         return c;
       }
 
@@ -1116,7 +1248,7 @@
       // `sample` in cards.mjs; the role alone can't say (Modern Signature's
       // "signature" zone is the word HOLIDAYS).
       function unchangedSample() {
-        return C.resolveText(state.template, state.text)
+        return C.resolveText(state.template, state.text, state.greeting)
           .filter((z) => z.sample && z.value && z.value === z.default)[0] || null;
       }
 
@@ -1124,7 +1256,7 @@
         const tpl = state.template;
         const need = tpl.photos.filter((s) => !state.photos[s.id]);
         if (need.length) throw new Error('Add ' + (need.length === 1 ? 'a photo' : need.length + ' photos') + ' first.');
-        if (!state.popcode) throw new Error('Attach a video. It’s what plays when someone scans the card.');
+        if (!state.popcode) throw new Error('Add a Popcode. It’s what plays when someone scans the card.');
         const sample = unchangedSample();
         if (sample) throw new Error('Change “' + sample.value + '” to your own words. It’s the example text.');
         if (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler) {
@@ -1160,6 +1292,17 @@
           }
         }
 
+        // 1b. The back photo, if any.
+        let backUrl = null;
+        if (state.back) {
+          if (state.back.file) {
+            backUrl = await uploadWithRetry(`${slug}/card/back-photo-${stamp}.jpg`, state.back.file, state.back.file.type || 'image/jpeg');
+            state.back = { url: backUrl };
+          } else {
+            backUrl = (await remap(state.back.url)) || state.back.url;
+          }
+        }
+
         // 2. The front as it will print. It is the scan target and the thumbnail.
         setBusy('Laying out your card…');
         const front = await renderFrontTrim();
@@ -1189,7 +1332,10 @@
 
         // 5. The row and its one Popcode.
         setBusy('Saving…');
-        const headline = (C.resolveText(tpl, state.text).find((z) => z.role === 'headline') || {}).value || tpl.name;
+        // The greeting, whole: a split one (Brighton's MERRY / CHRISTMAS) joined.
+        const zones = C.resolveText(tpl, state.text, state.greeting);
+        const greetLines = zones.filter((z) => z.greet).map((z) => z.value.trim()).filter(Boolean);
+        const headline = (greetLines.length ? greetLines.join(' ').replace(/\s+&$/, ' & …') : (zones.find((z) => z.role === 'headline') || {}).value) || tpl.name;
         const row = {
           name: 'Cards · 5×7 — ' + headline,
           kind: 'card',
@@ -1199,6 +1345,7 @@
               templateId: tpl.id, formatId: tpl.formatId, orientation: tpl.orientation,
               occasionId: state.occasionId, text: state.text, photos: photoUrls,
               colorway: state.colorway, pack: state.pack, bw: state.bw, frontUrl,
+              greeting: state.greeting, corners: state.corners, backPhoto: backUrl,
             },
           },
         };
@@ -1279,12 +1426,13 @@
             collectionId: saved.collectionId,
             productType: 'card',
             // Printify sells each pack as its own variant, so a pack is one copy.
-            variantId: 'card-5x7-' + state.pack,
+            variantId: 'card-5x7-' + state.pack + (state.corners === 'rounded' ? '-round' : ''),
             copies: 1,
             assetUrls: [{ url: frontUrl, print_area: 'front' }, { url: backUrl, print_area: 'back' }],
             title: saved.headline + ' — ' + state.pack + ' cards, 5×7″',
             thumbUrl: saved.frontUrl,
-            options: { sizeLabel: '5×7″ flat cards', orientationLabel: (state.template.orientation === 'landscape' ? 'landscape, ' : '') + 'with envelopes' },
+            options: { sizeLabel: '5×7″ flat cards', orientationLabel: (state.template.orientation === 'landscape' ? 'landscape, ' : '') +
+              (state.corners === 'rounded' ? 'rounded corners, ' : '') + 'with envelopes' },
           });
           location.href = '/cart.html';
         } catch (err) {
@@ -1319,6 +1467,9 @@
         const v = items && items[0] && items[0].video_url;
         state.popcode = v ? { url: v } : null;
         state.bw = !!cfg.bw;
+        state.greeting = cfg.greeting || 'holiday';
+        state.corners = cfg.corners === 'rounded' ? 'rounded' : 'square';
+        state.back = cfg.backPhoto ? { url: cfg.backPhoto } : null;
         editing = duplicate ? null : { id: col.id, slug: col.slug };
         $('step-browse').classList.add('hidden');
         $('step-edit').classList.remove('hidden');
