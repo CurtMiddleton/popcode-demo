@@ -251,6 +251,7 @@
 
         const face = document.createElement('div');
         face.className = 'card-face';
+        if (tpl.bands) face.dataset.bands = JSON.stringify(tpl.bands);
         face.style.width = widthPx + 'px';
         face.style.height = Math.round(widthPx / aspect) + 'px';
         // Full-bleed cards are the photo. A `frame` card is the colourway's ground
@@ -332,6 +333,9 @@
           const t = document.createElement('div');
           t.className = 'cf-text';
           t.style.top = z.y * 100 + '%';
+          // fitCardText resets to this before it centres the zone in a band.
+          t.dataset.zid = z.id;
+          t.dataset.baseTop = z.y * 100 + '%';
           t.style.fontSize = (z.size * 100) + 'cqh';
           // Leading tightens as type grows -- a flat 1.15 makes display lines
           // look slack and body copy look cramped.
@@ -477,6 +481,7 @@
       // print bake — so what fits on screen is what fits on the card.
       function fitCardText(face) {
         const zones = [...face.querySelectorAll('.cf-text')];
+        zones.forEach((el) => { if (el.dataset.baseTop) el.style.top = el.dataset.baseTop; });
         // Pass 1 — honour each zone's own line budget.
         zones.forEach((el) => {
           const maxLines = parseInt(el.dataset.maxLines, 10) || 1;
@@ -521,6 +526,24 @@
           const cur = parseFloat(getComputedStyle(pick).fontSize);
           if (cur < 4) break;
           pick.style.fontSize = cur * 0.93 + 'px';
+        }
+
+        // Pass 3 — centre each band's zones between its top and bottom (see
+        // BANDS in cards.mjs). The group moves as one, by the gap between the
+        // middle of its drawn lines and the middle of the band.
+        const bands = face.dataset.bands ? JSON.parse(face.dataset.bands) : [];
+        if (bands.length) {
+          const fr = face.getBoundingClientRect();
+          const scale = fr.height / face.offsetHeight || 1;   // a transformed preview
+          bands.forEach((band) => {
+            const els = zones.filter((el) => band.zones.includes(el.dataset.zid) && el.textContent.trim());
+            if (!els.length) return;
+            const rs = els.map((el) => el.getBoundingClientRect());
+            const top = Math.min(...rs.map((r) => r.top)), bottom = Math.max(...rs.map((r) => r.bottom));
+            const want = fr.top + ((band.top + band.bottom) / 2) * fr.height;
+            const delta = (want - (top + bottom) / 2) / scale;
+            els.forEach((el) => { el.style.top = (el.offsetTop + delta) + 'px'; });
+          });
         }
       }
 

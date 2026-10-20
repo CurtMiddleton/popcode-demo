@@ -1899,6 +1899,22 @@
           "size": 0.027,
           "maxW": 0.8
         }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline"
+          ],
+          "top": 0,
+          "bottom": 0.091
+        },
+        {
+          "zones": [
+            "signature"
+          ],
+          "top": 0.859,
+          "bottom": 1
+        }
       ]
     },
     {
@@ -1986,6 +2002,22 @@
           "size": 0.038,
           "maxW": 0.7
         }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline"
+          ],
+          "top": 0,
+          "bottom": 0.137
+        },
+        {
+          "zones": [
+            "signature"
+          ],
+          "top": 0.843,
+          "bottom": 1
+        }
       ]
     },
     {
@@ -2072,6 +2104,22 @@
           "size": 0.019,
           "maxW": 0.8
         }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline"
+          ],
+          "top": 0,
+          "bottom": 0.181
+        },
+        {
+          "zones": [
+            "signature"
+          ],
+          "top": 0.749,
+          "bottom": 1
+        }
       ]
     },
     {
@@ -2157,6 +2205,22 @@
           "y": 0.865,
           "size": 0.026,
           "maxW": 0.6
+        }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline"
+          ],
+          "top": 0,
+          "bottom": 0.225
+        },
+        {
+          "zones": [
+            "signature"
+          ],
+          "top": 0.785,
+          "bottom": 1
         }
       ]
     },
@@ -2248,6 +2312,22 @@
           "size": 0.019,
           "maxW": 0.76
         }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline"
+          ],
+          "top": 0.039,
+          "bottom": 0.14
+        },
+        {
+          "zones": [
+            "signature"
+          ],
+          "top": 0.76,
+          "bottom": 0.961
+        }
       ]
     },
     {
@@ -2337,6 +2417,22 @@
           "y": 0.81,
           "size": 0.026,
           "maxW": 0.66
+        }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline"
+          ],
+          "top": 0.055,
+          "bottom": 0.22
+        },
+        {
+          "zones": [
+            "signature"
+          ],
+          "top": 0.77,
+          "bottom": 0.945
         }
       ]
     },
@@ -2472,6 +2568,24 @@
           "size": 0.019,
           "maxW": 0.22
         }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline",
+            "subhead"
+          ],
+          "top": 0,
+          "bottom": 0.149
+        },
+        {
+          "zones": [
+            "signature",
+            "year"
+          ],
+          "top": 0.771,
+          "bottom": 1
+        }
       ]
     },
     {
@@ -2606,6 +2720,24 @@
           "size": 0.026,
           "maxW": 0.16
         }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline",
+            "subhead"
+          ],
+          "top": 0,
+          "bottom": 0.159
+        },
+        {
+          "zones": [
+            "signature",
+            "year"
+          ],
+          "top": 0.801,
+          "bottom": 1
+        }
       ]
     },
     {
@@ -2690,6 +2822,16 @@
           "y": 0.868,
           "size": 0.018,
           "maxW": 0.32
+        }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline",
+            "signature"
+          ],
+          "top": 0.8,
+          "bottom": 1
         }
       ]
     },
@@ -2776,6 +2918,16 @@
           "size": 0.025,
           "maxW": 0.32
         }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline",
+            "signature"
+          ],
+          "top": 0.76,
+          "bottom": 1
+        }
       ]
     },
     {
@@ -2861,6 +3013,16 @@
           "size": 0.075,
           "maxW": 0.8
         }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline",
+            "signature"
+          ],
+          "top": 0.7,
+          "bottom": 1
+        }
       ]
     },
     {
@@ -2945,6 +3107,16 @@
           "y": 0.545,
           "size": 0.1,
           "maxW": 0.33
+        }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline",
+            "signature"
+          ],
+          "top": 0,
+          "bottom": 1
         }
       ]
     },
@@ -3053,6 +3225,22 @@
           "size": 0.03,
           "maxW": 0.76
         }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline"
+          ],
+          "top": 0,
+          "bottom": 0.1
+        },
+        {
+          "zones": [
+            "signature"
+          ],
+          "top": 0.79,
+          "bottom": 1
+        }
       ]
     },
     {
@@ -3160,6 +3348,22 @@
           "size": 0.042,
           "maxW": 0.7
         }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline"
+          ],
+          "top": 0,
+          "bottom": 0.14
+        },
+        {
+          "zones": [
+            "signature"
+          ],
+          "top": 0.82,
+          "bottom": 1
+        }
       ]
     },
     {
@@ -3250,6 +3454,16 @@
           "y": 0.76,
           "size": 0.075,
           "maxW": 0.4
+        }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline",
+            "signature"
+          ],
+          "top": 0.71,
+          "bottom": 1
         }
       ]
     },
@@ -3349,6 +3563,16 @@
           "y": 0.745,
           "size": 0.1,
           "maxW": 0.4
+        }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline",
+            "signature"
+          ],
+          "top": 0.7,
+          "bottom": 1
         }
       ]
     },
@@ -3464,6 +3688,16 @@
           "size": 0.031,
           "maxW": 0.8
         }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline",
+            "signature"
+          ],
+          "top": 0.725,
+          "bottom": 1
+        }
       ]
     },
     {
@@ -3578,6 +3812,16 @@
           "size": 0.042,
           "maxW": 0.7
         }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "headline",
+            "signature"
+          ],
+          "top": 0.76,
+          "bottom": 1
+        }
       ]
     },
     {
@@ -3675,6 +3919,17 @@
           "size": 0.019,
           "maxW": 0.84
         }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "subhead",
+            "headline",
+            "signature"
+          ],
+          "top": 0.733,
+          "bottom": 1
+        }
       ]
     },
     {
@@ -3771,6 +4026,17 @@
           "y": 0.54,
           "size": 0.026,
           "maxW": 0.34
+        }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "subhead",
+            "headline",
+            "signature"
+          ],
+          "top": 0,
+          "bottom": 1
         }
       ]
     },
@@ -3873,6 +4139,17 @@
           "size": 0.019,
           "maxW": 0.76
         }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "subhead",
+            "headline",
+            "signature"
+          ],
+          "top": 0.69,
+          "bottom": 0.961
+        }
       ]
     },
     {
@@ -3974,6 +4251,17 @@
           "size": 0.025,
           "maxW": 0.3
         }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "subhead",
+            "headline",
+            "signature"
+          ],
+          "top": 0.055,
+          "bottom": 0.945
+        }
       ]
     },
     {
@@ -4071,6 +4359,23 @@
           "size": 0.018,
           "maxW": 0.86
         }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "subhead"
+          ],
+          "top": 0,
+          "bottom": 0.101
+        },
+        {
+          "zones": [
+            "headline",
+            "signature"
+          ],
+          "top": 0.699,
+          "bottom": 1
+        }
       ]
     },
     {
@@ -4167,6 +4472,23 @@
           "y": 0.895,
           "size": 0.025,
           "maxW": 0.8
+        }
+      ],
+      "bands": [
+        {
+          "zones": [
+            "subhead"
+          ],
+          "top": 0,
+          "bottom": 0.145
+        },
+        {
+          "zones": [
+            "headline",
+            "signature"
+          ],
+          "top": 0.755,
+          "bottom": 1
         }
       ]
     }
