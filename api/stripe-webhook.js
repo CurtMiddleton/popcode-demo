@@ -83,8 +83,12 @@ export default async function handler(req, res) {
       orders,
       amountTotalMinor: settledAmountMinor(session),
       onError: (err, result) => {
-        console.error(err.message, JSON.stringify(result.response).slice(0, 500));
-        Sentry.captureException(err);
+        // The credit-refund path passes no `response`, and JSON.stringify(undefined)
+        // has no .slice — guard it so the failure still reaches Sentry.
+        const detail = String(JSON.stringify(result?.response) ?? '').slice(0, 500);
+        console.error(err.message, detail);
+        // Prodigi's own reply goes with the event: a 500 says nothing on its own.
+        Sentry.captureException(err, { extra: { httpStatus: result?.httpStatus ?? null, providerResponse: detail || null } });
       },
     });
     await Sentry.flush(2000);
