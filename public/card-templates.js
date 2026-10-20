@@ -1200,6 +1200,513 @@
       ]
     },
     {
+      "id": "l-pacifique",
+      "name": "Pacifique",
+      "formatId": "flat-5x7",
+      "orientation": "landscape",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "pet",
+        "newlywed",
+        "baby"
+      ],
+      "ground": "bleed",
+      "ornament": "none",
+      "scrim": 0.14,
+      "colorways": [
+        "snow"
+      ],
+      "photos": [
+        {
+          "id": "main",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "fit": "cover"
+        }
+      ],
+      "popcodeSlot": "main",
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "HAPPY HOLIDAYS",
+          "font": "cormorant",
+          "weight": 500,
+          "color": "onPhoto",
+          "align": "right",
+          "track": 0.24,
+          "upper": true,
+          "lead": 1.2,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "x": 0.93,
+          "y": 0.79,
+          "size": 0.04,
+          "maxW": 0.56
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "THE LOWELL FAMILY",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "onPhoto",
+          "align": "right",
+          "track": 0.36,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": null,
+          "sample": true,
+          "italic": false,
+          "x": 0.93,
+          "y": 0.868,
+          "size": 0.016,
+          "maxW": 0.5
+        }
+      ]
+    },
+    {
+      "id": "l-typewriter",
+      "name": "Typewriter",
+      "formatId": "flat-5x7",
+      "orientation": "landscape",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "baby",
+        "pet",
+        "newlywed"
+      ],
+      "ground": "inset",
+      "ornament": "none",
+      "photoEdge": "square",
+      "colorways": [
+        "ivory",
+        "snow",
+        "cranberry",
+        "evergreen",
+        "navy",
+        "ink"
+      ],
+      "photos": [
+        {
+          "id": "main",
+          "x": 0.13,
+          "y": 0.13,
+          "w": 0.74,
+          "h": 0.72,
+          "fit": "cover",
+          "mat": 0.002
+        }
+      ],
+      "popcodeSlot": "main",
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "happy holidays",
+          "font": "cormorant",
+          "weight": 500,
+          "color": "ink",
+          "align": "center",
+          "track": 0.22,
+          "upper": false,
+          "lead": 1.3,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "x": 0.5,
+          "y": 0.052,
+          "size": 0.03,
+          "maxW": 0.7
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "the millers 2026",
+          "font": "cormorant",
+          "weight": 500,
+          "color": "accent",
+          "align": "center",
+          "track": 0.22,
+          "upper": false,
+          "lead": 1.3,
+          "finish": "flat",
+          "lines": null,
+          "sample": true,
+          "italic": false,
+          "x": 0.5,
+          "y": 0.885,
+          "size": 0.026,
+          "maxW": 0.7
+        }
+      ]
+    },
+    {
+      "id": "l-frame",
+      "name": "Colour Frame",
+      "formatId": "flat-5x7",
+      "orientation": "landscape",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newlywed",
+        "baby",
+        "pet"
+      ],
+      "ground": "inset",
+      "ornament": "none",
+      "photoEdge": "square",
+      "frame": {
+        "x": 0.039,
+        "y": 0.055,
+        "w": 0.922,
+        "h": 0.89
+      },
+      "colorways": [
+        "cranberry",
+        "evergreen",
+        "navy",
+        "sage"
+      ],
+      "photos": [
+        {
+          "id": "main",
+          "x": 0.2,
+          "y": 0.2,
+          "w": 0.6,
+          "h": 0.59,
+          "fit": "cover"
+        }
+      ],
+      "popcodeSlot": "main",
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "MERRY CHRISTMAS",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "ink",
+          "align": "center",
+          "track": 0.36,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "x": 0.5,
+          "y": 0.118,
+          "size": 0.021,
+          "maxW": 0.6
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "THE BURCHETTES",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "ink",
+          "align": "center",
+          "track": 0.34,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": null,
+          "sample": true,
+          "italic": false,
+          "x": 0.5,
+          "y": 0.83,
+          "size": 0.02,
+          "maxW": 0.6
+        }
+      ]
+    },
+    {
+      "id": "l-side",
+      "name": "Side Note",
+      "formatId": "flat-5x7",
+      "orientation": "landscape",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "pet",
+        "baby",
+        "newlywed"
+      ],
+      "ground": "inset",
+      "ornament": "none",
+      "photoEdge": "square",
+      "colorways": [
+        "snow",
+        "ivory",
+        "cranberry",
+        "evergreen",
+        "ink"
+      ],
+      "photos": [
+        {
+          "id": "main",
+          "x": 0,
+          "y": 0,
+          "w": 0.66,
+          "h": 1,
+          "fit": "cover"
+        }
+      ],
+      "popcodeSlot": "main",
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "HAPPY HOLIDAYS",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "ink",
+          "align": "center",
+          "track": 0.36,
+          "upper": true,
+          "lead": 1.9,
+          "finish": "flat",
+          "lines": 2,
+          "sample": false,
+          "italic": false,
+          "x": 0.83,
+          "y": 0.4,
+          "size": 0.022,
+          "maxW": 0.22
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "The Parkers",
+          "font": "hand",
+          "weight": 400,
+          "color": "accent",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 1.1,
+          "finish": "flat",
+          "lines": 1,
+          "sample": true,
+          "italic": false,
+          "x": 0.83,
+          "y": 0.53,
+          "size": 0.075,
+          "maxW": 0.28
+        }
+      ]
+    },
+    {
+      "id": "l-strip",
+      "name": "Photo Booth",
+      "formatId": "flat-5x7",
+      "orientation": "landscape",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "multiphoto",
+        "newlywed"
+      ],
+      "ground": "inset",
+      "ornament": "none",
+      "photoEdge": "square",
+      "colorways": [
+        "cranberry",
+        "snow",
+        "evergreen",
+        "navy"
+      ],
+      "photos": [
+        {
+          "id": "p1",
+          "x": 0.07,
+          "y": 0.1,
+          "w": 0.287,
+          "h": 0.62,
+          "fit": "cover"
+        },
+        {
+          "id": "p2",
+          "x": 0.3565,
+          "y": 0.1,
+          "w": 0.287,
+          "h": 0.62,
+          "fit": "cover"
+        },
+        {
+          "id": "p3",
+          "x": 0.643,
+          "y": 0.1,
+          "w": 0.287,
+          "h": 0.62,
+          "fit": "cover"
+        }
+      ],
+      "popcodeSlot": "p1",
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "HAPPY HOLIDAYS",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "ink",
+          "align": "left",
+          "track": 0.42,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "x": 0.07,
+          "y": 0.815,
+          "size": 0.021,
+          "maxW": 0.4
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "Love, The Parks",
+          "font": "hand",
+          "weight": 400,
+          "color": "ink",
+          "align": "right",
+          "track": 0,
+          "upper": false,
+          "lead": 1.1,
+          "finish": "flat",
+          "lines": 1,
+          "sample": true,
+          "italic": false,
+          "x": 0.93,
+          "y": 0.77,
+          "size": 0.08,
+          "maxW": 0.4
+        }
+      ]
+    },
+    {
+      "id": "l-gallery",
+      "name": "Gallery",
+      "formatId": "flat-5x7",
+      "orientation": "landscape",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "multiphoto"
+      ],
+      "ground": "inset",
+      "ornament": "none",
+      "photoEdge": "square",
+      "colorways": [
+        "ivory",
+        "snow",
+        "sage",
+        "ink"
+      ],
+      "photos": [
+        {
+          "id": "p1",
+          "x": 0.27,
+          "y": 0.08,
+          "w": 0.46,
+          "h": 0.68,
+          "fit": "cover"
+        },
+        {
+          "id": "p2",
+          "x": 0.06,
+          "y": 0.08,
+          "w": 0.2,
+          "h": 0.335,
+          "fit": "cover"
+        },
+        {
+          "id": "p3",
+          "x": 0.06,
+          "y": 0.425,
+          "w": 0.2,
+          "h": 0.335,
+          "fit": "cover"
+        },
+        {
+          "id": "p4",
+          "x": 0.74,
+          "y": 0.08,
+          "w": 0.2,
+          "h": 0.335,
+          "fit": "cover"
+        },
+        {
+          "id": "p5",
+          "x": 0.74,
+          "y": 0.425,
+          "w": 0.2,
+          "h": 0.335,
+          "fit": "cover"
+        }
+      ],
+      "popcodeSlot": "p1",
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "HAPPY HOLIDAYS",
+          "font": "cormorant",
+          "weight": 600,
+          "color": "ink",
+          "align": "center",
+          "track": 0.42,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "x": 0.5,
+          "y": 0.815,
+          "size": 0.019,
+          "maxW": 0.6
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "the parkers — 2026",
+          "font": "cormorant",
+          "weight": 500,
+          "color": "accent",
+          "align": "center",
+          "track": 0.1,
+          "upper": false,
+          "lead": 1.3,
+          "finish": "flat",
+          "lines": null,
+          "sample": true,
+          "italic": true,
+          "x": 0.5,
+          "y": 0.868,
+          "size": 0.03,
+          "maxW": 0.6
+        }
+      ]
+    },
+    {
       "id": "m-hello",
       "name": "Hello World",
       "formatId": "flat-5x7",
