@@ -426,12 +426,12 @@
   },
   "FONTS": {
     "parisienne": {
-      "label": "Classic",
+      "label": "Parisienne",
       "css": "'Parisienne', 'Snell Roundhand', cursive",
       "google": "Parisienne"
     },
     "doulaise": {
-      "label": "Formal",
+      "label": "Monsieur La Doulaise",
       "css": "'Monsieur La Doulaise', 'Snell Roundhand', cursive",
       "google": "Monsieur+La+Doulaise"
     },
@@ -446,7 +446,7 @@
       "google": "Sacramento"
     },
     "windsong": {
-      "label": "Sweeping",
+      "label": "WindSong",
       "css": "'WindSong', 'Snell Roundhand', cursive",
       "google": "WindSong"
     },
@@ -5935,15 +5935,15 @@
   "SCRIPTS": [
     {
       "id": "parisienne",
-      "label": "Classic"
+      "label": "Parisienne"
     },
     {
       "id": "doulaise",
-      "label": "Formal"
+      "label": "Monsieur La Doulaise"
     },
     {
       "id": "windsong",
-      "label": "Sweeping"
+      "label": "WindSong"
     }
   ],
   "CARD_LAYOUTS": [
