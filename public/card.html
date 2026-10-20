@@ -163,6 +163,12 @@
       .toggle { display: inline-flex; background: #eee; border-radius: 16px; padding: 3px; gap: 2px; }
       .toggle button { border: none; background: none; border-radius: 14px; padding: 8px 18px; font-size: 13px; font-weight: 500; color: #666; cursor: pointer; font-family: 'Inter', sans-serif; }
       .toggle button.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 4px rgba(0,0,0,0.12); font-weight: 600; }
+      .slug-row { display: flex; align-items: stretch; }
+      .slug-prefix { display: flex; align-items: center; background: #eceae4; border: 1.5px solid #e3e1db; border-right: none; border-radius: 12px 0 0 12px; padding: 0 10px 0 14px; font-size: 15px; color: #6b6558; font-weight: 600; white-space: nowrap; }
+      .slug-row .text-input { border-radius: 0 12px 12px 0; min-width: 0; }
+      .slug-row .text-input:disabled { background: #f4f2ee; color: #6b6558; }
+      .slug-note { font-size: 12px; color: #999; margin: 6px 2px 0; line-height: 1.4; }
+      .slug-note.bad { color: #d33; }
       .side-hint { text-align: center; font-size: 13px; color: #777; margin-top: 12px; min-height: 1.3em; }
       .card-face img { -webkit-user-drag: none; user-select: none; }
       .cf-guide { position: absolute; left: 50%; top: 0; bottom: 0; width: 0; border-left: 1px dashed #ff3b9a; z-index: 9; pointer-events: none; display: none; }
@@ -1092,6 +1098,7 @@
       }
 
       // ── Step 2: editor ──────────────────────────────────────────────────
+      let slugField = null, slugBackTimer = null;
       function renderEditor() {
         const tpl = state.template;
         const host = $('step-edit');
@@ -1105,7 +1112,11 @@
               '<div class="panel"><h2 class="ed-name">' + esc(tpl.name) + '</h2>' +
                 '<div class="ed-tag">Flat 5&times;7&Prime; card &middot; envelopes included</div>' +
                 '<div class="field"><label for="card-name">Name this card <span class="lim">so you can find it in My Designs</span></label>' +
-                '<input class="text-input" id="card-name" maxlength="80" placeholder="e.g. Christmas 2026" value="' + esc(state.name || '') + '"/></div>' +
+                '<input class="text-input" id="card-name" maxlength="80" placeholder="e.g. Middleton Christmas 2026" value="' + esc(state.name || '') + '"/></div>' +
+                '<div class="field"><label for="slug-input">Popcode link <span class="lim">printed on the back</span></label>' +
+                '<div class="slug-row"><span class="slug-prefix">popcode.app/</span>' +
+                '<input class="text-input" id="slug-input" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="yourlink"/></div>' +
+                '<div class="slug-note" id="slug-note">Fills in from the card’s name. It’s locked once the card is saved, so printed cards keep working.</div></div>' +
                 '<div class="opt hidden" id="opt-layout"><h3>Layout <span id="layout-name"></span></h3><div class="chip-row" id="layout-row"></div></div>' +
                 '<div class="opt hidden" id="opt-orient"><h3>Orientation <span id="orient-name"></span></h3><div class="pack-row" id="orient-row"></div></div>' +
                 '<div class="opt hidden" id="opt-greet"><h3>Greeting <span id="greet-name"></span></h3><div class="chip-row" id="greet-row"></div></div>' +
@@ -1179,6 +1190,21 @@
         $('zone-fields').addEventListener('focusin', () => { if (state.side === 'back') showSide('front'); });
         drawBackPreview();
         $('card-name').addEventListener('input', (e) => { state.name = e.target.value; });
+        // The Popcode link, as on the calendar and books: fills in from the
+        // name until the buyer edits it; locked once the card is saved.
+        slugField = PopcodeSlug.attach({
+          db, nameInput: $('card-name'), slugInput: $('slug-input'), note: $('slug-note'),
+          classes: { base: 'slug-note', err: 'bad' }, nameLabel: 'name', touched: state.slugTouched,
+          onChange: (sl) => {
+            state.slug = sl;
+            clearTimeout(slugBackTimer);
+            if (state.side === 'back') slugBackTimer = setTimeout(() => drawBackPreview(true), 300);
+          },
+        });
+        $('slug-input').addEventListener('input', () => { state.slugTouched = true; });
+        if (editing) slugField.lock(editing.slug, 'This card’s link. It’s locked so printed cards keep working.');
+        else if (state.slug) slugField.set(state.slug, state.slugTouched);
+        else if (state.name) slugField.set(PopcodeSlug.slugify(state.name), false);
         if ($('move-reset')) {
           $('move-reset').addEventListener('click', (e) => { e.preventDefault(); state.moves = {}; drawEditorCard(); paintMoveReset(); });
           paintMoveReset();
@@ -1460,7 +1486,7 @@
         if (!show) return;
         state.side = 'back';
         paintSideToggle();
-        const full = await renderBack(editing ? editing.slug : 'yourlink', { placeholder: true });
+        const full = await renderBack(editing ? editing.slug : ((slugField && slugField.get()) || 'yourlink'), { placeholder: true });
         if (mine !== backSeq || state.side !== 'back' || !$('ed-stage')) return;
         const w = editorCardWidth();
         const im = document.createElement('img');
@@ -1915,6 +1941,15 @@
         }
 
         let slug = editing && editing.slug;
+        // The link the buyer chose (or that the name filled in). Left empty, a
+        // random one is made, as before.
+        if (!slug && slugField && slugField.get()) {
+          if (!(await slugField.ensureFree())) {
+            $('slug-input').scrollIntoView({ block: 'center', behavior: 'smooth' });
+            throw new Error('popcode.app/' + slugField.get() + ' can’t be used. Pick a different link (suggestions are under it).');
+          }
+          slug = slugField.get();
+        }
         if (!slug) {
           for (let i = 0; i < 6 && !slug; i++) {
             const cand = PopcodeSlug.randomSlug();
@@ -2044,6 +2079,7 @@
           if (iErr) throw new Error('Saved, but linking the video failed: ' + iErr.message);
         }
         editing = { id: collectionId, slug };
+        if (slugField) slugField.lock(slug, 'This card’s link. It’s locked so printed cards keep working.');
         const u = new URL(location.href);
         u.searchParams.set('id', slug); u.searchParams.delete('duplicate');
         history.replaceState(null, '', u);
@@ -2159,6 +2195,7 @@
         state.script = C.SCRIPTS.some((x) => x.id === cfg.script) ? cfg.script : null;
         state.moves = (cfg.moves && typeof cfg.moves === 'object') ? cfg.moves : {};
         state.name = cfg.title || '';
+        state.slug = null; state.slugTouched = false;   // a duplicate gets its own link
         state.back = cfg.backPhoto ? { url: cfg.backPhoto, shape: cfg.backShape || null, size: cfg.backSize || 'large' } : null;
         editing = duplicate ? null : { id: col.id, slug: col.slug };
         $('step-browse').classList.add('hidden');
