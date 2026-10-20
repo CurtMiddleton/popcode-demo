@@ -164,6 +164,16 @@
       .toggle button { border: none; background: none; border-radius: 14px; padding: 8px 18px; font-size: 13px; font-weight: 500; color: #666; cursor: pointer; font-family: 'Inter', sans-serif; }
       .toggle button.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 4px rgba(0,0,0,0.12); font-weight: 600; }
       .side-hint { text-align: center; font-size: 13px; color: #777; margin-top: 10px; min-height: 1.3em; }
+      .text-input.qty-select { appearance: none; -webkit-appearance: none; cursor: pointer; font-weight: 600; padding-right: 40px;
+        background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%231a1a1a' stroke-width='1.8'/%3E%3C/svg%3E") no-repeat right 16px center; }
+      /* Add a Popcode: the Shop's pinwheel button (order.html .popcode-cta), full width. */
+      .popcode-cta { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; height: 58px; padding: 0 22px;
+        border: 1.5px solid #d9d2fb; border-radius: 999px; background: linear-gradient(135deg, #f3f0ff, #eef4ff); color: #4b34c7;
+        font: 700 17px 'Inter', sans-serif; cursor: pointer; box-shadow: 0 2px 10px rgba(118,87,252,0.16); transition: border-color .15s, box-shadow .15s; }
+      .popcode-cta:hover { border-color: #b9a9f7; box-shadow: 0 4px 16px rgba(118,87,252,0.22); }
+      .popcode-cta .pc-sym { width: 34px; height: 34px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+      .popcode-cta .pc-sym img { width: 22px; height: 22px; display: block; }
+      .popcode-cta.has-media { border-color: #b9a9f7; }
       .panel .hint a { color: #7657FC; font-weight: 600; text-decoration: none; }
 
       /* Sections of the options column are divided by rules, not boxed. */
@@ -1022,10 +1032,11 @@
                 '<button class="btn-ghost hidden" id="back-clear" style="margin-top:0">Remove photo</button></div></div>' +
               '<div class="panel"><h3>Popcode</h3>' +
                 '<p class="hint" id="pop-hint"></p>' +
-                '<button class="btn-ghost" id="pop-btn" style="margin-top:0">Add a Popcode</button></div>' +
+                '<button type="button" class="popcode-cta" id="pop-btn"><span class="pc-sym"><img src="/assets/popcode_symbol_color.svg" alt=""/></span>' +
+                '<span id="pop-label">Add a Popcode</span></button></div>' +
               '<div class="panel"><h3>How many?</h3>' +
                 '<p class="hint">Flat card &middot; 5&times;7&Prime; &middot; Eggshell paper &middot; envelopes included. The more you order, the less each one costs.</p>' +
-                '<div class="pack-row" id="pack-row"></div>' +
+                '<select class="text-input qty-select" id="qty-select" aria-label="How many cards"></select>' +
                 '<div class="price-row"><span class="price-big" id="price-big">&mdash;</span>' +
                 '<span class="price-note" id="price-note"></span></div></div>' +
               '<div class="ed-actions"><button class="btn-primary" id="cart-btn">Add to cart</button>' +
@@ -1239,17 +1250,13 @@
         });
       }
 
+      // `state.pack` is the number of cards; C.packFor turns it into a
+      // Printify pack and a number of copies at the cart.
       function renderPacks() {
-        const row = $('pack-row');
-        row.innerHTML = '';
-        C.CARD_PACKS.forEach((p) => {
-          const b = document.createElement('button');
-          b.className = 'pack-btn' + (p.qty === state.pack ? ' active' : '');
-          b.innerHTML = '<div class="pack-qty">' + p.qty + '</div>' +
-            '<div class="pack-each">cards</div>';
-          b.addEventListener('click', () => { state.pack = p.qty; renderPacks(); refreshPrice(); });
-          row.appendChild(b);
-        });
+        const sel = $('qty-select');
+        sel.innerHTML = C.CARD_QUANTITIES.map((q) =>
+          '<option value="' + q + '"' + (q === state.pack ? ' selected' : '') + '>' + q + ' cards</option>').join('');
+        sel.onchange = () => { state.pack = Number(sel.value); refreshPrice(); };
         refreshPrice();
       }
 
@@ -1267,7 +1274,8 @@
         $('pop-hint').textContent = pc
           ? (pc.mediaType === 'audio' ? 'Audio added.' : 'Video added.') + ' Scanning the printed card plays it.'
           : 'Add a Popcode and the card comes to life: point a phone at it and your video, montage or audio plays.';
-        $('pop-btn').textContent = pc ? 'Edit Popcode' : 'Add a Popcode';
+        $('pop-label').textContent = pc ? 'Edit Popcode' : 'Add a Popcode';
+        $('pop-btn').classList.toggle('has-media', !!pc);
       }
 
       // Tap an empty photo to add one; tap a photo to edit it (the calendar's
@@ -1897,8 +1905,8 @@
             collectionId: saved.collectionId,
             productType: 'card',
             // Printify sells each pack as its own variant, so a pack is one copy.
-            variantId: 'card-5x7-' + state.pack + (state.corners === 'rounded' ? '-round' : ''),
-            copies: 1,
+            variantId: 'card-5x7-' + C.packFor(state.pack).pack + (state.corners === 'rounded' ? '-round' : ''),
+            copies: C.packFor(state.pack).copies,
             assetUrls: [{ url: frontUrl, print_area: 'front' }, { url: backUrl, print_area: 'back' }],
             title: saved.headline + ' — ' + state.pack + ' cards, 5×7″',
             thumbUrl: saved.frontUrl,
@@ -1938,7 +1946,7 @@
         state.template = tpl;
         state.text = cfg.text || {};
         state.colorway = cfg.colorway || (tpl.colorways && tpl.colorways[0]) || C.DEFAULT_COLORWAY;
-        state.pack = C.CARD_PACKS.some((p) => p.qty === cfg.pack) ? cfg.pack : C.DEFAULT_PACK;
+        state.pack = C.CARD_QUANTITIES.includes(cfg.pack) ? cfg.pack : C.DEFAULT_PACK;
         state.photos = {};
         Object.entries(cfg.photos || {}).forEach(([k, url]) => { if (url) state.photos[k] = { url, adjust: (cfg.adjust || {})[k] }; });
         const it = items && items[0];

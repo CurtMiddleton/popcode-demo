@@ -6689,10 +6689,34 @@
       "discount": 0.2
     }
   ],
-  "DEFAULT_PACK": 30
+  "DEFAULT_PACK": 30,
+  "CARD_QUANTITIES": [
+    10,
+    20,
+    30,
+    40,
+    50,
+    60,
+    70,
+    80,
+    90,
+    100,
+    150,
+    200,
+    250,
+    300,
+    400,
+    500
+  ]
 };
 
   // Pure helpers mirrored from cards.mjs so the builder and the server agree.
+  // Mirrors packFor() in lib/print/cards.mjs.
+  C.packFor = function (qty) {
+    var q = Number(qty);
+    var pack = [100, 50, 30, 10].filter(function (p) { return q % p === 0; })[0];
+    return pack ? { pack: pack, copies: q / pack } : null;
+  };
   C.occasionById = function (id) {
     return C.OCCASIONS.filter(function (o) { return o.id === id; })[0] || null;
   };
