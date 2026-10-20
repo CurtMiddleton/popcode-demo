@@ -27,10 +27,17 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 - **Video mix-up bug fixed + customer handled (2026-10-18, PRs #253–#255; see that entry).**
   Uploads now get unique filenames; books/calendars/board books no longer count toward the
   Popcode limit (migration **run in prod**); every checkout shows a "Check what each photo
-  plays" step, and Analytics → Content → a project has **Check videos**. **Open:** Elena Kuher
-  (Olena Kucher, Spokane, `only80yearsyoung`) — reply pending; when she orders, confirm her
-  `print_orders` row has `default, spine` (first real order with a spine file) and the order
-  in Prodigi's dashboard lists a spine. #255 not yet tried on an iPhone or a real checkout.
+  plays" step, and Analytics → Content → a project has **Check videos**. **Elena Kuher**
+  (Olena Kucher, Spokane, `only80yearsyoung`) **has ordered** — Prodigi 14652102 (her book,
+  spine file attached, est. despatch Mon 26 Oct), 14653577 (her second order) and 14656283
+  (the user's hand-made photo fix). See 2026-10-20. Still open: confirm the spine PDF
+  actually carries the title text. #255 not yet tried on an iPhone or a real checkout.
+- **Sentry triage follow-up: [PR #271](https://github.com/CurtMiddleton/popcode-demo/pull/271)
+  merged 2026-10-20** — Prodigi's reply now rides on failed-order events, and quote retries
+  back off (429 → Retry-After / 1 s, 2 s). **Sentry is now watched:** two email alert rules
+  (failed paid order / fatal outage; spikes) + the **Daily Sentry check** scheduled task at
+  8:45 ET every day (push only when something is real). **Shotstack balance was 0.17 credits on 10-17** — top up before
+  promoting montage in books (a render needs ~1.13).
 - **Gallery outreach round 1 SENT 2026-10-15** (9:45–10:55 ET, scheduled in Gmail from
   curt@popcodeapp.com, BCC curt@theworkshop.works): Geary, Rye Arts Center, Pelham Art Center
   (**free-pilot offer**, personal email, not in the follow-up sequence), Iona Chapman Gallery,
@@ -4022,6 +4029,88 @@ entry was ever made. A fresh Claude would not find them otherwise:
 - **Web traffic map** (`drawWebMap`, analytics.html): `tile.openstreetmap.org` → `PopcodeBasemap.add`. Those OSM tiles labelled places in local script (the user's screenshot: Россия, 中国, مصر); OSM has no English tile set. CARTO tiles answered 200 from the sandbox but an earlier session found they need a key, so not used.
 - **Map tab** (`reach-map.js`): same base map under the pins; the Natural Earth country shapes are now shading only (`fillOpacity` 0.08–0.38, no stroke). **Fit all** (`fitAll`, to the visible pins) and **Expand** (`setFull`, `.rm-map-wrap.full` + `body.rm-map-open` overlay, Esc closes) copy the Web traffic map. maxZoom 9 → 12; scroll-wheel zoom only when expanded; `fitMinZoom()` stops zoom-out past the world filling the height (full screen at z1 showed empty bands).
 - Test harness: Playwright `page.route` can't reach the internet directly in this sandbox; real tiles were served by shelling out to `curl` (which honours the proxy) inside the route handler.
+
+### 2026-10-20 — Sentry triage: what the four "real" issues actually were
+
+**PR [#271](https://github.com/CurtMiddleton/popcode-demo/pull/271) — merged.** The first
+"push to prod" was blocked by the auto-mode classifier; the second went through after
+merging `main` in (conflicts in `docs/STATUS.md` and `lib/print/cart.mjs`, where #273 had
+swapped `priceParts` for `priceGroup` in the import line).
+**Also in #271 — POPCODE-WEB-K (Prodigi quote 429):** 23 quotes in ~1 s at 14:55 UTC with no
+user agent (a script, not a shopper; caller unknown). Both quote loops retried instantly, so
+`quoteRetryDelayMs` in `lib/print/providers/statuses.mjs` now paces them, and `prodigi.mjs`
+reads `Retry-After`. Resolved in Sentry with a comment. Branch `claude/epic-thompson-tc57hv`, commit `c99e486`, mergeable/clean.
+
+**Context:** the user triaged all 26 Sentry issues in a claude.ai chat (Sentry connector),
+resolved them, and flagged four as real. Sentry org `popcode-inc`, project `popcode-web`.
+The Sentry MCP works here: `get_sentry_resource(resourceType='issue', organizationSlug=
+'popcode-inc', resourceId='POPCODE-WEB-19')`, and `search_errors` with `issue:<id>` lists
+every event with browser/city. **Cross-check with the release tag** (`release` = commit
+SHA) — two of the four had already been fixed by later commits.
+
+| Issue | What it was | Outcome |
+|---|---|---|
+| WEB-19 Prodigi 500 in stripe-webhook (10-18 18:10 UTC) | Elena's book, `print_orders.id` `e35707ce…` | Someone pressed **Retry** ~1 h later; it is Prodigi **14652102**, in production, spine attached. Nothing to do. |
+| WEB-R Shotstack out of credits (10-17 16:13 UTC) | Fired on release `68f4bc4`, 14 min before `fe94563` added the friendly pause + `fatal` "Shotstack OUT OF CREDITS" alert | No out-of-credits alert since → no render attempted, or topped up. Balance unknown from here. |
+| WEB-V "scan check timed out" ×5 | Advisory photo check in `public/scan-check.js` giving up after 15 s; all Safari/iOS (2 from New Rochelle = the user) | Stopped reporting timeouts (#271) |
+| WEB-16 POPCODE_QUOTA_EXCEEDED in book.html (10-17) | Elena, before #254 | Already fixed by #254 |
+
+**Found in passing:** POPCODE-WEB-1B, a `SyntaxError: No identifiers allowed directly after
+numeric literal` at `manage.html:1` from the same Athens Firefox-iOS creator. **Not ours** —
+manage.html has no inline handlers and its one inline script parses; line 1 + no stack on
+Firefox iOS = the browser's injected scripts. Left resolved.
+
+**#271 changes:**
+- `api/stripe-webhook.js` / `api/finalize-order.js` `onError`: attach `httpStatus` and
+  Prodigi's reply as Sentry `extra` (WEB-19 was a bare "500"; the reply was only in
+  `print_orders.prodigi_response`). **Latent bug fixed:** `settlePopcodeCredits`
+  (`lib/print/fulfill.mjs:140`) calls `onError(err, { order_id })` with no `response`, and
+  `JSON.stringify(undefined).slice` threw a TypeError before `captureException` — a failed
+  credit refund would have 500'd the request and never reached Sentry.
+- `public/scan-check.js`: timeout no longer sent to Sentry; other failures still are.
+- `public/create.html` (Generate compile catch, ~:1950): now `captureException` with
+  `step: compile` — before, a failed compile was only shown on screen.
+Syntax-checked only; not run in a browser or a real checkout.
+
+**Finding a Prodigi order by our id:** the dashboard list has no reference column. Open an
+order — the Summary panel shows **Order reference** = our `print_orders.id` (that's the
+`merchantReference`). The Search box may also take it.
+
+**Elena's orders (all accounted for):** 14652102 (book, 10-18 15:07, the retried failure,
+spine + postcard + sticker), 14653577 ($74.78, her own second order), 14656283 ($28.20,
+"Online order" — the user made it by hand to fix her photo).
+
+#### Later the same day: Sentry is now watched automatically
+
+**Sentry alert rules (made by the user in Sentry → Alerts, project popcode-web, env production, notify Member → Curt by email):**
+- **Popcode: paid order failed / outage** — WHEN a new issue is created OR a resolved issue
+  regresses; IF *any*: message contains `order failed`, message contains `Order submission
+  failed`, level equals `fatal` (catches Shotstack out-of-credits). Every trigger.
+- **Popcode: something is spiking** — WHEN an issue escalates; no filter; 60-minute throttle.
+- Default **"Send a notification for high priority issues"**: told to disable it (noise the
+  daily check now handles). Not confirmed done. "Send a notification when pull requests are
+  ready" left alone (Seer only).
+- In Sentry's new alert builder the filters are **"The event's [message] attribute
+  [contains]"** and **"The event's level [equals]"** — not "Message"/"Level". The alert name
+  is the editable title next to "Alerts /" (defaults to "Notify <member>").
+
+**Scheduled task "Daily Sentry check"** (`trig_01Y7yeD3u5JZGFDdcC8uVLZc`, fresh session per
+run, **daily 8:45 ET incl. weekends**, push only, auto-fix PRs off). Read-only on code:
+triages new/regressed issues from the last 24 h, resolves NOISE / already-fixed with a
+reason, leaves REAL ones open and pushes a phone-readable summary with the fix it suggests;
+the user says "fix it" in a session to get it built.
+- **Gotcha:** created via `create_trigger` it got **no repository and no connector** (this
+  org rejects the `connectors` param, and the call passed no source). The user added both by
+  hand: claude.ai → Scheduled tasks → Daily Sentry check → Edit → **Advanced settings** →
+  General → Repository `CurtMiddleton/popcode-demo`, Connectors → Sentry. Do the same for any
+  future scheduled task that needs a repo or connector.
+- **Test run worked:** resolved one noise issue (a one-off Leaflet map error on the
+  owner-only analytics page), "nothing needs you".
+
+#### Open
+- Elena's spine PDF: open **View PDF** under Spine on 14652102 and check the title is on it.
+- Check the Shotstack balance before montage in books gets used.
+- Confirm the default Sentry "high priority issues" alert is disabled.
 
 ### 2026-10-20 — Holiday card maker revived and rebuilt (Minted-style), not yet live
 
