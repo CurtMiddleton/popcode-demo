@@ -34,7 +34,7 @@
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Ballet&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,600;1,6..96,400&family=Cinzel:wght@400;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500&family=Jost:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Mrs+Saint+Delafield&family=Ballet&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,600;1,6..96,400&family=Cinzel:wght@400;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500&family=Jost:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
@@ -236,13 +236,35 @@
         face.className = 'card-face';
         face.style.width = widthPx + 'px';
         face.style.height = Math.round(widthPx / aspect) + 'px';
-        // Full-bleed cards are the photo; inset/collage sit on the colourway ground.
-        face.style.background = tpl.ground === 'bleed' ? '#dedbd4' : cw.ground;
+        // Full-bleed cards are the photo. A `frame` card is the colourway's ground
+        // with a panel inset; `fill: 'ground'` is the ground all over (type in the
+        // panel colour); anything else is the panel colour (older colourways
+        // have no panel, so it falls back to ground).
+        face.style.background = tpl.ground === 'bleed' ? '#dedbd4'
+          : (tpl.frame || tpl.fill === 'ground') ? cw.ground : (cw.panel || cw.ground);
+        if (tpl.frame) {
+          const pnl = document.createElement('div');
+          pnl.className = 'cf-panel';
+          pnl.style.cssText = 'position:absolute;left:' + tpl.frame.x * 100 + '%;top:' + tpl.frame.y * 100 +
+            '%;width:' + tpl.frame.w * 100 + '%;height:' + tpl.frame.h * 100 + '%;background:' + (cw.panel || '#fff');
+          face.appendChild(pnl);
+        }
 
         (tpl.photos || []).forEach((slot) => {
+          // A mat is a plain block behind the photo, `mat` (a fraction of card
+          // width) bigger on every side. A thin one reads as a ruled line.
+          if (slot.mat) {
+            const m = document.createElement('div');
+            const my = slot.mat * (land ? 1 / fmt.aspect : fmt.aspect);
+            m.className = 'cf-mat';
+            m.style.cssText = 'position:absolute;left:' + (slot.x - slot.mat) * 100 + '%;top:' + (slot.y - my) * 100 +
+              '%;width:' + (slot.w + slot.mat * 2) * 100 + '%;height:' + (slot.h + my * 2) * 100 + '%;background:' + (cw.mat || cw.ink);
+            face.appendChild(m);
+          }
           const d = document.createElement('div');
+          // `photoEdge: 'square'` (the minimal set): no rounded corner or hairline.
           d.className = 'cf-photo' + (slot.arch ? ' arch' : '')
-            + (tpl.ground !== 'bleed' ? ' inset' : '');
+            + (tpl.ground !== 'bleed' && tpl.photoEdge !== 'square' ? ' inset' : '');
           d.style.left = slot.x * 100 + '%';
           d.style.top = slot.y * 100 + '%';
           d.style.width = slot.w * 100 + '%';
@@ -290,6 +312,7 @@
           t.style.color = paint(z.color);
           t.style.textAlign = z.align;
           t.style.fontWeight = String(z.weight || 400);
+          if (z.italic) t.style.fontStyle = 'italic';
           t.style.fontFamily = (C.FONTS[z.font] || C.FONTS.cormorant).css;
           if (z.track) t.style.letterSpacing = z.track + 'em';
           if (z.upper) t.style.textTransform = 'uppercase';

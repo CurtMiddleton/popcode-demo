@@ -219,7 +219,7 @@
   "TEXT_ROLES": {
     "headline": {
       "label": "Greeting",
-      "maxChars": 34,
+      "maxChars": 44,
       "maxLines": 2,
       "hint": "Happy Holidays"
     },
@@ -249,6 +249,11 @@
     }
   },
   "FONTS": {
+    "hand": {
+      "label": "Handwritten",
+      "css": "'Mrs Saint Delafield', 'Snell Roundhand', cursive",
+      "google": "Mrs+Saint+Delafield"
+    },
     "script": {
       "label": "Script",
       "css": "'Ballet', 'Snell Roundhand', cursive",
@@ -342,9 +347,11 @@
     },
     "sage": {
       "label": "Sage",
-      "ground": "#E4E9E0",
-      "ink": "#33402F",
-      "accent": "#6F8466",
+      "ground": "#9DAA8F",
+      "panel": "#FFFFFF",
+      "ink": "#2F3A2A",
+      "accent": "#6E7B62",
+      "mat": "#9DAA8F",
       "onPhoto": "#FFFFFF"
     },
     "midnight": {
@@ -367,9 +374,63 @@
       "ink": "#4A3239",
       "accent": "#B98A83",
       "onPhoto": "#FFFFFF"
+    },
+    "snow": {
+      "label": "White",
+      "ground": "#FFFFFF",
+      "panel": "#FFFFFF",
+      "ink": "#1F1F1F",
+      "accent": "#6F6B64",
+      "mat": "#1F1F1F",
+      "onPhoto": "#FFFFFF"
+    },
+    "ivory": {
+      "label": "Ivory",
+      "ground": "#F4EFE4",
+      "panel": "#F4EFE4",
+      "ink": "#2B2A27",
+      "accent": "#857F73",
+      "mat": "#2B2A27",
+      "onPhoto": "#FFFFFF"
+    },
+    "cranberry": {
+      "label": "Red",
+      "ground": "#A8232B",
+      "panel": "#F7F3EA",
+      "ink": "#A8232B",
+      "accent": "#A8232B",
+      "mat": "#A8232B",
+      "onPhoto": "#FFFFFF"
+    },
+    "evergreen": {
+      "label": "Green",
+      "ground": "#2E4A3A",
+      "panel": "#F4F1E8",
+      "ink": "#2E4A3A",
+      "accent": "#5E7566",
+      "mat": "#2E4A3A",
+      "onPhoto": "#FFFFFF"
+    },
+    "navy": {
+      "label": "Navy",
+      "ground": "#1F2B44",
+      "panel": "#F4F2EC",
+      "ink": "#1F2B44",
+      "accent": "#5B6478",
+      "mat": "#1F2B44",
+      "onPhoto": "#FFFFFF"
+    },
+    "ink": {
+      "label": "Black",
+      "ground": "#1E1E1F",
+      "panel": "#1E1E1F",
+      "ink": "#F4F2EC",
+      "accent": "#A9A49B",
+      "mat": "#F4F2EC",
+      "onPhoto": "#FFFFFF"
     }
   },
-  "DEFAULT_COLORWAY": "cream",
+  "DEFAULT_COLORWAY": "snow",
   "ORNAMENTS": [
     "none",
     "arch",
@@ -380,107 +441,38 @@
   ],
   "CARD_TEMPLATES": [
     {
-      "id": "bleed-script",
-      "name": "Winter Script",
-      "formatId": "flat-5x7",
-      "orientation": "portrait",
-      "tags": [
-        "christmas",
-        "holiday",
-        "baby",
-        "pet",
-        "newlywed"
-      ],
-      "ground": "bleed",
-      "ornament": "snow",
-      "scrim": 0.26,
-      "colorways": [
-        "cream",
-        "midnight",
-        "sage",
-        "burgundy"
-      ],
-      "photos": [
-        {
-          "id": "main",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "fit": "cover"
-        }
-      ],
-      "popcodeSlot": "main",
-      "text": [
-        {
-          "id": "headline",
-          "role": "headline",
-          "default": "Happy Holidays",
-          "font": "script",
-          "weight": 400,
-          "color": "onPhoto",
-          "align": "center",
-          "track": 0,
-          "upper": false,
-          "lead": 1,
-          "finish": "flat",
-          "lines": 1,
-          "sample": false,
-          "x": 0.5,
-          "y": 0.74,
-          "size": 0.118,
-          "maxW": 0.85
-        },
-        {
-          "id": "signature",
-          "role": "signature",
-          "default": "The Middleton Family",
-          "font": "grotesk",
-          "weight": 400,
-          "color": "onPhoto",
-          "align": "center",
-          "track": 0.28,
-          "upper": true,
-          "lead": 1.4,
-          "finish": "flat",
-          "lines": null,
-          "sample": true,
-          "x": 0.5,
-          "y": 0.88,
-          "size": 0.023,
-          "maxW": 0.78
-        }
-      ]
-    },
-    {
-      "id": "bleed-stacked",
-      "name": "Stacked Didone",
+      "id": "m-typewriter",
+      "name": "Typewriter",
       "formatId": "flat-5x7",
       "orientation": "portrait",
       "tags": [
         "christmas",
         "holiday",
         "newyear",
+        "baby",
         "pet",
-        "multiphoto"
+        "newlywed"
       ],
-      "ground": "bleed",
+      "ground": "inset",
       "ornament": "none",
-      "scrim": 0.3,
+      "photoEdge": "square",
       "colorways": [
-        "cream",
-        "midnight",
-        "burgundy",
-        "blush"
+        "ivory",
+        "snow",
+        "cranberry",
+        "evergreen",
+        "navy",
+        "ink"
       ],
       "photos": [
         {
           "id": "main",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "fit": "cover"
+          "x": 0.1,
+          "y": 0.095,
+          "w": 0.8,
+          "h": 0.775,
+          "fit": "cover",
+          "mat": 0.003
         }
       ],
       "popcodeSlot": "main",
@@ -488,90 +480,77 @@
         {
           "id": "headline",
           "role": "headline",
-          "default": "MERRY",
-          "font": "didone",
-          "weight": 400,
-          "color": "onPhoto",
+          "default": "happy holidays",
+          "font": "cormorant",
+          "weight": 500,
+          "color": "ink",
           "align": "center",
-          "track": 0.16,
-          "upper": true,
-          "lead": 1.02,
+          "track": 0.22,
+          "upper": false,
+          "lead": 1.3,
           "finish": "flat",
           "lines": 1,
           "sample": false,
+          "italic": false,
           "x": 0.5,
-          "y": 0.7,
-          "size": 0.118,
-          "maxW": 0.85
-        },
-        {
-          "id": "subhead",
-          "role": "subhead",
-          "default": "CHRISTMAS",
-          "font": "didone",
-          "weight": 400,
-          "color": "onPhoto",
-          "align": "center",
-          "track": 0.28,
-          "upper": true,
-          "lead": 1.02,
-          "finish": "flat",
-          "lines": 1,
-          "sample": false,
-          "x": 0.5,
-          "y": 0.806,
-          "size": 0.072,
-          "maxW": 0.85
+          "y": 0.04,
+          "size": 0.022,
+          "maxW": 0.8
         },
         {
           "id": "signature",
           "role": "signature",
-          "default": "the Middletons",
-          "font": "grotesk",
-          "weight": 400,
-          "color": "onPhoto",
+          "default": "the millers 2026",
+          "font": "cormorant",
+          "weight": 500,
+          "color": "accent",
           "align": "center",
           "track": 0.22,
-          "upper": true,
-          "lead": 1.4,
+          "upper": false,
+          "lead": 1.3,
           "finish": "flat",
           "lines": null,
           "sample": true,
+          "italic": false,
           "x": 0.5,
-          "y": 0.892,
-          "size": 0.023,
-          "maxW": 0.78
+          "y": 0.905,
+          "size": 0.019,
+          "maxW": 0.8
         }
       ]
     },
     {
-      "id": "bleed-corner",
-      "name": "Corner Note",
+      "id": "m-minimal",
+      "name": "Minimal Border",
       "formatId": "flat-5x7",
       "orientation": "portrait",
       "tags": [
         "christmas",
         "holiday",
-        "baby",
-        "birth",
-        "newyear"
+        "newyear",
+        "newlywed",
+        "pet"
       ],
-      "ground": "bleed",
+      "ground": "inset",
       "ornament": "none",
-      "scrim": 0.22,
+      "photoEdge": "square",
       "colorways": [
-        "cream",
         "sage",
-        "midnight"
+        "snow",
+        "cranberry",
+        "evergreen",
+        "navy",
+        "ivory"
       ],
       "photos": [
         {
           "id": "main",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "fit": "cover"
+          "x": 0.19,
+          "y": 0.175,
+          "w": 0.62,
+          "h": 0.56,
+          "fit": "cover",
+          "mat": 0.026
         }
       ],
       "popcodeSlot": "main",
@@ -579,72 +558,80 @@
         {
           "id": "headline",
           "role": "headline",
-          "default": "joy",
-          "font": "script",
-          "weight": 400,
-          "color": "onPhoto",
-          "align": "left",
-          "track": 0,
-          "upper": false,
-          "lead": 1,
+          "default": "WISHING YOU THE VERY HAPPIEST HOLIDAYS",
+          "font": "cormorant",
+          "weight": 600,
+          "color": "ink",
+          "align": "center",
+          "track": 0.36,
+          "upper": true,
+          "lead": 1.7,
           "finish": "flat",
-          "lines": 1,
+          "lines": 2,
           "sample": false,
-          "x": 0.075,
-          "y": 0.712,
-          "size": 0.15,
-          "maxW": 0.6
+          "italic": false,
+          "x": 0.5,
+          "y": 0.072,
+          "size": 0.0145,
+          "maxW": 0.5
         },
         {
           "id": "signature",
           "role": "signature",
-          "default": "the Middletons 2026",
+          "default": "THE MARTINS — 2026",
           "font": "grotesk",
-          "weight": 400,
-          "color": "onPhoto",
-          "align": "left",
-          "track": 0.28,
+          "weight": 500,
+          "color": "ink",
+          "align": "center",
+          "track": 0.34,
           "upper": true,
           "lead": 1.4,
           "finish": "flat",
           "lines": null,
           "sample": true,
-          "x": 0.075,
-          "y": 0.902,
-          "size": 0.023,
-          "maxW": 0.62
+          "italic": false,
+          "x": 0.5,
+          "y": 0.862,
+          "size": 0.0135,
+          "maxW": 0.7
         }
       ]
     },
     {
-      "id": "inset-arch",
-      "name": "Arched Branches",
+      "id": "m-frame",
+      "name": "Colour Frame",
       "formatId": "flat-5x7",
       "orientation": "portrait",
       "tags": [
         "christmas",
         "holiday",
         "newlywed",
-        "baby"
+        "baby",
+        "pet"
       ],
       "ground": "inset",
-      "ornament": "branches",
-      "mat": true,
+      "ornament": "none",
+      "photoEdge": "square",
+      "frame": {
+        "x": 0.055,
+        "y": 0.039,
+        "w": 0.89,
+        "h": 0.922
+      },
       "colorways": [
-        "cream",
-        "sage",
-        "blush",
-        "burgundy"
+        "cranberry",
+        "evergreen",
+        "navy",
+        "sage"
       ],
       "photos": [
         {
           "id": "main",
-          "x": 0.15,
-          "y": 0.205,
-          "w": 0.7,
-          "h": 0.545,
-          "fit": "cover",
-          "arch": true
+          "x": 0.16,
+          "y": 0.135,
+          "w": 0.68,
+          "h": 0.64,
+          "fit": "cover"
         }
       ],
       "popcodeSlot": "main",
@@ -652,163 +639,77 @@
         {
           "id": "headline",
           "role": "headline",
-          "default": "HAPPY HOLIDAYS",
-          "font": "cinzel",
-          "weight": 400,
+          "default": "HAPPIEST HOLIDAYS",
+          "font": "grotesk",
+          "weight": 500,
           "color": "ink",
           "align": "center",
-          "track": 0.28,
+          "track": 0.36,
           "upper": true,
           "lead": 1.4,
-          "finish": "gold",
-          "lines": null,
+          "finish": "flat",
+          "lines": 1,
           "sample": false,
+          "italic": false,
           "x": 0.5,
-          "y": 0.115,
-          "size": 0.034,
-          "maxW": 0.78
+          "y": 0.082,
+          "size": 0.0155,
+          "maxW": 0.72
         },
         {
           "id": "signature",
           "role": "signature",
-          "default": "From, the Middletons",
+          "default": "JACK + COOPER · 2026",
           "font": "grotesk",
-          "weight": 400,
-          "color": "accent",
+          "weight": 500,
+          "color": "ink",
           "align": "center",
-          "track": 0.16,
-          "upper": false,
+          "track": 0.34,
+          "upper": true,
           "lead": 1.4,
           "finish": "flat",
           "lines": null,
           "sample": true,
+          "italic": false,
           "x": 0.5,
-          "y": 0.828,
-          "size": 0.023,
-          "maxW": 0.78
+          "y": 0.818,
+          "size": 0.0145,
+          "maxW": 0.72
         }
       ]
     },
     {
-      "id": "inset-signature",
-      "name": "Modern Signature",
+      "id": "m-modern",
+      "name": "Modern Frame",
       "formatId": "flat-5x7",
       "orientation": "portrait",
       "tags": [
         "christmas",
         "holiday",
         "newyear",
+        "newlywed",
         "pet"
       ],
       "ground": "inset",
       "ornament": "none",
-      "mat": true,
+      "photoEdge": "square",
       "colorways": [
-        "cream",
-        "sage",
-        "burgundy",
-        "midnight"
-      ],
-      "photos": [
-        {
-          "id": "main",
-          "x": 0.22,
-          "y": 0.3,
-          "w": 0.56,
-          "h": 0.4,
-          "fit": "cover"
-        }
-      ],
-      "popcodeSlot": "main",
-      "text": [
-        {
-          "id": "headline",
-          "role": "headline",
-          "default": "HAPPY",
-          "font": "didone",
-          "weight": 400,
-          "color": "ink",
-          "align": "center",
-          "track": 0.16,
-          "upper": true,
-          "lead": 1.02,
-          "finish": "flat",
-          "lines": 1,
-          "sample": false,
-          "x": 0.5,
-          "y": 0.12,
-          "size": 0.092,
-          "maxW": 0.85
-        },
-        {
-          "id": "subhead",
-          "role": "subhead",
-          "default": "the Middletons, 2026",
-          "font": "script",
-          "weight": 400,
-          "color": "ink",
-          "align": "center",
-          "track": 0,
-          "upper": false,
-          "lead": 1.1,
-          "finish": "flat",
-          "lines": 1,
-          "sample": true,
-          "x": 0.5,
-          "y": 0.222,
-          "size": 0.046,
-          "maxW": 0.72
-        },
-        {
-          "id": "signature",
-          "role": "signature",
-          "default": "HOLIDAYS",
-          "font": "didone",
-          "weight": 400,
-          "color": "ink",
-          "align": "center",
-          "track": 0.16,
-          "upper": true,
-          "lead": 1.02,
-          "finish": "flat",
-          "lines": 1,
-          "sample": false,
-          "x": 0.5,
-          "y": 0.762,
-          "size": 0.092,
-          "maxW": 0.85
-        }
-      ]
-    },
-    {
-      "id": "inset-frame",
-      "name": "Ruled Frame",
-      "formatId": "flat-5x7",
-      "orientation": "portrait",
-      "tags": [
-        "christmas",
-        "holiday",
-        "birth",
-        "baby",
-        "graduation",
-        "savethedate"
-      ],
-      "ground": "inset",
-      "ornament": "frame",
-      "colorways": [
-        "midnight",
-        "cream",
-        "burgundy",
+        "snow",
+        "ivory",
+        "cranberry",
+        "evergreen",
+        "navy",
         "sage"
       ],
       "photos": [
         {
           "id": "main",
-          "x": 0.125,
-          "y": 0.15,
-          "w": 0.75,
-          "h": 0.58,
-          "fit": "cover"
+          "x": 0.18,
+          "y": 0.165,
+          "w": 0.64,
+          "h": 0.6,
+          "fit": "cover",
+          "mat": 0.03
         }
       ],
       "popcodeSlot": "main",
@@ -816,94 +717,137 @@
         {
           "id": "headline",
           "role": "headline",
-          "default": "Season’s Greetings",
-          "font": "cormorant",
-          "weight": 400,
+          "default": "HAPPIEST",
+          "font": "grotesk",
+          "weight": 500,
           "color": "ink",
-          "align": "center",
-          "track": 0,
-          "upper": false,
-          "lead": 1.02,
-          "finish": "gold",
+          "align": "left",
+          "track": 0.34,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
           "lines": 1,
           "sample": false,
-          "x": 0.5,
-          "y": 0.798,
-          "size": 0.072,
-          "maxW": 0.8
+          "italic": false,
+          "x": 0.15,
+          "y": 0.085,
+          "size": 0.0135,
+          "maxW": 0.34
+        },
+        {
+          "id": "subhead",
+          "role": "subhead",
+          "default": "HOLIDAYS",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "ink",
+          "align": "right",
+          "track": 0.34,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "x": 0.85,
+          "y": 0.085,
+          "size": 0.0135,
+          "maxW": 0.34
         },
         {
           "id": "signature",
           "role": "signature",
-          "default": "THE MIDDLETONS",
+          "default": "THE ROBINSONS",
           "font": "grotesk",
-          "weight": 400,
-          "color": "accent",
-          "align": "center",
-          "track": 0.28,
+          "weight": 500,
+          "color": "ink",
+          "align": "left",
+          "track": 0.34,
           "upper": true,
           "lead": 1.4,
           "finish": "flat",
-          "lines": null,
+          "lines": 1,
           "sample": true,
-          "x": 0.5,
-          "y": 0.892,
-          "size": 0.023,
-          "maxW": 0.78
+          "italic": false,
+          "x": 0.15,
+          "y": 0.845,
+          "size": 0.0135,
+          "maxW": 0.46
+        },
+        {
+          "id": "year",
+          "role": "year",
+          "default": "2026",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "ink",
+          "align": "right",
+          "track": 0.34,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "x": 0.85,
+          "y": 0.845,
+          "size": 0.0135,
+          "maxW": 0.24
         }
       ]
     },
     {
-      "id": "collage-editorial",
-      "name": "Editorial Collage",
+      "id": "m-quartet",
+      "name": "Quartet",
       "formatId": "flat-5x7",
       "orientation": "portrait",
       "tags": [
         "christmas",
         "holiday",
-        "multiphoto",
-        "newyear"
+        "newyear",
+        "multiphoto"
       ],
-      "ground": "collage",
+      "ground": "inset",
       "ornament": "none",
-      "mat": true,
+      "photoEdge": "square",
+      "fill": "ground",
       "colorways": [
-        "sage",
-        "cream",
-        "midnight",
-        "burgundy"
+        "evergreen",
+        "cranberry",
+        "navy",
+        "ink"
       ],
       "photos": [
         {
           "id": "p1",
-          "x": 0.075,
-          "y": 0.075,
-          "w": 0.415,
-          "h": 0.275,
+          "x": 0.14,
+          "y": 0.095,
+          "w": 0.355,
+          "h": 0.4,
           "fit": "cover"
         },
         {
           "id": "p2",
-          "x": 0.51,
-          "y": 0.075,
-          "w": 0.415,
-          "h": 0.385,
+          "x": 0.505,
+          "y": 0.095,
+          "w": 0.355,
+          "h": 0.195,
           "fit": "cover"
         },
         {
           "id": "p3",
-          "x": 0.075,
-          "y": 0.37,
-          "w": 0.415,
-          "h": 0.275,
+          "x": 0.505,
+          "y": 0.3,
+          "w": 0.355,
+          "h": 0.195,
           "fit": "cover"
         },
         {
           "id": "p4",
-          "x": 0.51,
-          "y": 0.48,
-          "w": 0.415,
-          "h": 0.275,
+          "x": 0.14,
+          "y": 0.505,
+          "w": 0.72,
+          "h": 0.3,
           "fit": "cover"
         }
       ],
@@ -912,46 +856,352 @@
         {
           "id": "headline",
           "role": "headline",
-          "default": "ENJOY EVERY MOMENT",
-          "font": "editorial",
-          "weight": 400,
-          "color": "ink",
+          "default": "HAPPY HOLIDAYS",
+          "font": "cormorant",
+          "weight": 600,
+          "color": "panel",
           "align": "center",
-          "track": 0.16,
+          "track": 0.42,
           "upper": true,
-          "lead": 1.18,
+          "lead": 1.4,
           "finish": "flat",
-          "lines": 2,
+          "lines": 1,
           "sample": false,
+          "italic": false,
           "x": 0.5,
-          "y": 0.8,
-          "size": 0.04,
-          "maxW": 0.85
+          "y": 0.048,
+          "size": 0.0135,
+          "maxW": 0.72
         },
         {
           "id": "signature",
           "role": "signature",
-          "default": "the Middletons 2026",
-          "font": "grotesk",
-          "weight": 400,
-          "color": "accent",
+          "default": "the bradfords — 2026",
+          "font": "cormorant",
+          "weight": 500,
+          "color": "panel",
           "align": "center",
-          "track": 0.22,
+          "track": 0.12,
+          "upper": false,
+          "lead": 1.3,
+          "finish": "flat",
+          "lines": null,
+          "sample": true,
+          "italic": true,
+          "x": 0.5,
+          "y": 0.845,
+          "size": 0.021,
+          "maxW": 0.72
+        }
+      ]
+    },
+    {
+      "id": "m-pacifique",
+      "name": "Pacifique",
+      "formatId": "flat-5x7",
+      "orientation": "portrait",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "pet",
+        "newlywed",
+        "baby"
+      ],
+      "ground": "bleed",
+      "ornament": "none",
+      "scrim": 0.14,
+      "colorways": [
+        "snow"
+      ],
+      "photos": [
+        {
+          "id": "main",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "fit": "cover"
+        }
+      ],
+      "popcodeSlot": "main",
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "HAPPY HOLIDAYS",
+          "font": "cormorant",
+          "weight": 500,
+          "color": "onPhoto",
+          "align": "center",
+          "track": 0.24,
+          "upper": true,
+          "lead": 1.2,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "x": 0.5,
+          "y": 0.792,
+          "size": 0.03,
+          "maxW": 0.84
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "THE LOWELL FAMILY",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "onPhoto",
+          "align": "center",
+          "track": 0.36,
           "upper": true,
           "lead": 1.4,
           "finish": "flat",
           "lines": null,
           "sample": true,
+          "italic": false,
           "x": 0.5,
-          "y": 0.9,
-          "size": 0.023,
-          "maxW": 0.8
+          "y": 0.862,
+          "size": 0.012,
+          "maxW": 0.7
         }
       ]
     },
     {
-      "id": "inset-birth",
-      "name": "Introducing",
+      "id": "m-everything",
+      "name": "Merry Everything",
+      "formatId": "flat-5x7",
+      "orientation": "portrait",
+      "tags": [
+        "christmas",
+        "holiday",
+        "baby",
+        "pet"
+      ],
+      "ground": "bleed",
+      "ornament": "none",
+      "scrim": 0.16,
+      "colorways": [
+        "snow"
+      ],
+      "photos": [
+        {
+          "id": "main",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "fit": "cover"
+        }
+      ],
+      "popcodeSlot": "main",
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "MERRY EVERYTHING",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "onPhoto",
+          "align": "center",
+          "track": 0.4,
+          "upper": true,
+          "lead": 1.55,
+          "finish": "flat",
+          "lines": 2,
+          "sample": false,
+          "italic": false,
+          "x": 0.5,
+          "y": 0.76,
+          "size": 0.021,
+          "maxW": 0.6
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "The Parkers",
+          "font": "hand",
+          "weight": 400,
+          "color": "onPhoto",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 1.1,
+          "finish": "flat",
+          "lines": 1,
+          "sample": true,
+          "italic": false,
+          "x": 0.5,
+          "y": 0.845,
+          "size": 0.052,
+          "maxW": 0.7
+        }
+      ]
+    },
+    {
+      "id": "m-handwritten",
+      "name": "Handwritten Name",
+      "formatId": "flat-5x7",
+      "orientation": "portrait",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "multiphoto",
+        "newlywed"
+      ],
+      "ground": "inset",
+      "ornament": "none",
+      "photoEdge": "square",
+      "colorways": [
+        "cranberry",
+        "snow",
+        "evergreen",
+        "navy"
+      ],
+      "photos": [
+        {
+          "id": "p1",
+          "x": 0.08,
+          "y": 0.07,
+          "w": 0.415,
+          "h": 0.66,
+          "fit": "cover"
+        },
+        {
+          "id": "p2",
+          "x": 0.505,
+          "y": 0.07,
+          "w": 0.415,
+          "h": 0.66,
+          "fit": "cover"
+        }
+      ],
+      "popcodeSlot": "p1",
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "HAPPY HOLIDAYS",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "ink",
+          "align": "left",
+          "track": 0.4,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "x": 0.08,
+          "y": 0.8,
+          "size": 0.0155,
+          "maxW": 0.4
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "Love, The Parks",
+          "font": "hand",
+          "weight": 400,
+          "color": "ink",
+          "align": "right",
+          "track": 0,
+          "upper": false,
+          "lead": 1.1,
+          "finish": "flat",
+          "lines": 1,
+          "sample": true,
+          "italic": false,
+          "x": 0.92,
+          "y": 0.772,
+          "size": 0.058,
+          "maxW": 0.42
+        }
+      ]
+    },
+    {
+      "id": "m-band",
+      "name": "Bottom Band",
+      "formatId": "flat-5x7",
+      "orientation": "portrait",
+      "tags": [
+        "christmas",
+        "holiday",
+        "newyear",
+        "pet",
+        "baby",
+        "newlywed"
+      ],
+      "ground": "inset",
+      "ornament": "none",
+      "photoEdge": "square",
+      "colorways": [
+        "snow",
+        "ivory",
+        "cranberry",
+        "evergreen",
+        "ink"
+      ],
+      "photos": [
+        {
+          "id": "main",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 0.82,
+          "fit": "cover"
+        }
+      ],
+      "popcodeSlot": "main",
+      "text": [
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "Merry Christmas",
+          "font": "cormorant",
+          "weight": 400,
+          "color": "ink",
+          "align": "left",
+          "track": 0,
+          "upper": false,
+          "lead": 1.05,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "x": 0.075,
+          "y": 0.86,
+          "size": 0.04,
+          "maxW": 0.5
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "THE MIDDLETONS",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "accent",
+          "align": "right",
+          "track": 0.3,
+          "upper": true,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": null,
+          "sample": true,
+          "italic": false,
+          "x": 0.925,
+          "y": 0.877,
+          "size": 0.0135,
+          "maxW": 0.34
+        }
+      ]
+    },
+    {
+      "id": "m-hello",
+      "name": "Hello World",
       "formatId": "flat-5x7",
       "orientation": "portrait",
       "tags": [
@@ -960,19 +1210,118 @@
       ],
       "ground": "inset",
       "ornament": "none",
-      "mat": true,
+      "photoEdge": "square",
       "colorways": [
-        "blush",
-        "cream",
-        "sage"
+        "snow",
+        "ivory",
+        "sage",
+        "navy"
       ],
       "photos": [
         {
           "id": "main",
           "x": 0.1,
-          "y": 0.1,
+          "y": 0.07,
           "w": 0.8,
-          "h": 0.585,
+          "h": 0.68,
+          "fit": "cover",
+          "mat": 0.003
+        }
+      ],
+      "popcodeSlot": "main",
+      "text": [
+        {
+          "id": "subhead",
+          "role": "subhead",
+          "default": "hello, world",
+          "font": "cormorant",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 1.05,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": true,
+          "x": 0.5,
+          "y": 0.775,
+          "size": 0.044,
+          "maxW": 0.8
+        },
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "ADELAIDE ROSE",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "ink",
+          "align": "center",
+          "track": 0.34,
+          "upper": true,
+          "lead": 1.3,
+          "finish": "flat",
+          "lines": 1,
+          "sample": true,
+          "italic": false,
+          "x": 0.5,
+          "y": 0.848,
+          "size": 0.0165,
+          "maxW": 0.84
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "March 4, 2026 · 7 lbs 2 oz",
+          "font": "grotesk",
+          "weight": 400,
+          "color": "accent",
+          "align": "center",
+          "track": 0.18,
+          "upper": false,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": null,
+          "sample": true,
+          "italic": false,
+          "x": 0.5,
+          "y": 0.888,
+          "size": 0.0135,
+          "maxW": 0.84
+        }
+      ]
+    },
+    {
+      "id": "m-date",
+      "name": "Save the Date",
+      "formatId": "flat-5x7",
+      "orientation": "portrait",
+      "tags": [
+        "savethedate"
+      ],
+      "ground": "inset",
+      "ornament": "none",
+      "photoEdge": "square",
+      "frame": {
+        "x": 0.055,
+        "y": 0.039,
+        "w": 0.89,
+        "h": 0.922
+      },
+      "colorways": [
+        "evergreen",
+        "cranberry",
+        "navy",
+        "sage"
+      ],
+      "photos": [
+        {
+          "id": "main",
+          "x": 0.14,
+          "y": 0.12,
+          "w": 0.72,
+          "h": 0.6,
           "fit": "cover"
         }
       ],
@@ -981,59 +1330,155 @@
         {
           "id": "subhead",
           "role": "subhead",
-          "default": "INTRODUCING",
-          "font": "grotesk",
-          "weight": 400,
-          "color": "accent",
-          "align": "center",
-          "track": 0.28,
-          "upper": true,
-          "lead": 1.4,
-          "finish": "flat",
-          "lines": null,
-          "sample": false,
-          "x": 0.5,
-          "y": 0.748,
-          "size": 0.023,
-          "maxW": 0.8
-        },
-        {
-          "id": "headline",
-          "role": "headline",
-          "default": "Adelaide Rose",
+          "default": "save the date",
           "font": "cormorant",
           "weight": 400,
           "color": "ink",
           "align": "center",
           "track": 0,
           "upper": false,
-          "lead": 1.02,
+          "lead": 1.05,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": true,
+          "x": 0.5,
+          "y": 0.745,
+          "size": 0.04,
+          "maxW": 0.72
+        },
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "ANA & JAMES",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "ink",
+          "align": "center",
+          "track": 0.34,
+          "upper": true,
+          "lead": 1.3,
           "finish": "flat",
           "lines": 1,
           "sample": true,
+          "italic": false,
           "x": 0.5,
-          "y": 0.796,
-          "size": 0.072,
-          "maxW": 0.85
+          "y": 0.815,
+          "size": 0.0165,
+          "maxW": 0.72
         },
         {
           "id": "signature",
           "role": "signature",
-          "default": "March 4, 2026",
+          "default": "June 12, 2027 · Hudson, New York",
           "font": "grotesk",
           "weight": 400,
           "color": "accent",
           "align": "center",
-          "track": 0.22,
+          "track": 0.16,
+          "upper": false,
+          "lead": 1.4,
+          "finish": "flat",
+          "lines": null,
+          "sample": true,
+          "italic": false,
+          "x": 0.5,
+          "y": 0.855,
+          "size": 0.0135,
+          "maxW": 0.72
+        }
+      ]
+    },
+    {
+      "id": "m-grad",
+      "name": "Class Of",
+      "formatId": "flat-5x7",
+      "orientation": "portrait",
+      "tags": [
+        "graduation"
+      ],
+      "ground": "inset",
+      "ornament": "none",
+      "photoEdge": "square",
+      "colorways": [
+        "snow",
+        "navy",
+        "evergreen",
+        "cranberry",
+        "ink"
+      ],
+      "photos": [
+        {
+          "id": "main",
+          "x": 0.18,
+          "y": 0.12,
+          "w": 0.64,
+          "h": 0.58,
+          "fit": "cover",
+          "mat": 0.026
+        }
+      ],
+      "popcodeSlot": "main",
+      "text": [
+        {
+          "id": "subhead",
+          "role": "subhead",
+          "default": "CLASS OF 2026",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "ink",
+          "align": "center",
+          "track": 0.42,
+          "upper": true,
+          "lead": 1.3,
+          "finish": "flat",
+          "lines": 1,
+          "sample": false,
+          "italic": false,
+          "x": 0.5,
+          "y": 0.055,
+          "size": 0.0145,
+          "maxW": 0.72
+        },
+        {
+          "id": "headline",
+          "role": "headline",
+          "default": "Jordan Middleton",
+          "font": "cormorant",
+          "weight": 400,
+          "color": "ink",
+          "align": "center",
+          "track": 0,
+          "upper": false,
+          "lead": 1.05,
+          "finish": "flat",
+          "lines": 1,
+          "sample": true,
+          "italic": false,
+          "x": 0.5,
+          "y": 0.765,
+          "size": 0.046,
+          "maxW": 0.84
+        },
+        {
+          "id": "signature",
+          "role": "signature",
+          "default": "WESTFIELD HIGH SCHOOL",
+          "font": "grotesk",
+          "weight": 500,
+          "color": "accent",
+          "align": "center",
+          "track": 0.34,
           "upper": true,
           "lead": 1.4,
           "finish": "flat",
           "lines": null,
           "sample": true,
+          "italic": false,
           "x": 0.5,
-          "y": 0.898,
-          "size": 0.023,
-          "maxW": 0.82
+          "y": 0.838,
+          "size": 0.0125,
+          "maxW": 0.84
         }
       ]
     }
