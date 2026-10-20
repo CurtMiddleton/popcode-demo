@@ -9,15 +9,17 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 ## Current state (updated 2026-10-20)
 
 **Live and recent**
-- **Holiday / photo card maker — built on branch `claude/youthful-mccarthy-1ybhzt`, NOT merged,
-  not priced, not linked from the Shop (2026-10-20, see that entry).** `public/card.html`:
-  24 designs × portrait/landscape, Minted-style options, Design your own, Use your photo,
-  the shared Add a Popcode sheet + Edit Photo (`public/popcode-tools.js`). Printify blueprint
-  10717 (District Photo, pack variants). **Next:** run `node scripts/printify-card-cost.mjs`
-  for cost → set prices; run `supabase/migrations/2026-10-20-cards-free.sql` in prod; order
-  one sample (portrait + landscape + rounded); user's keep/cut list from the review PDF;
-  then merge + Shop/holiday-panel links. Branch is behind `main` (13 commits on 10-20) — merge
-  main in before a PR.
+- **Holiday / photo card maker — DRAFT PR [#278](https://github.com/CurtMiddleton/popcode-demo/pull/278)
+  (branch `claude/youthful-mccarthy-1ybhzt`, main merged in 10-20), NOT merged, not priced, not
+  linked from the Shop (2026-10-20, see both entries).** Preview (follows the branch):
+  `https://popcode-demo-git-claude-youthful-9baa3f-curtmiddletons-projects.vercel.app/card.html`.
+  `public/card.html`: 24 designs × portrait/landscape, Minted-style options, draggable text,
+  Design your own, Use your photo, Front/Back, named cards + chosen Popcode link, drafts, the
+  shared Add a Popcode sheet + Edit Photo (`public/popcode-tools.js`). Printify blueprint 10717
+  (District Photo, pack variants). **Next:** run `node scripts/printify-card-cost.mjs` for cost →
+  set prices; run `supabase/migrations/2026-10-20-cards-free.sql` in prod; test on a phone with a
+  real account; order one sample (portrait + landscape + rounded); keep/cut list; then mark the
+  PR ready, merge, and link from the Shop / holiday panel.
 - **Montage is now on every Popcode surface (2026-10-19, `9743928`).** The builder
   moved out of create.html/edit.html into **`public/montage.js`**, shared by all five
   pages; book, calendar and board book gained the third choice. Montage is an action,
@@ -4144,4 +4146,25 @@ Session `session_015E5kyBeMhTbTAzVobGtHPP`. All work on branch **`claude/youthfu
 - html2canvas leaves its own scale on the context (`setTransform` before painting foil); hex colours come back as `rgb()` from the DOM; `.inset` CSS had been overriding `.arch` (arch never showed).
 - The overlap pass shrinks text when left/right boxes touch — keep `maxW`s apart on split rows.
 - curtmiddleton.com mail is hosted at Verve (cPanel, `mail.curtmiddleton.com`); plan agreed: later move it to its **own Google Workspace user** (secondary domain), keep Verve for DNS, back up the mailbox first. Green Empowerment isn't doing a campaign this year; **Centurion is considering** one (their thread is in curtmiddleton.com — the user was to forward it to curt@popcodeapp.com).
+
+#### Later the same day (2026-10-20): card page redesign + editor features, draft PR #278
+
+All on `claude/youthful-mccarthy-1ybhzt`; **draft PR [#278](https://github.com/CurtMiddleton/popcode-demo/pull/278)** opened (user asked, to get a Vercel link). `origin/main` merged in (`b9f5f3a`; only conflict was the two 10-20 STATUS entries, both kept). Commits `828a731` … `3a28f85`. Every change was checked in the scratchpad's headless harness (stubbed supabase; `run.cjs <templateId> "" "" "" 1` = save + cart with a back photo) and `npm test`.
+
+- **Layout matches the Shop** (order.html's product detail): `#f9f9f9` page, Cooper h1 + grey subtitle (one line; "play a video, montage or audio") + purple "← All products" link (becomes "← All designs" in the editor). Page width 1240.
+- **Browse:** no white squares (user tried them, then "forget white squares") — cards sit on the page with a drop shadow, **4 across** (3 ≤1000px, 2 ≤720px), sized from the column (`sizeThumbs`). **Landscape is the default** tile/editor. Names 14px Inter, details 12px, 12px swatches. Occasions are **small 12px text links**, not pills.
+- **Scripts:** user thought the fonts were wrong — they were right (Parisienne etc. verified by rendering); the confusion was the labels Classic/Formal/Sweeping. Buttons now read **Parisienne / Monsieur La Doulaise / WindSong**, stacked. Only those three exist now: `SCRIPT_FOR` in cards.mjs maps Mea Culpa → Doulaise and Sacramento → WindSong (Hand Lettered, Pen & Ink, Class Of).
+- **Editor:** 2-column grid like the Shop; design name 22px. Card preview is **pinned at `top:124px`** (nav.js's sticky header is 100px — at `top:24px` the menu covered the card) and capped to the window height (`editorCardWidth`).
+  - Empty photo slots show the tile's **sample photo** with an "Add your photo" badge (`opts.samples`; never saved/printed — save still requires real photos).
+  - **Front / Back toggle** under the card (order.html's `.toggle`); Back renders `renderBack(..., {placeholder:true})` full size; tap to add/change. Links under it: Add / Edit / Remove photo (front) and Change / Remove photo (back).
+  - **Drag any text line** (`enableZoneDrag`, saved as `book_layout.card.moves` = {zoneId:{dx,dy}} fractions; used by the print bake; moved lines skip band centring + the overlap pass; "Put the words back" resets). **Snaps to the centre line** within 8px with a dashed guide (also in Design your own). Gotcha: the browser's native drag of the photo under the text fired `pointercancel` mid-drag — fixed with `dragstart` preventDefault on the face + `-webkit-user-drag:none`, and window-level pointer listeners.
+  - **Back photo:** no drop shadow; empty spot = grey square + picture icon (editor only); **shape** landscape/portrait/square (default from the photo) and **size** small/medium/large (`backShape`, `backSize`); message block lower (`BACK.bottom` 0.40).
+  - **Add a Popcode** = the Shop's pinwheel `.popcode-cta`, full width.
+  - **Quantity pulldown** 10–100 by tens, 150–500 (`CARD_QUANTITIES`, `packFor`: copies of the biggest Printify pack that divides it — 80 = 8×10). Cart line = `card-5x7-{pack}[-round]` × copies.
+- **Name + link:** "Name this card" (`book_layout.card.title`, = `collections.name`) and a **Popcode link** field (`PopcodeSlug.attach`, like calendar/books): fills in from the name, availability + suggestions, **locked once saved**. Older saved cards keep their random slug (duplicate to rename).
+- **Save for later = drafts:** no Popcode / missing photo / sample words allowed; compiled only when it has a Popcode and every photo (else `mind_file_url ''`, no collection_items row). Add to cart still checks everything. My Designs uses `cardCfg.frontUrl` as a draft's thumb.
+
+**Not tested:** phone, a real account (reopen after reload), print. **Next** is unchanged (cost script → prices, cards-free migration, sample) — see Current state.
+
+**Lessons:** preview deployments are behind Vercel login (Claude can't open them; curl gets a 302) and the user has to sign into Popcode on the preview domain separately. The PR's Vercel comment gives a branch URL that always shows the latest push — give the user that, not a per-deployment URL.
 
