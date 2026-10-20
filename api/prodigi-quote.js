@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     const blocked = destinationRestriction(destinationCountryCode, address && address.postalOrZipCode);
     if (blocked) return res.status(400).json({ error: blocked.message, restricted: true });
 
-    const { findVariant, markupFor, priceParts, providerFor, normalizeCopies, minCopiesFor } = await import('../lib/print/catalog.mjs');
+    const { findVariant, priceGroup, providerFor, normalizeCopies, minCopiesFor } = await import('../lib/print/catalog.mjs');
     const variant = findVariant(productType, variantId);
     if (!variant) return res.status(400).json({ error: 'Unknown product' });
 
@@ -93,10 +93,11 @@ export default async function handler(req, res) {
     }
     if (!summed) return res.status(502).json({ error: 'Could not price this product/destination', unservable: true });
 
-    // Markup is per product type (see catalog.TYPE_MARKUPS); MARKUP is only the
-    // fallback for a type with no entry.
-    const typeMarkup = markupFor(productType, MARKUP);
-    const parts = priceParts(summed, typeMarkup);
+    // Retail price where the catalogue sets one, else the type markup; never
+    // under catalog.MIN_MARKUP on the goods. The same function prices checkout.
+    const parts = priceGroup([{ productType, variant, copies: qty, pageCount: pages }], summed, MARKUP);
+    const goodsMinor = summed.itemsMinor ?? Math.max(0, summed.totalMinor - (summed.shippingMinor || 0));
+    const typeMarkup = goodsMinor > 0 ? Math.round((parts.printingMinor / goodsMinor) * 1000) / 1000 : null;
     res.status(200).json({
       quote_cost_minor: summed.totalMinor,
       markup: typeMarkup,

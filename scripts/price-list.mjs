@@ -26,15 +26,14 @@
 // only reads quotes; it places no orders.
 //
 // Two things the table cannot show, worth remembering when reading it:
-//  - Markup applies to the PRODUCT only; shipping is passed through at cost (see
-//    priceParts). "customer price" is the two added together, each rounded UP to
-//    a whole unit, so effective markup on the goods runs a little above the
-//    multiplier and the blended markup on the whole order runs below it.
+//  - The product part is the catalogue's retail price, or the type markup where
+//    there is none, never below MIN_MARKUP x the goods; shipping is passed
+//    through at cost, rounded UP (see catalog.priceGroup).
 //  - These are BUY-ONE-NOW prices: one item, one shipping charge. In the cart a
 //    group of items from the same provider is quoted as ONE shipment, so two
 //    prints together cost less than twice one print.
 
-import { PRODUCTS, markupFor, priceParts, providerFor } from '../lib/print/catalog.mjs';
+import { PRODUCTS, markupFor, priceGroup, providerFor } from '../lib/print/catalog.mjs';
 import { getProvider } from '../lib/print/providers/index.mjs';
 
 const arg = (name, dflt) => {
@@ -99,7 +98,7 @@ for (const type of types) {
       row.shipMinor = q.shippingMinor ?? null;
       row.itemMinor = q.itemsMinor ?? (row.shipMinor == null ? null : q.totalMinor - row.shipMinor);
       row.costMinor = q.totalMinor;
-      const parts = priceParts(q, markupFor(type, MARKUP));
+      const parts = priceGroup([{ productType: type, variant, copies: COPIES, pageCount: pages }], q, MARKUP);
       row.printingMinor = parts.printingMinor;
       row.priceMinor = parts.totalMinor;
       row.marginMinor = row.priceMinor - q.totalMinor;

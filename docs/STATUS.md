@@ -24,8 +24,8 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   (the user's hand-made photo fix). See 2026-10-20. Still open: confirm the spine PDF
   actually carries the title text. #255 not yet tried on an iPhone or a real checkout.
 - **Sentry triage follow-up: [PR #271](https://github.com/CurtMiddleton/popcode-demo/pull/271)
-  OPEN, not merged** (auto-mode blocked the merge). Merge it to get Prodigi's reply on
-  failed-order events. **Shotstack balance was 0.17 credits on 10-17** — top up before
+  merged 2026-10-20** — Prodigi's reply now rides on failed-order events, and quote retries
+  back off (429 → Retry-After / 1 s, 2 s). **Shotstack balance was 0.17 credits on 10-17** — top up before
   promoting montage in books (a render needs ~1.13).
 - **Gallery outreach round 1 SENT 2026-10-15** (9:45–10:55 ET, scheduled in Gmail from
   curt@popcodeapp.com, BCC curt@theworkshop.works): Geary, Rye Arts Center, Pelham Art Center
@@ -281,17 +281,12 @@ happened and what's open. (Session history moved here from CLAUDE.md on
    on Scout's is lower right at **12%** of the diameter on a white ring (the
    user's mockup, 2026-09-26); real orders print it at 6% — decide whether
    orders should get the bigger symbol too.
-10. **Privacy/trust fixes — Monday 2026-10-05 (reminder set in session
-    `session_01Kf5EHms85CmqqyN3UHuXfu`, 9:00 ET).** (a) `scan_events.ip_address`
-    still holds real IPs for every event before 2026-09-26 (log-event stopped
-    writing them in `eb81c4c`, but nothing deleted the old ones) — so the impact
-    dashboard's "Popcode doesn't keep IP addresses" isn't yet true for history.
-    Plan: migration that replaces each with a one-way hash (keeps old
-    unique-visitor counts), then nulls the raw column; first check every RPC
-    that reads `ip_address` (`get_reach_events`, `get_events_with_users`
-    (prod-only definition), viewer-insights). (b) `privacy.html` says local
-    storage is only for sign-in and UI preferences — the anonymous `device_id`
-    lives there now; add a sentence.
+10. ~~**Privacy/trust fixes**~~ — **done 2026-10-20 (PR #270).** Every stored
+    `scan_events.ip_address` was replaced in prod with a keyed one-way code
+    (`supabase/migrations/2026-10-20-erase-stored-ips.sql`, run by the user;
+    check query returned 0). `privacy.html` names the anonymous viewer ID.
+    "Popcode doesn't keep IP addresses" is now true for history too — worth
+    saying on `/nonprofits` (suggested to the user, not done).
 11. **New engagement insights — plan agreed 2026-10-02, build in a fresh
     session.** One data source (`scan_events`), three audiences, each insight
     only where it answers that audience's question:
@@ -4009,11 +4004,31 @@ entry was ever made. A fresh Claude would not find them otherwise:
   calendar.html, and the calendar admin proof path opens the blocking progress
   panel it was already writing progress into.
 
+### 2026-10-20 — Stored IPs erased; English labels on both analytics maps; Popcode map expandable
+
+**PR #270 (merged by Claude at the user's request).** Session `session_01Kf5EHms85CmqqyN3UHuXfu` (the Map-tab session from 09-26, resumed).
+
+#### Privacy (Next item 10, now done)
+- `supabase/migrations/2026-10-20-erase-stored-ips.sql`: converts `ip_address` to text if it isn't, then sets every remaining IP to `'x' || left(md5(secret || ip), 16)` with a random `secret` that lives only inside the `do` block — irreversible (an unkeyed md5 of an IPv4 could be brute-forced), but the same IP → same code, so every RPC's `md5(ip_address || user_agent)` visitor key still counts old viewers the same. Re-runnable (skips `^x[0-9a-f]{16}$`). Tested on local Postgres 16 (`pg_ctlcluster 16 main start`; it exists in the container) with inet and text columns. **User ran it in prod; the check returned 0.** Note: `2026-09-26-no-ip-addresses.sql` had said "the user chose not to erase them" — the user reversed that on 10-02 and confirmed 10-20.
+- `analytics.html`: Activity log's IP column and IP search removed (internal session grouping still reads the column; codes work the same).
+- `privacy.html`: local storage also holds "a random ID … so repeat views count once"; Last updated → October 20, 2026. Wording deliberately avoids "not linked to your name" — signed-in views do carry user_id alongside device_id.
+
+#### Maps
+- **New `public/basemap.js`** — `PopcodeBasemap.add(leafletMap)`: OpenFreeMap Positron vector tiles (free, no key, commercial OK) via MapLibre GL 4.7.1 + `@maplibre/maplibre-gl-leaflet` 0.1.4 (jsdelivr), so pin/popup code stays Leaflet. Every label layer's `text-field` rewritten to `coalesce(name:en, name:latin, name)`. **Gotcha: don't use `name_en`** — in OpenMapTiles it silently falls back to the local name, so Cyrillic won before the Latin spelling was tried. Tiny villages with neither (e.g. Мякинино) still show local script at city zoom. Falls back to OSM raster tiles without WebGL.
+- **Web traffic map** (`drawWebMap`, analytics.html): `tile.openstreetmap.org` → `PopcodeBasemap.add`. Those OSM tiles labelled places in local script (the user's screenshot: Россия, 中国, مصر); OSM has no English tile set. CARTO tiles answered 200 from the sandbox but an earlier session found they need a key, so not used.
+- **Map tab** (`reach-map.js`): same base map under the pins; the Natural Earth country shapes are now shading only (`fillOpacity` 0.08–0.38, no stroke). **Fit all** (`fitAll`, to the visible pins) and **Expand** (`setFull`, `.rm-map-wrap.full` + `body.rm-map-open` overlay, Esc closes) copy the Web traffic map. maxZoom 9 → 12; scroll-wheel zoom only when expanded; `fitMinZoom()` stops zoom-out past the world filling the height (full screen at z1 showed empty bands).
+- Test harness: Playwright `page.route` can't reach the internet directly in this sandbox; real tiles were served by shelling out to `curl` (which honours the proxy) inside the route handler.
+
 ### 2026-10-20 — Sentry triage: what the four "real" issues actually were
 
-**PR [#271](https://github.com/CurtMiddleton/popcode-demo/pull/271) — OPEN, not merged.**
-The user said "push to prod"; the auto-mode classifier blocked the merge ("Merge Without
-Review"). Branch `claude/epic-thompson-tc57hv`, commit `c99e486`, mergeable/clean.
+**PR [#271](https://github.com/CurtMiddleton/popcode-demo/pull/271) — merged.** The first
+"push to prod" was blocked by the auto-mode classifier; the second went through after
+merging `main` in (conflicts in `docs/STATUS.md` and `lib/print/cart.mjs`, where #273 had
+swapped `priceParts` for `priceGroup` in the import line).
+**Also in #271 — POPCODE-WEB-K (Prodigi quote 429):** 23 quotes in ~1 s at 14:55 UTC with no
+user agent (a script, not a shopper; caller unknown). Both quote loops retried instantly, so
+`quoteRetryDelayMs` in `lib/print/providers/statuses.mjs` now paces them, and `prodigi.mjs`
+reads `Retry-After`. Resolved in Sentry with a comment. Branch `claude/epic-thompson-tc57hv`, commit `c99e486`, mergeable/clean.
 
 **Context:** the user triaged all 26 Sentry issues in a claude.ai chat (Sentry connector),
 resolved them, and flagged four as real. Sentry org `popcode-inc`, project `popcode-web`.
@@ -4055,7 +4070,6 @@ spine + postcard + sticker), 14653577 ($74.78, her own second order), 14656283 (
 "Online order" — the user made it by hand to fix her photo).
 
 #### Open
-- Merge #271.
 - Elena's spine PDF: open **View PDF** under Spine on 14652102 and check the title is on it.
 - Check the Shotstack balance before montage in books gets used.
 

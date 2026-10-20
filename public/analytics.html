@@ -22,6 +22,7 @@
     <script src="/config.js"></script>
     <script src="/media-check.js"></script>
     <script src="/dialog.js"></script>
+    <script src="/basemap.js"></script>
     <script src="/reach-map.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="stylesheet" href="/ui.css">
@@ -234,7 +235,7 @@
       .web-key b { color: #1a1a1a; }
       .web-map-box { position: relative; height: 380px; border-radius: 12px; overflow: hidden; background: #eef0f7; }
       .web-map { position: absolute; inset: 0; }
-      .web-map .web-tiles { filter: grayscale(0.85) contrast(0.9) brightness(1.06); }
+      .web-map .basemap-raster { filter: grayscale(0.85) contrast(0.9) brightness(1.06); }
       .web-map-btns { position: absolute; top: 10px; right: 10px; z-index: 500; display: flex; gap: 6px; }
       .web-map-btns .btn { background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
       .web-map-box.full { position: fixed; inset: 16px; height: auto; z-index: 10001; box-shadow: 0 10px 40px rgba(0,0,0,0.35); }
@@ -442,7 +443,13 @@
       .rm-through { font-size: 13px; min-width: 110px; }
       .rm-body { display: grid; grid-template-columns: 1fr 300px; gap: 12px; align-items: start; }
       @media (max-width: 900px) { .rm-body { grid-template-columns: 1fr; } }
-      .rm-map-wrap { background: #eef0f7; border-radius: var(--pc-radius-card); box-shadow: var(--pc-shadow-card); overflow: hidden; }
+      .rm-map-wrap { background: #eef0f7; border-radius: var(--pc-radius-card); box-shadow: var(--pc-shadow-card); overflow: hidden; position: relative; }
+      .rm-map-btns { position: absolute; top: 10px; right: 10px; z-index: 500; display: flex; gap: 6px; }
+      .rm-map-btns .btn { background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+      .rm-map-wrap.full { position: fixed; inset: 16px; z-index: 10001; box-shadow: 0 10px 40px rgba(0,0,0,0.35); }
+      .rm-map-wrap.full .rm-map { height: 100%; }
+      body.rm-map-open { overflow: hidden; }
+      body.rm-map-open::after { content: ''; position: fixed; inset: 0; background: rgba(20,18,30,0.45); z-index: 10000; }
       .rm-map { height: min(62vh, 600px); min-height: 340px; background: #eef0f7; }
       .rm-map .leaflet-container, .rm-map.leaflet-container { background: #eef0f7; font-family: 'Inter', sans-serif; }
       .rm-countries { padding: 6px 4px; max-height: min(62vh, 600px); overflow: auto; }
@@ -732,7 +739,6 @@
         { key: 'device_type',label: 'Device' },
         { key: 'browser',    label: 'Browser' },
         { key: 'country',    label: 'Location' },
-        { key: 'ip_address', label: 'IP' },
         // NOT the project owner — this is whoever's Popcode session the browser
         // was holding when the event fired. A viewer who merely has the link
         // shows "—". Mislabelling this as "User" once made an owner watching
@@ -839,7 +845,6 @@
           return (cachedColNames[e.slug] || e.slug || '').toLowerCase().includes(q) ||
                  getUserSearch(e).toLowerCase().includes(q) ||
                  getLocation(e).toLowerCase().includes(q) ||
-                 (e.ip_address || '').toLowerCase().includes(q) ||
                  (e.event_type || '').toLowerCase().includes(q) ||
                  (e.browser || '').toLowerCase().includes(q) ||
                  (e.device_type || '').toLowerCase().includes(q);
@@ -907,7 +912,6 @@
             tbody += '<td>' + devicePill(first.device_type) + '</td>';
             tbody += '<td class="muted">' + (first.browser || '—') + '</td>';
             tbody += '<td style="white-space:nowrap">' + loc + '</td>';
-            tbody += '<td class="muted" style="font-size:11px">' + (first.ip_address || '—') + '</td>';
             tbody += '<td class="muted" style="font-size:11px">' + (first.user_name || first.user_email || '—') + '</td>';
             tbody += '<td class="muted" style="font-size:11px">' + parseModel(first.user_agent) + '</td>';
             tbody += foundTd + completedTd;
@@ -924,7 +928,6 @@
                 tbody += '<td>' + devicePill(e.device_type) + '</td>';
                 tbody += '<td class="muted">' + (e.browser || '—') + '</td>';
                 tbody += '<td style="white-space:nowrap">' + cloc + '</td>';
-                tbody += '<td class="muted" style="font-size:11px">' + (e.ip_address || '—') + '</td>';
                 tbody += '<td class="muted" style="font-size:11px">' + (e.user_name || e.user_email || '—') + '</td>';
                 tbody += '<td></td><td></td><td></td>';
                 tbody += '</tr>';
@@ -993,7 +996,6 @@
           '<td>' + devicePill(e.device_type) + '</td>' +
           '<td class="muted">' + (e.browser || '—') + '</td>' +
           '<td style="white-space:nowrap">' + loc + '</td>' +
-          '<td class="muted" style="font-size:11px">' + (e.ip_address || '—') + '</td>' +
           '<td class="muted" style="font-size:11px">' + (e.user_name || e.user_email || '—') + '</td>' +
           '</tr>';
       }
@@ -2647,11 +2649,10 @@
         drawWebMap(Object.values(V));
       }
 
-      // Visitors by town. Base map: OpenStreetMap's own tiles (state lines, towns,
-      // streets as you zoom), muted with CSS so the dots stand out. No key; one
-      // admin page is well inside the OSM tile usage policy (attribution kept).
-      // CARTO's basemaps now need an API key (tested 2026-10-15). Expand opens
-      // it full screen.
+      // Visitors by town. Base map: OpenFreeMap vector tiles with every label
+      // in English (basemap.js, 2026-10-20) — OSM's own raster tiles labelled
+      // places in their local script. No key. CARTO's basemaps now need an API
+      // key (tested 2026-10-15). Expand opens it full screen.
       // Locations are city-level (Vercel's IP geo), so zooming past a town
       // shows where the town is, not where the visitor was.
       function loadWebMapLibs() {
@@ -2717,10 +2718,8 @@
           if (webMap) { try { webMap.remove(); } catch (e) {} webMap = null; }
           if (!document.body.contains(el)) return; // the panel was redrawn while the library loaded
           webMap = L.map(el, { minZoom: 2, maxZoom: 16, zoomSnap: 0.5, scrollWheelZoom: false, worldCopyJump: true });
-          L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19, className: 'web-tiles',
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          }).addTo(webMap);
+          // English labels (basemap.js); falls back to OSM's own tiles.
+          window.PopcodeBasemap.add(webMap);
           const fit = () => {
             const b = L.latLngBounds(pts.map(p => [p.lat, p.lon]));
             if (pts.length === 1) webMap.setView(b.getCenter(), 9); else webMap.fitBounds(b.pad(0.3), { maxZoom: 10 });
