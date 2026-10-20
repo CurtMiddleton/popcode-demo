@@ -57,7 +57,7 @@
       @media (max-width: 680px) { .wrap { padding: 28px 18px 120px; } }
       h1 { font-family: 'CooperBT', Georgia, serif; font-size: 44px; font-weight: 400; letter-spacing: -0.01em; line-height: 1.05; margin-bottom: 16px; }
       @media (max-width: 680px) { h1 { font-size: 34px; } }
-      .subtitle { color: #666; font-size: 16px; line-height: 1.5; margin-bottom: 32px; max-width: 560px; }
+      .subtitle { color: #666; font-size: 16px; line-height: 1.5; margin-bottom: 32px; }
       .bi-back { display: inline-flex; align-items: center; gap: 6px; color: #7657FC; font-weight: 600; font-size: 14px; text-decoration: none; margin-bottom: 26px; cursor: pointer; }
 
       /* ── Step 1: occasion + design grid ──────────────────────────────── */
@@ -156,7 +156,8 @@
       .ed-stage { padding: 6px 0 30px; display: flex; justify-content: center; align-items: center; }
       .ed-stage .card-face { box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 14px 34px rgba(0,0,0,0.20); }
       .ed-side { min-width: 0; }
-      @media (min-width: 761px) { .ed-left { position: sticky; top: 24px; } .ed-stage { position: static; } }
+      /* Below the site's sticky 100px menu bar (nav.js), so the card is never under it. */
+      @media (min-width: 761px) { .ed-left { position: sticky; top: 124px; } .ed-stage { position: static; } }
       .ed-back { display: block; height: auto; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 14px 34px rgba(0,0,0,0.20); }
       /* Front / Back: the Shop's segmented toggle (order.html). */
       .side-toggle { display: flex; justify-content: center; margin-top: 6px; }
@@ -1341,7 +1342,15 @@
         const stage = $('ed-stage');
         const side = stage.clientWidth || Math.min(460, window.innerWidth - 40);
         const fmt = C.CARD_FORMATS[state.template.formatId];
-        return Math.round(state.template.orientation === 'landscape' ? side * 0.96 : side * 0.92 * fmt.aspect);
+        const land = state.template.orientation === 'landscape';
+        let w = land ? side * 0.96 : side * 0.92 * fmt.aspect;
+        // On a laptop the card stays pinned while the options scroll, so it
+        // must fit the window under the menu bar with its toggle and links.
+        if (window.innerWidth > 760) {
+          const maxH = Math.max(240, window.innerHeight - 124 - 150);
+          w = Math.min(w, land ? maxH / fmt.aspect : maxH * fmt.aspect);
+        }
+        return Math.round(w);
       }
       function drawEditorCard() {
         state.side = 'front';
