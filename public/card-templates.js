@@ -3234,7 +3234,7 @@
           "id": "headline",
           "role": "headline",
           "default": "Happy Holidays",
-          "font": "sacramento",
+          "font": "windsong",
           "weight": 400,
           "color": "onPhoto",
           "align": "center",
@@ -3261,7 +3261,7 @@
           "id": "signature",
           "role": "signature",
           "default": "With Love, The Anderson Family",
-          "font": "sacramento",
+          "font": "windsong",
           "weight": 400,
           "color": "onPhoto",
           "align": "center",
@@ -3321,7 +3321,7 @@
           "id": "headline",
           "role": "headline",
           "default": "Happy Holidays",
-          "font": "sacramento",
+          "font": "windsong",
           "weight": 400,
           "color": "onPhoto",
           "align": "center",
@@ -3348,7 +3348,7 @@
           "id": "signature",
           "role": "signature",
           "default": "With Love, The Anderson Family",
-          "font": "sacramento",
+          "font": "windsong",
           "weight": 400,
           "color": "onPhoto",
           "align": "center",
@@ -3682,7 +3682,7 @@
           "id": "headline",
           "role": "headline",
           "default": "Happy",
-          "font": "meaculpa",
+          "font": "doulaise",
           "weight": 400,
           "color": "ink",
           "align": "center",
@@ -3712,7 +3712,7 @@
           "id": "subhead",
           "role": "subhead",
           "default": "Holidays",
-          "font": "meaculpa",
+          "font": "doulaise",
           "weight": 400,
           "color": "ink",
           "align": "center",
@@ -3742,7 +3742,7 @@
           "id": "message",
           "role": "message",
           "default": "from the",
-          "font": "meaculpa",
+          "font": "doulaise",
           "weight": 400,
           "color": "ink",
           "align": "center",
@@ -3764,7 +3764,7 @@
           "id": "signature",
           "role": "signature",
           "default": "FRANKLINS",
-          "font": "meaculpa",
+          "font": "doulaise",
           "weight": 400,
           "color": "ink",
           "align": "center",
@@ -3842,7 +3842,7 @@
           "id": "headline",
           "role": "headline",
           "default": "Happy",
-          "font": "meaculpa",
+          "font": "doulaise",
           "weight": 400,
           "color": "ink",
           "align": "center",
@@ -3872,7 +3872,7 @@
           "id": "subhead",
           "role": "subhead",
           "default": "Holidays",
-          "font": "meaculpa",
+          "font": "doulaise",
           "weight": 400,
           "color": "ink",
           "align": "center",
@@ -3902,7 +3902,7 @@
           "id": "message",
           "role": "message",
           "default": "from the",
-          "font": "meaculpa",
+          "font": "doulaise",
           "weight": 400,
           "color": "ink",
           "align": "center",
@@ -3924,7 +3924,7 @@
           "id": "signature",
           "role": "signature",
           "default": "FRANKLINS",
-          "font": "meaculpa",
+          "font": "doulaise",
           "weight": 400,
           "color": "ink",
           "align": "center",
@@ -5944,14 +5944,6 @@
     {
       "id": "windsong",
       "label": "Sweeping"
-    },
-    {
-      "id": "meaculpa",
-      "label": "Calligraphy"
-    },
-    {
-      "id": "sacramento",
-      "label": "Pen"
     }
   ],
   "CARD_LAYOUTS": [
@@ -6633,9 +6625,7 @@
     "sans",
     "parisienne",
     "doulaise",
-    "windsong",
-    "meaculpa",
-    "sacramento"
+    "windsong"
   ],
   "CUSTOM_COLORS": [
     {
