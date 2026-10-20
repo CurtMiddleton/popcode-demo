@@ -6,7 +6,7 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-19)
+## Current state (updated 2026-10-20)
 
 **Live and recent**
 - **Montage is now on every Popcode surface (2026-10-19, `9743928`).** The builder
@@ -18,10 +18,15 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 - **Video mix-up bug fixed + customer handled (2026-10-18, PRs #253–#255; see that entry).**
   Uploads now get unique filenames; books/calendars/board books no longer count toward the
   Popcode limit (migration **run in prod**); every checkout shows a "Check what each photo
-  plays" step, and Analytics → Content → a project has **Check videos**. **Open:** Elena Kuher
-  (Olena Kucher, Spokane, `only80yearsyoung`) — reply pending; when she orders, confirm her
-  `print_orders` row has `default, spine` (first real order with a spine file) and the order
-  in Prodigi's dashboard lists a spine. #255 not yet tried on an iPhone or a real checkout.
+  plays" step, and Analytics → Content → a project has **Check videos**. **Elena Kuher**
+  (Olena Kucher, Spokane, `only80yearsyoung`) **has ordered** — Prodigi 14652102 (her book,
+  spine file attached, est. despatch Mon 26 Oct), 14653577 (her second order) and 14656283
+  (the user's hand-made photo fix). See 2026-10-20. Still open: confirm the spine PDF
+  actually carries the title text. #255 not yet tried on an iPhone or a real checkout.
+- **Sentry triage follow-up: [PR #271](https://github.com/CurtMiddleton/popcode-demo/pull/271)
+  OPEN, not merged** (auto-mode blocked the merge). Merge it to get Prodigi's reply on
+  failed-order events. **Shotstack balance was 0.17 credits on 10-17** — top up before
+  promoting montage in books (a render needs ~1.13).
 - **Gallery outreach round 1 SENT 2026-10-15** (9:45–10:55 ET, scheduled in Gmail from
   curt@popcodeapp.com, BCC curt@theworkshop.works): Geary, Rye Arts Center, Pelham Art Center
   (**free-pilot offer**, personal email, not in the follow-up sequence), Iona Chapman Gallery,
@@ -4003,3 +4008,54 @@ entry was ever made. A fresh Claude would not find them otherwise:
   other's pages. `withProofStage()` now serialises them in book.html and
   calendar.html, and the calendar admin proof path opens the blocking progress
   panel it was already writing progress into.
+
+### 2026-10-20 — Sentry triage: what the four "real" issues actually were
+
+**PR [#271](https://github.com/CurtMiddleton/popcode-demo/pull/271) — OPEN, not merged.**
+The user said "push to prod"; the auto-mode classifier blocked the merge ("Merge Without
+Review"). Branch `claude/epic-thompson-tc57hv`, commit `c99e486`, mergeable/clean.
+
+**Context:** the user triaged all 26 Sentry issues in a claude.ai chat (Sentry connector),
+resolved them, and flagged four as real. Sentry org `popcode-inc`, project `popcode-web`.
+The Sentry MCP works here: `get_sentry_resource(resourceType='issue', organizationSlug=
+'popcode-inc', resourceId='POPCODE-WEB-19')`, and `search_errors` with `issue:<id>` lists
+every event with browser/city. **Cross-check with the release tag** (`release` = commit
+SHA) — two of the four had already been fixed by later commits.
+
+| Issue | What it was | Outcome |
+|---|---|---|
+| WEB-19 Prodigi 500 in stripe-webhook (10-18 18:10 UTC) | Elena's book, `print_orders.id` `e35707ce…` | Someone pressed **Retry** ~1 h later; it is Prodigi **14652102**, in production, spine attached. Nothing to do. |
+| WEB-R Shotstack out of credits (10-17 16:13 UTC) | Fired on release `68f4bc4`, 14 min before `fe94563` added the friendly pause + `fatal` "Shotstack OUT OF CREDITS" alert | No out-of-credits alert since → no render attempted, or topped up. Balance unknown from here. |
+| WEB-V "scan check timed out" ×5 | Advisory photo check in `public/scan-check.js` giving up after 15 s; all Safari/iOS (2 from New Rochelle = the user) | Stopped reporting timeouts (#271) |
+| WEB-16 POPCODE_QUOTA_EXCEEDED in book.html (10-17) | Elena, before #254 | Already fixed by #254 |
+
+**Found in passing:** POPCODE-WEB-1B, a `SyntaxError: No identifiers allowed directly after
+numeric literal` at `manage.html:1` from the same Athens Firefox-iOS creator. **Not ours** —
+manage.html has no inline handlers and its one inline script parses; line 1 + no stack on
+Firefox iOS = the browser's injected scripts. Left resolved.
+
+**#271 changes:**
+- `api/stripe-webhook.js` / `api/finalize-order.js` `onError`: attach `httpStatus` and
+  Prodigi's reply as Sentry `extra` (WEB-19 was a bare "500"; the reply was only in
+  `print_orders.prodigi_response`). **Latent bug fixed:** `settlePopcodeCredits`
+  (`lib/print/fulfill.mjs:140`) calls `onError(err, { order_id })` with no `response`, and
+  `JSON.stringify(undefined).slice` threw a TypeError before `captureException` — a failed
+  credit refund would have 500'd the request and never reached Sentry.
+- `public/scan-check.js`: timeout no longer sent to Sentry; other failures still are.
+- `public/create.html` (Generate compile catch, ~:1950): now `captureException` with
+  `step: compile` — before, a failed compile was only shown on screen.
+Syntax-checked only; not run in a browser or a real checkout.
+
+**Finding a Prodigi order by our id:** the dashboard list has no reference column. Open an
+order — the Summary panel shows **Order reference** = our `print_orders.id` (that's the
+`merchantReference`). The Search box may also take it.
+
+**Elena's orders (all accounted for):** 14652102 (book, 10-18 15:07, the retried failure,
+spine + postcard + sticker), 14653577 ($74.78, her own second order), 14656283 ($28.20,
+"Online order" — the user made it by hand to fix her photo).
+
+#### Open
+- Merge #271.
+- Elena's spine PDF: open **View PDF** under Spine on 14652102 and check the title is on it.
+- Check the Shotstack balance before montage in books gets used.
+
