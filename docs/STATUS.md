@@ -9,6 +9,15 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 ## Current state (updated 2026-10-20)
 
 **Live and recent**
+- **Holiday / photo card maker — built on branch `claude/youthful-mccarthy-1ybhzt`, NOT merged,
+  not priced, not linked from the Shop (2026-10-20, see that entry).** `public/card.html`:
+  24 designs × portrait/landscape, Minted-style options, Design your own, Use your photo,
+  the shared Add a Popcode sheet + Edit Photo (`public/popcode-tools.js`). Printify blueprint
+  10717 (District Photo, pack variants). **Next:** run `node scripts/printify-card-cost.mjs`
+  for cost → set prices; run `supabase/migrations/2026-10-20-cards-free.sql` in prod; order
+  one sample (portrait + landscape + rounded); user's keep/cut list from the review PDF;
+  then merge + Shop/holiday-panel links. Branch is behind `main` (13 commits on 10-20) — merge
+  main in before a PR.
 - **Montage is now on every Popcode surface (2026-10-19, `9743928`).** The builder
   moved out of create.html/edit.html into **`public/montage.js`**, shared by all five
   pages; book, calendar and board book gained the third choice. Montage is an action,
@@ -4013,3 +4022,37 @@ entry was ever made. A fresh Claude would not find them otherwise:
 - **Web traffic map** (`drawWebMap`, analytics.html): `tile.openstreetmap.org` → `PopcodeBasemap.add`. Those OSM tiles labelled places in local script (the user's screenshot: Россия, 中国, مصر); OSM has no English tile set. CARTO tiles answered 200 from the sandbox but an earlier session found they need a key, so not used.
 - **Map tab** (`reach-map.js`): same base map under the pins; the Natural Earth country shapes are now shading only (`fillOpacity` 0.08–0.38, no stroke). **Fit all** (`fitAll`, to the visible pins) and **Expand** (`setFull`, `.rm-map-wrap.full` + `body.rm-map-open` overlay, Esc closes) copy the Web traffic map. maxZoom 9 → 12; scroll-wheel zoom only when expanded; `fitMinZoom()` stops zoom-out past the world filling the height (full screen at z1 showed empty bands).
 - Test harness: Playwright `page.route` can't reach the internet directly in this sandbox; real tiles were served by shelling out to `curl` (which honours the proxy) inside the route handler.
+
+### 2026-10-20 — Holiday card maker revived and rebuilt (Minted-style), not yet live
+
+Session `session_015E5kyBeMhTbTAzVobGtHPP`. All work on branch **`claude/youthful-mccarthy-1ybhzt`** (pushed, **no PR**, not merged). Nothing a customer can reach: `/card.html` isn't linked and cards can't be priced, so Pay stays disabled.
+
+#### Where it started
+- The Sept card builder lived on `claude/holiday-cards-categories-3t5cbo`, which **shares no history with main** (main was rewritten) — so its six files were copied, not merged. Plan + provider finding: `docs/cards-plan.md` (kept current, read it first).
+- Prodigi can't do flat 5×7 (all folded, UK-made). **Printify blueprint 10717 "Flat Greeting Cards (envelopes included)", provider 28 District Photo** (same lab as the board book). The user ran `scripts/probe-printify-cards.mjs` on their Mac: Printify sells **by the pack** — each pack is a variant: square 399502–399505 (10/30/50/100), rounded 399509–399512. Print area **1538×2175** per side (full 1/8″ bleed top/bottom, ~1/16″ sides) → `CARD_FORMATS['flat-5x7'].printPx`, `toBleed()` crops to it. Catalog: `card-5x7-{10,30,50,100}[-round]`, copies = number of packs; `baseCostMinor` **null** (dormant).
+
+#### What a card is now (`public/card.html`, `lib/print/cards.mjs` → generated `public/card-templates.js` via `node scripts/build-card-templates.mjs` — re-run after any cards.mjs edit)
+- **A Popcode**: save renders the front exactly as the editor (html2canvas 1.4.1; photos pre-cropped onto canvases, foil painted glyph by glyph), compiles it to `{slug}/target.mind`, uploads video **or audio**, writes `kind:'card'` + one `collection_items` row. Design state in `book_layout.card` (templateId or `custom`, text, photos, adjust, colorway, greeting, corners, script, bw, backPhoto, pack).
+- **Print files**: front (mirrored bleed, cropped to Printify's area) + back; landscape cards are laid out landscape and **rotated a quarter turn clockwise only at upload** (`toPrintify`) — verify on the first landscape sample which way up the back prints. Shared print preview before the cart.
+- **Back** = the books' back cover: wordmark, "Go to popcode.app/{slug} on your phone. / **Scan the front of this card.**" (cards carry no front symbol), symbol, on white; optional square photo above.
+- **Designs**: 24 families (`fam()` in cards.mjs → `p-{family}` / `l-{family}`), after the user's Minted "simple & minimalist" references: full-bleed (Pacifique, Brighton, Bold Serif, Joyeux, Corner Title, Bold Condensed, Merry Everything), on the card colour (Typewriter, Minimal Border, Colour Frame, Modern Frame, Bottom Band, Side Note), multi-photo (Quartet, Handwritten Name, Gallery), handwritten/calligraphy (Vertical Script, Pen & Ink, Harbor, Hand Lettered, Above & Below), announcements (Hello World, Save the Date, Class Of). The first two sets (Sept's snow/laurel/gold, then a too-small minimal set) were replaced on the user's feedback.
+- **Options per design** (Minted's product page): orientation, **greeting** (Holiday/Christmas/New Year/Religious; per-zone `greet` maps; occasion preselects), **script** (user chose Parisienne/Classic, Monsieur La Doulaise/Formal, WindSong/Sweeping; + Mea Culpa/Calligraphy, Sacramento/Pen; zones `scriptable`), colour theme (named; colourways have `panel`/`mat` roles), corners square/rounded, colour or black-and-white photo (baked into pixels — html2canvas ignores CSS filters).
+- **Layout engine additions**: frames, mats, `fill:'ground'`, italic, rotated/centred zones (`rotate`, `center` → `free`, skipped by the no-overlap pass), **bands** (`BANDS` in cards.mjs: text centred between photo edge and card edge, measured from the drawn type in `fitCardText` pass 3). Type ~40% bigger than the first minimal set at the user's request.
+- **Sections** (user decided): Holiday · Wedding · Baby · **Invitations** — only occasions where people mail many of the same card; **no business holiday cards**. Occasions with no designs stay hidden. `?section=wedding`.
+- **Design your own** (first tile everywhere): 7 layouts (`CARD_LAYOUTS`), draggable text boxes with font/size/colour/align/bold/caps/italic; every layout has a photo (scan needs a picture). **Use your photo**: one photo redraws every thumbnail and pre-fills the design.
+- **Shared `public/popcode-tools.js`** (new): the calendar's Add a Popcode sheet (Video + compression / Montage via montage.js / Audio record) and Edit Photo (fill/fit/zoom/drag/rotate/replace/remove/grid/print quality) + `drawPhotoAdjusted`/`layoutPhoto`. Cards use it; **calendar/book/board book still have their own copies** — migrate one at a time. Loading `dialog.js` makes `alert()` a Popcode dialog on card.html (tests must click `.pcd-btn`).
+- Sample-name guard: zones flagged `sample: true` ("The Middleton Family", "Adelaide Rose"…) block saving until changed.
+- Also: `supabase/migrations/2026-10-20-cards-free.sql` (cards don't count toward the Popcode limit — **not yet run**), `scripts/printify-card-cost.mjs` (held order with every pack variant, prints cost, **auto-cancels** — the 08-22 board-book lesson), My Designs + cart "Edit design" route `kind:'card'` to `/card.html?id=`.
+
+#### Decisions / answers from the user
+- Transcript stays as it is on create/edit (for everyone); cards don't get one.
+- Packs 10/30/50/100 (Printify's); "save X%" labels removed until real prices.
+- Minted benchmark: 100 cards $192 ($1.92 ea), rounded corners +$37.
+
+#### Lessons
+- The user's Mac repo is `~/popcode-demo`; they run Printify scripts there (`export PRINTIFY_API_TOKEN=$(pbpaste)`), never paste tokens in chat. Printify tokens can be scoped (catalog.read; orders.read/write for the cost script).
+- Headless MindAR compile needs `--use-angle=swiftshader --enable-unsafe-swiftshader`. Test harness lives in the session scratchpad (not committed): stubbed supabase-js, `__store` route for uploads.
+- html2canvas leaves its own scale on the context (`setTransform` before painting foil); hex colours come back as `rgb()` from the DOM; `.inset` CSS had been overriding `.arch` (arch never showed).
+- The overlap pass shrinks text when left/right boxes touch — keep `maxW`s apart on split rows.
+- curtmiddleton.com mail is hosted at Verve (cPanel, `mail.curtmiddleton.com`); plan agreed: later move it to its **own Google Workspace user** (secondary domain), keep Verve for DNS, back up the mailbox first. Green Empowerment isn't doing a campaign this year; **Centurion is considering** one (their thread is in curtmiddleton.com — the user was to forward it to curt@popcodeapp.com).
+
