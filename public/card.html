@@ -1313,7 +1313,7 @@
         if (!show) return;
         state.side = 'back';
         paintSideToggle();
-        const full = await renderBack(editing ? editing.slug : 'yourlink');
+        const full = await renderBack(editing ? editing.slug : 'yourlink', { placeholder: true });
         if (mine !== backSeq || state.side !== 'back' || !$('ed-stage')) return;
         const w = editorCardWidth();
         const im = document.createElement('img');
@@ -1609,7 +1609,8 @@
         logoW: 1.1, gapLogo: 0.19, textPt: 9, leadPt: 14, gapSym: 0.16, symW: 0.36, bottom: 0.62,
         logo: '/assets/Popcode_logo.png', logoAspect: 591 / 2232,
       };
-      async function renderBack(slug) {
+      async function renderBack(slug, opts) {
+        opts = opts || {};
         const tpl = state.template;
         const b = { ...C.cardBleedSize(tpl.formatId, tpl.orientation) };
         const pp = printArea(tpl);
@@ -1625,19 +1626,36 @@
         const blockH = (k.logoW * k.logoAspect + k.gapLogo + (k.leadPt * 2) / 72 + k.gapSym + k.symW) * inch;
         let y = trimBottom - k.bottom * inch - blockH;
 
-        // The photo, square, centred in the space above the block.
+        // The photo, square, centred in the space above the block. Printed flat,
+        // no shadow. In the editor (opts.placeholder) an empty spot is a light
+        // grey square with a picture icon, so it's clear it can be tapped; the
+        // print file never has it.
+        const land = tpl.orientation === 'landscape';
+        const side = (land ? 1.75 : 2.7) * inch;
+        const top = b.offsetY + (land ? 0.32 : 0.5) * inch;
+        const py = top + Math.max(0, (y - top - side) / 2);
+        const px = cx - side / 2;
+        if (!(state.back && state.back.url) && opts.placeholder) {
+          ctx.fillStyle = '#efefef';
+          ctx.fillRect(px, py, side, side);
+          // A 24-unit picture icon, 28% of the square, a little above centre.
+          const isz = side * 0.28, ix = cx - isz / 2, iy = py + side / 2 - isz * 0.7;
+          ctx.save();
+          ctx.translate(ix, iy); ctx.scale(isz / 24, isz / 24);
+          ctx.strokeStyle = '#a3a3a3'; ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.roundRect(1.5, 2.5, 21, 19, 2.5); ctx.stroke();
+          ctx.beginPath(); ctx.arc(8.5, 9, 2, 0, Math.PI * 2); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(22, 16); ctx.lineTo(16, 10); ctx.lineTo(5, 21); ctx.stroke();
+          ctx.restore();
+          ctx.fillStyle = '#8a8a8a';
+          ctx.font = `600 ${0.13 * inch}px 'Inter', sans-serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+          ctx.fillText('Add a photo', cx, iy + isz + side * 0.06);
+          ctx.textAlign = 'left';
+        }
         if (state.back && state.back.url) {
           try {
             const img = await loadImg(state.back.url);
-            const land = tpl.orientation === 'landscape';
-            const side = (land ? 1.75 : 2.7) * inch;
-            const top = b.offsetY + (land ? 0.32 : 0.5) * inch;
-            const py = top + Math.max(0, (y - top - side) / 2);
-            const px = cx - side / 2;
-            ctx.save();
-            ctx.shadowColor = 'rgba(0,0,0,0.16)'; ctx.shadowBlur = 0.12 * inch; ctx.shadowOffsetY = 0.03 * inch;
-            ctx.fillStyle = '#fff'; ctx.fillRect(px, py, side, side);
-            ctx.restore();
             ctx.save();
             ctx.beginPath(); ctx.rect(px, py, side, side); ctx.clip();
             ctx.translate(px, py);
