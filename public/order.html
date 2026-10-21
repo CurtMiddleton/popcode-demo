@@ -2754,8 +2754,12 @@
         try {
           const photo = state.selectedPhoto;
           const meta = CATEGORY_META[state.productType] || {};
-          const items = [{ src: dataUrl, label: HAS_BACK_PANEL.has(state.productType) ? 'Front' : (meta.noun || meta.name || 'Print') }];
-          if (HAS_BACK_PANEL.has(state.productType) && photo.slug) items.push({ src: await drawOrnamentBack(photo.slug, BACK_PANEL_PX), label: 'Back' });
+          // Show how the product crops the file: the ornament's round cut (both
+          // sides), the part of a mug that faces you.
+          const v = variantOf(state.productType, state.variantId) || {};
+          const marks = v.round ? { round: true } : v.wrap ? { faceFrac: WRAP_FACE_FRAC } : {};
+          const items = [Object.assign({ src: dataUrl, label: HAS_BACK_PANEL.has(state.productType) ? 'Front' : (meta.noun || meta.name || 'Print') }, marks)];
+          if (HAS_BACK_PANEL.has(state.productType) && photo.slug) items.push(Object.assign({ src: await drawOrnamentBack(photo.slug, BACK_PANEL_PX), label: 'Back' }, marks));
           const q = await printSharpness();
           // Below 100 DPI the print visibly blurs (a customer's 960×1280 photo
           // went out as a 12×16″ frame at ~80 DPI, 2026-10-19): ordering it
@@ -2775,7 +2779,9 @@
             extraLabel: canEnhance ? 'Enhance this photo (free)' : undefined,
             goLabel: bad ? (mode === 'cart' ? 'Add to cart anyway' : 'Order anyway') : undefined,
             sections: [{ heading: 'Print file',
-              note: 'The very edges can be trimmed or wrap around a frame or mug, so keep words and faces away from them.',
+              note: v.round ? 'The dashed circle is where the ornament is cut. Everything outside it is trimmed away.'
+                : v.wrap ? 'The dashed lines mark the part of the mug you see from the front. The faded sides wrap round toward the handle.'
+                : 'The very edges can be trimmed or wrap around a frame or mug, so keep words and faces away from them.',
               html: notice + PopcodePrintPreview.list({ cols: Math.min(2, items.length), items, maxWidth: items.length > 1 ? 900 : 460 }) }],
           });
         } catch (e) {
