@@ -170,6 +170,11 @@
       .slug-row .text-input:disabled { background: #f4f2ee; color: #6b6558; }
       .slug-note { font-size: 12px; color: #999; margin: 6px 2px 0; line-height: 1.4; }
       .slug-note.bad { color: #d33; }
+       #busy-overlay { position: fixed; inset: 0; z-index: 8500; background: rgba(249,249,249,0.72); display: none; align-items: center; justify-content: center; cursor: progress; }
+      #busy-overlay.on { display: flex; }
+      .busy-card { background: #fff; border-radius: 20px; padding: 22px 28px; box-shadow: 0 16px 40px rgba(20,16,40,.18); display: flex; align-items: center; gap: 14px; font-size: 15px; font-weight: 600; }
+      .busy-spin { width: 22px; height: 22px; border-radius: 50%; border: 3px solid #e6e1ff; border-top-color: #7657FC; animation: busy-spin .8s linear infinite; }
+      @keyframes busy-spin { to { transform: rotate(360deg); } }
       .side-hint { text-align: center; font-size: 13px; color: #777; margin-top: 12px; min-height: 1.3em; }
       .card-face img { -webkit-user-drag: none; user-select: none; }
       .cf-guide { position: absolute; left: 50%; top: 0; bottom: 0; width: 0; border-left: 1px dashed #ff3b9a; z-index: 9; pointer-events: none; display: none; }
@@ -396,7 +401,8 @@
             if (opts.bw) im.style.filter = 'grayscale(1)';
             if (opts.crossOrigin) im.crossOrigin = 'anonymous';
             d.appendChild(im);
-          } else {
+          } else if (!opts.print) {
+            // The "+" is an editor prompt; a saved draft's front shows plain grey.
             d.classList.add('empty');
           }
           if (opts.onPickPhoto) {
@@ -896,7 +902,26 @@
         if (!state.myPhoto) return;
         (tpl.photos || []).forEach((sl) => { state.photos[sl.id] = { file: state.myPhoto.file, url: state.myPhoto.url }; });
       }
+      // Picking a design (or Design your own) starts a NEW card. Without this the
+      // card just saved, or opened from My Designs, stayed `editing` and the next
+      // save overwrote it -- design, scan target and all (audit 2026-10-21).
+      function startNewCard() {
+        editing = null;
+        state.name = '';
+        state.slug = null;
+        state.slugTouched = false;
+        state.back = null;
+        state.bw = false;
+        state.corners = 'square';
+        state.moves = {};
+        const u = new URL(location.href);
+        if (u.searchParams.has('id') || u.searchParams.has('duplicate')) {
+          u.searchParams.delete('id'); u.searchParams.delete('duplicate');
+          history.replaceState(null, '', u);
+        }
+      }
       function startCustom() {
+        startNewCard();
         state.custom = newCustom(state.occasionId);
         state.text = {};
         state.photos = {};
@@ -920,6 +945,25 @@
       // Snapping to the card's centre line while dragging text: within this
       // many screen pixels of centre it locks on, and a guide line shows.
       const SNAP_PX = 8;
+      // How far (screen px) the line's drawn box sits outside the card's safe
+      // area (1/4in inside the trim, the dashed line on the print preview), per
+      // side -- so a drop can be pushed back inside it.
+      function safeOverflow(face, el) {
+        const fr = face.getBoundingClientRect(), r = el.getBoundingClientRect();
+        const fmt = C.CARD_FORMATS[state.template.formatId];
+        const wIn = state.template.orientation === 'landscape' ? fmt.hIn : fmt.wIn;
+        const m = fr.width * 0.25 / wIn;
+        let dx = 0, dy = 0;
+        if (r.width <= fr.width - 2 * m) {
+          if (r.left < fr.left + m) dx = fr.left + m - r.left;
+          else if (r.right > fr.right - m) dx = fr.right - m - r.right;
+        }
+        if (r.height <= fr.height - 2 * m) {
+          if (r.top < fr.top + m) dy = fr.top + m - r.top;
+          else if (r.bottom > fr.bottom - m) dy = fr.bottom - m - r.bottom;
+        }
+        return { dx, dy, scale: fr.width / face.offsetWidth || 1 };
+      }
       function centreGuide(face, on) {
         let g = face.querySelector('.cf-guide');
         if (on && !g) { g = document.createElement('div'); g.className = 'cf-guide'; face.appendChild(g); }
@@ -950,6 +994,9 @@
               el.removeEventListener('pointermove', move);
               el.removeEventListener('pointerup', up);
               centreGuide(face, false);
+              const o = safeOverflow(face, el);
+              box.x = Math.min(1, Math.max(0, box.x + o.dx / fr.width));
+              box.y = Math.min(0.97, Math.max(0, box.y + o.dy / fr.height));
               refreshCustom();
             };
             el.addEventListener('pointermove', move);
@@ -1001,6 +1048,12 @@
               if (!dragging) return;
               const W = face.offsetWidth, H = face.offsetHeight;
               const zid = el.dataset.zid;
+              // Keep the words inside the safe area: they print where they're dropped.
+              const o = safeOverflow(face, el);
+              if (o.dx || o.dy) {
+                el.style.left = el.offsetLeft + o.dx / o.scale + 'px';
+                el.style.top = el.offsetTop + o.dy / o.scale + 'px';
+              }
               const z = state.template.text.find((x) => x.id === zid);
               const prev = (state.moves || {})[zid] || { dx: 0, dy: 0 };
               // The line's top on screen IS its new y (a band may have centred
@@ -1082,6 +1135,7 @@
       }
 
       function chooseTemplate(tpl) {
+        startNewCard();
         state.custom = null;
         state.template = tpl;
         state.colorway = (tpl.colorways && tpl.colorways[0]) || C.DEFAULT_COLORWAY;
@@ -1650,7 +1704,7 @@
         const holder = document.createElement('div');
         holder.style.cssText = 'position:fixed;left:-20000px;top:0;pointer-events:none;';
         const face = renderCard(tpl, { width: FRONT_CSS_W, text: state.text, photos: state.photos,
-          colorway: state.colorway, crossOrigin: true, bw: state.bw, greeting: state.greeting, script: state.script,
+          colorway: state.colorway, crossOrigin: true, bw: state.bw, greeting: state.greeting, script: state.script, print: true,
           moves: state.custom ? null : state.moves });
         face.style.boxShadow = 'none';
         holder.appendChild(face);
@@ -1911,13 +1965,50 @@
       // attached video. It saves as kind:'card' (no migration beyond counting it
       // free, 2026-10-20-cards-free.sql) with the design in book_layout.card, so
       // My Designs can reopen it here.
-      let editing = null;   // { id, slug } once saved or when opened from My Designs
+      let editing = null;   // { id, slug, live } once saved or when opened from My Designs; live = it scans
 
+      // Has this card been bought? Its scan target must not change after that.
+      // Orders keep each design in `items` (a cart order spans designs).
+      async function cardWasOrdered(collectionId) {
+        try {
+          const { data, error } = await db.from('print_orders').select('id')
+            .neq('status', 'pending')
+            .or('collection_id.eq.' + collectionId + ',items.cs.' + JSON.stringify([{ collection_id: collectionId }]))
+            .limit(1);
+          if (error) throw error;
+          return !!(data && data.length);
+        } catch (e) {
+          // Can't tell: treat it as ordered, the safe answer.
+          console.warn('Order check failed', e);
+          return true;
+        }
+      }
+
+      // While a save runs the whole page is covered: editing mid-save mixed two
+      // designs into one card, and a second tap started a second save.
+      let saving = false;
       function setBusy(text) {
         const btn = $('cart-btn');
         if (btn) { btn.disabled = !!text; btn.textContent = text || 'Add to cart'; }
         const sb = $('save-btn');
         if (sb) sb.disabled = !!text;
+        let ov = $('busy-overlay');
+        if (text && !ov) {
+          ov = document.createElement('div');
+          ov.id = 'busy-overlay';
+          ov.innerHTML = '<div class="busy-card"><div class="busy-spin"></div><div id="busy-text"></div></div>';
+          document.body.appendChild(ov);
+        }
+        if (ov) {
+          ov.classList.toggle('on', !!text);
+          if (text) $('busy-text').textContent = text;
+        }
+      }
+      // Runs `fn` as the only save in flight; a second tap while one runs is ignored.
+      async function exclusive(fn) {
+        if (saving) return;
+        saving = true;
+        try { await fn(); } finally { saving = false; }
       }
 
       // The template's sample names are only an example. Printing "The Middleton
@@ -1945,6 +2036,27 @@
         const sample = unchangedSample();
         if (sample && !draft) throw new Error('Change “' + sample.value + '” to your own words. It’s the example text.');
         const scannable = !!state.popcode && !need.length;
+        setBusy('Checking your card…');
+        // A card that already scans (a link in use, maybe already printed):
+        // never save it into something that doesn't, and never swap the scan
+        // target of a card that has been ordered -- the printed cards would stop
+        // working. Those changes become a new card with its own link.
+        if (editing && editing.live) {
+          if (!scannable) {
+            throw new Error('This card is live at popcode.app/' + editing.slug + '. Add back its ' +
+              (need.length ? 'photo' : 'Popcode') + ' before saving, or duplicate it in My Designs to start a new version.');
+          }
+          if (await cardWasOrdered(editing.id)) {
+            setBusy(null);
+            const ok = await popcodeConfirm('This card has already been ordered. Saving changes over it would stop the printed cards from scanning. ' +
+              'Save your changes as a new card, with its own link?', { title: 'Save as a new card?', confirmText: 'Save as new card' });
+            if (!ok) { const e = new Error('cancelled'); e.quiet = true; throw e; }
+            editing = null;
+            state.slug = null; state.slugTouched = false;
+            if (slugField) slugField.unlock(PopcodeSlug.randomSlug());
+            setBusy('Saving…');
+          }
+        }
         if (scannable && (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler)) {
           throw new Error('Still loading. Wait a moment and try again.');
         }
@@ -2072,22 +2184,32 @@
           const { error } = await db.from('collections').update(row).eq('id', editing.id);
           if (error) throw new Error('Could not save: ' + error.message);
           collectionId = editing.id;
-          await db.from('collection_items').delete().eq('collection_id', collectionId);
         } else {
           if (!currentUser) throw new Error('Sign in to save your card.');
           const { data, error } = await db.from('collections')
             .insert({ ...row, slug, user_id: currentUser.id }).select().single();
           if (error) throw new Error('Could not save: ' + error.message);
           collectionId = data.id;
+          // The row exists now: a retry after a later failure updates it rather
+          // than inserting again under a slug it has just taken itself.
+          editing = { id: collectionId, slug, live: false };
         }
+        // The new item goes in BEFORE the old ones come out, so a failure part
+        // way leaves the card playing its previous video, not nothing.
+        let keepId = null;
         if (pc) {
-          const { error: iErr } = await db.from('collection_items').insert({
+          const { data: item, error: iErr } = await db.from('collection_items').insert({
             collection_id: collectionId, target_index: 0, media_type: pc.mediaType === 'audio' ? 'audio' : 'video',
             video_url: videoUrl, audio_url: audioUrl, photo_url: frontUrl,
-          });
+          }).select('id').single();
           if (iErr) throw new Error('Saved, but linking the video failed: ' + iErr.message);
+          keepId = item && item.id;
         }
-        editing = { id: collectionId, slug };
+        let del = db.from('collection_items').delete().eq('collection_id', collectionId);
+        if (keepId) del = del.neq('id', keepId);
+        const { error: dErr } = await del;
+        if (dErr) console.warn('Old Popcode rows were not cleared', dErr);
+        editing = { id: collectionId, slug, live: scannable };
         if (slugField) slugField.lock(slug, 'This card’s link. It’s locked so printed cards keep working.');
         const u = new URL(location.href);
         u.searchParams.set('id', slug); u.searchParams.delete('duplicate');
@@ -2095,7 +2217,8 @@
         return { slug, collectionId, front, frontUrl, headline, scannable };
       }
 
-      async function onSave() {
+      function onSave() { return exclusive(onSaveInner); }
+      async function onSaveInner() {
         try {
           const saved = await saveCard({ draft: true });
           setBusy(null);
@@ -2108,12 +2231,13 @@
         } catch (err) {
           setBusy(null);
           console.error(err);
-          if (window.Sentry && !/first|Attach|Change|Still loading/.test(err.message)) try { Sentry.captureException(err); } catch (e) {}
-          alert(err.message || String(err));
+          if (window.Sentry && !err.quiet && !/first|Attach|Change|Still loading|live at|ordered/.test(err.message)) try { Sentry.captureException(err); } catch (e) {}
+          if (!err.quiet) alert(err.message || String(err));
         }
       }
 
-      async function addToCart() {
+      function addToCart() { return exclusive(addToCartInner); }
+      async function addToCartInner() {
         try {
           const saved = await saveCard();
           setBusy('Preparing the print files…');
@@ -2154,26 +2278,45 @@
             variantId: 'card-5x7-' + C.packFor(state.pack).pack + (state.corners === 'rounded' ? '-round' : ''),
             copies: C.packFor(state.pack).copies,
             assetUrls: [{ url: frontUrl, print_area: 'front' }, { url: backUrl, print_area: 'back' }],
-            title: saved.headline + ' — ' + state.pack + ' cards, 5×7″',
+            // The cart's − / + changes the number of PACKS, so the line names the
+            // pack size; a card count in the title went stale when it changed.
+            title: saved.headline + ' — 5×7″ cards',
             thumbUrl: saved.frontUrl,
-            options: { sizeLabel: '5×7″ flat cards', orientationLabel: (state.template.orientation === 'landscape' ? 'landscape, ' : '') +
+            options: { sizeLabel: 'Packs of ' + C.packFor(state.pack).pack, orientationLabel: (state.template.orientation === 'landscape' ? 'landscape, ' : '') +
               (state.corners === 'rounded' ? 'rounded corners, ' : '') + 'with envelopes' },
           });
           location.href = '/cart.html';
         } catch (err) {
           setBusy(null);
           console.error(err);
-          if (window.Sentry && !/first|Attach|Change|Still loading/.test(err.message)) try { Sentry.captureException(err); } catch (e) {}
-          alert(err.message || String(err));
+          if (window.Sentry && !err.quiet && !/first|Attach|Change|Still loading|live at|ordered/.test(err.message)) try { Sentry.captureException(err); } catch (e) {}
+          if (!err.quiet) alert(err.message || String(err));
         }
       }
 
       // Reopen a saved card (?id=slug from My Designs or the cart). With
       // &duplicate=1 it opens unattached, so saving makes a new card.
+      // Anything that goes wrong opening a card lands back on the designs with a
+      // message, never on a blank page.
       async function loadCard(slug, duplicate) {
+        try {
+          await loadCardInner(slug, duplicate);
+        } catch (e) {
+          console.error(e);
+          if (window.Sentry) try { Sentry.captureException(e); } catch (x) {}
+          $('step-edit').classList.add('hidden');
+          $('step-browse').classList.remove('hidden');
+          renderBrowse();
+          alert('That card couldn’t be opened. Please try again.');
+        }
+      }
+      async function loadCardInner(slug, duplicate) {
         const { data: col, error } = await db.from('collections')
-          .select('id, slug, kind, book_layout, user_id').eq('slug', slug).maybeSingle();
+          .select('id, slug, kind, book_layout, user_id, mind_file_url').eq('slug', slug).maybeSingle();
         const cfg = col && col.book_layout && col.book_layout.card;
+        const okCustom = (cu) => cu && Array.isArray(cu.boxes) && (cu.orientation === 'portrait' || cu.orientation === 'landscape')
+          && C.CARD_LAYOUTS.some((l) => l.id === cu.layout);
+        if (cfg && cfg.custom && !okCustom(cfg.custom)) throw new Error('Saved design is incomplete');
         if (cfg && cfg.custom) {
           state.custom = cfg.custom;
           boxSeq = Math.max(0, ...cfg.custom.boxes.map((b) => parseInt(String(b.id).slice(1), 10) || 0));
@@ -2186,8 +2329,11 @@
           alert('That card couldn’t be opened.');
           return;
         }
-        const { data: items } = await db.from('collection_items')
+        const { data: items, error: itemsErr } = await db.from('collection_items')
           .select('media_type, video_url, audio_url').eq('collection_id', col.id).order('target_index').limit(1);
+        // Without its items the card would look Popcode-less, and saving it
+        // would delete the video. Stop instead.
+        if (itemsErr) throw itemsErr;
         state.occasionId = cfg.occasionId || state.occasionId;
         state.template = tpl;
         state.text = cfg.text || {};
@@ -2202,11 +2348,18 @@
         state.greeting = cfg.greeting || 'holiday';
         state.corners = cfg.corners === 'rounded' ? 'rounded' : 'square';
         state.script = C.SCRIPTS.some((x) => x.id === cfg.script) ? cfg.script : null;
-        state.moves = (cfg.moves && typeof cfg.moves === 'object') ? cfg.moves : {};
+        // Positions only for lines this design still has.
+        const zoneIds = new Set((tpl.text || []).map((z) => z.id));
+        state.moves = {};
+        if (cfg.moves && typeof cfg.moves === 'object') {
+          Object.entries(cfg.moves).forEach(([k, m]) => {
+            if (zoneIds.has(k) && m && isFinite(m.dx) && isFinite(m.dy)) state.moves[k] = { dx: +m.dx, dy: +m.dy };
+          });
+        }
         state.name = cfg.title || '';
         state.slug = null; state.slugTouched = false;   // a duplicate gets its own link
         state.back = cfg.backPhoto ? { url: cfg.backPhoto, shape: cfg.backShape || null, size: cfg.backSize || 'large' } : null;
-        editing = duplicate ? null : { id: col.id, slug: col.slug };
+        editing = duplicate ? null : { id: col.id, slug: col.slug, live: !!col.mind_file_url };
         $('step-browse').classList.add('hidden');
         $('step-edit').classList.remove('hidden');
         renderEditor();
