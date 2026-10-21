@@ -180,8 +180,12 @@ What a card is now:
    Then a `RETAIL_PRICES.card` entry per pack (the pack buttons say only
    "cards" until then), and drop `card` from the exemption in
    `scripts/check-pricing.mjs`.
-3. **Run `supabase/migrations/2026-10-20-cards-free.sql` in prod**, or a card
-   counts as one of the free plan's five Popcodes.
+3. ~~Run the cards-free migration~~ — dropped 2026-10-21. A card's Popcode
+   **counts toward the plan until the card is ordered**, then the order credits
+   it back (`popcode_settle_print_order`, same as a mug made from a standard
+   Popcode). Making cards free let anyone use them as unlimited free, playable
+   Popcodes. At the limit, saving a card with a video shows "Out of Popcodes"
+   (the design itself still saves).
 4. **Order one sample** and scan it with an iPhone: first scan speed, and
    whether the type over the photo hurts tracking.
 5. **Link it**: Shop tile and the home-page holiday panel → `/card.html`.

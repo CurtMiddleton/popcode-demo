@@ -2030,9 +2030,11 @@
 
       // ── Save ────────────────────────────────────────────────────────────
       // A card is a Popcode: its printed front is the AR target and plays the
-      // attached video. It saves as kind:'card' (no migration beyond counting it
-      // free, 2026-10-20-cards-free.sql) with the design in book_layout.card, so
-      // My Designs can reopen it here.
+      // attached video. It saves as kind:'card' with the design in
+      // book_layout.card, so My Designs can reopen it here. Its Popcode COUNTS
+      // toward the plan until the card is ordered; the order gives it back
+      // (popcode_settle_print_order) -- the user's call, 2026-10-21, so cards
+      // can't be used as unlimited free Popcodes.
       let editing = null;   // { id, slug, live } once saved or when opened from My Designs; live = it scans
 
       // Has this card been bought? Its scan target must not change after that.
@@ -2274,6 +2276,21 @@
             collection_id: collectionId, target_index: 0, media_type: pc.mediaType === 'audio' ? 'audio' : 'video',
             video_url: videoUrl, audio_url: audioUrl, photo_url: frontUrl,
           }).select('id').single();
+          if (iErr && /POPCODE_QUOTA_EXCEEDED/.test(iErr.message || '')) {
+            // The design is saved; only its Popcode didn't fit the plan. Keep it
+            // a draft (no scan target), not a link that scans to nothing.
+            if (!(editing && editing.live)) {
+              await db.from('collections').update({ mind_file_url: '' }).eq('id', collectionId);
+              editing = { id: collectionId, slug, live: false };
+              if (slugField) slugField.lock(slug, 'This card’s link. It’s locked so printed cards keep working.');
+            }
+            setBusy(null);
+            const go = await popcodeConfirm('Your card is saved, but you’ve used all the Popcodes on your plan, so its video can’t be attached yet. ' +
+              'A card’s Popcode counts until you order the card, then you get it back. Get a Popcode pack to finish this card.',
+              { title: 'Out of Popcodes', confirmText: 'See Popcode packs', cancelText: 'Not now' });
+            if (go) location.href = '/pricing.html';
+            const e = new Error('quota'); e.quiet = true; throw e;
+          }
           if (iErr) throw new Error('Saved, but linking the video failed: ' + iErr.message);
           keepId = item && item.id;
         }

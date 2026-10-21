@@ -16,8 +16,8 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   `public/card.html`: 24 designs × portrait/landscape, Minted-style options, draggable text,
   Design your own, Use your photo, Front/Back, named cards + chosen Popcode link, drafts, the
   shared Add a Popcode sheet + Edit Photo (`public/popcode-tools.js`). Printify blueprint 10717
-  (District Photo, pack variants). **Next:** run `node scripts/printify-card-cost.mjs` for cost →
-  set prices; run `supabase/migrations/2026-10-20-cards-free.sql` in prod; test on a phone with a
+  (District Photo, pack variants). A card's Popcode counts toward the plan until it's ordered (decided 10-21; the cards-free migration was deleted). **Next:** run `node scripts/printify-card-cost.mjs` for cost →
+  set prices; test on a phone with a
   real account; order one sample (portrait + landscape + rounded); keep/cut list; then mark the
   PR ready, merge, and link from the Shop / holiday panel.
 - **Montage is now on every Popcode surface (2026-10-19, `9743928`).** The builder
