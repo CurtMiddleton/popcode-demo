@@ -172,7 +172,8 @@
       .slug-row .text-input:disabled { background: #f4f2ee; color: #6b6558; }
       .slug-note { font-size: 12px; color: #999; margin: 6px 2px 0; line-height: 1.4; }
       .slug-note.bad { color: #d33; }
-       #busy-overlay { position: fixed; inset: 0; z-index: 8500; background: rgba(249,249,249,0.72); display: none; align-items: center; justify-content: center; cursor: progress; }
+       .old-browser { background: #fff6e0; color: #8a5a00; border-radius: 12px; padding: 12px 16px; font-size: 14px; margin-bottom: 20px; }
+      #busy-overlay { position: fixed; inset: 0; z-index: 8500; background: rgba(249,249,249,0.72); display: none; align-items: center; justify-content: center; cursor: progress; }
       #busy-overlay.on { display: flex; }
       .busy-card { background: #fff; border-radius: 20px; padding: 22px 28px; box-shadow: 0 16px 40px rgba(20,16,40,.18); display: flex; align-items: center; gap: 14px; font-size: 15px; font-weight: 600; }
       .busy-spin { width: 22px; height: 22px; border-radius: 50%; border: 3px solid #e6e1ff; border-top-color: #7657FC; animation: busy-spin .8s linear infinite; }
@@ -472,7 +473,8 @@
           t.dataset.maxLines = String(z.lines || (C.TEXT_ROLES[z.role] || {}).maxLines || 1);
 
           if (opts.editable) {
-            t.contentEditable = 'plaintext-only';
+            // 'plaintext-only' throws in older Firefox; 'true' still edits.
+            try { t.contentEditable = 'plaintext-only'; } catch (x) { t.contentEditable = 'true'; }
             t.dataset.zone = z.id;
             t.dataset.ph = (C.TEXT_ROLES[z.role] || {}).hint || '';
             if (!z.value) t.classList.add('placeholder');
@@ -959,15 +961,46 @@
         if (on && !g) { g = document.createElement('div'); g.className = 'cf-guide'; face.appendChild(g); }
         if (g) g.classList.toggle('on', !!on);
       }
+      // On a touchscreen a swipe across the words must scroll the page, so a
+      // finger moves text only after a short press-and-hold. Mouse and pen
+      // drag straight away. `start(e)` begins the real drag from the press.
+      const HOLD_MS = 350;
+      function onPress(el, start) {
+        el.style.touchAction = 'manipulation';
+        el.style.webkitTouchCallout = 'none';
+        el.addEventListener('pointerdown', (e) => {
+          if (e.button) return;
+          if (e.pointerType !== 'touch') { start(e, false); return; }
+          const sx = e.clientX, sy = e.clientY;
+          let armed = false;
+          const block = (ev) => { if (armed && ev.cancelable) ev.preventDefault(); };
+          const done = () => {
+            clearTimeout(timer);
+            window.removeEventListener('pointermove', mv);
+            window.removeEventListener('pointerup', done);
+            window.removeEventListener('pointercancel', done);
+            setTimeout(() => el.removeEventListener('touchmove', block), 0);
+          };
+          const mv = (ev) => { if (!armed && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 8) done(); };
+          const timer = setTimeout(() => {
+            armed = true;
+            if (navigator.vibrate) try { navigator.vibrate(8); } catch (x) {}
+            start(e, true);
+          }, HOLD_MS);
+          el.addEventListener('touchmove', block, { passive: false });
+          window.addEventListener('pointermove', mv);
+          window.addEventListener('pointerup', done);
+          window.addEventListener('pointercancel', done);
+        });
+      }
       function enableDrag(face) {
         face.querySelectorAll('.cf-text').forEach((el) => {
           const box = state.custom.boxes.find((b) => b.id === el.dataset.zid);
           if (!box) return;
           el.style.cursor = 'move';
-          el.style.touchAction = 'none';
-          el.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            el.setPointerCapture(e.pointerId);
+          onPress(el, (e, held) => {
+            if (!held) e.preventDefault();
+            if (held) el.classList.add('dragging');
             const fr = face.getBoundingClientRect();
             const sx = e.clientX, sy = e.clientY, bx0 = box.x, by0 = box.y, l0 = el.offsetLeft, t0 = el.offsetTop;
             const move = (ev) => {
@@ -981,16 +1014,19 @@
               centreGuide(face, snap);
             };
             const up = () => {
-              el.removeEventListener('pointermove', move);
-              el.removeEventListener('pointerup', up);
+              window.removeEventListener('pointermove', move);
+              window.removeEventListener('pointerup', up);
+              window.removeEventListener('pointercancel', up);
+              el.classList.remove('dragging');
               centreGuide(face, false);
               const o = safeOverflow(face, el);
               box.x = Math.min(1, Math.max(0, box.x + o.dx / fr.width));
               box.y = Math.min(0.97, Math.max(0, box.y + o.dy / fr.height));
               refreshCustom();
             };
-            el.addEventListener('pointermove', move);
-            el.addEventListener('pointerup', up);
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+            window.addEventListener('pointercancel', up);
           });
         });
       }
@@ -1002,13 +1038,12 @@
         // text) would take over the pointer mid-move.
         face.addEventListener('dragstart', (e) => e.preventDefault());
         face.querySelectorAll('.cf-text[data-zone]').forEach((el) => {
-          el.style.touchAction = 'none';
-
-          el.addEventListener('pointerdown', (e) => {
-            if (e.button) return;
+          onPress(el, (e, held) => {
             const sx = e.clientX, sy = e.clientY, l0 = el.offsetLeft, t0 = el.offsetTop;
             const scale = face.getBoundingClientRect().width / face.offsetWidth || 1;
-            let dragging = false;
+            // A held finger is already a drag; a mouse becomes one after 5px.
+            let dragging = held;
+            if (held) { el.blur(); el.classList.add('dragging'); }
             const move = (ev) => {
               const dx = (ev.clientX - sx) / scale, dy = (ev.clientY - sy) / scale;
               if (!dragging) {
@@ -1229,12 +1264,12 @@
           onSave: (pc) => { state.popcode = pc; updatePopHint(); },
         }));
         $('back-photo').addEventListener('click', () => { pendingSlot = '__back'; $('photo-input').click(); });
-        $('back-clear').addEventListener('click', () => { state.back = null; drawBackPreview(true); });
+        $('back-clear').addEventListener('click', () => { state.back = null; drawBackPreview(true).catch(backFailed); });
         $('see-back').addEventListener('click', (e) => { e.preventDefault(); showSide('back'); $('ed-stage').scrollIntoView({ behavior: 'smooth', block: 'center' }); });
         $('side-toggle').addEventListener('click', (e) => { const b = e.target.closest('[data-side]'); if (b) showSide(b.dataset.side); });
         // Editing the words is front work: show the front.
         $('zone-fields').addEventListener('focusin', () => { if (state.side === 'back') showSide('front'); });
-        drawBackPreview();
+        drawBackPreview().catch(() => {});
         $('card-name').addEventListener('input', (e) => { state.name = e.target.value; });
         // The Popcode link, as on the calendar and books: fills in from the
         // name until the buyer edits it; locked once the card is saved.
@@ -1244,7 +1279,7 @@
           onChange: (sl) => {
             state.slug = sl;
             clearTimeout(slugBackTimer);
-            if (state.side === 'back') slugBackTimer = setTimeout(() => drawBackPreview(true), 300);
+            if (state.side === 'back') slugBackTimer = setTimeout(() => drawBackPreview(true).catch(backFailed), 300);
           },
         });
         $('slug-input').addEventListener('input', () => { state.slugTouched = true; });
@@ -1348,7 +1383,12 @@
       // Front / Back under the preview, like the ornament's. Changing anything
       // on the front (an option, a photo) brings the front back.
       function showSide(side) {
-        if (side === 'back') drawBackPreview(true); else drawEditorCard();
+        if (side === 'back') drawBackPreview(true).catch(backFailed); else drawEditorCard();
+      }
+      function backFailed(e) {
+        console.error(e);
+        if (window.Sentry) try { Sentry.captureException(e); } catch (x) {}
+        drawEditorCard();
       }
       function paintSideToggle() {
         document.querySelectorAll('#side-toggle [data-side]').forEach((b) =>
@@ -1378,7 +1418,7 @@
           e.preventDefault();
           const act = a.dataset.act;
           if (act === 'back-change') { pendingSlot = '__back'; $('photo-input').click(); }
-          if (act === 'back-remove') { state.back = null; drawBackPreview(true); }
+          if (act === 'back-remove') { state.back = null; drawBackPreview(true).catch(backFailed); }
           if (act === 'front-edit') onPhotoTap(state.template.photos[0].id);
           if (act === 'front-add') pickPhotoFor(state.template.photos[0].id);
           if (act === 'front-remove') { state.photos = {}; drawEditorCard(); }
@@ -1527,15 +1567,15 @@
         if (state.back) {
           optionRow('bsize-row', 'bsize-name',
             [{ id: 'small', label: 'Small' }, { id: 'medium', label: 'Medium' }, { id: 'large', label: 'Large' }],
-            state.back.size || 'large', (id) => { state.back.size = id; drawBackPreview(true); });
+            state.back.size || 'large', (id) => { state.back.size = id; drawBackPreview(true).catch(backFailed); });
         }
         if (state.back) {
           let natural = null;
-          try { natural = await loadImg(state.back.url); } catch (_) {}
+          try { natural = await backImg(state.back.url); } catch (_) {}
           if (mine !== backSeq) return;
           optionRow('bshape-row', 'bshape-name',
             [{ id: 'landscape', label: 'Landscape' }, { id: 'portrait', label: 'Portrait' }, { id: 'square', label: 'Square' }],
-            backShape(natural), (id) => { state.back.shape = id; drawBackPreview(true); });
+            backShape(natural), (id) => { state.back.shape = id; drawBackPreview(true).catch(backFailed); });
         }
         if (!show) return;
         state.side = 'back';
@@ -1543,10 +1583,20 @@
         const full = await renderBack(editing ? editing.slug : ((slugField && slugField.get()) || 'yourlink'), { placeholder: true });
         if (mine !== backSeq || state.side !== 'back' || !$('ed-stage')) return;
         const w = editorCardWidth();
+        // Shown at screen size: encoding the full 300 DPI back on every change
+        // took over a second.
+        const px = Math.round(w * Math.min(2, window.devicePixelRatio || 1));
+        const sm = document.createElement('canvas');
+        sm.width = px; sm.height = Math.round(px * full.height / full.width);
+        const sctx = ctx2d(sm);
+        sctx.imageSmoothingQuality = 'high';
+        sctx.drawImage(full, 0, 0, sm.width, sm.height);
+        freeCanvas(full);
         const im = document.createElement('img');
         im.className = 'ed-back';
         im.alt = 'The back of the card';
-        im.src = full.toDataURL('image/jpeg', 0.9);
+        im.src = sm.toDataURL('image/jpeg', 0.88);
+        freeCanvas(sm);
         im.style.width = w + 'px';
         im.style.borderRadius = state.corners === 'rounded' ? (w * 0.035) + 'px' : '0';
         im.addEventListener('click', () => { pendingSlot = '__back'; $('photo-input').click(); });
@@ -1574,7 +1624,7 @@
         if (pendingSlot === '__back') {
           state.back = { file, url: URL.createObjectURL(file) };
           pendingSlot = null;
-          drawBackPreview(true);
+          drawBackPreview(true).catch(backFailed);
           return;
         }
         state.photos[pendingSlot] = { file, url: URL.createObjectURL(file) };
@@ -1604,6 +1654,15 @@
         }).catch((e) => { h2cPromise = null; throw e; });
         return h2cPromise;
       }
+      // iOS caps the canvas memory a page can hold; past it getContext returns
+      // null. Say so plainly instead of a 'null is not an object' alert.
+      function ctx2d(c) {
+        const x = c.getContext('2d');
+        if (!x) throw new Error('Your device ran out of memory making the card. Close other tabs or apps and try again.');
+        return x;
+      }
+      // Hand a big canvas's memory back now rather than at the next GC.
+      function freeCanvas(...cs) { cs.forEach((c) => { if (c && c.width) { c.width = 0; c.height = 0; } }); }
       function loadImg(src) {
         return new Promise((res, rej) => {
           const i = new Image(); i.crossOrigin = 'anonymous';
@@ -1712,7 +1771,7 @@
             const r = box.getBoundingClientRect();
             const c = document.createElement('canvas');
             c.width = Math.round(r.width * scale); c.height = Math.round(r.height * scale);
-            const cx = c.getContext('2d');
+            const cx = ctx2d(c);
             cx.imageSmoothingQuality = 'high';
             clipToRadius(cx, box, c.width, c.height, scale);
             const adj = (state.photos[box.dataset.slot] || {}).adjust;
@@ -1739,14 +1798,14 @@
           });
           foil.forEach((el) => { el.style.visibility = ''; });
           const origin = face.getBoundingClientRect();
-          const ctx = canvas.getContext('2d');
+          const ctx = ctx2d(canvas);
           // html2canvas leaves its own scale on the context; foil is placed in canvas pixels.
           ctx.setTransform(1, 0, 0, 1, 0, 0);
           foil.forEach((el) => paintFoil(ctx, el, origin, scale, face.offsetHeight));
           if (canvas.width !== trim.w || canvas.height !== trim.h) {
             const out = document.createElement('canvas');
             out.width = trim.w; out.height = trim.h;
-            out.getContext('2d').drawImage(canvas, 0, 0, trim.w, trim.h);
+            ctx2d(out).drawImage(canvas, 0, 0, trim.w, trim.h);
             return out;
           }
           return canvas;
@@ -1765,12 +1824,12 @@
         const b = C.cardBleedSize(tpl.formatId, tpl.orientation);
         const out = document.createElement('canvas');
         out.width = b.w; out.height = b.h;
-        const ctx = out.getContext('2d');
+        const ctx = ctx2d(out);
         const W = trimCanvas.width, H = trimCanvas.height, ox = b.offsetX, oy = b.offsetY;
         // html2canvas leaves the outermost pixel row a shade dark (the face's own
         // ground antialiasing in under the photo), and mirroring would double it
         // into a line along the cut. Repaint the outer 2px from just inside.
-        const tctx = trimCanvas.getContext('2d');
+        const tctx = ctx2d(trimCanvas);
         const E = 2;
         for (let i = 0; i < E; i++) {
           tctx.drawImage(trimCanvas, 0, E, W, 1, 0, i, W, 1);
@@ -1790,9 +1849,10 @@
         mirror(trimCanvas, 0, H - (b.h - oy - H), W, b.h - oy - H, ox, oy + H, false, true);   // bottom
         const snap = document.createElement('canvas');
         snap.width = b.w; snap.height = b.h;
-        snap.getContext('2d').drawImage(out, 0, 0);
+        ctx2d(snap).drawImage(out, 0, 0);
         mirror(snap, ox, 0, ox, b.h, 0, 0, true, false);                        // left, corners included
         mirror(snap, ox + W - (b.w - ox - W), 0, b.w - ox - W, b.h, ox + W, 0, true, false);   // right
+        freeCanvas(snap);
         // The lab's print area can be smaller than a full 1/8in bleed (District
         // Photo's is ~1/16in at the sides). Crop to it, centred, so Printify
         // gets exactly its size and nothing inside the trim moves.
@@ -1800,7 +1860,8 @@
         if (pp && (pp.w !== b.w || pp.h !== b.h)) {
           const crop = document.createElement('canvas');
           crop.width = pp.w; crop.height = pp.h;
-          crop.getContext('2d').drawImage(out, Math.round((b.w - pp.w) / 2), Math.round((b.h - pp.h) / 2), pp.w, pp.h, 0, 0, pp.w, pp.h);
+          ctx2d(crop).drawImage(out, Math.round((b.w - pp.w) / 2), Math.round((b.h - pp.h) / 2), pp.w, pp.h, 0, 0, pp.w, pp.h);
+          freeCanvas(out);
           return crop;
         }
         return out;
@@ -1818,7 +1879,7 @@
         if (state.template.orientation !== 'landscape') return canvas;
         const r = document.createElement('canvas');
         r.width = canvas.height; r.height = canvas.width;
-        const ctx = r.getContext('2d');
+        const ctx = ctx2d(r);
         // Clockwise: the card's top edge runs down the print file's right side.
         // Check it against the first landscape sample.
         ctx.translate(r.width, 0);
@@ -1848,6 +1909,12 @@
         const r = img.naturalWidth / img.naturalHeight;
         return r > 1.15 ? 'landscape' : r < 0.87 ? 'portrait' : 'square';
       }
+      // The back photo, decoded once per URL (a 24MP photo is ~100MB decoded).
+      let backImgCache = { url: null, img: null };
+      async function backImg(url) {
+        if (backImgCache.url !== url) backImgCache = { url, img: await loadImg(url) };
+        return backImgCache.img;
+      }
       async function renderBack(slug, opts) {
         opts = opts || {};
         const tpl = state.template;
@@ -1856,7 +1923,7 @@
         if (pp) { b.offsetX -= (b.w - pp.w) / 2; b.offsetY -= (b.h - pp.h) / 2; b.w = pp.w; b.h = pp.h; }
         const c = document.createElement('canvas');
         c.width = b.w; c.height = b.h;
-        const ctx = c.getContext('2d');
+        const ctx = ctx2d(c);
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, b.w, b.h);
         await Promise.all(['600', '700'].map((w) => document.fonts.load(`${w} 40px Inter`))).catch(() => {});
@@ -1873,7 +1940,7 @@
         // shape the buyer picks (landscape / portrait / square; by default the
         // photo's own shape). An empty spot is drawn square.
         let img = null;
-        if (state.back && state.back.url) { try { img = await loadImg(state.back.url); } catch (_) {} }
+        if (state.back && state.back.url) { try { img = await backImg(state.back.url); } catch (_) {} }
         const shape = backShape(img);
         const ratio = BACK_SHAPES[shape];
         const trimW = b.w - 2 * b.offsetX;
@@ -1891,7 +1958,7 @@
           ctx.save();
           ctx.translate(ix, iy); ctx.scale(isz / 24, isz / 24);
           ctx.strokeStyle = '#a3a3a3'; ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.roundRect(1.5, 2.5, 21, 19, 2.5); ctx.stroke();
+          ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(1.5, 2.5, 21, 19, 2.5); else ctx.rect(1.5, 2.5, 21, 19); ctx.stroke();
           ctx.beginPath(); ctx.arc(8.5, 9, 2, 0, Math.PI * 2); ctx.stroke();
           ctx.beginPath(); ctx.moveTo(22, 16); ctx.lineTo(16, 10); ctx.lineTo(5, 21); ctx.stroke();
           ctx.restore();
@@ -1942,11 +2009,21 @@
 
       async function uploadWithRetry(path, blob, contentType, tries = 3) {
         let last = null;
+        // A request that never settles (phone backgrounded, network switched)
+        // would leave "Saving…" up forever: each try gets a time limit, ~60s
+        // plus a second per MB.
+        const limit = 60000 + Math.round((blob.size || 0) / 1e6) * 1000;
         for (let i = 0; i < tries; i++) {
-          const { error } = await db.storage.from('experiences').upload(path, blob, { contentType, upsert: true });
+          let timer;
+          const timeout = new Promise((r) => { timer = setTimeout(() => r({ error: { message: 'timed out' } }), limit); });
+          const { error } = await Promise.race([
+            db.storage.from('experiences').upload(path, blob, { contentType, upsert: true }),
+            timeout,
+          ]).catch((e) => ({ error: e }));
+          clearTimeout(timer);
           if (!error) return db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
           last = error;
-          await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+          if (i < tries - 1) await new Promise((r) => setTimeout(r, 800 * (i + 1)));
         }
         throw new Error('Upload failed: ' + (last && last.message));
       }
@@ -2114,9 +2191,10 @@
         setBusy('Making it scannable…');
         const small = document.createElement('canvas');
         small.width = 1000; small.height = Math.round(1000 * front.height / front.width);
-        small.getContext('2d').drawImage(front, 0, 0, small.width, small.height);
+        ctx2d(small).drawImage(front, 0, 0, small.width, small.height);
         const targetImg = await loadImg(small.toDataURL('image/jpeg', 0.92));
         const compiler = new MINDAR.IMAGE.Compiler();
+        freeCanvas(small);
         await compiler.compileImageTargets([targetImg], () => {});
         mindUrl = await uploadWithRetry(`${slug}/target.mind`, new Blob([await compiler.exportData()]), 'application/octet-stream')
           + '?v=' + stamp;
@@ -2139,7 +2217,10 @@
         } else {
           setBusy('Uploading your video…');
           if (pc.video) {
-            videoUrl = await uploadWithRetry(`${slug}/video_0_${stamp}.mp4`, pc.video, pc.video.type || 'video/mp4');
+            // A compressed video is WebM; name it for what it is.
+            const vtype = pc.video.type || 'video/mp4';
+            const vext = /webm/.test(vtype) ? 'webm' : /quicktime/.test(vtype) ? 'mov' : 'mp4';
+            videoUrl = await uploadWithRetry(`${slug}/video_0_${stamp}.${vext}`, pc.video, vtype);
           } else {
             videoUrl = (await remap(pc.existingVideoUrl)) || pc.existingVideoUrl;
           }
@@ -2163,7 +2244,7 @@
               title: (state.name || '').trim() || null,
               occasionId: state.occasionId, text: state.text, photos: photoUrls,
               colorway: state.colorway, pack: state.pack, bw: state.bw, frontUrl,
-              greeting: state.greeting, corners: state.corners, script: state.script, moves: state.custom ? null : state.moves, backPhoto: backUrl, backShape: state.back ? backShape(await loadImg(backUrl).catch(() => null)) : null, backSize: state.back ? (state.back.size || 'large') : null,
+              greeting: state.greeting, corners: state.corners, script: state.script, moves: state.custom ? null : state.moves, backPhoto: backUrl, backShape: state.back ? backShape(await backImg(backUrl).catch(() => null)) : null, backSize: state.back ? (state.back.size || 'large') : null,
               custom: state.custom ? JSON.parse(JSON.stringify(state.custom)) : null,
               // Edit Photo crops, per slot.
               adjust: Object.fromEntries(Object.entries(state.photos).filter(([, p]) => p.adjust).map(([k, p]) => [k, p.adjust])),
@@ -2235,9 +2316,15 @@
           const frontCanvas = toBleed(saved.front);
           const backCanvas = await renderBack(saved.slug);
           // The preview shows the card the right way up; Printify gets it turned.
-          const frontBlob = await toJpeg(toPrintify(frontCanvas), 0.95);
-          const backBlob = await toJpeg(toPrintify(backCanvas), 0.95);
+          freeCanvas(saved.front);
+          const turnedFront = toPrintify(frontCanvas);
+          const frontBlob = await toJpeg(turnedFront, 0.95);
+          if (turnedFront !== frontCanvas) freeCanvas(turnedFront);
+          const turnedBack = toPrintify(backCanvas);
+          const backBlob = await toJpeg(turnedBack, 0.95);
+          if (turnedBack !== backCanvas) freeCanvas(turnedBack);
           const urls = [URL.createObjectURL(await toJpeg(frontCanvas, 0.9)), URL.createObjectURL(await toJpeg(backCanvas, 0.9))];
+          freeCanvas(frontCanvas, backCanvas);
           // The print file in mm (it is 300 DPI). The preview draws one inset on
           // all four sides, so it uses the deeper top/bottom bleed: the safe line
           // sits at least 1/4in inside the trim everywhere.
@@ -2364,6 +2451,14 @@
           document.querySelector('.wrap').innerHTML =
             '<p style="color:#b00">Card templates failed to load. Run <code>node scripts/build-card-templates.mjs</code>.</p>';
           return;
+        }
+        // Card type is sized in container units (iOS 16+ / Safari 16+). Older
+        // browsers would print the words at the wrong size, so say so up front.
+        if (!(window.CSS && CSS.supports && CSS.supports('font-size', '1cqh'))) {
+          const n = document.createElement('div');
+          n.className = 'old-browser';
+          n.textContent = 'Your browser is too old to design cards accurately. Please update to iOS 16 or later (or the latest Chrome, Safari or Firefox) and try again.';
+          document.querySelector('.wrap').prepend(n);
         }
         const q = new URLSearchParams(location.search);
         if (q.get('occasion')) state.occasionId = q.get('occasion');

@@ -313,9 +313,11 @@
         a.oy = Math.max(-80, Math.min(80, oy0 + (ev.clientY - sy) / rect.height * 100));
         updateEp();
       };
-      const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); };
+      const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up); };
       document.addEventListener('pointermove', move);
       document.addEventListener('pointerup', up);
+      // iOS cancels a touch it takes over; without this the next touch pans from stale coordinates.
+      document.addEventListener('pointercancel', up);
     });
   }
   window.addEventListener('resize', () => { if (overlay && overlay.classList.contains('visible') && q('#ep-stage')) updateEp(); });
@@ -448,30 +450,51 @@
       return ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].some((t) => MediaRecorder.isTypeSupported(t));
     } catch (e) { return false; }
   }
+  // Re-encodes through a canvas. The canvas stream has no sound, so the
+  // video's own audio is routed in too (Web Audio, not the speakers); if the
+  // browser won't allow that, it falls back to a silent copy as before.
   function compressVideo(file, onProgress) {
-    const mimeType = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((t) => MediaRecorder.isTypeSupported(t));
+    const types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    const mimeType = types.find((t) => MediaRecorder.isTypeSupported(t));
     return new Promise((resolve, reject) => {
       const video = document.createElement('video');
       const srcUrl = URL.createObjectURL(file);
-      video.src = srcUrl; video.muted = true; video.playsInline = true;
+      video.src = srcUrl; video.playsInline = true;
+      let actx = null;
+      const finish = () => { URL.revokeObjectURL(srcUrl); if (actx) actx.close().catch(() => {}); };
       video.onloadedmetadata = () => {
         const scale = Math.min(1, 1280 / Math.max(video.videoWidth || 1, video.videoHeight || 1));
         const w = Math.max(2, Math.round(video.videoWidth * scale / 2) * 2);
         const h = Math.max(2, Math.round(video.videoHeight * scale / 2) * 2);
         const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
         const ctx = canvas.getContext('2d');
-        const rec = new MediaRecorder(canvas.captureStream(30), { mimeType, videoBitsPerSecond: 2500000 });
+        const stream = canvas.captureStream(30);
+        try {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          actx = new AC();
+          const dest = actx.createMediaStreamDestination();
+          actx.createMediaElementSource(video).connect(dest);
+          dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+        } catch (e) {
+          video.muted = true;   // no audio routing: a silent copy, as before
+        }
+        const rec = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2500000 });
         const chunks = [];
         rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-        rec.onstop = () => { URL.revokeObjectURL(srcUrl); resolve(new Blob(chunks, { type: mimeType.split(';')[0] })); };
-        rec.onerror = (e) => { URL.revokeObjectURL(srcUrl); reject(e.error || new Error('Compression error')); };
+        rec.onstop = () => { finish(); resolve(new Blob(chunks, { type: mimeType.split(';')[0] })); };
+        rec.onerror = (e) => { finish(); reject(e.error || new Error('Compression error')); };
         let animId;
         const draw = () => { if (!video.ended && !video.paused) { ctx.drawImage(video, 0, 0, w, h); onProgress && onProgress(video.currentTime / (video.duration || 1)); animId = requestAnimationFrame(draw); } };
         video.onended = () => { cancelAnimationFrame(animId); rec.stop(); };
         rec.start(200);
-        video.play().then(draw).catch(reject);
+        if (actx && actx.state === 'suspended') actx.resume().catch(() => {});
+        video.play().then(draw).catch(() => {
+          // Autoplay with sound refused: carry on silent rather than fail.
+          video.muted = true;
+          video.play().then(draw).catch((e) => { finish(); reject(e); });
+        });
       };
-      video.onerror = () => reject(new Error('Could not load video for compression'));
+      video.onerror = () => { finish(); reject(new Error('Could not load video for compression')); };
       video.load();
     });
   }
