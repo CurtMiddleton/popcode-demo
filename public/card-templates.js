@@ -2298,7 +2298,7 @@
     {
       "id": "p-frame",
       "family": "frame",
-      "name": "Colour Frame",
+      "name": "Color Frame",
       "formatId": "flat-5x7",
       "orientation": "portrait",
       "tags": [
@@ -2404,7 +2404,7 @@
     {
       "id": "l-frame",
       "family": "frame",
-      "name": "Colour Frame",
+      "name": "Color Frame",
       "formatId": "flat-5x7",
       "orientation": "landscape",
       "tags": [
@@ -6630,7 +6630,7 @@
   "CUSTOM_COLORS": [
     {
       "id": "ink",
-      "label": "Card colour"
+      "label": "Card color"
     },
     {
       "id": "accent",
