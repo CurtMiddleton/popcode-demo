@@ -726,6 +726,15 @@
         ? state.variantId + '-' + state.frameColor
         : state.variantId;
 
+      /* Symbol size a product starts at. Small (6%) on an ornament printed a
+         4mm pinwheel on a 2.9" disc, too small once the sample arrived
+         (2026-10-21), and a mug's 9mm read the same way. */
+      const LARGE_BADGE_DEFAULT = new Set(['ornament', 'mug']);
+      function defaultScaleFor(type) { return LARGE_BADGE_DEFAULT.has(type) ? 0.12 : 0.06; }
+      function syncBadgeSizeToggle() {
+        document.querySelectorAll('.badge-size-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.scale) === state.scale));
+      }
+
       function variantOf(type, id) { return (PRODUCTS[type] || []).find(v => v.id === id) || null; }
       function baseAspect() { const v = variantOf(state.productType, state.variantId); return v ? v.aspect : null; }
       function currentAspect() {
@@ -1171,7 +1180,8 @@
           state.frameColor = savedColor;
           state.mounted = /^cfpm-/.test(savedVid);
           state.orientation = pc.orientation || 'portrait';
-          state.scale = pc.scale || 0.06;
+          state.scale = pc.scale || defaultScaleFor(pc.productType);
+          syncBadgeSizeToggle();
           state.photoAdjust = normalizeAdjust(pc.adjust);
           renderSizeChips(); renderFrameChips(); renderMountChips(); updateOrientationVisibility();
           document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b.dataset.orientation === state.orientation));
@@ -1211,7 +1221,8 @@
           state.frameColor = o.frameColor || color;
           state.mounted = /^cfpm-/.test(vid);
           state.orientation = o.orientation || 'portrait';
-          state.scale = o.scale || 0.06;
+          state.scale = o.scale || defaultScaleFor(row.product_type);
+          syncBadgeSizeToggle();
           state.photoAdjust = normalizeAdjust(o.adjust);
           renderSizeChips(); renderFrameChips(); renderMountChips(); updateOrientationVisibility();
           document.querySelectorAll('#orientation-toggle button').forEach(b => b.classList.toggle('active', b.dataset.orientation === state.orientation));
@@ -1346,9 +1357,9 @@
           card.onclick = () => openCategory(type);
           grid.appendChild(card);
           const cv = card.querySelector('canvas');
-          const fallback = () => compositeBadgedImage(firstPhoto, Object.assign({ scale: 0.06, aspect: first.aspect, previewCanvas: cv, returnDataUrl: false }, giftArtOpts())).catch(() => {});
+          const fallback = () => compositeBadgedImage(firstPhoto, Object.assign({ scale: defaultScaleFor(type), aspect: first.aspect, previewCanvas: cv, returnDataUrl: false }, giftArtOpts())).catch(() => {});
           if (hasMockup) {
-            renderProductMockup(cv, firstPhoto, { scale: 0.06, aspect: first.aspect, mockup: mk, art: giftArtOpts() }).catch(fallback);
+            renderProductMockup(cv, firstPhoto, { scale: defaultScaleFor(type), aspect: first.aspect, mockup: mk, art: giftArtOpts() }).catch(fallback);
           } else { fallback(); }
         });
       }
@@ -1366,6 +1377,8 @@
            Every other per-product choice above is reset here; this one was missed,
            so the default 'fill' survived into the mug and its sample preview. */
         state.photoAdjust = defaultAdjustFor(type);
+        state.scale = defaultScaleFor(type);
+        syncBadgeSizeToggle();
         state.previewSide = 'front';
         // Name the product before the async preview runs, or the button shows
         // whatever it last said for a beat.

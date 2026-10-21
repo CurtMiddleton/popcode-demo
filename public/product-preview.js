@@ -214,7 +214,9 @@
 
   function placeBadge(ctx, iconImg, w, h, scale, opts) {
           var minSide = Math.min(w, h);
-          var size = Math.round(minSide * ((opts && opts.wrap) ? WRAP_BADGE_SCALE : scale));
+          // A wrap sizes off its own number (see WRAP_BADGE_SCALE), with Small /
+          // Medium / Large scaling it the same way they scale everyone else's.
+          var size = Math.round(minSide * ((opts && opts.wrap) ? WRAP_BADGE_SCALE * (scale || 0.06) / 0.06 : scale));
           var pad = Math.round(minSide * 0.025);
           // A kiss-cut sticker is trimmed 2.5mm (30px at 300 DPI) in from the
           // file edge, and the usual 2.5% margin is under that on the smaller
