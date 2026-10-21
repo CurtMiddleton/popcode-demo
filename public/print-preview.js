@@ -12,8 +12,11 @@
      A hardcover laid flat: back | spine | front, with a keep-inside line.
    PopcodePrintPreview.spreads({ pages, wIn, hIn })
      A book as it opens: inside front cover | page 1, 2 | 3, …, last | inside back cover.
-   PopcodePrintPreview.list({ items: [{ src, label, safeMm, wMm, hMm }], cols })
+   PopcodePrintPreview.list({ items: [{ src, label, safeMm, wMm, hMm, round, faceFrac }], cols })
      Single pages or products in a grid, each optionally with a keep-inside line.
+     round: a dashed circle where a round product (an ornament) is cut, with the
+     trimmed corners faded. faceFrac: dashed lines around the middle share of a
+     wrap (a mug) that faces you; the faded sides turn toward the handle.
    PopcodePrintPreview.warn(level, title, text)
      A notice to put first in a section: 'soft' (amber) or 'bad' (red).
    open() also takes goLabel / backLabel to rename the two buttons, and
@@ -56,6 +59,9 @@
       '.pp-face{position:relative}' +
       '.pp-face img{display:block;width:100%;height:auto}' +
       '.pp-safe{position:absolute;border:1.5px dashed rgba(255,255,255,.9);outline:1px dashed rgba(0,0,0,.45);pointer-events:none}' +
+      '.pp-cut{position:absolute;inset:0;border-radius:50%;border:2px dashed rgba(255,255,255,.95);outline:1px dashed rgba(0,0,0,.5);outline-offset:-3px;box-shadow:0 0 0 9999px rgba(242,240,236,.6);pointer-events:none}' +
+      '.pp-front{position:absolute;top:0;bottom:0;border-left:2px dashed rgba(0,0,0,.55);border-right:2px dashed rgba(0,0,0,.55);box-shadow:0 0 0 9999px rgba(242,240,236,.55);pointer-events:none}' +
+      '.pp-front span{position:absolute;left:50%;top:6px;transform:translateX(-50%);white-space:nowrap;background:rgba(0,0,0,.6);color:#fff;font-size:11px;font-weight:600;padding:2px 7px;border-radius:9px}' +
       '.pp-tag{position:absolute;left:6px;top:6px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;font-weight:600;padding:2px 7px;border-radius:9px}' +
       '.pp-spinebox{background:#fff;display:flex;box-shadow:inset 1px 0 0 #e3ded6,inset -1px 0 0 #e3ded6}' +
       '.pp-spinebox img{width:100%;height:100%;object-fit:fill;display:block}' +
@@ -82,6 +88,14 @@
     if (!(safeMm > 0 && wMm > 0 && hMm > 0)) return '';
     var x = safeMm / wMm * 100, y = safeMm / hMm * 100;
     return '<div class="pp-safe" style="left:' + x + '%;right:' + x + '%;top:' + y + '%;bottom:' + y + '%"></div>';
+  }
+
+  // How the product itself crops the file: a round die-cut, or the front of a wrap.
+  function cropMarks(it) {
+    if (it.round) return '<div class="pp-cut"></div>';
+    var f = it.faceFrac;
+    if (f > 0 && f < 1) return '<div class="pp-front" style="left:' + ((1 - f) / 2 * 100) + '%;right:' + ((1 - f) / 2 * 100) + '%"><span>Front of the mug</span></div>';
+    return '';
   }
 
   function wrap(o) {
@@ -119,8 +133,9 @@
     // maxWidth (px) keeps a single portrait print from filling the screen.
     return '<div class="pp-list" style="grid-template-columns:repeat(' + cols + ',minmax(0,1fr))' + (o.maxWidth ? ';max-width:' + o.maxWidth + 'px' : '') + '">' +
       o.items.map(function (it) {
-        return '<div class="pp-item"><figure><div class="pp-face"><img src="' + it.src + '" alt="' + esc(it.label || '') + '" loading="lazy"/>' +
-          safeBox(it.safeMm, it.wMm, it.hMm) + '</div>' + (it.label ? '<figcaption>' + esc(it.label) + '</figcaption>' : '') + '</figure></div>';
+        var marks = cropMarks(it);
+        return '<div class="pp-item"><figure><div class="pp-face"' + (marks ? ' style="overflow:hidden"' : '') + '><img src="' + it.src + '" alt="' + esc(it.label || '') + '" loading="lazy"/>' +
+          safeBox(it.safeMm, it.wMm, it.hMm) + marks + '</div>' + (it.label ? '<figcaption>' + esc(it.label) + '</figcaption>' : '') + '</figure></div>';
       }).join('') + '</div>';
   }
 

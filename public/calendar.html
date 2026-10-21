@@ -240,7 +240,9 @@
          the size/position the print PDF bakes it (the page is a fixed 1400×993
          canvas, so the geometry matches the print 1:1). */
       .pf-badge { position: absolute; z-index: 2; pointer-events: none; }
-      .pf-badge img { width: 100%; height: 100%; display: block; }
+      /* White ring, the same share as the print's (BADGE_RING_FRAC = 0.06 / 1.12). */
+      .pf-badge { background: #fff; border-radius: 50%; }
+      .pf-badge img { width: 89.29%; height: 89.29%; margin: 5.357%; display: block; }
       .tray-thumb .pop-dot {
         position: absolute; bottom: 4px; left: 4px; width: 16px; height: 16px; border-radius: 50%;
         background: linear-gradient(135deg,#7657FC,#589AF9); display: flex; align-items: center; justify-content: center;
@@ -1178,7 +1180,7 @@
         // Popcode tag (builder-only; the print pass replaces it with the badge).
         const p = photoId && photos.get(photoId);
         if (url && photoHasMedia(p)) {
-          const size = Math.round(PRINT.PXH * 0.09), pad = Math.round(size * 0.5);
+          const { size, pad } = calBadgeBox();
           const badge = document.createElement('div');
           badge.className = 'pf-badge';
           badge.title = p.popcode.mediaType === 'audio' ? 'Popcode — plays audio when scanned' : 'Popcode — plays video when scanned';
@@ -1966,7 +1968,15 @@
       // it in the print PDF (it drops external SVG <img>s).
       // px: 256 is plenty on screen; the print file overlays a 600px copy (see
       // PRINT_BADGE_PX) so the half-inch symbol prints at 1200 DPI, not 300.
-      async function rasterizeBadge(px = 256) {
+      // White ring 6% of the symbol's width, outside it (see rasterizeBadge).
+      const BADGE_RING_FRAC = 0.06 / 1.12;
+      // The badge box: the symbol (9% of the page height, inset half its size)
+      // grown by its ring, so the symbol itself keeps its size and place.
+      function calBadgeBox() {
+        const sym = Math.round(PRINT.PXH * 0.09), ring = Math.round(sym * 0.06);
+        return { size: sym + 2 * ring, pad: Math.round(sym * 0.5) - ring };
+      }
+      async function rasterizeBadge(px = 256, ring = true) {
         let svg = await (await fetch('/assets/popcode_symbol_color.svg')).text();
         if (!/<svg[^>]*\bwidth=/.test(svg)) svg = svg.replace('<svg ', '<svg width="302" height="302" ');
         const img = new Image();
@@ -1975,7 +1985,15 @@
         const c = document.createElement('canvas'); c.width = px; c.height = px;
         const ctx = c.getContext('2d');
         ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, px, px);
+        // The badge on a photo carries a thin white ring (as on the shop's
+        // products), so it keeps its edge on a busy picture; the box grows by
+        // the ring (BADGE_RING_FRAC) so the symbol inside stays its size.
+        if (ring) {
+          const r = Math.round(px * BADGE_RING_FRAC);
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath(); ctx.arc(px / 2, px / 2, px / 2, 0, Math.PI * 2); ctx.fill();
+          ctx.drawImage(img, r, r, px - 2 * r, px - 2 * r);
+        } else ctx.drawImage(img, 0, 0, px, px);
         return c.toDataURL('image/png');
       }
 
@@ -2927,8 +2945,7 @@
           if (!tag) return;
           tag.remove(); // swap the SVG badge for a PNG (html2canvas drops external SVGs)
           if (!badgePng) return;
-          const size = Math.round(PRINT.PXH * 0.09);
-          const pad = Math.round(size * 0.5);
+          const { size, pad } = calBadgeBox();
           const b = document.createElement('div');
           b.className = 'print-badge';
           b.style.cssText = 'position:absolute;z-index:3;right:' + pad + 'px;bottom:' + pad + 'px;'
