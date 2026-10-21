@@ -64,10 +64,19 @@ const order = {
 const money = (minor) => (typeof minor === 'number' ? '$' + (minor / 100).toFixed(2) : '?');
 
 let id = null;
+// Ctrl-C mid-run must not leave the held order behind (the 2026-08-22 lesson).
+process.on('SIGINT', async () => {
+  if (id && !keep) {
+    console.error(`\nInterrupted — cancelling order ${id}…`);
+    try { await call(`/shops/${SHOP}/orders/${id}/cancel.json`, 'POST'); console.error('Cancelled.'); }
+    catch (e) { console.error(`COULD NOT CANCEL order ${id}: ${e.message}\nCancel it now in the Printify dashboard (Orders).`); }
+  }
+  process.exit(130);
+});
 try {
   const created = await call(`/shops/${SHOP}/orders.json`, 'POST', order);
   id = created.id;
-  console.log(`Created held order ${id}. Reading it back…`);
+  console.log(`Created held order ${id} (it will be cancelled automatically). Reading it back…`);
   // Costs are filled in asynchronously; give Printify a moment.
   let o = null;
   for (let i = 0; i < 10; i++) {
