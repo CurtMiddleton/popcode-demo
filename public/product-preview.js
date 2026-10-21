@@ -39,6 +39,9 @@
 
   const WRAP_BADGE_LIFT = 0.10;
 
+  // White ring width as a share of the symbol's diameter, each side.
+  const BADGE_RING = 0.06;
+
   const CORRECTION_PRESETS = [
           { key: 'off',    label: 'Off',    gamma: 1.00, contrast: 1.00, saturation: 1.00 },
           { key: 'light',  label: 'Light',  gamma: 1.10, contrast: 1.02, saturation: 1.06 },
@@ -217,6 +220,14 @@
           // A wrap sizes off its own number (see WRAP_BADGE_SCALE), with Small /
           // Medium / Large scaling it the same way they scale everyone else's.
           var size = Math.round(minSide * ((opts && opts.wrap) ? WRAP_BADGE_SCALE * (scale || 0.06) / 0.06 : scale));
+          /* A thin white ring around the colour and black symbols (not the white
+             one, where it would vanish), so the disc keeps its edge on a busy
+             photo, as on Scout's ornament. From here `size` is the ringed
+             badge, so every margin and cut-line rule below allows for the ring;
+             the symbol itself stays the size picked. */
+          var symSize = size;
+          var ring = (opts && opts.symbol === 'white') ? 0 : Math.max(1, Math.round(symSize * BADGE_RING));
+          size = symSize + 2 * ring;
           var pad = Math.round(minSide * 0.025);
           // A kiss-cut sticker is trimmed 2.5mm (30px at 300 DPI) in from the
           // file edge, and the usual 2.5% margin is under that on the smaller
@@ -259,7 +270,11 @@
             x = Math.round(w / 2 + reach * 0.707 - size / 2);
             y = Math.round(h / 2 + reach * 0.707 - size / 2);
           }
-          ctx.drawImage(iconImg, x, y, size, size);
+          if (ring) {
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath(); ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2); ctx.fill();
+          }
+          ctx.drawImage(iconImg, x + ring, y + ring, symSize, symSize);
         }
 
   async function renderProductMockup(targetCanvas, photoUrl, opts) {
