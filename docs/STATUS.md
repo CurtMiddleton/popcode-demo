@@ -12,7 +12,8 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 - **Calendar page themes are live (2026-10-20, [PR #277](https://github.com/CurtMiddleton/popcode-demo/pull/277)).**
   Popsa-style background colours, for all pages or one month at a time, in `public/calendar.html`.
   **Not yet tried on live:** saving and reopening a themed calendar, the real print PDF, an iPhone, or
-  a printed test calendar. Calendar only so far: the photo book and board book don't have themes yet.
+  a printed test calendar. Calendar only: **the user wants photo books (and board books) to stay white for now** (decided
+  2026-10-21). Don't offer or build themes for them unless asked.
   See the 2026-10-20 (calendar themes) entry.
 - **Montage is now on every Popcode surface (2026-10-19, `9743928`).** The builder
   moved out of create.html/edit.html into **`public/montage.js`**, shared by all five
@@ -4183,6 +4184,6 @@ print-preview and PDF paths **are** testable here, which the old notes said they
   before promoting the feature; white type on deep colours is the most likely to print differently.
 - A Popsa-style cover (photo inset with a coloured border) was deliberately left out. It changes
   the cover layout and print, so it's a follow-up if the user wants it.
-- Bringing the same picker to `book.html` and `boardbook.html` was offered, not started. The board
-  book already has its own text-page swatches (`swatchesHTML`).
+- Themes for `book.html` and `boardbook.html`: **declined by the user on 2026-10-21. Books stay
+  white for now.** Don't build them unless asked.
 
