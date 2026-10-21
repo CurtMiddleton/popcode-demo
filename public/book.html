@@ -308,7 +308,9 @@
          position (bottom-right, ~9% of the slot's shorter edge; sized by
          sizeSlotBadges()), so the preview shows exactly what prints. */
       .slot-badge { position: absolute; z-index: 2; pointer-events: none; }
-      .slot-badge img { width: 100%; height: 100%; display: block; }
+      /* White ring, the same share as the print's (BADGE_RING_FRAC = 0.06 / 1.12). */
+      .slot-badge { background: #fff; border-radius: 50%; }
+      .slot-badge img { width: 89.29%; height: 89.29%; margin: 5.357%; display: block; }
 
       /* Drag-and-drop flourish: a circular photo "chip" follows the pointer, and
          on drop the photo fills the slot with an expanding-circle reveal. */
@@ -3436,6 +3438,7 @@
           // printed page (the badge signals a page is scannable). html2canvas drops
           // external SVG <img>s, so rasterize the badge to a PNG once.
           const badgePng = await rasterizeBadge();
+          const symbolPng = await rasterizeBadge(256, false);   // back cover: no ring
 
           // html2canvas (1.4.1) predates CSS `aspect-ratio`, mishandles
           // `object-fit` on a transformed <img>, and can't do `writing-mode`.
@@ -3459,7 +3462,7 @@
               slot.appendChild(b);
             });
             unit.querySelectorAll('.bc-symbol').forEach(sym => {
-              sym.src = badgePng;         // html2canvas can't render an external SVG
+              sym.src = symbolPng;        // html2canvas can't render an external SVG
             });
             unit.querySelectorAll('.slot, .bc-inset').forEach(el => {
               const r = el.getBoundingClientRect();
@@ -3542,12 +3545,17 @@
       // every book size. Smaller also means the printed photo deviates less from
       // the target the .mind file was compiled from.
       const BADGE_IN = 0.5, BADGE_INSET_IN = 0.25;
+      /* Plus a white ring 6% of the symbol's width (2026-10-21, matching the
+         shop). It goes OUTSIDE the half inch: the box grows by the ring and the
+         inset shrinks by it, so the symbol keeps its size and place. */
+      const BADGE_RING_IN = BADGE_IN * 0.06;
+      const BADGE_RING_FRAC = BADGE_RING_IN / (BADGE_IN + 2 * BADGE_RING_IN); // of the ringed box
       // Badge box in px for a page rendered `pageWidthPx` wide. Every render path
       // (builder, proof, print) puts slots inside a .page-canvas of a known width,
       // which is what converts inches to pixels.
       function badgeBoxPx(pageWidthPx) {
         const perIn = (pageWidthPx || 0) / (currentBookSize().wIn || 11.6929);
-        return { size: Math.max(5, Math.round(BADGE_IN * perIn)), pad: Math.round(BADGE_INSET_IN * perIn) };
+        return { size: Math.max(5, Math.round((BADGE_IN + 2 * BADGE_RING_IN) * perIn)), pad: Math.round((BADGE_INSET_IN - BADGE_RING_IN) * perIn) };
       }
       const slotPageWidth = (slot) => { const p = slot.closest('.page-canvas'); return p ? p.getBoundingClientRect().width : 0; };
 
@@ -3555,7 +3563,7 @@
       // PNG data-URL so html2canvas renders it (it drops external SVG <img>s).
       // px: 256 is plenty on screen; the print file overlays a 600px copy (see
       // PRINT_BADGE_PX) so the half-inch symbol prints at 1200 DPI, not 300.
-      async function rasterizeBadge(px = 256) {
+      async function rasterizeBadge(px = 256, ring = true) {
         let svg = await (await fetch('/assets/popcode_symbol_color.svg')).text();
         if (!/<svg[^>]*\bwidth=/.test(svg)) svg = svg.replace('<svg ', '<svg width="302" height="302" ');
         const img = new Image();
@@ -3564,7 +3572,15 @@
         const c = document.createElement('canvas'); c.width = px; c.height = px;
         const ctx = c.getContext('2d');
         ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, px, px);
+        // The badge on a photo carries a thin white ring (as on the shop's
+        // products), so it keeps its edge on a busy picture; the box grows by
+        // the ring (BADGE_RING_FRAC) so the symbol inside stays its size.
+        if (ring) {
+          const r = Math.round(px * BADGE_RING_FRAC);
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath(); ctx.arc(px / 2, px / 2, px / 2, 0, Math.PI * 2); ctx.fill();
+          ctx.drawImage(img, r, r, px - 2 * r, px - 2 * r);
+        } else ctx.drawImage(img, 0, 0, px, px);
         return c.toDataURL('image/png');
       }
 
@@ -3692,6 +3708,7 @@
         // on top of the page in the PDF at that box: 1200 DPI, clean alpha
         // edges, embedded once and reused by alias.
         const badgeHi = await rasterizeBadge(PRINT_BADGE_PX);
+        const symbolHi = await rasterizeBadge(PRINT_BADGE_PX, false);   // back cover: no ring
 
         // Mark the badge boxes on popcoded slots + apply the buildProof fixups (pin
         // aspect-ratio boxes, swap transformed photo <img>s to background <div>s).
@@ -3710,7 +3727,7 @@
             slot.appendChild(b);
           });
           unit.querySelectorAll('.bc-symbol').forEach(sym => {
-            sym.src = badgeHi;          // html2canvas can't render an external SVG; the big copy downsamples cleanly
+            sym.src = symbolHi;         // html2canvas can't render an external SVG; the big copy downsamples cleanly
           });
           unit.querySelectorAll('.slot, .bc-inset').forEach(el => { const r = el.getBoundingClientRect(); el.style.width = r.width + 'px'; el.style.height = r.height + 'px'; el.style.aspectRatio = 'auto'; });
           unit.querySelectorAll('.cv-spine').forEach(spine => spine.remove());
