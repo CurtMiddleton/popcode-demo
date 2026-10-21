@@ -6,7 +6,7 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-20)
+## Current state (updated 2026-10-21)
 
 **Live and recent**
 - **Montage is now on every Popcode surface (2026-10-19, `9743928`).** The builder
@@ -27,7 +27,7 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   merged 2026-10-20** — Prodigi's reply now rides on failed-order events, and quote retries
   back off (429 → Retry-After / 1 s, 2 s). **Sentry is now watched:** two email alert rules
   (failed paid order / fatal outage; spikes) + the **Daily Sentry check** scheduled task at
-  8:45 ET every day (push only when something is real). **Shotstack balance was 0.17 credits on 10-17** — top up before
+  8:45 ET every day (push every run since 10-21: "✅ All clear —" or "⚠️ Needs you —"). **Shotstack balance was 0.17 credits on 10-17** — top up before
   promoting montage in books (a render needs ~1.13).
 - **Gallery outreach round 1 SENT 2026-10-15** (9:45–10:55 ET, scheduled in Gmail from
   curt@popcodeapp.com, BCC curt@theworkshop.works): Geary, Rye Arts Center, Pelham Art Center
@@ -4099,6 +4099,56 @@ the user says "fix it" in a session to get it built.
   owner-only analytics page), "nothing needs you".
 
 #### Open
+- Elena's spine PDF: open **View PDF** under Spine on 14652102 and check the title is on it.
+- Check the Shotstack balance before montage in books gets used.
+- Confirm the default Sentry "high priority issues" alert is disabled.
+
+### 2026-10-20 → 21 — Black phone mockups (a Safari glitch); still-image fallback; Sentry check pushes daily
+
+**PR [#276](https://github.com/CurtMiddleton/popcode-demo/pull/276) — merged and live** (all five
+files byte-identical on popcode.app). Branch `claude/epic-thompson-tc57hv` again (restarted from
+`main` after each merge — #271 and #275 were merged).
+
+**The report:** "the mockup videos are no longer playing on the site" — every phone mockup was a
+black rectangle: the home hero, the Narrated tours card (home + pricing), the /nonprofits hero.
+**Not the site:** every video file returned 206 `video/mp4`, byte-identical to the repo, H.264
+(`avc1`, moov first), none touched since 10-13; worked on the user's iPhone; Low Power Mode was
+off. **Restarting Safari fixed it.** Safari decodes video in a separate media process; after long
+uptime / sleep-wake cycles it can wedge so every video "plays" but draws black, site-wide and
+on every site. Next time: three separate code paths going black at once = the browser. ⌘Q first.
+- The grey "Error: Prodigi order failed (500)…" box over the painting in the user's screenshot
+  was a hover tooltip left over from a Sentry tab, not page content.
+
+**#276 anyway (real gap for visitors whose browser refuses autoplay — Low Power Mode, Safari's
+per-site Auto-Play):**
+- `public/index.html` hero `mount()`: on `play()` rejecting with `NotAllowedError`, clear the
+  phone and `showStill(scene)` (the fallback already used for a missing/unplayable clip). Other
+  rejections are left to `onerror`, so the clip→fallback→still chain isn't doubled.
+- Fixed phone videos get a `poster` of their own first frame: `/video/exhibit-poster.jpg`
+  (home + pricing Narrated tours) and `/video/Album-poster.jpg` (photo-book page). Made with
+  `ffmpeg -ss 0.5 -frames:v 1 -q:v 4` (`/usr/bin/ffmpeg` exists in the container), ~85 KB each.
+- /nonprofits needed nothing: it already had a poster and drops `.playing` when play() fails.
+- Tested headless with `HTMLMediaElement.prototype.play` stubbed to reject `NotAllowedError`.
+
+**Headless testing gotchas (save the next session ten minutes):**
+- `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` refuses `--headless=old` (what
+  playwright-core 1.48 passes). Launch **`/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell`**
+  via `executablePath` instead.
+- That shell **can't decode H.264** (MediaError code 4 on every mp4), so it can't tell you
+  whether a video plays — only whether the page's logic and fallbacks behave.
+
+**Daily Sentry check — first scheduled run 10-21 08:45 ET, succeeded:** resolved 3 noise issues
+(two `card.html` errors from a Vercel *preview* deploy, one stackless Safari error on
+`calendar.html`), "nothing needs you". It sent **no push** — the notifications setting only pushes
+"when there's something worth telling you". The user wants a daily all-clear, so the prompt
+(`trig_01Y7yeD3u5JZGFDdcC8uVLZc`, changed with `update_trigger`, which kept the Sentry connector
+and repo the user had added by hand) now says to report every run, starting **"✅ All clear —"** or
+**"⚠️ Needs you —"**. Whether the app treats an all-clear as push-worthy is not confirmed; if no
+push arrives, switch the all-clear to email. Read a run's output with `get_trigger` →
+`last_run.session_id` → `list_events(kinds=["assistant","result"])`.
+
+#### Open
+- Confirm the ✅ all-clear push actually arrives (Run now, or tomorrow 08:45).
 - Elena's spine PDF: open **View PDF** under Spine on 14652102 and check the title is on it.
 - Check the Shotstack balance before montage in books gets used.
 - Confirm the default Sentry "high priority issues" alert is disabled.
