@@ -1,0 +1,2480 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+    <script
+      src="https://browser.sentry-cdn.com/10.59.0/bundle.min.js"
+      integrity="sha384-V80tE+22zYqM17YuWTi3GmAl/uJSKuAi5ov4G1Y6Zyw9wvVwwv9zree5oYNbB5Rn"
+      crossorigin="anonymous"></script>
+    <script src="/sentry-init.js"></script>
+    <link rel="icon" href="/assets/popcode_symbol_color.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/assets/Popcode_logo.png">
+    <meta property="og:title" content="Popcode — Holiday Cards">
+    <meta property="og:description" content="Flat 5×7 photo cards that come to life when you scan them.">
+    <meta property="og:image" content="https://popcode.app/assets/og_image.png?v=2">
+    <meta property="og:type" content="website">
+    <title>Popcode — Cards</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
+    <script src="/slug.js"></script>
+    <script src="/card-templates.js"></script>
+    <script src="/unsplash-samples.js"></script>
+    <script src="/storage-copy.js"></script>
+    <script src="/print-preview.js"></script>
+    <!-- The shared Add a Popcode sheet and Edit Photo (same as the calendar),
+         with what the montage builder and audio recorder need. -->
+    <script src="/dialog.js"></script>
+    <script src="/montage-music.js"></script>
+    <script src="/montage.js"></script>
+    <script src="/audio-wav.js"></script>
+    <script src="/popcode-tools.js"></script>
+    <!-- MindAR compiler only (no AR rendering here) — stub AFRAME so the bundle
+         loads without booting WebGL. Same trick as create.html / calendar.html. -->
+    <script>
+      window.AFRAME = window.AFRAME || {
+        registerSystem(){}, registerComponent(){}, registerShader(){},
+        registerGeometry(){}, registerPrimitive(){}, registerElement(){}
+      };
+    </script>
+    <script src="/vendor/mindar/1.2.2/mindar-image-aframe.prod.js"></script>
+    <link rel="stylesheet" href="/ui.css">
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Parisienne&family=Monsieur+La+Doulaise&family=WindSong&family=Mea+Culpa&family=Sacramento&family=Oswald:wght@500;600&family=Ballet&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,600;1,6..96,400&family=Cinzel:wght@400;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500&family=Jost:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      /* Laid out like the Shop's product pages (order.html): very light gray
+         page, Cooper title, grey line under it, purple back link, and the
+         cards shown on white squares. */
+      body {
+        min-height: 100vh; background: #f9f9f9; font-family: 'Inter', sans-serif;
+        color: #1a1a1a; -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── Page header (same as the Shop) ──────────────────────────────── */
+      .wrap { width: 100%; max-width: 1240px; margin: 0 auto; padding: 44px 28px 140px; }
+      @media (max-width: 680px) { .wrap { padding: 28px 18px 120px; } }
+      h1 { font-family: 'CooperBT', Georgia, serif; font-size: var(--pc-h1); font-weight: 400; letter-spacing: -0.01em; line-height: 1.05; margin-bottom: 16px; }
+      .subtitle { color: #666; font-size: 16px; line-height: 1.5; margin-bottom: 32px; }
+      .bi-back { display: inline-flex; align-items: center; gap: 6px; color: #7657FC; font-weight: 600; font-size: 14px; text-decoration: none; margin-bottom: 26px; cursor: pointer; }
+
+      /* ── Step 1: occasion + design grid ──────────────────────────────── */
+      .sec-tabs { display: flex; gap: 30px; border-bottom: 1px solid #e8e8e8; margin-bottom: 30px; overflow-x: auto; }
+      .sec-tab { background: none; border: none; padding: 0 0 12px; font: 600 15px 'Inter', sans-serif; color: #888; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+      .sec-tab.active { color: #1a1a1a; border-bottom-color: #1a1a1a; }
+      /* Occasions are small text links, grouped under a quiet label. */
+      .occ-group { display: flex; align-items: baseline; gap: 0 22px; flex-wrap: wrap; margin-bottom: 2px; }
+      .occ-group-name { font-size: 11px; font-weight: 600; color: #999; text-transform: uppercase; letter-spacing: 0.06em; min-width: 104px; }
+      .occ-row { display: flex; flex-wrap: wrap; gap: 0 20px; }
+      .occ-chip {
+        border: none; background: none; padding: 9px 0; font-size: 12px; font-weight: 500; cursor: pointer;
+        font-family: 'Inter', sans-serif; color: #666; border-bottom: 1.5px solid transparent;
+      }
+      .occ-chip:hover { color: #1a1a1a; }
+      .occ-chip.active { color: #1a1a1a; font-weight: 600; border-bottom-color: #1a1a1a; }
+      .occ-chip .n { display: none; }
+      /* Options inside the editor (Layout, Greeting) stay as chips. */
+      .chip-row .occ-chip { border: 1px solid #e3e3e3; background: #fff; border-radius: 999px; padding: 0 18px; height: 36px; color: #333; font-size: 14px; }
+      .chip-row .occ-chip:hover { border-color: #c9c9c9; }
+      .chip-row .occ-chip.active { border-color: #7657FC; background: #f3f0ff; color: #7657FC; }
+
+      .mine-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 28px 0 0; }
+      .mine-bar .mine-btn { width: auto; margin: 0; padding: 0 24px; }
+      .mine-hint, .mine-bar span { font-size: 14px; color: #777; }
+      .mine-thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 10px; }
+      /* Four across on a laptop, like Minted: each card on the page itself
+         with a soft drop shadow, in a stage of the same height for every tile. */
+      .tpl-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 48px 32px; margin-top: 40px; }
+      @media (max-width: 1000px) { .tpl-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+      @media (max-width: 720px) { .tpl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px 16px; } }
+      .tpl-card { cursor: pointer; }
+      .tpl-stage { aspect-ratio: 1 / 0.8; display: flex; justify-content: center; align-items: center; }
+      .tpl-stage .card-face { box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 10px 24px rgba(0,0,0,0.16); transition: transform .15s, box-shadow .15s; }
+      .tpl-card:hover .tpl-stage .card-face { transform: translateY(-3px); box-shadow: 0 2px 4px rgba(0,0,0,0.08), 0 16px 32px rgba(0,0,0,0.20); }
+      .tpl-name { font-size: 14px; font-weight: 600; margin-top: 12px; }
+      .tpl-meta { font-size: 12px; color: #777; margin-top: 2px; }
+      .tpl-card .sw-row { margin-top: 8px; gap: 5px; }
+      .tpl-card .sw { width: 12px; height: 12px; }
+      /* Small to look at, ~40px to tap. */
+      .sw::after { content: ''; position: absolute; inset: -10px; }
+      .tpl-card .sw.active { box-shadow: 0 0 0 1.5px #f9f9f9, 0 0 0 2.5px #7657FC; }
+
+      /* ── The card face ───────────────────────────────────────────────────
+         Geometry is fractional (see lib/print/cards.mjs). `container-type: size`
+         makes cqw/cqh resolve against the CARD, so one set of numbers drives the
+         editor and the 300 DPI bake — same discipline as book.html's cover. */
+      .card-face {
+        position: relative; overflow: hidden; background: #fff;
+        container-type: size; box-shadow: 0 3px 14px rgba(0,0,0,0.13);
+        flex: none;
+      }
+      .cf-photo { position: absolute; overflow: hidden; background: #e6e6e6; }
+      .cf-photo img { position: absolute; width: 100%; height: 100%; object-fit: cover; }
+      .cf-photo.empty::after {
+        content: '+'; position: absolute; inset: 0; display: flex;
+        align-items: center; justify-content: center;
+        font-size: 8cqh; color: #999; font-family: 'Inter', sans-serif; font-weight: 300;
+      }
+      .cf-photo.is-sample::after {
+        content: 'Add your photo'; position: absolute; left: 3%; bottom: 4%;
+        background: rgba(255,255,255,0.92); color: #1a1a1a; border-radius: 999px; padding: 0.5em 1.1em;
+        font: 600 max(10px, 2cqw) 'Inter', sans-serif; white-space: nowrap; box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+      }
+      .cf-ornament { position: absolute; inset: 0; pointer-events: none; }
+      .cf-photo.arch { border-radius: 50% 50% 3px 3px / 34% 34% 3px 3px; }
+      /* Inset photos get a hairline + small radius. A bare hard-edged rectangle
+         dropped on a flat ground is what makes an inset card look like clip art. */
+      .cf-photo.inset { border-radius: 0.9cqw; box-shadow: 0 0 0 1px rgba(0,0,0,0.07); }
+      /* After .inset, which would otherwise flatten the arch into a rectangle. */
+      .cf-photo.inset.arch { border-radius: 50% 50% 0.9cqw 0.9cqw / 34% 34% 0.9cqw 0.9cqw; }
+      /* EASED scrim. A two-stop linear gradient has a visible onset line across
+         the photo -- the giveaway. These stops approximate an ease-in curve so
+         the darkening has no perceptible edge, at roughly half the old strength. */
+      .cf-scrim { position: absolute; inset: 0; pointer-events: none;
+        background: linear-gradient(to bottom,
+          rgba(0,0,0,0) 30%, rgba(0,0,0,0.012) 44%, rgba(0,0,0,0.05) 56%,
+          rgba(0,0,0,0.115) 66%, rgba(0,0,0,0.21) 76%, rgba(0,0,0,0.33) 86%,
+          rgba(0,0,0,0.46) 94%, rgba(0,0,0,0.55) 100%); }
+      .cf-scrim.top { transform: scaleY(-1); }
+      /* Foil = a banded metallic gradient clipped to the glyphs. A flat gold fill
+         reads as yellow text; the bands are what read as reflected light. */
+      .cf-text.foil { -webkit-background-clip: text; background-clip: text;
+        color: transparent !important; -webkit-text-fill-color: transparent;
+        filter: drop-shadow(0 0.35cqh 0.5cqh rgba(0,0,0,0.16)); }
+      .cf-band { position: absolute; left: 0; right: 0; bottom: 0; }
+      .cf-text { position: absolute; line-height: 1.15; white-space: pre-wrap; word-break: break-word; }
+      .cf-text[contenteditable="true"]:focus { outline: 2px solid #7657FC; outline-offset: 3px; border-radius: 2px; }
+      .cf-text.placeholder::before { content: attr(data-ph); opacity: 0.42; }
+      .cf-pop {
+        position: absolute; right: 3.2%; bottom: 2.6%; width: 7%; z-index: 4;
+        opacity: 0.92; pointer-events: none;
+      }
+
+      /* ── Step 2: editor (the Shop's product detail: preview | options) ── */
+      .editor { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(0,1fr); gap: 56px; align-items: start; }
+      @media (max-width: 760px) { .editor { grid-template-columns: minmax(0,1fr); gap: 30px; } }
+      .ed-stage { padding: 6px 0 30px; display: flex; justify-content: center; align-items: center; }
+      .ed-stage .card-face { box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 14px 34px rgba(0,0,0,0.20); }
+      .ed-side { min-width: 0; }
+      /* Below the site's sticky 100px menu bar (nav.js), so the card is never under it. */
+      @media (min-width: 761px) { .ed-left { position: sticky; top: 124px; } .ed-stage { position: static; } }
+      .ed-back { display: block; height: auto; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 14px 34px rgba(0,0,0,0.20); }
+      /* Front / Back: the Shop's segmented toggle (order.html). */
+      .side-toggle { display: flex; justify-content: center; margin-top: 6px; }
+      .toggle { display: inline-flex; background: #eee; border-radius: 16px; padding: 3px; gap: 2px; }
+      .toggle button { border: none; background: none; border-radius: 14px; padding: 8px 18px; font-size: 13px; font-weight: 500; color: #666; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .toggle button.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 4px rgba(0,0,0,0.12); font-weight: 600; }
+      .slug-row { display: flex; align-items: stretch; }
+      .slug-prefix { display: flex; align-items: center; background: #eceae4; border: 1px solid #e4e2dc; border-right: none; border-radius: 12px 0 0 12px; padding: 0 10px 0 14px; font-size: 16px; color: #6b6558; font-weight: 600; white-space: nowrap; }
+      .slug-row .text-input { border-radius: 0 12px 12px 0; min-width: 0; }
+      .slug-row .text-input:disabled { background: #f4f2ee; color: #6b6558; }
+      .slug-note { font-size: 12px; color: #999; margin: 6px 2px 0; line-height: 1.4; }
+      .slug-note.bad { color: #d33; }
+       .old-browser { background: #fff6e0; color: #8a5a00; border-radius: 12px; padding: 12px 16px; font-size: 14px; margin-bottom: 20px; }
+      #busy-overlay { position: fixed; inset: 0; z-index: 8500; background: rgba(249,249,249,0.72); display: none; align-items: center; justify-content: center; cursor: progress; }
+      #busy-overlay.on { display: flex; }
+      .busy-card { background: #fff; border-radius: 20px; padding: 22px 28px; box-shadow: 0 16px 40px rgba(20,16,40,.18); display: flex; align-items: center; gap: 14px; font-size: 15px; font-weight: 600; }
+      .busy-spin { width: 22px; height: 22px; border-radius: 50%; border: 3px solid #e6e1ff; border-top-color: #7657FC; animation: busy-spin .8s linear infinite; }
+      @keyframes busy-spin { to { transform: rotate(360deg); } }
+      .side-hint { text-align: center; font-size: 13px; color: #777; margin-top: 12px; min-height: 1.3em; }
+      .card-face img { -webkit-user-drag: none; user-select: none; }
+      .cf-guide { position: absolute; left: 50%; top: 0; bottom: 0; width: 0; border-left: 1px dashed #ff3b9a; z-index: 9; pointer-events: none; display: none; }
+      .cf-guide.on { display: block; }
+      .card-face .cf-text[data-zone]:hover { outline: 1px dashed rgba(118,87,252,0.75); outline-offset: 3px; cursor: grab; }
+      .card-face .cf-text.dragging { outline: 1.5px solid #7657FC; outline-offset: 3px; cursor: grabbing; user-select: none; }
+      .side-hint a { color: #7657FC; font-weight: 600; text-decoration: none; }
+      .text-input.qty-select { appearance: none; -webkit-appearance: none; cursor: pointer; font-weight: 600; padding-right: 40px;
+        background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%231a1a1a' stroke-width='1.8'/%3E%3C/svg%3E") no-repeat right 16px center; }
+      /* Add a Popcode: the Shop's pinwheel button (order.html .popcode-cta), full width. */
+      .popcode-cta { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; height: 58px; padding: 0 22px;
+        border: 1.5px solid #d9d2fb; border-radius: 999px; background: linear-gradient(135deg, #f3f0ff, #eef4ff); color: #4b34c7;
+        font: 700 17px 'Inter', sans-serif; cursor: pointer; box-shadow: 0 2px 10px rgba(118,87,252,0.16); transition: border-color .15s, box-shadow .15s; }
+      .popcode-cta:hover { border-color: #b9a9f7; box-shadow: 0 4px 16px rgba(118,87,252,0.22); }
+      .popcode-cta .pc-sym { width: 34px; height: 34px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+      .popcode-cta .pc-sym img { width: 22px; height: 22px; display: block; }
+      .popcode-cta.has-media { border-color: #b9a9f7; }
+      .panel .hint a { color: #7657FC; font-weight: 600; text-decoration: none; }
+
+      /* Sections of the options column are divided by rules, not boxed. */
+      .panel { padding: 26px 0; border-top: 1px solid #eee; }
+      .panel:first-child { padding-top: 0; border-top: none; }
+      .panel h3 { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+      .panel .hint { font-size: 14px; color: #777; line-height: 1.5; margin-bottom: 14px; }
+      .field { margin-bottom: 14px; }
+      .field label { display: block; font-size: 13px; font-weight: 700; color: #1a1a1a; margin-bottom: 6px; }
+      .field label .lim { float: right; font-weight: 400; color: #aaa; }
+      .text-input {
+        width: 100%; border: 1.5px solid #e3e1db; border-radius: 12px; padding: 11px 12px;
+        font-size: 16px; font-family: 'Inter', sans-serif; background: #fff; color: #1a1a1a;
+      }
+      .text-input:focus { outline: none; border-color: #7657FC; }
+
+      .pack-row { display: flex; gap: 10px; flex-wrap: wrap; }
+      .pack-btn {
+        flex: 0 0 auto; border: 1px solid #e3e3e3; background: #fff; border-radius: 999px;
+        min-height: 36px; padding: 6px 18px; cursor: pointer; font-family: 'Inter', sans-serif; text-align: center;
+        font-size: 14px; font-weight: 500; color: #333; transition: border-color .15s;
+      }
+      .pack-btn:hover { border-color: #c9c9c9; }
+      .pack-btn.active { border-color: #7657FC; background: #f3f0ff; color: #7657FC; font-weight: 600; }
+      /* Script names are set in their own faces, so they get a little height. */
+      #script-row .pack-btn { min-height: 46px; padding: 6px 20px; }
+      .pack-qty { font-size: 15px; font-weight: 700; }
+      .pack-each { font-size: 12px; opacity: 0.7; margin-top: 2px; }
+
+      .price-row { margin-top: 10px; }
+      .price-note { font-size: 13px; color: #777; }
+
+      /* Buttons are ui.css's .btn variants, as on the other Shop pages. */
+      .ed-actions .btn + .btn { margin-top: 10px; }
+      .ed-actions { padding-top: 6px; }
+
+      .ed-name { font-family: 'CooperBT', Georgia, serif; font-weight: 400; font-size: 22px; letter-spacing: -0.01em; margin-bottom: 4px; }
+      /* The Shop's spec list (order.html .specs): purple bullets. */
+      .specs { list-style: none; margin: 4px 0 24px; padding: 0; }
+      .specs li { color: #555; font-size: 14px; padding: 3px 0; display: flex; gap: 10px; }
+      .specs li::before { content: '•'; color: #7657FC; }
+      .opt { margin-bottom: 24px; }
+      .opt:last-child { margin-bottom: 0; }
+      .opt h3 span { font-weight: 400; color: #888; margin-left: 4px; }
+      .opt h3 { margin-bottom: 10px; }
+      .chip-row { display: flex; flex-wrap: wrap; gap: 10px; }
+      .box-ed { border-top: 1px solid #eee; padding-top: 14px; margin-top: 14px; }
+      .box-ed:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+      .box-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; font-size: 13px; }
+      .box-del { background: none; border: none; color: #777; font: 600 12px 'Inter', sans-serif; cursor: pointer; text-decoration: underline; }
+      .box-ed textarea { resize: vertical; margin-bottom: 8px; }
+      .box-row { display: flex; gap: 10px; align-items: center; margin-bottom: 4px; }
+      .box-font { flex: 1; min-width: 0; padding: 8px 10px; }
+      .box-size { font-size: 12px; color: #777; display: flex; align-items: center; gap: 6px; }
+      .box-size input { width: 96px; }
+      .box-tog { margin-top: 8px; gap: 6px; }
+      .box-tog .pack-btn { flex: 1 1 54px; padding: 7px 4px; font-size: 12px; font-weight: 600; }
+      .sw-row { display: flex; gap: 6px; margin-top: 9px; flex-wrap: wrap; }
+      .sw { position: relative; width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.16); cursor: pointer; padding: 0; }
+      .sw.active { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px #7657FC; }
+      .sw-lg { width: 20px; height: 20px; }
+
+      /* ── Sheet (shared idiom) ────────────────────────────────────────── */
+      .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; z-index: 8000; align-items: flex-end; justify-content: center; }
+      .overlay.visible { display: flex; }
+      .sheet { background: #fff; width: 100%; max-width: 520px; border-radius: var(--pc-radius-card) var(--pc-radius-card) 0 0; padding: 26px 22px calc(26px + env(safe-area-inset-bottom)); box-shadow: var(--pc-shadow-sheet); max-height: 92vh; overflow-y: auto; }
+      @media (min-width: 620px) { .overlay { align-items: center; padding: 24px; } .sheet { border-radius: var(--pc-radius-card); } }
+      .sheet h2 { font-size: 19px; font-weight: 700; margin-bottom: 4px; }
+      .sheet-sub { font-size: 13px; color: #888; margin-bottom: 18px; line-height: 1.5; }
+      .sheet-actions { display: flex; gap: 12px; margin-top: 20px; }
+      .sheet-actions .btn { flex: 1; }
+      .photos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 9px; }
+      .photos-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 9px; cursor: pointer; }
+      .hidden { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1 id="page-title">Photo Cards</h1>
+      <p class="subtitle" id="page-sub">Flat 5&times;7&Prime; photo cards that play a video, montage or audio when they're scanned.</p>
+      <a class="bi-back" id="top-back" href="/shop.html">&larr; All products</a>
+      <div id="step-browse"></div>
+      <div id="step-edit" class="hidden"></div>
+    </div>
+
+    <div class="overlay" id="overlay"><div class="sheet" id="sheet"></div></div>
+    <input type="file" id="photo-input" accept="image/*" class="hidden"/>
+
+    <script>
+      const C = window.PopcodeCards;
+      const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      // /cart.js (injected by nav.js) reuses this client instead of making its own.
+      window.__popcodeCartDb = db;
+      const $ = (id) => document.getElementById(id);
+
+      let currentUser = null;
+      let state = {
+        occasionId: 'christmas',
+        template: null,
+        text: {},               // zoneId -> string typed by the buyer
+        photos: {},             // slotId -> { url, file }
+        pack: C.DEFAULT_PACK,
+        colorway: C.DEFAULT_COLORWAY,
+        popcode: null,          // { file, url } video attached to the popcode slot
+        bw: false,              // print the photos in black and white
+        greeting: 'holiday',    // which of C.GREETINGS fills the greeting zones
+        corners: 'square',      // 'square' | 'rounded' (a separate Printify variant)
+        script: null,           // one of C.SCRIPTS for every script line, or null for the design's own
+        back: null,             // { url, file? } an optional photo on the back
+        custom: null,           // Design your own: { layout, orientation, boxes }
+        myPhoto: null,          // Use your photo: { file, url } shown in every design
+      };
+
+      function openSheet(html) { $('sheet').innerHTML = html; $('overlay').classList.add('visible'); }
+      function closeSheet() { $('overlay').classList.remove('visible'); }
+      $('overlay').addEventListener('click', (e) => { if (e.target === $('overlay')) closeSheet(); });
+      const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+      // ── Card renderer ───────────────────────────────────────────────────
+      // ONE function draws the picker thumbnail, the live editor, and (at print
+      // scale) the bake. Fractional geometry + container queries mean the only
+      // difference between a 200px thumbnail and a 1575px print asset is the
+      // element's width — never a second layout code path that can drift.
+      function renderCard(tpl, opts) {
+        opts = opts || {};
+        const widthPx = opts.width || 300;
+        const fmt = C.CARD_FORMATS[tpl.formatId];
+        const land = tpl.orientation === 'landscape';
+        const aspect = land ? 1 / fmt.aspect : fmt.aspect;
+
+        // Colourway drives every colour on the card, so one swatch click
+        // recolours ground, type and ornament together and a buyer can't
+        // assemble an incoherent combination.
+        const cwId = opts.colorway || (tpl.colorways && tpl.colorways[0]) || C.DEFAULT_COLORWAY;
+        const cw = C.COLORWAYS[cwId] || C.COLORWAYS[C.DEFAULT_COLORWAY];
+        const paint = (role) => (role && cw[role]) || role || cw.ink;
+
+        const face = document.createElement('div');
+        face.className = 'card-face';
+        if (tpl.bands) face.dataset.bands = JSON.stringify(tpl.bands);
+        face.style.width = widthPx + 'px';
+        face.style.height = Math.round(widthPx / aspect) + 'px';
+        // Full-bleed cards are the photo. A `frame` card is the colourway's ground
+        // with a panel inset; `fill: 'ground'` is the ground all over (type in the
+        // panel colour); anything else is the panel colour (older colourways
+        // have no panel, so it falls back to ground).
+        face.style.background = tpl.ground === 'bleed' ? '#dedbd4'
+          : (tpl.frame || tpl.fill === 'ground') ? cw.ground : (cw.panel || cw.ground);
+        if (tpl.frame) {
+          const pnl = document.createElement('div');
+          pnl.className = 'cf-panel';
+          pnl.style.cssText = 'position:absolute;left:' + tpl.frame.x * 100 + '%;top:' + tpl.frame.y * 100 +
+            '%;width:' + tpl.frame.w * 100 + '%;height:' + tpl.frame.h * 100 + '%;background:' + (cw.panel || '#fff');
+          face.appendChild(pnl);
+        }
+
+        (tpl.photos || []).forEach((slot) => {
+          // A mat is a plain block behind the photo, `mat` (a fraction of card
+          // width) bigger on every side. A thin one reads as a ruled line.
+          if (slot.mat) {
+            const m = document.createElement('div');
+            const my = slot.mat * (land ? 1 / fmt.aspect : fmt.aspect);
+            m.className = 'cf-mat';
+            m.style.cssText = 'position:absolute;left:' + (slot.x - slot.mat) * 100 + '%;top:' + (slot.y - my) * 100 +
+              '%;width:' + (slot.w + slot.mat * 2) * 100 + '%;height:' + (slot.h + my * 2) * 100 + '%;background:' + (cw.mat || cw.ink);
+            face.appendChild(m);
+          }
+          const d = document.createElement('div');
+          // `photoEdge: 'square'` (the minimal set): no rounded corner or hairline.
+          d.className = 'cf-photo' + (slot.arch ? ' arch' : '')
+            + (tpl.ground !== 'bleed' && tpl.photoEdge !== 'square' ? ' inset' : '');
+          d.style.left = slot.x * 100 + '%';
+          d.style.top = slot.y * 100 + '%';
+          d.style.width = slot.w * 100 + '%';
+          d.style.height = slot.h * 100 + '%';
+          d.dataset.slot = slot.id;
+          const got = (opts.photos || {})[slot.id];
+          // In the editor an empty slot shows a sample photo (the one the
+          // buyer saw on the design's tile) marked "Add your photo", so the
+          // design reads as designed; it is never saved or printed.
+          const stand = !(got && got.url) && opts.samples && opts.samples[slot.id];
+          const src = (got && got.url) || stand || opts.sample;
+          if (stand) d.classList.add('is-sample');
+          if (src) {
+            const im = document.createElement('img');
+            im.src = src;
+            // A photo the buyer has cropped (Edit Photo) is laid out by the same
+            // geometry the print bake uses (PopcodeTools.layoutPhoto).
+            if (got && got.adjust && window.PopcodeTools) {
+              const lay = () => PopcodeTools.layoutPhoto(d, im, got.adjust);
+              im.addEventListener('load', () => requestAnimationFrame(lay));
+              requestAnimationFrame(() => { if (im.complete && im.naturalWidth) lay(); });
+            }
+            if (opts.bw) im.style.filter = 'grayscale(1)';
+            if (opts.crossOrigin) im.crossOrigin = 'anonymous';
+            d.appendChild(im);
+          } else if (!opts.print) {
+            // The "+" is an editor prompt; a saved draft's front shows plain grey.
+            d.classList.add('empty');
+          }
+          if (opts.onPickPhoto) {
+            d.style.cursor = 'pointer';
+            d.addEventListener('click', () => opts.onPickPhoto(slot.id));
+          }
+          face.appendChild(d);
+        });
+
+        // Scrim: only full-bleed cards need type legible over a photo. A design
+        // with type at the top (Brighton, Corner Title) has one there too.
+        if (tpl.ground === 'bleed' && tpl.scrim) {
+          const sc = document.createElement('div');
+          sc.className = 'cf-scrim';
+          sc.style.opacity = String(Math.min(1, tpl.scrim / 0.55));
+          face.appendChild(sc);
+        }
+        if (tpl.ground === 'bleed' && tpl.scrimTop) {
+          const st = document.createElement('div');
+          st.className = 'cf-scrim top';
+          st.style.opacity = String(Math.min(1, tpl.scrimTop / 0.55));
+          face.appendChild(st);
+        }
+        // Rounded corners are cut by the lab (a separate variant), so they are
+        // shown on screen but never drawn into the print file. Radius 1/8in.
+        if (opts.corners === 'rounded') face.style.borderRadius = (0.125 / (land ? fmt.hIn : fmt.wIn)) * widthPx + 'px';
+
+        // Ornament is drawn, never licensed — see the note in cards.mjs.
+        if (tpl.ornament && tpl.ornament !== 'none') {
+          const o = drawOrnament(tpl.ornament, cw, tpl.ground);
+          if (o) face.appendChild(o);
+        }
+
+        C.resolveText(tpl, opts.text || {}, opts.greeting).forEach((z) => {
+          // A line the buyer dragged (opts.moves, fractions of the card) sits
+          // where they put it: the fitter no longer nudges it into a band or
+          // away from its neighbours.
+          const mv = opts.moves && opts.moves[z.id];
+          if (mv) z = { ...z, x: z.x + mv.dx, y: z.y + mv.dy, free: true };
+          const t = document.createElement('div');
+          t.className = 'cf-text';
+          if (mv) t.dataset.moved = '1';
+          t.style.top = z.y * 100 + '%';
+          // fitCardText resets to this before it centres the zone in a band.
+          t.dataset.zid = z.id;
+          if (z.free) t.dataset.free = '1';
+          t.dataset.baseTop = z.y * 100 + '%';
+          t.style.fontSize = (z.size * 100) + 'cqh';
+          // Leading tightens as type grows -- a flat 1.15 makes display lines
+          // look slack and body copy look cramped.
+          t.style.lineHeight = String(z.lead || (z.size >= 0.09 ? C.TYPE.lead.display
+                              : z.size >= 0.04 ? C.TYPE.lead.mid : C.TYPE.lead.body));
+          t.style.color = paint(z.color);
+          t.style.textAlign = z.align;
+          t.style.fontWeight = String(z.weight || 400);
+          if (z.italic) t.style.fontStyle = 'italic';
+          const fontId = z.scriptable && opts.script ? opts.script : z.font;
+          t.style.fontFamily = (C.FONTS[fontId] || C.FONTS.cormorant).css;
+          if (z.track) t.style.letterSpacing = z.track + 'em';
+          if (z.upper) t.style.textTransform = 'uppercase';
+          // A tight shadow lifts type off a photo without the muddy halo a wide
+          // blur gives; scaled in cq units so it holds at print resolution.
+          if (tpl.ground === 'bleed' || z.color === 'onPhoto' || z.shadow) t.style.textShadow = '0 0.12cqh 0.7cqh rgba(0,0,0,0.34)';
+          const fin = C.FINISHES[z.finish || 'flat'];
+          if (fin && fin.gradient) { t.classList.add('foil'); t.style.backgroundImage = fin.gradient; }
+          const w = (z.maxW || 0.84) * 100;
+          t.style.width = w + '%';
+          t.style.left = (z.align === 'center' ? (z.x * 100 - w / 2)
+                        : z.align === 'right' ? (z.x * 100 - w) : z.x * 100) + '%';
+          // A rotated (or `center`) zone sits with its centre at (x, y).
+          if (z.rotate || z.center) {
+            t.style.left = z.x * 100 + '%';
+            t.style.transform = 'translate(-50%, -50%)' + (z.rotate ? ' rotate(' + z.rotate + 'deg)' : '');
+            t.style.transformOrigin = 'center';
+          }
+          t.textContent = z.value;
+          t.dataset.maxLines = String(z.lines || (C.TEXT_ROLES[z.role] || {}).maxLines || 1);
+
+          if (opts.editable) {
+            // 'plaintext-only' throws in older Firefox; 'true' still edits.
+            try { t.contentEditable = 'plaintext-only'; } catch (x) { t.contentEditable = 'true'; }
+            t.dataset.zone = z.id;
+            t.dataset.ph = (C.TEXT_ROLES[z.role] || {}).hint || '';
+            if (!z.value) t.classList.add('placeholder');
+            t.addEventListener('input', () => {
+              const max = (C.TEXT_ROLES[z.role] || {}).maxChars || 120;
+              if (t.textContent.length > max) t.textContent = t.textContent.slice(0, max);
+              state.text[z.id] = t.textContent;
+              t.classList.toggle('placeholder', !t.textContent);
+              if (face.isConnected) fitCardText(face);
+              syncSideInputs();
+            });
+            t.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); t.blur(); } });
+          }
+          face.appendChild(t);
+        });
+
+        // The Popcode mark used to sit on every card front. On a $1.40 card a
+        // black dot in the corner is the most expensive-looking thing you can
+        // remove -- no competitor prints a logo on the face. It belongs on the
+        // BACK panel (these SKUs are duplex), alongside the popcode.app/{slug}
+        // instructions. Opt in explicitly if a front mark is ever wanted.
+        if (opts.showBadge === true) {
+          const b = document.createElement('img');
+          b.className = 'cf-pop';
+          b.src = '/assets/popcode-symbol.png';
+          b.alt = '';
+          face.appendChild(b);
+        }
+        return face;
+      }
+
+      // Ornaments as generated SVG. Drawing them in code means they recolour with
+      // the colourway for free AND carry no licence surface — which matters here,
+      // because the obvious stock sources (Envato Elements, Creative Market) both
+      // explicitly forbid use in a print-on-demand product configurator.
+      function drawOrnament(kind, cw, ground) {
+        const NS = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(NS, 'svg');
+        svg.setAttribute('class', 'cf-ornament');
+        svg.setAttribute('viewBox', '0 0 100 140');
+        svg.setAttribute('preserveAspectRatio', 'none');
+        const add = (tag, attrs) => {
+          const el = document.createElementNS(NS, tag);
+          Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+          svg.appendChild(el); return el;
+        };
+        const onPhoto = ground === 'bleed';
+        const tint = onPhoto ? '#ffffff' : cw.accent;
+
+        if (kind === 'snow') {
+          // Deterministic scatter: a seeded walk, so a card looks identical every
+          // render (a random() here would reshuffle on every keystroke).
+          let seed = 7;
+          const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+          for (let i = 0; i < 90; i++) {
+            add('circle', { cx: (rnd() * 100).toFixed(2), cy: (rnd() * 140).toFixed(2),
+              r: (0.25 + rnd() * 0.85).toFixed(2), fill: '#ffffff',
+              opacity: (0.25 + rnd() * 0.5).toFixed(2) });
+          }
+        } else if (kind === 'frame') {
+          add('rect', { x: 4, y: 4, width: 92, height: 132, fill: 'none', stroke: tint, 'stroke-width': 0.5, opacity: 0.85 });
+          add('rect', { x: 6.5, y: 6.5, width: 87, height: 127, fill: 'none', stroke: tint, 'stroke-width': 0.2, opacity: 0.6 });
+        } else if (kind === 'arch' || kind === 'branches') {
+          // A real laurel: walk a path around the photo opening, and at each step
+          // lay a PAIR of leaves angled off the local tangent. The previous
+          // version placed leaves at fixed angles in rows, which is why it read
+          // as tally marks -- the angle has to come from the curve, not a
+          // constant, or the eye immediately sees a grid instead of a branch.
+          const pts = [];
+          const L = 12, R = 88, yBase = 104, yShoulder = 64;
+          for (let i = 0; i <= 10; i++) pts.push([L, yBase - (i / 10) * (yBase - yShoulder)]);
+          for (let i = 1; i < 24; i++) {           // over the arch, left to right
+            const a = Math.PI - (i / 24) * Math.PI;
+            pts.push([50 + 38 * Math.cos(a), yShoulder - 30 * Math.sin(a)]);
+          }
+          for (let i = 0; i <= 10; i++) pts.push([R, yShoulder + (i / 10) * (yBase - yShoulder)]);
+
+          const leaf = (x, y, deg, sc) => add('ellipse', {
+            cx: x.toFixed(2), cy: y.toFixed(2),
+            rx: (2.6 * sc).toFixed(2), ry: (0.95 * sc).toFixed(2),
+            fill: tint, opacity: 0.82,
+            transform: `rotate(${deg.toFixed(1)} ${x.toFixed(2)} ${y.toFixed(2)})`,
+          });
+
+          pts.forEach((p, i) => {
+            const q = pts[Math.min(i + 1, pts.length - 1)];
+            const r = pts[Math.max(i - 1, 0)];
+            const tan = (Math.atan2(q[1] - r[1], q[0] - r[0]) * 180) / Math.PI;
+            // Outward normal, so the pair opens away from the photo.
+            const nx = Math.cos(((tan - 90) * Math.PI) / 180);
+            const ny = Math.sin(((tan - 90) * Math.PI) / 180);
+            const sc = 0.78 + 0.22 * Math.sin((i / pts.length) * Math.PI); // taper at the tips
+            // Two leaves per node, splayed off the tangent like a real sprig.
+            leaf(p[0] + nx * 2.1, p[1] + ny * 2.1, tan - 38, sc);
+            leaf(p[0] + nx * 0.5, p[1] + ny * 0.5, tan + 34, sc * 0.85);
+          });
+          // The stem the leaves grow from.
+          add('path', {
+            d: 'M' + pts.map((p) => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L'),
+            fill: 'none', stroke: tint, 'stroke-width': 0.35, opacity: 0.5,
+          });
+        } else if (kind === 'confetti') {
+          let seed = 21;
+          const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+          for (let i = 0; i < 26; i++) {
+            const x = (rnd() * 100).toFixed(2), y = (rnd() * 140).toFixed(2);
+            add('rect', { x, y, width: 1.1, height: 3.4, fill: tint, opacity: 0.55,
+              transform: `rotate(${(rnd() * 180).toFixed(0)} ${x} ${y})` });
+          }
+        } else { return null; }
+        return svg;
+      }
+
+      // Shrink a zone's type until it fits its role's maxLines. Must run AFTER the
+      // face is in the document (detached elements have no layout). Idempotent, so
+      // re-running on resize is safe. Applied at every scale — thumbnail, editor and
+      // print bake — so what fits on screen is what fits on the card.
+      function fitCardText(face) {
+        const zones = [...face.querySelectorAll('.cf-text')];
+        zones.forEach((el) => { if (el.dataset.baseTop) el.style.top = el.dataset.baseTop; });
+        // Pass 1 — honour each zone's own line budget.
+        zones.forEach((el) => {
+          const maxLines = parseInt(el.dataset.maxLines, 10) || 1;
+          const base = parseFloat(el.dataset.baseFs || getComputedStyle(el).fontSize);
+          el.dataset.baseFs = String(base);
+          el.style.fontSize = base + 'px';
+          // COUNT LINES, don't compare raw heights. A script face's ascenders and
+          // flourishes make scrollHeight exceed fontSize x leading even on ONE
+          // line, so the old `scrollHeight > fs * lead * maxLines` test fired on
+          // display scripts that fit perfectly and shrank them to nothing.
+          // Dividing by the computed line-height and rounding is immune to that
+          // overshoot: one line of Ballet measures ~1.35x but still rounds to 1.
+          for (let i = 0; i < 14; i++) {
+            const lh = parseFloat(getComputedStyle(el).lineHeight) || parseFloat(el.style.fontSize);
+            if (Math.round(el.scrollHeight / lh) <= maxLines) break;
+            el.style.fontSize = parseFloat(el.style.fontSize) * 0.94 + 'px';
+          }
+        });
+
+        // Pass 2 — enforce the real invariant: no zone may overlap another.
+        // Line budgets alone can't guarantee this (a single line of 13% display
+        // type is taller than the gap a template leaves beneath it), and an
+        // overlap is the one text failure that would actually reach print. So
+        // resolve it geometrically: shrink the larger of any overlapping pair
+        // until they clear. Bounded, and independent of what a template author
+        // wrote or a buyer typed.
+        const overlaps = (a, b) =>
+          a.right > b.left + 0.5 && b.right > a.left + 0.5 &&
+          a.bottom > b.top + 0.5 && b.bottom > a.top + 0.5;
+        for (let pass = 0; pass < 24; pass++) {
+          const rects = zones.filter((el) => !el.dataset.free).map((el) => ({ el, r: el.getBoundingClientRect() }));
+          let hit = null;
+          for (let i = 0; i < rects.length && !hit; i++) {
+            for (let j = i + 1; j < rects.length; j++) {
+              if (overlaps(rects[i].r, rects[j].r)) { hit = [rects[i], rects[j]]; break; }
+            }
+          }
+          if (!hit) break;
+          // Shrink whichever is set larger — the display line has the most to give.
+          const pick = parseFloat(getComputedStyle(hit[0].el).fontSize) >=
+                       parseFloat(getComputedStyle(hit[1].el).fontSize) ? hit[0].el : hit[1].el;
+          const cur = parseFloat(getComputedStyle(pick).fontSize);
+          if (cur < 4) break;
+          pick.style.fontSize = cur * 0.93 + 'px';
+        }
+
+        // Pass 3 — centre each band's zones between its top and bottom (see
+        // BANDS in cards.mjs). The group moves as one, by the gap between the
+        // middle of its drawn lines and the middle of the band.
+        const bands = face.dataset.bands ? JSON.parse(face.dataset.bands) : [];
+        if (bands.length) {
+          const fr = face.getBoundingClientRect();
+          const scale = fr.height / face.offsetHeight || 1;   // a transformed preview
+          bands.forEach((band) => {
+            const els = zones.filter((el) => band.zones.includes(el.dataset.zid) && !el.dataset.moved && el.textContent.trim());
+            if (!els.length) return;
+            const rs = els.map((el) => el.getBoundingClientRect());
+            const top = Math.min(...rs.map((r) => r.top)), bottom = Math.max(...rs.map((r) => r.bottom));
+            const want = fr.top + ((band.top + band.bottom) / 2) * fr.height;
+            const delta = (want - (top + bottom) / 2) / scale;
+            els.forEach((el) => { el.style.top = (el.offsetTop + delta) + 'px'; });
+          });
+        }
+      }
+
+      // Webfonts change every metric the fitter measures, and they land AFTER
+      // first paint. Fitting only once means the layout is computed against
+      // fallback faces and is stale the moment the real ones swap in -- which is
+      // exactly when a display line grows and lands on the signature. So re-fit
+      // every card on the page whenever fonts finish loading. Cheap and
+      // idempotent (fitCardText resets to each zone's stored base size first).
+      function refitAll() {
+        document.querySelectorAll('.card-face').forEach(fitCardText);
+      }
+      if (document.fonts) {
+        document.fonts.ready.then(refitAll);
+        document.fonts.addEventListener('loadingdone', refitAll);
+      }
+
+      // ── Step 1: browse ──────────────────────────────────────────────────
+      // Card width on its white square: a landscape card fills about three
+      // quarters of a ~300px tile; a portrait one is as tall as that.
+      // Set per render from the grid's column width (see renderBrowse).
+      const THUMB_W = { landscape: 260, portrait: 150 };
+      function sizeThumbs(host) {
+        const cols = innerWidth <= 720 ? 2 : innerWidth <= 1000 ? 3 : 4;
+        const gap = innerWidth <= 720 ? 16 : 32;
+        const col = Math.max(120, (host.clientWidth - gap * (cols - 1)) / cols);
+        // Stage is col × 0.8col: landscape fills the width, portrait the height.
+        THUMB_W.landscape = Math.round(col * 0.96);
+        THUMB_W.portrait = Math.round(col * 0.78 * 5 / 7);
+      }
+      function renderBrowse() {
+        const back = $('top-back');
+        back.innerHTML = '&larr; All products'; back.href = '/shop.html'; back.onclick = null;
+        const host = $('step-browse');
+        host.innerHTML = '';
+        sizeThumbs(host);
+        const all = C.occasionsWithCounts();
+        if (!all.some((o) => o.id === state.occasionId)) state.occasionId = all[0].id;
+        const section = C.occasionById(state.occasionId).section;
+
+        // Holiday · Wedding · Baby · Invitations, as tabs. A section with no
+        // designs yet isn't shown.
+        const tabs = document.createElement('div');
+        tabs.className = 'sec-tabs';
+        C.SECTIONS.filter((sec) => all.some((o) => o.section === sec)).forEach((sec) => {
+          const t = document.createElement('button');
+          t.className = 'sec-tab' + (sec === section ? ' active' : '');
+          t.textContent = sec;
+          t.addEventListener('click', () => {
+            state.occasionId = all.find((o) => o.section === sec).id;
+            renderBrowse();
+          });
+          tabs.appendChild(t);
+        });
+        host.appendChild(tabs);
+
+        const live = all.filter((o) => o.section === section);
+        const groups = [...new Set(live.map((o) => o.group))];
+        groups.forEach((g) => {
+          const wrap = document.createElement('div');
+          wrap.className = 'occ-group';
+          wrap.innerHTML = '<div class="occ-group-name">' + esc(g) + '</div>';
+          const row = document.createElement('div');
+          row.className = 'occ-row';
+          live.filter((o) => o.group === g).forEach((o) => {
+            const b = document.createElement('button');
+            b.className = 'occ-chip' + (o.id === state.occasionId ? ' active' : '');
+            b.innerHTML = esc(o.label) + '<span class="n">' + o.count + '</span>';
+            b.addEventListener('click', () => { state.occasionId = o.id; renderBrowse(); });
+            row.appendChild(b);
+          });
+          wrap.appendChild(row);
+          host.appendChild(wrap);
+        });
+
+        // Use your photo: every design below is drawn with it, and it is already
+        // in place when a design is opened.
+        const mine = document.createElement('div');
+        mine.className = 'mine-bar';
+        mine.innerHTML = state.myPhoto
+          ? '<img class="mine-thumb" src="' + state.myPhoto.url + '" alt=""/><span>Showing every design with your photo.</span>' +
+            '<button class="btn btn-quiet mine-btn" id="mine-change">Change photo</button><button class="btn btn-link" id="mine-clear">Use sample photos</button>'
+          : '<button class="btn btn-quiet mine-btn" id="mine-pick"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:8px"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Use your photo</button>' +
+            '<span class="mine-hint">See every design with your own photo.</span>';
+        host.appendChild(mine);
+        const pickMine = () => { pendingSlot = '__browse'; $('photo-input').click(); };
+        if ($('mine-pick')) $('mine-pick').addEventListener('click', pickMine);
+        if ($('mine-change')) $('mine-change').addEventListener('click', pickMine);
+        if ($('mine-clear')) $('mine-clear').addEventListener('click', () => { state.myPhoto = null; renderBrowse(); });
+
+        const grid = document.createElement('div');
+        grid.className = 'tpl-grid';
+        // One tile per design (family), shown landscape where it has a
+        // landscape layout (the default); the editor offers portrait too.
+        const seen = new Set();
+        const tpls = C.templatesForOccasion(state.occasionId)
+          .filter((t) => t.orientation === 'landscape' || !C.familyTemplates(t.family).some((x) => x.orientation === 'landscape'))
+          .filter((t) => (seen.has(t.family) ? false : seen.add(t.family)));
+        const occGreeting = (C.occasionById(state.occasionId) || {}).greeting || 'holiday';
+        const samples = window.unsplashSamples ? window.unsplashSamples(tpls.length + 1, 700) : [];
+        // Design your own, first in every occasion.
+        {
+          const card = document.createElement('div');
+          card.className = 'tpl-card';
+          const stage = document.createElement('div');
+          stage.className = 'tpl-stage';
+          const saved = state.custom;
+          state.custom = newCustom(state.occasionId);
+          const thumb = renderCard(customTemplate(), { width: THUMB_W.landscape, sample: (state.myPhoto && state.myPhoto.url) || samples[tpls.length] || '/assets/sample-photo.jpg', colorway: C.CUSTOM_COLORWAYS[0] });
+          state.custom = saved;
+          stage.appendChild(thumb);
+          card.appendChild(stage);
+          requestAnimationFrame(() => fitCardText(thumb));
+          card.insertAdjacentHTML('beforeend', '<div class="tpl-name">Design your own</div>' +
+            '<div class="tpl-meta">Start blank &middot; any occasion &middot; your layout and words</div>');
+          card.addEventListener('click', startCustom);
+          grid.appendChild(card);
+        }
+        tpls.forEach((t, i) => {
+          const card = document.createElement('div');
+          card.className = 'tpl-card';
+          const stage = document.createElement('div');
+          stage.className = 'tpl-stage';
+          const tw = THUMB_W[t.orientation];
+          const sampleUrl = (state.myPhoto && state.myPhoto.url) || samples[i] || '/assets/sample-photo.jpg';
+          const thumb = renderCard(t, { width: tw, sample: sampleUrl,
+            colorway: (t.colorways && t.colorways[0]) || C.DEFAULT_COLORWAY, greeting: occGreeting });
+          stage.appendChild(thumb);
+          card.appendChild(stage);
+          requestAnimationFrame(() => fitCardText(thumb));
+          const fmt = C.CARD_FORMATS[t.formatId];
+          card.insertAdjacentHTML('beforeend',
+            '<div class="tpl-name">' + esc(t.name) + '</div>' +
+            '<div class="tpl-meta">' + (C.familyTemplates(t.family).length > 1 ? 'Portrait or landscape' : esc(t.orientation)) +
+            ' &middot; ' + (t.photos.length) + ' photo' + (t.photos.length > 1 ? 's' : '') + '</div>');
+          // Swatch row: clicking one re-renders the thumbnail in that colourway
+          // and carries the choice into the editor, so what you clicked is what
+          // you get.
+          if (t.colorways && t.colorways.length > 1) {
+            const sw = document.createElement('div');
+            sw.className = 'sw-row';
+            t.colorways.forEach((id, k) => {
+              const c = C.COLORWAYS[id]; if (!c) return;
+              const dot = document.createElement('button');
+              dot.className = 'sw' + (k === 0 ? ' active' : '');
+              dot.style.background = c.ground;
+              dot.title = c.label;
+              dot.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                sw.querySelectorAll('.sw').forEach((x) => x.classList.remove('active'));
+                dot.classList.add('active');
+                const fresh = renderCard(t, { width: tw, sample: sampleUrl, colorway: id, greeting: occGreeting });
+                stage.innerHTML = ''; stage.appendChild(fresh);
+                requestAnimationFrame(() => fitCardText(fresh));
+                card.dataset.colorway = id;
+              });
+              sw.appendChild(dot);
+            });
+            card.appendChild(sw);
+          }
+          card.addEventListener('click', () => {
+            state.greeting = occGreeting;
+            state.sampleUrl = sampleUrl;
+            chooseTemplate(t);
+            if (card.dataset.colorway) { state.colorway = card.dataset.colorway; renderEditor(); }
+          });
+          grid.appendChild(card);
+        });
+        host.appendChild(grid);
+
+        const occ = C.occasionById(state.occasionId);
+        $('page-title').textContent = occ ? occ.label : 'Cards';
+      }
+
+      // ── Design your own ─────────────────────────────────────────────────
+      // A blank card: a layout (C.CARD_LAYOUTS) plus text boxes the buyer
+      // styles and drags. customTemplate() turns that into an ordinary
+      // template, so the renderer, print bake, scan target and cart treat it
+      // like any other design.
+      let boxSeq = 0;
+      const GREET_TEXT = { christmas: 'Merry Christmas', religious: 'Joy to the World', newyear: 'Happy New Year', holiday: 'Happy Holidays' };
+      function layoutById(id) { return C.CARD_LAYOUTS.find((l) => l.id === id) || C.CARD_LAYOUTS[0]; }
+      function layoutBoxes(layoutId, orientation) {
+        return layoutById(layoutId)[orientation].boxes.map((b) => ({ ...b, id: 'b' + (++boxSeq) }));
+      }
+      function newCustom(occasionId) {
+        const occ = C.occasionById(occasionId) || {};
+        const boxes = layoutBoxes('top', 'portrait');
+        // On a holiday occasion the first line starts as that greeting, which
+        // is fine to keep; elsewhere it is a placeholder that must be replaced.
+        if (occ.section === 'Holiday') {
+          boxes[0].text = GREET_TEXT[occ.greeting || 'holiday'];
+          boxes[0].sample = false;
+        }
+        boxes.forEach((b) => { b.sampleText = b.text; });
+        return { layout: 'top', orientation: 'landscape', boxes };
+      }
+      // Move the boxes to where the new layout puts its text; the words and
+      // their styling stay. Extra boxes keep their place.
+      function relayoutBoxes() {
+        const cu = state.custom;
+        const spots = layoutById(cu.layout)[cu.orientation].boxes;
+        cu.boxes.forEach((b, i) => {
+          const sp = spots[i];
+          if (!sp) return;
+          Object.assign(b, { x: sp.x, y: sp.y, maxW: sp.maxW });
+          // A box made for one card shape is resized for the other.
+          if (b.color === 'onPhoto' && sp.color !== 'onPhoto') b.color = sp.color;
+          if (sp.color === 'onPhoto' && (b.color === 'ink' || b.color === 'accent')) b.color = 'onPhoto';
+        });
+      }
+      function customTemplate() {
+        const cu = state.custom, L = layoutById(cu.layout), side = L[cu.orientation];
+        return {
+          id: 'custom', family: 'custom', name: 'Design your own', custom: true,
+          formatId: 'flat-5x7', orientation: cu.orientation, tags: [], ornament: 'none',
+          ground: L.ground, scrim: L.scrim, photoEdge: 'square',
+          colorways: C.CUSTOM_COLORWAYS, popcodeSlot: side.photos[0].id,
+          photos: side.photos.map((p) => ({ ...p, fit: 'cover' })),
+          text: cu.boxes.map((b, i) => {
+            const w = b.maxW || 0.84;
+            const x = b.align === 'left' ? b.x - w / 2 : b.align === 'right' ? b.x + w / 2 : b.x;
+            return {
+              id: b.id, role: 'message', label: 'Text ' + (i + 1), default: b.text,
+              x, y: b.y, size: b.size, maxW: w, align: b.align, color: b.color, font: b.font,
+              weight: b.bold ? 600 : (b.font === 'grotesk' ? 500 : 400), upper: !!b.upper, italic: !!b.italic,
+              track: b.upper ? 0.22 : 0, lead: 1.15, lines: 4, finish: 'flat', free: true,
+              shadow: b.color === 'onPhoto' || b.color === '#FFFFFF',
+            };
+          }),
+        };
+      }
+      // Put the browse photo (Use your photo) in every slot of the design.
+      function fillMyPhoto(tpl) {
+        if (!state.myPhoto) return;
+        (tpl.photos || []).forEach((sl) => { state.photos[sl.id] = { file: state.myPhoto.file, url: state.myPhoto.url }; });
+      }
+      // Picking a design (or Design your own) starts a NEW card. Without this the
+      // card just saved, or opened from My Designs, stayed `editing` and the next
+      // save overwrote it -- design, scan target and all (audit 2026-10-21).
+      function startNewCard() {
+        editing = null;
+        state.name = '';
+        state.slug = null;
+        state.slugTouched = false;
+        state.back = null;
+        state.bw = false;
+        state.corners = 'square';
+        state.moves = {};
+        const u = new URL(location.href);
+        if (u.searchParams.has('id') || u.searchParams.has('duplicate')) {
+          u.searchParams.delete('id'); u.searchParams.delete('duplicate');
+          history.replaceState(null, '', u);
+        }
+      }
+      function startCustom() {
+        startNewCard();
+        state.custom = newCustom(state.occasionId);
+        state.text = {};
+        state.photos = {};
+        state.samples = {};
+        state.sampleUrl = null;
+        state.popcode = null;
+        state.script = null;
+        state.colorway = C.CUSTOM_COLORWAYS[0];
+        state.template = customTemplate();
+        fillMyPhoto(state.template);
+        $('step-browse').classList.add('hidden');
+        $('step-edit').classList.remove('hidden');
+        renderEditor();
+        window.scrollTo(0, 0);
+      }
+      function refreshCustom() {
+        state.template = customTemplate();
+        drawEditorCard();
+      }
+      // Drag a box on the card to move it.
+      // Snapping to the card's centre line while dragging text: within this
+      // many screen pixels of centre it locks on, and a guide line shows.
+      const SNAP_PX = 8;
+      // How far (screen px) the line's drawn box sits outside the card's safe
+      // area (1/4in inside the trim, the dashed line on the print preview), per
+      // side -- so a drop can be pushed back inside it.
+      function safeOverflow(face, el) {
+        const fr = face.getBoundingClientRect(), r = el.getBoundingClientRect();
+        const fmt = C.CARD_FORMATS[state.template.formatId];
+        const wIn = state.template.orientation === 'landscape' ? fmt.hIn : fmt.wIn;
+        const m = fr.width * 0.25 / wIn;
+        let dx = 0, dy = 0;
+        if (r.width <= fr.width - 2 * m) {
+          if (r.left < fr.left + m) dx = fr.left + m - r.left;
+          else if (r.right > fr.right - m) dx = fr.right - m - r.right;
+        }
+        if (r.height <= fr.height - 2 * m) {
+          if (r.top < fr.top + m) dy = fr.top + m - r.top;
+          else if (r.bottom > fr.bottom - m) dy = fr.bottom - m - r.bottom;
+        }
+        return { dx, dy, scale: fr.width / face.offsetWidth || 1 };
+      }
+      function centreGuide(face, on) {
+        let g = face.querySelector('.cf-guide');
+        if (on && !g) { g = document.createElement('div'); g.className = 'cf-guide'; face.appendChild(g); }
+        if (g) g.classList.toggle('on', !!on);
+      }
+      // On a touchscreen a swipe across the words must scroll the page, so a
+      // finger moves text only after a short press-and-hold. Mouse and pen
+      // drag straight away. `start(e)` begins the real drag from the press.
+      const HOLD_MS = 350;
+      function onPress(el, start) {
+        el.style.touchAction = 'manipulation';
+        el.style.webkitTouchCallout = 'none';
+        el.addEventListener('pointerdown', (e) => {
+          if (e.button) return;
+          if (e.pointerType !== 'touch') { start(e, false); return; }
+          const sx = e.clientX, sy = e.clientY;
+          let armed = false;
+          const block = (ev) => { if (armed && ev.cancelable) ev.preventDefault(); };
+          const done = () => {
+            clearTimeout(timer);
+            window.removeEventListener('pointermove', mv);
+            window.removeEventListener('pointerup', done);
+            window.removeEventListener('pointercancel', done);
+            setTimeout(() => el.removeEventListener('touchmove', block), 0);
+          };
+          const mv = (ev) => { if (!armed && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 8) done(); };
+          const timer = setTimeout(() => {
+            armed = true;
+            if (navigator.vibrate) try { navigator.vibrate(8); } catch (x) {}
+            start(e, true);
+          }, HOLD_MS);
+          el.addEventListener('touchmove', block, { passive: false });
+          window.addEventListener('pointermove', mv);
+          window.addEventListener('pointerup', done);
+          window.addEventListener('pointercancel', done);
+        });
+      }
+      function enableDrag(face) {
+        face.querySelectorAll('.cf-text').forEach((el) => {
+          const box = state.custom.boxes.find((b) => b.id === el.dataset.zid);
+          if (!box) return;
+          el.style.cursor = 'move';
+          onPress(el, (e, held) => {
+            if (!held) e.preventDefault();
+            if (held) el.classList.add('dragging');
+            const fr = face.getBoundingClientRect();
+            const sx = e.clientX, sy = e.clientY, bx0 = box.x, by0 = box.y, l0 = el.offsetLeft, t0 = el.offsetTop;
+            const move = (ev) => {
+              let x = Math.min(1, Math.max(0, bx0 + (ev.clientX - sx) / fr.width));
+              const snap = Math.abs(x - 0.5) * fr.width < SNAP_PX;
+              if (snap) x = 0.5;
+              box.x = x;
+              box.y = Math.min(0.97, Math.max(0, by0 + (ev.clientY - sy) / fr.height));
+              el.style.left = l0 + (x - bx0) * fr.width / (fr.width / face.offsetWidth) + 'px';
+              el.style.top = t0 + (ev.clientY - sy) + 'px';
+              centreGuide(face, snap);
+            };
+            const up = () => {
+              window.removeEventListener('pointermove', move);
+              window.removeEventListener('pointerup', up);
+              window.removeEventListener('pointercancel', up);
+              el.classList.remove('dragging');
+              centreGuide(face, false);
+              const o = safeOverflow(face, el);
+              box.x = Math.min(1, Math.max(0, box.x + o.dx / fr.width));
+              box.y = Math.min(0.97, Math.max(0, box.y + o.dy / fr.height));
+              refreshCustom();
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+            window.addEventListener('pointercancel', up);
+          });
+        });
+      }
+      // Drag any line of a design to move it (2026-10-20: type is hard to place
+      // on some photos). A press that moves more than a few pixels is a drag;
+      // a plain click still puts the cursor in the text to type.
+      function enableZoneDrag(face) {
+        // The browser's own drag (of the photo under the words, or of selected
+        // text) would take over the pointer mid-move.
+        face.addEventListener('dragstart', (e) => e.preventDefault());
+        face.querySelectorAll('.cf-text[data-zone]').forEach((el) => {
+          onPress(el, (e, held) => {
+            const sx = e.clientX, sy = e.clientY, l0 = el.offsetLeft, t0 = el.offsetTop;
+            const scale = face.getBoundingClientRect().width / face.offsetWidth || 1;
+            // A held finger is already a drag; a mouse becomes one after 5px.
+            let dragging = held;
+            if (held) { el.blur(); el.classList.add('dragging'); }
+            const move = (ev) => {
+              const dx = (ev.clientX - sx) / scale, dy = (ev.clientY - sy) / scale;
+              if (!dragging) {
+                if (Math.hypot(dx, dy) < 5) return;
+                dragging = true;
+                el.blur();
+                el.classList.add('dragging');
+              }
+              ev.preventDefault();
+              window.getSelection().removeAllRanges();
+              // The line's middle: a rotated / `center` zone is placed by its
+              // middle already; the others by their left edge.
+              const mid0 = el.style.transform ? l0 : l0 + el.offsetWidth / 2;
+              const W = face.offsetWidth;
+              let nx = dx;
+              const snap = Math.abs(mid0 + dx - W / 2) * scale < SNAP_PX;
+              if (snap) nx = W / 2 - mid0;
+              el.style.left = l0 + nx + 'px';
+              el.style.top = t0 + dy + 'px';
+              centreGuide(face, snap);
+            };
+            const up = () => {
+              window.removeEventListener('pointermove', move);
+              window.removeEventListener('pointerup', up);
+              window.removeEventListener('pointercancel', up);
+              centreGuide(face, false);
+              if (!dragging) return;
+              const W = face.offsetWidth, H = face.offsetHeight;
+              const zid = el.dataset.zid;
+              // Keep the words inside the safe area: they print where they're dropped.
+              const o = safeOverflow(face, el);
+              if (o.dx || o.dy) {
+                el.style.left = el.offsetLeft + o.dx / o.scale + 'px';
+                el.style.top = el.offsetTop + o.dy / o.scale + 'px';
+              }
+              const z = state.template.text.find((x) => x.id === zid);
+              const prev = (state.moves || {})[zid] || { dx: 0, dy: 0 };
+              // The line's top on screen IS its new y (a band may have centred
+              // it before, so measure where it was shown, not the design's y).
+              // Left is offset by its alignment, so x moves by the drag.
+              const nx = Math.min(0.98, Math.max(0.02, z.x + prev.dx + (el.offsetLeft - l0) / W));
+              const ny = Math.min(0.97, Math.max(0, el.offsetTop / H));
+              state.moves = { ...(state.moves || {}), [zid]: { dx: nx - z.x, dy: ny - z.y } };
+              drawEditorCard();
+              paintMoveReset();
+            };
+            // On the window, not the line: a quick first move can leave the
+            // line before the drag has begun.
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+            window.addEventListener('pointercancel', up);
+          });
+        });
+      }
+      function paintMoveReset() {
+        const r = $('move-reset');
+        if (r) r.classList.toggle('hidden', !Object.keys(state.moves || {}).length);
+      }
+      const swatchColor = (id) => (id[0] === '#' ? id : (C.COLORWAYS[state.colorway] || {})[id] || '#999');
+      // One block of controls per text box.
+      function renderBoxFields() {
+        const host = $('zone-fields');
+        host.innerHTML = '';
+        const tog = (on, act, label, extra) => '<button class="pack-btn' + (on ? ' active' : '') + '" data-act="' + act + '"' + (extra || '') + '>' + label + '</button>';
+        state.custom.boxes.forEach((b, i) => {
+          const d = document.createElement('div');
+          d.className = 'box-ed';
+          d.innerHTML =
+            '<div class="box-head"><b>Text ' + (i + 1) + '</b>' +
+              (state.custom.boxes.length > 1 ? '<button class="box-del" data-act="del">Remove</button>' : '') + '</div>' +
+            '<textarea class="text-input" rows="2" maxlength="240" aria-label="Text ' + (i + 1) + '">' + esc(b.text) + '</textarea>' +
+            '<div class="box-row"><select class="text-input box-font" aria-label="Font">' +
+              C.CUSTOM_FONTS.map((f) => '<option value="' + f + '"' + (f === b.font ? ' selected' : '') + '>' +
+                esc(C.FONTS[f].label) + (C.SCRIPTS.some((x) => x.id === f) ? ' script' : '') + '</option>').join('') +
+            '</select><label class="box-size">Size <input type="range" min="10" max="170" value="' + Math.round(b.size * 1000) + '" aria-label="Size"/></label></div>' +
+            '<div class="sw-row box-colors">' + C.CUSTOM_COLORS.map((c) =>
+              '<button class="sw' + (c.id === b.color || (c.id === '#FFFFFF' && b.color === 'onPhoto') ? ' active' : '') + '" data-c="' + c.id + '" title="' + esc(c.label) + '" style="background:' + swatchColor(c.id) + '"></button>').join('') + '</div>' +
+            '<div class="pack-row box-tog">' +
+              tog(b.align === 'left', 'left', 'Left') + tog(b.align === 'center', 'center', 'Center') + tog(b.align === 'right', 'right', 'Right') +
+              tog(b.bold, 'bold', 'Bold') + tog(b.upper, 'upper', 'Caps') + tog(b.italic, 'italic', 'Italic') +
+            '</div>';
+          host.appendChild(d);
+          const ta = d.querySelector('textarea');
+          ta.addEventListener('input', () => {
+            b.text = ta.value;
+            state.template = customTemplate();
+            const el = $('ed-stage').querySelector('[data-zid="' + b.id + '"]');
+            if (el) { el.textContent = b.text; fitCardText(el.closest('.card-face')); }
+          });
+          d.querySelector('.box-font').addEventListener('change', (e) => { b.font = e.target.value; refreshCustom(); });
+          d.querySelector('input[type=range]').addEventListener('input', (e) => { b.size = Number(e.target.value) / 1000; refreshCustom(); });
+          d.querySelectorAll('.box-colors .sw').forEach((sw) => sw.addEventListener('click', () => {
+            b.color = sw.dataset.c; refreshCustom(); renderBoxFields();
+          }));
+          d.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', () => {
+            const a = btn.dataset.act;
+            if (a === 'del') state.custom.boxes.splice(i, 1);
+            else if (a === 'left' || a === 'center' || a === 'right') b.align = a;
+            else b[a] = !b[a];
+            refreshCustom(); renderBoxFields();
+          }));
+        });
+        const add = document.createElement('button');
+        add.className = 'btn btn-quiet btn-block';
+        add.textContent = '+ Add text';
+        add.addEventListener('click', () => {
+          const last = state.custom.boxes[state.custom.boxes.length - 1];
+          const nb = { text: 'More words', sample: true, sampleText: 'More words', x: 0.5, y: Math.min(0.9, last ? last.y + 0.06 : 0.5),
+            size: 0.024, maxW: 0.84, color: last ? last.color : 'ink', font: 'cormorant', align: 'center', bold: false, upper: false, italic: false, id: 'b' + (++boxSeq) };
+          state.custom.boxes.push(nb);
+          refreshCustom(); renderBoxFields();
+        });
+        host.appendChild(add);
+      }
+
+      function chooseTemplate(tpl) {
+        startNewCard();
+        state.custom = null;
+        state.template = tpl;
+        state.colorway = (tpl.colorways && tpl.colorways[0]) || C.DEFAULT_COLORWAY;
+        state.text = {};
+        state.photos = {};
+        state.samples = {};
+        state.moves = {};
+        fillMyPhoto(tpl);
+        state.popcode = null;
+        state.script = null;
+        $('step-browse').classList.add('hidden');
+        $('step-edit').classList.remove('hidden');
+        renderEditor();
+        window.scrollTo(0, 0);
+      }
+
+      // ── Step 2: editor ──────────────────────────────────────────────────
+      let slugField = null, slugBackTimer = null;
+      function backToDesigns() {
+        if (saving) return;
+        $('step-edit').classList.add('hidden');
+        $('step-browse').classList.remove('hidden');
+        renderBrowse();
+        window.scrollTo(0, 0);
+      }
+      function renderEditor() {
+        const tpl = state.template;
+        const host = $('step-edit');
+        host.innerHTML =
+          '<div class="editor">' +
+            '<div class="ed-left"><div class="ed-stage" id="ed-stage"></div>' +
+              '<div class="side-toggle"><div class="toggle" id="side-toggle">' +
+                '<button type="button" data-side="front">Front</button><button type="button" data-side="back">Back</button>' +
+              '</div></div><p class="side-hint" id="side-hint"></p></div>' +
+            '<div class="ed-side">' +
+              '<div class="panel"><h2 class="ed-name">' + esc(tpl.name) + '</h2>' +
+                '<ul class="specs"><li>Flat 5&times;7&Prime; card, printed front and back</li><li>Eggshell paper</li><li>Envelopes included</li></ul>' +
+                '<div class="field"><label for="card-name">Name this card <span class="lim">so you can find it in My Designs</span></label>' +
+                '<input class="text-input" id="card-name" maxlength="80" placeholder="e.g. Middleton Christmas 2026" value="' + esc(state.name || '') + '"/></div>' +
+                '<div class="field"><label for="slug-input">Popcode link <span class="lim">printed on the back</span></label>' +
+                '<div class="slug-row"><span class="slug-prefix">popcode.app/</span>' +
+                '<input class="text-input" id="slug-input" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="yourlink"/></div>' +
+                '<div class="slug-note" id="slug-note">Fills in from the card’s name. It’s locked once the card is saved, so printed cards keep working.</div></div>' +
+                '<div class="opt hidden" id="opt-layout"><h3>Layout <span id="layout-name"></span></h3><div class="chip-row" id="layout-row"></div></div>' +
+                '<div class="opt hidden" id="opt-orient"><h3>Orientation <span id="orient-name"></span></h3><div class="toggle" id="orient-row"></div></div>' +
+                '<div class="opt hidden" id="opt-greet"><h3>Greeting <span id="greet-name"></span></h3><div class="chip-row" id="greet-row"></div></div>' +
+                '<div class="opt hidden" id="opt-script"><h3>Script <span id="script-name"></span></h3><div class="pack-row" id="script-row"></div></div>' +
+                '<div class="opt" id="cw-panel"><h3>Color theme <span id="cw-name"></span></h3><div class="sw-row" id="cw-row"></div></div>' +
+                '<div class="opt"><h3>Corners <span id="corner-name"></span></h3><div class="pack-row" id="corner-row"></div></div>' +
+                '<div class="opt"><h3>Photo <span id="bw-name"></span></h3><p class="hint" style="margin:-4px 0 8px">Tap a photo on the card to crop, zoom, rotate or replace it.</p><div class="pack-row"><button class="pack-btn" id="bw-off">Color</button>' +
+                '<button class="pack-btn" id="bw-on">Black &amp; white</button></div></div>' +
+              '</div>' +
+              '<div class="panel"><h3>' + (state.custom ? 'Your text' : 'Your words') + '</h3>' +
+                '<p class="hint">' + (state.custom
+                  ? 'Add as many lines as you like and style each one. Drag text on the card to move it.'
+                  : 'Everything on the card is yours to change. Pick a greeting above or type your own, here or straight onto the card. ' +
+                    'Drag any line on the card to move it.' +
+                    ' <a href="#" id="move-reset" class="hidden">Put the words back</a>') + '</p>' +
+                '<div id="zone-fields"></div></div>' +
+              '<div class="panel"><h3>Back of the card</h3>' +
+                '<p class="hint">How to play the card, as on every Popcode product. Add a photo above it if you like. ' +
+                'Switch to <a href="#" id="see-back">Back</a> under the card to see it full size.</p>' +
+                '<div class="chip-row"><button class="btn btn-sm btn-quiet" id="back-photo">Add a photo</button>' +
+                '<button class="btn btn-sm btn-quiet hidden" id="back-clear">Remove photo</button></div>' +
+                '<div class="opt hidden" id="opt-bshape" style="margin:16px 0 0"><h3>Photo shape <span id="bshape-name"></span></h3><div class="pack-row" id="bshape-row"></div></div>' +
+                '<div class="opt hidden" id="opt-bsize" style="margin:16px 0 0"><h3>Photo size <span id="bsize-name"></span></h3><div class="pack-row" id="bsize-row"></div></div></div>' +
+              '<div class="panel"><h3>Popcode</h3>' +
+                '<p class="hint" id="pop-hint"></p>' +
+                '<button type="button" class="popcode-cta" id="pop-btn"><span class="pc-sym"><img src="/assets/popcode_symbol_color.svg" alt=""/></span>' +
+                '<span id="pop-label">Add a Popcode</span></button></div>' +
+              '<div class="panel"><h3>How many?</h3>' +
+                '<p class="hint">The more you order, the less each one costs.</p>' +
+                '<select class="text-input qty-select" id="qty-select" aria-label="How many cards"></select>' +
+                '<div class="price-row"><span class="price-note" id="price-note"></span></div></div>' +
+              '<div class="ed-actions"><button class="btn btn-lg btn-primary btn-block" id="cart-btn">Add to cart</button>' +
+              '<button class="btn btn-quiet btn-block" id="save-btn">Save design</button></div>' +
+            '</div>' +
+          '</div>';
+
+        const back = $('top-back');
+        back.innerHTML = '&larr; All designs';
+        back.onclick = (e) => { e.preventDefault(); backToDesigns(); };
+        drawEditorCard();
+        if (state.custom) renderBoxFields(); else renderZoneFields();
+        renderColorways();
+        renderOptions();
+        renderPacks();
+        const paintBw = () => {
+          $('bw-on').classList.toggle('active', state.bw);
+          $('bw-off').classList.toggle('active', !state.bw);
+          $('bw-name').textContent = state.bw ? 'Black & white' : 'Color';
+        };
+        $('bw-on').addEventListener('click', () => { state.bw = true; paintBw(); drawEditorCard(); });
+        $('bw-off').addEventListener('click', () => { state.bw = false; paintBw(); drawEditorCard(); });
+        paintBw();
+        updatePopHint();
+
+
+        $('pop-btn').addEventListener('click', () => PopcodeTools.popcodeSheet({
+          current: state.popcode, noun: 'card', db, getUser: () => currentUser,
+          onSave: (pc) => { state.popcode = pc; updatePopHint(); },
+        }));
+        $('back-photo').addEventListener('click', () => { pendingSlot = '__back'; $('photo-input').click(); });
+        $('back-clear').addEventListener('click', () => { state.back = null; drawBackPreview(true).catch(backFailed); });
+        $('see-back').addEventListener('click', (e) => { e.preventDefault(); showSide('back'); $('ed-stage').scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+        $('side-toggle').addEventListener('click', (e) => { const b = e.target.closest('[data-side]'); if (b) showSide(b.dataset.side); });
+        // Editing the words is front work: show the front.
+        $('zone-fields').addEventListener('focusin', () => { if (state.side === 'back') showSide('front'); });
+        drawBackPreview().catch(() => {});
+        $('card-name').addEventListener('input', (e) => { state.name = e.target.value; });
+        // The Popcode link, as on the calendar and books: fills in from the
+        // name until the buyer edits it; locked once the card is saved.
+        slugField = PopcodeSlug.attach({
+          db, nameInput: $('card-name'), slugInput: $('slug-input'), note: $('slug-note'),
+          classes: { base: 'slug-note', err: 'bad' }, nameLabel: 'name', touched: state.slugTouched,
+          onChange: (sl) => {
+            state.slug = sl;
+            clearTimeout(slugBackTimer);
+            if (state.side === 'back') slugBackTimer = setTimeout(() => drawBackPreview(true).catch(backFailed), 300);
+          },
+        });
+        $('slug-input').addEventListener('input', () => { state.slugTouched = true; });
+        if (editing) slugField.lock(editing.slug, 'This card’s link. It’s locked so printed cards keep working.');
+        else if (state.slug) slugField.set(state.slug, state.slugTouched);
+        else if (state.name) slugField.set(PopcodeSlug.slugify(state.name), false);
+        if ($('move-reset')) {
+          $('move-reset').addEventListener('click', (e) => { e.preventDefault(); state.moves = {}; drawEditorCard(); paintMoveReset(); });
+          paintMoveReset();
+        }
+        $('save-btn').addEventListener('click', onSave);
+        $('cart-btn').addEventListener('click', addToCart);
+      }
+
+      // Orientation, greeting and corners: Minted's product options.
+      function optionRow(rowId, nameId, items, current, onPick) {
+        const row = $(rowId);
+        row.innerHTML = '';
+        items.forEach((it) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = (row.classList.contains('toggle') ? '' : row.classList.contains('chip-row') ? 'occ-chip' : 'pack-btn') + (it.id === current ? ' active' : '');
+          b.textContent = it.label;
+          b.addEventListener('click', () => onPick(it.id));
+          row.appendChild(b);
+        });
+        const cur = items.find((it) => it.id === current);
+        $(nameId).textContent = cur ? cur.label : '';
+      }
+      function renderOptions() {
+        const tpl = state.template;
+        $('opt-layout').classList.toggle('hidden', !state.custom);
+        if (state.custom) {
+          optionRow('layout-row', 'layout-name', C.CARD_LAYOUTS, state.custom.layout, (id) => {
+            state.custom.layout = id; relayoutBoxes(); state.template = customTemplate(); renderEditor();
+          });
+        }
+        const fam = state.custom
+          ? [{ orientation: 'portrait' }, { orientation: 'landscape' }]
+          : C.familyTemplates(tpl.family);
+        $('opt-orient').classList.toggle('hidden', fam.length < 2);
+        if (fam.length > 1) {
+          optionRow('orient-row', 'orient-name',
+            fam.map((t) => ({ id: t.orientation, label: t.orientation === 'portrait' ? 'Portrait' : 'Landscape' })),
+            tpl.orientation, (o) => switchOrientation(o));
+        }
+        const greets = (tpl.text || []).some((z) => z.greet);
+        $('opt-greet').classList.toggle('hidden', !greets);
+        if (greets) {
+          optionRow('greet-row', 'greet-name', C.GREETINGS, state.greeting, (id) => {
+            state.greeting = id;
+            // A new greeting replaces what the greeting lines say, typed or not.
+            (state.template.text || []).forEach((z) => { if (z.greet) delete state.text[z.id]; });
+            renderOptions(); drawEditorCard(); renderZoneFields();
+          });
+        }
+        const scripted = (tpl.text || []).some((z) => z.scriptable);
+        $('opt-script').classList.toggle('hidden', !scripted);
+        if (scripted) {
+          const own = (tpl.text.find((z) => z.scriptable) || {}).font;
+          optionRow('script-row', 'script-name', C.SCRIPTS, state.script || own, (id) => { state.script = id; renderOptions(); drawEditorCard(); });
+          // Each button is set in its own script so the choice is visible.
+          [...$('script-row').children].forEach((b, i) => { b.style.fontFamily = C.FONTS[C.SCRIPTS[i].id].css; b.style.fontSize = '22px'; b.style.fontWeight = '400'; b.style.lineHeight = '1.1'; });
+        }
+        optionRow('corner-row', 'corner-name', [{ id: 'square', label: 'Square' }, { id: 'rounded', label: 'Rounded' }],
+          state.corners, (c) => { state.corners = c; renderOptions(); drawEditorCard(); });
+      }
+      // Same design, the other layout. Words, photos and colour carry over.
+      function switchOrientation(o) {
+        if (state.custom) {
+          if (state.custom.orientation === o) return;
+          state.custom.orientation = o; relayoutBoxes(); state.template = customTemplate(); renderEditor();
+          return;
+        }
+        const next = C.familyTemplates(state.template.family).find((t) => t.orientation === o);
+        if (!next || next === state.template) return;
+        state.template = next;
+        state.moves = {};   // positions belong to one layout
+        if (!(next.colorways || []).includes(state.colorway)) state.colorway = next.colorways[0];
+        renderEditor();
+      }
+
+      function renderColorways() {
+        const tpl = state.template;
+        const row = $('cw-row');
+        const list = tpl.colorways || [C.DEFAULT_COLORWAY];
+        $('cw-name').textContent = (C.COLORWAYS[state.colorway] || {}).label || '';
+        if (list.length < 2) { $('cw-panel').classList.add('hidden'); return; }
+        row.innerHTML = '';
+        list.forEach((id) => {
+          const c = C.COLORWAYS[id]; if (!c) return;
+          const dot = document.createElement('button');
+          dot.className = 'sw sw-lg' + (id === state.colorway ? ' active' : '');
+          dot.style.background = c.ground;
+          dot.title = c.label;
+          dot.addEventListener('click', () => { state.colorway = id; renderColorways(); drawEditorCard(); });
+          row.appendChild(dot);
+        });
+      }
+
+      // Front / Back under the preview, like the ornament's. Changing anything
+      // on the front (an option, a photo) brings the front back.
+      function showSide(side) {
+        if (side === 'back') drawBackPreview(true).catch(backFailed); else drawEditorCard();
+      }
+      function backFailed(e) {
+        console.error(e);
+        if (window.Sentry) try { Sentry.captureException(e); } catch (x) {}
+        drawEditorCard();
+      }
+      function paintSideToggle() {
+        document.querySelectorAll('#side-toggle [data-side]').forEach((b) =>
+          b.classList.toggle('active', b.dataset.side === (state.side || 'front')));
+        paintPhotoLinks();
+      }
+      // Under the preview: change / remove the photo on the side showing.
+      function paintPhotoLinks() {
+        const h = $('side-hint');
+        if (!h) return;
+        const link = (id, label) => '<a href="#" data-act="' + id + '">' + label + '</a>';
+        const slots = (state.template.photos || []).filter((sl) => state.photos[sl.id]);
+        if (state.side === 'back') {
+          h.innerHTML = state.back
+            ? link('back-change', 'Change photo') + ' &middot; ' + link('back-remove', 'Remove photo')
+            : link('back-change', 'Add a photo') + ' above the message';
+        } else if (!slots.length) {
+          h.innerHTML = link('front-add', 'Add your photo') + (state.template.photos.length > 1 ? ' &middot; or tap any photo spot' : '');
+        } else if (state.template.photos.length === 1) {
+          h.innerHTML = link('front-edit', 'Edit photo') + ' &middot; ' + link('front-remove', 'Remove photo');
+        } else {
+          h.innerHTML = 'Tap a photo to edit it &middot; ' + link('front-remove', 'Remove all photos');
+        }
+        h.onclick = (e) => {
+          const a = e.target.closest('[data-act]');
+          if (!a) return;
+          e.preventDefault();
+          const act = a.dataset.act;
+          if (act === 'back-change') { pendingSlot = '__back'; $('photo-input').click(); }
+          if (act === 'back-remove') { state.back = null; drawBackPreview(true).catch(backFailed); }
+          if (act === 'front-edit') onPhotoTap(state.template.photos[0].id);
+          if (act === 'front-add') pickPhotoFor(state.template.photos[0].id);
+          if (act === 'front-remove') { state.photos = {}; drawEditorCard(); }
+        };
+      }
+      function editorCardWidth() {
+        const stage = $('ed-stage');
+        const side = stage.clientWidth || Math.min(460, window.innerWidth - 40);
+        const fmt = C.CARD_FORMATS[state.template.formatId];
+        const land = state.template.orientation === 'landscape';
+        let w = land ? side * 0.96 : side * 0.92 * fmt.aspect;
+        // On a laptop the card stays pinned while the options scroll, so it
+        // must fit the window under the menu bar with its toggle and links.
+        if (window.innerWidth > 760) {
+          const maxH = Math.max(240, window.innerHeight - 124 - 150);
+          w = Math.min(w, land ? maxH / fmt.aspect : maxH * fmt.aspect);
+        }
+        return Math.round(w);
+      }
+      function drawEditorCard() {
+        state.side = 'front';
+        paintSideToggle();
+        const stage = $('ed-stage');
+        stage.innerHTML = '';
+        const land = state.template.orientation === 'landscape';
+        const w = editorCardWidth();
+        // Sample photos for the empty slots: the tile's photo first, then others.
+        state.samples = state.samples || {};
+        const pool = window.unsplashSamples ? window.unsplashSamples(6, 900) : [];
+        (state.template.photos || []).forEach((sl, i) => {
+          if (!state.samples[sl.id]) state.samples[sl.id] = (i === 0 && state.sampleUrl) || pool[i] || '/assets/sample-photo.jpg';
+        });
+        const face = renderCard(state.template, {
+          width: w, editable: !state.custom, samples: state.samples, text: state.text, photos: state.photos, bw: state.bw,
+          greeting: state.greeting, corners: state.corners, script: state.script, moves: state.moves,
+          colorway: state.colorway, onPickPhoto: onPhotoTap,
+        });
+        stage.appendChild(face);
+        fitCardText(face);
+        if (state.custom) enableDrag(face); else enableZoneDrag(face);
+      }
+
+      // Side inputs and on-card editing are two views of the same string.
+      function renderZoneFields() {
+        const host = $('zone-fields');
+        host.innerHTML = '';
+        C.resolveText(state.template, state.text, state.greeting).forEach((z) => {
+          const role = C.TEXT_ROLES[z.role] || {};
+          const f = document.createElement('div');
+          f.className = 'field';
+          f.innerHTML =
+            '<label for="zf-' + z.id + '">' + esc(z.label || role.label || z.id) +
+            '<span class="lim" id="lim-' + z.id + '"></span></label>' +
+            '<input class="text-input" id="zf-' + z.id + '" maxlength="' + (role.maxChars || 120) +
+            '" value="' + esc(z.value) + '" placeholder="' + esc(role.hint || '') + '"/>';
+          host.appendChild(f);
+          const input = f.querySelector('input');
+          input.addEventListener('input', () => {
+            state.text[z.id] = input.value;
+            const el = $('ed-stage').querySelector('[data-zone="' + z.id + '"]');
+            if (el) {
+              el.textContent = input.value;
+              el.classList.toggle('placeholder', !input.value);
+              const f = el.closest('.card-face');
+              if (f) fitCardText(f);
+            }
+            updateLimit(z.id, input.value.length, role.maxChars || 120);
+          });
+          updateLimit(z.id, z.value.length, role.maxChars || 120);
+        });
+      }
+      function updateLimit(id, len, max) {
+        const el = $('lim-' + id);
+        if (el) el.textContent = len > max - 8 ? len + '/' + max : '';
+      }
+      // On-card typing → mirror into the side inputs.
+      function syncSideInputs() {
+        C.resolveText(state.template, state.text, state.greeting).forEach((z) => {
+          const input = $('zf-' + z.id);
+          if (input && input.value !== z.value) input.value = z.value;
+          updateLimit(z.id, z.value.length, (C.TEXT_ROLES[z.role] || {}).maxChars || 120);
+        });
+      }
+
+      // `state.pack` is the number of cards; C.packFor turns it into a
+      // Printify pack and a number of copies at the cart.
+      function renderPacks() {
+        const sel = $('qty-select');
+        sel.innerHTML = C.CARD_QUANTITIES.map((q) =>
+          '<option value="' + q + '"' + (q === state.pack ? ' selected' : '') + '>' + q + ' cards</option>').join('');
+        sel.onchange = () => { state.pack = Number(sel.value); refreshPrice(); };
+        refreshPrice();
+      }
+
+      // Price comes from the server (never computed here — the client is not
+      // trusted for money). Until the Printify card SKU is pinned down the quote
+      // endpoint has nothing to price, so we show a placeholder rather than a
+      // number we'd have to walk back.
+      async function refreshPrice() {
+        $('price-note').textContent = state.pack + ' cards · the price is shown in your cart';
+      }
+
+      function updatePopHint() {
+        const pc = state.popcode;
+        $('pop-hint').textContent = pc
+          ? (pc.mediaType === 'audio' ? 'Audio added.' : 'Video added.') + ' Scanning the printed card plays it.'
+          : 'Add a Popcode and the card comes to life: point a phone at it and your video, montage or audio plays.';
+        $('pop-label').textContent = pc ? 'Edit Popcode' : 'Add a Popcode';
+        $('pop-btn').classList.toggle('has-media', !!pc);
+      }
+
+      // Tap an empty photo to add one; tap a photo to edit it (the calendar's
+      // Edit Photo: fill or fit, zoom, drag, rotate, replace, remove).
+      function onPhotoTap(slotId) {
+        if (!state.photos[slotId]) { pickPhotoFor(slotId); return; }
+        const slot = state.template.photos.find((p) => p.id === slotId);
+        const fmt = C.CARD_FORMATS[state.template.formatId];
+        const land = state.template.orientation === 'landscape';
+        const W = land ? fmt.hIn : fmt.wIn, H = land ? fmt.wIn : fmt.hIn;
+        const p = state.photos[slotId];
+        PopcodeTools.editPhoto({
+          url: p.url, adjust: p.adjust, aspect: (slot.w * W) / (slot.h * H),
+          source: p.file ? 'Device' : 'Saved',
+          onSave: (a) => { p.adjust = a; drawEditorCard(); },
+          onReplace: (f) => {
+            const url = URL.createObjectURL(f);
+            state.photos[slotId] = { file: f, url };
+            drawEditorCard();
+            return url;
+          },
+          onRemove: () => { delete state.photos[slotId]; drawEditorCard(); },
+        });
+      }
+
+      // A small live picture of the back, from the same renderer as the print.
+      let backSeq = 0;
+      // The back, drawn the same size as the front in the main preview
+      // (`show`), from the same renderBack the print file uses. Tapping it
+      // adds or changes the back photo.
+      async function drawBackPreview(show) {
+        const mine = ++backSeq;
+        $('back-photo').textContent = state.back ? 'Change photo' : 'Add a photo';
+        $('back-clear').classList.toggle('hidden', !state.back);
+        $('opt-bshape').classList.toggle('hidden', !state.back);
+        $('opt-bsize').classList.toggle('hidden', !state.back);
+        if (state.back) {
+          optionRow('bsize-row', 'bsize-name',
+            [{ id: 'small', label: 'Small' }, { id: 'medium', label: 'Medium' }, { id: 'large', label: 'Large' }],
+            state.back.size || 'large', (id) => { state.back.size = id; drawBackPreview(true).catch(backFailed); });
+        }
+        if (state.back) {
+          let natural = null;
+          try { natural = await backImg(state.back.url); } catch (_) {}
+          if (mine !== backSeq) return;
+          optionRow('bshape-row', 'bshape-name',
+            [{ id: 'landscape', label: 'Landscape' }, { id: 'portrait', label: 'Portrait' }, { id: 'square', label: 'Square' }],
+            backShape(natural), (id) => { state.back.shape = id; drawBackPreview(true).catch(backFailed); });
+        }
+        if (!show) return;
+        state.side = 'back';
+        paintSideToggle();
+        const full = await renderBack(editing ? editing.slug : ((slugField && slugField.get()) || 'yourlink'), { placeholder: true });
+        if (mine !== backSeq || state.side !== 'back' || !$('ed-stage')) return;
+        const w = editorCardWidth();
+        // Shown at screen size: encoding the full 300 DPI back on every change
+        // took over a second.
+        const px = Math.round(w * Math.min(2, window.devicePixelRatio || 1));
+        const sm = document.createElement('canvas');
+        sm.width = px; sm.height = Math.round(px * full.height / full.width);
+        const sctx = ctx2d(sm);
+        sctx.imageSmoothingQuality = 'high';
+        sctx.drawImage(full, 0, 0, sm.width, sm.height);
+        freeCanvas(full);
+        const im = document.createElement('img');
+        im.className = 'ed-back';
+        im.alt = 'The back of the card';
+        im.src = sm.toDataURL('image/jpeg', 0.88);
+        freeCanvas(sm);
+        im.style.width = w + 'px';
+        im.style.borderRadius = state.corners === 'rounded' ? (w * 0.035) + 'px' : '0';
+        im.addEventListener('click', () => { pendingSlot = '__back'; $('photo-input').click(); });
+        const stage = $('ed-stage');
+        stage.innerHTML = '';
+        stage.appendChild(im);
+      }
+
+      // ── Photos ──────────────────────────────────────────────────────────
+      let pendingSlot = null;
+      function pickPhotoFor(slotId) {
+        pendingSlot = slotId;
+        $('photo-input').click();
+      }
+      $('photo-input').addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        e.target.value = '';
+        if (!file || !pendingSlot) return;
+        if (pendingSlot === '__browse') {
+          state.myPhoto = { file, url: URL.createObjectURL(file) };
+          pendingSlot = null;
+          renderBrowse();
+          return;
+        }
+        if (pendingSlot === '__back') {
+          state.back = { file, url: URL.createObjectURL(file) };
+          pendingSlot = null;
+          drawBackPreview(true).catch(backFailed);
+          return;
+        }
+        state.photos[pendingSlot] = { file, url: URL.createObjectURL(file) };
+        pendingSlot = null;
+        drawEditorCard();
+      });
+
+      // ── Print files ─────────────────────────────────────────────────────
+      // The front is captured from renderCard() itself, so the print can't drift
+      // from the editor. html2canvas 1.4.1 (cdnjs), the library postcard-render.js
+      // and calendar.html already print with. It reads computed styles, so the
+      // cq-unit type sizes arrive as pixels. The two things it can't draw are
+      // handled around it:
+      //   - object-fit:cover <img>: each photo is pre-cropped onto a <canvas>
+      //   - background-clip:text (foil): hidden for the capture, painted after
+      const FRONT_CSS_W = 750;   // captured at x2 = 1500px = 5in at 300 DPI
+      let h2cPromise = null;
+      function loadHtml2canvas() {
+        if (window.html2canvas) return Promise.resolve();
+        if (h2cPromise) return h2cPromise;
+        h2cPromise = new Promise((res, rej) => {
+          const el = document.createElement('script');
+          el.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+          el.onload = res;
+          el.onerror = () => rej(new Error('Could not load the print renderer. Check your connection and try again.'));
+          document.head.appendChild(el);
+        }).catch((e) => { h2cPromise = null; throw e; });
+        return h2cPromise;
+      }
+      // iOS caps the canvas memory a page can hold; past it getContext returns
+      // null. Say so plainly instead of a 'null is not an object' alert.
+      function ctx2d(c) {
+        const x = c.getContext('2d');
+        if (!x) throw new Error('Your device ran out of memory making the card. Close other tabs or apps and try again.');
+        return x;
+      }
+      // Hand a big canvas's memory back now rather than at the next GC.
+      function freeCanvas(...cs) { cs.forEach((c) => { if (c && c.width) { c.width = 0; c.height = 0; } }); }
+      function loadImg(src) {
+        return new Promise((res, rej) => {
+          const i = new Image(); i.crossOrigin = 'anonymous';
+          i.onload = () => res(i); i.onerror = () => rej(new Error('Could not load ' + src)); i.src = src;
+        });
+      }
+      // Clip to an element's border-radius (each corner may be elliptical, as the
+      // arch is). html2canvas doesn't clip a child canvas to its parent's radius.
+      function clipToRadius(ctx, el, w, h, scale) {
+        const cs = getComputedStyle(el);
+        const corner = (v) => {
+          const [a, b] = v.split(' ').map((x) => parseFloat(x) || 0);
+          return [a * scale, (b == null || isNaN(b) ? a : b) * scale];
+        };
+        const fit = (r) => [Math.min(r[0], w / 2), Math.min(r[1], h / 2)];
+        const tl = fit(corner(cs.borderTopLeftRadius)), tr = fit(corner(cs.borderTopRightRadius));
+        const br = fit(corner(cs.borderBottomRightRadius)), bl = fit(corner(cs.borderBottomLeftRadius));
+        ctx.beginPath();
+        ctx.moveTo(tl[0], 0);
+        ctx.lineTo(w - tr[0], 0);
+        ctx.ellipse(w - tr[0], tr[1], tr[0], tr[1], 0, -Math.PI / 2, 0);
+        ctx.lineTo(w, h - br[1]);
+        ctx.ellipse(w - br[0], h - br[1], br[0], br[1], 0, 0, Math.PI / 2);
+        ctx.lineTo(bl[0], h);
+        ctx.ellipse(bl[0], h - bl[1], bl[0], bl[1], 0, Math.PI / 2, Math.PI);
+        ctx.lineTo(0, tl[1]);
+        ctx.ellipse(tl[0], tl[1], tl[0], tl[1], 0, Math.PI, Math.PI * 1.5);
+        ctx.closePath();
+        ctx.clip();
+      }
+      function drawCover(ctx, img, w, h) {
+        const s = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+        const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+        ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+      }
+
+      // A CSS linear-gradient(<deg>, colour p%, ...) as a canvas gradient over a
+      // box. Read back from the DOM the colours come as rgb(), not the hex in
+      // cards.mjs, so both are accepted.
+      function cssGradient(ctx, css, x, y, w, h) {
+        const deg = parseFloat((css.match(/\(\s*(-?[\d.]+)deg/) || [0, 180])[1]);
+        const a = deg * Math.PI / 180, dx = Math.sin(a), dy = -Math.cos(a);
+        const len = Math.abs(w * dx) + Math.abs(h * dy);
+        const cx = x + w / 2, cy = y + h / 2;
+        const g = ctx.createLinearGradient(cx - dx * len / 2, cy - dy * len / 2, cx + dx * len / 2, cy + dy * len / 2);
+        for (const m of css.matchAll(/(rgba?\([^)]*\)|#[0-9a-f]{3,8})\s+([\d.]+)%/gi)) g.addColorStop(parseFloat(m[2]) / 100, m[1]);
+        return g;
+      }
+
+      // Paint one foil zone glyph by glyph at the positions the browser laid it
+      // out at, so wrapping, tracking and alignment match the editor exactly.
+      function paintFoil(ctx, el, origin, scale, faceH) {
+        const cs = getComputedStyle(el);
+        const fs = parseFloat(cs.fontSize);
+        const font = `${cs.fontStyle} ${cs.fontWeight} ${fs * scale}px ${cs.fontFamily}`;
+        ctx.save();
+        ctx.font = font;
+        const asc = ctx.measureText('Hg').fontBoundingBoxAscent;
+        const box = el.getBoundingClientRect();
+        ctx.fillStyle = cssGradient(ctx, el.style.backgroundImage,
+          (box.left - origin.left) * scale, (box.top - origin.top) * scale, box.width * scale, box.height * scale);
+        // The editor's drop-shadow(0 0.35cqh 0.5cqh rgba(0,0,0,0.16)).
+        ctx.shadowColor = 'rgba(0,0,0,0.16)';
+        ctx.shadowOffsetY = 0.0035 * faceH * scale;
+        ctx.shadowBlur = 0.005 * faceH * scale;
+        ctx.textBaseline = 'alphabetic';
+        const upper = cs.textTransform === 'uppercase';
+        const range = document.createRange();
+        for (const node of el.childNodes) {
+          if (node.nodeType !== 3) continue;
+          const text = node.textContent;
+          for (let i = 0; i < text.length; i++) {
+            if (/\s/.test(text[i])) continue;
+            range.setStart(node, i); range.setEnd(node, i + 1);
+            const r = range.getClientRects()[0];
+            if (!r) continue;
+            ctx.fillText(upper ? text[i].toUpperCase() : text[i],
+              (r.left - origin.left) * scale, (r.top - origin.top) * scale + asc);
+          }
+        }
+        ctx.restore();
+      }
+
+      // The front at trim size (1500 x 2100 for a 5x7), exactly as the editor shows it.
+      async function renderFrontTrim() {
+        await loadHtml2canvas();
+        const tpl = state.template;
+        const trim = C.cardTrimSize(tpl.formatId, tpl.orientation);
+        const holder = document.createElement('div');
+        holder.style.cssText = 'position:fixed;left:-20000px;top:0;pointer-events:none;';
+        const face = renderCard(tpl, { width: FRONT_CSS_W, text: state.text, photos: state.photos,
+          colorway: state.colorway, crossOrigin: true, bw: state.bw, greeting: state.greeting, script: state.script, print: true,
+          moves: state.custom ? null : state.moves });
+        face.style.boxShadow = 'none';
+        holder.appendChild(face);
+        document.body.appendChild(holder);
+        try {
+          await document.fonts.ready;
+          fitCardText(face);
+          const scale = trim.w / face.offsetWidth;
+          for (const box of face.querySelectorAll('.cf-photo')) {
+            const im = box.querySelector('img');
+            if (!im) continue;
+            if (!im.complete || !im.naturalWidth) await im.decode().catch(() => {});
+            if (!im.naturalWidth) throw new Error('A photo didn’t load. Try adding it again.');
+            const r = box.getBoundingClientRect();
+            const c = document.createElement('canvas');
+            c.width = Math.round(r.width * scale); c.height = Math.round(r.height * scale);
+            const cx = ctx2d(c);
+            cx.imageSmoothingQuality = 'high';
+            clipToRadius(cx, box, c.width, c.height, scale);
+            const adj = (state.photos[box.dataset.slot] || {}).adjust;
+            if (adj) PopcodeTools.drawPhotoAdjusted(cx, im, adj, 0, 0, c.width, c.height);
+            else drawCover(cx, im, c.width, c.height);
+            // html2canvas ignores CSS filters, so black and white is baked into
+            // the pixels here (ctx.filter isn't in every Safari).
+            if (state.bw) {
+              const px = cx.getImageData(0, 0, c.width, c.height), d = px.data;
+              for (let k = 0; k < d.length; k += 4) {
+                const y = 0.2126 * d[k] + 0.7152 * d[k + 1] + 0.0722 * d[k + 2];
+                d[k] = d[k + 1] = d[k + 2] = y;
+              }
+              cx.putImageData(px, 0, 0);
+            }
+            c.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
+            im.replaceWith(c);
+          }
+          const foil = [...face.querySelectorAll('.cf-text.foil')];
+          foil.forEach((el) => { el.style.visibility = 'hidden'; });
+          const canvas = await window.html2canvas(face, {
+            scale, backgroundColor: null, useCORS: true, logging: false,
+            width: face.offsetWidth, height: face.offsetHeight,
+          });
+          foil.forEach((el) => { el.style.visibility = ''; });
+          const origin = face.getBoundingClientRect();
+          const ctx = ctx2d(canvas);
+          // html2canvas leaves its own scale on the context; foil is placed in canvas pixels.
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          foil.forEach((el) => paintFoil(ctx, el, origin, scale, face.offsetHeight));
+          if (canvas.width !== trim.w || canvas.height !== trim.h) {
+            const out = document.createElement('canvas');
+            out.width = trim.w; out.height = trim.h;
+            ctx2d(out).drawImage(canvas, 0, 0, trim.w, trim.h);
+            return out;
+          }
+          return canvas;
+        } finally {
+          holder.remove();
+        }
+      }
+
+      // Trim → bleed. Template geometry is fractions of TRIM (cards.mjs), so the
+      // bleed is made by mirroring the outermost strip of the finished card
+      // outward. Whatever touches an edge (photo, ground, scrim) carries on past
+      // the cut, and nothing inside the card moves. Mirrored rather than
+      // stretched: a stretched edge shows as streaks in the print preview.
+      function toBleed(trimCanvas) {
+        const tpl = state.template;
+        const b = C.cardBleedSize(tpl.formatId, tpl.orientation);
+        const out = document.createElement('canvas');
+        out.width = b.w; out.height = b.h;
+        const ctx = ctx2d(out);
+        const W = trimCanvas.width, H = trimCanvas.height, ox = b.offsetX, oy = b.offsetY;
+        // html2canvas leaves the outermost pixel row a shade dark (the face's own
+        // ground antialiasing in under the photo), and mirroring would double it
+        // into a line along the cut. Repaint the outer 2px from just inside.
+        const tctx = ctx2d(trimCanvas);
+        const E = 2;
+        for (let i = 0; i < E; i++) {
+          tctx.drawImage(trimCanvas, 0, E, W, 1, 0, i, W, 1);
+          tctx.drawImage(trimCanvas, 0, H - 1 - E, W, 1, 0, H - 1 - i, W, 1);
+          tctx.drawImage(trimCanvas, E, 0, 1, H, i, 0, 1, H);
+          tctx.drawImage(trimCanvas, W - 1 - E, 0, 1, H, W - 1 - i, 0, 1, H);
+        }
+        const mirror = (src, sx, sy, sw, sh, dx, dy, flipX, flipY) => {
+          ctx.save();
+          ctx.translate(dx + (flipX ? sw : 0), dy + (flipY ? sh : 0));
+          ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+          ctx.drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh);
+          ctx.restore();
+        };
+        ctx.drawImage(trimCanvas, ox, oy);
+        mirror(trimCanvas, 0, 0, W, oy, ox, 0, false, true);                    // top
+        mirror(trimCanvas, 0, H - (b.h - oy - H), W, b.h - oy - H, ox, oy + H, false, true);   // bottom
+        const snap = document.createElement('canvas');
+        snap.width = b.w; snap.height = b.h;
+        ctx2d(snap).drawImage(out, 0, 0);
+        mirror(snap, ox, 0, ox, b.h, 0, 0, true, false);                        // left, corners included
+        mirror(snap, ox + W - (b.w - ox - W), 0, b.w - ox - W, b.h, ox + W, 0, true, false);   // right
+        freeCanvas(snap);
+        // The lab's print area can be smaller than a full 1/8in bleed (District
+        // Photo's is ~1/16in at the sides). Crop to it, centred, so Printify
+        // gets exactly its size and nothing inside the trim moves.
+        const pp = printArea(tpl);
+        if (pp && (pp.w !== b.w || pp.h !== b.h)) {
+          const crop = document.createElement('canvas');
+          crop.width = pp.w; crop.height = pp.h;
+          ctx2d(crop).drawImage(out, Math.round((b.w - pp.w) / 2), Math.round((b.h - pp.h) / 2), pp.w, pp.h, 0, 0, pp.w, pp.h);
+          freeCanvas(out);
+          return crop;
+        }
+        return out;
+      }
+
+      // The lab's print area turned to the card's orientation. Printify's is
+      // portrait; a landscape card is laid out landscape and turned a quarter
+      // turn only at upload (toPrintify), so the customer never sees it sideways.
+      function printArea(tpl) {
+        const pp = C.CARD_FORMATS[tpl.formatId].printPx;
+        if (!pp) return null;
+        return tpl.orientation === 'landscape' ? { w: pp.h, h: pp.w } : pp;
+      }
+      function toPrintify(canvas) {
+        if (state.template.orientation !== 'landscape') return canvas;
+        const r = document.createElement('canvas');
+        r.width = canvas.height; r.height = canvas.width;
+        const ctx = ctx2d(r);
+        // Clockwise: the card's top edge runs down the print file's right side.
+        // Check it against the first landscape sample.
+        ctx.translate(r.width, 0);
+        ctx.rotate(Math.PI / 2);
+        ctx.drawImage(canvas, 0, 0);
+        return r;
+      }
+
+      // The back: how to play the card. Same colourway as the front.
+      // The back, laid out like the books' back cover so every Popcode product
+      // reads the same: the wordmark, two lines, the symbol, anchored near the
+      // bottom of a white back, with an optional square photo above. Line two
+      // differs from the books ("Scan photos with the Popcode symbol"): a card's
+      // front carries no symbol, the whole front is what scans.
+      const BACK = {
+        logoW: 1.1, gapLogo: 0.19, textPt: 9, leadPt: 14, gapSym: 0.16, symW: 0.36, bottom: 0.40,
+        logo: '/assets/Popcode_logo.png', logoAspect: 591 / 2232,
+      };
+      // Back photo shapes, as width / height.
+      const BACK_SHAPES = { landscape: 3 / 2, portrait: 4 / 5, square: 1 };
+      // Back photo size, as a share of the biggest that fits.
+      const BACK_SIZES = { small: 0.55, medium: 0.78, large: 1 };
+      function backShape(img) {
+        const set = state.back && state.back.shape;
+        if (BACK_SHAPES[set]) return set;
+        if (!img || !img.naturalWidth) return 'square';
+        const r = img.naturalWidth / img.naturalHeight;
+        return r > 1.15 ? 'landscape' : r < 0.87 ? 'portrait' : 'square';
+      }
+      // The back photo, decoded once per URL (a 24MP photo is ~100MB decoded).
+      let backImgCache = { url: null, img: null };
+      async function backImg(url) {
+        if (backImgCache.url !== url) backImgCache = { url, img: await loadImg(url) };
+        return backImgCache.img;
+      }
+      async function renderBack(slug, opts) {
+        opts = opts || {};
+        const tpl = state.template;
+        const b = { ...C.cardBleedSize(tpl.formatId, tpl.orientation) };
+        const pp = printArea(tpl);
+        if (pp) { b.offsetX -= (b.w - pp.w) / 2; b.offsetY -= (b.h - pp.h) / 2; b.w = pp.w; b.h = pp.h; }
+        const c = document.createElement('canvas');
+        c.width = b.w; c.height = b.h;
+        const ctx = ctx2d(c);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, b.w, b.h);
+        await Promise.all(['600', '700'].map((w) => document.fonts.load(`${w} 40px Inter`))).catch(() => {});
+        const inch = b.dpi, cx = b.w / 2, k = BACK;
+        const trimBottom = b.h - b.offsetY;
+        const blockH = (k.logoW * k.logoAspect + k.gapLogo + (k.leadPt * 2) / 72 + k.gapSym + k.symW) * inch;
+        let y = trimBottom - k.bottom * inch - blockH;
+
+        // The photo, square, centred in the space above the block. Printed flat,
+        // no shadow. In the editor (opts.placeholder) an empty spot is a light
+        // grey square with a picture icon, so it's clear it can be tapped; the
+        // print file never has it.
+        // The photo is as big as the space above the block allows, in the
+        // shape the buyer picks (landscape / portrait / square; by default the
+        // photo's own shape). An empty spot is drawn square.
+        let img = null;
+        if (state.back && state.back.url) { try { img = await backImg(state.back.url); } catch (_) {} }
+        const shape = backShape(img);
+        const ratio = BACK_SHAPES[shape];
+        const trimW = b.w - 2 * b.offsetX;
+        const top = b.offsetY + 0.42 * inch;
+        const boxW = trimW - 0.84 * inch, boxH = Math.max(0.5 * inch, y - 0.34 * inch - top);
+        const scaleBy = BACK_SIZES[(state.back && state.back.size) || 'large'] || 1;
+        const pw = Math.min(boxW, boxH * ratio) * scaleBy, ph = pw / ratio;
+        const px = cx - pw / 2, py = top + (boxH - ph) / 2;
+        const side = Math.min(pw, ph);
+        if (!img && opts.placeholder) {
+          ctx.fillStyle = '#efefef';
+          ctx.fillRect(px, py, pw, ph);
+          // A 24-unit picture icon, 28% of the square, a little above centre.
+          const isz = side * 0.28, ix = cx - isz / 2, iy = py + side / 2 - isz * 0.7;
+          ctx.save();
+          ctx.translate(ix, iy); ctx.scale(isz / 24, isz / 24);
+          ctx.strokeStyle = '#a3a3a3'; ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+          ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(1.5, 2.5, 21, 19, 2.5); else ctx.rect(1.5, 2.5, 21, 19); ctx.stroke();
+          ctx.beginPath(); ctx.arc(8.5, 9, 2, 0, Math.PI * 2); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(22, 16); ctx.lineTo(16, 10); ctx.lineTo(5, 21); ctx.stroke();
+          ctx.restore();
+          ctx.fillStyle = '#8a8a8a';
+          ctx.font = `600 ${0.13 * inch}px 'Inter', sans-serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+          ctx.fillText('Add a photo', cx, iy + isz + side * 0.06);
+          ctx.textAlign = 'left';
+        }
+        if (img) {
+          ctx.save();
+          ctx.beginPath(); ctx.rect(px, py, pw, ph); ctx.clip();
+          ctx.translate(px, py);
+          drawCover(ctx, img, pw, ph);
+          ctx.restore();
+        }
+
+        try {
+          const logo = await loadImg(k.logo);
+          const lw = k.logoW * inch;
+          ctx.drawImage(logo, cx - lw / 2, y, lw, lw * k.logoAspect);
+        } catch (_) {}
+        y += (k.logoW * k.logoAspect + k.gapLogo) * inch;
+        const fs = k.textPt / 72 * inch, lead = k.leadPt / 72 * inch;
+        const font = (wt) => `${wt} ${fs}px 'Inter', sans-serif`;
+        ctx.fillStyle = '#1a1a1a';
+        ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+        const line = (runs, baseY) => {
+          let total = 0;
+          for (const r of runs) { ctx.font = font(r[1]); total += ctx.measureText(r[0]).width; }
+          let lx = cx - total / 2;
+          for (const r of runs) { ctx.font = font(r[1]); ctx.fillText(r[0], lx, baseY); lx += ctx.measureText(r[0]).width; }
+        };
+        const base = (n) => y + lead * n + lead * 0.5 + fs * 0.35;
+        line([['Go to ', 600], ['popcode.app/' + slug, 700], [' on your phone.', 600]], base(0));
+        line([['Scan the front of this card.', 600]], base(1));
+        y += lead * 2 + k.gapSym * inch;
+        try {
+          const sym = await loadImg('/assets/popcode_symbol_color.svg');
+          const sw = k.symW * inch;
+          ctx.drawImage(sym, cx - sw / 2, y, sw, sw);
+        } catch (_) {}
+        return c;
+      }
+
+      const toJpeg = (canvas, q) => new Promise((res, rej) =>
+        canvas.toBlob((bl) => (bl ? res(bl) : rej(new Error('Could not encode the card image.'))), 'image/jpeg', q || 0.92));
+
+      async function uploadWithRetry(path, blob, contentType, tries = 3) {
+        let last = null;
+        // A request that never settles (phone backgrounded, network switched)
+        // would leave "Saving…" up forever: each try gets a time limit, ~60s
+        // plus a second per MB.
+        const limit = 60000 + Math.round((blob.size || 0) / 1e6) * 1000;
+        for (let i = 0; i < tries; i++) {
+          let timer;
+          const timeout = new Promise((r) => { timer = setTimeout(() => r({ error: { message: 'timed out' } }), limit); });
+          const { error } = await Promise.race([
+            db.storage.from('experiences').upload(path, blob, { contentType, upsert: true }),
+            timeout,
+          ]).catch((e) => ({ error: e }));
+          clearTimeout(timer);
+          if (!error) return db.storage.from('experiences').getPublicUrl(path).data.publicUrl;
+          last = error;
+          if (i < tries - 1) await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+        }
+        throw new Error('Upload failed: ' + (last && last.message));
+      }
+
+      // ── Save ────────────────────────────────────────────────────────────
+      // A card is a Popcode: its printed front is the AR target and plays the
+      // attached video. It saves as kind:'card' (no migration beyond counting it
+      // free, 2026-10-20-cards-free.sql) with the design in book_layout.card, so
+      // My Designs can reopen it here.
+      let editing = null;   // { id, slug, live } once saved or when opened from My Designs; live = it scans
+
+      // Has this card been bought? Its scan target must not change after that.
+      // Orders keep each design in `items` (a cart order spans designs).
+      async function cardWasOrdered(collectionId) {
+        try {
+          const { data, error } = await db.from('print_orders').select('id')
+            .neq('status', 'pending')
+            .or('collection_id.eq.' + collectionId + ',items.cs.' + JSON.stringify([{ collection_id: collectionId }]))
+            .limit(1);
+          if (error) throw error;
+          return !!(data && data.length);
+        } catch (e) {
+          // Can't tell: treat it as ordered, the safe answer.
+          console.warn('Order check failed', e);
+          return true;
+        }
+      }
+
+      // While a save runs the whole page is covered: editing mid-save mixed two
+      // designs into one card, and a second tap started a second save.
+      let saving = false;
+      function setBusy(text) {
+        const btn = $('cart-btn');
+        if (btn) { btn.disabled = !!text; btn.textContent = text || 'Add to cart'; }
+        const sb = $('save-btn');
+        if (sb) sb.disabled = !!text;
+        let ov = $('busy-overlay');
+        if (text && !ov) {
+          ov = document.createElement('div');
+          ov.id = 'busy-overlay';
+          ov.innerHTML = '<div class="busy-card"><div class="busy-spin"></div><div id="busy-text"></div></div>';
+          document.body.appendChild(ov);
+        }
+        if (ov) {
+          ov.classList.toggle('on', !!text);
+          if (text) $('busy-text').textContent = text;
+        }
+      }
+      // Runs `fn` as the only save in flight; a second tap while one runs is ignored.
+      async function exclusive(fn) {
+        if (saving) return;
+        saving = true;
+        try { await fn(); } finally { saving = false; }
+      }
+
+      // The template's sample names are only an example. Printing "The Middleton
+      // Family" on someone's cards is the mistake this stops. Zones carry
+      // `sample` in cards.mjs; the role alone can't say (Modern Signature's
+      // "signature" zone is the word HOLIDAYS).
+      function unchangedSample() {
+        if (state.custom) {
+          const b = state.custom.boxes.find((x) => x.sample && x.text.trim() === (x.sampleText || '').trim());
+          return b ? { value: b.text } : null;
+        }
+        return C.resolveText(state.template, state.text, state.greeting)
+          .filter((z) => z.sample && z.value && z.value === z.default)[0] || null;
+      }
+
+      // `draft` (Save for later): keep a card in progress -- no Popcode, a photo
+      // still to add, the example words still in. It is made scannable only
+      // once it has its Popcode and every photo; Add to cart checks it all.
+      async function saveCard(opts) {
+        const draft = !!(opts && opts.draft);
+        const tpl = state.template;
+        const need = tpl.photos.filter((s) => !state.photos[s.id]);
+        if (need.length && !draft) throw new Error('Add ' + (need.length === 1 ? 'a photo' : need.length + ' photos') + ' first.');
+        if (!state.popcode && !draft) throw new Error('Add a Popcode. It’s what plays when someone scans the card.');
+        const sample = unchangedSample();
+        if (sample && !draft) throw new Error('Change “' + sample.value + '” to your own words. It’s the example text.');
+        const scannable = !!state.popcode && !need.length;
+        setBusy('Checking your card…');
+        // A card that already scans (a link in use, maybe already printed):
+        // never save it into something that doesn't, and never swap the scan
+        // target of a card that has been ordered -- the printed cards would stop
+        // working. Those changes become a new card with its own link.
+        if (editing && editing.live) {
+          if (!scannable) {
+            throw new Error('This card is live at popcode.app/' + editing.slug + '. Add back its ' +
+              (need.length ? 'photo' : 'Popcode') + ' before saving, or duplicate it in My Designs to start a new version.');
+          }
+          if (await cardWasOrdered(editing.id)) {
+            setBusy(null);
+            const ok = await popcodeConfirm('This card has already been ordered. Saving changes over it would stop the printed cards from scanning. ' +
+              'Save your changes as a new card, with its own link?', { title: 'Save as a new card?', confirmText: 'Save as new card' });
+            if (!ok) { const e = new Error('cancelled'); e.quiet = true; throw e; }
+            editing = null;
+            state.slug = null; state.slugTouched = false;
+            if (slugField) slugField.unlock(PopcodeSlug.randomSlug());
+            setBusy('Saving…');
+          }
+        }
+        if (scannable && (typeof MINDAR === 'undefined' || !MINDAR.IMAGE || !MINDAR.IMAGE.Compiler)) {
+          throw new Error('Still loading. Wait a moment and try again.');
+        }
+
+        let slug = editing && editing.slug;
+        // The link the buyer chose (or that the name filled in). Left empty, a
+        // random one is made, as before.
+        if (!slug && slugField && slugField.get()) {
+          if (!(await slugField.ensureFree())) {
+            $('slug-input').scrollIntoView({ block: 'center', behavior: 'smooth' });
+            throw new Error('popcode.app/' + slugField.get() + ' can’t be used. Pick a different link (suggestions are under it).');
+          }
+          slug = slugField.get();
+        }
+        if (!slug) {
+          for (let i = 0; i < 6 && !slug; i++) {
+            const cand = PopcodeSlug.randomSlug();
+            if (await PopcodeSlug.isAvailable(db, cand)) slug = cand;
+          }
+          if (!slug) throw new Error('Could not reserve a link. Please try again.');
+        }
+        const stamp = Date.now().toString(36);
+        // A duplicate (or a design reopened under a new slug) still points at the
+        // original's files. Copy them under this slug so deleting one can't gut the other.
+        const remap = PopcodeStorageCopy.makeRemapper(db, 'experiences', slug, {
+          onError: (err) => { if (window.Sentry) try { Sentry.captureException(err); } catch (e) {} },
+        });
+
+        // 1. The photos as chosen, so the design can be reopened and re-cropped.
+        setBusy('Saving your photos…');
+        const photoUrls = {};
+        for (const s of tpl.photos) {
+          const p = state.photos[s.id];
+          if (!p) continue;
+          if (p.file) {
+            const ext = ((p.file.name || '').split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+            photoUrls[s.id] = await uploadWithRetry(`${slug}/card/${s.id}-${stamp}.${ext}`, p.file, p.file.type || 'image/jpeg');
+            state.photos[s.id] = { url: photoUrls[s.id], adjust: p.adjust };   // keep the crop
+          } else {
+            photoUrls[s.id] = (await remap(p.url)) || p.url;
+          }
+        }
+
+        // 1b. The back photo, if any.
+        let backUrl = null;
+        if (state.back) {
+          if (state.back.file) {
+            backUrl = await uploadWithRetry(`${slug}/card/back-photo-${stamp}.jpg`, state.back.file, state.back.file.type || 'image/jpeg');
+            state.back = { url: backUrl, shape: state.back.shape, size: state.back.size };
+          } else {
+            backUrl = (await remap(state.back.url)) || state.back.url;
+          }
+        }
+
+        // 2. The front as it will print. It is the scan target and the thumbnail.
+        setBusy('Laying out your card…');
+        const front = await renderFrontTrim();
+        const frontUrl = await uploadWithRetry(`${slug}/card/front-${stamp}.jpg`, await toJpeg(front, 0.9), 'image/jpeg');
+
+        // 3. Make the front scannable. Compiled from the whole printed face, type
+        //    and all, because that is what the phone will see.
+        let mindUrl = '';
+        if (scannable) {
+        setBusy('Making it scannable…');
+        const small = document.createElement('canvas');
+        small.width = 1000; small.height = Math.round(1000 * front.height / front.width);
+        ctx2d(small).drawImage(front, 0, 0, small.width, small.height);
+        const targetImg = await loadImg(small.toDataURL('image/jpeg', 0.92));
+        const compiler = new MINDAR.IMAGE.Compiler();
+        freeCanvas(small);
+        await compiler.compileImageTargets([targetImg], () => {});
+        mindUrl = await uploadWithRetry(`${slug}/target.mind`, new Blob([await compiler.exportData()]), 'application/octet-stream')
+          + '?v=' + stamp;
+        }
+
+        // 4. What it plays: a video (or montage) or an audio clip.
+        const pc = state.popcode;
+        let videoUrl = null, audioUrl = null;
+        if (!pc) {
+          // A draft with nothing to play yet.
+        } else if (pc.mediaType === 'audio') {
+          setBusy('Uploading your audio…');
+          if (pc.audio) {
+            const ext = ((pc.audio.name || '').split('.').pop() || 'webm').toLowerCase();
+            audioUrl = await uploadWithRetry(`${slug}/audio_0_${stamp}.${ext}`, pc.audio, pc.audio.type || 'audio/webm');
+          } else {
+            audioUrl = (await remap(pc.existingAudioUrl)) || pc.existingAudioUrl;
+          }
+          state.popcode = { mediaType: 'audio', existingAudioUrl: audioUrl };
+        } else {
+          setBusy('Uploading your video…');
+          if (pc.video) {
+            // A compressed video is WebM; name it for what it is.
+            const vtype = pc.video.type || 'video/mp4';
+            const vext = /webm/.test(vtype) ? 'webm' : /quicktime/.test(vtype) ? 'mov' : 'mp4';
+            videoUrl = await uploadWithRetry(`${slug}/video_0_${stamp}.${vext}`, pc.video, vtype);
+          } else {
+            videoUrl = (await remap(pc.existingVideoUrl)) || pc.existingVideoUrl;
+          }
+          state.popcode = { mediaType: 'video', existingVideoUrl: videoUrl };
+        }
+
+        // 5. The row and its one Popcode.
+        setBusy('Saving…');
+        // The greeting, whole: a split one (Brighton's MERRY / CHRISTMAS) joined.
+        const zones = C.resolveText(tpl, state.text, state.greeting);
+        const greetLines = zones.filter((z) => z.greet).map((z) => z.value.trim()).filter(Boolean);
+        const headline = (state.custom ? (state.custom.boxes.find((b) => b.text.trim()) || {}).text
+          : greetLines.length ? greetLines.join(' ').replace(/\s+&$/, ' & …') : (zones.find((z) => z.role === 'headline') || {}).value) || tpl.name;
+        const row = {
+          name: (state.name || '').trim() || ('Cards · 5×7 — ' + headline),
+          kind: 'card',
+          mind_file_url: mindUrl,
+          book_layout: {
+            card: {
+              templateId: tpl.id, formatId: tpl.formatId, orientation: tpl.orientation,
+              title: (state.name || '').trim() || null,
+              occasionId: state.occasionId, text: state.text, photos: photoUrls,
+              colorway: state.colorway, pack: state.pack, bw: state.bw, frontUrl,
+              greeting: state.greeting, corners: state.corners, script: state.script, moves: state.custom ? null : state.moves, backPhoto: backUrl, backShape: state.back ? backShape(await backImg(backUrl).catch(() => null)) : null, backSize: state.back ? (state.back.size || 'large') : null,
+              custom: state.custom ? JSON.parse(JSON.stringify(state.custom)) : null,
+              // Edit Photo crops, per slot.
+              adjust: Object.fromEntries(Object.entries(state.photos).filter(([, p]) => p.adjust).map(([k, p]) => [k, p.adjust])),
+            },
+          },
+        };
+        let collectionId;
+        if (editing && editing.id) {
+          const { error } = await db.from('collections').update(row).eq('id', editing.id);
+          if (error) throw new Error('Could not save: ' + error.message);
+          collectionId = editing.id;
+        } else {
+          if (!currentUser) throw new Error('Sign in to save your card.');
+          const { data, error } = await db.from('collections')
+            .insert({ ...row, slug, user_id: currentUser.id }).select().single();
+          if (error) throw new Error('Could not save: ' + error.message);
+          collectionId = data.id;
+          // The row exists now: a retry after a later failure updates it rather
+          // than inserting again under a slug it has just taken itself.
+          editing = { id: collectionId, slug, live: false };
+        }
+        // The new item goes in BEFORE the old ones come out, so a failure part
+        // way leaves the card playing its previous video, not nothing.
+        let keepId = null;
+        if (pc) {
+          const { data: item, error: iErr } = await db.from('collection_items').insert({
+            collection_id: collectionId, target_index: 0, media_type: pc.mediaType === 'audio' ? 'audio' : 'video',
+            video_url: videoUrl, audio_url: audioUrl, photo_url: frontUrl,
+          }).select('id').single();
+          if (iErr) throw new Error('Saved, but linking the video failed: ' + iErr.message);
+          keepId = item && item.id;
+        }
+        let del = db.from('collection_items').delete().eq('collection_id', collectionId);
+        if (keepId) del = del.neq('id', keepId);
+        const { error: dErr } = await del;
+        if (dErr) console.warn('Old Popcode rows were not cleared', dErr);
+        editing = { id: collectionId, slug, live: scannable };
+        if (slugField) slugField.lock(slug, 'This card’s link. It’s locked so printed cards keep working.');
+        const u = new URL(location.href);
+        u.searchParams.set('id', slug); u.searchParams.delete('duplicate');
+        history.replaceState(null, '', u);
+        return { slug, collectionId, front, frontUrl, headline, scannable };
+      }
+
+      function onSave() { return exclusive(onSaveInner); }
+      async function onSaveInner() {
+        try {
+          const saved = await saveCard({ draft: true });
+          setBusy(null);
+          const where = '<b>' + esc((state.name || '').trim() || 'Your card') + '</b> is in My Designs';
+          openSheet('<h2>Card saved</h2><p class="sheet-sub">' + where + (saved.scannable
+            ? ', and it plays at <b>popcode.app/' + esc(saved.slug) + '</b>.'
+            : '. Open it from there any time to finish it' + (state.popcode ? '.' : ' and add its Popcode.')) + '</p>' +
+            '<div class="sheet-actions"><button class="btn btn-quiet" onclick="location.href=\'/manage.html?tab=designs\'">My Designs</button>' +
+            '<button class="btn btn-primary" onclick="closeSheet()">Keep editing</button></div>');
+        } catch (err) {
+          setBusy(null);
+          console.error(err);
+          if (window.Sentry && !err.quiet && !/first|Attach|Change|Still loading|live at|ordered/.test(err.message)) try { Sentry.captureException(err); } catch (e) {}
+          if (!err.quiet) alert(err.message || String(err));
+        }
+      }
+
+      function addToCart() { return exclusive(addToCartInner); }
+      async function addToCartInner() {
+        try {
+          const saved = await saveCard();
+          setBusy('Preparing the print files…');
+          const frontCanvas = toBleed(saved.front);
+          const backCanvas = await renderBack(saved.slug);
+          // The preview shows the card the right way up; Printify gets it turned.
+          freeCanvas(saved.front);
+          const turnedFront = toPrintify(frontCanvas);
+          const frontBlob = await toJpeg(turnedFront, 0.95);
+          if (turnedFront !== frontCanvas) freeCanvas(turnedFront);
+          const turnedBack = toPrintify(backCanvas);
+          const backBlob = await toJpeg(turnedBack, 0.95);
+          if (turnedBack !== backCanvas) freeCanvas(turnedBack);
+          const urls = [URL.createObjectURL(await toJpeg(frontCanvas, 0.9)), URL.createObjectURL(await toJpeg(backCanvas, 0.9))];
+          freeCanvas(frontCanvas, backCanvas);
+          // The print file in mm (it is 300 DPI). The preview draws one inset on
+          // all four sides, so it uses the deeper top/bottom bleed: the safe line
+          // sits at least 1/4in inside the trim everywhere.
+          const pp = printArea(state.template);
+          const mm = (px) => px / 300 * 25.4;
+          const face = { wMm: mm(pp.w), hMm: mm(pp.h), safeMm: 6.35 + mm((Math.max(pp.w, pp.h) - 2100) / 2) };
+          let go;
+          try {
+            go = await PopcodePrintPreview.open({
+              mode: 'cart',
+              intro: 'This is exactly what we’ll print, front and back. The outer edge is trimmed off, so keep faces and words inside the dashed line.',
+              sections: [{ heading: state.pack + ' cards, 5×7″, with envelopes', html: PopcodePrintPreview.list({ cols: 2, items: [
+                { src: urls[0], label: 'Front', ...face },
+                { src: urls[1], label: 'Back', ...face },
+              ] }) }],
+            });
+          } finally {
+            urls.forEach((x) => URL.revokeObjectURL(x));
+          }
+          if (go !== true) { setBusy(null); return; }
+          setBusy('Adding to your cart…');
+          const stamp = Date.now().toString(36);
+          const frontUrl = await uploadWithRetry(`${saved.slug}/card/print-front-${stamp}.jpg`, frontBlob, 'image/jpeg');
+          const backUrl = await uploadWithRetry(`${saved.slug}/card/print-back-${stamp}.jpg`, backBlob, 'image/jpeg');
+          await PopcodeCart.add({
+            collectionId: saved.collectionId,
+            productType: 'card',
+            // Printify sells each pack as its own variant, so a pack is one copy.
+            variantId: 'card-5x7-' + C.packFor(state.pack).pack + (state.corners === 'rounded' ? '-round' : ''),
+            copies: C.packFor(state.pack).copies,
+            assetUrls: [{ url: frontUrl, print_area: 'front' }, { url: backUrl, print_area: 'back' }],
+            // The cart's − / + changes the number of PACKS, so the line names the
+            // pack size; a card count in the title went stale when it changed.
+            title: saved.headline + ' — 5×7″ cards',
+            thumbUrl: saved.frontUrl,
+            options: { sizeLabel: 'Packs of ' + C.packFor(state.pack).pack, orientationLabel: (state.template.orientation === 'landscape' ? 'landscape, ' : '') +
+              (state.corners === 'rounded' ? 'rounded corners, ' : '') + 'with envelopes' },
+          });
+          location.href = '/cart.html';
+        } catch (err) {
+          setBusy(null);
+          console.error(err);
+          if (window.Sentry && !err.quiet && !/first|Attach|Change|Still loading|live at|ordered/.test(err.message)) try { Sentry.captureException(err); } catch (e) {}
+          if (!err.quiet) alert(err.message || String(err));
+        }
+      }
+
+      // Reopen a saved card (?id=slug from My Designs or the cart). With
+      // &duplicate=1 it opens unattached, so saving makes a new card.
+      // Anything that goes wrong opening a card lands back on the designs with a
+      // message, never on a blank page.
+      async function loadCard(slug, duplicate) {
+        try {
+          await loadCardInner(slug, duplicate);
+        } catch (e) {
+          console.error(e);
+          if (window.Sentry) try { Sentry.captureException(e); } catch (x) {}
+          $('step-edit').classList.add('hidden');
+          $('step-browse').classList.remove('hidden');
+          renderBrowse();
+          alert('That card couldn’t be opened. Please try again.');
+        }
+      }
+      async function loadCardInner(slug, duplicate) {
+        const { data: col, error } = await db.from('collections')
+          .select('id, slug, kind, book_layout, user_id, mind_file_url').eq('slug', slug).maybeSingle();
+        const cfg = col && col.book_layout && col.book_layout.card;
+        const okCustom = (cu) => cu && Array.isArray(cu.boxes) && (cu.orientation === 'portrait' || cu.orientation === 'landscape')
+          && C.CARD_LAYOUTS.some((l) => l.id === cu.layout);
+        if (cfg && cfg.custom && !okCustom(cfg.custom)) throw new Error('Saved design is incomplete');
+        if (cfg && cfg.custom) {
+          state.custom = cfg.custom;
+          boxSeq = Math.max(0, ...cfg.custom.boxes.map((b) => parseInt(String(b.id).slice(1), 10) || 0));
+        } else {
+          state.custom = null;
+        }
+        const tpl = cfg && (cfg.custom ? customTemplate() : C.templateById(cfg.templateId));
+        if (error || !col || col.kind !== 'card' || !tpl || col.user_id !== currentUser.id) {
+          renderBrowse();
+          alert('That card couldn’t be opened.');
+          return;
+        }
+        const { data: items, error: itemsErr } = await db.from('collection_items')
+          .select('media_type, video_url, audio_url').eq('collection_id', col.id).order('target_index').limit(1);
+        // Without its items the card would look Popcode-less, and saving it
+        // would delete the video. Stop instead.
+        if (itemsErr) throw itemsErr;
+        state.occasionId = cfg.occasionId || state.occasionId;
+        state.template = tpl;
+        state.text = cfg.text || {};
+        state.colorway = cfg.colorway || (tpl.colorways && tpl.colorways[0]) || C.DEFAULT_COLORWAY;
+        state.pack = C.CARD_QUANTITIES.includes(cfg.pack) ? cfg.pack : C.DEFAULT_PACK;
+        state.photos = {};
+        Object.entries(cfg.photos || {}).forEach(([k, url]) => { if (url) state.photos[k] = { url, adjust: (cfg.adjust || {})[k] }; });
+        const it = items && items[0];
+        state.popcode = it && it.media_type === 'audio' && it.audio_url ? { mediaType: 'audio', existingAudioUrl: it.audio_url }
+          : it && it.video_url ? { mediaType: 'video', existingVideoUrl: it.video_url } : null;
+        state.bw = !!cfg.bw;
+        state.greeting = cfg.greeting || 'holiday';
+        state.corners = cfg.corners === 'rounded' ? 'rounded' : 'square';
+        state.script = C.SCRIPTS.some((x) => x.id === cfg.script) ? cfg.script : null;
+        // Positions only for lines this design still has.
+        const zoneIds = new Set((tpl.text || []).map((z) => z.id));
+        state.moves = {};
+        if (cfg.moves && typeof cfg.moves === 'object') {
+          Object.entries(cfg.moves).forEach(([k, m]) => {
+            if (zoneIds.has(k) && m && isFinite(m.dx) && isFinite(m.dy)) state.moves[k] = { dx: +m.dx, dy: +m.dy };
+          });
+        }
+        state.name = cfg.title || '';
+        state.slug = null; state.slugTouched = false;   // a duplicate gets its own link
+        state.back = cfg.backPhoto ? { url: cfg.backPhoto, shape: cfg.backShape || null, size: cfg.backSize || 'large' } : null;
+        editing = duplicate ? null : { id: col.id, slug: col.slug, live: !!col.mind_file_url };
+        $('step-browse').classList.add('hidden');
+        $('step-edit').classList.remove('hidden');
+        renderEditor();
+      }
+
+      // ── Boot ────────────────────────────────────────────────────────────
+      // Deferred to DOMContentLoaded: running at parse time would hit the TDZ on
+      // the `let`s above (the scan.html lesson).
+      document.addEventListener('DOMContentLoaded', () => {
+        if (!C || !C.CARD_TEMPLATES) {
+          document.querySelector('.wrap').innerHTML =
+            '<p style="color:#b00">Card templates failed to load. Run <code>node scripts/build-card-templates.mjs</code>.</p>';
+          return;
+        }
+        // Card type is sized in container units (iOS 16+ / Safari 16+). Older
+        // browsers would print the words at the wrong size, so say so up front.
+        if (!(window.CSS && CSS.supports && CSS.supports('font-size', '1cqh'))) {
+          const n = document.createElement('div');
+          n.className = 'old-browser';
+          n.textContent = 'Your browser is too old to design cards accurately. Please update to iOS 16 or later (or the latest Chrome, Safari or Firefox) and try again.';
+          document.querySelector('.wrap').prepend(n);
+        }
+        const q = new URLSearchParams(location.search);
+        if (q.get('occasion')) state.occasionId = q.get('occasion');
+        // ?section=wedding opens that tab on its first occasion with designs.
+        if (q.get('section')) {
+          const first = C.occasionsWithCounts().find((o) => o.section.toLowerCase() === q.get('section').toLowerCase());
+          if (first) state.occasionId = first.id;
+        }
+        db.auth.getSession().then(({ data }) => {
+          if (!data.session) { location.href = '/auth.html?next=' + encodeURIComponent(location.pathname + location.search); return; }
+          currentUser = data.session.user;
+          if (q.get('id')) loadCard(q.get('id'), q.get('duplicate') === '1');
+          else renderBrowse();
+        });
+      });
+    </script>
+    <script src="/nav.js"></script>
+  </body>
+</html>

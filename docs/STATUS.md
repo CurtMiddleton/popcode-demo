@@ -9,6 +9,17 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 ## Current state (updated 2026-10-20)
 
 **Live and recent**
+- **Holiday / photo card maker — DRAFT PR [#278](https://github.com/CurtMiddleton/popcode-demo/pull/278)
+  (branch `claude/youthful-mccarthy-1ybhzt`, main merged in 10-20), NOT merged, not priced, not
+  linked from the Shop (2026-10-20, see both entries).** Preview (follows the branch):
+  `https://popcode-demo-git-claude-youthful-9baa3f-curtmiddletons-projects.vercel.app/card.html`.
+  `public/card.html`: 24 designs × portrait/landscape, Minted-style options, draggable text,
+  Design your own, Use your photo, Front/Back, named cards + chosen Popcode link, drafts, the
+  shared Add a Popcode sheet + Edit Photo (`public/popcode-tools.js`). Printify blueprint 10717
+  (District Photo, pack variants). **Next:** run `node scripts/printify-card-cost.mjs` for cost →
+  set prices; run `supabase/migrations/2026-10-20-cards-free.sql` in prod; test on a phone with a
+  real account; order one sample (portrait + landscape + rounded); keep/cut list; then mark the
+  PR ready, merge, and link from the Shop / holiday panel.
 - **Montage is now on every Popcode surface (2026-10-19, `9743928`).** The builder
   moved out of create.html/edit.html into **`public/montage.js`**, shared by all five
   pages; book, calendar and board book gained the third choice. Montage is an action,
@@ -4102,4 +4113,58 @@ the user says "fix it" in a session to get it built.
 - Elena's spine PDF: open **View PDF** under Spine on 14652102 and check the title is on it.
 - Check the Shotstack balance before montage in books gets used.
 - Confirm the default Sentry "high priority issues" alert is disabled.
+
+### 2026-10-20 — Holiday card maker revived and rebuilt (Minted-style), not yet live
+
+Session `session_015E5kyBeMhTbTAzVobGtHPP`. All work on branch **`claude/youthful-mccarthy-1ybhzt`** (pushed, **no PR**, not merged). Nothing a customer can reach: `/card.html` isn't linked and cards can't be priced, so Pay stays disabled.
+
+#### Where it started
+- The Sept card builder lived on `claude/holiday-cards-categories-3t5cbo`, which **shares no history with main** (main was rewritten) — so its six files were copied, not merged. Plan + provider finding: `docs/cards-plan.md` (kept current, read it first).
+- Prodigi can't do flat 5×7 (all folded, UK-made). **Printify blueprint 10717 "Flat Greeting Cards (envelopes included)", provider 28 District Photo** (same lab as the board book). The user ran `scripts/probe-printify-cards.mjs` on their Mac: Printify sells **by the pack** — each pack is a variant: square 399502–399505 (10/30/50/100), rounded 399509–399512. Print area **1538×2175** per side (full 1/8″ bleed top/bottom, ~1/16″ sides) → `CARD_FORMATS['flat-5x7'].printPx`, `toBleed()` crops to it. Catalog: `card-5x7-{10,30,50,100}[-round]`, copies = number of packs; `baseCostMinor` **null** (dormant).
+
+#### What a card is now (`public/card.html`, `lib/print/cards.mjs` → generated `public/card-templates.js` via `node scripts/build-card-templates.mjs` — re-run after any cards.mjs edit)
+- **A Popcode**: save renders the front exactly as the editor (html2canvas 1.4.1; photos pre-cropped onto canvases, foil painted glyph by glyph), compiles it to `{slug}/target.mind`, uploads video **or audio**, writes `kind:'card'` + one `collection_items` row. Design state in `book_layout.card` (templateId or `custom`, text, photos, adjust, colorway, greeting, corners, script, bw, backPhoto, pack).
+- **Print files**: front (mirrored bleed, cropped to Printify's area) + back; landscape cards are laid out landscape and **rotated a quarter turn clockwise only at upload** (`toPrintify`) — verify on the first landscape sample which way up the back prints. Shared print preview before the cart.
+- **Back** = the books' back cover: wordmark, "Go to popcode.app/{slug} on your phone. / **Scan the front of this card.**" (cards carry no front symbol), symbol, on white; optional square photo above.
+- **Designs**: 24 families (`fam()` in cards.mjs → `p-{family}` / `l-{family}`), after the user's Minted "simple & minimalist" references: full-bleed (Pacifique, Brighton, Bold Serif, Joyeux, Corner Title, Bold Condensed, Merry Everything), on the card colour (Typewriter, Minimal Border, Colour Frame, Modern Frame, Bottom Band, Side Note), multi-photo (Quartet, Handwritten Name, Gallery), handwritten/calligraphy (Vertical Script, Pen & Ink, Harbor, Hand Lettered, Above & Below), announcements (Hello World, Save the Date, Class Of). The first two sets (Sept's snow/laurel/gold, then a too-small minimal set) were replaced on the user's feedback.
+- **Options per design** (Minted's product page): orientation, **greeting** (Holiday/Christmas/New Year/Religious; per-zone `greet` maps; occasion preselects), **script** (user chose Parisienne/Classic, Monsieur La Doulaise/Formal, WindSong/Sweeping; + Mea Culpa/Calligraphy, Sacramento/Pen; zones `scriptable`), colour theme (named; colourways have `panel`/`mat` roles), corners square/rounded, colour or black-and-white photo (baked into pixels — html2canvas ignores CSS filters).
+- **Layout engine additions**: frames, mats, `fill:'ground'`, italic, rotated/centred zones (`rotate`, `center` → `free`, skipped by the no-overlap pass), **bands** (`BANDS` in cards.mjs: text centred between photo edge and card edge, measured from the drawn type in `fitCardText` pass 3). Type ~40% bigger than the first minimal set at the user's request.
+- **Sections** (user decided): Holiday · Wedding · Baby · **Invitations** — only occasions where people mail many of the same card; **no business holiday cards**. Occasions with no designs stay hidden. `?section=wedding`.
+- **Design your own** (first tile everywhere): 7 layouts (`CARD_LAYOUTS`), draggable text boxes with font/size/colour/align/bold/caps/italic; every layout has a photo (scan needs a picture). **Use your photo**: one photo redraws every thumbnail and pre-fills the design.
+- **Shared `public/popcode-tools.js`** (new): the calendar's Add a Popcode sheet (Video + compression / Montage via montage.js / Audio record) and Edit Photo (fill/fit/zoom/drag/rotate/replace/remove/grid/print quality) + `drawPhotoAdjusted`/`layoutPhoto`. Cards use it; **calendar/book/board book still have their own copies** — migrate one at a time. Loading `dialog.js` makes `alert()` a Popcode dialog on card.html (tests must click `.pcd-btn`).
+- Sample-name guard: zones flagged `sample: true` ("The Middleton Family", "Adelaide Rose"…) block saving until changed.
+- Also: `supabase/migrations/2026-10-20-cards-free.sql` (cards don't count toward the Popcode limit — **not yet run**), `scripts/printify-card-cost.mjs` (held order with every pack variant, prints cost, **auto-cancels** — the 08-22 board-book lesson), My Designs + cart "Edit design" route `kind:'card'` to `/card.html?id=`.
+
+#### Decisions / answers from the user
+- Transcript stays as it is on create/edit (for everyone); cards don't get one.
+- Packs 10/30/50/100 (Printify's); "save X%" labels removed until real prices.
+- Minted benchmark: 100 cards $192 ($1.92 ea), rounded corners +$37.
+
+#### Lessons
+- The user's Mac repo is `~/popcode-demo`; they run Printify scripts there (`export PRINTIFY_API_TOKEN=$(pbpaste)`), never paste tokens in chat. Printify tokens can be scoped (catalog.read; orders.read/write for the cost script).
+- Headless MindAR compile needs `--use-angle=swiftshader --enable-unsafe-swiftshader`. Test harness lives in the session scratchpad (not committed): stubbed supabase-js, `__store` route for uploads.
+- html2canvas leaves its own scale on the context (`setTransform` before painting foil); hex colours come back as `rgb()` from the DOM; `.inset` CSS had been overriding `.arch` (arch never showed).
+- The overlap pass shrinks text when left/right boxes touch — keep `maxW`s apart on split rows.
+- curtmiddleton.com mail is hosted at Verve (cPanel, `mail.curtmiddleton.com`); plan agreed: later move it to its **own Google Workspace user** (secondary domain), keep Verve for DNS, back up the mailbox first. Green Empowerment isn't doing a campaign this year; **Centurion is considering** one (their thread is in curtmiddleton.com — the user was to forward it to curt@popcodeapp.com).
+
+#### Later the same day (2026-10-20): card page redesign + editor features, draft PR #278
+
+All on `claude/youthful-mccarthy-1ybhzt`; **draft PR [#278](https://github.com/CurtMiddleton/popcode-demo/pull/278)** opened (user asked, to get a Vercel link). `origin/main` merged in (`b9f5f3a`; only conflict was the two 10-20 STATUS entries, both kept). Commits `828a731` … `3a28f85`. Every change was checked in the scratchpad's headless harness (stubbed supabase; `run.cjs <templateId> "" "" "" 1` = save + cart with a back photo) and `npm test`.
+
+- **Layout matches the Shop** (order.html's product detail): `#f9f9f9` page, Cooper h1 + grey subtitle (one line; "play a video, montage or audio") + purple "← All products" link (becomes "← All designs" in the editor). Page width 1240.
+- **Browse:** no white squares (user tried them, then "forget white squares") — cards sit on the page with a drop shadow, **4 across** (3 ≤1000px, 2 ≤720px), sized from the column (`sizeThumbs`). **Landscape is the default** tile/editor. Names 14px Inter, details 12px, 12px swatches. Occasions are **small 12px text links**, not pills.
+- **Scripts:** user thought the fonts were wrong — they were right (Parisienne etc. verified by rendering); the confusion was the labels Classic/Formal/Sweeping. Buttons now read **Parisienne / Monsieur La Doulaise / WindSong**, stacked. Only those three exist now: `SCRIPT_FOR` in cards.mjs maps Mea Culpa → Doulaise and Sacramento → WindSong (Hand Lettered, Pen & Ink, Class Of).
+- **Editor:** 2-column grid like the Shop; design name 22px. Card preview is **pinned at `top:124px`** (nav.js's sticky header is 100px — at `top:24px` the menu covered the card) and capped to the window height (`editorCardWidth`).
+  - Empty photo slots show the tile's **sample photo** with an "Add your photo" badge (`opts.samples`; never saved/printed — save still requires real photos).
+  - **Front / Back toggle** under the card (order.html's `.toggle`); Back renders `renderBack(..., {placeholder:true})` full size; tap to add/change. Links under it: Add / Edit / Remove photo (front) and Change / Remove photo (back).
+  - **Drag any text line** (`enableZoneDrag`, saved as `book_layout.card.moves` = {zoneId:{dx,dy}} fractions; used by the print bake; moved lines skip band centring + the overlap pass; "Put the words back" resets). **Snaps to the centre line** within 8px with a dashed guide (also in Design your own). Gotcha: the browser's native drag of the photo under the text fired `pointercancel` mid-drag — fixed with `dragstart` preventDefault on the face + `-webkit-user-drag:none`, and window-level pointer listeners.
+  - **Back photo:** no drop shadow; empty spot = grey square + picture icon (editor only); **shape** landscape/portrait/square (default from the photo) and **size** small/medium/large (`backShape`, `backSize`); message block lower (`BACK.bottom` 0.40).
+  - **Add a Popcode** = the Shop's pinwheel `.popcode-cta`, full width.
+  - **Quantity pulldown** 10–100 by tens, 150–500 (`CARD_QUANTITIES`, `packFor`: copies of the biggest Printify pack that divides it — 80 = 8×10). Cart line = `card-5x7-{pack}[-round]` × copies.
+- **Name + link:** "Name this card" (`book_layout.card.title`, = `collections.name`) and a **Popcode link** field (`PopcodeSlug.attach`, like calendar/books): fills in from the name, availability + suggestions, **locked once saved**. Older saved cards keep their random slug (duplicate to rename).
+- **Save for later = drafts:** no Popcode / missing photo / sample words allowed; compiled only when it has a Popcode and every photo (else `mind_file_url ''`, no collection_items row). Add to cart still checks everything. My Designs uses `cardCfg.frontUrl` as a draft's thumb.
+
+**Not tested:** phone, a real account (reopen after reload), print. **Next** is unchanged (cost script → prices, cards-free migration, sample) — see Current state.
+
+**Lessons:** preview deployments are behind Vercel login (Claude can't open them; curl gets a 302) and the user has to sign into Popcode on the preview domain separately. The PR's Vercel comment gives a branch URL that always shows the latest push — give the user that, not a per-deployment URL.
 

@@ -44,9 +44,10 @@ const priced = await quoteCart({
 assert.deepEqual(priced.groups[0].linePrices, [2900, 4400]);
 assert.equal(priced.totalMinor, 2900 + 4400 + 1300);
 
-// Every variant we sell has a retail price, except the held-back UK-only ones.
+// Every variant we sell has a retail price, except the held-back UK-only ones
+// and cards, which stay unpriced until their Printify cost is known.
 const unpriced = Object.entries(PRODUCTS).flatMap(([t, vs]) =>
   vs.filter((v) => retailMinorFor(t, v, v.minPages) == null).map((v) => `${t}:${v.id}`));
-assert.deepEqual(unpriced.filter((k) => !/^(sticker|magnet):/.test(k)), []);
+assert.deepEqual(unpriced.filter((k) => !/^(sticker|magnet|card):/.test(k)), []);
 
 console.log(`pricing OK — retail prices resolve for every sold variant, floor ${MIN_MARKUP}x goods`);
