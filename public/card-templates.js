@@ -409,7 +409,7 @@
       "label": "Your names",
       "maxChars": 44,
       "maxLines": 1,
-      "hint": "Love, the Middletons"
+      "hint": "Love, the Harpers"
     },
     "year": {
       "label": "Year",
@@ -1131,7 +1131,7 @@
         {
           "id": "signature",
           "role": "signature",
-          "default": "THE MIDDLETONS",
+          "default": "THE HARPERS",
           "font": "grotesk",
           "weight": 500,
           "color": "onPhoto",
@@ -1212,7 +1212,7 @@
         {
           "id": "signature",
           "role": "signature",
-          "default": "THE MIDDLETONS",
+          "default": "THE HARPERS",
           "font": "grotesk",
           "weight": 500,
           "color": "onPhoto",
@@ -1294,7 +1294,7 @@
         {
           "id": "signature",
           "role": "signature",
-          "default": "THE MIDDLETONS",
+          "default": "THE HARPERS",
           "font": "grotesk",
           "weight": 500,
           "color": "onPhoto",
@@ -1376,7 +1376,7 @@
         {
           "id": "signature",
           "role": "signature",
-          "default": "THE MIDDLETONS",
+          "default": "THE HARPERS",
           "font": "grotesk",
           "weight": 500,
           "color": "onPhoto",
@@ -1622,7 +1622,7 @@
         {
           "id": "signature",
           "role": "signature",
-          "default": "Catherine, Christian and Bella",
+          "default": "Emma, Noah and Lily",
           "font": "parisienne",
           "weight": 400,
           "color": "onPhoto",
@@ -1703,7 +1703,7 @@
         {
           "id": "signature",
           "role": "signature",
-          "default": "Catherine, Christian and Bella",
+          "default": "Emma, Noah and Lily",
           "font": "parisienne",
           "weight": 400,
           "color": "onPhoto",
@@ -2877,7 +2877,7 @@
         {
           "id": "signature",
           "role": "signature",
-          "default": "THE MIDDLETONS",
+          "default": "THE HARPERS",
           "font": "grotesk",
           "weight": 500,
           "color": "accent",
@@ -2972,7 +2972,7 @@
         {
           "id": "signature",
           "role": "signature",
-          "default": "THE MIDDLETONS",
+          "default": "THE HARPERS",
           "font": "grotesk",
           "weight": 500,
           "color": "accent",
@@ -5715,7 +5715,7 @@
         {
           "id": "headline",
           "role": "headline",
-          "default": "Jordan Middleton",
+          "default": "Jordan Ellis",
           "font": "cormorant",
           "weight": 500,
           "color": "ink",
@@ -5829,7 +5829,7 @@
         {
           "id": "headline",
           "role": "headline",
-          "default": "Jordan Middleton",
+          "default": "Jordan Ellis",
           "font": "cormorant",
           "weight": 500,
           "color": "ink",

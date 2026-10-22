@@ -68,6 +68,9 @@ A common gotcha: the console will appear empty if the page hit a parse-time Synt
 ## Working style
 Be proactive about the business, not just the code (the user asked for this on 2026-10-15). When you notice a gap that matters for growing Popcode as a business — measurement (e.g. there was no website-traffic tracking until 2026-10-15), conversion, follow-up on outreach, pricing, retention, deliverability — say so and suggest the fix, without waiting to be asked. Keep it to a line or two and let the user decide.
 
+## Example text in the product
+Placeholders, sample names and example copy that customers see must be **generic** — never the user's own name or family (e.g. "Middleton"), trips (e.g. Rwanda / South Africa), clients or nonprofit partners, or anything else that points at a real person or project. Use neutral examples ("e.g. Our Year", "The Harpers", "yourorg.org/appeal"), or leave the field without an example when its label already explains it. The user has asked for this more than once (last on 2026-10-22, when a full audit removed the remaining ones).
+
 ## Session workflow
 **Trigger phrase: "save notes"** — when the user says this (or any close variant like "save session notes", "wrap the session", "save the notes"), treat it as an explicit instruction to append a new dated entry to the **Session history** in `docs/STATUS.md` (newest at the bottom), and to update that file's **Current state** section if what's open or next has changed. Do not wait to be asked twice.
 
