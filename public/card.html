@@ -178,6 +178,15 @@
       .busy-card { background: #fff; border-radius: 20px; padding: 22px 28px; box-shadow: 0 16px 40px rgba(20,16,40,.18); display: flex; align-items: center; gap: 14px; font-size: 15px; font-weight: 600; }
       .busy-spin { width: 22px; height: 22px; border-radius: 50%; border: 3px solid #e6e1ff; border-top-color: #7657FC; animation: busy-spin .8s linear infinite; }
       @keyframes busy-spin { to { transform: rotate(360deg); } }
+      .menu-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+      .menu-head h2 { margin: 0; }
+      .menu-x { width: 36px; height: 36px; border-radius: 50%; border: none; background: #f2f2f2; font-size: 22px; line-height: 1; cursor: pointer; color: #555; }
+      .menu-row { display: flex; align-items: center; gap: 14px; padding: 15px 6px; cursor: pointer; border-bottom: 1px solid #f2f0ea; font-size: 16px; font-weight: 600; color: #1a1a1a; }
+      .menu-row:last-child { border-bottom: none; }
+      .menu-row:hover { background: #fafafa; }
+      .menu-row .menu-ic { width: 40px; height: 40px; border-radius: 50%; background: #f2f0ea; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #555; }
+      .menu-row.destructive { color: #d33; }
+      .menu-sub { font-size: 13px; font-weight: 400; color: #888; margin-top: 2px; }
       .side-hint { text-align: center; font-size: 13px; color: #777; margin-top: 12px; min-height: 1.3em; }
       .card-face img { -webkit-user-drag: none; user-select: none; }
       .cf-guide { position: absolute; left: 50%; top: 0; bottom: 0; width: 0; border-left: 1px dashed #ff3b9a; z-index: 9; pointer-events: none; display: none; }
@@ -1403,7 +1412,7 @@
         const slots = (state.template.photos || []).filter((sl) => state.photos[sl.id]);
         if (state.side === 'back') {
           h.innerHTML = state.back
-            ? link('back-change', 'Change photo') + ' &middot; ' + link('back-remove', 'Remove photo')
+            ? link('back-edit', 'Edit photo') + ' &middot; ' + link('back-change', 'Change photo') + ' &middot; ' + link('back-remove', 'Remove photo')
             : link('back-change', 'Add a photo') + ' above the message';
         } else if (!slots.length) {
           h.innerHTML = link('front-add', 'Add your photo') + (state.template.photos.length > 1 ? ' &middot; or tap any photo spot' : '');
@@ -1419,7 +1428,8 @@
           const act = a.dataset.act;
           if (act === 'back-change') { pendingSlot = '__back'; $('photo-input').click(); }
           if (act === 'back-remove') { state.back = null; drawBackPreview(true).catch(backFailed); }
-          if (act === 'front-edit') onPhotoTap(state.template.photos[0].id);
+          if (act === 'front-edit') editFrontPhoto(state.template.photos[0].id);
+          if (act === 'back-edit') editBackPhoto();
           if (act === 'front-add') pickPhotoFor(state.template.photos[0].id);
           if (act === 'front-remove') { state.photos = {}; drawEditorCard(); }
         };
@@ -1532,8 +1542,34 @@
 
       // Tap an empty photo to add one; tap a photo to edit it (the calendar's
       // Edit Photo: fill or fit, zoom, drag, rotate, replace, remove).
+      // Tapping a photo, as on the calendar and books: an empty spot picks a
+      // photo; a filled one opens Edit photo / Choose a different photo / Remove.
+      const MENU_IC = {
+        edit: '<path d="M6 3v14a1 1 0 0 0 1 1h14"/><path d="M18 21V7a1 1 0 0 0-1-1H3"/>',
+        replace: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
+        remove: '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+      };
+      function photoMenu(title, acts) {
+        const row = (id, ic, label, sub, cls) => '<div class="menu-row' + (cls ? ' ' + cls : '') + '" data-act="' + id + '">' +
+          '<div class="menu-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + MENU_IC[ic] + '</svg></div>' +
+          '<div><div>' + label + '</div>' + (sub ? '<div class="menu-sub">' + sub + '</div>' : '') + '</div></div>';
+        openSheet('<div class="menu-head"><h2>' + esc(title) + '</h2><button class="menu-x" id="pm-x" aria-label="Close">&times;</button></div>' +
+          row('edit', 'edit', 'Edit photo', 'Fill / fit, zoom, reposition, rotate') +
+          row('replace', 'replace', 'Choose a different photo') +
+          row('remove', 'remove', 'Remove photo', null, 'destructive'));
+        $('pm-x').addEventListener('click', closeSheet);
+        $('sheet').querySelectorAll('.menu-row').forEach((r) => r.addEventListener('click', () => { closeSheet(); acts[r.dataset.act](); }));
+      }
       function onPhotoTap(slotId) {
         if (!state.photos[slotId]) { pickPhotoFor(slotId); return; }
+        const n = state.template.photos.length;
+        photoMenu(n > 1 ? 'Photo ' + (state.template.photos.findIndex((p) => p.id === slotId) + 1) : 'Your photo', {
+          edit: () => editFrontPhoto(slotId),
+          replace: () => pickPhotoFor(slotId),
+          remove: () => { delete state.photos[slotId]; drawEditorCard(); },
+        });
+      }
+      function editFrontPhoto(slotId) {
         const slot = state.template.photos.find((p) => p.id === slotId);
         const fmt = C.CARD_FORMATS[state.template.formatId];
         const land = state.template.orientation === 'landscape';
@@ -1553,6 +1589,31 @@
         });
       }
 
+      // The back photo gets the same Edit Photo, cropped to its chosen shape.
+      function editBackPhoto() {
+        const b = state.back;
+        if (!b) return;
+        PopcodeTools.editPhoto({
+          url: b.url, adjust: b.adjust, aspect: BACK_SHAPES[backShape(backImgCache.url === b.url ? backImgCache.img : null)],
+          source: b.file ? 'Device' : 'Saved',
+          onSave: (a) => { b.adjust = a; drawBackPreview(true).catch(backFailed); },
+          onReplace: (f) => {
+            const url = URL.createObjectURL(f);
+            state.back = { file: f, url, shape: b.shape, size: b.size };
+            drawBackPreview(true).catch(backFailed);
+            return url;
+          },
+          onRemove: () => { state.back = null; drawBackPreview(true).catch(backFailed); },
+        });
+      }
+      function onBackTap() {
+        if (!state.back) { pendingSlot = '__back'; $('photo-input').click(); return; }
+        photoMenu('Back photo', {
+          edit: editBackPhoto,
+          replace: () => { pendingSlot = '__back'; $('photo-input').click(); },
+          remove: () => { state.back = null; drawBackPreview(true).catch(backFailed); },
+        });
+      }
       // A small live picture of the back, from the same renderer as the print.
       let backSeq = 0;
       // The back, drawn the same size as the front in the main preview
@@ -1599,7 +1660,7 @@
         freeCanvas(sm);
         im.style.width = w + 'px';
         im.style.borderRadius = state.corners === 'rounded' ? (w * 0.035) + 'px' : '0';
-        im.addEventListener('click', () => { pendingSlot = '__back'; $('photo-input').click(); });
+        im.addEventListener('click', onBackTap);
         const stage = $('ed-stage');
         stage.innerHTML = '';
         stage.appendChild(im);
@@ -1622,7 +1683,7 @@
           return;
         }
         if (pendingSlot === '__back') {
-          state.back = { file, url: URL.createObjectURL(file) };
+          state.back = { file, url: URL.createObjectURL(file), shape: state.back && state.back.shape, size: state.back && state.back.size };
           pendingSlot = null;
           drawBackPreview(true).catch(backFailed);
           return;
@@ -1969,11 +2030,15 @@
           ctx.textAlign = 'left';
         }
         if (img) {
-          ctx.save();
-          ctx.beginPath(); ctx.rect(px, py, pw, ph); ctx.clip();
-          ctx.translate(px, py);
-          drawCover(ctx, img, pw, ph);
-          ctx.restore();
+          if (state.back.adjust && window.PopcodeTools) {
+            PopcodeTools.drawPhotoAdjusted(ctx, img, state.back.adjust, px, py, pw, ph);
+          } else {
+            ctx.save();
+            ctx.beginPath(); ctx.rect(px, py, pw, ph); ctx.clip();
+            ctx.translate(px, py);
+            drawCover(ctx, img, pw, ph);
+            ctx.restore();
+          }
         }
 
         try {
@@ -2175,7 +2240,7 @@
         if (state.back) {
           if (state.back.file) {
             backUrl = await uploadWithRetry(`${slug}/card/back-photo-${stamp}.jpg`, state.back.file, state.back.file.type || 'image/jpeg');
-            state.back = { url: backUrl, shape: state.back.shape, size: state.back.size };
+            state.back = { url: backUrl, shape: state.back.shape, size: state.back.size, adjust: state.back.adjust };
           } else {
             backUrl = (await remap(state.back.url)) || state.back.url;
           }
@@ -2246,7 +2311,7 @@
               title: (state.name || '').trim() || null,
               occasionId: state.occasionId, text: state.text, photos: photoUrls,
               colorway: state.colorway, pack: state.pack, bw: state.bw, frontUrl,
-              greeting: state.greeting, corners: state.corners, script: state.script, moves: state.custom ? null : state.moves, backPhoto: backUrl, backShape: state.back ? backShape(await backImg(backUrl).catch(() => null)) : null, backSize: state.back ? (state.back.size || 'large') : null,
+              greeting: state.greeting, corners: state.corners, script: state.script, moves: state.custom ? null : state.moves, backPhoto: backUrl, backShape: state.back ? backShape(await backImg(backUrl).catch(() => null)) : null, backSize: state.back ? (state.back.size || 'large') : null, backAdjust: (state.back && state.back.adjust) || null,
               custom: state.custom ? JSON.parse(JSON.stringify(state.custom)) : null,
               // Edit Photo crops, per slot.
               adjust: Object.fromEntries(Object.entries(state.photos).filter(([, p]) => p.adjust).map(([k, p]) => [k, p.adjust])),
@@ -2453,7 +2518,7 @@
         }
         state.name = cfg.title || '';
         state.slug = null; state.slugTouched = false;   // a duplicate gets its own link
-        state.back = cfg.backPhoto ? { url: cfg.backPhoto, shape: cfg.backShape || null, size: cfg.backSize || 'large' } : null;
+        state.back = cfg.backPhoto ? { url: cfg.backPhoto, shape: cfg.backShape || null, size: cfg.backSize || 'large', adjust: cfg.backAdjust || undefined } : null;
         editing = duplicate ? null : { id: col.id, slug: col.slug, live: !!col.mind_file_url };
         $('step-browse').classList.add('hidden');
         $('step-edit').classList.remove('hidden');
