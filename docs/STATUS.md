@@ -6,7 +6,7 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-20)
+## Current state (updated 2026-10-21)
 
 **Live and recent**
 - **Centurion (nonprofit) — sample in progress (2026-10-19 → 20; see that entry).** Demo went well;
@@ -17,6 +17,12 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   the speech files) → uploads on /create → Claude makes a one-page PDF of the 8 photos → user sends the
   email from curt@theworkshop.works (text drafted in chat on 10-19). Delete the stale unsent
   "sample coming" draft in curt@popcodeapp.com.
+- **Popcode symbol on print: [PR #279](https://github.com/CurtMiddleton/popcode-demo/pull/279)
+  open, not merged (2026-10-21).** Print preview shows the ornament's die-cut circle and
+  the mug's front third; ornaments and mugs default to the **Large** symbol (12%); a thin
+  **white ring** around the symbol on shop products, books, calendars and board books.
+  Not clicked through signed in — try an ornament + mug preview and a book proof before
+  merging. See the 2026-10-21 entry.
 - **Montage is now on every Popcode surface (2026-10-19, `9743928`).** The builder
   moved out of create.html/edit.html into **`public/montage.js`**, shared by all five
   pages; book, calendar and board book gained the third choice. Montage is an action,
@@ -35,7 +41,7 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   merged 2026-10-20** — Prodigi's reply now rides on failed-order events, and quote retries
   back off (429 → Retry-After / 1 s, 2 s). **Sentry is now watched:** two email alert rules
   (failed paid order / fatal outage; spikes) + the **Daily Sentry check** scheduled task at
-  8:45 ET every day (push only when something is real). **Shotstack balance was 0.17 credits on 10-17** — top up before
+  8:45 ET every day (push every run since 10-21: "✅ All clear —" or "⚠️ Needs you —"). **Shotstack balance was 0.17 credits on 10-17** — top up before
   promoting montage in books (a render needs ~1.13).
 - **Gallery outreach round 1 SENT 2026-10-15** (9:45–10:55 ET, scheduled in Gmail from
   curt@popcodeapp.com, BCC curt@theworkshop.works): Geary, Rye Arts Center, Pelham Art Center
@@ -289,8 +295,8 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 9. **Scout's ornament:** scan `/assets/scout-ornament.pdf` and the home-page
    ornament off a screen to confirm both trigger `popcode.app/scout`. The symbol
    on Scout's is lower right at **12%** of the diameter on a white ring (the
-   user's mockup, 2026-09-26); real orders print it at 6% — decide whether
-   orders should get the bigger symbol too.
+   user's mockup, 2026-09-26); real orders print it at 6% — **decided 2026-10-21:**
+   ornaments and mugs now default to Large (12%), PR #279.
 10. ~~**Privacy/trust fixes**~~ — **done 2026-10-20 (PR #270).** Every stored
     `scan_events.ip_address` was replaced in prod with a keyed one-way code
     (`supabase/migrations/2026-10-20-erase-stored-ips.sql`, run by the user;
@@ -4143,3 +4149,109 @@ the user says "fix it" in a session to get it built.
 - The user trims the 8 clips (or gets them from Centurion) → upload on /create → send Claude the slug → Claude makes the one-page PDF of the 8 photos → the user sends the email.
 - Double-check the spellings "Jozelyn" and Barry's surname (the transcript only gave first names).
 - Try #269 on a real Android phone.
+### 2026-10-21 — Print preview crop lines, Large symbol on ornaments/mugs, white ring on the symbol
+
+**PR [#279](https://github.com/CurtMiddleton/popcode-demo/pull/279) — open, not merged.**
+Branch `claude/affectionate-curie-1dtxyc`, 4 commits (`ee7c413a`, `86de739e`, `2d608600`,
+`c6308e54`). Only check is Vercel Preview Comments (green); no reviews yet. Session is
+subscribed to it.
+
+**What was built**
+- **Crop lines in the print preview** (`public/print-preview.js` `cropMarks()`; `list()`
+  items take `round` / `faceFrac`). Ornament: dashed circle where it's die-cut, front AND
+  back, corners faded. Mug: dashed lines round the middle third (`WRAP_FACE_FRAC` 0.335),
+  labelled "Front of the mug", sides faded. `order.html` `previewShopPrintOnce` passes them
+  from the variant (`v.round` / `v.wrap`) and swaps the note text per product.
+- **Large symbol by default on ornaments and mugs** (`order.html` `LARGE_BADGE_DEFAULT`,
+  `defaultScaleFor()`, set in `openCategory`). The user's sample ornament printed the Small
+  (6%) symbol at **0.17″ on the 2.9″ disc** — "way too small". Large = 12% ≈ 0.35″, which
+  is what Scout's ornament uses; the user confirmed it from a screenshot of it.
+  - The user remembered "we enlarged it" — **it had never been done**; STATUS item 9 had
+    left it as an open decision since 2026-09-26. Check the code before trusting memory.
+  - **The size picker did nothing on a mug**: `placeBadge` used `WRAP_BADGE_SCALE` (9 mm)
+    regardless of `scale`. Now `WRAP_BADGE_SCALE * scale / 0.06` → 9 / 13.5 / 18 mm.
+  - `syncBadgeSizeToggle()`: the Small/Medium/Large highlight never followed the product or a
+    reopened design (always showed Small). Fixed.
+  - Saved designs keep their stored `scale`; only new ones get the default.
+- **White ring around the symbol, everywhere it sits on a photo.** 6% of the symbol's width,
+  OUTSIDE it, so the pinwheel keeps its size and place; skipped for the white symbol.
+  - Shop: `placeBadge` (`product-preview.js`, `BADGE_RING`) — `size` becomes the ringed box
+    so the ornament cut-line margin and sticker `padPx` include the ring.
+  - Book: `BADGE_RING_IN`, `badgeBoxPx` grows by the ring and the inset shrinks by it
+    (symbol still 0.5″ at 0.25″; ring edge ~0.22″ from the trim). `rasterizeBadge(px, ring)`;
+    the back-cover `.bc-symbol` uses an unringed copy (`symbolPng` / `symbolHi`).
+  - Calendar: `calBadgeBox()`, same `rasterizeBadge(px, ring)`. Board book: ring drawn in
+    `squareCanvas`. Editor badges show it via CSS (`.slot-badge`/`.pf-badge` white disc +
+    img at 89.29% with 5.357% margin; board book `.pc-badge` `box-shadow: 0 0 0 2px #fff`).
+
+**How it was checked:** badge geometry by hooking `drawImage` in the real
+`compositeBadgedImage` (ornament Large far edge at 0.85 r; mug 18.1 mm inside the face);
+before/after sheets on busy (grass, brick) and light (sky) photos sent to the user; book ring
+position compared against the unringed one; inline scripts `node --check`ed. **Not done:**
+order.html / book / calendar signed in.
+
+**Gotchas**
+- The clone is **shallow** (133 commits) — `git log -S` found nothing until
+  `git fetch --unshallow`.
+- `pkill -f "http.server 8765"` killed the Bash call itself (the pattern matched its own
+  command line) and silently skipped the commit chained after it. Use a PID.
+- Playwright here needs `executablePath: '/opt/pw-browsers/chromium'` (npm's playwright
+  wanted a newer headless shell).
+- CSS `padding: %` on the badge would be relative to the SLOT, not the badge — that's why the
+  ring uses the img's margins instead.
+
+#### Open
+- Merge #279 after trying an ornament + mug print preview and one book proof.
+- The ring brings the book badge ~0.03″ nearer the trim; if a sample clips the corner, that's why.
+- Optional: match Scout's symbol placement (lower, ~5 o'clock) on ordered ornaments — orders sit on the 45° diagonal.
+
+### 2026-10-20 → 21 — Black phone mockups (a Safari glitch); still-image fallback; Sentry check pushes daily
+
+**PR [#276](https://github.com/CurtMiddleton/popcode-demo/pull/276) — merged and live** (all five
+files byte-identical on popcode.app). Branch `claude/epic-thompson-tc57hv` again (restarted from
+`main` after each merge — #271 and #275 were merged).
+
+**The report:** "the mockup videos are no longer playing on the site" — every phone mockup was a
+black rectangle: the home hero, the Narrated tours card (home + pricing), the /nonprofits hero.
+**Not the site:** every video file returned 206 `video/mp4`, byte-identical to the repo, H.264
+(`avc1`, moov first), none touched since 10-13; worked on the user's iPhone; Low Power Mode was
+off. **Restarting Safari fixed it.** Safari decodes video in a separate media process; after long
+uptime / sleep-wake cycles it can wedge so every video "plays" but draws black, site-wide and
+on every site. Next time: three separate code paths going black at once = the browser. ⌘Q first.
+- The grey "Error: Prodigi order failed (500)…" box over the painting in the user's screenshot
+  was a hover tooltip left over from a Sentry tab, not page content.
+
+**#276 anyway (real gap for visitors whose browser refuses autoplay — Low Power Mode, Safari's
+per-site Auto-Play):**
+- `public/index.html` hero `mount()`: on `play()` rejecting with `NotAllowedError`, clear the
+  phone and `showStill(scene)` (the fallback already used for a missing/unplayable clip). Other
+  rejections are left to `onerror`, so the clip→fallback→still chain isn't doubled.
+- Fixed phone videos get a `poster` of their own first frame: `/video/exhibit-poster.jpg`
+  (home + pricing Narrated tours) and `/video/Album-poster.jpg` (photo-book page). Made with
+  `ffmpeg -ss 0.5 -frames:v 1 -q:v 4` (`/usr/bin/ffmpeg` exists in the container), ~85 KB each.
+- /nonprofits needed nothing: it already had a poster and drops `.playing` when play() fails.
+- Tested headless with `HTMLMediaElement.prototype.play` stubbed to reject `NotAllowedError`.
+
+**Headless testing gotchas (save the next session ten minutes):**
+- `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` refuses `--headless=old` (what
+  playwright-core 1.48 passes). Launch **`/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell`**
+  via `executablePath` instead.
+- That shell **can't decode H.264** (MediaError code 4 on every mp4), so it can't tell you
+  whether a video plays — only whether the page's logic and fallbacks behave.
+
+**Daily Sentry check — first scheduled run 10-21 08:45 ET, succeeded:** resolved 3 noise issues
+(two `card.html` errors from a Vercel *preview* deploy, one stackless Safari error on
+`calendar.html`), "nothing needs you". It sent **no push** — the notifications setting only pushes
+"when there's something worth telling you". The user wants a daily all-clear, so the prompt
+(`trig_01Y7yeD3u5JZGFDdcC8uVLZc`, changed with `update_trigger`, which kept the Sentry connector
+and repo the user had added by hand) now says to report every run, starting **"✅ All clear —"** or
+**"⚠️ Needs you —"**. Whether the app treats an all-clear as push-worthy is not confirmed; if no
+push arrives, switch the all-clear to email. Read a run's output with `get_trigger` →
+`last_run.session_id` → `list_events(kinds=["assistant","result"])`.
+
+#### Open
+- Confirm the ✅ all-clear push actually arrives (Run now, or tomorrow 08:45).
+- Elena's spine PDF: open **View PDF** under Spine on 14652102 and check the title is on it.
+- Check the Shotstack balance before montage in books gets used.
+- Confirm the default Sentry "high priority issues" alert is disabled.
+
