@@ -9,6 +9,14 @@ happened and what's open. (Session history moved here from CLAUDE.md on
 ## Current state (updated 2026-10-21)
 
 **Live and recent**
+- **Centurion (nonprofit) — sample in progress (2026-10-19 → 20; see that entry).** Demo went well;
+  Android had no video scrubber → fixed (PR #269, live). Laila S. Wilson-McCoy (Director of Development,
+  laila.wilson@centurion.org) asked for a sample: honoree presenters + honorees speaking, and **Jozelyn
+  Davis's call for support**. **Photos picked + cut list made**; the clips could NOT be cut here (Drive
+  throttled the 24.5 GB file). **Next:** the user trims the 8 clips on the Mac (or asks Centurion for
+  the speech files) → uploads on /create → Claude makes a one-page PDF of the 8 photos → user sends the
+  email from curt@theworkshop.works (text drafted in chat on 10-19). Delete the stale unsent
+  "sample coming" draft in curt@popcodeapp.com.
 - **Popcode symbol on print: [PR #279](https://github.com/CurtMiddleton/popcode-demo/pull/279)
   open, not merged (2026-10-21).** Print preview shows the ornament's die-cut circle and
   the mug's front third; ornaments and mugs default to the **Large** symbol (12%); a thin
@@ -4109,6 +4117,38 @@ the user says "fix it" in a session to get it built.
 - Check the Shotstack balance before montage in books gets used.
 - Confirm the default Sentry "high priority issues" alert is disabled.
 
+
+### 2026-10-19 → 20 — Centurion demo: Android video scrubber, and a sample from the gala footage
+
+**PR:** [CurtMiddleton/popcode-demo#269](https://github.com/CurtMiddleton/popcode-demo/pull/269), merged at the user's "push to prod", confirmed live (polled popcode.app for `id="vid-bar"`). Plus STATUS commits on `claude/friendly-euler-stnvpv`.
+
+#### The demo
+- Popcode for nonprofits was demoed to **Centurion** (Princeton NJ; works to free the wrongly convicted). Scans and videos worked; viewers on **Android couldn't see a scrubber**.
+- Laila S. Wilson-McCoy (Director of Development, laila.wilson@centurion.org) followed up with the gala video + photo gallery and asked for a sample: **the presenters for the honorees + the honorees speaking, and Jozelyn Davis's call for support**.
+
+#### #269 — video scrubber on the viewer
+- **Root cause:** `view.html`'s `<video id="fullvideo">` never had controls. iPhones only *seemed* to have a scrubber because landscape videos go to iOS's system player (`webkitEnterFullscreen`); Android (element fullscreen on `#fullscreen-video`) and portrait videos everywhere had none.
+- **Fix:** `#vid-bar` inside `#fullscreen-video`: drawn SVG play/pause (not ▶, iOS emoji), elapsed/remaining, and the audio player's tap/drag scrub pattern (`.ap-scrub-hit`/`.ap-scrub` classes reused; seeks ≥120 ms apart; drag stops 0.25 s short of the end so `ended` → end screen doesn't fire mid-drag). Fades after 3 s of play; tap the video to toggle; always shown when paused. `vidResetUi()` is called from `triggerVideo()` and the end-screen Replay path.
+- Tested headless (Pixel 7 profile, WebM clip loaded as a **blob URL**: Python's `http.server` has no Range support, so seeks snapped to 0 until then). **Not tried on a real Android.**
+
+#### The sample (not finished: clips not cut)
+- **Video:** `Program.mp4`, Drive id `1iYms9vtPhOTAROQi_QI1Oykh6mDbJEQ7`, owner tyler@centurion.org, **24.5 GB**, 2:31:39, 1080p ~21 Mbps, moov at the front.
+- **Program map** (from 15 s samples every 90 s + Whisper): 13:30 welcome · 28:30–42 Paul Castellaro legal update · 43:30 Jim Cousins → Brian Pippett (video 49:30–54) · 55:30–61 presenter (curly hair, dark ruffled dress) → Jose Carreon (video ~61:30) · 64:30–69 **Jose speaks** (bow tie) · **70:30–77 Jozelyn Davis's appeal** (green brocade jacket; she gives Laila a shout-out) · 78–90 break · 91:30 → Paul Castellaro + Michael Shannon (Michael speaks ~102–104) · 108–119 presenter (bald, grey suit) → Barry (video 120–123) · **124:30+ Barry speaks** (maroon striped suit; Montana contractor). 130–152 not sampled (throttled).
+- **Gallery:** pic-time `phillipvn.pic-time.com/client/centurion-gala-2026` (photographer Phillip Van Nostrand), 378 photos. JS-rendered: scrape with headless Chromium (`waitUntil: 'domcontentloaded'`, not networkidle), then swap `/thumbres/` or `/smallres/` → `/lowres/` in the URL for 1600×1064 (~600 KB). `/highres/` is 404.
+- **Picks + cut list** (zip sent to the user; times are approximate, nudge to sentences): 1 Cousins (gallery `12550832085`) 47:20–48:40 · 2 Jose's presenter (`12550832108`) 58:10–59:30 · 3 Jose (`12541524659`) 67:50–69:15 · 4 **Jozelyn** (`12550832133`) 75:40–77:00 · 5 Castellaro (`12541524653`) 97:20–98:40 · 6 Shannon (`12541524664`) 102:20–103:40 · 7 Barry's presenter (`12541524665`) 117:50–119:10 · 8 Barry (`12541524666`) 126:10–127:30.
+- ORB + homography cross-match of the 8 (phone-shot simulation): self 540–720 inliers, worst cross-match 75 (#3 Jose vs #8 Barry, shared podium sign). Safe as MindAR targets.
+- **Email to Laila:** the user sends it from curt@theworkshop.works (Gmail connector only reaches curt@popcodeapp.com). Text drafted in chat on 10-19 with a link placeholder + "attached PDF of the photos". The earlier popcodeapp draft (`r-1935952549805512744`) is stale; delete it.
+
+#### Lessons (the big rabbit hole)
+- **Drive throttles big files hard.** The confirm URL (`drive.usercontent.google.com/download?id=…&export=download&confirm=t`) supports Range, but after ~7 GB in ~10 min responses get **truncated to 2,040 bytes** (still HTTP 206) and the rate fell to ~6.5 MB/min, then ~0.3 MB/min. A fresh `uuid` didn't help. **For a multi-GB event video, ask for the clips (or have the user trim locally) up front.**
+- What worked before the throttle: a **sparse local copy** (`truncate -s SIZE`, `dd conv=notrunc oflag=seek_bytes` each fetched range in), a Python parser of the moov (stts/stsz/stsc/co64) for per-second byte offsets, then plain `ffmpeg -ss` on the sparse file. ffmpeg can't open the Drive URL itself through the proxy; a Python requests-based range relay returned corrupt data.
+- faster-whisper in a venv: its PyAV call fails (`metadata_errors` kwarg), so pass a numpy array read with `wave` instead of a path. `small.en` int8 on 4 CPUs is fine.
+- `pkill -f <pattern>` matches the calling shell's own command line → exit 144. Use `pkill -f "relay[.]py"`.
+
+#### Open
+- The user trims the 8 clips (or gets them from Centurion) → upload on /create → send Claude the slug → Claude makes the one-page PDF of the 8 photos → the user sends the email.
+- Double-check the spellings "Jozelyn" and Barry's surname (the transcript only gave first names).
+- Try #269 on a real Android phone.
 ### 2026-10-21 — Print preview crop lines, Large symbol on ornaments/mugs, white ring on the symbol
 
 **PR [#279](https://github.com/CurtMiddleton/popcode-demo/pull/279) — open, not merged.**
