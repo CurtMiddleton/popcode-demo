@@ -4255,3 +4255,18 @@ push arrives, switch the all-clear to email. Read a run's output with `get_trigg
 - Check the Shotstack balance before montage in books gets used.
 - Confirm the default Sentry "high priority issues" alert is disabled.
 
+
+### 2026-10-23 → 24 — Analytics Accounts summary line clipped by the card corner
+
+**[PR #283](https://github.com/CurtMiddleton/popcode-demo/pull/283) — merged 2026-10-24** (`0114bed`).
+
+- The summary line on Analytics → Accounts ("24 accounts · 1 on a pack · … · 7 on the email
+  list") is rendered *inside* `#accounts-wrap`, a `.table-wrap` card (white, rounded,
+  `overflow: auto`, `public/analytics.html:82`), with `margin:0 0 10px` and no padding — so it
+  sat flush on the card's top-left edge and the rounded corner clipped the first character.
+- Fix (`public/analytics.html` ~1401): summary div now `padding:12px 16px 10px`; the red
+  "Could not read the credit ledger" warning under it `padding:0 16px 10px`.
+- Not checked on the live page (Analytics needs an admin sign-in; can't load it headless here).
+  Worth a glance after the Vercel deploy.
+- Lesson: other tabs that inject a muted summary inside a `.table-wrap` would have the same
+  problem — grep for `class="muted"` inside `wrap.innerHTML` if another one shows up clipped.
