@@ -83,10 +83,18 @@
 
   function add(map) {
     if (!webglOk()) return Promise.resolve(rasterFallback(map));
+    // The style loads over the network, and the page may remove this map
+    // meanwhile (analytics redraws a panel by replacing its map). Adding a
+    // layer to a removed map throws inside Leaflet (getPane() is undefined),
+    // and the fallback threw the same way, uncaught: POPCODE-WEB-1C.
+    var gone = false;
+    map.once('unload', function () { gone = true; });
     return englishStyle().then(function (style) {
+      if (gone) return null;
       // A fresh copy per map: MapLibre keeps a reference to the object.
       return window.L.maplibreGL({ style: JSON.parse(JSON.stringify(style)), attribution: ATTRIBUTION }).addTo(map);
     }).catch(function (e) {
+      if (gone) return null;
       console.warn('English base map unavailable, using OSM tiles:', e);
       return rasterFallback(map);
     });
