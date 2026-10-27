@@ -427,6 +427,12 @@
 
       #fullscreen-video { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 9000; background: black; }
       #fullscreen-video video { width: 100%; height: 100%; object-fit: cover; }
+      /* A landscape video on an upright phone shows whole, letterboxed. Cropped
+         to fill, a 16:9 film loses two thirds of its width, captions and title
+         cards with it (2026-10-27, a pilot viewer). Portrait videos still fill
+         the screen. While one plays the phone may be turned sideways too. */
+      #fullscreen-video.wide video { object-fit: contain; }
+      body.wide-video #orientation-lock { display: none !important; }
       /* Video controls: shown on start, fade after 3 s of play, a tap on the
          video brings them back. Always shown while paused. */
       #vid-bar {
@@ -1303,6 +1309,8 @@
         document.getElementById('loading').style.display = 'none';
         showStartScreen();
         logEvent('scan_open');
+        // Before the browser asks: say it's coming, so it's Allow, not Block.
+        if (window.PopcodeCameraError) PopcodeCameraError.headsUp();
 
         document.getElementById('start-btn').addEventListener('click', handleStartTap);
         // The custom cover's tap target is the default one's, cloned: halos, disc
@@ -2307,7 +2315,10 @@
       });
       // Request fullscreen when video is landscape
       fullVid.addEventListener('loadedmetadata', () => {
-        if (fullVid.videoWidth > fullVid.videoHeight) tryGoFullscreen();
+        const wide = fullVid.videoWidth > fullVid.videoHeight;
+        fullScreen.classList.toggle('wide', wide);
+        document.body.classList.toggle('wide-video', wide);
+        if (wide) tryGoFullscreen();
       });
 
       fullVid.addEventListener('error', () => {
@@ -2317,6 +2328,7 @@
       });
 
       function returnToScanner() {
+        document.body.classList.remove('wide-video');
         reportProgress(); // before the media is torn down below
         mediaActive = false;
         if (triggerTimer) { clearTimeout(triggerTimer); triggerTimer = null; }
@@ -2343,6 +2355,7 @@
       }
 
       fullVid.addEventListener('ended', () => {
+        document.body.classList.remove('wide-video');
         progressPending = false;
         logEvent('video_complete', currentTargetIndex);
         // Leave full screen first, or on iPhone the system player stays up on a
