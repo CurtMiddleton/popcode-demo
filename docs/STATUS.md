@@ -6,7 +6,7 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-21)
+## Current state (updated 2026-10-27)
 
 **Live and recent**
 - **Centurion (nonprofit) — sample in progress (2026-10-19 → 20; see that entry).** Demo went well;
@@ -4255,3 +4255,37 @@ push arrives, switch the all-clear to email. Read a run's output with `get_trigg
 - Check the Shotstack balance before montage in books gets used.
 - Confirm the default Sentry "high priority issues" alert is disabled.
 
+
+### 2026-10-26 — Analytics map race (POPCODE-WEB-1C), fixed
+
+**PR [#285](https://github.com/CurtMiddleton/popcode-demo/pull/285) — merged and live** (`basemap.js`
+on popcode.app byte-identical). POPCODE-WEB-1C resolved in Sentry with a comment naming the PR.
+
+**The report:** a Sentry "has regressed" email for POPCODE-WEB-1C, `TypeError: undefined is not
+an object (evaluating 'this.getPane().appendChild')` in Leaflet's `_initContainer`, on
+`analytics.html`, the user's own Mac/Safari, 2 events in a week. The daily check's first test run
+(10-20) had resolved it as a one-off; the second event made it a real (if owner-only, harmless)
+bug. The email came from Sentry's own regression notice, not from our two alert rules.
+
+**Cause — a race in `public/basemap.js`:** `PopcodeBasemap.add(map)` fetches the English style
+asynchronously. `drawWebMap` in `analytics.html` replaces its map on a redraw (`webMap.remove()`
++ new `L.map`). If the redraw lands mid-fetch, the style layer is added to the removed map
+(throws, caught), then the `.catch` adds the OSM raster fallback to the same removed map and that
+throw is **uncaught** (analytics ignores the returned promise). Leaflet's `remove()` empties
+`_panes` but leaves `_loaded` true, so `whenReady` runs `onAdd` immediately → `getPane()` undefined.
+**Fix:** `map.once('unload', …)` (fired by `remove()` when loaded) sets `gone`; both the style
+and the fallback branches return early. Covers both callers (`analytics.html`, `reach-map.js`).
+
+**Reproduced before/after** in the headless shell: local Leaflet 1.9.4, map → `add()` → `remove()`
+→ new map → `add()`. Before: unhandled `Cannot read properties of undefined (reading
+'appendChild')` (Chrome's wording of Safari's). After: no errors, new map still gets its layer.
+- **Gotcha:** the headless browser can't reach CDNs through the agent proxy (405) — download the
+  library into a temp folder under `public/` and serve it locally (delete it before committing).
+- **Gotcha:** a test that attaches its own rejection handler to `add()`'s promise hides the
+  unhandled rejection; call it the way the page does (result ignored).
+
+#### Open
+- Confirm the ✅ all-clear push from the Daily Sentry check actually arrives.
+- Elena's spine PDF: open **View PDF** under Spine on 14652102 and check the title is on it.
+- Check the Shotstack balance before montage in books gets used.
+- Confirm the default Sentry "high priority issues" alert is disabled.
