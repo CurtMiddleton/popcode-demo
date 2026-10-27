@@ -375,6 +375,12 @@
 
       #fullscreen-video { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 9000; background: black; }
       #fullscreen-video video { width: 100%; height: 100%; object-fit: cover; }
+      /* A landscape video on an upright phone shows whole, letterboxed. Cropped
+         to fill, a 16:9 film loses two thirds of its width, captions and title
+         cards with it (2026-10-27, a pilot viewer). Portrait videos still fill
+         the screen. While one plays the phone may be turned sideways too. */
+      #fullscreen-video.wide video { object-fit: contain; }
+      body.wide-video #orientation-lock { display: none !important; }
 
       /* Audio player overlay */
       #audio-player {
@@ -857,6 +863,8 @@
       function bootstrap() {
         document.getElementById('loading').style.display = 'none';
         showStartScreen();
+        // Before the browser asks: say it's coming, so it's Allow, not Block.
+        if (window.PopcodeCameraError) PopcodeCameraError.headsUp();
         document.getElementById('start-btn').addEventListener('click', handleScanTap);
         document.getElementById('wl-scan-btn').addEventListener('click', handleScanTap);
         document.getElementById('cap-btn').addEventListener('click', () => scanTick(true));
@@ -1577,7 +1585,10 @@
       });
       // Request fullscreen when video is landscape
       fullVid.addEventListener('loadedmetadata', () => {
-        if (fullVid.videoWidth > fullVid.videoHeight) tryGoFullscreen();
+        const wide = fullVid.videoWidth > fullVid.videoHeight;
+        fullScreen.classList.toggle('wide', wide);
+        document.body.classList.toggle('wide-video', wide);
+        if (wide) tryGoFullscreen();
       });
 
       fullVid.addEventListener('error', () => {
@@ -1587,6 +1598,7 @@
       });
 
       function returnToScanner() {
+        document.body.classList.remove('wide-video');
         mediaActive = false;
         if (triggerTimer) { clearTimeout(triggerTimer); triggerTimer = null; }
         clearReloadHint();
@@ -1612,6 +1624,7 @@
       }
 
       fullVid.addEventListener('ended', () => {
+        document.body.classList.remove('wide-video');
         logEvent('video_complete');
         hideTapToPlay();
         const fade = document.getElementById('fade-overlay');
