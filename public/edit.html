@@ -2216,7 +2216,8 @@
         page.querySelector('#photo-btn-' + key).addEventListener('click', (e) => {
           if (e.target.closest('.tile-eye')) return;
           if (mediaOnly) return;
-          openScanImageMenu((file) => applyExistingPhoto(item, key, file));
+          openScanImageMenu((file) => applyExistingPhoto(item, key, file), null,
+            (replacements[item.id] && replacements[item.id].photo) || item.photo_url);
         });
 
         // Video replacement, driven by the playback source menu.
@@ -2812,12 +2813,13 @@
 
       // Tapping a scan-image tile opens the source menu (library / camera /
       // frame from a video) rather than going straight to the OS picker.
-      function openScanImageMenu(onPick, onPickMany) {
+      // `current` (the photo already there) adds Crop & zoom to the menu.
+      function openScanImageMenu(onPick, onPickMany, current) {
         if (typeof openImageSourceMenu !== 'function') {
           alert("The image picker didn't load. Reload the page and try again.");
           return;
         }
-        openImageSourceMenu({ onPick, onPickMany: onPickMany || null });
+        openImageSourceMenu({ onPick, onPickMany: onPickMany || null, current: current || null });
       }
 
       // New pages can take several scan images at once (create.html does the
@@ -2825,7 +2827,8 @@
       // their videos/audio are added afterwards, page by page.
       function pickScanImage(n) {
         openScanImageMenu((file) => applyMediaFile(file, 'photo', n, null).catch(e => console.error(e)),
-          (files) => addNewImageBatch(n, files).catch(e => console.error(e)));
+          (files) => addNewImageBatch(n, files).catch(e => console.error(e)),
+          newPairs[n] && newPairs[n].photo);
       }
       const MAX_PAGES = 30;   // as create.html
       async function addNewImageBatch(n, files) {

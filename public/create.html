@@ -1231,9 +1231,14 @@
         // Several at once (one page each), except for a Shop product, which
         // takes one image, or when changing an image that's already in.
         const batchOk = !document.body.classList.contains('from-shop') && !(window.wizState && wizState().editing);
+        /* Crop & zoom once a photo is in. From the Shop it offers the product's
+           shape — except a mug, whose 2.41 wrap is shown whole (Fit), not cropped. */
+        const wrap = shopRender && shopRender.art && shopRender.art.wrap;
         openImageSourceMenu({
           onPick: (file) => applyMediaFile(file, 'photo', n, null).catch(e => console.error(e)),
-          onPickMany: batchOk ? (files) => addImageBatch(n, files).catch(e => console.error(e)) : null
+          onPickMany: batchOk ? (files) => addImageBatch(n, files).catch(e => console.error(e)) : null,
+          current: (pairs[n] && pairs[n].photo) || null,
+          aspect: (shopRender && !wrap && shopRender.aspect) || null
         });
       }
 

@@ -1,6 +1,11 @@
 /* Where the "Image to scan" comes from — one menu, every source in it.
  *
- *   openImageSourceMenu({ onPick(imageFile) {}, onPickMany(imageFiles) {} })
+ *   openImageSourceMenu({ onPick(imageFile) {}, onPickMany(imageFiles) {},
+ *                         current, aspect })
+ *
+ * With `current` (the photo already on the page: a File, Blob or URL) the menu
+ * leads with "Crop & zoom", which hands a cropped copy to onPick exactly as if
+ * it had been picked fresh. `aspect` (w/h) adds a "Fits your product" shape.
  *
  * Tapping the scan-image tile opens this instead of going straight to the OS
  * picker, so "Frame from video" sits alongside the camera and the photo library
@@ -32,6 +37,9 @@
   const IC_VIDEO   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10.5L22 7v10l-6-3.5z"/></svg>';
   const IC_MONTAGE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="13" height="13" rx="2"/><path d="M16 19v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h1"/><path d="M8 12.5l3-3 4 4"/><circle cx="13" cy="7.5" r="1.2"/></svg>';
   const IC_AUDIO   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10.5a7 7 0 0 0 14 0"/><line x1="12" y1="17.5" x2="12" y2="21"/><line x1="8.5" y1="21" x2="15.5" y2="21"/></svg>';
+
+  const IC_CROP    = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>';
+  const IC_ROTATE  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>';
 
   let injected = false;
   function injectStyles() {
@@ -112,6 +120,30 @@
       .ism-text { min-width: 0; flex: 1; }
       .ism-name { display: block; font-size: 15px; font-weight: 700; color: #1a1a1a; line-height: 1.3; }
       .ism-desc { display: block; font-size: 12.5px; color: #8a8a8a; line-height: 1.4; margin-top: 2px; }
+
+      .pcr-stage {
+        position: relative; background: #111; border-radius: 16px; overflow: hidden;
+        height: min(52vh, 440px); touch-action: none; cursor: grab; user-select: none;
+      }
+      .pcr-stage:active { cursor: grabbing; }
+      .pcr-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+      .pcr-shapes { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+      .pcr-shape {
+        background: #f3f3f3; border: 1px solid transparent; border-radius: 999px; padding: 7px 14px;
+        font-size: 12.5px; font-weight: 700; color: #1a1a1a; cursor: pointer; font-family: 'Inter', sans-serif;
+      }
+      .pcr-shape.on { background: #fff; border-color: #1a1a1a; }
+      .pcr-tools { display: flex; align-items: center; gap: 12px; margin: 16px 0 4px; }
+      .pcr-zoom { flex: 1; accent-color: #1a1a1a; }
+      .pcr-rot {
+        flex: 0 0 auto; background: #f3f3f3; border: none; border-radius: 999px; padding: 8px 14px;
+        font-size: 12px; font-weight: 700; color: #1a1a1a; cursor: pointer; font-family: 'Inter', sans-serif;
+        display: flex; align-items: center; gap: 6px;
+      }
+      .pcr-rot svg { width: 15px; height: 15px; }
+      .pcr-rot:hover, .pcr-shape:hover { background: #ecebe5; }
+      .pcr-info { font-size: 12px; color: #8a8a8a; margin: 10px 0 0; text-align: center; font-family: 'Inter', sans-serif; font-variant-numeric: tabular-nums; }
+      .pcr-info.warn { color: #b45309; }
     `;
     document.head.appendChild(css);
   }
@@ -197,13 +229,15 @@
     opts = opts || {};
     const pick = (f) => { if (opts.onPick) opts.onPick(f); };
     const many = opts.onPickMany ? (fs) => opts.onPickMany(fs) : null;
-    openMenu(many ? 'Images to scan' : 'Image to scan', [
+    const crop = opts.current ? [{ name: 'Crop & zoom', desc: 'Zoom in, crop or rotate this photo', icon: IC_CROP,
+      run: () => window.openPhotoCropper(opts.current, { aspect: opts.aspect, onPick: pick }) }] : [];
+    openMenu(many ? 'Images to scan' : 'Image to scan', crop.concat([
       { name: 'Photo Library or File', desc: many ? 'Pick one photo, or several at once' : 'Pick a photo you already have',
         icon: IC_LIBRARY, accept: 'image/*', run: pick, runMany: many },
       { name: 'Take Photo', desc: 'Shoot one with the camera now', icon: IC_CAMERA, accept: 'image/*', capture: 'environment', run: pick },
       { name: 'Frame from Video', desc: 'Scrub a video and grab a still from it', icon: IC_FRAME, accept: 'video/*',
         run: (videoFile) => showSheet(videoFile, { onPick: pick }) }
-    ]);
+    ]));
   };
 
   // What plays when the image is scanned.
@@ -363,4 +397,239 @@
     video.src = url;
     video.load();
   }
+  /* Crop & zoom for the scan image — the same photo becomes the print, so this
+     is where a product's photo gets framed. `src` is a File, Blob or URL (a
+     stored photo, loaded crossOrigin like edit.html's other canvas reads).
+     The photo is drawn on a canvas under a fixed crop window: drag to move,
+     pinch / wheel / slider to zoom, rotate in quarter turns. The window always
+     stays covered, so the result never has empty edges. opts.onPick gets a
+     JPEG File of what's inside the window. */
+  window.openPhotoCropper = function openPhotoCropper(src, opts) {
+    opts = opts || {};
+    injectStyles();
+    const isBlob = typeof src !== 'string';
+    const url = isBlob ? URL.createObjectURL(src) : src;
+    const baseName = ((isBlob && src.name) || 'photo').replace(/\.[^.]+$/, '');
+
+    const ov = document.createElement('div');
+    ov.className = 'vfr-overlay open';
+    ov.innerHTML = `
+      <div class="vfr-sheet" role="dialog" aria-modal="true" aria-label="Crop and zoom">
+        <div class="vfr-head">
+          <div class="vfr-title">Crop &amp; zoom</div>
+          <button type="button" class="vfr-close" title="Close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="vfr-body">
+          <p class="vfr-sub">Drag to move, pinch or slide to zoom. What's inside the frame is what gets printed and scanned.</p>
+          <div class="pcr-shapes"></div>
+          <div class="pcr-stage"><canvas></canvas></div>
+          <div class="pcr-tools">
+            <input class="pcr-zoom" type="range" min="100" max="400" value="100" step="1" aria-label="Zoom"/>
+            <button type="button" class="pcr-rot">${IC_ROTATE}Rotate</button>
+          </div>
+          <p class="pcr-info">&nbsp;</p>
+        </div>
+        <div class="vfr-foot">
+          <button type="button" class="vfr-btn vfr-again">Cancel</button>
+          <button type="button" class="vfr-btn vfr-use" disabled>Use this crop</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+
+    const stage = ov.querySelector('.pcr-stage');
+    const cv = stage.querySelector('canvas');
+    const ctx = cv.getContext('2d');
+    const zoomEl = ov.querySelector('.pcr-zoom');
+    const info = ov.querySelector('.pcr-info');
+    const useBtn = ov.querySelector('.vfr-use');
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    function close() {
+      document.body.style.overflow = prevOverflow;
+      if (isBlob) URL.revokeObjectURL(url);
+      window.removeEventListener('resize', draw);
+      document.removeEventListener('keydown', onKey);
+      ov.remove();
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    ov.querySelector('.vfr-close').addEventListener('click', close);
+    ov.querySelector('.vfr-again').addEventListener('click', close);
+    ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+
+    // src: the photo at working size (≤ MAX_DIM, as create.html stores it),
+    // turned by `rot` quarter turns. cx/cy: the source point at the window's
+    // centre. zoom: on top of the cover fit.
+    let base = null, rotated = null, rot = 0, zoom = 1, cx = 0, cy = 0, aspect = null;
+    let win = { x: 0, y: 0, w: 0, h: 0 }, scale = 1;
+
+    function buildRotated() {
+      const q = rot % 2 === 1;
+      const c = document.createElement('canvas');
+      c.width = q ? base.height : base.width;
+      c.height = q ? base.width : base.height;
+      const g = c.getContext('2d');
+      g.translate(c.width / 2, c.height / 2);
+      g.rotate(rot * Math.PI / 2);
+      g.drawImage(base, -base.width / 2, -base.height / 2);
+      rotated = c;
+      cx = c.width / 2; cy = c.height / 2;
+    }
+    function clamp() {
+      const hw = win.w / 2 / scale, hh = win.h / 2 / scale;
+      cx = Math.max(hw, Math.min(rotated.width - hw, cx));
+      cy = Math.max(hh, Math.min(rotated.height - hh, cy));
+    }
+    function layout() {
+      const dpr = window.devicePixelRatio || 1;
+      const SW = stage.clientWidth, SH = stage.clientHeight;
+      if (cv.width !== Math.round(SW * dpr) || cv.height !== Math.round(SH * dpr)) {
+        cv.width = Math.round(SW * dpr); cv.height = Math.round(SH * dpr);
+      }
+      const a = aspect || rotated.width / rotated.height;
+      const pad = 0.86;
+      let ww, wh;
+      if (SW / SH > a) { wh = SH * pad; ww = wh * a; } else { ww = SW * pad; wh = ww / a; }
+      win = { x: (SW - ww) / 2, y: (SH - wh) / 2, w: ww, h: wh };
+      scale = Math.max(ww / rotated.width, wh / rotated.height) * zoom;
+      clamp();
+    }
+    function draw() {
+      if (!rotated) return;
+      layout();
+      const dpr = window.devicePixelRatio || 1;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const SW = stage.clientWidth, SH = stage.clientHeight;
+      ctx.clearRect(0, 0, SW, SH);
+      const dx = win.x + win.w / 2 - cx * scale, dy = win.y + win.h / 2 - cy * scale;
+      ctx.drawImage(rotated, dx, dy, rotated.width * scale, rotated.height * scale);
+      // Dim everything outside the window, then outline it with a thirds grid.
+      ctx.fillStyle = 'rgba(17,17,17,.62)';
+      ctx.beginPath(); ctx.rect(0, 0, SW, SH); ctx.rect(win.x, win.y, win.w, win.h); ctx.fill('evenodd');
+      ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 1; i < 3; i++) {
+        ctx.moveTo(win.x + win.w * i / 3, win.y); ctx.lineTo(win.x + win.w * i / 3, win.y + win.h);
+        ctx.moveTo(win.x, win.y + win.h * i / 3); ctx.lineTo(win.x + win.w, win.y + win.h * i / 3);
+      }
+      ctx.stroke();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+      ctx.strokeRect(win.x, win.y, win.w, win.h);
+      const ow = Math.round(win.w / scale), oh = Math.round(win.h / scale);
+      info.textContent = ow + ' × ' + oh + ' px' + (Math.max(ow, oh) < 1000 ? ' · zoomed in a lot, this may print soft' : '');
+      info.classList.toggle('warn', Math.max(ow, oh) < 1000);
+      zoomEl.value = String(Math.round(zoom * 100));
+    }
+    function setZoom(z, fx, fy) {
+      // Zoom about a point on the stage (the pinch centre), else the window centre.
+      z = Math.max(1, Math.min(4, z));
+      if (fx != null) {
+        const wcx = win.x + win.w / 2, wcy = win.y + win.h / 2;
+        const px = cx + (fx - wcx) / scale, py = cy + (fy - wcy) / scale;
+        const ns = scale * z / zoom;
+        cx = px - (fx - wcx) / ns; cy = py - (fy - wcy) / ns;
+      }
+      zoom = z; draw();
+    }
+
+    // Shapes: the product's own (when the Shop sent one), the photo's, and the
+    // common print shapes. Portrait/landscape follow the photo's orientation.
+    const shapesEl = ov.querySelector('.pcr-shapes');
+    function shapes() {
+      const land = rotated.width > rotated.height;
+      const list = [];
+      if (opts.aspect) list.push({ label: 'Fits your product', a: opts.aspect });
+      list.push({ label: 'Original', a: null }, { label: 'Square', a: 1 },
+        land ? { label: '4:3', a: 4 / 3 } : { label: '3:4', a: 3 / 4 },
+        land ? { label: '5:4', a: 5 / 4 } : { label: '4:5', a: 4 / 5 });
+      return list;
+    }
+    function renderShapes() {
+      shapesEl.innerHTML = '';
+      shapes().forEach(sh => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'pcr-shape' + (sh.a === aspect ? ' on' : '');
+        b.textContent = sh.label;
+        b.addEventListener('click', () => { aspect = sh.a; renderShapes(); draw(); });
+        shapesEl.appendChild(b);
+      });
+    }
+
+    zoomEl.addEventListener('input', () => setZoom(Number(zoomEl.value) / 100));
+    ov.querySelector('.pcr-rot').addEventListener('click', () => {
+      if (!base) return;
+      rot = (rot + 1) % 4; zoom = 1;
+      // A product shape stays as it is; a free shape turns with the photo.
+      if (aspect && aspect !== opts.aspect) aspect = 1 / aspect;
+      buildRotated(); renderShapes(); draw();
+    });
+
+    // Drag with one pointer, pinch with two.
+    const pts = new Map();
+    let last = null;
+    stage.addEventListener('pointerdown', (e) => {
+      stage.setPointerCapture(e.pointerId);
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      last = null;
+    });
+    stage.addEventListener('pointermove', (e) => {
+      if (!pts.has(e.pointerId) || !rotated) return;
+      const prev = pts.get(e.pointerId);
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 1) {
+        cx -= (e.clientX - prev.x) / scale; cy -= (e.clientY - prev.y) / scale;
+        draw();
+      } else if (pts.size === 2) {
+        const [a, b] = [...pts.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        const r = stage.getBoundingClientRect();
+        if (last) setZoom(zoom * d / last, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top);
+        last = d;
+      }
+    });
+    const lift = (e) => { pts.delete(e.pointerId); last = null; };
+    stage.addEventListener('pointerup', lift);
+    stage.addEventListener('pointercancel', lift);
+    stage.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const r = stage.getBoundingClientRect();
+      setZoom(zoom * Math.exp(-e.deltaY / 400), e.clientX - r.left, e.clientY - r.top);
+    }, { passive: false });
+    window.addEventListener('resize', draw);
+
+    const img = new Image();
+    if (!isBlob) img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const s = Math.min(1, MAX_DIM / Math.max(img.naturalWidth, img.naturalHeight));
+      base = document.createElement('canvas');
+      base.width = Math.round(img.naturalWidth * s); base.height = Math.round(img.naturalHeight * s);
+      base.getContext('2d').drawImage(img, 0, 0, base.width, base.height);
+      buildRotated();
+      aspect = opts.aspect || null;
+      renderShapes(); draw();
+      useBtn.disabled = false;
+    };
+    img.onerror = () => { alert("That photo couldn't be opened for cropping. Try picking it again."); close(); };
+    img.src = url;
+
+    useBtn.addEventListener('click', () => {
+      if (!rotated) return;
+      const ow = Math.round(win.w / scale), oh = Math.round(win.h / scale);
+      const out = document.createElement('canvas');
+      out.width = ow; out.height = oh;
+      try {
+        out.getContext('2d').drawImage(rotated, cx - ow / 2, cy - oh / 2, ow, oh, 0, 0, ow, oh);
+      } catch (e) { alert("That photo couldn't be cropped on this device."); return; }
+      useBtn.disabled = true;
+      try { out.toBlob((blob) => {
+        if (!blob) { useBtn.disabled = false; alert("That crop couldn't be saved. Try again."); return; }
+        const file = new File([blob], baseName + '-cropped.jpg', { type: 'image/jpeg' });
+        close();
+        if (opts.onPick) opts.onPick(file);
+      }, 'image/jpeg', 0.92); }
+      // A stored photo served without CORS headers taints the canvas.
+      catch (e) { useBtn.disabled = false; alert("That photo couldn't be cropped here. Pick it again from your library, then crop it."); }
+    });
+  };
 })();
