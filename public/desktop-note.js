@@ -12,11 +12,13 @@
 (function () {
   'use strict';
 
-  // Capability, not user-agent. A coarse pointer means a touchscreen, which in
-  // practice means a phone or tablet — both of which have a rear camera and
-  // work fine. A touchscreen laptop reads as capable and simply doesn't get
-  // the note; that's the safe direction to be wrong in, since we'd rather let
-  // someone try than block someone who could have scanned.
+  // Capability first: a coarse pointer means a touchscreen, which usually
+  // means a phone or tablet with a rear camera. But plenty of Windows laptops
+  // have touchscreens too, and they passed as phones: on 2026-10-27 a viewer
+  // on one tapped Scan, met a camera prompt, and gave up. So a desktop
+  // operating system rules a device out even with touch. iPadOS reports itself
+  // as a Mac, so a "Mac" with multi-touch is an iPad and can scan. The
+  // "Continue on this computer" link stays for anyone who knows better.
   // ?desktopnote=1 forces the note on, =0 forces it off — so the note can be
   // looked at on a phone, and skipped on a laptop, without faking a device.
   var forced = /[?&]desktopnote=([01])/.exec(location.search);
@@ -25,8 +27,47 @@
     if (forced) return forced[1] === '0';
     var hasCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
     var coarse = window.matchMedia && window.matchMedia('(any-pointer: coarse)').matches;
-    return hasCamera && coarse;
+    return hasCamera && coarse && !desktopOS();
   }
+
+  function desktopOS() {
+    var uad = navigator.userAgentData;
+    if (uad && typeof uad.mobile === 'boolean' && uad.platform) {
+      if (uad.mobile) return false;
+      if (/Windows|macOS|Linux|Chrome OS/i.test(uad.platform)) return !isIpad();
+    }
+    var ua = navigator.userAgent || '';
+    if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return false;
+    return /Windows NT|Macintosh|CrOS|X11/.test(ua) && !isIpad();
+  }
+  function isIpad() {
+    return /Macintosh/.test(navigator.userAgent || '') && navigator.maxTouchPoints > 1;
+  }
+
+  // A code to scan with the phone is quicker than copying a link across
+  // devices. The generator is vendored (see docs/vendor/qrcode-generator) and
+  // only loaded here, on a computer; if it fails, the link and Copy button
+  // are still there.
+  var QR_SRC = '/vendor/qrcode-generator/1.4.4/qrcode.js';
+  function drawQr(box, link) {
+    var paint = function () {
+      try {
+        var qr = window.qrcode(0, 'M');
+        qr.addData(link);
+        qr.make();
+        box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+        box.style.display = 'block';
+      } catch (e) {}
+    };
+    if (window.qrcode) { paint(); return; }
+    var sc = document.createElement('script');
+    sc.src = QR_SRC;
+    sc.onload = paint;
+    document.head.appendChild(sc);
+  }
+
+  // The link to hand to the phone: this page without its #hash.
+  function phoneLink() { return location.origin + location.pathname + location.search; }
 
   var node = null;
 
@@ -61,6 +102,19 @@
       // The cover's CTA column is sized for a single pill button; the note
       // needs room to set its lines without wrapping into a tower.
       '.popcode-desktop #wl-cover .wl-cta { max-width: 330px; }' +
+      // The cover pins its title at a fixed height and pushes the CTA to the
+      // bottom, which on a phone keeps them apart. On a short laptop window
+      // the panel (now with a code to scan) grows up into the title. Stack
+      // logo, title and panel in one centred column instead, scrolling if the
+      // window is shorter still. The auto-margin spacers centre it without
+      // clipping the top the way justify-content: center does on overflow.
+      '.popcode-desktop #wl-cover .wl-content { justify-content: flex-start; gap: 22px;' +
+      '  overflow-y: auto; padding-top: 28px; padding-bottom: 28px; }' +
+      '.popcode-desktop #wl-cover .wl-content::before,' +
+      '.popcode-desktop #wl-cover .wl-content::after { content: ""; margin: auto 0; }' +
+      '.popcode-desktop #wl-cover .wl-text { position: static; padding: 0; }' +
+      '.popcode-desktop #wl-cover .wl-org-logo { position: static; transform: none; }' +
+      '.popcode-desktop #wl-cover .wl-cta { margin-top: 0; }' +
       // A white-label cover is composed for a portrait phone: a 120px display
       // title plus this panel doesn't fit a laptop window, and the title wins
       // the collision. Cap it here — the cover is already being seen on a
@@ -84,6 +138,10 @@
       "font-family:'DM Sans',system-ui,sans-serif;color:#fff;text-align:center}" +
       '#desktop-note .dn-title{font-size:18px;font-weight:700;line-height:1.25}' +
       '#desktop-note .dn-body{font-size:14px;line-height:1.5;opacity:0.85}' +
+      '#desktop-note .dn-qr{display:none;width:124px;height:124px;padding:7px;box-sizing:border-box;' +
+      'border-radius:14px;background:#fff}' +
+      '#desktop-note .dn-qr svg{display:block;width:100%;height:100%}' +
+      '#desktop-note .dn-or{font-size:12px;opacity:0.7;margin-top:2px}' +
       '#desktop-note .dn-url{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;' +
       'background:rgba(255,255,255,0.12);font-size:13px;font-weight:600;word-break:break-all;line-height:1.35}' +
       '#desktop-note .dn-copy{width:100%;padding:12px 16px;border:none;border-radius:999px;' +
@@ -109,19 +167,30 @@
 
     var body = document.createElement('div');
     body.className = 'dn-body';
-    body.textContent = 'Popcode plays through your phone’s camera — point it at the printed photo and the video or audio starts.';
+    body.textContent = 'Scan this code with your phone’s camera, then point your phone at the photo.';
+
+    var qrBox = document.createElement('div');
+    qrBox.className = 'dn-qr';
+    qrBox.setAttribute('role', 'img');
+    qrBox.setAttribute('aria-label', 'Code that opens this page on your phone');
+    drawQr(qrBox, phoneLink());
+
+    var or = document.createElement('div');
+    or.className = 'dn-or';
+    or.textContent = 'or open this link on your phone';
 
     var url = document.createElement('div');
     url.className = 'dn-url';
-    // Strip the query/hash: what people retype is the short link itself.
-    url.textContent = (location.host + location.pathname).replace(/\/$/, '');
+    // The short link people would retype. The query stays when there is one:
+    // ?id= is the Popcode itself on view.html links, and ?r= is who it was sent to.
+    url.textContent = phoneLink().replace(/^https?:\/\//, '').replace(/\/$/, '');
 
     var copy = document.createElement('button');
     copy.type = 'button';
     copy.className = 'dn-copy';
     copy.textContent = 'Copy link';
     copy.addEventListener('click', function () {
-      var link = location.origin + location.pathname;
+      var link = phoneLink();
       var done = function () {
         copy.textContent = 'Copied — open it on your phone';
         setTimeout(function () { copy.textContent = 'Copy link'; }, 2600);
@@ -161,7 +230,9 @@
     });
 
     node.appendChild(title);
+    node.appendChild(qrBox);
     node.appendChild(body);
+    node.appendChild(or);
     node.appendChild(url);
     node.appendChild(copy);
     node.appendChild(anyway);

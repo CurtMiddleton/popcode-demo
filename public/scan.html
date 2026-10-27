@@ -1210,14 +1210,39 @@
       const reloadHintBtn = document.getElementById('reload-hint');
       reloadHintBtn.addEventListener('click', () => location.reload());
 
+      // While the browser's "Allow camera?" prompt is waiting for an answer the
+      // camera can't start and nothing can be found. That's the viewer reading
+      // the prompt, not a stuck scan, so the reload timers wait for the answer.
+      // (2026-10-27: an Android viewer got "Not scanning?" twice while the
+      // prompt was up, and gave up.) Browsers that can't report the camera
+      // permission keep the plain timers.
+      function whenCameraAllowed(fn) {
+        const perms = navigator.permissions;
+        if (!perms || !perms.query) { fn(); return; }
+        perms.query({ name: 'camera' }).then(st => {
+          if (st.state !== 'prompt') { fn(); return; }
+          const onChange = () => {
+            if (st.state === 'prompt') return;
+            st.removeEventListener('change', onChange);
+            if (st.state === 'granted') fn(); // denied: arError shows the fix
+          };
+          st.addEventListener('change', onChange);
+        }, () => fn());
+      }
+      let rhArm = 0; // bumped on every start/clear so a late permission answer can't arm a stale timer
       function startReloadHintTimer() {
         clearTimeout(reloadHintTimer);
         reloadHintBtn.style.display = 'none';
-        reloadHintTimer = setTimeout(() => {
-          if (!mediaActive) reloadHintBtn.style.display = 'block';
-        }, 10000);
+        const arm = ++rhArm;
+        whenCameraAllowed(() => {
+          if (arm !== rhArm) return;
+          reloadHintTimer = setTimeout(() => {
+            if (!mediaActive) reloadHintBtn.style.display = 'block';
+          }, 10000);
+        });
       }
       function clearReloadHint() {
+        rhArm++;
         clearTimeout(reloadHintTimer);
         reloadHintBtn.style.display = 'none';
       }
