@@ -1653,15 +1653,40 @@
       // Called right after mindar.start(). arReady always arrives later (it
       // waits on the camera's video), so clearing cameraUp here is safe.
       // resume: restarting after a lost photo — keep the flicker count.
+      // While the browser's "Allow camera?" prompt is waiting for an answer the
+      // camera can't start and nothing can be found. That's the viewer reading
+      // the prompt, not a stuck scan, so the reload timers wait for the answer.
+      // (2026-10-27: an Android viewer got "Not scanning?" twice while the
+      // prompt was up, and gave up.) Browsers that can't report the camera
+      // permission keep the plain timers.
+      function whenCameraAllowed(fn) {
+        const perms = navigator.permissions;
+        if (!perms || !perms.query) { fn(); return; }
+        perms.query({ name: 'camera' }).then(st => {
+          if (st.state !== 'prompt') { fn(); return; }
+          const onChange = () => {
+            if (st.state === 'prompt') return;
+            st.removeEventListener('change', onChange);
+            if (st.state === 'granted') fn(); // denied: arError shows the fix
+          };
+          st.addEventListener('change', onChange);
+        }, () => fn());
+      }
+      let rhArm = 0; // bumped on every start/clear so a late permission answer can't arm stale timers
       function startReloadHintTimer(resume) {
         clearReloadHint();
         if (!resume) { rhFlickers = 0; cameraUp = false; }
-        reloadHintTimer = setTimeout(() => showReloadHint('idle'), RH_IDLE_MS);
-        if (!cameraUp) {
-          rhCameraTimer = setTimeout(() => { if (!cameraUp) showReloadHint('camera'); }, RH_CAMERA_MS);
-        }
+        const arm = rhArm;
+        whenCameraAllowed(() => {
+          if (arm !== rhArm || mediaActive) return;
+          reloadHintTimer = setTimeout(() => showReloadHint('idle'), RH_IDLE_MS);
+          if (!cameraUp) {
+            rhCameraTimer = setTimeout(() => { if (!cameraUp) showReloadHint('camera'); }, RH_CAMERA_MS);
+          }
+        });
       }
       function clearReloadHint() {
+        rhArm++;
         clearTimeout(reloadHintTimer); clearTimeout(rhCameraTimer);
         reloadHintBtn.classList.remove('show');
       }
