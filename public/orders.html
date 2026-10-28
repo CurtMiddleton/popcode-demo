@@ -20,6 +20,7 @@
     <title>Popcode — My Orders</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/view-as.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="stylesheet" href="/ui.css">
     <style>
@@ -211,15 +212,19 @@
           location.href = '/auth.html?next=' + encodeURIComponent('/orders.html');
           return;
         }
-        user = session.user;
+        // An admin's read-only view of someone else's orders (?as=, view-as.js).
+        const va = PopcodeViewAs.init(db, session);
+        user = va.active ? va.user : session.user;
 
         /* Read straight from the table: "read own print_orders" (2026-06-27)
-           already scopes SELECT to auth.uid(), so this needs no endpoint. */
+           scopes SELECT to auth.uid(). Filtered by user as well, because admins
+           can read every row (2026-10-28-admin-view-as.sql). */
         const { data: rows, error } = await db
           .from('print_orders')
           .select('id, order_group_id, status, items, product_type, sku, copies, attributes, '
                 + 'asset_urls, recipient, shipping_method, currency, total_charged_minor, '
                 + 'tracking_url, shipments, created_at, collection_id, provider')
+          .eq('user_id', user.id)
           .order('created_at', { ascending: false });
 
         const el = document.getElementById('content');
@@ -249,7 +254,7 @@
 
         const cols = await loadCollections(groups);
         el.innerHTML = groups.map((g) => card(g, cols)).join('');
-        if (!synced) refresh(session);
+        if (!synced && !va.active) refresh(session);
       }
 
       /* Neither provider is guaranteed to tell us an order moved: Printify has
@@ -390,6 +395,18 @@
         return null;
       }
 
+      /* UPS Mail Innovations hands the parcel to USPS for delivery, and Prodigi
+         reports its barcode, not a tracking number: 420 + the ZIP code + the
+         USPS number. UPS's page for it shows nothing ("not available"), so link
+         the USPS number to USPS instead (only80yearsyoung's album, 2026-10-28). */
+      function tracking(p) {
+        const n = String(p.tracking_number || '').replace(/\s/g, '');
+        const usps = /^420(?:\d{5}|\d{9})(9[2-5]\d{18,24})$/.exec(n);
+        if (usps) return { carrier: 'USPS', number: usps[1],
+          url: 'https://tools.usps.com/go/TrackConfirmAction?tLabels=' + usps[1] };
+        return { carrier: null, number: n || null, url: p.tracking_url || null };
+      }
+
       function delivery(parcels, st, first) {
         const addr = first.recipient && first.recipient.address;
         const to = addr ? '<div class="ship-to">To ' + esc([first.recipient.name, addr.line1,
@@ -421,16 +438,17 @@
              allocated yet. That is their placeholder, not a courier, and
              "Mixed \u00b7 Still being made" reads like a bug. Until there is a
              real carrier the parcel is named by its position instead. */
+          const t = tracking(p);
           const named = p.carrier && p.carrier.toLowerCase() !== 'mixed';
-          const label = named ? p.carrier
-            : (parcels.length > 1 ? 'Parcel ' + (i + 1) : 'Your parcel');
+          const label = t.carrier || (named ? p.carrier
+            : (parcels.length > 1 ? 'Parcel ' + (i + 1) : 'Your parcel'));
           return '<div class="parcel"><div class="parcel-what">'
             + esc(label)
             + '<div class="parcel-sub">' + sub
-            + (p.tracking_number ? ' \u00b7 ' + esc(p.tracking_number) : '') + '</div></div>'
-            + (p.tracking_url
+            + (t.number ? ' \u00b7 ' + esc(t.number) : '') + '</div></div>'
+            + (t.url
                 ? '<a class="btn btn-sm btn-secondary" target="_blank" rel="noopener" href="'
-                  + esc(p.tracking_url) + '">Track</a>' : '')
+                  + esc(t.url) + '">Track</a>' : '')
             + '</div>';
         }).join('') + to;
       }
