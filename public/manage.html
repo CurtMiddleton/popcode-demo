@@ -20,6 +20,7 @@
     <title>Popcode — My Popcodes</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/view-as.js"></script>
     <script src="/symbol-color.js"></script>
     <script src="/product-preview.js"></script>
     <script src="/thumbs.js"></script>
@@ -657,11 +658,13 @@
         if (!data.session) {
           window.location.href = '/auth.html';
         } else {
-          currentUser = data.session.user;
-          const uName = data.session.user?.user_metadata?.full_name?.split(' ')[0] || data.session.user?.email?.split('@')[0] || '';
+          // An admin's read-only view of someone else's projects (?as=, view-as.js).
+          const va = PopcodeViewAs.init(db, data.session);
+          currentUser = va.active ? va.user : data.session.user;
+          const uName = currentUser.user_metadata?.full_name?.split(' ')[0] || currentUser.email?.split('@')[0] || '';
           if (uName) { const g = document.getElementById('user-greeting'); if (g) g.textContent = 'Hi, ' + uName + '!'; }
           // Claim any collections created before auth was added (user_id = null)
-          await db.from('collections').update({ user_id: currentUser.id }).is('user_id', null);
+          if (!va.active) await db.from('collections').update({ user_id: currentUser.id }).is('user_id', null);
           loadCollections();
         }
       });
@@ -1596,7 +1599,9 @@
       async function loadViewData(ids) {
         viewEventsBySlug = {}; recipientsByCol = {};
         try {
-          const { data, error } = await db.rpc('get_my_view_events', { max_rows: 20000 });
+          const { data, error } = PopcodeViewAs.active
+            ? await db.rpc('get_view_events_as', { for_user: currentUser.id, max_rows: 20000 })
+            : await db.rpc('get_my_view_events', { max_rows: 20000 });
           if (error) throw error;
           (data || []).forEach(e => { (viewEventsBySlug[e.slug] = viewEventsBySlug[e.slug] || []).push(e); });
         } catch (e) { console.warn('views unavailable', e); }

@@ -20,6 +20,7 @@
     <title>Popcode — Account Settings</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/config.js"></script>
+    <script src="/view-as.js"></script>
     <link rel="stylesheet" href="/assets/fonts.css">
     <link rel="stylesheet" href="/ui.css">
     <style>
@@ -288,8 +289,10 @@
 
       db.auth.getSession().then(async ({ data }) => {
         if (!data.session) { window.location.href = '/auth.html'; return; }
-        const user = data.session.user;
-        const uName = data.session.user?.user_metadata?.full_name?.split(' ')[0] || data.session.user?.email?.split('@')[0] || '';
+        // An admin's read-only view of someone else's account (?as=, view-as.js).
+        const va = PopcodeViewAs.init(db, data.session);
+        const user = va.active ? va.user : data.session.user;
+        const uName = user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || '';
         if (uName) { const g = document.getElementById('user-greeting'); if (g) g.textContent = 'Hi, ' + uName + '!'; }
         document.getElementById('email-input').value = user.email || '';
         document.getElementById('name-input').value = user.user_metadata?.full_name || '';
@@ -301,7 +304,9 @@
       // and nothing else on this page depends on it.
       async function showQuota() {
         try {
-          const { data, error } = await db.rpc('popcode_quota');
+          const { data, error } = PopcodeViewAs.active
+            ? await db.rpc('popcode_quota_as', { for_user: PopcodeViewAs.user.id })
+            : await db.rpc('popcode_quota');
           if (error || !data || !data.length) return;
           const q = data[0];
           const card = document.getElementById('quota-card');
