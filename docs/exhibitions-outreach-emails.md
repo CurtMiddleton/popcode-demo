@@ -87,8 +87,10 @@ A quick follow-up with the details:
   transcript, ready for the opening.
 - Your entrance card comes with a locked NFC tag, a QR code and a short address.
 - You get a dashboard of scans, listens and inquiries per work.
-- Pilot price for the first galleries this season: $1,500 for one show
-  (regularly $2,500), in exchange for sharing your results and feedback.
+- $1,500 for one show. We're taking on five founding galleries this
+  winter, who keep that price for two years in exchange for a short case
+  study.
+- If the tour isn't working in your room by the opening, you don't pay.
 - No audio yet? We write the scripts and record a natural AI voice, from $400
   per 10 stops.
 
@@ -130,9 +132,12 @@ If this isn't for you, reply "no thanks" and I won't write again.
 
 ## Before sending — check these
 
-1. **Pricing (set 2026-10-13):** pilot $1,500 per show (regular $2,500),
-   Gallery year $3,900 (regular $6,500), Museum year $7,500 (regular $12,000),
-   scripts + AI voice from $400 per 10 stops. Keep these in step with the
+1. **Pricing (changed 2026-11-01):** one price, no "pilot" and no
+   struck-through "regular" prices: $1,500 per show, Gallery year $3,900,
+   Museum year $7,500, scripts + AI voice from $400 per 10 stops. Founding
+   galleries (first five this winter) keep these prices for two years in
+   exchange for a short case study. Guarantee: if the tour isn't working in
+   the room by the opening, they don't pay. Keep these in step with the
    cards on /exhibitions.
 2. **"Up to 30 works": tested 2026-10-13.** A 30-painting Popcode scanned
    perfectly on the user's iPhone. Beyond 30 is still untested, and the create
