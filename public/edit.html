@@ -25,6 +25,7 @@
     <script src="/config.js"></script>
     <script src="/dialog.js"></script>
     <script src="/slug.js"></script>
+    <script src="/activity.js"></script>
     <script src="/symbol-color.js"></script>
     <script src="/audio-wav.js"></script>
     <script src="/align-transcript.js"></script>
@@ -1179,6 +1180,9 @@
           input.disabled = true;
           try {
             await renameProjectSlug(original, newSlug, (step) => setHint(step, ''));
+            // Events before this keep the old slug; this row lets Analytics
+            // join them to the project's new link.
+            if (window.logActivity) logActivity('project_link_changed', { slug: newSlug, user_id: currentUser && currentUser.id, project: { from: original } });
             setHint(`Renamed to popcode.app/${newSlug} — reloading…`, 'ok');
             setTimeout(() => { window.location.href = `/edit.html?id=${newSlug}`; }, 600);
           } catch (e) {
