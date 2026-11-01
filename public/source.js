@@ -102,7 +102,8 @@
                '/nonprofits-thanks', '/howto', '/shop', '/book', '/boardbook',
                '/calendar', '/privacy', '/terms', '/photo-book-that-plays-videos',
                '/popcode-vs-artivive', '/popcode-vs-qr-codes', '/audio-tour-without-an-app',
-               '/printed-appeal-with-video'];
+               '/printed-appeal-with-video', '/photo-ornament-that-plays-video',
+               '/christmas-gift-for-grandparents'];
   function pagePath() {
     var path = location.pathname.replace(/\.html$/, '').replace(/^\/index$/, '/') || '/';
     if (path.length > 1) path = path.replace(/\/$/, '');
