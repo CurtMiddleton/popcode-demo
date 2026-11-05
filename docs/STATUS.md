@@ -6,7 +6,7 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-21)
+## Current state (updated 2026-11-05)
 
 **Live and recent**
 - **Centurion (nonprofit) — sample in progress (2026-10-19 → 20; see that entry).** Demo went well;
@@ -43,13 +43,15 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   (failed paid order / fatal outage; spikes) + the **Daily Sentry check** scheduled task at
   8:45 ET every day (push every run since 10-21: "✅ All clear —" or "⚠️ Needs you —"). **Shotstack balance was 0.17 credits on 10-17** — top up before
   promoting montage in books (a render needs ~1.13).
-- **Gallery outreach round 1 SENT 2026-10-15** (9:45–10:55 ET, scheduled in Gmail from
-  curt@popcodeapp.com, BCC curt@theworkshop.works): Geary, Rye Arts Center, Pelham Art Center
-  (**free-pilot offer**, personal email, not in the follow-up sequence), Iona Chapman Gallery,
-  Blue Door, Hudson River Museum, Hopper House, WCC Art Gallery, Samuel Owen, Hammond.
-  **Next:** Mon 10/19 check replies → Email 2 to non-repliers (day 4), Email 3 day 10; set the sheet's
-  Status / Email-sent dates (not yet done). Track B (separate cold domain + Instantly/Smartlead +
-  2-week warm-up for the other ~130 venues in November) **not started**. Sheet:
+- **Gallery outreach batch 2 (2026-11-01 → 05; see that entry).** Pricing is now ONE price + a
+  founding offer + a guarantee (PR #294, live; no more "pilot"/struck-through prices). Short links
+  `/exhibitions/6` Boston, `/7` Philadelphia (PR #295). **Scheduled for Fri 11/6, 9:40–11:59 ET (21,
+  all checked):** 13 new (8 Chelsea /1, 5 Manhattan /2) + 8 Email 2 follow-ups to round 1.
+  **Still in Gmail Drafts (43, link placeholders not yet pasted):** 6 Brooklyn /3, 4 Westchester /4,
+  7 Connecticut /5, 12 Boston /6, 14 Philadelphia /7 — plan Tue–Thu 11/10–12, ~15/day.
+  Round 1: only reply was Geary (no). Email 3 ("close the loop?") ~10 days after each Email 2.
+  Nonprofits: next 10 Email 1s (film group) in tracker col L, follow-ups for the first 10 in col O
+  (sent from Apple Mail, not this Gmail). Gallery sheet:
   https://docs.google.com/spreadsheets/d/1qguOaOI37s7V1wjm0M9zWdsp13LMjbRJNeue4pTfOl0/edit
 - **Website traffic tracking + Website panel** (PRs #237, #239, live 2026-10-15): marketing pages
   log anonymous `page_view` and `page_engage` rows; Analytics → Overview → **Website** (sources by
@@ -4270,3 +4272,36 @@ push arrives, switch the all-clear to email. Read a run's output with `get_trigg
   Worth a glance after the Vercel deploy.
 - Lesson: other tabs that inject a muted summary inside a `.table-wrap` would have the same
   problem — grep for `class="muted"` inside `wrap.innerHTML` if another one shows up clipped.
+
+
+### 2026-11-01 → 05 — Pricing without "pilot"; 30 → 56 new gallery emails (NY, CT, Boston, Philadelphia)
+
+**PRs, all merged by Claude at the user's say-so:** #294 (one price + founding offer + guarantee) · #295 (short links `/exhibitions/6` boston, `/7` philadelphia). Earlier in this same session (2026-10-14/15): #234 (impact.html sends Supabase errors to Sentry as real Errors, with code/details/hint — the wrenalder `get_impact_dashboard` failure's cause is still unknown, waiting on the next Sentry event) · #241 (Analytics: "Booked a Demo" → "Clicked Book a Demo"; the event is a click on the Calendly button, not a booking — Calendly emails real bookings to curt@popcodeapp.com).
+
+#### Pricing (#294)
+- User asked whether pilot pricing scares buyers. Advice: the crossed-out "regular" prices look invented and "pilot" reads as "we're testing on you"; keep the numbers. Now: /exhibitions $1,500 show / $3,900 gallery year / $7,500 museum year; /nonprofits $2,500 / $4,500. Pill line: **first five galleries (or nonprofits) this winter keep these prices for two years, for a short case study.** Bold guarantee under the cards: galleries "If your tour isn't working in the room by the opening, you don't pay."; nonprofits "If your stories aren't playing when your piece goes to print, you don't pay." Year-End Kit now "For a year-end appeal, a donor thank-you card or your annual report." Same in `audio-tour-without-an-app.html`, `printed-appeal-with-video.html` (JSON-LD re-validated) and `docs/exhibitions-outreach-emails.md` Email 2.
+
+#### Outreach state found on 11/01
+- Round 1 (10 galleries, 10/15): only Geary replied (no). **Email 2 was never sent** — another session drafted them 10/21 with pilot pricing and they sat in Drafts. Replaced with new-pricing drafts (old ones deleted).
+- **Sheet error fixed:** on 10/15 Claude marked the 10 galleries from a pasted list instead of the real recipients. Gmail is the source of truth: round 1 = Geary, Rye, Pelham, Iona, Blue Door, HRM, Hopper, WCC, Samuel Owen, Hammond. Rows corrected.
+- Nonprofits: 10 intl sent ~9/30 from Apple Mail (not visible in this Gmail), 0 replies, no follow-ups. Year-end-appeal pitch is too late in November → new angle: January donor thank-you cards / spring galas.
+
+#### Batch 2
+- Research by parallel subagents (results in session scratch, not kept): Westchester/CT/Manhattan/Brooklyn rows of the gallery sheet re-checked for the Nov–Jan show + one hook line each (~74 usable of ~111; many small venues only had members'/juried/holiday shows), plus new lists for **Boston (17)** and **Philadelphia (16)**.
+- Picked 30 NY-area (local first; skipped blue-chip giants, member/juried shows, weak hooks) → sheet tab **"Nov 1 batch"** (row, to, link, show, hook). Boston 12 (dropped 2 with no email, and Tufts / MIT List / Davis which already run audio/digital guides) and Philadelphia 14 (dropped ICA, Asian Arts Initiative) — these are NOT in the sheet yet.
+- Contacts updated in the sheet: Neuberger → nma@purchase.edu; Yancey → dmetz@; Markel → debra@; Chapter NY → nicole@; Kenise Barnes → Lani Ming Holloway, Lani@kbfa.com.
+- Email 1 copy now includes the guarantee; museums get "become a member", nonprofits "give"; Manhattan/Brooklyn drop the "stop by" line; Boston/Philly say "on a short video call".
+- Nonprofit tracker: rows 12–21 (film group) col K/L rewritten (subject "Photos that play, for your donor thank-yous"); col O = follow-up for rows 2–11.
+
+#### Lessons
+- **Gmail connector still rewrites every link** (plain URL and `<a href>`) to google.com/url — retested 11/05. Drafts carry `[PASTE DEMO LINK: exhibitions/N]`; the user pastes. Gmail **won't let the connector label drafts** ("caller does not have permission"), so grouping = search `in:drafts "exhibitions/N"`. Follow-ups are found with `in:drafts "You can try it yourself"`.
+- Verify scheduled mail with `search_threads in:scheduled` + `get_thread FULL_CONTENT` (check the href, not just the text: Liz's /5#try text sat on a /4#try href until re-linked).
+- A placeholder slip: a `repeatCell` over F:H wrote "x" into three cells of row 132; fixed and read back. Read back every sheet write.
+- Calendly: user built a "Demo" schedule (Tue–Thu 10–12:30 / 2–4); it must be applied to the event types (Popcode Tours, Popcode Nonprofits Demo = the `/30min` link) and date range / min notice / daily limit are set inside each event type. Not confirmed done.
+
+#### Open / next
+- Paste links + schedule the 43 remaining drafts (Tue–Thu next week, ~15/day). Add Boston/Philly rows to the sheet.
+- Watch replies from Fri 11/6; Email 3 ~10 days after each Email 2.
+- Nonprofit follow-ups + film-group Email 1s from Apple Mail.
+- Consider GMass/YAMM for the next batch (real links + auto follow-ups from the sheet).
+
