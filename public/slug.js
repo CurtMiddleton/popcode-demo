@@ -64,6 +64,16 @@
       .slice(0, MAX);
   }
 
+  // Some creators paste the link they want into the name field. Slugifying
+  // that gave "https://popcode.app/copatwirlnandfly" the link
+  // popcode.app/httpspopcodeappcopatwirlnandfl (2026-10-25). Return the code
+  // after popcode.app/ when the whole field is one of our links, else ''.
+  function linkCode(text) {
+    var m = /^\s*(?:https?:\/\/)?(?:www\.)?popcode\.app\/+([^\s\/?#]+)\/?(?:[?#]\S*)?\s*$/i
+      .exec(String(text == null ? '' : text));
+    return m ? normalize(m[1]).replace(/-+$/, '') : '';
+  }
+
   function randomSlug() {
     var a = 'abcdefghijklmnopqrstuvwxyz0123456789', s = '';
     for (var i = 0; i < 8; i++) s += a[Math.floor(Math.random() * a.length)];
@@ -272,10 +282,26 @@
     }
 
     if (nameInput) {
-      nameInput.addEventListener('input', function () {
+      // A popcode.app link in the name field is a choice of link, not a name:
+      // take its code as the link (as if typed there) and leave the code in
+      // the name field so they can retitle it without the link following.
+      var takeLink = function () {
+        var code = linkCode(nameInput.value);
+        if (!code) return false;
+        nameInput.value = code;
+        set(code, true);
+        return true;
+      };
+      nameInput.addEventListener('input', function (e) {
         if (touched || locked) return;
+        // Only on paste — typed by hand, "popcode.app/c" would fire mid-word.
+        if ((!e || !e.inputType || e.inputType === 'insertFromPaste') && takeLink()) return;
         slugInput.value = slugify(nameInput.value);
         run();
+      });
+      // ...and once they leave the field, for the link typed out in full.
+      nameInput.addEventListener('change', function () {
+        if (!touched && !locked) takeLink();
       });
     }
 
@@ -345,7 +371,7 @@
 
   window.PopcodeSlug = {
     MIN: MIN, MAX: MAX, RESERVED: RESERVED,
-    words: words, slugify: slugify, hyphenate: hyphenate, normalize: normalize,
+    words: words, slugify: slugify, hyphenate: hyphenate, normalize: normalize, linkCode: linkCode,
     randomSlug: randomSlug, validate: validate,
     takenSet: takenSet, isAvailable: isAvailable, suggest: suggest,
     attach: attach
