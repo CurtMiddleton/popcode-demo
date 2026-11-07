@@ -473,6 +473,31 @@
       drawer.insertBefore(head, drawer.firstChild);
       head.querySelector('.nav-drawer-close').addEventListener('click', close);
 
+      // Every link in the desktop bar (`items`) belongs in the drawer too. Most
+      // app pages ship their own hand-written drawer that predates some of
+      // them (Pricing was missing from shop, howto, manage, create, cart…), so
+      // fill in whatever is absent, in `items` order: before the next item the
+      // page does have, else after the previous one.
+      var drawerIcons = !!drawer.querySelector('.nav-link svg');
+      var ITEM_ICONS = {
+        '/pricing.html': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
+        '/views.html': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
+        '/howto.html': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+      };
+      function drawerLink(it) { return it && drawer.querySelector(':scope > .nav-link[href="' + it.href + '"]'); }
+      items.forEach(function (it, i) {
+        if (drawerLink(it)) return;
+        var a = document.createElement('a');
+        a.className = 'nav-link'; a.href = it.href;
+        a.innerHTML = (drawerIcons && ITEM_ICONS[it.href] ? ITEM_ICONS[it.href] : '') + it.label;
+        var next = null, prev = null;
+        for (var j = i + 1; j < items.length && !next; j++) next = drawerLink(items[j]);
+        for (var k = i - 1; k >= 0 && !prev; k--) prev = drawerLink(items[k]);
+        if (next) drawer.insertBefore(a, next);
+        else if (prev) prev.after(a);
+        else drawer.appendChild(a);
+      });
+
       // The Solutions pages, as plain links after the page's own list. Added
       // here so pages that ship their own drawer markup get them too.
       if (!drawer.querySelector('.nav-link[href="/exhibitions"]')) {
