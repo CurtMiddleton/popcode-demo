@@ -94,7 +94,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    await db.from('scan_events').insert({ event_type: 'gt_start_submit',
+    // device_id (anonymous, same one source.js uses) lets Analytics → Website tie the
+    // submission to the visit and the outreach link it came from. No name or email stored.
+    const device_id = typeof b.device_id === 'string' && /^[A-Za-z0-9_-]{6,64}$/.test(b.device_id) ? b.device_id : null;
+    await db.from('scan_events').insert({ event_type: 'gt_start_submit', device_id,
       country: req.headers['x-vercel-ip-country'] || null });
   } catch (e) {}
 
