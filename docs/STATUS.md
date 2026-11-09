@@ -4313,4 +4313,6 @@ push arrives, switch the all-clear to email. Read a run's output with `get_trigg
 - No replies yet from the 13 new galleries (sent Friday morning; give them through Wed).
 - **43 drafts still unsent** in Gmail (Brooklyn /3, Westchester /4, Connecticut /5, Boston /6, Philadelphia /7), placeholders not pasted. Plan unchanged: Tue–Thu 11/10–12, ~15/day.
 - Email 3 ("close the loop?") for the 7 other round-1 follow-ups is due ~Mon 11/16.
+- **No more BCC to curt@theworkshop.works on outreach** (user, 11/9): Sent in curt@popcodeapp.com is the record. The 43 waiting gallery drafts still carry the BCC (the connector's update_draft can't clear it), so remove it by hand when pasting each link; new drafts get none.
+- Nonprofit tracker row 19: Austin Film Society contact is now Torie Gehrig (Julya Jara left; auto-reply 11/9).
 
