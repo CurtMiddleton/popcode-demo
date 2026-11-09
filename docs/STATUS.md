@@ -4270,3 +4270,25 @@ push arrives, switch the all-clear to email. Read a run's output with `get_trigg
   Worth a glance after the Vercel deploy.
 - Lesson: other tabs that inject a muted summary inside a `.table-wrap` would have the same
   problem — grep for `class="muted"` inside `wrap.innerHTML` if another one shows up clipped.
+
+### 2026-10-15 → 11-09 — Nonprofit leads: two "not now"s, Clay at The Picture House, tracker renamed
+
+No code or PRs. Sales and outreach work in the long nonprofits session (`affectionate-dirac`).
+
+#### Lead status (update the tracker's Warm contacts tab to match)
+- **One Mind (Jamie Deuell): not now.** Jamie liked the dashboard, but they're establishing brand guidelines and won't add new tools yet. Revisit in the new year; Jamie asked to hear how other organizations use it. The A/B test (QR vs no QR) is on hold with them. User replied graciously: will keep Jamie posted, pick back up whenever they like.
+- **Green Empowerment (Mica, Andrea): pass on the winter appeal, interested in the 30th-anniversary event next spring.** Their reasons, worth expecting from others:
+  1. New tech may confuse donors (a past tech change went badly).
+  2. "One link" fundraising: every link should go straight to donate, not to more content.
+  3. No bandwidth to support a good trial this season.
+  Andrea asked what problem Popcode solves for Green Empowerment, so start there in January. Reply drafted: agrees with all three, seeds "bringing distant voices into the room", and suggests a **keepsake book of 30 years of stories** for the anniversary (gratitude rather than an ask, which sidesteps the one-link worry). Pick up in **January**.
+- **The Picture House (Clay):** met Friday ~Oct 10. Interested in the nonprofit print offer or the exhibitions offer (posters and event photos on the cinema walls that play). Email drafted with `popcode.app/nonprofits#try` and `popcode.app/exhibitions#try` (both anchors checked on an iPhone viewport: the Try section scrolls into view after the JS unhides it) plus the One Mind PDF. Clay had trouble scanning before, so the email asks him to say which phone. Likely cause: links opened in an in-app browser.
+- **Centurion:** see the 10-19 → 20 entry (another session) for the gala-footage demo.
+
+#### Takeaways
+- **Year-end appeals are the hardest way in**: too late in October, and fundraisers protect the single donate link. Lead with galas, anniversaries, thank-you cards and keepsakes, where the goal is connection rather than an immediate gift.
+- Before sharing a client's mockup (One Mind's) with another prospect, ask them, especially after a "not now".
+
+#### Housekeeping
+- The tracker sheet was **renamed "Popcode Nonprofit Tracker"** (same link: `docs.google.com/spreadsheets/d/1VEkjc_WbdHxHL4qw-MJGnIpjMOkk7XH6f_TbO68jajk`) so it isn't confused with a galleries list.
+- **Cloud-session gotcha:** checking out files from `origin/main` while the branch is behind left the worktree dirty. Reset the branch to `origin/main` first.
