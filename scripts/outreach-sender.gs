@@ -19,6 +19,12 @@
  *     for your own script).
  *  That's it. It now sends one email every 5 minutes while Status is RUN.
  *
+ * ALERTS + DIGESTS: every 5 minutes (any day, even while PAUSEd) it also looks
+ * for replies, bounces, auto-replies and Get started form submissions. A real
+ * reply or a form submission is emailed to "Alerts to" within ~5 minutes; the
+ * Send list Status column is updated (Replied / Bounced / Auto-reply); and a
+ * summary goes out at each "Digest times" slot on weekdays.
+ *
  * STOP / START: type PAUSE or RUN in the Status cell on "Sender settings".
  * REMOVE COMPLETELY: run `uninstall` from the Apps Script editor.
  */
@@ -44,7 +50,10 @@ var DEFAULTS = [
   ['Follow-up after (days)', 4, ''],
   ['Follow-up text',
    'Hi {first},\n\nJust floating this back up in case it got buried. If a Giving Tuesday thank-you card would help, there\'s still time: send us one phone video and it\'s ready to print five business days later.\n\nYou can see how it works, and get started without a call, here: https://popcode.app/givingtuesday\n\nThanks,\nCurt',
-   '{first} becomes their first name. Plain text; links stay clean.']
+   '{first} becomes their first name. Plain text; links stay clean.'],
+  ['Alerts to', 'curt@theworkshop.works', 'Reply/form alerts and digests go here. Blank = off.'],
+  ['Reply alerts', 'ON', 'ON = email me within ~5 minutes of a real reply or a Get started form.'],
+  ['Digest times (ET, 24h)', '8:20, 11:50, 16:40', 'Weekday summaries. Blank = no digests.']
 ];
 
 // ── One-time setup ──────────────────────────────────────────────────────────
@@ -78,15 +87,20 @@ function tick() {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) return;
   try {
+    ensureSettings_();
     var s = readSettings_();
-    if (String(s['Status']).trim().toUpperCase() !== 'RUN') return;
-    if (!inSendingWindow_(s)) return;
-    if (MailApp.getRemainingDailyQuota() < 5) return;
-
     var list = SpreadsheetApp.getActive().getSheetByName(SEND_TAB);
     var last = list.getLastRow();
     if (last < 2) return;
     var rows = list.getRange(2, 1, last - 1, COL.STATUS).getValues();
+
+    try { watchInbox_(list, rows, s); } catch (e) { console.error('watchInbox_: ' + e); }
+    try { maybeDigest_(s); } catch (e) { console.error('maybeDigest_: ' + e); }
+
+    if (String(s['Status']).trim().toUpperCase() !== 'RUN') return;
+    if (!inSendingWindow_(s)) return;
+    if (MailApp.getRemainingDailyQuota() < 5) return;
+    rows = list.getRange(2, 1, last - 1, COL.STATUS).getValues();   // statuses may have changed
 
     if (String(s['Follow-ups']).trim().toUpperCase() === 'ON' && sendOneFollowUp_(list, rows, s)) return;
     sendOneNew_(list, rows, s);
@@ -182,6 +196,203 @@ function sendReplyInThread_(threadId, to, subject, messageId, text, fromName, fr
 
 function encodeHeader_(v) {
   return /^[\x20-\x7e]*$/.test(v) ? v : '=?UTF-8?B?' + Utilities.base64Encode(v, Utilities.Charset.UTF_8) + '?=';
+}
+
+
+// ── Replies, bounces, form submissions → tracker Status, alerts, event log ───
+var WATCH = [
+  { kind: 'mail', q: 'subject:("Giving Tuesday thank-you that plays" OR "Photos that play") -from:me newer_than:2d' },
+  { kind: 'mail', q: 'from:(mailer-daemon OR postmaster) newer_than:2d' },
+  { kind: 'form', q: 'from:info@popcodeapp.com subject:("Ready to start" OR "Question") newer_than:2d' },
+  { kind: 'site', q: 'from:info@popcodeapp.com subject:("Outreach link opened" OR "Lead:") newer_than:2d' }
+];
+
+function watchInbox_(list, rows, s) {
+  var props = PropertiesService.getScriptProperties();
+  var seen = JSON.parse(props.getProperty('seen') || '{}');
+  var events = JSON.parse(props.getProperty('events') || '[]');
+  var me = Session.getEffectiveUser().getEmail().toLowerCase();
+  var alertsOn = String(s['Reply alerts']).trim().toUpperCase() === 'ON' && String(s['Alerts to'] || '').indexOf('@') > 0;
+  var cutoff = Date.now() - 2 * 864e5;
+
+  var threadRow = {}, addrRow = {};
+  rows.forEach(function (r, i) {
+    if (r[COL.THREAD - 1]) threadRow[String(r[COL.THREAD - 1])] = i;
+    if (r[COL.TO - 1]) addrRow[String(r[COL.TO - 1]).trim().toLowerCase()] = i;
+  });
+
+  var changed = false;
+  WATCH.forEach(function (w) {
+    GmailApp.search(w.q, 0, 50).forEach(function (thread) {
+      thread.getMessages().forEach(function (m) {
+        var id = m.getId();
+        if (seen[id] || m.getDate().getTime() < cutoff) return;
+        seen[id] = Date.now(); changed = true;
+        var from = m.getFrom(), fromAddr = (from.match(/<([^>]+)>/) || [, from])[1].trim().toLowerCase();
+        if (w.kind === 'mail' && fromAddr === me) return;
+        var subj = m.getSubject() || '';
+        var type = w.kind === 'form' ? (/TEST/.test(subj) ? null : 'form')
+                 : w.kind === 'site' ? (/^Lead:/.test(subj) ? 'demo click' : 'link opened')
+                 : classify_(m, from, subj);
+        if (!type) return;
+
+        // Which Send list row?  Same thread, same sender, or (bounces) the address quoted in the bounce.
+        var idx = threadRow[thread.getId()];
+        if (idx === undefined) idx = addrRow[fromAddr];
+        if (idx === undefined && type === 'bounce') {
+          var body = m.getPlainBody().toLowerCase();
+          Object.keys(addrRow).some(function (a) { if (body.indexOf(a) !== -1) { idx = addrRow[a]; return true; } return false; });
+        }
+        var org = idx !== undefined ? String(rows[idx][COL.ORG - 1]) : (w.kind === 'form' ? subj.replace(/^(Ready to start|Question):\s*/, '') : from.replace(/<.*>/, '').replace(/"/g, '').trim());
+
+        if (idx !== undefined && (type === 'reply' || type === 'bounce' || type === 'auto')) {
+          var cur = String(rows[idx][COL.STATUS - 1] || '');
+          var next = type === 'reply' ? 'Replied (check inbox)' : type === 'bounce' ? 'Bounced' : 'Auto-reply';
+          if (!/Replied|Bounced/.test(cur) && cur !== next) {
+            list.getRange(idx + 2, COL.STATUS).setValue(next);
+            rows[idx][COL.STATUS - 1] = next;
+          }
+        }
+
+        var site = type === 'link opened' || type === 'demo click';
+        events.push({ t: type, at: m.getDate().getTime(), org: String(org).slice(0, 50),
+                      who: site ? '' : fromAddr.slice(0, 50),
+                      snip: site ? subj.replace(/^(Outreach link opened|Lead):\s*/, '').slice(0, 60) : replyText_(m).replace(/\s+/g, ' ').slice(0, 110) });
+
+        // Alert only for fresh messages: the first run after installing sees 2 days of mail and must not replay it.
+        if (alertsOn && (type === 'reply' || type === 'form') && m.getDate().getTime() > Date.now() - 2 * 36e5) {
+          var link = 'https://mail.google.com/mail/?authuser=' + me + '#all/' + thread.getId();
+          MailApp.sendEmail({
+            to: s['Alerts to'], name: 'Popcode outreach',
+            subject: (type === 'form' ? '🚀 Get started form: ' : '📬 Reply from ') + org,
+            body: (type === 'form' ? 'Someone filled in the Get started form on popcode.app/givingtuesday.\n\n' : 'A nonprofit replied to your outreach.\n\n') +
+                  'From: ' + from + '\nSubject: ' + subj + '\n\n' + replyText_(m).slice(0, 1500) +
+                  '\n\nOpen in Gmail (curt@popcodeapp.com): ' + link
+          });
+        }
+      });
+    });
+  });
+
+  if (changed) {
+    Object.keys(seen).forEach(function (k) { if (seen[k] < Date.now() - 5 * 864e5) delete seen[k]; });
+    props.setProperty('seen', JSON.stringify(seen));
+    // Script properties hold at most ~9 KB per value: keep the newest events that fit.
+    var keep = events.slice(-40), json = JSON.stringify(keep);
+    while (json.length > 8500 && keep.length) { keep.shift(); json = JSON.stringify(keep); }
+    props.setProperty('events', json);
+  }
+}
+
+function classify_(m, from, subj) {
+  if (/mailer-daemon|postmaster/i.test(from) || /undeliverable|delivery status notification|returned mail|failure notice|delivery has failed|could not be delivered/i.test(subj)) return 'bounce';
+  var auto = String(m.getHeader('Auto-Submitted') || '').toLowerCase();
+  if ((auto && auto !== 'no') || m.getHeader('X-Autoreply') || m.getHeader('X-Autorespond') ||
+      /automatic reply|auto[- ]?reply|autoreply|out of (the )?office|away from (the )?office|thank you for (contacting|your (message|email|inquiry))/i.test(subj)) return 'auto';
+  var head = replyText_(m).slice(0, 500);
+  if (/out of (the )?office|no longer with|thank you for contacting|your (inquiry|message) (has been|will be) (received|forwarded)|auto(mated|matic)? (reply|response)|limited access to email|will (respond|reply|return your email) (as soon as|when i return|upon my return)/i.test(head)) return 'auto';
+  return 'reply';
+}
+
+// The new text of a reply, without the quoted original underneath.
+function replyText_(m) {
+  var t = String(m.getPlainBody() || '').replace(/\r/g, '');
+  t = t.split(/\nOn [^\n]{5,200}wrote:|\n-{2,} ?Original Message|\nFrom: [^\n]+\nSent: |\n>/)[0];
+  return t.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// ── Digests at the "Digest times" slots, weekdays ────────────────────────────
+function maybeDigest_(s) {
+  var slots = String(s['Digest times (ET, 24h)'] || '').split(/[,;]/).map(function (x) { return toMins_(x.trim(), -1); })
+    .filter(function (x) { return x >= 0; }).sort(function (a, b) { return a - b; });
+  if (!slots.length || String(s['Alerts to'] || '').indexOf('@') < 1) return;
+  var now = new Date();
+  if (Number(Utilities.formatDate(now, TZ, 'u')) > 5) return;
+  var mins = Number(Utilities.formatDate(now, TZ, 'H')) * 60 + Number(Utilities.formatDate(now, TZ, 'm'));
+  var ymd = Utilities.formatDate(now, TZ, 'yyyy-MM-dd');
+  var props = PropertiesService.getScriptProperties();
+  for (var i = 0; i < slots.length; i++) {
+    if (mins < slots[i] || mins >= slots[i] + 60) continue;
+    var key = 'digest_' + ymd + '_' + slots[i];
+    if (props.getProperty(key)) return;
+    props.setProperty(key, '1');
+    var label = i === 0 ? 'Morning' : i === slots.length - 1 ? 'End of day' : 'Midday';
+    sendDigest_(s, label, Number(props.getProperty('lastDigestAt') || (Date.now() - 864e5)), i === 0);
+    props.setProperty('lastDigestAt', String(Date.now()));
+    return;
+  }
+}
+
+function sendDigest_(s, label, since, isMorning) {
+  var props = PropertiesService.getScriptProperties();
+  var events = JSON.parse(props.getProperty('events') || '[]').filter(function (e) { return e.at > since; });
+  var list = SpreadsheetApp.getActive().getSheetByName(SEND_TAB);
+  var rows = list.getLastRow() > 1 ? list.getRange(2, 1, list.getLastRow() - 1, COL.STATUS).getValues() : [];
+  var ymd = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  var sentToday = 0, dueLeft = 0, sentAll = 0, total = 0, replies = 0, bounces = 0;
+  rows.forEach(function (r) {
+    if (!r[COL.TO - 1]) return;
+    total++;
+    var st = String(r[COL.STATUS - 1] || '');
+    if (r[COL.SENT - 1] === true) {
+      sentAll++;
+      if (r[COL.SENT_AT - 1] && Utilities.formatDate(new Date(r[COL.SENT_AT - 1]), TZ, 'yyyy-MM-dd') === ymd) sentToday++;
+    } else if (!st && dueToday_(r[COL.SEND_ON - 1])) dueLeft++;
+    if (/Replied/.test(st)) replies++;
+    if (/Bounced/.test(st)) bounces++;
+  });
+  var cap = Number(s['Max new emails per day'] || 50);
+  dueLeft = Math.min(dueLeft, Math.max(0, cap - sentToday));
+  var running = String(s['Status']).trim().toUpperCase() === 'RUN';
+  var when = Utilities.formatDate(new Date(since), TZ, 'EEE h:mm a');
+
+  function block(title, arr, fmt) { return arr.length ? '\n' + title + ' (' + arr.length + ')\n' + arr.map(fmt).join('\n') + '\n' : ''; }
+  var by = function (t) { return events.filter(function (e) { return e.t === t; }); };
+  var oneLine = function (x) { return String(x || '').replace(/\s+/g, ' ').slice(0, 160); };
+
+  var out = [];
+  out.push('Popcode outreach: ' + label.toLowerCase() + ' summary, ' + Utilities.formatDate(new Date(), TZ, 'EEE MMM d') + '\n');
+  var news = by('reply').length + by('form').length;
+  out.push(news ? 'Since ' + when + ': ' + by('reply').length + ' repl' + (by('reply').length === 1 ? 'y' : 'ies') + ', ' + by('form').length + ' Get started form' + (by('form').length === 1 ? '' : 's') + '.'
+                : 'No replies or form submissions since ' + when + '.');
+  out.push(block('📬 Replies', by('reply'), function (e) { return '• ' + e.org + ' (' + e.who + '): "' + oneLine(e.snip) + '…"'; }));
+  out.push(block('🚀 Get started forms', by('form'), function (e) { return '• ' + e.org; }));
+  out.push(block('Auto-replies (no action unless a new contact is named)', by('auto'), function (e) { return '• ' + e.org + ': ' + oneLine(e.snip); }));
+  out.push(block('Bounces (bad address)', by('bounce'), function (e) { return '• ' + e.org; }));
+  var opened = by('link opened'), clicks = by('demo click');
+  if (opened.length || clicks.length) out.push('\nWebsite: ' + opened.length + ' outreach link' + (opened.length === 1 ? '' : 's') + ' opened' +
+    (opened.length ? ' (' + opened.map(function (e) { return e.snip; }).join('; ') + ')' : '') +
+    (clicks.length ? ', ' + clicks.length + ' Book-a-demo click' + (clicks.length === 1 ? '' : 's') : '') + '.\n');
+
+  out.push('\nSending: ' + (running ? 'RUNNING' : 'PAUSED') + '. Sent today: ' + sentToday + '. Still due today: ' + dueLeft + '.');
+  if (isMorning && running && dueLeft) {
+    var start = Math.max(toMins_(s['Start time (ET, 24h)'], 570), Number(Utilities.formatDate(new Date(), TZ, 'H')) * 60 + Number(Utilities.formatDate(new Date(), TZ, 'm')));
+    var end = start + dueLeft * 5;
+    out.push('Today\'s plan: ' + dueLeft + ' emails, one every 5 minutes, done about ' + Math.floor(end / 60 > 12 ? end / 60 - 12 : end / 60) + ':' + ('0' + end % 60).slice(-2) + (end >= 720 ? ' PM' : ' AM') + '.');
+  }
+  out.push('Send list so far: ' + sentAll + ' of ' + total + ' sent, ' + replies + ' replied, ' + bounces + ' bounced.');
+  out.push('\nTracker: ' + SpreadsheetApp.getActive().getUrl());
+
+  MailApp.sendEmail({ to: s['Alerts to'], name: 'Popcode outreach',
+    subject: (news ? '📬 ' : '') + 'Outreach ' + label.toLowerCase() + ': ' + (news ? news + ' new' : 'no new replies') + ', ' + sentToday + ' sent today',
+    body: out.join('\n').replace(/\n{3,}/g, '\n\n') });
+}
+
+// Adds any setting rows that a newer version of this script introduced.
+function ensureSettings_() {
+  var st = SpreadsheetApp.getActive().getSheetByName(SETTINGS_TAB);
+  if (!st) return;
+  var have = {};
+  if (st.getLastRow()) st.getRange(1, 1, st.getLastRow(), 1).getValues().forEach(function (r) { have[r[0]] = 1; });
+  DEFAULTS.forEach(function (d) {
+    if (!have[d[0]]) { st.appendRow(d); st.getRange(st.getLastRow(), 1).setFontWeight('bold'); }
+  });
+}
+
+// Send yourself a sample digest now (run from the editor to preview).
+function testDigest() {
+  ensureSettings_();
+  sendDigest_(readSettings_(), 'Test', Date.now() - 864e5, true);
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
