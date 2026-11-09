@@ -6,7 +6,7 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-11-05)
+## Current state (updated 2026-11-09)
 
 **Live and recent**
 - **Centurion (nonprofit) — sample in progress (2026-10-19 → 20; see that entry).** Demo went well;
@@ -49,7 +49,9 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   all checked):** 13 new (8 Chelsea /1, 5 Manhattan /2) + 8 Email 2 follow-ups to round 1.
   **Still in Gmail Drafts (43, link placeholders not yet pasted):** 6 Brooklyn /3, 4 Westchester /4,
   7 Connecticut /5, 12 Boston /6, 14 Philadelphia /7 — plan Tue–Thu 11/10–12, ~15/day.
-  Round 1: only reply was Geary (no). Email 3 ("close the loop?") ~10 days after each Email 2.
+  **Fri 11/6 sends all went out** (in:scheduled empty on 11/9). Replies so far: Hudson River Museum
+  (Laura Vookles, 11/6: "Thank you for the details. We will keep it in mind." — soft no, no reply needed).
+  Round 1: Geary (no). Email 3 ("close the loop?") ~10 days after each Email 2.
   Nonprofits: next 10 Email 1s (film group) in tracker col L, follow-ups for the first 10 in col O
   (sent from Apple Mail, not this Gmail). Gallery sheet:
   https://docs.google.com/spreadsheets/d/1qguOaOI37s7V1wjm0M9zWdsp13LMjbRJNeue4pTfOl0/edit
@@ -4304,4 +4306,11 @@ push arrives, switch the all-clear to email. Read a run's output with `get_trigg
 - Watch replies from Fri 11/6; Email 3 ~10 days after each Email 2.
 - Nonprofit follow-ups + film-group Email 1s from Apple Mail.
 - Consider GMass/YAMM for the next batch (real links + auto follow-ups from the sheet).
+
+### 2026-11-09 — Check-in after the Friday sends
+- All 21 emails scheduled for Fri 11/6 (13 new to /1 and /2, 8 Email 2 follow-ups) went out; nothing left in Scheduled.
+- One reply: **Hudson River Museum** (Laura Vookles), 11/6 4:33 pm: "Thank you for the details. We will keep it in mind." Soft no; mark Not interested (or Replied) in the gallery sheet, row 87, and leave her out of Email 3.
+- No replies yet from the 13 new galleries (sent Friday morning; give them through Wed).
+- **43 drafts still unsent** in Gmail (Brooklyn /3, Westchester /4, Connecticut /5, Boston /6, Philadelphia /7), placeholders not pasted. Plan unchanged: Tue–Thu 11/10–12, ~15/day.
+- Email 3 ("close the loop?") for the 7 other round-1 follow-ups is due ~Mon 11/16.
 
