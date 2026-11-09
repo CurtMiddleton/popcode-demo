@@ -33,7 +33,7 @@
     'about', 'nonprofits', 'givingtuesday', 'exhibitions', 'photo-book-that-plays-videos',
     'popcode-vs-artivive', 'popcode-vs-qr-codes', 'guides', 'audio-tour-without-an-app',
     'printed-appeal-with-video', 'photo-ornament-that-plays-video',
-    'christmas-gift-for-grandparents', 'dashboard', 'help', 'home', 'login', 'logout', 'new', 'popcode',
+    'christmas-gift-for-grandparents', 'memorial-photo-that-plays-their-voice', 'wedding-album-with-videos', 'baby-first-year-photo-book', 'dashboard', 'help', 'home', 'login', 'logout', 'new', 'popcode',
     'pricing', 'profile', 'settings', 'signin', 'signup', 'support', 'www'
   ]);
 
