@@ -28,6 +28,18 @@ export default async function handler(req, res) {
     // Use service role to delete the user and their data
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
+    // Note each project in Analytics first (project_deleted), so their old
+    // slugs read as deleted rather than as an unexplained gap. Best effort.
+    try {
+      const { data: cols } = await admin.from('collections').select('slug, name, kind').eq('user_id', user.id);
+      if (cols && cols.length) {
+        await admin.from('scan_events').insert(cols.map(c => ({
+          slug: c.slug, event_type: 'project_deleted', user_id: user.id,
+          source: { project: { name: (c.name || '').slice(0, 120) || undefined, kind: c.kind || undefined, account_deleted: true } },
+        })));
+      }
+    } catch (e) { console.warn('delete-account: could not log project_deleted', e); }
+
     // Delete collections (collection_items cascade via FK)
     await admin.from('collections').delete().eq('user_id', user.id);
 

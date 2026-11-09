@@ -97,6 +97,13 @@ export default async function handler(req, res) {
       const clean = cleanSource(source);
       if (clean) extra.source = clean;
     }
+    // A project deleted, or moved to a new link (2026-11-01). Neither left a
+    // trace before, so Analytics showed a bare old slug with no explanation.
+    // Rebuilt from known keys, like the touches above.
+    if (event_type === 'project_deleted' || event_type === 'project_link_changed') {
+      const project = cleanProject(req.body.project);
+      if (project) extra.source = { project };
+    }
     // Time on page, scroll and seconds per section (source.js), kept beside
     // the touch so it needs no column of its own.
     if (event_type === 'page_engage') {
@@ -171,6 +178,16 @@ function cleanTouch(t) {
 }
 // The sign-up form's "How did you hear about Popcode?" answer (auth.html).
 const HEARD = ['ai', 'search', 'friend', 'popcode', 'social', 'other'];
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,59}$/i;
+function cleanProject(p) {
+  if (!p || typeof p !== 'object') return null;
+  const out = {};
+  if (typeof p.name === 'string' && p.name.trim()) out.name = p.name.trim().slice(0, 120);
+  if (typeof p.from === 'string' && SLUG_RE.test(p.from)) out.from = p.from.toLowerCase();
+  if (typeof p.kind === 'string' && /^[a-z]{1,20}$/.test(p.kind)) out.kind = p.kind;
+  return Object.keys(out).length ? out : null;
+}
+
 function cleanSource(src) {
   if (!src || typeof src !== 'object') return null;
   const first = cleanTouch(src.first);

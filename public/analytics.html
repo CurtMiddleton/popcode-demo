@@ -109,6 +109,11 @@
       .badge-create_calendar  { background: #ffeccc; color: #b35309; }
       .badge-create_montage   { background: #ffe4d6; color: #b1400a; }
       .badge-save_design      { background: #f3e8d6; color: #86601f; }
+      .badge-project_deleted      { background: #f1f1f1; color: #8a1c1c; }
+      .badge-project_link_changed { background: #f3e8d6; color: #86601f; }
+      /* The project behind an old slug: "deleted", "was /old-link" … */
+      .slug-fate { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 500; color: #8a8a8a; white-space: nowrap; }
+      .slug-fate.is-deleted { color: #a33; }
 
       /* Word of mouth — cool purples, so a referral reads as its own story
          rather than as a view (grey) or a creation (warm). Without a rule here
@@ -689,6 +694,7 @@
       function eventBadge(e) {
         const labels = { scan_open: 'Opened', target_found: 'Photo Found', video_play: 'Video Played', video_complete: 'Video Done', video_error: 'Error', audio_play: 'Audio Played', audio_complete: 'Audio Done',
           signup: 'Signed Up', create_project: 'Made a Popcode', create_book: 'Made a Book', create_boardbook: 'Made a Board Book', create_calendar: 'Made a Calendar', create_montage: 'Made a Montage', save_design: 'Saved a Design',
+          project_deleted: 'Deleted a Project', project_link_changed: 'Changed Link',
           referral_visit: 'Came From a Popcode', referral_signup: 'Signed Up via a Popcode', credits_granted: 'Credits Granted', book_demo_click: 'Clicked Book a Demo (Nonprofits)', exh_book_demo_click: 'Clicked Book a Demo (Exhibitions)', exh_try_download: 'Downloaded At Work Tour (Exhibitions)', demo_postcard_download: 'Downloaded Demo Postcard', gt_start_submit: 'Get started form',
           cta_shown: 'Buttons Shown', cta_tap_1: 'Tapped Button 1', cta_tap_2: 'Tapped Button 2', cta_tap_3: 'Tapped Button 3', cta_replay: 'Watched Again',
           transcript_mode_own: 'Transcript: Own Pace', transcript_mode_follow: 'Transcript: Follow Along',
@@ -707,6 +713,9 @@
       // Project table, which is exactly how creation events quietly inflated
       // both when they were first added.
       var REFERRAL_EVENTS = ['referral_visit', 'referral_signup'];
+      // Deleting a project / changing its link (2026-11-01). Kept out of
+      // CREATE_EVENTS so they don't count as something made.
+      var PROJECT_EDIT_EVENTS = ['project_deleted', 'project_link_changed'];
       // Administrative acts, logged for the audit trail rather than because
       // anyone visited. Same rule as above: they must not fall through to
       // 'viewed' or they land in Unique Visitors.
@@ -720,10 +729,76 @@
         if (e.event_type === 'exh_try_download') return '<span class="muted" style="font-weight:400">Exhibitions page</span>';
         if (e.event_type === 'exh_book_demo_click') return '<span class="muted" style="font-weight:400">Exhibitions page</span>';
         if (!e.slug) return '<span class="muted" style="font-weight:400">Account</span>';
-        return escapeHtml(cachedColNames[e.slug] || e.slug);
+        if (cachedColNames[e.slug]) return escapeHtml(cachedColNames[e.slug]);
+        return slugFateHtml(e.slug);
+      }
+
+      /*
+       * What became of a slug that no longer matches a project (2026-11-01).
+       * Events keep the slug they were logged under, so after a project is
+       * deleted or moved to a new link its history used to show a bare old
+       * slug. slugFates[slug] = { state: 'renamed' | 'deleted' | 'gone', name, to }.
+       */
+      let slugFates = {};
+      function slugFateHtml(slug) {
+        const f = slugFates[slug];
+        if (!f) return escapeHtml(slug) + '<span class="slug-fate" title="No project has this link now">deleted or link changed</span>';
+        if (f.state === 'renamed') return escapeHtml(f.name || f.to) + '<span class="slug-fate" title="Now popcode.app/' + escapeHtml(f.to) + '">was /' + escapeHtml(slug) + '</span>';
+        if (f.state === 'deleted') return escapeHtml(f.name || slug) + '<span class="slug-fate is-deleted" title="popcode.app/' + escapeHtml(slug) + '">deleted</span>';
+        return escapeHtml(slug) + '<span class="slug-fate" title="No project has this link now; it was removed before deletions and link changes were logged">deleted or link changed</span>';
+      }
+      // Plain-text version, for search and for places that print a name.
+      function projectLabelText(slug) {
+        if (!slug) return '';
+        if (cachedColNames[slug]) return cachedColNames[slug];
+        const f = slugFates[slug];
+        if (f && f.state === 'renamed') return (f.name || f.to) + ' (was /' + slug + ')';
+        if (f && f.state === 'deleted') return (f.name || slug) + ' (deleted)';
+        return slug + ' (deleted or link changed)';
+      }
+
+      async function loadSlugFates(allCols, evts) {
+        const bySlug = {}, byId = {};
+        (allCols || []).forEach(c => { bySlug[c.slug] = c; if (c.id) byId[c.id] = c; });
+        const orphans = [...new Set(evts.map(e => e.slug).filter(sl => sl && !bySlug[sl]))];
+        const fates = {};
+        if (!orphans.length) return fates;
+
+        // Deletions and link changes logged since 2026-11-01.
+        const { data: life } = await db.from('scan_events').select('slug, event_type, source, created_at')
+          .in('event_type', PROJECT_EDIT_EVENTS).order('created_at', { ascending: true }).limit(5000);
+        const movedTo = {}, deletedName = {};
+        (life || []).forEach(r => {
+          const pj = (r.source && r.source.project) || {};
+          if (r.event_type === 'project_link_changed' && pj.from) movedTo[pj.from] = r.slug;
+          if (r.event_type === 'project_deleted') deletedName[r.slug] = pj.name || '';
+        });
+
+        // Older moves: log-event stamps each row with the project's id, which
+        // survives a link change, so an old slug's rows still point at it.
+        const idOf = {};
+        try {
+          const { data: ids } = await db.from('scan_events').select('slug, collection_id')
+            .in('slug', orphans.slice(0, 300)).not('collection_id', 'is', null).limit(5000);
+          (ids || []).forEach(r => { if (!idOf[r.slug]) idOf[r.slug] = r.collection_id; });
+        } catch (e) { /* column not there yet: fall back to the logged moves */ }
+
+        orphans.forEach(sl => {
+          const viaId = idOf[sl] && byId[idOf[sl]];
+          if (viaId) { fates[sl] = { state: 'renamed', name: viaId.name, to: viaId.slug }; return; }
+          // Follow logged moves (a link can change more than once).
+          let cur = sl, hops = 0;
+          while (movedTo[cur] && !bySlug[cur] && hops++ < 10) cur = movedTo[cur];
+          if (cur !== sl && bySlug[cur]) { fates[sl] = { state: 'renamed', name: bySlug[cur].name, to: cur }; return; }
+          if (cur in deletedName) { fates[sl] = { state: 'deleted', name: deletedName[cur] }; return; }
+          fates[sl] = { state: 'gone' };
+        });
+        return fates;
       }
       function eventCategory(t) {
         if (CREATE_EVENTS.indexOf(t) !== -1) return 'created';
+        // A creator's own edits: not a view, so never in Unique Visitors.
+        if (PROJECT_EDIT_EVENTS.indexOf(t) !== -1) return 'created';
         if (REFERRAL_EVENTS.indexOf(t) !== -1) return 'referral';
         if (ADMIN_EVENTS.indexOf(t) !== -1) return 'admin';
         if (MARKETING_EVENTS.indexOf(t) !== -1) return 'marketing';
@@ -845,7 +920,7 @@
         var rows = cachedEvts.filter(function(e) {
           if (activityCategory !== 'all' && eventCategory(e.event_type) !== activityCategory) return false;
           if (!q) return true;
-          return (cachedColNames[e.slug] || e.slug || '').toLowerCase().includes(q) ||
+          return projectLabelText(e.slug).toLowerCase().includes(q) ||
                  getUserSearch(e).toLowerCase().includes(q) ||
                  getLocation(e).toLowerCase().includes(q) ||
                  (e.event_type || '').toLowerCase().includes(q) ||
@@ -1537,7 +1612,8 @@
           : events.length
           ? '<table><tbody>' + events.map(e => '<tr><td class="muted" style="white-space:nowrap">' + formatDate(e.created_at) + '</td>' +
               '<td>' + eventBadge(e.event_type) + '</td>' +
-              '<td>' + escapeHtml((e.slug && projectBySlug(e.slug) && shortName(projectBySlug(e.slug).name)) || e.slug || '') + '</td>' +
+              '<td>' + ((e.slug && projectBySlug(e.slug)) ? escapeHtml(shortName(projectBySlug(e.slug).name) || e.slug)
+                       : e.slug ? slugFateHtml(e.slug) : '') + '</td>' +
               '<td class="muted">' + escapeHtml([e.city, e.region].filter(Boolean).join(', ')) + '</td></tr>').join('') + '</tbody></table>' +
             '<div class="muted" style="font-size:10.5px;margin-top:4px">Only what they did while signed in, newest first (last 40). Scans of their prints by others are in the Activity Log.</div>'
           : '<div class="ad-empty">No signed-in activity recorded.</div>';
@@ -2156,8 +2232,7 @@
                 '<div class="bv-count">' + found + '<span>scans</span></div>' +
               '</div>';
             }).join('');
-          const name = (cachedColNames && cachedColNames[p.slug]) || p.slug;
-          return '<div class="bv-card"><h4>' + escapeHtml(name) + '</h4>' + rowsHtml + '</div>';
+          return '<div class="bv-card"><h4>' + (cachedColNames && cachedColNames[p.slug] ? escapeHtml(cachedColNames[p.slug]) : slugFateHtml(p.slug)) + '</h4>' + rowsHtml + '</div>';
         }).join('');
 
         wrap.innerHTML = '<div class="byvideo-grid">' + cards + '</div>';
@@ -2340,6 +2415,7 @@
         [/(^|\.)duckduckgo\.com$/, 'DuckDuckGo'], [/(^|\.)yandex\./, 'Yandex'],
         [/(^|\.)(chatgpt\.com|openai\.com)$/, 'ChatGPT'], [/(^|\.)perplexity\.ai$/, 'Perplexity'],
         [/(^|\.)claude\.ai$/, 'Claude'], [/(^|\.)gemini\.google\.com$/, 'Gemini'],
+        [/(^|\.)copilot\.microsoft\.com$/, 'Copilot'],
         [/(^|\.)instagram\.com$/, 'Instagram'], [/(^|\.)(facebook\.com|fb\.com|messenger\.com)$/, 'Facebook'],
         [/(^|\.)(t\.co|x\.com|twitter\.com)$/, 'X / Twitter'], [/(^|\.)reddit\.com$/, 'Reddit'],
         [/(^|\.)tiktok\.com$/, 'TikTok'], [/(^|\.)(youtube\.com|youtu\.be)$/, 'YouTube'],
@@ -2353,6 +2429,14 @@
         if (viaPopcode) return { label: 'A friend’s Popcode', detail: '“Create your own” on ' + viaPopcode };
         if (!src || (!src.first && !src.last)) return { label: 'Not recorded', detail: 'before tracking began' };
         const t = src.last || src.first;
+        // AI assistants tag the links they cite with their own site name
+        // (ChatGPT adds ?utm_source=chatgpt.com, and the ChatGPT app sends no
+        // referrer). That is an AI referral, not a campaign of ours.
+        if (t.utm_source) {
+          const src = String(t.utm_source).toLowerCase().replace(/^www\./, '');
+          const hit = SOURCE_HOSTS.find(h => h[0].test(src));
+          if (hit) return { label: hit[1], detail: 'link in ' + hit[1] + ', landed on ' + (t.landing || '/') };
+        }
         const tag = t.utm_source || t.via || t.ref;
         if (tag) {
           const bits = [t.utm_medium, t.utm_campaign].filter(Boolean).join(' / ');
@@ -2391,7 +2475,7 @@
         { key: 'other',    label: 'Other sites',    color: '#eda100' },
         { key: 'direct',   label: 'Direct / unknown', color: '#bdb9b0' }
       ];
-      var SEARCH_LABELS = ['Google search', 'Bing', 'DuckDuckGo', 'Yandex', 'ChatGPT', 'Perplexity', 'Claude', 'Gemini'];
+      var SEARCH_LABELS = ['Google search', 'Bing', 'DuckDuckGo', 'Yandex', 'ChatGPT', 'Perplexity', 'Claude', 'Gemini', 'Copilot'];
       var SOCIAL_LABELS = ['Instagram', 'Facebook', 'X / Twitter', 'Reddit', 'TikTok', 'YouTube', 'LinkedIn', 'Pinterest'];
       // Section keys come from source.js (id, else "hero", else aria-labelledby minus "-h").
       var SECTION_NAMES = {
@@ -2405,6 +2489,12 @@
       function webGroup(t) {
         if (!t) return 'direct';
         if (t.utm_source === 'email') return 'outreach';
+        // Paid ads tagged with UTMs (docs/holiday-ads-2026.md): count by
+        // network even when the gclid / fbclid didn't survive the redirect.
+        if (/^(cpc|paid|paid_social)$/.test(t.utm_medium || '')) {
+          if (/^(google|bing)$/.test(t.utm_source || '')) return 'search';
+          if (/^(meta|facebook|instagram|tiktok|pinterest)$/.test(t.utm_source || '')) return 'social';
+        }
         const label = sourceChannel({ first: t, last: null }).label;
         if (SEARCH_LABELS.indexOf(label) !== -1 || t.click === 'google_ads') return 'search';
         if (SOCIAL_LABELS.indexOf(label) !== -1 || t.click === 'facebook') return 'social';
@@ -3316,7 +3406,7 @@
         try {
 
         // Load ALL collections (not just current user's)
-        const { data: allCols } = await db.from('collections').select('slug, name, user_id');
+        const { data: allCols } = await db.from('collections').select('id, slug, name, user_id');
         const colNames = Object.fromEntries((allCols || []).map(c => [c.slug, c.name || c.slug]));
 
         // Load events — try RPC first (includes user email), fall back to direct query
@@ -3335,6 +3425,9 @@
         // Website visits have their own panel (renderWebsite) and must not
         // count as Popcode opens, visitors or activity.
         evts = evts.filter(e => e.event_type !== 'page_view' && e.event_type !== 'page_engage');
+
+        // Name the projects behind slugs that no longer exist (deleted / moved).
+        try { slugFates = await loadSlugFates(allCols, evts); } catch (e) { console.warn('slug fates:', e); slugFates = {}; }
 
         if (evts.length === 0 && activeDays !== 0) {
           document.getElementById('main-content').innerHTML =
