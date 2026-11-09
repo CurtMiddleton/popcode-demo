@@ -103,7 +103,8 @@
                '/calendar', '/privacy', '/terms', '/photo-book-that-plays-videos',
                '/popcode-vs-artivive', '/popcode-vs-qr-codes', '/audio-tour-without-an-app',
                '/printed-appeal-with-video', '/photo-ornament-that-plays-video',
-               '/christmas-gift-for-grandparents'];
+               '/christmas-gift-for-grandparents',
+               '/memorial-photo-that-plays-their-voice', '/wedding-album-with-videos', '/baby-first-year-photo-book'];
   function pagePath() {
     var path = location.pathname.replace(/\.html$/, '').replace(/^\/index$/, '/') || '/';
     if (path.length > 1) path = path.replace(/\/$/, '');
