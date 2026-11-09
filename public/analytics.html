@@ -2415,6 +2415,7 @@
         [/(^|\.)duckduckgo\.com$/, 'DuckDuckGo'], [/(^|\.)yandex\./, 'Yandex'],
         [/(^|\.)(chatgpt\.com|openai\.com)$/, 'ChatGPT'], [/(^|\.)perplexity\.ai$/, 'Perplexity'],
         [/(^|\.)claude\.ai$/, 'Claude'], [/(^|\.)gemini\.google\.com$/, 'Gemini'],
+        [/(^|\.)copilot\.microsoft\.com$/, 'Copilot'],
         [/(^|\.)instagram\.com$/, 'Instagram'], [/(^|\.)(facebook\.com|fb\.com|messenger\.com)$/, 'Facebook'],
         [/(^|\.)(t\.co|x\.com|twitter\.com)$/, 'X / Twitter'], [/(^|\.)reddit\.com$/, 'Reddit'],
         [/(^|\.)tiktok\.com$/, 'TikTok'], [/(^|\.)(youtube\.com|youtu\.be)$/, 'YouTube'],
@@ -2428,6 +2429,14 @@
         if (viaPopcode) return { label: 'A friend’s Popcode', detail: '“Create your own” on ' + viaPopcode };
         if (!src || (!src.first && !src.last)) return { label: 'Not recorded', detail: 'before tracking began' };
         const t = src.last || src.first;
+        // AI assistants tag the links they cite with their own site name
+        // (ChatGPT adds ?utm_source=chatgpt.com, and the ChatGPT app sends no
+        // referrer). That is an AI referral, not a campaign of ours.
+        if (t.utm_source) {
+          const src = String(t.utm_source).toLowerCase().replace(/^www\./, '');
+          const hit = SOURCE_HOSTS.find(h => h[0].test(src));
+          if (hit) return { label: hit[1], detail: 'link in ' + hit[1] + ', landed on ' + (t.landing || '/') };
+        }
         const tag = t.utm_source || t.via || t.ref;
         if (tag) {
           const bits = [t.utm_medium, t.utm_campaign].filter(Boolean).join(' / ');
@@ -2466,7 +2475,7 @@
         { key: 'other',    label: 'Other sites',    color: '#eda100' },
         { key: 'direct',   label: 'Direct / unknown', color: '#bdb9b0' }
       ];
-      var SEARCH_LABELS = ['Google search', 'Bing', 'DuckDuckGo', 'Yandex', 'ChatGPT', 'Perplexity', 'Claude', 'Gemini'];
+      var SEARCH_LABELS = ['Google search', 'Bing', 'DuckDuckGo', 'Yandex', 'ChatGPT', 'Perplexity', 'Claude', 'Gemini', 'Copilot'];
       var SOCIAL_LABELS = ['Instagram', 'Facebook', 'X / Twitter', 'Reddit', 'TikTok', 'YouTube', 'LinkedIn', 'Pinterest'];
       // Section keys come from source.js (id, else "hero", else aria-labelledby minus "-h").
       var SECTION_NAMES = {
