@@ -6,9 +6,19 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-10-21)
+## Current state (updated 2026-11-09)
 
 **Live and recent**
+- **Giving Tuesday nonprofit push (2026-11-09; see that entry).** `popcode.app/givingtuesday` is live
+  (PRs #300–#305): $1,250 Giving Tuesday Kit + $2,500 Year-End Kit, dated timeline, **Get started form**
+  (no call needed; emails curt@ via Resend). Outreach now runs from an **Apps Script on the tracker**
+  (`scripts/outreach-sender.gs`): Send list tab, one email every 5 min, weekdays 9:30–16:00 ET, 50/day,
+  PAUSE switch on "Sender settings", reply alerts + 8:20/11:50/16:40 digests to curt@theworkshop.works.
+  **39 sent 11/9** (13 by hand via the Gmail connector, links mangled — see entry; 26 by the script);
+  **50 queued for Tue 11/10**; 100 more researched leads on the tracker's "Giving Tuesday" tab.
+  **Next:** Thu/Fri follow-ups (turn on in Sender settings after adding the Gmail API service; hand
+  follow-up for the 13 connector sends, clean links); load Wed/Thu batches; Stripe link for the $1,250 kit.
+  `RESEND_API_KEY` **is set in Vercel** — lead alerts and the form work (tested 11/9).
 - **Centurion (nonprofit) — sample in progress (2026-10-19 → 20; see that entry).** Demo went well;
   Android had no video scrubber → fixed (PR #269, live). Laila S. Wilson-McCoy (Director of Development,
   laila.wilson@centurion.org) asked for a sample: honoree presenters + honorees speaking, and **Jozelyn
@@ -4292,3 +4302,59 @@ No code or PRs. Sales and outreach work in the long nonprofits session (`affecti
 #### Housekeeping
 - The tracker sheet was **renamed "Popcode Nonprofit Tracker"** (same link: `docs.google.com/spreadsheets/d/1VEkjc_WbdHxHL4qw-MJGnIpjMOkk7XH6f_TbO68jajk`) so it isn't confused with a galleries list.
 - **Cloud-session gotcha:** checking out files from `origin/main` while the branch is behind left the worktree dirty. Reset the branch to `origin/main` first.
+
+### 2026-11-09 — Giving Tuesday push: /givingtuesday page, $1,250 kit, Get started form, automated outreach
+
+**PRs (all merged and live):** [#300](https://github.com/CurtMiddleton/popcode-demo/pull/300) page · [#301](https://github.com/CurtMiddleton/popcode-demo/pull/301) headline · [#302](https://github.com/CurtMiddleton/popcode-demo/pull/302) Get started form · [#303](https://github.com/CurtMiddleton/popcode-demo/pull/303)/[#304](https://github.com/CurtMiddleton/popcode-demo/pull/304) pricing showcase · [#305](https://github.com/CurtMiddleton/popcode-demo/pull/305) analytics label + script · [#306](https://github.com/CurtMiddleton/popcode-demo/pull/306) script alerts/digests.
+
+#### The offer (user decisions)
+- Giving Tuesday is **Dec 1, 2026**. Pitch = **thank-you card for Giving Tuesday donors** (easiest yes; dodges the
+  "one link"/new-tech objections Green Empowerment raised) **plus** "imagine your year-end appeal where every photo speaks".
+- New **Giving Tuesday Kit $1,250** (1 story, card/insert, story page, buttons, dashboard, **ready to print 5 business
+  days after the video** — user confirmed 5 days is OK). Upgrade to the $2,500 Year-End Kit for the difference. No
+  Stripe link yet (`PAY_URLS.giving_tuesday` empty, same as the other kits); thanks page knows `?kit=giving_tuesday`.
+- Nationwide, not local. The call is now **only for people with questions / checking it's legit**; "Get started" is the main CTA.
+
+#### The page — `public/givingtuesday.html` (copy of /nonprofits)
+- Hero "Let donors hear who they helped." (user rejected "There's still time to make it play" — cold readers don't know
+  Popcode). Closer "A thank-you they'll keep. An appeal they'll watch."
+- "Three ways in, even now" dated timeline; pricing opens with a big postcard + **animated sample dashboard** (count-up,
+  bars fill; no pulsing symbol overlay — user said that's misleading); two type-only kit cards, name/price centred.
+- **Get started form** `#start` → `api/start-request.js`: Resend email to curt@popcodeapp.com, **Reply-To = sender**,
+  honeypot, 20/h cap, logs anonymous `gt_start_submit` (+ `pc_device`). If Resend fails → page opens a prefilled mailto.
+  Analytics shows it as **"Get started form"** and it's a marketing event (not a view).
+- Short links `/givingtuesday/1`–`8` = animals, hunger, housing, health, youth, enviro, intl, arts
+  (`utm_campaign=givingtuesday-outreach`). Slug `givingtuesday` reserved in `slug.js`.
+
+#### Outreach
+- **Leads:** 150 new nationwide nonprofits ($1–10M, ProPublica-checked) researched by 3 subagents → tracker tab
+  **"Giving Tuesday"**. Mix: animals/hunger 50, housing+DV+refugee/health 50, youth/enviro/intl 50. 41 guessed addresses.
+- **Send list tab** (first tab): rows 1–26 Mon 11/9 (25 leftover Cold-outreach orgs + Torie Gehrig at AFS — Julya Jara
+  left), rows 27–76 Tue 11/10. Full email per row; guessed personal addresses swapped for general inboxes where possible.
+- **Sent 11/9:** 13 via the Gmail connector (Jacob Burns, Loft, Belcourt, Coolidge, Film Streams, Tampa, AFS, Denver Film,
+  NWFF, Friends of Trees, Bird Alliance, Wolf CC, Westchester LT — ticked in Cold outreach), then 26 by the script.
+- Auto-replies so far: Jacob Burns (general autoresponder), AFS (Julya gone → Torie, now on the Send list).
+
+#### The sender script — `scripts/outreach-sender.gs` (installed on the tracker as curt@popcodeapp.com)
+- Every 5 min: one email from Send list (rows due by "Send on"), weekdays 9:30–16:00 ET, 50/day, plain text + signature
+  with postal address; fills Sent / Sent at / Thread / Status. PAUSE/RUN on "Sender settings".
+- Watches Gmail every run: real reply or form → alert email to curt@theworkshop.works within ~5 min; Status →
+  Replied / Bounced / Auto-reply; digests 8:20, 11:50, 16:40 weekdays. `testDigest()` previews.
+- **Follow-ups are built but OFF.** To enable: Apps Script → Services (+) → Gmail API → Add, then Follow-ups = ON
+  (4 days, same thread, skips anyone who replied/bounced/auto-replied). Review the follow-up text with the user first.
+  The 13 connector sends aren't in the Send list, so they need a hand follow-up from Apple Mail (clean links).
+- Sheet time zone is Pacific, so "Sent at" displays 3 h early (cosmetic; File → Settings → Time zone).
+
+#### Lessons / warnings for future-Claude
+- **The Gmail MCP connector rewrites every URL** (plain, bare or `<a href>`) into `google.com/url?q=…&ust=…` in both
+  sent mail and drafts. Recipients get Google's "Redirect Notice" page. **Never send outreach through the connector.**
+  Use the Apps Script or Apple Mail. User chose not to send an apology; fix arrives with the follow-up.
+- "Groups of 4 every 12 min" was not "one every 3 minutes" — say so before changing a promised plan. Also two sends went
+  1 minute apart because a send happened before the wait finished; check the last send time before each send.
+- Scheduled tasks created from this session **can't carry the Gmail/Sheets connectors** (org setting) — a routine that
+  needs them must be created in claude.ai Routines. That's why alerts/digests live in the Apps Script.
+- New Send-list-style tabs: give them enough columns (the script writes I–L; setup failed on an 8-column grid until resized).
+- The Apps Script consent flow opens a separate window that gets lost; "Advanced → Go to … (unsafe)" is on the
+  unverified-app screen. Developer shown is curt@theworkshop.works (sheet owner) — fine as long as the account chosen
+  is curt@popcodeapp.com.
+- Sheets writes via the connector were once blocked by the auto-mode classifier until the user explicitly asked.
