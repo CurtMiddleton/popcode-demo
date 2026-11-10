@@ -268,8 +268,8 @@ function watchInbox_(list, rows, s) {
           var link = 'https://mail.google.com/mail/?authuser=' + me + '#all/' + thread.getId();
           MailApp.sendEmail({
             to: s['Alerts to'], name: 'Popcode outreach',
-            subject: (type === 'form' ? '🚀 Get started form: ' : '📬 Reply from ') + org,
-            body: (type === 'form' ? 'Someone filled in the Get started form on popcode.app/givingtuesday.\n\n' : 'A nonprofit replied to your outreach.\n\n') +
+            subject: (type === 'form' ? 'Get started form: ' : 'Gallery reply from ') + org,
+            body: (type === 'form' ? 'Someone filled in the Get started form on popcode.app/givingtuesday.\n\n' : 'A gallery replied to your outreach.\n\n') +
                   'From: ' + from + '\nSubject: ' + subj + '\n\n' + replyText_(m).slice(0, 1500) +
                   '\n\nOpen in Gmail (curt@popcodeapp.com): ' + link
           });
@@ -359,8 +359,8 @@ function sendDigest_(s, label, since, isMorning) {
   var news = by('reply').length + by('form').length;
   out.push(news ? 'Since ' + when + ': ' + by('reply').length + ' repl' + (by('reply').length === 1 ? 'y' : 'ies') + ', ' + by('form').length + ' Get started form' + (by('form').length === 1 ? '' : 's') + '.'
                 : 'No replies or form submissions since ' + when + '.');
-  out.push(block('📬 Replies', by('reply'), function (e) { return '• ' + e.org + ' (' + e.who + '): "' + oneLine(e.snip) + '…"'; }));
-  out.push(block('🚀 Get started forms', by('form'), function (e) { return '• ' + e.org; }));
+  out.push(block('Replies', by('reply'), function (e) { return '• ' + e.org + ' (' + e.who + '): "' + oneLine(e.snip) + '…"'; }));
+  out.push(block('Get started forms', by('form'), function (e) { return '• ' + e.org; }));
   out.push(block('Auto-replies (no action unless a new contact is named)', by('auto'), function (e) { return '• ' + e.org + ': ' + oneLine(e.snip); }));
   out.push(block('Bounces (bad address)', by('bounce'), function (e) { return '• ' + e.org; }));
   var opened = by('link opened'), clicks = by('demo click');
@@ -378,7 +378,7 @@ function sendDigest_(s, label, since, isMorning) {
   out.push('\nTracker: ' + SpreadsheetApp.getActive().getUrl());
 
   MailApp.sendEmail({ to: s['Alerts to'], name: 'Popcode outreach',
-    subject: (news ? '📬 ' : '') + 'Outreach ' + label.toLowerCase() + ': ' + (news ? news + ' new' : 'no new replies') + ', ' + sentToday + ' sent today',
+    subject: (news ? 'NEW: ' : '') + 'Gallery outreach ' + label.toLowerCase() + ': ' + (news ? news + ' new' : 'no new replies') + ', ' + sentToday + ' sent today',
     body: out.join('\n').replace(/\n{3,}/g, '\n\n') });
 }
 
