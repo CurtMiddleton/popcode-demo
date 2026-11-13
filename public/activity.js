@@ -42,6 +42,8 @@
    *                                 how each page builds its client.
    * @param {object} [opts.source]   how they found Popcode (source.js);
    *                                 only the signup event sends it.
+   * @param {object} [opts.project]  { name, from, kind } for project_deleted /
+   *                                 project_link_changed (from = the old slug).
    */
   window.logActivity = function (eventType, opts) {
     try {
@@ -60,7 +62,8 @@
           browser: info.browser,
           user_agent: navigator.userAgent,
           user_id: opts.user_id || null,
-          source: opts.source || undefined
+          source: opts.source || undefined,
+          project: opts.project || undefined
         })
       }).catch(function () {});
     } catch (e) { /* never let analytics break the app */ }

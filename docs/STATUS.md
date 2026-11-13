@@ -6,9 +6,19 @@ bottom. `CLAUDE.md` holds the standing rules and context; this file holds what
 happened and what's open. (Session history moved here from CLAUDE.md on
 2026-09-24 — entries are unchanged, oldest first.)
 
-## Current state (updated 2026-11-09)
+## Current state (updated 2026-11-13)
 
 **Live and recent**
+- **Giving Tuesday nonprofit push (2026-11-09; see that entry).** `popcode.app/givingtuesday` is live
+  (PRs #300–#305): $1,250 Giving Tuesday Kit + $2,500 Year-End Kit, dated timeline, **Get started form**
+  (no call needed; emails curt@ via Resend). Outreach now runs from an **Apps Script on the tracker**
+  (`scripts/outreach-sender.gs`): Send list tab, one email every 5 min, weekdays 9:30–16:00 ET, 50/day,
+  PAUSE switch on "Sender settings", reply alerts + 8:20/11:50/16:40 digests to curt@theworkshop.works.
+  **39 sent 11/9** (13 by hand via the Gmail connector, links mangled — see entry; 26 by the script);
+  **50 queued for Tue 11/10**; 100 more researched leads on the tracker's "Giving Tuesday" tab.
+  **Next:** Thu/Fri follow-ups (turn on in Sender settings after adding the Gmail API service; hand
+  follow-up for the 13 connector sends, clean links); load Wed/Thu batches; Stripe link for the $1,250 kit.
+  `RESEND_API_KEY` **is set in Vercel** — lead alerts and the form work (tested 11/9).
 - **Centurion (nonprofit) — sample in progress (2026-10-19 → 20; see that entry).** Demo went well;
   Android had no video scrubber → fixed (PR #269, live). Laila S. Wilson-McCoy (Director of Development,
   laila.wilson@centurion.org) asked for a sample: honoree presenters + honorees speaking, and **Jozelyn
@@ -43,6 +53,13 @@ happened and what's open. (Session history moved here from CLAUDE.md on
   (failed paid order / fatal outage; spikes) + the **Daily Sentry check** scheduled task at
   8:45 ET every day (push every run since 10-21: "✅ All clear —" or "⚠️ Needs you —"). **Shotstack balance was 0.17 credits on 10-17** — top up before
   promoting montage in books (a render needs ~1.13).
+- **FIRST EXHIBITIONS PILOT — Somerville Museum (Boston list), 2026-11-13.** Stephanie Marlin-Curiel
+  (somemuseum@gmail.com, cc stephanie@somervillemuseum.org) said a **no-cost pilot "sounds doable"**
+  for their next show, **opening Jan 21, 2027** (curator to approve). Offer as sent: free in return for
+  feedback, permission to share results (visitor numbers + quotes) as a case study, and to name them as
+  an early partner; up to 15 stops; they record or we write + AI-voice; **testing done virtually (no
+  site visit)**; help with grant language/budget later. **Next: call next week** (Curt is traveling;
+  waiting for her to pick a time). Free pilots so far: Somerville + Pelham Art Center; keep it to 2–3.
 - **Gallery outreach batch 2 (2026-11-01 → 05; see that entry).** Pricing is now ONE price + a
   founding offer + a guarantee (PR #294, live; no more "pilot"/struck-through prices). Short links
   `/exhibitions/6` Boston, `/7` Philadelphia (PR #295). **Scheduled for Fri 11/6, 9:40–11:59 ET (21,
@@ -4275,6 +4292,7 @@ push arrives, switch the all-clear to email. Read a run's output with `get_trigg
 - Lesson: other tabs that inject a muted summary inside a `.table-wrap` would have the same
   problem — grep for `class="muted"` inside `wrap.innerHTML` if another one shows up clipped.
 
+<<<<<<< HEAD
 
 ### 2026-11-01 → 05 — Pricing without "pilot"; 30 → 56 new gallery emails (NY, CT, Boston, Philadelphia)
 
@@ -4315,4 +4333,92 @@ push arrives, switch the all-clear to email. Read a run's output with `get_trigg
 - Email 3 ("close the loop?") for the 7 other round-1 follow-ups is due ~Mon 11/16.
 - **No more BCC to curt@theworkshop.works on outreach** (user, 11/9): Sent in curt@popcodeapp.com is the record. The 43 waiting gallery drafts still carry the BCC (the connector's update_draft can't clear it), so remove it by hand when pasting each link; new drafts get none.
 - Nonprofit tracker row 19: Austin Film Society contact is now Torie Gehrig (Julya Jara left; auto-reply 11/9).
+
+=======
+### 2026-10-15 → 11-09 — Nonprofit leads: two "not now"s, Clay at The Picture House, tracker renamed
+
+No code or PRs. Sales and outreach work in the long nonprofits session (`affectionate-dirac`).
+
+#### Lead status (update the tracker's Warm contacts tab to match)
+- **One Mind (Jamie Deuell): not now.** Jamie liked the dashboard, but they're establishing brand guidelines and won't add new tools yet. Revisit in the new year; Jamie asked to hear how other organizations use it. The A/B test (QR vs no QR) is on hold with them. User replied graciously: will keep Jamie posted, pick back up whenever they like.
+- **Green Empowerment (Mica, Andrea): pass on the winter appeal, interested in the 30th-anniversary event next spring.** Their reasons, worth expecting from others:
+  1. New tech may confuse donors (a past tech change went badly).
+  2. "One link" fundraising: every link should go straight to donate, not to more content.
+  3. No bandwidth to support a good trial this season.
+  Andrea asked what problem Popcode solves for Green Empowerment, so start there in January. Reply drafted: agrees with all three, seeds "bringing distant voices into the room", and suggests a **keepsake book of 30 years of stories** for the anniversary (gratitude rather than an ask, which sidesteps the one-link worry). Pick up in **January**.
+- **The Picture House (Clay):** met Friday ~Oct 10. Interested in the nonprofit print offer or the exhibitions offer (posters and event photos on the cinema walls that play). Email drafted with `popcode.app/nonprofits#try` and `popcode.app/exhibitions#try` (both anchors checked on an iPhone viewport: the Try section scrolls into view after the JS unhides it) plus the One Mind PDF. Clay had trouble scanning before, so the email asks him to say which phone. Likely cause: links opened in an in-app browser.
+- **Centurion:** see the 10-19 → 20 entry (another session) for the gala-footage demo.
+
+#### Takeaways
+- **Year-end appeals are the hardest way in**: too late in October, and fundraisers protect the single donate link. Lead with galas, anniversaries, thank-you cards and keepsakes, where the goal is connection rather than an immediate gift.
+- Before sharing a client's mockup (One Mind's) with another prospect, ask them, especially after a "not now".
+
+#### Housekeeping
+- The tracker sheet was **renamed "Popcode Nonprofit Tracker"** (same link: `docs.google.com/spreadsheets/d/1VEkjc_WbdHxHL4qw-MJGnIpjMOkk7XH6f_TbO68jajk`) so it isn't confused with a galleries list.
+- **Cloud-session gotcha:** checking out files from `origin/main` while the branch is behind left the worktree dirty. Reset the branch to `origin/main` first.
+
+### 2026-11-09 — Giving Tuesday push: /givingtuesday page, $1,250 kit, Get started form, automated outreach
+
+**PRs (all merged and live):** [#300](https://github.com/CurtMiddleton/popcode-demo/pull/300) page · [#301](https://github.com/CurtMiddleton/popcode-demo/pull/301) headline · [#302](https://github.com/CurtMiddleton/popcode-demo/pull/302) Get started form · [#303](https://github.com/CurtMiddleton/popcode-demo/pull/303)/[#304](https://github.com/CurtMiddleton/popcode-demo/pull/304) pricing showcase · [#305](https://github.com/CurtMiddleton/popcode-demo/pull/305) analytics label + script · [#306](https://github.com/CurtMiddleton/popcode-demo/pull/306) script alerts/digests.
+
+#### The offer (user decisions)
+- Giving Tuesday is **Dec 1, 2026**. Pitch = **thank-you card for Giving Tuesday donors** (easiest yes; dodges the
+  "one link"/new-tech objections Green Empowerment raised) **plus** "imagine your year-end appeal where every photo speaks".
+- New **Giving Tuesday Kit $1,250** (1 story, card/insert, story page, buttons, dashboard, **ready to print 5 business
+  days after the video** — user confirmed 5 days is OK). Upgrade to the $2,500 Year-End Kit for the difference. No
+  Stripe link yet (`PAY_URLS.giving_tuesday` empty, same as the other kits); thanks page knows `?kit=giving_tuesday`.
+- Nationwide, not local. The call is now **only for people with questions / checking it's legit**; "Get started" is the main CTA.
+
+#### The page — `public/givingtuesday.html` (copy of /nonprofits)
+- Hero "Let donors hear who they helped." (user rejected "There's still time to make it play" — cold readers don't know
+  Popcode). Closer "A thank-you they'll keep. An appeal they'll watch."
+- "Three ways in, even now" dated timeline; pricing opens with a big postcard + **animated sample dashboard** (count-up,
+  bars fill; no pulsing symbol overlay — user said that's misleading); two type-only kit cards, name/price centred.
+- **Get started form** `#start` → `api/start-request.js`: Resend email to curt@popcodeapp.com, **Reply-To = sender**,
+  honeypot, 20/h cap, logs anonymous `gt_start_submit` (+ `pc_device`). If Resend fails → page opens a prefilled mailto.
+  Analytics shows it as **"Get started form"** and it's a marketing event (not a view).
+- Short links `/givingtuesday/1`–`8` = animals, hunger, housing, health, youth, enviro, intl, arts
+  (`utm_campaign=givingtuesday-outreach`). Slug `givingtuesday` reserved in `slug.js`.
+
+#### Outreach
+- **Leads:** 150 new nationwide nonprofits ($1–10M, ProPublica-checked) researched by 3 subagents → tracker tab
+  **"Giving Tuesday"**. Mix: animals/hunger 50, housing+DV+refugee/health 50, youth/enviro/intl 50. 41 guessed addresses.
+- **Send list tab** (first tab): rows 1–26 Mon 11/9 (25 leftover Cold-outreach orgs + Torie Gehrig at AFS — Julya Jara
+  left), rows 27–76 Tue 11/10. Full email per row; guessed personal addresses swapped for general inboxes where possible.
+- **Sent 11/9:** 13 via the Gmail connector (Jacob Burns, Loft, Belcourt, Coolidge, Film Streams, Tampa, AFS, Denver Film,
+  NWFF, Friends of Trees, Bird Alliance, Wolf CC, Westchester LT — ticked in Cold outreach), then 26 by the script.
+- Auto-replies so far: Jacob Burns (general autoresponder), AFS (Julya gone → Torie, now on the Send list).
+
+#### The sender script — `scripts/outreach-sender.gs` (installed on the tracker as curt@popcodeapp.com)
+- Every 5 min: one email from Send list (rows due by "Send on"), weekdays 9:30–16:00 ET, 50/day, plain text + signature
+  with postal address; fills Sent / Sent at / Thread / Status. PAUSE/RUN on "Sender settings".
+- Watches Gmail every run: real reply or form → alert email to curt@theworkshop.works within ~5 min; Status →
+  Replied / Bounced / Auto-reply; digests 8:20, 11:50, 16:40 weekdays. `testDigest()` previews.
+- **Follow-ups are built but OFF.** To enable: Apps Script → Services (+) → Gmail API → Add, then Follow-ups = ON
+  (4 days, same thread, skips anyone who replied/bounced/auto-replied). Review the follow-up text with the user first.
+  The 13 connector sends aren't in the Send list, so they need a hand follow-up from Apple Mail (clean links).
+- Sheet time zone is Pacific, so "Sent at" displays 3 h early (cosmetic; File → Settings → Time zone).
+
+#### Lessons / warnings for future-Claude
+- **The Gmail MCP connector rewrites every URL** (plain, bare or `<a href>`) into `google.com/url?q=…&ust=…` in both
+  sent mail and drafts. Recipients get Google's "Redirect Notice" page. **Never send outreach through the connector.**
+  Use the Apps Script or Apple Mail. User chose not to send an apology; fix arrives with the follow-up.
+- "Groups of 4 every 12 min" was not "one every 3 minutes" — say so before changing a promised plan. Also two sends went
+  1 minute apart because a send happened before the wait finished; check the last send time before each send.
+- Scheduled tasks created from this session **can't carry the Gmail/Sheets connectors** (org setting) — a routine that
+  needs them must be created in claude.ai Routines. That's why alerts/digests live in the Apps Script.
+- New Send-list-style tabs: give them enough columns (the script writes I–L; setup failed on an 8-column grid until resized).
+- The Apps Script consent flow opens a separate window that gets lost; "Advanced → Go to … (unsafe)" is on the
+  unverified-app screen. Developer shown is curt@theworkshop.works (sheet owner) — fine as long as the account chosen
+  is curt@popcodeapp.com.
+- Sheets writes via the connector were once blocked by the auto-mode classifier until the user explicitly asked.
+>>>>>>> origin/main
+
+### 2026-11-10 → 13 — Big gallery send went out; Somerville Museum says yes to a pilot
+- **Gmail Sent shows ~200 gallery Email 1s ("an audio tour for your next show") on 11/10–12**, 5 min apart, sender name "Curt Middleton", no BCC — including all 43 drafts from 11/1 (Boston, Philadelphia, Brooklyn, Westchester, CT) and many other sheet venues (e.g. Lubov, Fort Gansevoort, Gordon Robichaux, Hudson Valley MOCA, DC Moore, Miles McEnery). These were not sent by this session; the gallery sheet's Status/date columns were NOT updated for them — reconcile the sheet against Gmail Sent before Email 2.
+- Nonprofits: 39 "A Giving Tuesday thank-you that plays" emails went out 11/9 (also not from this session). Austin Film Society: Julya Jara left; tracker row 19 now Torie Gehrig (already emailed).
+- **Somerville Museum (Stephanie Marlin-Curiel):** 11/11 "can't afford it now… send website and pricing"; Curt offered a no-cost pilot (reply drafted here, sent 11/13 with link /exhibitions/6); 11/13 she replied "a no-cost pilot sounds doable… next show opens January 21st" (needs the curator's OK). Short reply sent: Jan 21 works, call next week. No in-person visit — test virtually.
+- Lawrenceville: drafted check-in emails for Marquis Scott (AI work + Popcode with links to /nonprofits and /exhibitions; send first) and Steve Murray (personal; Steve's last year as head). Sent from curt@theworkshop.works by Curt, not through the connector.
+- Gotchas: putting a URL inside a `[PASTE LINK: …]` placeholder still gets it rewritten — keep placeholders URL-free. Connector-made reply drafts don't show inside the thread in Apple Mail; find them under Drafts. A stray empty-looking draft (id `s:496837980636259293`, 11/11) sits in the Somerville thread — probably an Apple Mail autosave; can be deleted.
+- Open: schedule the Somerville call (add to Calendar once she picks a time); plan the pilot (works list, recordings vs AI voice, entrance card) for a Jan 21 opening; Email 3 to round-1 non-repliers; reconcile the gallery sheet with the 11/10–12 sends; watch replies.
 
