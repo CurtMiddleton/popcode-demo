@@ -4292,7 +4292,6 @@ push arrives, switch the all-clear to email. Read a run's output with `get_trigg
 - Lesson: other tabs that inject a muted summary inside a `.table-wrap` would have the same
   problem — grep for `class="muted"` inside `wrap.innerHTML` if another one shows up clipped.
 
-<<<<<<< HEAD
 
 ### 2026-11-01 → 05 — Pricing without "pilot"; 30 → 56 new gallery emails (NY, CT, Boston, Philadelphia)
 
@@ -4334,7 +4333,6 @@ push arrives, switch the all-clear to email. Read a run's output with `get_trigg
 - **No more BCC to curt@theworkshop.works on outreach** (user, 11/9): Sent in curt@popcodeapp.com is the record. The 43 waiting gallery drafts still carry the BCC (the connector's update_draft can't clear it), so remove it by hand when pasting each link; new drafts get none.
 - Nonprofit tracker row 19: Austin Film Society contact is now Torie Gehrig (Julya Jara left; auto-reply 11/9).
 
-=======
 ### 2026-10-15 → 11-09 — Nonprofit leads: two "not now"s, Clay at The Picture House, tracker renamed
 
 No code or PRs. Sales and outreach work in the long nonprofits session (`affectionate-dirac`).
@@ -4412,13 +4410,12 @@ No code or PRs. Sales and outreach work in the long nonprofits session (`affecti
   unverified-app screen. Developer shown is curt@theworkshop.works (sheet owner) — fine as long as the account chosen
   is curt@popcodeapp.com.
 - Sheets writes via the connector were once blocked by the auto-mode classifier until the user explicitly asked.
->>>>>>> origin/main
 
 ### 2026-11-10 → 13 — Big gallery send went out; Somerville Museum says yes to a pilot
-- **Gmail Sent shows ~200 gallery Email 1s ("an audio tour for your next show") on 11/10–12**, 5 min apart, sender name "Curt Middleton", no BCC — including all 43 drafts from 11/1 (Boston, Philadelphia, Brooklyn, Westchester, CT) and many other sheet venues (e.g. Lubov, Fort Gansevoort, Gordon Robichaux, Hudson Valley MOCA, DC Moore, Miles McEnery). These were not sent by this session; the gallery sheet's Status/date columns were NOT updated for them — reconcile the sheet against Gmail Sent before Email 2.
+- **Gmail Sent shows about 200 (Gmail's estimate) gallery Email 1s ("an audio tour for your next show") on 11/10–12**, 5 min apart, sender name "Curt Middleton", no BCC — including all 43 drafts from 11/1 (Boston, Philadelphia, Brooklyn, Westchester, CT) and many other sheet venues (e.g. Lubov, Fort Gansevoort, Gordon Robichaux, Hudson Valley MOCA, DC Moore, Miles McEnery). These were not sent by this session (same 5-minute, "Curt Middleton", ~2 KB pattern as the Apps Script nonprofit sender, so probably a script — check); the gallery sheet's Status/date columns were NOT updated for them — reconcile the sheet against Gmail Sent before Email 2.
 - Nonprofits: 39 "A Giving Tuesday thank-you that plays" emails went out 11/9 (also not from this session). Austin Film Society: Julya Jara left; tracker row 19 now Torie Gehrig (already emailed).
 - **Somerville Museum (Stephanie Marlin-Curiel):** 11/11 "can't afford it now… send website and pricing"; Curt offered a no-cost pilot (reply drafted here, sent 11/13 with link /exhibitions/6); 11/13 she replied "a no-cost pilot sounds doable… next show opens January 21st" (needs the curator's OK). Short reply sent: Jan 21 works, call next week. No in-person visit — test virtually.
-- Lawrenceville: drafted check-in emails for Marquis Scott (AI work + Popcode with links to /nonprofits and /exhibitions; send first) and Steve Murray (personal; Steve's last year as head). Sent from curt@theworkshop.works by Curt, not through the connector.
+- Lawrenceville: drafted check-in emails for Marquis Scott (AI work + Popcode with links to /nonprofits and /exhibitions; send first) and Steve Murray (personal; Steve's last year as head). To be sent by Curt from curt@theworkshop.works (not through the connector); not confirmed sent.
 - Gotchas: putting a URL inside a `[PASTE LINK: …]` placeholder still gets it rewritten — keep placeholders URL-free. Connector-made reply drafts don't show inside the thread in Apple Mail; find them under Drafts. A stray empty-looking draft (id `s:496837980636259293`, 11/11) sits in the Somerville thread — probably an Apple Mail autosave; can be deleted.
 - Open: schedule the Somerville call (add to Calendar once she picks a time); plan the pilot (works list, recordings vs AI voice, entrance card) for a Jan 21 opening; Email 3 to round-1 non-repliers; reconcile the gallery sheet with the 11/10–12 sends; watch replies.
 
